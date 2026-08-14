@@ -1,0 +1,39 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+venv/
+.pytest_cache/
+*.egg-info/
+
+# Environment / secrets — never commit the real .env
+.env
+.env.*
+!.env.example
+
+# Databases (tests write SQLite files; production uses Postgres in a volume)
+*.db
+*.sqlite
+*.sqlite3
+
+# Node / frontend build output
+node_modules/
+dist/
+.vite/
+
+# Archives — the source lives in git as real files, not as a tarball
+*.tar.gz
+*.tgz
+*.zip
+
+# Backups produced by scripts/backup.sh
+backups/
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/
