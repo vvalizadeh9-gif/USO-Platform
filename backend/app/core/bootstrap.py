@@ -1,9 +1,20 @@
-"""Idempotent startup bootstrap: seed roles, categories and the first admin."""
-from sqlalchemy import inspect, text
+"""Idempotent startup seeding: roles, categories, provinces and the first admin.
+
+This module used to manage the database schema as well, in three overlapping
+ways: ``Base.metadata.create_all()``, a hand-written ``ADDITIVE_COLUMNS`` table
+of raw ``ALTER TABLE`` statements, and ``ADDITIVE_INDEXES``. They disagreed with
+each other and with the models, so a database that grew through them came out
+subtly different from a freshly created one.
+
+All three are gone. **Alembic is now the only thing that changes the schema**,
+and it runs at deploy time (see ``backend/entrypoint.sh``), not from inside the
+application. What is left here is seeding reference data, which is a different
+job: it inserts rows, never structure, and it is safe to repeat.
+"""
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
-from app.core.database import Base, SessionLocal, engine
+from app.core.database import SessionLocal
 from app.core.deps import (
     CPG_POWER,
     CPG_ROLLOUT_PM,
@@ -15,71 +26,6 @@ from app.models.reference import ProblemCategory, Province, Role, User
 from app.services.cpm_columns import IRAN_PROVINCES
 
 settings = get_settings()
-
-# Additive columns that may be missing on databases created by an earlier
-# version. Each entry: table -> {column_name: SQL type}. This is a lightweight,
-# idempotent forward-migration for simple column additions; anything more
-# complex (renames, constraints, backfills) should use an Alembic migration.
-ADDITIVE_COLUMNS: dict[str, dict[str, str]] = {
-    "work_items": {
-        "last_stage": "VARCHAR(60)",
-        "dt_sc_contractor_id": "INTEGER",
-        "dt_status": "VARCHAR(20)",
-        "dt_problem_category": "VARCHAR(120)",
-        "dt_date_gregorian": "DATE",
-    },
-    "monthly_snapshots": {
-        "current_month_dt_done": "INTEGER DEFAULT 0",
-    },
-    "cpm_import_batches": {
-        "new_villages_count": "INTEGER DEFAULT 0",
-        "changed_village_qty": "INTEGER DEFAULT 0",
-        "changed_site_type": "INTEGER DEFAULT 0",
-        "changed_requested_tech": "INTEGER DEFAULT 0",
-    },
-    "cpm_change_requests": {
-        "change_type": "VARCHAR(30) DEFAULT 'field'",
-        "detail": "TEXT",
-        "payload_json": "TEXT",
-    },
-    "villages": {
-        "target_classification": "VARCHAR(60)",
-    },
-    "hc_tasks": {
-        "reviewed_by": "INTEGER",
-        "reviewed_at": "TIMESTAMP",
-        "round_no": "INTEGER DEFAULT 1",
-    },
-    "roles": {
-        "is_category_owner": "BOOLEAN DEFAULT FALSE",
-    },
-    "problem_categories": {
-        "owner_role_id": "INTEGER",
-        "sla_days": "INTEGER DEFAULT 7",
-    },
-    "assignments": {
-        "returned_at": "TIMESTAMP",
-        "return_reason": "TEXT",
-    },
-}
-
-# Indexes on existing foreign-key columns, added for databases created before
-# this change. Postgres does not auto-index foreign keys (only primary keys),
-# and these columns are hit constantly by row-level security joins and chart
-# grouping — the cost grows with data volume without them.
-# Format: index_name -> (table, column).
-ADDITIVE_INDEXES: dict[str, tuple[str, str]] = {
-    "ix_sites_province_id": ("sites", "province_id"),
-    "ix_sites_region_id": ("sites", "region_id"),
-    "ix_work_items_site_id": ("work_items", "site_id"),
-    "ix_work_items_dt_sc_contractor_id": ("work_items", "dt_sc_contractor_id"),
-    "ix_villages_work_item_id": ("villages", "work_item_id"),
-    "ix_acceptances_village_id": ("acceptances", "village_id"),
-    "ix_health_checks_work_item_id": ("health_checks", "work_item_id"),
-    "ix_assignments_work_item_id": ("assignments", "work_item_id"),
-    "ix_assignments_contractor_id": ("assignments", "contractor_id"),
-    "ix_drive_tests_work_item_id": ("drive_tests", "work_item_id"),
-}
 
 DEFAULT_ROLES = [
     "Admin",
@@ -111,10 +57,16 @@ DEFAULT_PROBLEM_CATEGORIES: dict[str, tuple[str, int]] = {
 
 
 def init_db() -> None:
-    """Create tables (dev convenience) and seed baseline data."""
-    Base.metadata.create_all(bind=engine)
-    _sync_additive_columns()
-    _sync_additive_indexes()
+    """Seed baseline reference data. Does not touch the schema.
+
+    Safe to run on every start: each seeding step checks what is already there
+    and only fills in what is missing, so it never overwrites an Admin's later
+    edits (a re-pointed problem category keeps its new owning role, for example).
+
+    The schema itself must already exist. ``entrypoint.sh`` runs
+    ``alembic upgrade head`` before the application starts, and the test suite
+    calls ``tests.conftest.create_schema()``.
+    """
     db = SessionLocal()
     try:
         _seed_roles(db)
@@ -124,47 +76,6 @@ def init_db() -> None:
         db.commit()
     finally:
         db.close()
-
-
-def _sync_additive_columns() -> None:
-    """Add any missing additive columns to existing tables (idempotent).
-
-    Lets a database created by an earlier schema pick up new nullable columns
-    without a full wipe. Skips columns that already exist.
-    """
-    inspector = inspect(engine)
-    existing_tables = set(inspector.get_table_names())
-    with engine.begin() as conn:
-        for table, columns in ADDITIVE_COLUMNS.items():
-            if table not in existing_tables:
-                continue  # create_all already made it with all columns
-            present = {c["name"] for c in inspector.get_columns(table)}
-            for col_name, col_type in columns.items():
-                if col_name not in present:
-                    conn.execute(
-                        text(f'ALTER TABLE {table} ADD COLUMN {col_name} {col_type}')
-                    )
-
-
-def _sync_additive_indexes() -> None:
-    """Create any missing indexes on existing tables (idempotent).
-
-    Uses IF NOT EXISTS, supported by both Postgres and SQLite, so this is
-    safe to run on every startup regardless of whether the index already
-    exists (fresh install via create_all already has them).
-    """
-    inspector = inspect(engine)
-    existing_tables = set(inspector.get_table_names())
-    with engine.begin() as conn:
-        for index_name, (table, column) in ADDITIVE_INDEXES.items():
-            if table not in existing_tables:
-                continue
-            present_cols = {c["name"] for c in inspector.get_columns(table)}
-            if column not in present_cols:
-                continue  # column itself doesn't exist yet on this DB
-            conn.execute(
-                text(f"CREATE INDEX IF NOT EXISTS {index_name} ON {table} ({column})")
-            )
 
 
 def _seed_roles(db: Session) -> None:

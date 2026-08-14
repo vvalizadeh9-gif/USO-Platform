@@ -13,7 +13,12 @@ settings = get_settings()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Run startup bootstrap (create tables, seed baseline data)."""
+    """Seed baseline reference data on startup.
+
+    This deliberately does not create or alter any table. The schema is owned by
+    Alembic and applied by ``entrypoint.sh`` before this process starts, so that
+    a failed migration stops the deploy instead of going live half-applied.
+    """
     init_db()
     yield
 

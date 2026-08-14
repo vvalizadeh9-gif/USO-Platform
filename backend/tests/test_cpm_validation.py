@@ -24,7 +24,7 @@ _pg.JSONB = JSON
 from fastapi.testclient import TestClient  # noqa: E402
 
 from app.core.database import Base, SessionLocal, engine  # noqa: E402
-from tests.conftest import login_form  # noqa: E402
+from tests.conftest import create_schema, login_form  # noqa: E402
 
 SRC = "/mnt/user-data/uploads/CPM_2_.xlsx"
 
@@ -33,7 +33,7 @@ SRC = "/mnt/user-data/uploads/CPM_2_.xlsx"
 def client():
     if os.path.exists("/tmp/uep_cpmval_pytest.db"):
         os.remove("/tmp/uep_cpmval_pytest.db")
-    Base.metadata.drop_all(bind=engine)
+    create_schema()
     from app.main import app
 
     with TestClient(app) as c:

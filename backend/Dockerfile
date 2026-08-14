@@ -14,6 +14,10 @@ COPY . .
 # Data dir for uploaded letters / CPM files.
 RUN mkdir -p /data/uploads
 
+RUN chmod +x /app/entrypoint.sh
+
 EXPOSE 8000
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# The entrypoint applies Alembic migrations, then starts uvicorn. It fails the
+# container rather than serving against a half-migrated database.
+ENTRYPOINT ["/app/entrypoint.sh"]

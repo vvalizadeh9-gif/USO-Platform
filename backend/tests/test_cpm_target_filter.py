@@ -32,6 +32,7 @@ from fastapi.testclient import TestClient  # noqa: E402
 
 from app.core.database import Base, SessionLocal, engine  # noqa: E402
 from app.services import cpm_columns as C  # noqa: E402
+from tests.conftest import create_schema  # noqa: E402
 
 # The five classifications the CPM file uses that must never be imported.
 IGNORED_CLASSIFICATIONS = (
@@ -47,7 +48,7 @@ IGNORED_CLASSIFICATIONS = (
 def client():
     if os.path.exists("/tmp/uep_target_pytest.db"):
         os.remove("/tmp/uep_target_pytest.db")
-    Base.metadata.drop_all(bind=engine)
+    create_schema()
     from app.main import app
 
     with TestClient(app) as c:

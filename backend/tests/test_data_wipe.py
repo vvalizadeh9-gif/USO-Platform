@@ -18,14 +18,14 @@ _pg.JSONB = JSON
 from fastapi.testclient import TestClient  # noqa: E402
 
 from app.core.database import Base, engine  # noqa: E402
-from tests.conftest import login_form  # noqa: E402
+from tests.conftest import create_schema, login_form  # noqa: E402
 
 
 @pytest.fixture(scope="module")
 def client():
     if os.path.exists("/tmp/uep_wipe_pytest.db"):
         os.remove("/tmp/uep_wipe_pytest.db")
-    Base.metadata.drop_all(bind=engine)
+    create_schema()
     from app.main import app
 
     with TestClient(app) as c:

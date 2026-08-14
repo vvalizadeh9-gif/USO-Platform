@@ -32,7 +32,7 @@ from app.core.database import Base, SessionLocal, engine  # noqa: E402
 from app.core.deps import CPG_POWER, NWG_PLANNING, PM as PM_ROLE  # noqa: E402
 from app.core.security import hash_password  # noqa: E402
 from app.services import cpm_columns as C  # noqa: E402
-from tests.conftest import login_form  # noqa: E402
+from tests.conftest import create_schema, login_form  # noqa: E402
 
 POWER = "Temporary Power"
 PLANNING = "NWG Responsibility"
@@ -42,7 +42,7 @@ PLANNING = "NWG Responsibility"
 def client():
     if os.path.exists("/tmp/uep_hcloop_pytest.db"):
         os.remove("/tmp/uep_hcloop_pytest.db")
-    Base.metadata.drop_all(bind=engine)
+    create_schema()
     from app.main import app
 
     with TestClient(app) as c:
