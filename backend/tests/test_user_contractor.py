@@ -23,7 +23,7 @@ _pg.JSONB = JSON
 from fastapi.testclient import TestClient  # noqa: E402
 
 from app.core.database import Base, SessionLocal, engine  # noqa: E402
-from tests.conftest import create_schema, login_form  # noqa: E402
+from tests.conftest import create_schema, login_as_role, login_form, sample_cpm_path  # noqa: E402
 
 
 @pytest.fixture(scope="module")
@@ -116,7 +116,7 @@ def test_contractor_user_only_sees_their_own_hc_assignments(client):
     token = _login(client)
     h = {"Authorization": f"Bearer {token}"}
 
-    sample = (_p if os.path.exists(_p := "/mnt/user-data/uploads/CPM_2_.xlsx") else "/mnt/user-data/uploads/CPM-Org_-_Copy.xlsx")
+    sample = sample_cpm_path()
     if not sample:
         pytest.skip("sample CPM file not available")
     with open(sample, "rb") as f:
@@ -146,16 +146,19 @@ def test_contractor_user_only_sees_their_own_hc_assignments(client):
 
     basket = client.get("/api/v1/hc/basket", headers=h).json()
     assert len(basket) >= 2
-    client.post(
-        "/api/v1/hc/assignments",
-        headers=h,
-        json={"contractor_id": cid_a, "work_item_ids": [basket[0]["work_item_id"]]},
-    )
-    client.post(
-        "/api/v1/hc/assignments",
-        headers=h,
-        json={"contractor_id": cid_b, "work_item_ids": [basket[1]["work_item_id"]]},
-    )
+
+    # Assigning a health check is a Coordinator/PM job, not an Admin one -- the
+    # Admin/PM separation of duties. The status codes are asserted so that a
+    # future permission change fails here loudly instead of leaving this test
+    # quietly checking an empty list.
+    pm = login_as_role(client, token, "PM")
+    for contractor_id, item in ((cid_a, basket[0]), (cid_b, basket[1])):
+        created = client.post(
+            "/api/v1/hc/assignments",
+            headers=pm,
+            json={"contractor_id": contractor_id, "work_item_ids": [item["work_item_id"]]},
+        )
+        assert created.status_code == 201, created.text
 
     token_a = _login(client, "user_a", "Passw0rd!")
     h_a = {"Authorization": f"Bearer {token_a}"}

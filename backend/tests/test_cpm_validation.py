@@ -24,9 +24,13 @@ _pg.JSONB = JSON
 from fastapi.testclient import TestClient  # noqa: E402
 
 from app.core.database import Base, SessionLocal, engine  # noqa: E402
-from tests.conftest import create_schema, login_form  # noqa: E402
+from tests.conftest import create_schema, login_form, sample_cpm_path  # noqa: E402
 
-SRC = "/mnt/user-data/uploads/CPM_2_.xlsx"
+# The workbook these tests import and then modify. sample_cpm_path() returns
+# the committed synthetic fixture, or whatever UEP_TEST_CPM_XLSX points at,
+# or None when neither is available -- which is what lets the skips below
+# actually fire.
+SRC = sample_cpm_path()
 
 
 @pytest.fixture(scope="module")
@@ -57,8 +61,8 @@ def _import(filename):
 
 
 def test_first_import_has_no_change_requests(client):
-    if not os.path.exists(SRC):
-        pytest.skip("sample CPM file not available")
+    if not SRC:
+        pytest.skip("no sample CPM workbook available")
     from app.services import cpm_columns as C
     from app.models.reference import User
     from app.services.cpm_import import CpmImportService
@@ -72,8 +76,8 @@ def test_first_import_has_no_change_requests(client):
 
 
 def test_requested_tech_change_is_blocked_then_applied(client):
-    if not os.path.exists(SRC):
-        pytest.skip("sample CPM file not available")
+    if not SRC:
+        pytest.skip("no sample CPM workbook available")
     from app.services import cpm_columns as C
     from app.models.acceptance import CpmChangeRequest
     from app.models.reference import User
@@ -140,12 +144,38 @@ def test_pending_count_endpoint(client):
 
 
 def test_ignored_change_is_not_applied(client):
-    if not os.path.exists(SRC):
-        pytest.skip("sample CPM file not available")
+    if not SRC:
+        pytest.skip("no sample CPM workbook available")
+    from app.services import cpm_columns as C
     from app.models.acceptance import CpmChangeRequest
+    from app.models.reference import User
     from app.models.workitem import WorkItem
+    from app.services.cpm_import import CpmImportService
+
+    # Raise a change request of our own rather than relying on one left behind
+    # by an earlier test. This used to look for any pending requested-tech
+    # change and skip when it found none -- which is exactly what happened,
+    # because the test above accepts the one it creates. The test therefore
+    # never ran.
+    #
+    # A different row from the one that test modifies, so the two do not
+    # interfere.
+    wb = openpyxl.load_workbook(SRC)
+    ws = wb["CPM"]
+    target_excel_row = 5  # header at index 2 => data starts at Excel row 4
+    column = C.COL["requested_tech"] + 1
+    original = ws.cell(row=target_excel_row, column=column).value
+    ws.cell(
+        row=target_excel_row,
+        column=column,
+        value="4G" if original != "4G" else "2G",
+    )
+    modified = "/tmp/cpmval_month3.xlsx"
+    wb.save(modified)
 
     db = SessionLocal()
+    admin = db.query(User).filter(User.username == "admin").first()
+    CpmImportService(db, user_id=admin.id).import_file(modified, "month3.xlsx")
     pending = (
         db.query(CpmChangeRequest)
         .filter(
@@ -154,9 +184,7 @@ def test_ignored_change_is_not_applied(client):
         )
         .first()
     )
-    if pending is None:
-        db.close()
-        pytest.skip("no pending requested_tech change to test ignore")
+    assert pending is not None, "the re-import should have raised a change request"
     cr_id = pending.id
     wi_id = pending.work_item_id
     before = db.get(WorkItem, wi_id).requested_technology

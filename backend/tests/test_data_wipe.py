@@ -18,7 +18,7 @@ _pg.JSONB = JSON
 from fastapi.testclient import TestClient  # noqa: E402
 
 from app.core.database import Base, engine  # noqa: E402
-from tests.conftest import create_schema, login_form  # noqa: E402
+from tests.conftest import create_schema, login_form, sample_cpm_path  # noqa: E402
 
 
 @pytest.fixture(scope="module")
@@ -38,7 +38,7 @@ def _login(client):
 
 
 def _import_sample(client, token):
-    sample = (_p if os.path.exists(_p := "/mnt/user-data/uploads/CPM_2_.xlsx") else "/mnt/user-data/uploads/CPM-Org_-_Copy.xlsx")
+    sample = sample_cpm_path()
     if not sample:
         pytest.skip("sample CPM file not available")
     with open(sample, "rb") as f:

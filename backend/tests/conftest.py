@@ -66,6 +66,48 @@ def create_schema() -> None:
         command.upgrade(cfg, "head")
 
 
+def login_as_role(client, admin_token: str, role_name: str) -> dict:
+    """Create a user with *role_name* if needed, sign in, return auth headers.
+
+    Several workflow endpoints are deliberately closed to Admin -- the health
+    check is assigned by a Coordinator or PM, and results are submitted by a PM
+    or the subcontractor. That separation of duties is the intended design, so
+    tests exercising those steps need a user who actually holds the role rather
+    than reaching for the admin token.
+
+    Reused across calls: signing in as an existing user is fine, and creating
+    the same username twice would fail.
+    """
+    password = "Test-Role-Passw0rd"
+    username = f"test_{role_name.lower()}"
+    admin_headers = {"Authorization": f"Bearer {admin_token}"}
+
+    roles = client.get("/api/v1/reference/roles", headers=admin_headers).json()
+    role_id = next(r["id"] for r in roles if r["name"] == role_name)
+
+    existing = client.get("/api/v1/admin/users", headers=admin_headers).json()
+    if not any(u["username"] == username for u in existing):
+        created = client.post(
+            "/api/v1/admin/users",
+            headers=admin_headers,
+            json={
+                "username": username,
+                "password": password,
+                "full_name": f"Test {role_name}",
+                "role_id": role_id,
+                "sees_all_provinces": True,
+                "province_ids": [],
+            },
+        )
+        assert created.status_code == 201, created.text
+
+    response = client.post(
+        "/api/v1/auth/login", data=login_form(client, username, password)
+    )
+    assert response.status_code == 200, response.text
+    return {"Authorization": f"Bearer {response.json()['access_token']}"}
+
+
 def login_form(client, username: str = "admin", password: str = "Admin@12345") -> dict:
     """Build a login form payload, solving a fresh captcha challenge first."""
     challenge = client.get("/api/v1/auth/captcha").json()

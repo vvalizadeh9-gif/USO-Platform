@@ -22,7 +22,7 @@ _pg.JSONB = JSON  # SQLite has no JSONB
 from fastapi.testclient import TestClient  # noqa: E402
 
 from app.core.database import Base, engine  # noqa: E402
-from tests.conftest import create_schema, login_form  # noqa: E402
+from tests.conftest import create_schema, login_form, sample_cpm_path  # noqa: E402
 
 
 @pytest.fixture(scope="module")
@@ -68,7 +68,7 @@ def test_work_items_require_auth(client):
 def test_cpm_import_and_scope(client):
     token = _login(client)
     # Import the real sample file if present; otherwise skip gracefully.
-    sample = (_p if os.path.exists(_p := "/mnt/user-data/uploads/CPM_2_.xlsx") else "/mnt/user-data/uploads/CPM-Org_-_Copy.xlsx")
+    sample = sample_cpm_path()
     if not sample:
         pytest.skip("sample CPM file not available")
 
@@ -120,7 +120,7 @@ def test_rbac_contractor_cannot_assign(client):
 
 def test_second_import_creates_change_requests(client):
     token = _login(client)
-    sample = (_p if os.path.exists(_p := "/mnt/user-data/uploads/CPM_2_.xlsx") else "/mnt/user-data/uploads/CPM-Org_-_Copy.xlsx")
+    sample = sample_cpm_path()
     if not sample:
         pytest.skip("sample CPM file not available")
     with open(sample, "rb") as f:

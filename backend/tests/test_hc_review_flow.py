@@ -24,7 +24,7 @@ _pg.JSONB = JSON
 from fastapi.testclient import TestClient  # noqa: E402
 
 from app.core.database import Base, SessionLocal, engine  # noqa: E402
-from tests.conftest import create_schema, login_form, sample_cpm_path  # noqa: E402
+from tests.conftest import create_schema, login_as_role, login_form, sample_cpm_path  # noqa: E402
 
 
 @pytest.fixture(scope="module")
@@ -41,6 +41,17 @@ def client():
 def _login(client):
     r = client.post("/api/v1/auth/login", data=login_form(client))
     return r.json()["access_token"]
+
+
+def _pm(client):
+    """Headers for a PM.
+
+    The health-check workflow is deliberately closed to Admin: assigning is for
+    a Coordinator or PM, and submitting results is for a PM or the
+    subcontractor. Admin still performs the CPM import below, which is
+    admin-only.
+    """
+    return login_as_role(client, _login(client), "PM")
 
 
 def _seed(client, token):
@@ -69,7 +80,7 @@ def _contractor_id():
 def test_basket_excludes_done_and_ongoing(client):
     token = _login(client)
     _seed(client, token)
-    h = {"Authorization": f"Bearer {token}"}
+    h = _pm(client)
     basket = client.get("/api/v1/hc/basket", headers=h).json()
     assert len(basket) > 0
 
@@ -113,7 +124,7 @@ def _assign_first(client, h):
 def test_contractor_notnormal_requires_comment_not_category(client):
     token = _login(client)
     _seed(client, token)
-    h = {"Authorization": f"Bearer {token}"}
+    h = _pm(client)
     site, task = _assign_first(client, h)
     techs = site["requested_technologies"]
 
@@ -153,7 +164,7 @@ def test_contractor_notnormal_requires_comment_not_category(client):
 def test_coordinator_review_sets_category(client):
     token = _login(client)
     _seed(client, token)
-    h = {"Authorization": f"Bearer {token}"}
+    h = _pm(client)
     site, task = _assign_first(client, h)
     techs = site["requested_technologies"]
 
@@ -185,7 +196,7 @@ def test_coordinator_review_sets_category(client):
 def test_ready_site_review_needs_no_category(client):
     token = _login(client)
     _seed(client, token)
-    h = {"Authorization": f"Bearer {token}"}
+    h = _pm(client)
     site, task = _assign_first(client, h)
     techs = site["requested_technologies"]
 
