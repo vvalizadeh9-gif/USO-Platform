@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from 'framer-motion'
-import { Plus, UserPlus, Search, Check, X, Pencil, Trash2, MapPin } from 'lucide-react'
+import { Plus, UserPlus, Search, Check, X, Pencil, UserMinus, RotateCcw, MapPin } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import api from '../../api/client'
 import { useToast } from '../../context/ToastContext'
@@ -19,7 +19,7 @@ export default function UsersTab() {
   const [showCreate, setShowCreate] = useState(false)
   const [editingUser, setEditingUser] = useState(null)
   const [provincePopup, setProvincePopup] = useState(null)  // user whose provinces we're viewing
-  const [deleteTarget, setDeleteTarget] = useState(null)
+  const [deactivateTarget, setDeactivateTarget] = useState(null)
 
   function load() {
     api.get('/admin/users').then((r) => setUsers(r.data)).catch(() => setUsers([]))
@@ -31,15 +31,28 @@ export default function UsersTab() {
     api.get('/reference/contractors').then((r) => setContractors(r.data)).catch(() => {})
   }, [])
 
-  async function confirmDelete() {
+  async function confirmDeactivate() {
     try {
-      await api.delete(`/admin/users/${deleteTarget.id}`)
-      toast.success('User deleted', `${deleteTarget.full_name} removed.`)
-      setDeleteTarget(null)
+      await api.delete(`/admin/users/${deactivateTarget.id}`)
+      toast.success(
+        'User deactivated',
+        `${deactivateTarget.full_name} can no longer sign in. Their history is kept.`,
+      )
+      setDeactivateTarget(null)
       load()
     } catch (err) {
-      toast.error('Could not delete user', err.response?.data?.detail || 'Please try again.')
-      setDeleteTarget(null)
+      toast.error('Could not deactivate user', err.response?.data?.detail || 'Please try again.')
+      setDeactivateTarget(null)
+    }
+  }
+
+  async function reactivate(user) {
+    try {
+      await api.patch(`/admin/users/${user.id}`, { active: true })
+      toast.success('User reactivated', `${user.full_name} can sign in again.`)
+      load()
+    } catch (err) {
+      toast.error('Could not reactivate user', err.response?.data?.detail || 'Please try again.')
     }
   }
 
@@ -119,14 +132,24 @@ export default function UsersTab() {
                       <Pencil size={14} /> Edit
                     </button>
                     {u.id !== currentUser?.id && (
-                      <button
-                        className="btn btn-sm btn-ghost"
-                        style={{ color: 'var(--red)' }}
-                        onClick={() => setDeleteTarget(u)}
-                        title="Delete user"
-                      >
-                        <Trash2 size={14} />
-                      </button>
+                      u.active ? (
+                        <button
+                          className="btn btn-sm btn-ghost"
+                          style={{ color: 'var(--red)' }}
+                          onClick={() => setDeactivateTarget(u)}
+                          title="Deactivate user"
+                        >
+                          <UserMinus size={14} />
+                        </button>
+                      ) : (
+                        <button
+                          className="btn btn-sm btn-ghost"
+                          onClick={() => reactivate(u)}
+                          title="Reactivate user"
+                        >
+                          <RotateCcw size={14} />
+                        </button>
+                      )
                     )}
                   </div>
                 </td>
@@ -140,8 +163,12 @@ export default function UsersTab() {
         {provincePopup && (
           <ProvincePopup user={provincePopup} onClose={() => setProvincePopup(null)} />
         )}
-        {deleteTarget && (
-          <DeleteConfirm user={deleteTarget} onCancel={() => setDeleteTarget(null)} onConfirm={confirmDelete} />
+        {deactivateTarget && (
+          <DeactivateConfirm
+            user={deactivateTarget}
+            onCancel={() => setDeactivateTarget(null)}
+            onConfirm={confirmDeactivate}
+          />
         )}
       </AnimatePresence>
     </div>
@@ -193,7 +220,7 @@ function ProvincePopup({ user, onClose }) {
   )
 }
 
-function DeleteConfirm({ user, onCancel, onConfirm }) {
+function DeactivateConfirm({ user, onCancel, onConfirm }) {
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(20,30,50,0.45)', display: 'grid', placeItems: 'center', zIndex: 200 }} onClick={onCancel}>
       <motion.div
@@ -205,16 +232,20 @@ function DeleteConfirm({ user, onCancel, onConfirm }) {
         onClick={(e) => e.stopPropagation()}
       >
         <div className="row" style={{ gap: 8, color: 'var(--red)', marginBottom: 10 }}>
-          <Trash2 size={18} />
-          <h3 style={{ fontSize: 16, color: 'var(--red)' }}>Delete user?</h3>
+          <UserMinus size={18} />
+          <h3 style={{ fontSize: 16, color: 'var(--red)' }}>Deactivate user?</h3>
         </div>
         <p className="muted" style={{ fontSize: 13, lineHeight: 1.6, marginBottom: 16 }}>
-          Are you sure you want to permanently delete <b>{user.full_name}</b> ({user.username})?
-          This cannot be undone.
+          <b>{user.full_name}</b> ({user.username}) will no longer be able to sign in, and will
+          stop receiving notifications.
+        </p>
+        <p className="muted" style={{ fontSize: 13, lineHeight: 1.6, marginBottom: 16 }}>
+          Their account is kept, not deleted, so every health check they reviewed and every
+          audit entry still shows their name. You can reactivate them at any time.
         </p>
         <div className="row" style={{ gap: 8 }}>
           <button className="btn" style={{ background: 'var(--red)', color: '#fff', border: 'none' }} onClick={onConfirm}>
-            <Trash2 size={14} /> Yes, delete
+            <UserMinus size={14} /> Yes, deactivate
           </button>
           <button className="btn btn-ghost" onClick={onCancel}>No, cancel</button>
         </div>

@@ -226,3 +226,49 @@ no lock file for the backend, so indirect dependencies can still drift between
 builds. The frontend now has one (`npm ci` against `package-lock.json`, phase 4).
 Doing the same for Python means adding pip-tools or Poetry, which is a bigger
 change than this brief covers.
+
+---
+
+## Phase 3 — deactivating users
+
+### There is no `/auth/me` endpoint
+
+The brief listed "revalidating `uep_user` against `/auth/me` on page load" as
+out of scope. Worth recording that **the endpoint does not exist** — the API has
+`/auth/captcha` and `/auth/login` and nothing else under `/auth`. So that future
+change is slightly larger than it sounds: the endpoint has to be written first.
+
+The login response already returns the full user object, which is where the
+frontend gets it from today.
+
+### `PATCH active=false` was a second door with no lock
+
+The brief asked to keep the "cannot deactivate yourself" and "cannot remove the
+last administrator" guards on the delete endpoint. Those guards existed only
+there — but `PATCH /admin/users/{id}` with `active: false` has always done
+exactly the same thing and had **no guards at all**. An admin could lock every
+administrator out of the platform through the edit form.
+
+Now that delete and that patch are the same operation, both go through the same
+check. This was not in the brief; it is included because leaving it would have
+meant shipping a guard that is trivially bypassed.
+
+### Deactivation is reversible, and the interface now says so
+
+`frontend/src/pages/admin/UsersTab.jsx` told the admin they were about to
+"permanently delete" the user and that it "cannot be undone". After this change
+that text was simply false. The dialog now explains what actually happens, and
+deactivated users get a reactivate button rather than disappearing from the list.
+
+### Not changed: `POST /admin/users` with a reused username
+
+Creating a user checks that the username is not taken, and a deactivated user
+still holds theirs. So if someone leaves and a new starter is given the same
+username, creation fails with "Username already exists" and no hint that the
+name belongs to a deactivated account. The admin can see the account in the list
+(it is shown as inactive), so this is discoverable rather than mysterious.
+
+Left alone because the alternatives are all judgement calls the owner should
+make: free the username on deactivation (breaks the "who was this" trail),
+auto-suggest a variant, or say plainly that the name belongs to a deactivated
+account. The last is probably right, but it is a product decision.

@@ -76,7 +76,11 @@ class UserOut(ORMModel):
     role: RoleOut
     contractor_id: int | None = None
     sees_all_provinces: bool
+    # False means deactivated: cannot sign in, but the account is kept so that
+    # audit entries and health-check reviews stay attributable to a real person.
     active: bool
+    deactivated_at: datetime | None = None
+    deactivated_by: int | None = None
     provinces: list[ProvinceOut] = []
 
 

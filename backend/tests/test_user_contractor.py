@@ -175,7 +175,7 @@ def test_cannot_delete_self(client):
     assert r.status_code == 400  # can't delete own account
 
 
-def test_delete_regular_user_succeeds(client):
+def test_deleting_a_regular_user_deactivates_them(client):
     token = _login(client)
     h = {"Authorization": f"Bearer {token}"}
     contractor_role = _role_id(client, h, "Contractor")
@@ -196,6 +196,12 @@ def test_delete_regular_user_succeeds(client):
     uid = r.json()["id"]
     r = client.delete(f"/api/v1/admin/users/{uid}", headers=h)
     assert r.status_code == 200
-    # Confirm gone.
+
+    # This endpoint deactivates rather than deletes: the row stays so that audit
+    # entries and health-check reviews keep naming a real person. It is still
+    # listed for an Admin, marked inactive, so it can be switched back on.
+    # tests/test_user_deactivation.py covers this behaviour in full.
     users = client.get("/api/v1/admin/users", headers=h).json()
-    assert all(u["id"] != uid for u in users)
+    deactivated = next((u for u in users if u["id"] == uid), None)
+    assert deactivated is not None, "the user row must be kept"
+    assert deactivated["active"] is False

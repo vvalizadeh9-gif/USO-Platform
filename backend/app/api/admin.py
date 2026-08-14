@@ -216,6 +216,25 @@ def create_user(
     return user
 
 
+def _guard_deactivation(db: Session, user: User, admin: User) -> None:
+    """Refuse the two deactivations that would lock people out.
+
+    Shared by DELETE /users/{id} and by PATCH with ``active=false``, because
+    both now do exactly the same thing.
+    """
+    if user.id == admin.id:
+        raise HTTPException(400, "You cannot deactivate your own account.")
+    if user.role and user.role.name == ADMIN:
+        other_admins = (
+            db.query(User)
+            .join(User.role)
+            .filter(Role.name == ADMIN, User.id != user.id, User.active.is_(True))
+            .count()
+        )
+        if other_admins == 0:
+            raise HTTPException(400, "Cannot deactivate the last administrator.")
+
+
 @router.patch("/users/{user_id}", response_model=UserOut)
 def update_user(
     user_id: int,
@@ -242,6 +261,18 @@ def update_user(
     if payload.sees_all_provinces is not None:
         user.sees_all_provinces = payload.sees_all_provinces
     if payload.active is not None:
+        # Keep the deactivation record consistent with the flag, so an account
+        # that is active never carries a stale "deactivated by X on Y".
+        if payload.active and not user.active:
+            user.deactivated_at = None
+            user.deactivated_by = None
+        elif not payload.active and user.active:
+            # Setting active=false here does the same thing as DELETE, so it
+            # has to be protected the same way -- otherwise the guards are a
+            # lock on one door of two.
+            _guard_deactivation(db, user, admin)
+            user.deactivated_at = datetime.now(timezone.utc)
+            user.deactivated_by = admin.id
         user.active = payload.active
     if payload.province_ids is not None:
         _set_provinces(db, user, payload.province_ids)
@@ -261,35 +292,47 @@ def delete_user(
     db: Session = Depends(get_db),
     admin: User = Depends(require_roles(ADMIN)),
 ):
-    """Permanently delete a user.
+    """Deactivate a user. The row is kept.
 
-    Guards: an admin can't delete their own account, and the last remaining
-    active admin can't be deleted (which would lock everyone out).
+    This endpoint used to call ``db.delete(user)``. It no longer removes
+    anything, because user rows are referenced by ``audit_logs.user_id``,
+    ``hc_tasks.reviewed_by``, ``work_items.coordinator_reviewed_by`` and
+    ``work_items.pm_reviewed_by``. Deleting a reviewer turned every health check
+    they had signed off into one reviewed by nobody -- the accountability trail
+    went anonymous exactly where it mattered most. Over a ten-year platform,
+    staff turnover guarantees that happens.
+
+    After deactivation the account cannot sign in and receives no new
+    notifications, but their name still resolves everywhere it already appears.
+    An Admin can reactivate the account later by setting ``active`` back to true.
+
+    Province assignments are deliberately left in place, so reactivating
+    restores the person's original access rather than silently giving them none.
+
+    Guards are unchanged: an admin cannot deactivate their own account, and the
+    last remaining active admin cannot be deactivated (which would lock everyone
+    out of the platform).
     """
     user = db.get(User, user_id)
     if user is None:
         raise HTTPException(404, "User not found")
-    if user.id == admin.id:
-        raise HTTPException(400, "You cannot delete your own account.")
-    if user.role and user.role.name == ADMIN:
-        other_admins = (
-            db.query(User)
-            .join(User.role)
-            .filter(Role.name == ADMIN, User.id != user.id, User.active.is_(True))
-            .count()
-        )
-        if other_admins == 0:
-            raise HTTPException(400, "Cannot delete the last administrator.")
+    _guard_deactivation(db, user, admin)
 
     username = user.username
-    user.provinces = []  # clear m2m rows first
-    db.delete(user)
+    if not user.active:
+        # Already deactivated. Return success without moving the timestamp, so
+        # the audit trail keeps pointing at whoever actually did it.
+        return {"status": "ok", "deactivated": username}
+
+    user.active = False
+    user.deactivated_at = datetime.now(timezone.utc)
+    user.deactivated_by = admin.id
     record_audit(
         db, user_id=admin.id, module="Admin", entity_type="User",
-        entity_id=user_id, reason=f"User '{username}' deleted",
+        entity_id=user_id, reason=f"User '{username}' deactivated",
     )
     db.commit()
-    return {"status": "ok", "deleted": username}
+    return {"status": "ok", "deactivated": username}
 
 
 # ---------------- Admin Dashboard ----------------

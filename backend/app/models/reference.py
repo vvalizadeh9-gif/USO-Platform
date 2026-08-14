@@ -103,7 +103,17 @@ class User(Base):
         Boolean, default=False, nullable=False
     )
 
+    # False means deactivated. Deactivated users cannot sign in and receive no
+    # new notifications, but the row itself is never removed: audit_logs,
+    # hc_tasks.reviewed_by and work_items.*_reviewed_by all point at users, and
+    # deleting the row would turn "reviewed by Maryam" into "reviewed by nobody"
+    # across the whole history. Over a ten-year platform, staff turnover makes
+    # that certain.
     active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+
+    # Who deactivated this account, and when. Both are cleared on reactivation.
+    deactivated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    deactivated_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
 
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
