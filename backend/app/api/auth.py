@@ -1,11 +1,12 @@
 """Authentication endpoints."""
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, Form, HTTPException, status
+from fastapi import APIRouter, Depends, Form, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
+from app.core.rate_limit import client_ip, login_rate_limiter
 from app.core.security import (
     create_access_token,
     create_captcha_challenge,
@@ -26,12 +27,31 @@ def get_captcha() -> CaptchaChallenge:
 
 @router.post("/login", response_model=TokenResponse)
 def login(
+    request: Request,
     form: OAuth2PasswordRequestForm = Depends(),
     captcha_token: str = Form(...),
     captcha_answer: int = Form(...),
     db: Session = Depends(get_db),
 ) -> TokenResponse:
-    """Validate the captcha, then the credentials, and return a JWT plus the user profile."""
+    """Validate the captcha, then the credentials, and return a JWT plus the user profile.
+
+    Failed attempts are counted per username and per source address; too many in
+    a short time locks that username (or that address) out for a while. Counting
+    only failures, and clearing on success, keeps this invisible to people who
+    know their password.
+    """
+    ip = client_ip(request)
+    retry_after = login_rate_limiter.check(form.username, ip)
+    if retry_after:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=(
+                "Too many failed sign-in attempts. Please wait about "
+                f"{max(1, retry_after // 60)} minute(s) and try again."
+            ),
+            headers={"Retry-After": str(retry_after)},
+        )
+
     if not verify_captcha(captcha_token, captcha_answer):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -39,6 +59,10 @@ def login(
         )
     user = db.query(User).filter(User.username == form.username).one_or_none()
     if user is None or not verify_password(form.password, user.password_hash):
+        # Counted here, not on the captcha branch above: a wrong captcha is a
+        # human mistyping, and locking someone out for it would be a nuisance
+        # with no security benefit.
+        login_rate_limiter.record_failure(form.username, ip)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password",
@@ -47,6 +71,8 @@ def login(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN, detail="Account is disabled"
         )
+
+    login_rate_limiter.record_success(form.username, ip)
     # Lazily ensure this Shamsi month has a KPI snapshot (for month-over-month
     # deltas). Failure here must never block login, so guard it.
     try:

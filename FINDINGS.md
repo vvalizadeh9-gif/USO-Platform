@@ -153,3 +153,76 @@ Every module therefore shares one database file, and isolation comes from each
 module rebuilding the schema from scratch. It works, but the per-module paths in
 those files are misleading to read. Left alone: it is cosmetic, and touching it
 means editing all twelve test modules for no behavioural gain.
+
+---
+
+## Phase 2 — secrets, transport and authentication
+
+### Deliberately not implemented (the brief put these out of scope)
+
+**1. The session token is stored in `localStorage`.**
+Any JavaScript running on the page can read it, so a cross-site-scripting hole
+anywhere in the frontend turns into a stolen session that stays valid for eight
+hours. Storing it in an httpOnly cookie instead would put it out of JavaScript's
+reach — but cookies are sent automatically, which opens cross-site request
+forgery, so it also requires CSRF tokens on every state-changing request. That
+is a frontend change of real size and it belongs in its own piece of work.
+
+The Content-Security-Policy added to `nginx.conf` reduces the risk in the
+meantime: `script-src 'self'` means an injected inline script will not run.
+
+**2. `uep_user` is trusted from `localStorage` without revalidation.**
+On page load the frontend reads the cached user object — including their role —
+rather than asking `/auth/me`. Editing that cached object in browser developer
+tools makes the interface *show* administrator screens. **It does not grant any
+actual access**: every endpoint re-checks the role server-side against the JWT,
+so the buttons appear but the API refuses. The fix is to revalidate on load, and
+it naturally belongs with the cookie change above.
+
+### Found while writing the Content-Security-Policy: the fonts come from Google
+
+`frontend/src/styles/app.css` imports three fonts from `fonts.googleapis.com` —
+Space Grotesk, Inter, and **Vazirmatn, which is the Farsi font**.
+
+This matters for a reason that has nothing to do with security. If the server is
+internal-only and staff computers have no route to the public internet, those
+fonts will not load and the interface falls back to system fonts. Farsi text is
+what suffers most.
+
+It is also a slow first paint for every user, and a third party learning who
+visits the site.
+
+**Recommendation:** download the three font files into `frontend/src/assets/fonts/`
+and serve them from the application. It removes an external dependency from a
+platform meant to last ten years, works on an isolated network, and lets two
+entries be deleted from the Content-Security-Policy. Not done here because it is
+a frontend asset change, outside this brief.
+
+### The per-IP login limit depends on nginx
+
+Rate limiting counts failures per username and per source address. The address
+comes from the `X-Forwarded-For` header, because from the backend's point of
+view every request arrives from the nginx container.
+
+This is safe **as long as only nginx can reach the backend port**, which is how
+`docker-compose.yml` sets it up — port 8000 is not published to the host. If the
+backend were ever exposed directly, a caller could forge that header and slip
+past the per-IP limit. The per-username limit does not depend on it and would
+still apply.
+
+### Login counters are held in memory
+
+They reset if the backend container restarts, and they would be counted
+separately by each container if UEP were ever scaled to more than one backend.
+Neither is a problem for the current single-container deployment. If a second
+backend is ever added, this needs to move to Redis or the database — noted in
+`app/core/rate_limit.py` as well.
+
+### `python-jose` is gone, but check for a lock file when adding dependencies
+
+`python-jose==3.3.0` is replaced by `PyJWT==2.10.1`, and no code imports `jose`
+any more. Note that `requirements.txt` pins direct dependencies only — there is
+no lock file for the backend, so indirect dependencies can still drift between
+builds. The frontend now has one (`npm ci` against `package-lock.json`, phase 4).
+Doing the same for Python means adding pip-tools or Poetry, which is a bigger
+change than this brief covers.

@@ -10,6 +10,13 @@ stop being evidence that a deploy will work.
 import os
 from pathlib import Path
 
+# Mark this process as a development machine before anything imports the
+# settings. Production refuses to start on the default JWT secret, the default
+# admin password or a wildcard CORS list; the test suite deliberately uses all
+# three, so it has to say what it is. pytest loads this file before it imports
+# any test module, which is what makes setting it here early enough.
+os.environ.setdefault("APP_ENV", "development")
+
 BACKEND_DIR = Path(__file__).resolve().parent.parent
 
 # A small, synthetic CPM workbook lives in tests/fixtures/ and is committed to
