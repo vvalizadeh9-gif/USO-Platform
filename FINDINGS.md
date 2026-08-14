@@ -272,3 +272,91 @@ Left alone because the alternatives are all judgement calls the owner should
 make: free the username on deactivation (breaks the "who was this" trail),
 auto-suggest a variant, or say plainly that the name belongs to a deactivated
 account. The last is probably right, but it is a product decision.
+
+---
+
+## Phase 4 — deployment, backups and builds
+
+### None of the Docker work could be tested here
+
+**Please read this one.** The machine this work was done on has no Docker
+daemon, so `docker-compose.yml`, both `Dockerfile`s and the two backup scripts
+were **written but never run**. Everything else in this project was executed and
+verified; this part was not.
+
+They are written carefully and the shell scripts are syntax-checked, but the
+first `docker compose up -d --build` is the first real test. Do it at a time
+when a problem is an inconvenience rather than an emergency, and have
+`docker compose logs` open.
+
+Most likely places for a first-run problem:
+
+1. **The non-root backend user and the uploads volume.** The image creates
+   `/data/uploads` owned by the `uep` user, but Docker creates the named volume
+   on first mount and may give it root ownership. If uploads fail with a
+   permission error, that is why. Fix on the server with:
+   `docker compose exec -u root backend chown -R uep:uep /data/uploads`
+2. **The frontend port mapping.** nginx now listens on 8080 inside the container
+   (it runs unprivileged and cannot bind port 80), mapped to the host's port 80.
+   If the site does not answer, check `docker compose ps` shows `0.0.0.0:80->8080/tcp`.
+3. **The backend healthcheck.** It allows 120 seconds before it starts checking,
+   because migrations run first. On a slow first migration against a large
+   database, raise `start_period`.
+
+### The base images are pinned by digest, which means they will go stale
+
+Every image is pinned to an exact digest rather than a moving tag, so a rebuild
+gives the same result in five years as today. The other side of that: **security
+updates no longer arrive on their own.** Pinning trades automatic patching for
+reproducibility, which is the right trade for this platform, but only if someone
+updates the pins deliberately.
+
+Each `Dockerfile` records which tag the digest came from and the command to
+refresh it. Worth doing once or twice a year, and whenever a serious advisory
+lands. Python 3.12 and Node 20 both reach end of life inside this platform's
+expected lifetime and will force the issue.
+
+### Uploaded files are not covered by the database backup
+
+`pg_dump` backs up the database. Letters and attachments live in a separate
+Docker volume and are not in it. `BACKUP-RUNBOOK.md` gives the commands for
+backing that volume up separately, but it is **not automated** — the nightly
+cron job covers the database only.
+
+This was left manual because those files change far less often and a sensible
+schedule for them depends on how much use the letters feature actually gets. If
+it turns out to be used heavily, the volume backup should join the cron job.
+
+### Backups still need to leave the machine
+
+The script writes into `backups/` on the same server as the database. That
+protects against a bad import or a mistaken deletion — not against disk failure,
+loss of the machine, or ransomware.
+
+Copying `backups/` somewhere else is the single most valuable remaining step and
+it is **not done**, because the right destination depends on what your
+organisation provides. `BACKUP-RUNBOOK.md` has an `rsync` example.
+
+### Fixed while adding logging: Alembic was switching the application's logs off
+
+`alembic/env.py` called `fileConfig(config.config_file_name)`. That function's
+default is `disable_existing_loggers=True`, which switches off **every logger
+that already exists** — including the application's own.
+
+The new request logging exposed it: logs appeared when the logging tests ran on
+their own and vanished when the whole suite ran. The trigger is running
+migrations inside the same process as the application, which the test suite does
+by design so that tests build their schema the same way a deploy does.
+
+On the server this is currently harmless, because `entrypoint.sh` runs
+`alembic upgrade head` as a separate process before the application starts. But
+it was a landmine: any future code that ran a migration in-process would have
+silently ended request logging, with nothing at all to indicate why. Fixed by
+passing `disable_existing_loggers=False`.
+
+### The database is no longer reachable from outside the machine
+
+The PostgreSQL port is deliberately not published to the host — only the other
+containers can reach it. If anything on the server currently connects to the
+database directly on port 5432, it will stop working. Nothing in this repository
+does; mentioned in case some external tool was set up on the server.

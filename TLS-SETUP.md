@@ -76,6 +76,18 @@ And give the frontend access to them — in the `frontend` service:
       - certbot_webroot:/var/www/certbot
 ```
 
+And publish the HTTPS port — uncomment this line under `frontend`:
+
+```yaml
+      - "443:8443"
+```
+
+> **A note on ports.** The frontend container runs as an unprivileged user, so
+> inside the container nginx listens on **8080** and **8443**, not 80 and 443.
+> `docker-compose.yml` maps the host's real 80 and 443 onto those. You never
+> type the internal numbers into a browser; they only appear in `nginx.conf`
+> and `docker-compose.yml`.
+
 ### 2. Let the verification through
 
 In `frontend/nginx.conf`, uncomment **only** the redirect server block, and
@@ -218,8 +230,8 @@ chmod 600 privkey.pem
 
 ### 4. Give the container the files
 
-In `docker-compose.yml`, under the `frontend` service, uncomment the volume line
-and point it at your directory:
+In `docker-compose.yml`, under the `frontend` service, uncomment the volume lines
+and point them at your directory:
 
 ```yaml
     volumes:
@@ -227,6 +239,17 @@ and point it at your directory:
 ```
 
 `:ro` means read-only — the container can read the certificate but cannot alter it.
+
+Also uncomment the HTTPS port on that same service:
+
+```yaml
+      - "443:8443"
+```
+
+> **A note on ports.** The frontend container runs as an unprivileged user, so
+> inside the container nginx listens on **8080** and **8443**, not 80 and 443.
+> `docker-compose.yml` maps the host's real 80 and 443 onto those. You never
+> type the internal numbers into a browser.
 
 ### 5. Turn HTTPS on
 

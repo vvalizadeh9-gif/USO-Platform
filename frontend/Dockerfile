@@ -1,20 +1,44 @@
 # ---- Build stage ----
-FROM node:20-alpine AS build
+#
+# Pinned by digest rather than by tag. `node:20-alpine` points at a different
+# image every time it is rebuilt; the digest does not. This is the tag it
+# corresponded to when pinned:
+#   node:20-alpine  (fetched 2026-08-14)
+# Node 20 reaches end of life inside this platform's expected lifetime, so this
+# line will need changing one day -- see RUNBOOK.md.
+FROM node@sha256:fb4cd12c85ee03686f6af5362a0b0d56d50c58a04632e6c0fb8363f609372293 AS build
 WORKDIR /app
 
-COPY package.json ./
-RUN npm install
+# Both files, then `npm ci` -- not `npm install`.
+#
+# This used to copy only package.json and run `npm install`, which ignores the
+# lock file and resolves every dependency afresh. Two builds of the identical
+# commit could therefore ship different versions of React, recharts and
+# framer-motion, and a bug appearing after a rebuild had no visible cause.
+# `npm ci` installs exactly what package-lock.json specifies, and fails loudly
+# if the two files disagree rather than quietly picking something newer.
+#
+# This matters most at the moment the base image above has to change: when one
+# variable moves, every other one needs to be held still.
+COPY package.json package-lock.json ./
+RUN npm ci
 
-# Copy source after npm install so source changes don't invalidate the
-# npm install cache layer. A build-time ARG busts the cache when we
-# explicitly pass --build-arg CACHE_BUST=$(date +%s) during deployment.
+# Copy source after the install so source changes don't invalidate the
+# dependency layer. A build-time ARG busts the cache when we explicitly pass
+# --build-arg CACHE_BUST=$(date +%s) during deployment.
 ARG CACHE_BUST=1
 COPY . .
 RUN npm run build
 
 # ---- Serve stage ----
-FROM nginx:1.27-alpine
+#
+# nginx-unprivileged rather than plain nginx: the standard nginx image starts
+# its master process as root in order to bind port 80. This variant runs
+# entirely as an unprivileged user (uid 101) and listens on 8080 instead;
+# docker-compose.yml maps the host's port 80 to it.
+#   nginxinc/nginx-unprivileged:1.27-alpine  (fetched 2026-08-14)
+FROM nginxinc/nginx-unprivileged@sha256:65e3e85dbaed8ba248841d9d58a899b6197106c23cb0ff1a132b7bfe0547e4c0
 COPY --from=build /app/dist /usr/share/nginx/html
 COPY nginx.conf /etc/nginx/conf.d/default.conf
-EXPOSE 80
+EXPOSE 8080
 CMD ["nginx", "-g", "daemon off;"]

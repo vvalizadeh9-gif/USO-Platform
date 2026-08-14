@@ -1,0 +1,112 @@
+# How UEP runs on the server.
+#
+# This file was not in the repository before, even though nginx.conf proxies to
+# the hostname `backend:8000` -- a name that only exists because Compose creates
+# it. That meant the one file describing how the parts fit together lived
+# nowhere but on the server itself, so a rebuild from scratch depended on
+# someone remembering it.
+#
+# Everything secret comes from `.env` beside this file. Copy backend/.env.example
+# to .env and fill it in. Nothing sensitive is written here, so this file is safe
+# to keep in version control.
+#
+# Usual commands:
+#   docker compose up -d --build     start (or restart after a code change)
+#   docker compose ps                what is running, and whether it is healthy
+#   docker compose logs -f backend   follow the backend log
+#   docker compose down              stop everything (data is kept)
+#
+# `docker compose down -v` would also delete the named volumes below, which
+# means the database and every uploaded file. Do not use it on the server.
+
+services:
+  db:
+    # Pinned by digest so a rebuild cannot silently move to a new PostgreSQL
+    # build. This was postgres:16-alpine when pinned (2026-08-14).
+    image: postgres@sha256:44c4ee9810eff91f7eab4d822642e01115b1a9eccce4bcbdde7604752d68eac6
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-uep}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-uep}
+    volumes:
+      # Named volume, not a path on the host: Docker manages it and it survives
+      # `docker compose down`, image rebuilds and container replacement.
+      - uep_db_data:/var/lib/postgresql/data
+    healthcheck:
+      # `pg_isready` answers "is this database accepting connections yet".
+      # PostgreSQL takes a few seconds to start, and on first run it initialises
+      # the whole data directory, which takes longer.
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-uep} -d ${POSTGRES_DB:-uep}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    # Not published to the host. The database is reachable only from the other
+    # containers on this network, so it cannot be connected to from outside the
+    # machine even if the password leaks. To inspect it, see BACKUP-RUNBOOK.md.
+    expose:
+      - "5432"
+
+  backend:
+    build:
+      context: ./backend
+    restart: unless-stopped
+    env_file:
+      - .env
+    depends_on:
+      db:
+        # Waits for the healthcheck above to pass, not merely for the container
+        # to exist. Without this the backend starts while PostgreSQL is still
+        # initialising, the migrations fail to connect, and the container exits.
+        condition: service_healthy
+    volumes:
+      # Uploaded letters and CPM workbooks. A named volume, so they survive a
+      # rebuild -- these files are not reproducible from anything else.
+      - uep_uploads:/data/uploads
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health').read()\""]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      # Generous, because the container applies database migrations before it
+      # starts serving. A large migration on a full database takes a while, and
+      # failing the healthcheck mid-migration would restart the container.
+      start_period: 120s
+    # Also not published. Only nginx reaches the backend, which is what makes
+    # the X-Forwarded-For header trustworthy for per-IP login throttling.
+    expose:
+      - "8000"
+
+  frontend:
+    build:
+      context: ./frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      # host:container. The container listens on 8080 because it runs as an
+      # unprivileged user, which cannot bind a port below 1024.
+      - "80:8080"
+      # For HTTPS, uncomment this and see TLS-SETUP.md.
+      # - "443:8443"
+    # For HTTPS, uncomment the two lines below and point the left side at the
+    # directory on the server holding fullchain.pem and privkey.pem.
+    # `:ro` means the container can read the certificate but not change it.
+    # For Let's Encrypt, TLS-SETUP.md uses named volumes here instead.
+    # volumes:
+    #   - /root/uep-certs:/etc/nginx/certs:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:8080/ || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  # Named volumes are managed by Docker and outlive the containers.
+  # `docker volume ls` lists them. Backing up uep_db_data by copying files is
+  # NOT safe while PostgreSQL is running -- use the backup script, which uses
+  # pg_dump. See BACKUP-RUNBOOK.md.
+  uep_db_data:
+  uep_uploads:

@@ -12,7 +12,12 @@ config = context.config
 config.set_main_option("sqlalchemy.url", get_settings().database_url)
 
 if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
+    # disable_existing_loggers=False matters. The default is True, which
+    # switches off every logger that already exists -- including the
+    # application's own "uep.request" logger. Running migrations in the same
+    # process as the application (as the test suite does) would otherwise
+    # silence request logging from that point on, with nothing to indicate why.
+    fileConfig(config.config_file_name, disable_existing_loggers=False)
 
 target_metadata = Base.metadata
 
