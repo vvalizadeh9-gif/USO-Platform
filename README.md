@@ -63,11 +63,18 @@ the uploaded files live in named Docker volumes and survive rebuilds.
 ```bash
 git clone https://github.com/vvalizadeh9-gif/USO-Platform.git
 cd USO-Platform
-
-cp backend/.env.example .env
 ```
 
-Now edit `.env`. For local work the quickest correct setup is:
+**On a server**, generate a `.env` with real secrets:
+
+```bash
+./scripts/setup-env.sh
+```
+
+It generates the signing key and passwords, asks for the site address, and
+prints the admin login once — write it down.
+
+**For local development**, `cp backend/.env.example .env` and set just these:
 
 ```
 APP_ENV=development

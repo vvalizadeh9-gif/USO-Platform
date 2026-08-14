@@ -6,8 +6,10 @@
    display face + neutral body, tabular figures for dense data.
    =================================================================== */
 
-@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;450;500;600&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700&display=swap');
+/* Fonts are served from this application, not from Google. See fonts.css for
+   why: an internal server with no route to the public internet could not load
+   them, and Vazirmatn is the Farsi face. */
+@import url('./fonts.css');
 
 :root {
   /* Base surfaces */

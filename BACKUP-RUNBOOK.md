@@ -26,24 +26,34 @@ system, in [Practising a restore](#practising-a-restore-do-this-every-six-months
 
 | | |
 |---|---|
-| `scripts/backup.sh` | Makes a backup. Rotates old ones. |
-| `scripts/restore.sh` | Puts a backup back. Asks for confirmation first. |
-| `backups/daily/` | One per night, the last **14** kept. |
-| `backups/weekly/` | Every Sunday's, kept **3 months**. |
+| `scripts/backup.sh` | Backs up the database and the uploaded files. Rotates old ones. |
+| `scripts/restore.sh` | Puts both back. Asks for confirmation first. |
+| `backups/daily/` | One pair per night, the last **14** kept. |
+| `backups/weekly/` | Every Sunday's pair, kept **3 months**. |
 | `backups/pre-restore/` | A safety copy taken automatically before any restore. |
 
 Two levels of retention because problems are found at two speeds. Someone
 noticing a bad CPM import the next morning needs yesterday's; someone noticing
 in March that acceptance figures went wrong in January needs the weekly set.
 
-### What is backed up, and what is not
+### What is backed up
 
-**Backed up:** the entire database — sites, villages, work items, health checks,
-drive tests, acceptances, users, audit log.
+Two things, every night, both automatically:
 
-**NOT backed up: uploaded files.** Letters and attachments live in a separate
-Docker volume (`uep_uploads`) and `pg_dump` does not touch them. See
-[Backing up the uploaded files](#backing-up-the-uploaded-files) below.
+1. **The database** — sites, villages, work items, health checks, drive tests,
+   acceptances, users, audit log. Written as `uep-<date>.dump`.
+2. **The uploaded files** — letters and attachments, which live in a separate
+   Docker volume that `pg_dump` cannot see. Written as
+   `uep-uploads-<date>.tar.gz`, with the same timestamp as the dump beside it.
+
+They are deliberately kept as a matching pair. `restore.sh` restores the uploads
+archive whose timestamp matches the dump you chose, so a restore puts the
+database and its letters back to the *same* moment. Restoring one without the
+other leaves every letter link pointing at a file that is not on disk.
+
+If the uploads step fails, the script warns but still keeps the database backup
+— losing a good database backup because the uploads step failed after it would
+be worse than a missing letter.
 
 ---
 
@@ -232,7 +242,9 @@ The script:
 2. Takes a safety copy of the current database into `backups/pre-restore/`, so a
    restore you regret can itself be undone.
 3. Stops the application so nothing writes mid-restore.
-4. Restores.
+4. Restores the database, then the uploaded letters from the archive with the
+   matching timestamp. If that archive is missing it says so and restores the
+   database only, rather than putting back files from a different date.
 5. Starts everything again and waits for the backend to report healthy.
 
 Afterwards, check in the application: sign in, open Acceptance and see whether
@@ -243,36 +255,41 @@ If it was the wrong choice, restore the safety copy the same way.
 
 ---
 
-## Backing up the uploaded files
+## The uploaded files, by hand
 
-`pg_dump` covers the database. Letters and attachments live in the `uep_uploads`
-Docker volume and need copying separately:
+The nightly backup already covers letters and attachments, and `restore.sh`
+puts them back automatically. You should not normally need this section.
 
-```bash
-docker run --rm \
-  -v uso-platform_uep_uploads:/data:ro \
-  -v "$(pwd)/backups:/backup" \
-  alpine tar czf /backup/uploads-$(date +%F).tar.gz -C /data .
-```
+It is here for the case where you want a copy of just the files — to inspect
+them, or to move them to another machine — without touching the database.
 
-Check the volume's exact name first — Compose prefixes it with the directory
-name:
+Find the volume's real name first. Compose prefixes it with the directory name,
+so it changes if the directory is renamed:
 
 ```bash
 docker volume ls | grep uploads
 ```
 
-To put them back:
+Copy the files out:
 
 ```bash
 docker run --rm \
-  -v uso-platform_uep_uploads:/data \
+  -v <the volume name>:/data:ro \
   -v "$(pwd)/backups:/backup" \
-  alpine sh -c "cd /data && tar xzf /backup/uploads-YYYY-MM-DD.tar.gz"
+  alpine tar czf /backup/uploads-manual-$(date +%F).tar.gz -C /data .
 ```
 
-These files change far less often than the database, so monthly is usually
-enough — but include them in whatever copies data off the machine.
+Put them back:
+
+```bash
+docker run --rm \
+  -v <the volume name>:/data \
+  -v "$(pwd)/backups:/backup" \
+  alpine sh -c "cd /data && tar xzf /backup/uploads-manual-YYYY-MM-DD.tar.gz"
+```
+
+Restoring files this way does **not** touch the database. If you want both put
+back to the same moment, use `restore.sh` instead — that is what it is for.
 
 ---
 

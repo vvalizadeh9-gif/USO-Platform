@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 #
-# Back up the UEP database.
+# Back up UEP: the database, and the uploaded letters and attachments.
 #
-# Writes a compressed dump into backups/daily/, keeps 14 of them, and every
-# Sunday also copies one into backups/weekly/, keeping 3 months' worth.
+# Both go into backups/daily/, where the last 14 of each are kept. Every Sunday
+# a copy also goes into backups/weekly/, where 3 months' worth are kept.
 #
 # Run it by hand:
 #     ./scripts/backup.sh
@@ -68,19 +68,58 @@ fi
 
 echo "[$(date '+%Y-%m-%d %H:%M:%S')] Wrote ${TARGET} ($(numfmt --to=iec "$SIZE_BYTES" 2>/dev/null || echo "${SIZE_BYTES} bytes"))"
 
+# --- Uploaded files -------------------------------------------------------
+#
+# pg_dump covers the database and nothing else. Letters and attachments live in
+# a separate Docker volume, and a database restored without them leaves every
+# letter link pointing at a file that is not there. They are backed up here so
+# the nightly job covers the whole system rather than most of it.
+#
+# The volume is read through a throwaway container, because it belongs to Docker
+# rather than to a path on the host. Its name is looked up rather than assumed:
+# Compose prefixes volume names with the project directory, so the full name
+# changes if that directory is ever renamed.
+#
+# A failure here warns but does not abort. A missing letter is bad; losing the
+# database backup that already succeeded, because the uploads step failed after
+# it, would be worse.
+UPLOADS_TARGET="${DAILY_DIR}/uep-uploads-${TIMESTAMP}.tar.gz"
+UPLOADS_VOLUME="$(docker volume ls --format '{{.Name}}' | grep -E '_uep_uploads$' | head -1 || true)"
+
+if [ -z "$UPLOADS_VOLUME" ]; then
+    echo "WARNING: could not find the uploads volume; letters and attachments" >&2
+    echo "         were NOT backed up. The database backup above is fine." >&2
+else
+    if docker run --rm \
+        -v "${UPLOADS_VOLUME}:/data:ro" \
+        -v "$(pwd)/${DAILY_DIR}:/backup" \
+        alpine tar czf "/backup/$(basename "$UPLOADS_TARGET")" -C /data . 2>/dev/null
+    then
+        UPLOADS_SIZE="$(stat -c%s "$UPLOADS_TARGET" 2>/dev/null || stat -f%z "$UPLOADS_TARGET")"
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] Wrote ${UPLOADS_TARGET} ($(numfmt --to=iec "$UPLOADS_SIZE" 2>/dev/null || echo "${UPLOADS_SIZE} bytes")) from volume ${UPLOADS_VOLUME}"
+    else
+        echo "WARNING: backing up the uploads volume failed. The database backup" >&2
+        echo "         above is fine, but letters and attachments were missed." >&2
+    fi
+fi
+
 # Sundays also go to the weekly set, so there is still something to fall back on
 # when a problem is noticed more than two weeks after it started.
 if [ "$(date +%u)" -eq 7 ]; then
     cp "$TARGET" "${WEEKLY_DIR}/uep-${TIMESTAMP}.dump"
+    # Absent when the uploads step above warned rather than succeeded.
+    if [ -f "$UPLOADS_TARGET" ]; then
+        cp "$UPLOADS_TARGET" "${WEEKLY_DIR}/"
+    fi
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] Also kept as a weekly backup."
 fi
 
 # Rotation. -mtime +N deletes files older than N days.
-DELETED_DAILY="$(find "$DAILY_DIR" -name 'uep-*.dump' -mtime +${DAILY_KEEP_DAYS} -print -delete | wc -l)"
-DELETED_WEEKLY="$(find "$WEEKLY_DIR" -name 'uep-*.dump' -mtime +${WEEKLY_KEEP_DAYS} -print -delete | wc -l)"
+DELETED_DAILY="$(find "$DAILY_DIR" \( -name 'uep-*.dump' -o -name 'uep-uploads-*.tar.gz' \) -mtime +${DAILY_KEEP_DAYS} -print -delete | wc -l)"
+DELETED_WEEKLY="$(find "$WEEKLY_DIR" \( -name 'uep-*.dump' -o -name 'uep-uploads-*.tar.gz' \) -mtime +${WEEKLY_KEEP_DAYS} -print -delete | wc -l)"
 
 echo "[$(date '+%Y-%m-%d %H:%M:%S')] Rotation: removed ${DELETED_DAILY} daily and ${DELETED_WEEKLY} weekly backup(s)."
-echo "[$(date '+%Y-%m-%d %H:%M:%S')] Now holding $(find "$DAILY_DIR" -name 'uep-*.dump' | wc -l) daily and $(find "$WEEKLY_DIR" -name 'uep-*.dump' | wc -l) weekly backup(s)."
+echo "[$(date '+%Y-%m-%d %H:%M:%S')] Now holding $(find "$DAILY_DIR" -name 'uep-*.dump' | wc -l) daily and $(find "$WEEKLY_DIR" -name 'uep-*.dump' | wc -l) weekly database backup(s), plus $(find "$DAILY_DIR" "$WEEKLY_DIR" -name 'uep-uploads-*.tar.gz' | wc -l) uploads archive(s)."
 echo "[$(date '+%Y-%m-%d %H:%M:%S')] Backup complete."
 echo
 echo "Reminder: a backup nobody has ever restored is not a backup. If it has"

@@ -15,6 +15,7 @@ unless a step says otherwise.
 
 | I want to… | Go to |
 |---|---|
+| Set the server up for the first time | [First-time setup](#first-time-setup) |
 | Deploy a new version | [Deploying](#deploying) |
 | Undo a deploy | [Rolling back](#rolling-back) |
 | Put back yesterday's data | [Restoring a backup](#restoring-a-backup) |
@@ -35,6 +36,31 @@ There is also an **Admin → System Health** screen in the application, which
 shows whether the database is reachable, whether migrations are up to date, when
 CPM was last imported, and how many change requests are waiting. Check there
 first — it needs no terminal.
+
+---
+
+## First-time setup
+
+Only once, before the very first deploy. Skip to [Deploying](#deploying) if
+`.env` already exists.
+
+```bash
+cd /path/to/USO-Platform
+./scripts/setup-env.sh
+```
+
+It generates the JWT signing key, the database password and a first admin
+password, asks you for the address people will type into their browser, and
+writes `.env`. It then prints the admin username and password once — **write
+them down before closing the terminal.**
+
+It refuses to overwrite an existing `.env`, because changing the database
+password out from under a database that is already using it locks the
+application out of its own data.
+
+> `.env` is deliberately excluded from git, so it is **not** backed up with your
+> code. It is the only copy of the database password. Keep a copy wherever your
+> organisation stores passwords — if it is lost, the data cannot be opened.
 
 ---
 
