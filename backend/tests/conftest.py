@@ -8,6 +8,7 @@ they must also be the only thing that builds the test database, or the tests
 stop being evidence that a deploy will work.
 """
 import os
+import tempfile
 from pathlib import Path
 
 # Mark this process as a development machine before anything imports the
@@ -16,6 +17,19 @@ from pathlib import Path
 # three, so it has to say what it is. pytest loads this file before it imports
 # any test module, which is what makes setting it here early enough.
 os.environ.setdefault("APP_ENV", "development")
+
+# Uploads go to a temporary directory, not to the production default of
+# /data/uploads.
+#
+# The CPM import calls os.makedirs(settings.upload_dir), and creating /data
+# needs root. Anyone running the suite as an ordinary user -- which includes
+# every CI runner -- got a PermissionError, and because the import is what seeds
+# the test data, seventeen tests failed from that one cause. It passed only for
+# a root user, which is exactly the kind of "works on my machine" the suite is
+# supposed to be free of.
+os.environ.setdefault(
+    "UPLOAD_DIR", str(Path(tempfile.gettempdir()) / "uep-test-uploads")
+)
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent
 
