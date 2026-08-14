@@ -8,6 +8,22 @@ something is technical, the "What it means" line explains it in plain language.
 
 ---
 
+## The short version
+
+If you read nothing else, these are the things that still need a decision or an
+action from you. Everything else below is context.
+
+| | What | Where |
+|---|---|---|
+| 1 | **None of the Docker work could be tested** — this machine had no Docker. The first `docker compose up -d --build` is the first real test. | [Phase 4](#none-of-the-docker-work-could-be-tested-here) |
+| 2 | **Backups never leave the server.** That protects against a bad import, not against losing the machine. | [Phase 4](#backups-still-need-to-leave-the-machine) |
+| 3 | **Uploaded letters are not in the nightly backup** — only the database is. | [Phase 4](#uploaded-files-are-not-covered-by-the-database-backup) |
+| 4 | **The fonts come from Google.** On an internal server with no internet, Farsi text will not render properly. | [Phase 2](#found-while-writing-the-content-security-policy-the-fonts-come-from-google) |
+| 5 | **Delete the stale branch** — one click in the GitHub web interface; I could not do it from here. | [Phase 0](#the-stale-branch-was-a-duplicate-not-lost-work) |
+| 6 | **Pinned images stop receiving security updates** unless someone refreshes them once or twice a year. | [Phase 4](#the-base-images-are-pinned-by-digest-which-means-they-will-go-stale) |
+
+---
+
 ## Phase 0 — version control
 
 ### The eight prior merges did not lose the login captcha or the login UX work
@@ -436,3 +452,35 @@ state machine and the CPM import are all covered on the backend, so the rules
 are protected. What is not protected is the interface — a button wired to the
 wrong endpoint, or a screen that stops rendering, would reach the server
 unnoticed.
+
+---
+
+## Phase 6 — documentation
+
+### The `/auth/me` endpoint mentioned in the brief does not exist
+
+Recorded again here because it affects a planned future change. The brief listed
+"revalidating `uep_user` against `/auth/me`" as out of scope; that endpoint has
+to be written first. The login response already returns the full user object,
+which is where the frontend gets it from today.
+
+### Things that look like bugs and are not
+
+Collected here because they are the most likely thing for a future maintainer to
+"fix" by accident. Each is explained in `ARCHITECTURE.md`.
+
+| Looks wrong | Why it is right |
+|---|---|
+| The هدف filter rejects `هدف (Verbally)` | Those variants were excluded from every KPI anyway; storing them only inflated village counts. The filter defines the programme's scope. |
+| Acceptance counts the same site more than once | The obligation is per village. Two villages served by one site are two acceptances. Deduplicating would undercount. |
+| Admin gets `403` on operational actions | Deliberate separation of duties: whoever controls user accounts must not also be able to record operational results. |
+| Subcontractors cannot set a problem category | The party being measured does not get to assign blame. |
+| A failed site vanishes from the basket | It is deliberately withheld until triaged and fixed. That is what makes the remediation loop close by itself. |
+| CPM re-import does not apply changes | It raises change requests for a person to decide. An accidental spreadsheet edit would otherwise invalidate a health check. |
+
+### What is not documented, and deliberately so
+
+The frontend components have no architecture document. They are conventional
+React, they hold no business rules, and the screens map one-to-one onto the
+concepts in `ARCHITECTURE.md`. Documenting them would produce something that
+goes stale faster than it helps.
