@@ -105,6 +105,39 @@ if [ $RESTORE_STATUS -ne 0 ]; then
     echo "      $SAFETY" >&2
 fi
 
+# --- Uploaded files -------------------------------------------------------
+#
+# backup.sh writes an uploads archive alongside each database dump, named with
+# the same timestamp. If the matching one is there, restore it too: a database
+# restored without its letters leaves every letter link pointing at a file that
+# is not on disk.
+#
+# Only restored when the matching archive exists. Restoring yesterday's letters
+# next to last month's database would be worse than leaving them alone.
+UPLOADS_ARCHIVE="$(dirname "$BACKUP_FILE")/$(basename "$BACKUP_FILE" .dump | sed 's/^uep-/uep-uploads-/').tar.gz"
+
+if [ -f "$UPLOADS_ARCHIVE" ]; then
+    UPLOADS_VOLUME="$(docker volume ls --format '{{.Name}}' | grep -E '_uep_uploads$' | head -1 || true)"
+    if [ -n "$UPLOADS_VOLUME" ]; then
+        echo "[$(date '+%H:%M:%S')] Restoring uploaded letters and attachments..."
+        if docker run --rm \
+            -v "${UPLOADS_VOLUME}:/data" \
+            -v "$(cd "$(dirname "$UPLOADS_ARCHIVE")" && pwd):/backup:ro" \
+            alpine sh -c "cd /data && tar xzf /backup/$(basename "$UPLOADS_ARCHIVE")"
+        then
+            echo "[$(date '+%H:%M:%S')] Uploads restored from $(basename "$UPLOADS_ARCHIVE")"
+        else
+            echo "WARNING: restoring the uploads archive failed. The database was" >&2
+            echo "         restored; letters may be missing from disk." >&2
+        fi
+    else
+        echo "WARNING: could not find the uploads volume; letters were not restored." >&2
+    fi
+else
+    echo "[$(date '+%H:%M:%S')] No matching uploads archive; restoring the database only."
+    echo "           (Expected: $(basename "$UPLOADS_ARCHIVE"))"
+fi
+
 echo "[$(date '+%H:%M:%S')] Starting the application again..."
 docker compose up -d >/dev/null
 

@@ -17,8 +17,8 @@ action from you. Everything else below is context.
 |---|---|---|
 | 1 | **None of the Docker work could be tested** — this machine had no Docker. The first `docker compose up -d --build` is the first real test. | [Phase 4](#none-of-the-docker-work-could-be-tested-here) |
 | 2 | **Backups never leave the server.** That protects against a bad import, not against losing the machine. | [Phase 4](#backups-still-need-to-leave-the-machine) |
-| 3 | **Uploaded letters are not in the nightly backup** — only the database is. | [Phase 4](#uploaded-files-are-not-covered-by-the-database-backup) |
-| 4 | **The fonts come from Google.** On an internal server with no internet, Farsi text will not render properly. | [Phase 2](#found-while-writing-the-content-security-policy-the-fonts-come-from-google) |
+| 3 | ~~Uploaded letters are not in the nightly backup.~~ **Fixed** — the nightly job now covers both. | [Phase 4](#uploaded-files-are-not-covered-by-the-database-backup) |
+| 4 | ~~The fonts come from Google.~~ **Fixed** — the three fonts are now served by the application itself. | [Phase 2](#found-while-writing-the-content-security-policy-the-fonts-come-from-google) |
 | 5 | **Delete the stale branch** — one click in the GitHub web interface; I could not do it from here. | [Phase 0](#the-stale-branch-was-a-duplicate-not-lost-work) |
 | 6 | **Pinned images stop receiving security updates** unless someone refreshes them once or twice a year. | [Phase 4](#the-base-images-are-pinned-by-digest-which-means-they-will-go-stale) |
 
@@ -208,11 +208,26 @@ what suffers most.
 It is also a slow first paint for every user, and a third party learning who
 visits the site.
 
-**Recommendation:** download the three font files into `frontend/src/assets/fonts/`
-and serve them from the application. It removes an external dependency from a
-platform meant to last ten years, works on an isolated network, and lets two
-entries be deleted from the Content-Security-Policy. Not done here because it is
-a frontend asset change, outside this brief.
+**This has since been fixed.** The three fonts are downloaded into
+`frontend/src/assets/fonts/` (13 files, 360 KB) and served by the application.
+`scripts/fetch-fonts.py` regenerates them, and is committed so a future
+maintainer can add a weight or take a font update without reverse-engineering
+what was done.
+
+What changed as a result:
+
+* Farsi renders correctly on a server with no route to the public internet.
+* The Content-Security-Policy no longer needs any third-party origin — every
+  source is now `self`.
+* The built frontend makes **no external network requests at all**. The only
+  remaining `http://` strings in the build are React's error-message links, XML
+  namespace identifiers and a `window.location` fallback, none of which are ever
+  fetched.
+
+The `unicode-range` rules are kept exactly as Google generated them, so a
+browser still downloads only the subsets it needs — the Arabic subset is not
+fetched for a Latin-only page. All three are variable fonts, so the four weights
+of each share one file per subset.
 
 ### The per-IP login limit depends on nginx
 
@@ -334,14 +349,24 @@ expected lifetime and will force the issue.
 
 ### Uploaded files are not covered by the database backup
 
-`pg_dump` backs up the database. Letters and attachments live in a separate
-Docker volume and are not in it. `BACKUP-RUNBOOK.md` gives the commands for
-backing that volume up separately, but it is **not automated** — the nightly
-cron job covers the database only.
+**This has since been fixed.** `backup.sh` now writes an uploads archive beside
+each database dump, sharing its timestamp, and `restore.sh` restores the archive
+matching the dump you chose — so the database and its letters always go back to
+the same moment. Both are rotated together.
 
-This was left manual because those files change far less often and a sensible
-schedule for them depends on how much use the letters feature actually gets. If
-it turns out to be used heavily, the volume backup should join the cron job.
+Two deliberate choices in how it behaves:
+
+* **A failed uploads step warns rather than aborting.** The database backup has
+  already succeeded by that point, and throwing it away because the second half
+  failed would be worse than a missing letter.
+* **A restore with no matching uploads archive restores the database only**, and
+  says so. Putting back last month's letters next to today's database would be
+  worse than leaving them alone.
+
+The volume name is looked up rather than assumed, because Compose prefixes it
+with the project directory name — the old documented command hardcoded
+`uso-platform_uep_uploads`, which would have silently backed up nothing if the
+directory were ever renamed.
 
 ### Backups still need to leave the machine
 
