@@ -65,7 +65,14 @@ git clone https://github.com/vvalizadeh9-gif/USO-Platform.git
 cd USO-Platform
 ```
 
-**On a server**, generate a `.env` with real secrets:
+**On a server**, prepare the machine first — Docker, firewall, swap — if it is a
+fresh one:
+
+```bash
+sudo ./scripts/bootstrap-server.sh
+```
+
+Then generate a `.env` with real secrets:
 
 ```bash
 ./scripts/setup-env.sh
@@ -222,6 +229,7 @@ database, so the site goes down instead of going wrong.
 
 | Document | What it covers |
 |---|---|
+| **`SERVER-SETUP-TUTORIAL.md`** | Taking a bare server to a running UEP, from a Windows PC: reinstalling the OS, hardening SSH, installing Docker, and the first deploy. Written to teach, not just to be followed. |
 | **`ARCHITECTURE.md`** | The domain: sites, villages, work items, the health-check lifecycle, the CPM import rules, acceptance, and the full role and permission matrix. Read this first. |
 | **`RUNBOOK.md`** | Deploying, rolling back, restoring, rotating the signing key, resetting a password, and what to do when the backend will not start. |
 | **`MIGRATION-RUNBOOK.md`** | Database migrations: what they do, what the error messages mean, how to roll back. |
@@ -248,7 +256,7 @@ frontend/
     pages/       one per screen
     components/  shared UI
     context/     authentication, notifications
-scripts/         backup.sh, restore.sh
+scripts/         bootstrap-server.sh, setup-env.sh, backup.sh, restore.sh
 .github/         CI workflow
 ```
 
