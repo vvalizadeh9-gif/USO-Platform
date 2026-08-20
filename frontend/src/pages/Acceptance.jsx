@@ -10,9 +10,13 @@ import {
   Clock,
   Layers,
   GitCompareArrows,
+  ClipboardCheck,
 } from 'lucide-react'
 import api from '../api/client'
+import { useAuth } from '../context/AuthContext'
 import { Loading, PageHead, fadeUp, stagger } from '../components/ui'
+import VillageList from './acceptance/VillageList'
+import ReviewQueue from './acceptance/ReviewQueue'
 
 // ICT and CRA get a stable accent colour each, reused across every card and
 // table so the eye can track one authority at a glance when they sit side by
@@ -23,15 +27,22 @@ const CRA = 'var(--violet, #a06bff)'
 const TABS = [
   { key: 'overview', label: 'Overview', icon: LayoutDashboard },
   { key: 'provinces', label: 'Province Status', icon: MapPin },
+  { key: 'villages', label: 'Villages', icon: Layers },
+  // Only the roles that may actually validate get the queue; for everyone else
+  // a tab they cannot act on is just a dead end.
+  { key: 'queue', label: 'Review Queue', icon: ClipboardCheck, roles: ['PM', 'Coordinator'] },
 ]
 
 // The whole Acceptance dashboard reads ICT/CRA approval seeded from the CPM
 // execution block (cols AV..BQ). Counts are of every (site, village) row in
 // the DT-Done هدف universe — duplicates kept — see acceptance_analytics.py.
 export default function Acceptance() {
+  const { user } = useAuth()
   const [data, setData] = useState(null)
   const [error, setError] = useState(false)
   const [tab, setTab] = useState('overview')
+  const canReview = ['PM', 'Coordinator'].includes(user?.role?.name)
+  const tabs = TABS.filter((t) => !t.roles || t.roles.includes(user?.role?.name))
 
   useEffect(() => {
     api
@@ -52,7 +63,7 @@ export default function Acceptance() {
       />
 
       <div className="tabs">
-        {TABS.map((t) => (
+        {tabs.map((t) => (
           <button key={t.key} className={`tab ${tab === t.key ? 'active' : ''}`} onClick={() => setTab(t.key)}>
             <span className="row" style={{ gap: 8 }}><t.icon size={15} /> {t.label}</span>
           </button>
@@ -69,6 +80,8 @@ export default function Acceptance() {
         >
           {tab === 'overview' && <OverviewTab data={data} />}
           {tab === 'provinces' && <ProvinceTab provinces={data.provinces} />}
+          {tab === 'villages' && <VillageList canReview={canReview} />}
+          {tab === 'queue' && <ReviewQueue />}
         </motion.div>
       </AnimatePresence>
     </>

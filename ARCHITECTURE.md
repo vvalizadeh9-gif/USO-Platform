@@ -287,7 +287,9 @@ records rather than stored as a field that could drift out of step with them.
 
 ### Acceptance
 
-Recorded per village and per technology, in two independent stages:
+Acceptance is the approval of finished drive-test work, so a site whose drive
+test is not Done cannot be submitted at all. It is recorded per village and per
+technology, by two independent authorities:
 
 ```
 Village + Technology
@@ -297,19 +299,70 @@ Village + Technology
         └── CRA status:  Pending → Approved / Rejected   (+ date, letter, comment)
 ```
 
-ICT and CRA are separate authorities and are tracked separately. A
-village-technology can be ICT-approved and still awaiting CRA.
+ICT (the province office) and CRA (the region office) are separate authorities
+and are tracked separately. A village-technology can be ICT-approved and still
+awaiting CRA. Only these two stages are recorded today; the upstream ones
+(ICT HQ, CRA Setad) are deliberately left out until they are needed, and
+`authority` is stored as a value rather than a column so adding them later is a
+data change, not a migration.
 
-Approvals arrive two ways, and both are supported on purpose: recorded in the
-app by a PM or Coordinator, or maintained by filling in the acceptance columns of
-the monthly CPM workbook.
+#### How a verdict is reached
+
+Nothing a contractor types reaches the `acceptances` table directly. A
+submission is a *claim*; a coordinator or PM turns it into a *fact*:
+
+```
+contractor or coordinator          coordinator or PM
+        submits              →         validates            →   acceptances
+  (letter + per-tech verdicts                                    (the record)
+   + scanned evidence)              or returns it
+                                    with a reason  →  submitter files round 2
+```
+
+Every round is kept. A village rejected, fixed and re-submitted has both rounds
+on the record, with who decided each and why — `acceptance_submissions`,
+`acceptance_submission_techs` and `acceptance_evidence` hold that history, and
+the status the dashboard counts is derived from it rather than typed over it.
+
+#### The three rules that look wrong and are not
+
+1. **Only the technologies CPM requested may be answered.** A 3G/4G site never
+   shows a 2G box, and the server refuses one if it arrives anyway.
+2. **One rejected technology rejects the whole village.** A village approved for
+   3G and rejected for 4G is a rejected village, not a partly approved one.
+3. **A village is finished only when ICT *and* CRA have both approved every
+   requested technology.** ICT alone is not acceptance.
+
+A site rolls up from its villages: **Closed** when all are approved,
+**Open - Partial** when some are, **Open** when none are.
 
 > **Acceptance counting does not deduplicate.** Every site/village row is
 > counted. This looks like a bug and is not — the obligation is per village, so
 > two villages served by one site are two acceptances. Do not "optimise" this.
 
-Supporting letters can be uploaded and linked to many villages at once, because
-one letter from ICT typically covers a batch.
+#### Letters, evidence, and dates
+
+Submission is per village, one at a time, even though one ICT letter routinely
+covers a hundred villages — the letter number is a field on each submission
+rather than a shared entity, because each village is judged on its own.
+
+Evidence is **content-addressed**: a file is stored under the SHA-256 of its
+contents, so that one letter scanned once and attached to a hundred villages is
+one file on disk and a hundred rows. The corollary is that deleting an evidence
+row must never delete the file. Uploads are type-checked by magic bytes, not by
+extension.
+
+Letter dates are entered and displayed in Shamsi and stored Gregorian; the
+conversion lives only in `core/jalali.py`, never in the browser.
+
+#### The CPM workbook is no longer the source of acceptance
+
+The several thousand historical verdicts were seeded from the workbook's
+acceptance columns on the first import. From this release the app is the system
+of record and the monthly file carries no acceptance data, so those columns are
+blank and the importer does nothing with them. Should a stale cell ever appear
+in a future file, `acceptances.ict_source` / `cra_source` mark verdicts decided
+in the app and the importer will not overwrite them.
 
 ---
 
@@ -350,7 +403,8 @@ Admin is a *systems* role. PM is an *operational* role. Admin deliberately
 | Review a health-check result | **No** | Yes | Yes |
 | Assign a work item | **No** | Yes | No |
 | Review a drive test | **No** | No | Yes |
-| Set acceptance status | **No** | Yes | Yes |
+| Submit an acceptance letter | **No** | Yes | Yes (contractor too) |
+| Validate an acceptance submission | **No** | Yes | Yes |
 | Decide a CPM change request | Yes | Yes | No |
 | View baskets, results, reports | Yes | Yes | Yes |
 
@@ -423,6 +477,8 @@ Services worth knowing:
 | `health_check.py` | The basket, assignments, results, the remediation loop |
 | `visibility.py` | Row-level scoping — the single source of truth |
 | `acceptance_analytics.py` | ICT/CRA reporting |
+| `acceptance_workflow.py` | Acceptance submission, review, and the derived verdicts |
+| `evidence_store.py` | Content-addressed storage for scanned letters |
 | `workflow.py` | Work-item stage transitions |
 | `audit.py` | Audit entries and notifications |
 

@@ -37,6 +37,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session, selectinload
 
 from app.models.acceptance import Acceptance, CpmChangeRequest, CpmImportBatch
+from app.services.acceptance_workflow import SOURCE_APP as _APP_SOURCE
 from app.models.reference import Contractor, Province, Region
 from app.models.workitem import Site, Village, WorkItem
 from app.services import cpm_columns as C
@@ -516,12 +517,17 @@ class CpmImportService:
     def _apply_acceptance(self, raw: list, village: Village) -> None:
         """Apply the per-technology ICT/CRA statuses from the CPM columns.
 
-        Runs on **every** import (not just the first seed) so coordinators can
-        update approvals by editing the CPM file and re-uploading. Rules:
+        This is how the several thousand historical verdicts were seeded on the
+        first import. From this release approvals are entered and reviewed in
+        the app instead, and the workbook carries no acceptance data, so on a
+        normal monthly file every cell here is blank and this does nothing.
+        Rules:
 
         * A blank cell leaves the existing status untouched — a later monthly
           file with an empty acceptance cell never downgrades an approval.
-        * A recognised value (see ``_approval``) sets the status.
+        * A verdict already decided in the app is never overwritten, whatever
+          the cell says. The app is the system of record.
+        * Otherwise a recognised value (see ``_approval``) sets the status.
         * Missing per-tech rows are created (defaulting to Pending) so all three
           technologies are always represented.
         """
@@ -539,11 +545,16 @@ class CpmImportService:
                 village.acceptances.append(acc)
                 by_tech[tech] = acc
 
+            # A verdict already decided in the app is never overwritten by the
+            # workbook. From this release the app is the system of record for
+            # acceptance and the CPM file carries no acceptance data at all, so
+            # this only ever fires on a stale cell left in some future file —
+            # which must not be allowed to undo a coordinator's decision.
             ict_val = C.clean(self._get(raw, C.COL_HISTORY[ict_key]))
-            if ict_val is not None:
+            if ict_val is not None and acc.ict_source != _APP_SOURCE:
                 acc.ict_status = self._approval(ict_val, tech)
             cra_val = C.clean(self._get(raw, C.COL_HISTORY[cra_key]))
-            if cra_val is not None:
+            if cra_val is not None and acc.cra_source != _APP_SOURCE:
                 acc.cra_status = self._approval(cra_val, tech)
 
     # Values (case-insensitive) that a field team may type to mean approved or

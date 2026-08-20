@@ -220,6 +220,111 @@ class AcceptanceUpdate(BaseModel):
     cra_date: date | None = None
 
 
+
+# ---------- Acceptance submissions ----------
+class TechnologyClaim(BaseModel):
+    """One technology's claimed verdict inside a submission."""
+
+    technology: str
+    claimed_status: str  # Approved | Rejected
+    # Required by the service when the status is Rejected.
+    comment: str | None = None
+
+
+class AcceptanceSubmissionCreate(BaseModel):
+    authority: str  # ICT | CRA
+    letter_number: str = Field(min_length=1, max_length=120)
+    # Shamsi, "1404/05/29". Converted to Gregorian for storage by the endpoint,
+    # so the calendar conversion lives in one place rather than in the browser.
+    letter_date_shamsi: str | None = None
+    technologies: list[TechnologyClaim]
+
+
+class AcceptanceSubmissionUpdate(BaseModel):
+    letter_number: str = Field(min_length=1, max_length=120)
+    letter_date_shamsi: str | None = None
+    technologies: list[TechnologyClaim]
+
+
+class AcceptanceReviewRequest(BaseModel):
+    decision: str  # Validated | Returned
+    comment: str | None = None
+
+
+class EvidenceOut(ORMModel):
+    id: int
+    original_filename: str
+    content_type: str | None
+    size_bytes: int
+    uploaded_at: datetime
+
+
+class TechnologyClaimOut(ORMModel):
+    technology: str
+    claimed_status: str
+    comment: str | None
+
+
+class AcceptanceSubmissionOut(ORMModel):
+    id: int
+    village_id: int
+    authority: str
+    round_no: int
+    letter_number: str
+    letter_date: date | None
+    letter_date_shamsi: str | None = None
+    source: str
+    review_status: str
+    submitted_by_name: str | None = None
+    submitted_at: datetime
+    reviewed_by_name: str | None = None
+    reviewed_at: datetime | None = None
+    review_comment: str | None = None
+    technologies: list[TechnologyClaimOut] = []
+    evidence: list[EvidenceOut] = []
+    # Context, so a review queue row is readable without a second request.
+    village_name: str | None = None
+    village_code: str | None = None
+    site_code: str | None = None
+    province_name: str | None = None
+
+
+class AcceptanceVillageRow(BaseModel):
+    """One village on the acceptance list, with its derived verdicts."""
+
+    village_id: int
+    village_code: str | None
+    village_name: str | None
+    site_code: str | None
+    work_item_id: int
+    province_name: str | None
+    requested_technologies: list[str]
+    ict_verdict: str
+    cra_verdict: str
+    verdict: str
+    site_status: str
+    pending_authorities: list[str] = []
+    returned_authorities: list[str] = []
+    can_submit: list[str] = []
+
+
+class AcceptanceVillageList(BaseModel):
+    total: int
+    rows: list[AcceptanceVillageRow]
+
+
+class AcceptanceVillageDetail(BaseModel):
+    village: AcceptanceVillageRow
+    dt_status: str | None
+    submissions: list[AcceptanceSubmissionOut]
+
+
+class AcceptanceUploadLimits(BaseModel):
+    accepted_extensions: list[str]
+    max_file_mb: int
+    max_files_per_submission: int
+
+
 # ---------- Letters ----------
 class LetterCreate(BaseModel):
     letter_number: str
