@@ -131,7 +131,41 @@ def _submission_states(db: Session, village_ids: list[int]) -> dict:
     return states
 
 
-def _row(village: Village, states: dict) -> AcceptanceVillageRow:
+def _last_activity(db: Session, village_ids: list[int]) -> dict:
+    """Per village, when its acceptance last moved.
+
+    The most recent of any submission's review or submission time — so a
+    village that bounced four times reads "waiting 6 days" against its current
+    round, not three hundred days against its first.
+    """
+    if not village_ids:
+        return {}
+    rows = db.execute(
+        select(
+            AcceptanceSubmission.village_id,
+            func.max(
+                func.coalesce(
+                    AcceptanceSubmission.reviewed_at, AcceptanceSubmission.submitted_at
+                )
+            ),
+        )
+        .where(AcceptanceSubmission.village_id.in_(village_ids))
+        .group_by(AcceptanceSubmission.village_id)
+    ).all()
+    return {village_id: moment for village_id, moment in rows if moment}
+
+
+def _days_since(moment) -> int | None:
+    if moment is None:
+        return None
+    # SQLite hands back naive datetimes; treat those as UTC rather than
+    # letting the subtraction raise.
+    if moment.tzinfo is None:
+        moment = moment.replace(tzinfo=timezone.utc)
+    return max((datetime.now(timezone.utc) - moment).days, 0)
+
+
+def _row(village: Village, states: dict, activity: dict | None = None) -> AcceptanceVillageRow:
     work_item = village.work_item
     site = work_item.site if work_item else None
     state = states.get(village.id, {})
@@ -161,6 +195,7 @@ def _row(village: Village, states: dict) -> AcceptanceVillageRow:
         cra_verdict=flow.authority_verdict(village, "CRA"),
         verdict=flow.village_verdict(village),
         site_status=flow.site_status(work_item) if work_item else flow.SITE_OPEN,
+        waiting_days=_days_since((activity or {}).get(village.id)),
         pending_authorities=pending,
         returned_authorities=sorted(state.get("returned", ())),
         can_submit=can_submit,
@@ -270,8 +305,10 @@ def list_villages(
         )
 
     villages = db.execute(stmt.order_by(Village.id)).unique().scalars().all()
-    states = _submission_states(db, [v.id for v in villages])
-    rows = [_row(v, states) for v in villages]
+    village_ids = [v.id for v in villages]
+    states = _submission_states(db, village_ids)
+    activity = _last_activity(db, village_ids)
+    rows = [_row(v, states, activity) for v in villages]
 
     # Verdicts are derived from the loaded graph rather than stored, so status
     # filtering and the total happen here rather than in SQL.
@@ -279,7 +316,13 @@ def list_villages(
         wanted = status.strip().title()
         rows = [r for r in rows if r.verdict == wanted]
     if mine_only:
-        rows = [r for r in rows if r.can_submit or r.returned_authorities]
+        # "Needs me" means different work depending on who is asking. Someone
+        # who validates wants their review queue; someone who files letters
+        # wants what is unfiled or was sent back to them.
+        if user.role.name in _REVIEW_ROLES:
+            rows = [r for r in rows if r.pending_authorities]
+        else:
+            rows = [r for r in rows if r.can_submit or r.returned_authorities]
 
     total = len(rows)
     return AcceptanceVillageList(total=total, rows=rows[offset : offset + limit])
@@ -313,7 +356,7 @@ def village_detail(
     )
     states = _submission_states(db, [village_id])
     return AcceptanceVillageDetail(
-        village=_row(village, states),
+        village=_row(village, states, _last_activity(db, [village_id])),
         dt_status=village.work_item.dt_status if village.work_item else None,
         submissions=[_submission_out(s, names, village) for s in submissions],
     )

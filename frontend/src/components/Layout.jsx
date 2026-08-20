@@ -29,8 +29,7 @@ const NAV = [
   // Category owners get exactly one screen: the sites waiting on their team.
   { to: '/my-fix-queue', label: 'My Fix Queue', icon: Wrench, roles: CATEGORY_OWNER_ROLES },
   { to: '/action-center', label: 'Action Center', icon: Radio, key: 'action' },
-  { to: '/acceptance', label: 'Acceptance', icon: BadgeCheck, hideRoles: ['Admin', 'Contractor'] },
-  { to: '/my-acceptance', label: 'My Acceptance', icon: BadgeCheck, roles: ['Contractor'] },
+  { to: '/acceptance', label: 'Acceptance', icon: BadgeCheck, hideRoles: ['Admin'] },
 ]
 
 export default function Layout() {

@@ -303,6 +303,11 @@ class AcceptanceVillageRow(BaseModel):
     cra_verdict: str
     verdict: str
     site_status: str
+    # Days since this village's acceptance last moved — a submission sent, a
+    # validation, a return. None when nothing has been filed yet. This is what
+    # lets the list answer "how long has this been sitting with ICT", which is
+    # the question that actually moves a province office.
+    waiting_days: int | None = None
     pending_authorities: list[str] = []
     returned_authorities: list[str] = []
     can_submit: list[str] = []

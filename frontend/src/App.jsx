@@ -17,7 +17,6 @@ const WorkItems = lazy(() => import('./pages/WorkItems'))
 const WorkItemDetail = lazy(() => import('./pages/WorkItemDetail'))
 const ActionCenter = lazy(() => import('./pages/ActionCenter'))
 const Acceptance = lazy(() => import('./pages/Acceptance'))
-const MyAcceptance = lazy(() => import('./pages/MyAcceptance'))
 const Admin = lazy(() => import('./pages/Admin'))
 
 function Protected({ children, adminOnly, allowedRoles }) {
@@ -69,14 +68,8 @@ export default function App() {
           <Route path="/action-center" element={<ActionCenter />} />
           <Route path="/notifications" element={<Navigate to="/action-center" replace />} />
           <Route path="/acceptance" element={<Acceptance />} />
-          <Route
-            path="/my-acceptance"
-            element={
-              <Protected allowedRoles={['Contractor']}>
-                <MyAcceptance />
-              </Protected>
-            }
-          />
+          {/* The old contractor-only page is gone: everyone uses /acceptance. */}
+          <Route path="/my-acceptance" element={<Navigate to="/acceptance" replace />} />
           <Route path="/admin" element={<Protected allowedRoles={['Admin', 'PM']}><Admin /></Protected>} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />

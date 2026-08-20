@@ -511,3 +511,261 @@ tbody tr:last-child td { border-bottom: none; }
 @media (prefers-reduced-motion: reduce) {
   * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
 }
+
+/* ===================================================================
+   Acceptance — village list and the ICT / CRA village screen.
+   Quieter than the older tables on purpose: acceptance is read in long
+   sittings, so the row separators are hairlines, the status columns carry
+   the colour, and everything structural stays out of the way.
+   =================================================================== */
+
+.acc-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 14px 16px;
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+/* Segmented filter. One control, so the eye reads it as a single choice
+   rather than a row of unrelated buttons. */
+.seg {
+  display: inline-flex;
+  background: var(--surface-3);
+  border-radius: 999px;
+  padding: 3px;
+  gap: 2px;
+}
+
+.seg button {
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  padding: 6px 14px;
+  border-radius: 999px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background .14s ease, color .14s ease;
+}
+
+.seg button:hover { color: var(--text); }
+
+.seg button[aria-pressed="true"] {
+  background: var(--surface-1);
+  color: var(--text);
+  box-shadow: var(--shadow-1);
+}
+
+.seg .seg-count {
+  font-variant-numeric: tabular-nums;
+  opacity: .6;
+  margin-left: 6px;
+  font-size: 12px;
+}
+
+.acc-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--surface-2);
+  border: 1px solid var(--border-soft);
+  border-radius: 999px;
+  padding: 0 6px 0 12px;
+  min-width: 230px;
+}
+
+.acc-search input {
+  border: 0;
+  background: transparent;
+  font: inherit;
+  font-size: 13.5px;
+  color: var(--text);
+  padding: 8px 0;
+  width: 100%;
+  outline: none;
+}
+
+.acc-search input::placeholder { color: var(--text-dim); }
+
+/* ---- the list ---- */
+.acc-table { width: 100%; border-collapse: collapse; }
+
+.acc-table th {
+  text-align: left;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  padding: 0 14px 10px;
+  white-space: nowrap;
+}
+
+.acc-table td {
+  padding: 13px 14px;
+  border-top: 1px solid var(--border-soft);
+  vertical-align: middle;
+}
+
+.acc-table tbody tr { transition: background .12s ease; }
+.acc-table tbody tr:hover { background: var(--surface-2); }
+
+.acc-primary { font-weight: 600; color: var(--text); line-height: 1.3; }
+.acc-secondary { font-size: 11.5px; color: var(--text-dim); margin-top: 2px; }
+.acc-num { font-variant-numeric: tabular-nums; }
+
+/* Site status rides under the site code rather than standing as its own
+   column: it repeats identically for every village of a site, and level with
+   Final it reads as a competing answer to the same question. */
+.acc-site-state {
+  display: inline-block;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: .02em;
+  margin-top: 3px;
+  color: var(--text-dim);
+}
+.acc-site-state.is-closed { color: var(--green); }
+.acc-site-state.is-partial { color: var(--amber); }
+
+.tech-chip {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: var(--surface-3);
+  border-radius: 5px;
+  padding: 2px 6px;
+  margin-right: 4px;
+  font-variant-numeric: tabular-nums;
+}
+
+.acc-flag {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+.acc-flag.is-review { color: var(--amber); background: var(--amber-dim); }
+.acc-flag.is-returned { color: var(--red); background: var(--red-dim); }
+
+/* ---- the village screen: two authorities, side by side ---- */
+.auth-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+@media (max-width: 1100px) {
+  .auth-grid { grid-template-columns: minmax(0, 1fr); }
+}
+
+.auth-panel {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-1);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.auth-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 13px 15px;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.auth-head .auth-name { font-weight: 600; font-size: 14px; }
+.auth-head .auth-where { font-size: 11.5px; color: var(--text-dim); }
+
+.auth-body { padding: 15px; display: flex; flex-direction: column; gap: 13px; }
+
+/* One technology, its two choices. */
+.tech-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 11px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+
+.tech-row .tech-name {
+  font-weight: 600;
+  font-size: 13px;
+  min-width: 30px;
+  font-variant-numeric: tabular-nums;
+}
+
+.choice { display: inline-flex; gap: 4px; margin-left: auto; }
+
+.choice button {
+  border: 1px solid var(--border);
+  background: var(--surface-1);
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 500;
+  padding: 5px 12px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: all .13s ease;
+}
+
+.choice button:hover { border-color: var(--text-dim); color: var(--text); }
+
+.choice button[aria-pressed="true"].is-yes {
+  background: var(--green); border-color: var(--green); color: #fff;
+}
+.choice button[aria-pressed="true"].is-no {
+  background: var(--red); border-color: var(--red); color: #fff;
+}
+
+.auth-empty {
+  font-size: 13px;
+  color: var(--text-dim);
+  text-align: center;
+  padding: 18px 6px;
+}
+
+/* A returned submission states why, in the place the fix will happen. */
+.reason {
+  border-left: 3px solid var(--red);
+  background: var(--red-dim);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  padding: 10px 13px;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.round-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  color: var(--text-muted);
+  padding: 9px 0;
+  border-top: 1px solid var(--border-soft);
+}
+
+.link-btn {
+  border: 0;
+  background: transparent;
+  color: var(--signal-strong);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 0;
+}
+.link-btn:hover { text-decoration: underline; }
