@@ -68,6 +68,8 @@ export default function App() {
           <Route path="/action-center" element={<ActionCenter />} />
           <Route path="/notifications" element={<Navigate to="/action-center" replace />} />
           <Route path="/acceptance" element={<Acceptance />} />
+          {/* The old contractor-only page is gone: everyone uses /acceptance. */}
+          <Route path="/my-acceptance" element={<Navigate to="/acceptance" replace />} />
           <Route path="/admin" element={<Protected allowedRoles={['Admin', 'PM']}><Admin /></Protected>} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />

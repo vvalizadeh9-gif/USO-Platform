@@ -43,6 +43,19 @@ class Acceptance(Base):
     )
     cra_date: Mapped[date | None] = mapped_column(Date)
 
+    # Where each verdict came from: NULL or "CPM" for a value seeded from the
+    # workbook, "App" once a coordinator has validated a submission for it.
+    #
+    # The CPM import already leaves a blank cell alone, and from the next
+    # release the workbook carries no acceptance data at all, so in normal
+    # operation these are never consulted. They exist for the abnormal case: a
+    # stale non-blank cell in some future file must not be able to overwrite a
+    # decision a coordinator made in the app, which is now the system of
+    # record. Checking a column here rather than querying the submissions
+    # keeps that guard O(1) across a fifteen-thousand-row import.
+    ict_source: Mapped[str | None] = mapped_column(String(10))
+    cra_source: Mapped[str | None] = mapped_column(String(10))
+
     village = relationship("Village", back_populates="acceptances")
 
 

@@ -22,7 +22,10 @@ sites — is imported by an administrator. From that, UEP tracks each site throu
    days. Once every fix is closed, the site returns for re-checking.
 3. **Drive test** — field measurement, assigned to a contractor and reviewed.
 4. **Acceptance** — ICT and CRA approval, recorded per village and per
-   technology.
+   technology. A contractor or coordinator submits the authority's letter with
+   a verdict for each requested technology and the scan to back it; a
+   coordinator or PM validates it into the record, or returns it with a reason
+   for another round. Every round is kept.
 
 Who can see and do what is tightly controlled: contractors see only their own
 work, most staff see only their assigned provinces, and the roles that fix
@@ -141,7 +144,7 @@ cd backend
 .venv/bin/pytest
 ```
 
-That gives **147 passed, 10 skipped**. The ten skips are migration tests that
+That gives **167 passed, 10 skipped**. The ten skips are migration tests that
 need a real PostgreSQL. To run those too:
 
 ```bash
@@ -154,7 +157,7 @@ UEP_TEST_POSTGRES_URL="postgresql+psycopg://uep:test@localhost:5433/uep_test" \
   .venv/bin/pytest
 ```
 
-That gives **157 passed**, which is what GitHub Actions runs on every push and
+That gives **177 passed**, which is what GitHub Actions runs on every push and
 pull request.
 
 Everything except the migration tests runs against a throwaway SQLite file, so

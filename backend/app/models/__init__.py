@@ -9,6 +9,11 @@ from app.models.acceptance import (
     Notification,
     letter_villages,
 )
+from app.models.acceptance_workflow import (
+    AcceptanceEvidence,
+    AcceptanceSubmission,
+    AcceptanceSubmissionTech,
+)
 from app.models.health_check import HcAssignment, HcTask, HcTaskTechnology
 from app.models.reference import (
     Contractor,
@@ -30,6 +35,9 @@ from app.models.workitem import (
 
 __all__ = [
     "Acceptance",
+    "AcceptanceEvidence",
+    "AcceptanceSubmission",
+    "AcceptanceSubmissionTech",
     "AuditLog",
     "CpmChangeRequest",
     "CpmImportBatch",

@@ -37,3 +37,6 @@ Thumbs.db
 *.swp
 .idea/
 .vscode/
+
+# Screenshots taken for review, not part of the source
+.screenshots/
