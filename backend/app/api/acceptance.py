@@ -70,6 +70,9 @@ from app.schemas import (  # noqa: E402
     AcceptanceVillageDetail,
     AcceptanceVillageList,
     AcceptanceVillageRow,
+    BulkSubmissionCreate,
+    BulkSubmissionResult,
+    BulkSubmissionRow,
     EvidenceOut,
     TechnologyClaimOut,
 )
@@ -636,6 +639,159 @@ def create_submission(
     db.commit()
     db.refresh(submission)
     return _submission_out(submission, _names(db, {user.id}), village)
+
+
+@router.post("/submissions/bulk", response_model=BulkSubmissionResult, status_code=201)
+def create_bulk_submissions(
+    payload: str = Form(
+        ..., description="A JSON BulkSubmissionCreate, sent alongside the scan"
+    ),
+    file: UploadFile | None = File(None),
+    db: Session = Depends(get_db),
+    user: User = Depends(require_roles(*_SUBMIT_ROLES)),
+) -> BulkSubmissionResult:
+    """File one letter against many villages at once.
+
+    One ICT letter routinely covers a hundred villages. Filing them one at a
+    time is the same form a hundred times, and the hundredth is where the typo
+    goes in.
+
+    It is deliberately all-or-nothing. Every village is checked against the
+    same rules the single-village endpoint applies — its site's drive test must
+    be done, its requested technologies must match the claim, nothing may
+    already be awaiting review — and if any one of them fails, the whole batch
+    rolls back and the response names every village that failed and why. A
+    partly-filed batch would leave the submitter with no way to tell which
+    villages went in.
+
+    The scan is uploaded once. Evidence is content-addressed, so the hundredth
+    village on the same letter costs one row and no bytes.
+    """
+    try:
+        request = BulkSubmissionCreate.model_validate_json(payload)
+    except ValueError as exc:
+        raise HTTPException(400, f"Invalid request: {exc}") from None
+
+    # Order preserved, duplicates dropped: filing the same village twice under
+    # one letter is a mis-click, not an instruction.
+    village_ids = list(dict.fromkeys(request.village_ids))
+
+    villages = {
+        v.id: v
+        for v in db.execute(
+            _village_query(user, db).where(Village.id.in_(village_ids))
+        ).unique().scalars().all()
+    }
+
+    source = SOURCE_CONTRACTOR if user.role.name == CONTRACTOR else SOURCE_COORDINATOR
+    letter_date = _letter_date(request.letter_date_shamsi)
+    claims = _claims(request.technologies)
+
+    created: list = []
+    failures: list[dict] = []
+    for village_id in village_ids:
+        village = villages.get(village_id)
+        if village is None:
+            # Same answer as the single-village endpoint gives, for the same
+            # reason: a contractor must not learn which villages are someone
+            # else's by putting ids into a batch.
+            failures.append({"village_id": village_id, "reason": "Village not found"})
+            continue
+        try:
+            submission = flow.submit(
+                db,
+                village=village,
+                authority=request.authority,
+                letter_number=request.letter_number,
+                letter_date=letter_date,
+                claims=claims,
+                user=user,
+                source=source,
+            )
+        except flow.WorkflowError as exc:
+            failures.append(
+                {
+                    "village_id": village_id,
+                    "village_name": village.village_name or village.village_code,
+                    "reason": str(exc),
+                }
+            )
+            continue
+        created.append((village, submission))
+
+    if failures:
+        db.rollback()
+        raise HTTPException(
+            400,
+            {
+                "message": (
+                    f"{len(failures)} of {len(village_ids)} villages could not be "
+                    "submitted, so none were"
+                ),
+                "failures": failures,
+            },
+        )
+
+    db.flush()
+
+    # Stored only once every village has passed, so a refused batch cannot
+    # leave an orphan blob behind.
+    stored = None
+    if file is not None:
+        try:
+            stored = evidence_store.store(file.filename or "", file.file.read())
+        except evidence_store.EvidenceError as exc:
+            raise HTTPException(400, str(exc)) from None
+
+    if stored is not None:
+        now = datetime.now(timezone.utc)
+        for _village, submission in created:
+            db.add(
+                AcceptanceEvidence(
+                    submission_id=submission.id,
+                    sha256=stored["sha256"],
+                    stored_path=stored["stored_path"],
+                    original_filename=(file.filename or "")[:255],
+                    content_type=file.content_type,
+                    size_bytes=stored["size_bytes"],
+                    uploaded_by=user.id,
+                    uploaded_at=now,
+                )
+            )
+
+    record_audit(
+        db, user_id=user.id, module="Acceptance",
+        entity_type="AcceptanceSubmission", entity_id=None,
+        new_value={
+            "authority": request.authority,
+            "letter_number": request.letter_number,
+            "village_ids": [v.id for v, _s in created],
+            "submission_ids": [s.id for _v, s in created],
+            "claims": {c["technology"]: c["claimed_status"] for c in claims},
+        },
+        reason="Bulk acceptance submission",
+    )
+    # One notification, not one per village. A reviewer told a hundred times
+    # that a letter arrived learns nothing after the first.
+    notify_roles(
+        db, role_names=list(_REVIEW_ROLES), type="AcceptanceBulkSubmitted",
+        message=(
+            f"{request.authority} letter {request.letter_number} submitted for "
+            f"{len(created)} villages"
+        ),
+        entity_type="AcceptanceSubmission",
+        entity_id=created[0][1].id if created else None,
+    )
+    db.commit()
+
+    return BulkSubmissionResult(
+        created=[
+            BulkSubmissionRow(village_id=village.id, submission_id=submission.id)
+            for village, submission in created
+        ],
+        letter_number=request.letter_number,
+        count=len(created),
+    )
 
 
 def _editable(db: Session, user: UserModel, submission_id: int) -> AcceptanceSubmission:

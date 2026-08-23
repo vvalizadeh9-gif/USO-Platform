@@ -15,6 +15,7 @@ Three things are being protected here, and only the first is new behaviour:
 
 Run with:  cd backend && pytest tests/test_my_work_endpoint.py -q
 """
+import json
 import os
 import sys
 
@@ -517,3 +518,156 @@ def test_a_contractor_sees_only_their_own_villages(client, buckets):
         f"/api/v1/acceptance/villages/{theirs}", headers=_auth(contractor)
     )
     assert denied.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# 1.4 — one letter, many villages
+# ---------------------------------------------------------------------------
+# The smallest byte string evidence_store accepts as a PDF. Type is checked by
+# magic bytes, not by extension, so an empty file with a .pdf name is refused.
+_SCAN = b"%PDF-1.4\n1 0 obj\n<<>>\nendobj\n"
+
+
+def _bulk(client, token, village_ids, *, authority="ICT", letter="1404/8821",
+          technologies=None, with_file=True):
+    body = {
+        "village_ids": village_ids,
+        "authority": authority,
+        "letter_number": letter,
+        "letter_date_shamsi": "1404/05/29",
+        "technologies": technologies or _approve_all(["2G"]),
+    }
+    files = {"payload": (None, json.dumps(body))}
+    if with_file:
+        files["file"] = ("letter.pdf", _SCAN, "application/pdf")
+    return client.post(
+        "/api/v1/acceptance/submissions/bulk", headers=_auth(token), files=files
+    )
+
+
+def test_bulk_creates_one_submission_per_village_on_one_file(client):
+    """N villages, N submissions, one letter, and one blob on disk."""
+    pm = _user_token(client, "PM", "mw_pm")
+    _wi, ids, _co = _seed("BULK", villages=5)
+
+    response = _bulk(client, pm, ids)
+    assert response.status_code == 201, response.text
+    body = response.json()
+    assert body["count"] == 5
+    assert body["letter_number"] == "1404/8821"
+    assert {row["village_id"] for row in body["created"]} == set(ids)
+
+    # Every submission carries the letter and the same scan.
+    hashes = set()
+    for row in body["created"]:
+        detail = client.get(
+            f"/api/v1/acceptance/villages/{row['village_id']}", headers=_auth(pm)
+        ).json()
+        submission = detail["submissions"][0]
+        assert submission["letter_number"] == "1404/8821"
+        assert len(submission["evidence"]) == 1
+        hashes.add(submission["evidence"][0]["original_filename"])
+    assert hashes == {"letter.pdf"}
+
+    from sqlalchemy import text
+
+    db = SessionLocal()
+    try:
+        stored = db.execute(
+            text(
+                "SELECT DISTINCT sha256 FROM acceptance_evidence e "
+                "JOIN acceptance_submissions s ON s.id = e.submission_id "
+                "WHERE s.letter_number = '1404/8821'"
+            )
+        ).scalars().all()
+    finally:
+        db.close()
+    # Content-addressed: five rows, one file.
+    assert len(stored) == 1
+
+    # And every village is now awaiting review.
+    for village_id in ids:
+        _assert_cache_is_honest(village_id, ("Pending", "NotFiled"))
+
+
+def test_bulk_rolls_back_entirely_when_one_village_does_not_match(client):
+    """A village whose requested technologies differ fails the whole batch."""
+    pm = _user_token(client, "PM", "mw_pm")
+    _wi, (matching,), _co = _seed("BULKOK", technologies="2G")
+    _wi2, (mismatched,), _co2 = _seed("BULKBAD", technologies="3G4G")
+
+    response = _bulk(client, pm, [matching, mismatched])
+    assert response.status_code == 400, response.text
+    detail = response.json()["detail"]
+    failed = {f["village_id"] for f in detail["failures"]}
+    assert failed == {mismatched}
+    assert "3G" in detail["failures"][0]["reason"]
+
+    # Nothing was written — not even for the village that was fine.
+    for village_id in (matching, mismatched):
+        _assert_cache_is_honest(village_id, ("NotFiled", "NotFiled"))
+        assert (
+            client.get(
+                f"/api/v1/acceptance/villages/{village_id}", headers=_auth(pm)
+            ).json()["submissions"]
+            == []
+        )
+
+
+def test_bulk_refuses_a_village_outside_the_callers_scope(client):
+    """A contractor cannot reach another contractor's village through a batch."""
+    _wi, (mine,), my_contractor = _seed("BULKMINE")
+    _wi2, (theirs,), _other = _seed("BULKTHEIRS")
+    contractor = _user_token(
+        client, "Contractor", "mw_bulk_contractor", contractor_id=my_contractor
+    )
+
+    response = _bulk(client, contractor, [mine, theirs])
+    assert response.status_code == 400, response.text
+    failures = response.json()["detail"]["failures"]
+    assert [f["village_id"] for f in failures] == [theirs]
+    # The message says nothing about whose village it is.
+    assert failures[0]["reason"] == "Village not found"
+    _assert_cache_is_honest(mine, ("NotFiled", "NotFiled"))
+
+
+def test_bulk_emits_one_notification_not_one_per_village(client):
+    """A reviewer told a hundred times that a letter arrived learns nothing."""
+    from sqlalchemy import text
+
+    pm = _user_token(client, "PM", "mw_pm")
+    _wi, ids, _co = _seed("BULKNOTIFY", villages=4)
+
+    db = SessionLocal()
+    try:
+        before = db.execute(
+            text("SELECT COUNT(*) FROM notifications WHERE type = 'AcceptanceBulkSubmitted'")
+        ).scalar_one()
+    finally:
+        db.close()
+
+    assert _bulk(client, pm, ids, letter="1404/9002").status_code == 201
+
+    db = SessionLocal()
+    try:
+        rows = db.execute(
+            text(
+                "SELECT user_id, message FROM notifications "
+                "WHERE type = 'AcceptanceBulkSubmitted'"
+            )
+        ).all()
+    finally:
+        db.close()
+    fresh = [r for r in rows if "1404/9002" in r[1]]
+    # One per reviewer, not one per village — and every one of them names the
+    # letter and the count rather than a single village.
+    assert len(fresh) == len({r[0] for r in fresh})
+    assert len(rows) - before == len(fresh)
+    assert "4 villages" in fresh[0][1]
+
+
+def test_bulk_admin_is_refused(client):
+    """Separation of duties: Admin does not file acceptance letters."""
+    _wi, ids, _co = _seed("BULKADMIN", villages=2)
+    response = _bulk(client, _login(client), ids)
+    assert response.status_code == 403
