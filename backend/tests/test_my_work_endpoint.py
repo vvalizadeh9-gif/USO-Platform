@@ -320,3 +320,200 @@ def test_the_migration_backfill_reproduces_the_cache(client):
         db.close()
 
     assert after == before
+
+
+# ---------------------------------------------------------------------------
+# 1.3 — buckets, counts, sorting and scope
+# ---------------------------------------------------------------------------
+def _bucket(client, token, name, **params):
+    r = client.get(
+        "/api/v1/acceptance/villages",
+        headers=_auth(token),
+        params={"bucket": name, "limit": 500, **params},
+    )
+    assert r.status_code == 200, r.text
+    return r.json()
+
+
+def _counts(client, token, **params):
+    r = client.get(
+        "/api/v1/acceptance/villages/bucket-counts",
+        headers=_auth(token),
+        params=params,
+    )
+    assert r.status_code == 200, r.text
+    return r.json()
+
+
+@pytest.fixture(scope="module")
+def buckets(client):
+    """One site whose four villages sit in four different buckets."""
+    pm = _user_token(client, "PM", "mw_pm")
+    coordinator = _user_token(client, "Coordinator", "mw_coord")
+    _wi, ids, contractor_id = _seed("BUCKETS", villages=4)
+    closed, attention, awaiting, ready = ids
+
+    # Closed: both authorities validated.
+    for authority in ("ICT", "CRA"):
+        created = _submit(client, pm, closed, authority, _approve_all(["2G"]))
+        assert _review(client, coordinator, created.json()["id"]).status_code == 200
+
+    # Needs attention: returned to the submitter.
+    created = _submit(client, pm, attention, "ICT", _approve_all(["2G"]))
+    assert _review(
+        client, coordinator, created.json()["id"],
+        decision="Returned", comment="Wrong letter number",
+    ).status_code == 200
+
+    # Awaiting review: submitted, nobody has looked at it.
+    assert _submit(client, pm, awaiting, "CRA", _approve_all(["2G"])).status_code == 201
+
+    # Ready: untouched.
+    return {
+        "pm": pm,
+        "coordinator": coordinator,
+        "contractor_id": contractor_id,
+        "closed": closed,
+        "needs_attention": attention,
+        "awaiting_review": awaiting,
+        "ready": ready,
+        "site_id": _site_id_of(ready),
+    }
+
+
+def _site_id_of(village_id: int) -> int:
+    from app.models.workitem import Village, WorkItem
+
+    db = SessionLocal()
+    try:
+        village = db.get(Village, village_id)
+        return db.get(WorkItem, village.work_item_id).site_id
+    finally:
+        db.close()
+
+
+@pytest.mark.parametrize(
+    "name", ["needs_attention", "ready", "awaiting_review", "closed"]
+)
+def test_a_bucket_returns_only_its_own_villages(client, buckets, name):
+    """Each bucket contains the village seeded for it, and none of the others."""
+    body = _bucket(client, buckets["pm"], name, site_id=buckets["site_id"])
+    returned = {row["village_id"] for row in body["rows"]}
+    assert returned == {buckets[name]}, f"{name} returned {returned}"
+
+
+def test_bucket_counts_sum_to_the_total(client, buckets):
+    """The four buckets partition the list, so nothing is counted twice or lost."""
+    counts = _counts(client, buckets["pm"], site_id=buckets["site_id"])
+    assert counts["total"] == 4
+    assert (
+        counts["needs_attention"]
+        + counts["ready"]
+        + counts["awaiting_review"]
+        + counts["closed"]
+        == counts["total"]
+    )
+    assert counts["needs_attention"] == 1
+    assert counts["ready"] == 1
+    assert counts["awaiting_review"] == 1
+    assert counts["closed"] == 1
+
+
+def test_bucket_counts_match_the_lists_they_label(client, buckets):
+    """A chip saying 12 opens a queue of 12 — checked across the whole scope."""
+    counts = _counts(client, buckets["pm"])
+    for name in ("needs_attention", "ready", "awaiting_review", "closed"):
+        body = _bucket(client, buckets["pm"], name)
+        assert body["total"] == counts[name], name
+
+
+def test_an_unknown_bucket_or_sort_is_refused(client, buckets):
+    for params in ({"bucket": "everything"}, {"sort": "alphabetical"}):
+        r = client.get(
+            "/api/v1/acceptance/villages",
+            headers=_auth(buckets["pm"]),
+            params=params,
+        )
+        assert r.status_code == 400, r.text
+
+
+def test_needs_attention_is_oldest_first_by_default(client):
+    """The village that has waited longest leads — it is the one costing time."""
+    from datetime import datetime, timedelta, timezone
+
+    from sqlalchemy import text
+
+    pm = _user_token(client, "PM", "mw_pm")
+    coordinator = _user_token(client, "Coordinator", "mw_coord")
+    _wi, (recent, old), _co = _seed("AGEING", villages=2)
+
+    ids = {}
+    for village_id in (recent, old):
+        created = _submit(client, pm, village_id, "ICT", _approve_all(["2G"]))
+        assert _review(
+            client, coordinator, created.json()["id"],
+            decision="Returned", comment="Illegible scan",
+        ).status_code == 200
+        ids[village_id] = created.json()["id"]
+
+    # Age one of them by two months. Days are the unit the queue reports in,
+    # so two submissions made in the same second are indistinguishable without
+    # this.
+    stale = (datetime.now(timezone.utc) - timedelta(days=60)).isoformat()
+    db = SessionLocal()
+    try:
+        db.execute(
+            text("UPDATE acceptance_submissions SET reviewed_at = :when WHERE id = :id"),
+            {"when": stale, "id": ids[old]},
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    def order(**params):
+        body = _bucket(client, pm, "needs_attention", site_id=_site_id_of(old), **params)
+        return [row["village_id"] for row in body["rows"]]
+
+    assert order() == [old, recent]
+    assert order(sort="newest_first") == [recent, old]
+    assert order(sort="village_name") == sorted(
+        [recent, old],
+        key=lambda v: {recent: "Village AGEING-1", old: "Village AGEING-2"}[v],
+    )
+
+
+def test_the_list_pages_without_losing_the_total(client, buckets):
+    """total counts the whole bucket; rows carry only the page asked for."""
+    r = client.get(
+        "/api/v1/acceptance/villages",
+        headers=_auth(buckets["pm"]),
+        params={"site_id": buckets["site_id"], "limit": 2, "offset": 0},
+    )
+    assert r.status_code == 200, r.text
+    assert r.json()["total"] == 4
+    assert len(r.json()["rows"]) == 2
+
+
+def test_a_contractor_sees_only_their_own_villages(client, buckets):
+    """The scope rule the whole module rests on still holds for the new queries."""
+    _wi, (theirs,), _other = _seed("OTHERCO")
+    contractor = _user_token(
+        client, "Contractor", "mw_contractor", contractor_id=buckets["contractor_id"]
+    )
+
+    body = _bucket(client, contractor, "ready")
+    assert theirs not in {row["village_id"] for row in body["rows"]}
+    assert buckets["ready"] in {row["village_id"] for row in body["rows"]}
+
+    # And the counts are scoped the same way, not counted globally.
+    counts = _counts(client, contractor)
+    assert counts["total"] == len(
+        _bucket(client, contractor, "closed")["rows"]
+    ) + len(_bucket(client, contractor, "ready")["rows"]) + len(
+        _bucket(client, contractor, "awaiting_review")["rows"]
+    ) + len(_bucket(client, contractor, "needs_attention")["rows"])
+
+    denied = client.get(
+        f"/api/v1/acceptance/villages/{theirs}", headers=_auth(contractor)
+    )
+    assert denied.status_code == 404

@@ -41,10 +41,10 @@ def acceptance_overview(
 # Everything here goes through services/acceptance_workflow.py: this module
 # resolves and authorises, and holds no rules of its own.
 # ---------------------------------------------------------------------------
-from datetime import datetime, timezone  # noqa: E402
+from datetime import datetime, timedelta, timezone  # noqa: E402
 
 from fastapi import File, Form, HTTPException, Query, Response, UploadFile  # noqa: E402
-from sqlalchemy import func, or_, select  # noqa: E402
+from sqlalchemy import and_, func, or_, select  # noqa: E402
 from sqlalchemy.orm import selectinload  # noqa: E402
 
 from app.core.deps import ADMIN, CONTRACTOR, COORDINATOR, PM, require_roles  # noqa: E402
@@ -52,6 +52,7 @@ from app.core.jalali import format_shamsi, parse_shamsi  # noqa: E402
 from app.models.acceptance_workflow import (  # noqa: E402
     REVIEW_PENDING,
     REVIEW_RETURNED,
+    REVIEW_VALIDATED,
     SOURCE_CONTRACTOR,
     SOURCE_COORDINATOR,
     AcceptanceEvidence,
@@ -60,6 +61,7 @@ from app.models.acceptance_workflow import (  # noqa: E402
 from app.models.reference import Province, User as UserModel  # noqa: E402
 from app.models.workitem import Site, Village, WorkItem  # noqa: E402
 from app.schemas import (  # noqa: E402
+    AcceptanceBucketCounts,
     AcceptanceReviewRequest,
     AcceptanceSubmissionCreate,
     AcceptanceSubmissionOut,
@@ -194,6 +196,11 @@ def _row(village: Village, states: dict, activity: dict | None = None) -> Accept
         ict_verdict=flow.authority_verdict(village, "ICT"),
         cra_verdict=flow.authority_verdict(village, "CRA"),
         verdict=flow.village_verdict(village),
+        # The cached queue statuses — what the workspace renders on the ICT and
+        # CRA cards, and what the buckets above were computed from.
+        ict_status=village.ict_status,
+        cra_status=village.cra_status,
+        village_status=flow.village_status(village.ict_status, village.cra_status),
         site_status=flow.site_status(work_item) if work_item else flow.SITE_OPEN,
         waiting_days=_days_since((activity or {}).get(village.id)),
         pending_authorities=pending,
@@ -268,10 +275,205 @@ def upload_limits(user: User = Depends(get_current_user)) -> AcceptanceUploadLim
     )
 
 
+# ---------------------------------------------------------------------------
+# The queue: buckets, sorting and counting, all in SQL
+#
+# These read villages.ict_status / cra_status — the write-through cache that
+# services/acceptance_workflow.py maintains in the same transaction as every
+# state change. The row bodies below still report the derived verdicts, which
+# remain the source of truth; the cache exists so that grouping, filtering,
+# sorting and counting four hundred villages do not require loading four
+# hundred acceptance graphs first.
+# ---------------------------------------------------------------------------
+BUCKET_NEEDS_ATTENTION = "needs_attention"
+BUCKET_READY = "ready"
+BUCKET_AWAITING_REVIEW = "awaiting_review"
+BUCKET_CLOSED = "closed"
+BUCKET_RECENTLY_VALIDATED = "recently_validated"
+
+# The four that partition the list. Order matters: a village is placed in the
+# first one it matches, so a village whose ICT was returned while CRA is
+# awaiting review is the contractor's move, not the reviewer's.
+_PARTITION = (
+    BUCKET_CLOSED,
+    BUCKET_NEEDS_ATTENTION,
+    BUCKET_AWAITING_REVIEW,
+    BUCKET_READY,
+)
+BUCKETS = _PARTITION + (BUCKET_RECENTLY_VALIDATED,)
+
+# How recent "recently validated" is, for the reviewer's third bucket.
+_RECENT_DAYS = 30
+
+SORTS = ("oldest_first", "newest_first", "village_name", "site_code")
+
+_NEEDS_ATTENTION = (flow.STATUS_RETURNED, flow.STATUS_REJECTED)
+
+
+def _last_activity_column():
+    """A correlated scalar of when each village's acceptance last moved.
+
+    The queue is ordered by how long something has been sitting, so this has
+    to be available to ORDER BY rather than computed after the page is cut.
+    """
+    return (
+        select(
+            func.max(
+                func.coalesce(
+                    AcceptanceSubmission.reviewed_at,
+                    AcceptanceSubmission.submitted_at,
+                )
+            )
+        )
+        .where(AcceptanceSubmission.village_id == Village.id)
+        .correlate(Village)
+        .scalar_subquery()
+    )
+
+
+def _bucket_clause(bucket: str):
+    """The SQL predicate for one bucket, exclusive of the buckets above it."""
+    closed = and_(
+        Village.ict_status == flow.STATUS_APPROVED,
+        Village.cra_status == flow.STATUS_APPROVED,
+    )
+    attention = or_(
+        Village.ict_status.in_(_NEEDS_ATTENTION),
+        Village.cra_status.in_(_NEEDS_ATTENTION),
+    )
+    awaiting = or_(
+        Village.ict_status == flow.STATUS_PENDING,
+        Village.cra_status == flow.STATUS_PENDING,
+    )
+
+    if bucket == BUCKET_CLOSED:
+        return closed
+    if bucket == BUCKET_NEEDS_ATTENTION:
+        return and_(~closed, attention)
+    if bucket == BUCKET_AWAITING_REVIEW:
+        return and_(~closed, ~attention, awaiting)
+    if bucket == BUCKET_READY:
+        # Whatever is left: drive test done, nothing awaiting review, nothing
+        # sent back, and not yet closed. A letter can be filed today.
+        return and_(~closed, ~attention, ~awaiting)
+    if bucket == BUCKET_RECENTLY_VALIDATED:
+        # Not part of the partition — a reviewer's "what did I just decide"
+        # list, which necessarily overlaps closed and needs_attention.
+        cutoff = datetime.now(timezone.utc) - timedelta(days=_RECENT_DAYS)
+        return Village.id.in_(
+            select(AcceptanceSubmission.village_id).where(
+                AcceptanceSubmission.review_status == REVIEW_VALIDATED,
+                AcceptanceSubmission.reviewed_at >= cutoff,
+            )
+        )
+    raise HTTPException(400, f"bucket must be one of {', '.join(BUCKETS)}")
+
+
+def _queue_query(
+    user: UserModel,
+    db: Session,
+    *,
+    province_id: int | None = None,
+    site_id: int | None = None,
+    search: str | None = None,
+):
+    """Villages this user may see that acceptance applies to, before bucketing.
+
+    Acceptance is the approval of finished drive-test work, so only DT-Done
+    sites appear here at all.
+    """
+    stmt = (
+        _village_query(user, db)
+        .join(WorkItem, Village.work_item_id == WorkItem.id)
+        .join(Site, WorkItem.site_id == Site.id)
+        .where(WorkItem.dt_status == flow.DT_DONE)
+    )
+    if province_id is not None:
+        stmt = stmt.where(Site.province_id == province_id)
+    if site_id is not None:
+        stmt = stmt.where(Site.id == site_id)
+    if search:
+        pattern = f"%{search.strip()}%"
+        stmt = stmt.where(
+            or_(
+                Village.village_name.ilike(pattern),
+                Village.village_code.ilike(pattern),
+                Site.site_code.ilike(pattern),
+            )
+        )
+    return stmt
+
+
+def _ordering(sort: str | None, bucket: str | None):
+    """The ORDER BY for one sort choice.
+
+    Needs-attention defaults to oldest first: the village that has been sitting
+    longest is the one costing the programme money, and it is the one a queue
+    ordered by anything else buries.
+    """
+    if sort is None:
+        sort = "oldest_first" if bucket == BUCKET_NEEDS_ATTENTION else "newest_first"
+    if sort not in SORTS:
+        raise HTTPException(400, f"sort must be one of {', '.join(SORTS)}")
+
+    if sort == "village_name":
+        return (Village.village_name.asc(), Village.id.asc())
+    if sort == "site_code":
+        return (Site.site_code.asc(), Village.village_name.asc(), Village.id.asc())
+
+    activity = _last_activity_column()
+    if sort == "oldest_first":
+        # A village nothing has ever happened to is not the oldest thing
+        # waiting — it is simply unstarted, so it sorts after the ageing ones.
+        return (activity.asc().nulls_last(), Village.id.asc())
+    return (activity.desc().nulls_last(), Village.id.desc())
+
+
+@router.get("/villages/bucket-counts", response_model=AcceptanceBucketCounts)
+def bucket_counts(
+    province_id: int | None = None,
+    site_id: int | None = None,
+    search: str | None = None,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> AcceptanceBucketCounts:
+    """How much work sits in each bucket, in one round trip.
+
+    This is what the filter chips and the page header are counted from. The
+    four buckets partition the list, so they sum to the total.
+    """
+    base = _queue_query(
+        user, db, province_id=province_id, site_id=site_id, search=search
+    ).with_only_columns(Village.id)
+
+    counts = {
+        bucket: db.execute(
+            select(func.count()).select_from(
+                base.where(_bucket_clause(bucket)).subquery()
+            )
+        ).scalar_one()
+        for bucket in _PARTITION
+    }
+    return AcceptanceBucketCounts(
+        needs_attention=counts[BUCKET_NEEDS_ATTENTION],
+        ready=counts[BUCKET_READY],
+        awaiting_review=counts[BUCKET_AWAITING_REVIEW],
+        closed=counts[BUCKET_CLOSED],
+        total=sum(counts.values()),
+    )
+
+
 @router.get("/villages", response_model=AcceptanceVillageList)
 def list_villages(
     status: str | None = Query(None, description="Approved|Rejected|Pending"),
+    bucket: str | None = Query(
+        None, description="needs_attention|ready|awaiting_review|closed|recently_validated"
+    ),
+    sort: str | None = Query(
+        None, description="oldest_first|newest_first|village_name|site_code"
+    ),
     province_id: int | None = None,
+    site_id: int | None = None,
     search: str | None = None,
     mine_only: bool = Query(
         False, description="Only villages still needing something from me"
@@ -281,51 +483,74 @@ def list_villages(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> AcceptanceVillageList:
-    """The village-by-village acceptance list, scoped to this user.
+    """The village-by-village acceptance list, scoped to this user."""
+    stmt = _queue_query(
+        user, db, province_id=province_id, site_id=site_id, search=search
+    )
 
-    Acceptance is the approval of finished drive-test work, so only DT-Done
-    sites appear here at all.
-    """
-    stmt = _village_query(user, db).join(
-        WorkItem, Village.work_item_id == WorkItem.id
-    ).where(WorkItem.dt_status == flow.DT_DONE)
-
-    if province_id is not None:
-        stmt = stmt.join(Site, WorkItem.site_id == Site.id).where(
-            Site.province_id == province_id
-        )
-    if search:
-        pattern = f"%{search.strip()}%"
-        stmt = stmt.join(Site, WorkItem.site_id == Site.id).where(
-            or_(
-                Village.village_name.ilike(pattern),
-                Village.village_code.ilike(pattern),
-                Site.site_code.ilike(pattern),
-            )
-        )
-
-    villages = db.execute(stmt.order_by(Village.id)).unique().scalars().all()
-    village_ids = [v.id for v in villages]
-    states = _submission_states(db, village_ids)
-    activity = _last_activity(db, village_ids)
-    rows = [_row(v, states, activity) for v in villages]
-
-    # Verdicts are derived from the loaded graph rather than stored, so status
-    # filtering and the total happen here rather than in SQL.
+    if bucket:
+        stmt = stmt.where(_bucket_clause(bucket))
     if status:
-        wanted = status.strip().title()
-        rows = [r for r in rows if r.verdict == wanted]
+        stmt = stmt.where(_status_clause(status))
     if mine_only:
         # "Needs me" means different work depending on who is asking. Someone
         # who validates wants their review queue; someone who files letters
-        # wants what is unfiled or was sent back to them.
-        if user.role.name in _REVIEW_ROLES:
-            rows = [r for r in rows if r.pending_authorities]
-        else:
-            rows = [r for r in rows if r.can_submit or r.returned_authorities]
+        # wants what was sent back to them or is waiting to be filed.
+        stmt = stmt.where(
+            _bucket_clause(BUCKET_AWAITING_REVIEW)
+            if user.role.name in _REVIEW_ROLES
+            else or_(
+                _bucket_clause(BUCKET_NEEDS_ATTENTION),
+                _bucket_clause(BUCKET_READY),
+            )
+        )
 
-    total = len(rows)
-    return AcceptanceVillageList(total=total, rows=rows[offset : offset + limit])
+    total = db.execute(
+        select(func.count()).select_from(
+            stmt.with_only_columns(Village.id).order_by(None).subquery()
+        )
+    ).scalar_one()
+
+    villages = (
+        db.execute(stmt.order_by(*_ordering(sort, bucket)).offset(offset).limit(limit))
+        .unique()
+        .scalars()
+        .all()
+    )
+    village_ids = [v.id for v in villages]
+    states = _submission_states(db, village_ids)
+    activity = _last_activity(db, village_ids)
+    return AcceptanceVillageList(
+        total=total, rows=[_row(v, states, activity) for v in villages]
+    )
+
+
+def _status_clause(status: str):
+    """The legacy ``status`` filter, expressed over the cached columns.
+
+    Approved means both authorities are; Rejected means either one is; Pending
+    is everything else. Note this reads the *queue* status, so a village that
+    was rejected and has already been re-filed counts as Pending here — which
+    is what someone filtering a work queue means by it.
+    """
+    wanted = status.strip().title()
+    approved = and_(
+        Village.ict_status == flow.STATUS_APPROVED,
+        Village.cra_status == flow.STATUS_APPROVED,
+    )
+    rejected = or_(
+        Village.ict_status == flow.STATUS_REJECTED,
+        Village.cra_status == flow.STATUS_REJECTED,
+    )
+    if wanted == flow.APPROVED:
+        return approved
+    if wanted == flow.REJECTED:
+        return rejected
+    if wanted == flow.PENDING:
+        return and_(~approved, ~rejected)
+    raise HTTPException(
+        400, f"status must be {flow.APPROVED}, {flow.REJECTED} or {flow.PENDING}"
+    )
 
 
 @router.get("/villages/{village_id}", response_model=AcceptanceVillageDetail)
