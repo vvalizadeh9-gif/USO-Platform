@@ -324,6 +324,68 @@ on the record, with who decided each and why — `acceptance_submissions`,
 `acceptance_submission_techs` and `acceptance_evidence` hold that history, and
 the status the dashboard counts is derived from it rather than typed over it.
 
+#### Two surfaces: reading and doing
+
+Acceptance is read by one set of people and worked by another, so it is two
+screens rather than one page of tabs:
+
+```
+Reports
+  ├─ DT Dashboard          how far the drive-test programme has got
+  └─ Acceptance Dashboard  where ICT and CRA approval stands, by province
+
+My Work                    where letters are actually filed and validated
+```
+
+**Reports → Acceptance Dashboard** (`/reports/acceptance`, served by
+`/acceptance/overview` and `acceptance_analytics.py`) is the read surface. It
+computes from current state on every request and writes nothing.
+
+**My Work** (`/my-work`) is the work surface. Its left pane is a queue of
+villages, its right pane is one village and the one thing to do about it. The
+same screen serves a contractor and a coordinator — only the buckets and the
+form differ, because a submitter filling in a letter and a reviewer reading it
+back are two sides of one object, and a coordinator does both jobs in the same
+afternoon.
+
+The queue groups villages into four buckets, which **partition** the list (a
+village is in exactly one, so the chip counts sum to the total):
+
+| Bucket | What it means | Whose move |
+|---|---|---|
+| Closed | ICT and CRA both approved | nobody's |
+| Needs attention | either authority Returned or Rejected | the submitter's |
+| Awaiting review | a submission is waiting on a PM or coordinator | the reviewer's |
+| Ready to file | drive test done, nothing in flight, not closed | the submitter's |
+
+They are evaluated in that order, so a village whose ICT was returned while CRA
+is awaiting review counts as needing attention: the contractor has to move
+before anyone else can.
+
+#### Where a village stands, and the cache underneath it
+
+`villages.ict_status` and `cra_status` hold one of **Approved / Rejected /
+Returned / Pending / NotFiled** per authority. That is a wider vocabulary than
+the three verdicts, deliberately: a verdict answers *what has been decided*, and
+the queue has to answer *whose move is it*. A village rejected by ICT and
+already re-filed has the same verdict as one nobody has touched since the
+rejection, but only the second is work for the contractor.
+
+**Both columns are a cache, not a fact.** The truth is derived from
+`acceptances` and `acceptance_submissions` by
+`acceptance_workflow.authority_status()`; the columns exist only so the queue
+can filter, group, sort and count in SQL rather than loading four hundred
+acceptance graphs to answer "how many need attention". They are written through
+in the same transaction as every state change that could alter them — including
+the two paths that change an acceptance without a submission behind it (a
+coordinator's per-technology correction, and a stale acceptance cell in a CPM
+re-import). If they are ever suspected of drift, the fix is to recompute them
+from the submissions, never to read them as the record.
+
+A village rolls up from its two authorities the same way a site rolls up from
+its villages: **Closed** when both are approved, **Partial** when one is, **Open**
+when neither is.
+
 #### The three rules that look wrong and are not
 
 1. **Only the technologies CPM requested may be answered.** A 3G/4G site never
@@ -342,9 +404,17 @@ A site rolls up from its villages: **Closed** when all are approved,
 
 #### Letters, evidence, and dates
 
-Submission is per village, one at a time, even though one ICT letter routinely
-covers a hundred villages — the letter number is a field on each submission
-rather than a shared entity, because each village is judged on its own.
+Submission is per village, even though one ICT letter routinely covers a
+hundred villages — the letter number is a field on each submission rather than a
+shared entity, because each village is judged on its own.
+
+Filing them one at a time is still a hundred identical forms, so
+`POST /acceptance/submissions/bulk` takes the letter, the verdicts and the scan
+once and writes one submission per village. It is all-or-nothing: every village
+goes through the same `flow.submit()` the single-village endpoint calls, and if
+any of them fails its rules the whole transaction rolls back and the response
+names which ones failed and why. A partly-filed batch would leave the submitter
+with no way to tell which villages went in.
 
 Evidence is **content-addressed**: a file is stored under the SHA-256 of its
 contents, so that one letter scanned once and attached to a hundred villages is
@@ -476,8 +546,8 @@ Services worth knowing:
 | `cpm_columns.py` | Column positions, Persian normalisation, the canonical 31 provinces |
 | `health_check.py` | The basket, assignments, results, the remediation loop |
 | `visibility.py` | Row-level scoping — the single source of truth |
-| `acceptance_analytics.py` | ICT/CRA reporting |
-| `acceptance_workflow.py` | Acceptance submission, review, and the derived verdicts |
+| `acceptance_analytics.py` | ICT/CRA reporting (the Acceptance Dashboard) |
+| `acceptance_workflow.py` | Acceptance submission, review, the derived verdicts and the queue-status cache |
 | `evidence_store.py` | Content-addressed storage for scanned letters |
 | `workflow.py` | Work-item stage transitions |
 | `audit.py` | Audit entries and notifications |

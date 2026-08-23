@@ -7,7 +7,7 @@ from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.models.reference import User
 from app.models.workitem import Assignment, WorkItem
-from app.schemas import VillageAcceptanceRow, WorkItemDetail, WorkItemListItem
+from app.schemas import WorkItemDetail, WorkItemListItem
 from app.services.eager_loading import with_villages_and_acceptances
 from app.services.visibility import apply_work_item_scope
 from app.services.work_item_rows import (
@@ -52,30 +52,6 @@ def list_work_items(
         user_names = {u.id: u.full_name for u in rows}
 
     return [build_list_row(wi, user_names) for wi in work_items]
-
-
-@router.get("/acceptance/overview", response_model=list[VillageAcceptanceRow])
-def acceptance_overview(
-    db: Session = Depends(get_db), user: User = Depends(get_current_user)
-) -> list[dict]:
-    """Flattened village+acceptance rows for every visible work item, in ONE query.
-
-    Replaces the previous frontend pattern of fetching the work item list and
-    then one detail request per item (N+1 HTTP calls) — the single biggest
-    contributor to a slow Acceptance page as data grows.
-    """
-    stmt = select(WorkItem).where(WorkItem.deleted_at.is_(None))
-    stmt = apply_work_item_scope(stmt, user, db)
-    stmt = with_villages_and_acceptances(stmt)
-    work_items = db.execute(stmt).scalars().all()
-
-    rows = []
-    for wi in work_items:
-        for village in wi.villages:
-            rows.append(
-                {"work_item_id": wi.id, "site_type": wi.site_type, "village": village}
-            )
-    return rows
 
 
 @router.get("/{work_item_id}", response_model=WorkItemDetail)

@@ -1,8 +1,15 @@
-"""Acceptance dashboard endpoint.
+"""Acceptance: the reporting read, and the submission workflow.
 
-One combined endpoint returns the KPIs, ICT-vs-CRA analysis and per-province
-status for the current user's province scope, computed over the ICT/CRA
-approval data seeded from the CPM execution block (columns AV..BQ).
+Two audiences share this module, and it is worth knowing which is which.
+
+``/overview`` is the read surface — the KPIs, ICT-vs-CRA analysis and
+per-province status behind Reports → Acceptance Dashboard. It computes and
+returns; it changes nothing.
+
+Everything below it is the work surface behind My Work: the village queue and
+its buckets, and the submit / correct / review / evidence endpoints. All of it
+goes through services/acceptance_workflow.py — this module resolves and
+authorises, and holds no rules of its own.
 """
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
@@ -36,10 +43,6 @@ def acceptance_overview(
 
 # ---------------------------------------------------------------------------
 # Submission workflow
-#
-# Appended below the read-only dashboard endpoint above, which is unchanged.
-# Everything here goes through services/acceptance_workflow.py: this module
-# resolves and authorises, and holds no rules of its own.
 # ---------------------------------------------------------------------------
 from datetime import datetime, timedelta, timezone  # noqa: E402
 
@@ -47,7 +50,7 @@ from fastapi import File, Form, HTTPException, Query, Response, UploadFile  # no
 from sqlalchemy import and_, func, or_, select  # noqa: E402
 from sqlalchemy.orm import selectinload  # noqa: E402
 
-from app.core.deps import ADMIN, CONTRACTOR, COORDINATOR, PM, require_roles  # noqa: E402
+from app.core.deps import CONTRACTOR, COORDINATOR, PM, require_roles  # noqa: E402
 from app.core.jalali import format_shamsi, parse_shamsi  # noqa: E402
 from app.models.acceptance_workflow import (  # noqa: E402
     REVIEW_PENDING,
@@ -487,7 +490,6 @@ def bucket_counts(
 
 @router.get("/villages", response_model=AcceptanceVillageList)
 def list_villages(
-    status: str | None = Query(None, description="Approved|Rejected|Pending"),
     bucket: str | None = Query(
         None, description="needs_attention|ready|awaiting_review|closed|recently_validated"
     ),
@@ -497,9 +499,6 @@ def list_villages(
     province_id: int | None = None,
     site_id: int | None = None,
     search: str | None = None,
-    mine_only: bool = Query(
-        False, description="Only villages still needing something from me"
-    ),
     limit: int = Query(50, le=500),
     offset: int = 0,
     db: Session = Depends(get_db),
@@ -512,20 +511,6 @@ def list_villages(
 
     if bucket:
         stmt = stmt.where(_bucket_clause(bucket))
-    if status:
-        stmt = stmt.where(_status_clause(status))
-    if mine_only:
-        # "Needs me" means different work depending on who is asking. Someone
-        # who validates wants their review queue; someone who files letters
-        # wants what was sent back to them or is waiting to be filed.
-        stmt = stmt.where(
-            _bucket_clause(BUCKET_AWAITING_REVIEW)
-            if user.role.name in _REVIEW_ROLES
-            else or_(
-                _bucket_clause(BUCKET_NEEDS_ATTENTION),
-                _bucket_clause(BUCKET_READY),
-            )
-        )
 
     total = db.execute(
         select(func.count()).select_from(
@@ -544,34 +529,6 @@ def list_villages(
     activity = _last_activity(db, village_ids)
     return AcceptanceVillageList(
         total=total, rows=[_row(v, states, activity) for v in villages]
-    )
-
-
-def _status_clause(status: str):
-    """The legacy ``status`` filter, expressed over the cached columns.
-
-    Approved means both authorities are; Rejected means either one is; Pending
-    is everything else. Note this reads the *queue* status, so a village that
-    was rejected and has already been re-filed counts as Pending here — which
-    is what someone filtering a work queue means by it.
-    """
-    wanted = status.strip().title()
-    approved = and_(
-        Village.ict_status == flow.STATUS_APPROVED,
-        Village.cra_status == flow.STATUS_APPROVED,
-    )
-    rejected = or_(
-        Village.ict_status == flow.STATUS_REJECTED,
-        Village.cra_status == flow.STATUS_REJECTED,
-    )
-    if wanted == flow.APPROVED:
-        return approved
-    if wanted == flow.REJECTED:
-        return rejected
-    if wanted == flow.PENDING:
-        return and_(~approved, ~rejected)
-    raise HTTPException(
-        400, f"status must be {flow.APPROVED}, {flow.REJECTED} or {flow.PENDING}"
     )
 
 
@@ -881,34 +838,6 @@ def withdraw_submission(
     db.commit()
     db.refresh(submission)
     return _submission_out(submission, _names(db, {submission.submitted_by}))
-
-
-@router.get("/queue", response_model=list[AcceptanceSubmissionOut])
-def review_queue(
-    limit: int = Query(100, le=500),
-    db: Session = Depends(get_db),
-    user: User = Depends(require_roles(*_REVIEW_ROLES, ADMIN)),
-) -> list[AcceptanceSubmissionOut]:
-    """Submissions awaiting review, within this user's province scope."""
-    visible = flow.visible_villages(user, db).with_only_columns(Village.id)
-    submissions = db.execute(
-        select(AcceptanceSubmission)
-        .where(
-            AcceptanceSubmission.review_status == REVIEW_PENDING,
-            AcceptanceSubmission.village_id.in_(visible),
-        )
-        .options(
-            selectinload(AcceptanceSubmission.village)
-            .selectinload(Village.work_item)
-            .selectinload(WorkItem.site)
-            .selectinload(Site.province)
-        )
-        .order_by(AcceptanceSubmission.submitted_at)
-        .limit(limit)
-    ).unique().scalars().all()
-
-    names = _names(db, {s.submitted_by for s in submissions})
-    return [_submission_out(s, names) for s in submissions]
 
 
 @router.post("/submissions/{submission_id}/review", response_model=AcceptanceSubmissionOut)

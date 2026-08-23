@@ -114,7 +114,7 @@ Everything `running`, `db` and `backend` `healthy`.
 
 ### 5. Check the application itself
 
-Open it in a browser, sign in, and look at one real screen — Acceptance or Work
+Open it in a browser, sign in, and look at one real screen — My Work or Work
 Items. A backend that starts is not the same as an application that works.
 
 > **Migrations run automatically, before the application starts serving.** If a

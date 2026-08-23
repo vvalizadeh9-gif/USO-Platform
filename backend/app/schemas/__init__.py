@@ -124,14 +124,6 @@ class VillageOut(ORMModel):
     acceptances: list[AcceptanceOut] = []
 
 
-class VillageAcceptanceRow(ORMModel):
-    """One row for the Acceptance overview: a village plus its parent work item context."""
-
-    work_item_id: int
-    site_type: str
-    village: VillageOut
-
-
 class WorkItemListItem(ORMModel):
     """One row of the Work Items list.
 

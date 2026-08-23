@@ -247,9 +247,9 @@ The script:
    database only, rather than putting back files from a different date.
 5. Starts everything again and waits for the backend to report healthy.
 
-Afterwards, check in the application: sign in, open Acceptance and see whether
-the numbers match that date, open Admin → Audit Log and confirm the newest entry
-is from around when the backup was taken.
+Afterwards, check in the application: sign in, open Reports → Acceptance
+Dashboard and see whether the numbers match that date, open Admin → Audit Log
+and confirm the newest entry is from around when the backup was taken.
 
 If it was the wrong choice, restore the safety copy the same way.
 
