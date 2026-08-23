@@ -18,7 +18,7 @@ const FILTERS = [
   { key: 'Rejected', label: 'Rejected' },
 ]
 
-const SITE_CLASS = { Closed: 'is-closed', 'Open - Partial': 'is-partial' }
+const SITE_CLASS = { Closed: 'is-closed', Partial: 'is-partial' }
 
 function Waiting({ days, verdict }) {
   // An approved village is not waiting for anything, so an ageing figure there

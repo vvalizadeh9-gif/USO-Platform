@@ -15,8 +15,8 @@ negotiable in code:
 * **Any** rejected technology rejects the whole village for that authority.
   A village approved for 3G and rejected for 4G is a rejected village.
 * A village is finished only when ICT **and** CRA have both approved it.
-* A site is Closed when all of its villages are approved, Open — Partial when
-  some are, and Open when none are.
+* A site is Closed when all of its villages are approved, Partial when some
+  are, and Open when none are.
 * Acceptance is the approval of completed drive-test work, so a site whose
   drive test is not Done cannot be submitted at all.
 """
@@ -50,10 +50,41 @@ APPROVED = "Approved"
 REJECTED = "Rejected"
 PENDING = "Pending"
 
-# Site rollup.
-SITE_CLOSED = "Closed"
-SITE_PARTIAL = "Open - Partial"
-SITE_OPEN = "Open"
+# Where one village stands with one authority, as the queue needs to read it.
+#
+# This is a wider vocabulary than the three verdicts above, and deliberately
+# so: a verdict answers "what has been decided", and the queue has to answer
+# "whose move is it". A village rejected by ICT and already re-filed has the
+# same verdict as one nobody has touched since the rejection, but only the
+# second is work for the contractor.
+STATUS_APPROVED = APPROVED       # validated, every requested technology approved
+STATUS_REJECTED = REJECTED       # validated, at least one technology rejected
+STATUS_RETURNED = "Returned"     # sent back to the submitter, awaiting a new round
+STATUS_PENDING = PENDING         # awaiting a PM or coordinator's review
+STATUS_NOT_FILED = "NotFiled"    # never submitted
+AUTHORITY_STATUSES = (
+    STATUS_APPROVED,
+    STATUS_REJECTED,
+    STATUS_RETURNED,
+    STATUS_PENDING,
+    STATUS_NOT_FILED,
+)
+
+# The same three words at every level of rollup — village and site — because
+# they answer the same question about a different subject.
+CLOSED = "Closed"
+PARTIAL = "Partial"
+OPEN = "Open"
+
+# Village rollup: both authorities approved, one of them, or neither.
+VILLAGE_CLOSED = CLOSED
+VILLAGE_PARTIAL = PARTIAL
+VILLAGE_OPEN = OPEN
+
+# Site rollup, over the villages the site serves.
+SITE_CLOSED = CLOSED
+SITE_PARTIAL = PARTIAL
+SITE_OPEN = OPEN
 
 # Marks an ``acceptances`` verdict as decided in the app rather than seeded
 # from the workbook. See models/acceptance.py for why this is recorded.
@@ -139,8 +170,95 @@ def village_verdict(village: Village) -> str:
     return PENDING
 
 
+def derive_authority_status(
+    *,
+    verdict: str,
+    has_pending: bool,
+    latest_review_status: str | None,
+) -> str:
+    """One authority's queue status for one village, from three plain facts.
+
+    Kept pure and free of ORM objects so that the Alembic backfill in
+    ``d1e5a8b3c9f2`` derives exactly what the running application does rather
+    than a second implementation of the same paragraph.
+
+    The precedence is the point. What is *in flight* outranks the last verdict
+    recorded, because the queue answers "whose move is it": a village rejected
+    by ICT and already re-filed is the reviewer's problem, not the
+    contractor's, even though its verdict is still Rejected.
+    """
+    if verdict == APPROVED:
+        return STATUS_APPROVED
+    if has_pending:
+        return STATUS_PENDING
+    if latest_review_status == REVIEW_RETURNED:
+        return STATUS_RETURNED
+    if verdict == REJECTED:
+        return STATUS_REJECTED
+    return STATUS_NOT_FILED
+
+
+def _submission_facts(db: Session, village_id: int, authority: str) -> tuple:
+    """``(has_pending, latest_review_status)`` for one village and authority."""
+    rows = db.execute(
+        select(
+            AcceptanceSubmission.review_status,
+            AcceptanceSubmission.round_no,
+            AcceptanceSubmission.id,
+        ).where(
+            AcceptanceSubmission.village_id == village_id,
+            AcceptanceSubmission.authority == authority,
+        )
+    ).all()
+    if not rows:
+        return False, None
+    has_pending = any(status == REVIEW_PENDING for status, _r, _i in rows)
+    latest = max(rows, key=lambda r: (r[1], r[2]))[0]
+    return has_pending, latest
+
+
+def authority_status(db: Session, village: Village, authority: str) -> str:
+    """Derive this village's ICT or CRA queue status. The source of truth."""
+    has_pending, latest = _submission_facts(db, village.id, authority)
+    return derive_authority_status(
+        verdict=authority_verdict(village, authority),
+        has_pending=has_pending,
+        latest_review_status=latest,
+    )
+
+
+def refresh_authority_status(db: Session, village: Village, authority: str) -> str:
+    """Write the derived status through to the cached column. Caller commits.
+
+    ``villages.ict_status`` / ``cra_status`` are a cache of what
+    :func:`authority_status` computes, kept only so the queue can filter, group
+    and count in SQL instead of loading every village to sort them in Python.
+    The cache is refreshed in the same transaction as the state change that
+    invalidated it, so the two can never be seen disagreeing.
+    """
+    db.flush()
+    status = authority_status(db, village, authority)
+    setattr(village, f"{authority.lower()}_status", status)
+    return status
+
+
+def village_status(ict_status: str, cra_status: str) -> str:
+    """Closed / Partial / Open, from the two authority statuses.
+
+    Closed needs both. Partial means one authority is done and the other is
+    not — which is the state that costs the programme time, so it is named
+    rather than folded into Open.
+    """
+    approved = [s == STATUS_APPROVED for s in (ict_status, cra_status)]
+    if all(approved):
+        return VILLAGE_CLOSED
+    if any(approved):
+        return VILLAGE_PARTIAL
+    return VILLAGE_OPEN
+
+
 def site_status(work_item: WorkItem) -> str:
-    """Closed / Open - Partial / Open, rolled up from the site's villages."""
+    """Closed / Partial / Open, rolled up from the site's villages."""
     villages = [v for v in work_item.villages if v.deleted_at is None]
     if not villages:
         return SITE_OPEN

@@ -334,7 +334,7 @@ the status the dashboard counts is derived from it rather than typed over it.
    requested technology.** ICT alone is not acceptance.
 
 A site rolls up from its villages: **Closed** when all are approved,
-**Open - Partial** when some are, **Open** when none are.
+**Partial** when some are, **Open** when none are.
 
 > **Acceptance counting does not deduplicate.** Every site/village row is
 > counted. This looks like a bug and is not — the obligation is per village, so
