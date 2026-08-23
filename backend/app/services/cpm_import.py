@@ -37,6 +37,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session, selectinload
 
 from app.models.acceptance import Acceptance, CpmChangeRequest, CpmImportBatch
+from app.services import acceptance_workflow
 from app.services.acceptance_workflow import SOURCE_APP as _APP_SOURCE
 from app.models.reference import Contractor, Province, Region
 from app.models.workitem import Site, Village, WorkItem
@@ -89,6 +90,9 @@ class CpmImportService:
         # Running counters.
         self._skipped = 0        # rows skipped for not being exactly هدف
         self._new_villages = 0   # village rows created this import
+        # Villages whose ICT/CRA status a workbook cell actually moved, so
+        # the cached queue status can be rebuilt for them at the end.
+        self._acceptance_touched: set = set()
 
     # ---- public API ----
     def import_file(self, path: str, filename: str) -> CpmImportBatch:
@@ -132,6 +136,16 @@ class CpmImportService:
         )
         batch.new_villages_count = self._new_villages
         batch.skipped_satellite = self._skipped
+
+        # A workbook cell that set an approval bypassed the submission
+        # workflow, so the queue's cached per-authority status has to be
+        # rebuilt for those villages. Normally this set is empty: from this
+        # release the file carries no acceptance data at all.
+        if self._acceptance_touched:
+            self._db.flush()
+            acceptance_workflow.recompute_authority_statuses(
+                self._db, list(self._acceptance_touched)
+            )
 
         record_audit(
             self._db,
@@ -553,9 +567,11 @@ class CpmImportService:
             ict_val = C.clean(self._get(raw, C.COL_HISTORY[ict_key]))
             if ict_val is not None and acc.ict_source != _APP_SOURCE:
                 acc.ict_status = self._approval(ict_val, tech)
+                self._acceptance_touched.add(village)
             cra_val = C.clean(self._get(raw, C.COL_HISTORY[cra_key]))
             if cra_val is not None and acc.cra_source != _APP_SOURCE:
                 acc.cra_status = self._approval(cra_val, tech)
+                self._acceptance_touched.add(village)
 
     # Values (case-insensitive) that a field team may type to mean approved or
     # rejected. Anything unrecognised falls through to Pending. Kept permissive

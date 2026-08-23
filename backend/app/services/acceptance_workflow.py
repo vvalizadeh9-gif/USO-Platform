@@ -242,6 +242,47 @@ def refresh_authority_status(db: Session, village: Village, authority: str) -> s
     return status
 
 
+def recompute_authority_statuses(db: Session, villages) -> None:
+    """Rebuild the cached columns for a set of villages in one pass.
+
+    For the paths that change an acceptance without going through a submission
+    — a coordinator's direct per-technology correction, and the stale-cell case
+    in a CPM re-import — where refreshing one village at a time would mean two
+    queries per village across a whole workbook. Caller commits.
+    """
+    villages = [v for v in villages if v is not None]
+    if not villages:
+        return
+
+    rows = db.execute(
+        select(
+            AcceptanceSubmission.village_id,
+            AcceptanceSubmission.authority,
+            AcceptanceSubmission.review_status,
+            AcceptanceSubmission.round_no,
+            AcceptanceSubmission.id,
+        ).where(AcceptanceSubmission.village_id.in_([v.id for v in villages]))
+    ).all()
+
+    facts: dict[tuple[int, str], list] = {}
+    for village_id, authority, status, round_no, submission_id in rows:
+        facts.setdefault((village_id, authority), []).append(
+            (status, round_no, submission_id)
+        )
+
+    for village in villages:
+        for authority in AUTHORITIES:
+            rounds = facts.get((village.id, authority), [])
+            status = derive_authority_status(
+                verdict=authority_verdict(village, authority),
+                has_pending=any(s == REVIEW_PENDING for s, _r, _i in rounds),
+                latest_review_status=(
+                    max(rounds, key=lambda r: (r[1], r[2]))[0] if rounds else None
+                ),
+            )
+            setattr(village, f"{authority.lower()}_status", status)
+
+
 def village_status(ict_status: str, cra_status: str) -> str:
     """Closed / Partial / Open, from the two authority statuses.
 
@@ -398,6 +439,7 @@ def submit(
     )
     submission.technologies = [AcceptanceSubmissionTech(**c) for c in validated]
     db.add(submission)
+    refresh_authority_status(db, village, authority)
     return submission
 
 
@@ -432,6 +474,7 @@ def withdraw(db: Session, *, submission: AcceptanceSubmission) -> AcceptanceSubm
     if submission.review_status != REVIEW_PENDING:
         raise WorkflowError("Only a submission awaiting review can be withdrawn")
     submission.review_status = REVIEW_WITHDRAWN
+    refresh_authority_status(db, submission.village, submission.authority)
     return submission
 
 
@@ -491,4 +534,5 @@ def review(
     submission.review_comment = comment
     submission.reviewed_by = user.id
     submission.reviewed_at = _now()
+    refresh_authority_status(db, submission.village, submission.authority)
     return submission
