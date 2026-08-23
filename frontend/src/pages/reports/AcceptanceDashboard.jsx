@@ -11,10 +11,8 @@ import {
   Layers,
   GitCompareArrows,
 } from 'lucide-react'
-import api from '../api/client'
-import { useAuth } from '../context/AuthContext'
-import { Loading, PageHead, fadeUp, stagger } from '../components/ui'
-import VillageList from './acceptance/VillageList'
+import api from '../../api/client'
+import { Loading, PageHead, fadeUp, stagger } from '../../components/ui'
 
 // ICT and CRA get a stable accent colour each, reused across every card and
 // table so the eye can track one authority at a glance when they sit side by
@@ -22,25 +20,27 @@ import VillageList from './acceptance/VillageList'
 const ICT = 'var(--signal, #4f8cff)'
 const CRA = 'var(--violet, #a06bff)'
 
-// Villages leads: it is the work. The two reporting tabs are for the roles
-// that read reports — a contractor opening Acceptance sees the list and
-// nothing else, so there is no tab bar in their way at all.
 const TABS = [
-  { key: 'villages', label: 'Villages', icon: Layers },
-  { key: 'overview', label: 'Overview', icon: LayoutDashboard, staffOnly: true },
-  { key: 'provinces', label: 'Province Status', icon: MapPin, staffOnly: true },
+  { key: 'overview', label: 'Overview', icon: LayoutDashboard },
+  { key: 'provinces', label: 'Province Status', icon: MapPin },
 ]
 
-// The whole Acceptance dashboard reads ICT/CRA approval seeded from the CPM
-// execution block (cols AV..BQ). Counts are of every (site, village) row in
-// the DT-Done هدف universe — duplicates kept — see acceptance_analytics.py.
-export default function Acceptance() {
-  const { user } = useAuth()
+/**
+ * Reports → Acceptance Dashboard: where ICT/CRA status is *read*.
+ *
+ * This is the reporting half of what used to be one Acceptance page with tabs.
+ * The other half — actually filing and validating letters — is My Work. They
+ * were split because they are different jobs done by different people at
+ * different times, and a screen that tried to be both made the reader wade
+ * through a work queue and the worker wade through KPIs.
+ *
+ * Counts are of every (site, village) row in the DT-Done هدف universe,
+ * duplicates kept — see acceptance_analytics.py. Nothing here writes.
+ */
+export default function AcceptanceDashboard() {
   const [data, setData] = useState(null)
   const [error, setError] = useState(false)
-  const [tab, setTab] = useState('villages')
-  const isContractor = user?.role?.name === 'Contractor'
-  const tabs = TABS.filter((t) => !t.staffOnly || !isContractor)
+  const [tab, setTab] = useState('overview')
 
   useEffect(() => {
     api
@@ -55,26 +55,18 @@ export default function Acceptance() {
   return (
     <>
       <PageHead
-        eyebrow="Regulatory"
-        title="Acceptance"
-        subtitle={
-          isContractor
-            ? 'File ICT and CRA letters village by village, and track what came back.'
-            : 'ICT & CRA approval, village by village, with the reporting alongside.'
-        }
+        eyebrow="Reports"
+        title="Acceptance Dashboard"
+        subtitle="ICT and CRA approval across your provinces, village by village."
       />
 
-      {/* A contractor has one tab, and a tab bar offering a single choice is
-          just furniture — so it only appears when there is a choice. */}
-      {tabs.length > 1 && (
-        <div className="tabs">
-          {tabs.map((t) => (
-            <button key={t.key} className={`tab ${tab === t.key ? 'active' : ''}`} onClick={() => setTab(t.key)}>
-              <span className="row" style={{ gap: 8 }}><t.icon size={15} /> {t.label}</span>
-            </button>
-          ))}
-        </div>
-      )}
+      <div className="tabs">
+        {TABS.map((t) => (
+          <button key={t.key} className={`tab ${tab === t.key ? 'active' : ''}`} onClick={() => setTab(t.key)}>
+            <span className="row" style={{ gap: 8 }}><t.icon size={15} /> {t.label}</span>
+          </button>
+        ))}
+      </div>
 
       <AnimatePresence mode="wait">
         <motion.div
@@ -86,7 +78,6 @@ export default function Acceptance() {
         >
           {tab === 'overview' && <OverviewTab data={data} />}
           {tab === 'provinces' && <ProvinceTab provinces={data.provinces} />}
-          {tab === 'villages' && <VillageList />}
         </motion.div>
       </AnimatePresence>
     </>

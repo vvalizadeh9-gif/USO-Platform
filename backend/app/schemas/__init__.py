@@ -335,6 +335,11 @@ class AcceptanceVillageRow(BaseModel):
     cra_status: AuthorityStatus = "NotFiled"
     village_status: RollupStatus = "Open"
     site_status: RollupStatus
+    # Which queue group this village belongs to, so the workspace can head its
+    # list without re-deriving the server's partition in the browser.
+    bucket: Literal[
+        "needs_attention", "ready", "awaiting_review", "closed"
+    ] = "ready"
     # Days since this village's acceptance last moved — a submission sent, a
     # validation, a return. None when nothing has been filed yet. This is what
     # lets the list answer "how long has this been sitting with ICT", which is

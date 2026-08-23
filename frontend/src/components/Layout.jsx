@@ -23,14 +23,34 @@ import api from '../api/client'
 // the day-to-day work queues) while everyone else keeps seeing them.
 const NAV = [
   { to: '/work-items', label: 'Work Items', icon: ListChecks, end: true, hideRoles: ['Admin'] },
-  { to: '/drive-test', label: 'Drive Test Project', icon: Activity, hideRoles: ['Admin'] },
   { to: '/health-check', label: 'Health Check', icon: ClipboardList, roles: ['Admin', 'PM', 'Coordinator'], hideRoles: ['Admin'] },
   { to: '/my-health-check', label: 'My Health Check', icon: ClipboardCheck, roles: ['Contractor'] },
   // Category owners get exactly one screen: the sites waiting on their team.
   { to: '/my-fix-queue', label: 'My Fix Queue', icon: Wrench, roles: CATEGORY_OWNER_ROLES },
   { to: '/action-center', label: 'Action Center', icon: Radio, key: 'action' },
-  { to: '/acceptance', label: 'Acceptance', icon: BadgeCheck, hideRoles: ['Admin'] },
+  { to: '/my-work', label: 'My Work', icon: BadgeCheck, hideRoles: ['Admin'] },
 ]
+
+// Reporting is separated from the work itself, because they are read at
+// different times by different people. Everything under here is read-only:
+// nothing in Reports changes a record.
+const REPORTS = [
+  { to: '/reports/drive-test', label: 'DT Dashboard', icon: Activity },
+  { to: '/reports/acceptance', label: 'Acceptance Dashboard', icon: BadgeCheck },
+]
+
+/**
+ * Which page a URL belongs to, for the transition animation.
+ *
+ * The first path segment, except under Reports, where the second segment is
+ * what distinguishes one dashboard from the other. Anything a page keeps in
+ * the URL below that — a selected village, a work item id — is that page's own
+ * state and must not restart it.
+ */
+function pageKey(pathname) {
+  const [, section, sub] = pathname.split('/')
+  return section === 'reports' ? `reports/${sub}` : section
+}
 
 export default function Layout() {
   const { user, logout, isAdmin } = useAuth()
@@ -100,6 +120,18 @@ export default function Layout() {
           </NavLink>
         ))}
 
+        <div className="nav-section-label">Reports</div>
+        {REPORTS.map((item) => (
+          <NavLink
+            key={item.to}
+            to={item.to}
+            className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
+          >
+            <item.icon size={17} strokeWidth={2} />
+            <span>{item.label}</span>
+          </NavLink>
+        ))}
+
         {isAdmin && (
           <>
             <div className="nav-section-label">Administration</div>
@@ -138,9 +170,14 @@ export default function Layout() {
         {/* A quick fade/slide-in on the incoming page. We deliberately do NOT
             use mode="wait" (which held the new page back until the old one
             finished animating out, adding ~0.2s of dead time to every
-            navigation) and keep the duration short so pages feel instant. */}
+            navigation) and keep the duration short so pages feel instant.
+
+            Keyed on the page, not the URL. Keying on the full pathname
+            remounts the whole page whenever any part of the URL changes —
+            which silently threw away My Work's queue, filter and half-typed
+            form every time it selected a village. */}
         <motion.div
-          key={location.pathname}
+          key={pageKey(location.pathname)}
           initial={{ opacity: 0, y: 6 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.12 }}

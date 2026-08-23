@@ -401,6 +401,9 @@ def test_a_bucket_returns_only_its_own_villages(client, buckets, name):
     body = _bucket(client, buckets["pm"], name, site_id=buckets["site_id"])
     returned = {row["village_id"] for row in body["rows"]}
     assert returned == {buckets[name]}, f"{name} returned {returned}"
+    # The row says which group it is in, and it agrees with the SQL that
+    # selected it — the two implementations of the partition cannot drift.
+    assert {row["bucket"] for row in body["rows"]} == {name}
 
 
 def test_bucket_counts_sum_to_the_total(client, buckets):

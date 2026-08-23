@@ -170,6 +170,24 @@ def _days_since(moment) -> int | None:
     return max((datetime.now(timezone.utc) - moment).days, 0)
 
 
+def _row_bucket(village: Village) -> str:
+    """Which queue bucket this village falls in.
+
+    The Python twin of :func:`_bucket_clause`, so a row can say which group it
+    belongs to without the browser re-deriving the rule. The two are asserted
+    to agree in tests/test_my_work_endpoint.py — if you change one, change
+    both.
+    """
+    ict, cra = village.ict_status, village.cra_status
+    if ict == flow.STATUS_APPROVED and cra == flow.STATUS_APPROVED:
+        return BUCKET_CLOSED
+    if ict in _NEEDS_ATTENTION or cra in _NEEDS_ATTENTION:
+        return BUCKET_NEEDS_ATTENTION
+    if flow.STATUS_PENDING in (ict, cra):
+        return BUCKET_AWAITING_REVIEW
+    return BUCKET_READY
+
+
 def _row(village: Village, states: dict, activity: dict | None = None) -> AcceptanceVillageRow:
     work_item = village.work_item
     site = work_item.site if work_item else None
@@ -204,6 +222,7 @@ def _row(village: Village, states: dict, activity: dict | None = None) -> Accept
         ict_status=village.ict_status,
         cra_status=village.cra_status,
         village_status=flow.village_status(village.ict_status, village.cra_status),
+        bucket=_row_bucket(village),
         site_status=flow.site_status(work_item) if work_item else flow.SITE_OPEN,
         waiting_days=_days_since((activity or {}).get(village.id)),
         pending_authorities=pending,
