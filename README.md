@@ -25,7 +25,9 @@ sites — is imported by an administrator. From that, UEP tracks each site throu
    technology. A contractor or coordinator submits the authority's letter with
    a verdict for each requested technology and the scan to back it; a
    coordinator or PM validates it into the record, or returns it with a reason
-   for another round. Every round is kept.
+   for another round. Every round is kept. The filing and validating happens in
+   **My Work**; where every village stands is read in
+   **Reports → Acceptance Dashboard**.
 
 Who can see and do what is tightly controlled: contractors see only their own
 work, most staff see only their assigned provinces, and the roles that fix

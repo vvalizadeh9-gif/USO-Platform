@@ -131,6 +131,28 @@ class Village(Base):
     latitude: Mapped[float | None] = mapped_column(Float)
     longitude: Mapped[float | None] = mapped_column(Float)
 
+    # Where this village stands with each authority, as the acceptance queue
+    # reads it: Approved | Rejected | Returned | Pending | NotFiled.
+    #
+    # A cache, not a fact. The truth is derived from ``acceptances`` and
+    # ``acceptance_submissions`` by acceptance_workflow.authority_status(), and
+    # these two columns are written through in the same transaction as every
+    # state change that could alter them. They exist because the My Work queue
+    # groups, filters, sorts and counts four hundred villages per contractor,
+    # and doing that in Python means loading the whole acceptance graph to
+    # answer "how many need attention".
+    #
+    # If they are ever suspected of drift, the fix is to recompute them from
+    # the submissions — never to treat them as the record.
+    ict_status: Mapped[str] = mapped_column(
+        String(20), default="NotFiled", server_default="NotFiled",
+        nullable=False, index=True,
+    )
+    cra_status: Mapped[str] = mapped_column(
+        String(20), default="NotFiled", server_default="NotFiled",
+        nullable=False, index=True,
+    )
+
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     work_item: Mapped[WorkItem] = relationship(back_populates="villages")

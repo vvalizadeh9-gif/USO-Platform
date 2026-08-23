@@ -1,8 +1,15 @@
-"""Acceptance dashboard endpoint.
+"""Acceptance: the reporting read, and the submission workflow.
 
-One combined endpoint returns the KPIs, ICT-vs-CRA analysis and per-province
-status for the current user's province scope, computed over the ICT/CRA
-approval data seeded from the CPM execution block (columns AV..BQ).
+Two audiences share this module, and it is worth knowing which is which.
+
+``/overview`` is the read surface — the KPIs, ICT-vs-CRA analysis and
+per-province status behind Reports → Acceptance Dashboard. It computes and
+returns; it changes nothing.
+
+Everything below it is the work surface behind My Work: the village queue and
+its buckets, and the submit / correct / review / evidence endpoints. All of it
+goes through services/acceptance_workflow.py — this module resolves and
+authorises, and holds no rules of its own.
 """
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
@@ -36,22 +43,19 @@ def acceptance_overview(
 
 # ---------------------------------------------------------------------------
 # Submission workflow
-#
-# Appended below the read-only dashboard endpoint above, which is unchanged.
-# Everything here goes through services/acceptance_workflow.py: this module
-# resolves and authorises, and holds no rules of its own.
 # ---------------------------------------------------------------------------
-from datetime import datetime, timezone  # noqa: E402
+from datetime import datetime, timedelta, timezone  # noqa: E402
 
 from fastapi import File, Form, HTTPException, Query, Response, UploadFile  # noqa: E402
-from sqlalchemy import func, or_, select  # noqa: E402
+from sqlalchemy import and_, func, or_, select  # noqa: E402
 from sqlalchemy.orm import selectinload  # noqa: E402
 
-from app.core.deps import ADMIN, CONTRACTOR, COORDINATOR, PM, require_roles  # noqa: E402
+from app.core.deps import CONTRACTOR, COORDINATOR, PM, require_roles  # noqa: E402
 from app.core.jalali import format_shamsi, parse_shamsi  # noqa: E402
 from app.models.acceptance_workflow import (  # noqa: E402
     REVIEW_PENDING,
     REVIEW_RETURNED,
+    REVIEW_VALIDATED,
     SOURCE_CONTRACTOR,
     SOURCE_COORDINATOR,
     AcceptanceEvidence,
@@ -60,6 +64,7 @@ from app.models.acceptance_workflow import (  # noqa: E402
 from app.models.reference import Province, User as UserModel  # noqa: E402
 from app.models.workitem import Site, Village, WorkItem  # noqa: E402
 from app.schemas import (  # noqa: E402
+    AcceptanceBucketCounts,
     AcceptanceReviewRequest,
     AcceptanceSubmissionCreate,
     AcceptanceSubmissionOut,
@@ -68,6 +73,9 @@ from app.schemas import (  # noqa: E402
     AcceptanceVillageDetail,
     AcceptanceVillageList,
     AcceptanceVillageRow,
+    BulkSubmissionCreate,
+    BulkSubmissionResult,
+    BulkSubmissionRow,
     EvidenceOut,
     TechnologyClaimOut,
 )
@@ -165,6 +173,24 @@ def _days_since(moment) -> int | None:
     return max((datetime.now(timezone.utc) - moment).days, 0)
 
 
+def _row_bucket(village: Village) -> str:
+    """Which queue bucket this village falls in.
+
+    The Python twin of :func:`_bucket_clause`, so a row can say which group it
+    belongs to without the browser re-deriving the rule. The two are asserted
+    to agree in tests/test_my_work_endpoint.py — if you change one, change
+    both.
+    """
+    ict, cra = village.ict_status, village.cra_status
+    if ict == flow.STATUS_APPROVED and cra == flow.STATUS_APPROVED:
+        return BUCKET_CLOSED
+    if ict in _NEEDS_ATTENTION or cra in _NEEDS_ATTENTION:
+        return BUCKET_NEEDS_ATTENTION
+    if flow.STATUS_PENDING in (ict, cra):
+        return BUCKET_AWAITING_REVIEW
+    return BUCKET_READY
+
+
 def _row(village: Village, states: dict, activity: dict | None = None) -> AcceptanceVillageRow:
     work_item = village.work_item
     site = work_item.site if work_item else None
@@ -194,6 +220,12 @@ def _row(village: Village, states: dict, activity: dict | None = None) -> Accept
         ict_verdict=flow.authority_verdict(village, "ICT"),
         cra_verdict=flow.authority_verdict(village, "CRA"),
         verdict=flow.village_verdict(village),
+        # The cached queue statuses — what the workspace renders on the ICT and
+        # CRA cards, and what the buckets above were computed from.
+        ict_status=village.ict_status,
+        cra_status=village.cra_status,
+        village_status=flow.village_status(village.ict_status, village.cra_status),
+        bucket=_row_bucket(village),
         site_status=flow.site_status(work_item) if work_item else flow.SITE_OPEN,
         waiting_days=_days_since((activity or {}).get(village.id)),
         pending_authorities=pending,
@@ -268,64 +300,236 @@ def upload_limits(user: User = Depends(get_current_user)) -> AcceptanceUploadLim
     )
 
 
-@router.get("/villages", response_model=AcceptanceVillageList)
-def list_villages(
-    status: str | None = Query(None, description="Approved|Rejected|Pending"),
+# ---------------------------------------------------------------------------
+# The queue: buckets, sorting and counting, all in SQL
+#
+# These read villages.ict_status / cra_status — the write-through cache that
+# services/acceptance_workflow.py maintains in the same transaction as every
+# state change. The row bodies below still report the derived verdicts, which
+# remain the source of truth; the cache exists so that grouping, filtering,
+# sorting and counting four hundred villages do not require loading four
+# hundred acceptance graphs first.
+# ---------------------------------------------------------------------------
+BUCKET_NEEDS_ATTENTION = "needs_attention"
+BUCKET_READY = "ready"
+BUCKET_AWAITING_REVIEW = "awaiting_review"
+BUCKET_CLOSED = "closed"
+BUCKET_RECENTLY_VALIDATED = "recently_validated"
+
+# The four that partition the list. Order matters: a village is placed in the
+# first one it matches, so a village whose ICT was returned while CRA is
+# awaiting review is the contractor's move, not the reviewer's.
+_PARTITION = (
+    BUCKET_CLOSED,
+    BUCKET_NEEDS_ATTENTION,
+    BUCKET_AWAITING_REVIEW,
+    BUCKET_READY,
+)
+BUCKETS = _PARTITION + (BUCKET_RECENTLY_VALIDATED,)
+
+# How recent "recently validated" is, for the reviewer's third bucket.
+_RECENT_DAYS = 30
+
+SORTS = ("oldest_first", "newest_first", "village_name", "site_code")
+
+_NEEDS_ATTENTION = (flow.STATUS_RETURNED, flow.STATUS_REJECTED)
+
+
+def _last_activity_column():
+    """A correlated scalar of when each village's acceptance last moved.
+
+    The queue is ordered by how long something has been sitting, so this has
+    to be available to ORDER BY rather than computed after the page is cut.
+    """
+    return (
+        select(
+            func.max(
+                func.coalesce(
+                    AcceptanceSubmission.reviewed_at,
+                    AcceptanceSubmission.submitted_at,
+                )
+            )
+        )
+        .where(AcceptanceSubmission.village_id == Village.id)
+        .correlate(Village)
+        .scalar_subquery()
+    )
+
+
+def _bucket_clause(bucket: str):
+    """The SQL predicate for one bucket, exclusive of the buckets above it."""
+    closed = and_(
+        Village.ict_status == flow.STATUS_APPROVED,
+        Village.cra_status == flow.STATUS_APPROVED,
+    )
+    attention = or_(
+        Village.ict_status.in_(_NEEDS_ATTENTION),
+        Village.cra_status.in_(_NEEDS_ATTENTION),
+    )
+    awaiting = or_(
+        Village.ict_status == flow.STATUS_PENDING,
+        Village.cra_status == flow.STATUS_PENDING,
+    )
+
+    if bucket == BUCKET_CLOSED:
+        return closed
+    if bucket == BUCKET_NEEDS_ATTENTION:
+        return and_(~closed, attention)
+    if bucket == BUCKET_AWAITING_REVIEW:
+        return and_(~closed, ~attention, awaiting)
+    if bucket == BUCKET_READY:
+        # Whatever is left: drive test done, nothing awaiting review, nothing
+        # sent back, and not yet closed. A letter can be filed today.
+        return and_(~closed, ~attention, ~awaiting)
+    if bucket == BUCKET_RECENTLY_VALIDATED:
+        # Not part of the partition — a reviewer's "what did I just decide"
+        # list, which necessarily overlaps closed and needs_attention.
+        cutoff = datetime.now(timezone.utc) - timedelta(days=_RECENT_DAYS)
+        return Village.id.in_(
+            select(AcceptanceSubmission.village_id).where(
+                AcceptanceSubmission.review_status == REVIEW_VALIDATED,
+                AcceptanceSubmission.reviewed_at >= cutoff,
+            )
+        )
+    raise HTTPException(400, f"bucket must be one of {', '.join(BUCKETS)}")
+
+
+def _queue_query(
+    user: UserModel,
+    db: Session,
+    *,
     province_id: int | None = None,
+    site_id: int | None = None,
     search: str | None = None,
-    mine_only: bool = Query(
-        False, description="Only villages still needing something from me"
-    ),
-    limit: int = Query(50, le=500),
-    offset: int = 0,
-    db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
-) -> AcceptanceVillageList:
-    """The village-by-village acceptance list, scoped to this user.
+):
+    """Villages this user may see that acceptance applies to, before bucketing.
 
     Acceptance is the approval of finished drive-test work, so only DT-Done
     sites appear here at all.
     """
-    stmt = _village_query(user, db).join(
-        WorkItem, Village.work_item_id == WorkItem.id
-    ).where(WorkItem.dt_status == flow.DT_DONE)
-
+    stmt = (
+        _village_query(user, db)
+        .join(WorkItem, Village.work_item_id == WorkItem.id)
+        .join(Site, WorkItem.site_id == Site.id)
+        .where(WorkItem.dt_status == flow.DT_DONE)
+    )
     if province_id is not None:
-        stmt = stmt.join(Site, WorkItem.site_id == Site.id).where(
-            Site.province_id == province_id
-        )
+        stmt = stmt.where(Site.province_id == province_id)
+    if site_id is not None:
+        stmt = stmt.where(Site.id == site_id)
     if search:
         pattern = f"%{search.strip()}%"
-        stmt = stmt.join(Site, WorkItem.site_id == Site.id).where(
+        stmt = stmt.where(
             or_(
                 Village.village_name.ilike(pattern),
                 Village.village_code.ilike(pattern),
                 Site.site_code.ilike(pattern),
             )
         )
+    return stmt
 
-    villages = db.execute(stmt.order_by(Village.id)).unique().scalars().all()
+
+def _ordering(sort: str | None, bucket: str | None):
+    """The ORDER BY for one sort choice.
+
+    Needs-attention defaults to oldest first: the village that has been sitting
+    longest is the one costing the programme money, and it is the one a queue
+    ordered by anything else buries.
+    """
+    if sort is None:
+        sort = "oldest_first" if bucket == BUCKET_NEEDS_ATTENTION else "newest_first"
+    if sort not in SORTS:
+        raise HTTPException(400, f"sort must be one of {', '.join(SORTS)}")
+
+    if sort == "village_name":
+        return (Village.village_name.asc(), Village.id.asc())
+    if sort == "site_code":
+        return (Site.site_code.asc(), Village.village_name.asc(), Village.id.asc())
+
+    activity = _last_activity_column()
+    if sort == "oldest_first":
+        # A village nothing has ever happened to is not the oldest thing
+        # waiting — it is simply unstarted, so it sorts after the ageing ones.
+        return (activity.asc().nulls_last(), Village.id.asc())
+    return (activity.desc().nulls_last(), Village.id.desc())
+
+
+@router.get("/villages/bucket-counts", response_model=AcceptanceBucketCounts)
+def bucket_counts(
+    province_id: int | None = None,
+    site_id: int | None = None,
+    search: str | None = None,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> AcceptanceBucketCounts:
+    """How much work sits in each bucket, in one round trip.
+
+    This is what the filter chips and the page header are counted from. The
+    four buckets partition the list, so they sum to the total.
+    """
+    base = _queue_query(
+        user, db, province_id=province_id, site_id=site_id, search=search
+    ).with_only_columns(Village.id)
+
+    counts = {
+        bucket: db.execute(
+            select(func.count()).select_from(
+                base.where(_bucket_clause(bucket)).subquery()
+            )
+        ).scalar_one()
+        for bucket in _PARTITION
+    }
+    return AcceptanceBucketCounts(
+        needs_attention=counts[BUCKET_NEEDS_ATTENTION],
+        ready=counts[BUCKET_READY],
+        awaiting_review=counts[BUCKET_AWAITING_REVIEW],
+        closed=counts[BUCKET_CLOSED],
+        total=sum(counts.values()),
+    )
+
+
+@router.get("/villages", response_model=AcceptanceVillageList)
+def list_villages(
+    bucket: str | None = Query(
+        None, description="needs_attention|ready|awaiting_review|closed|recently_validated"
+    ),
+    sort: str | None = Query(
+        None, description="oldest_first|newest_first|village_name|site_code"
+    ),
+    province_id: int | None = None,
+    site_id: int | None = None,
+    search: str | None = None,
+    limit: int = Query(50, le=500),
+    offset: int = 0,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> AcceptanceVillageList:
+    """The village-by-village acceptance list, scoped to this user."""
+    stmt = _queue_query(
+        user, db, province_id=province_id, site_id=site_id, search=search
+    )
+
+    if bucket:
+        stmt = stmt.where(_bucket_clause(bucket))
+
+    total = db.execute(
+        select(func.count()).select_from(
+            stmt.with_only_columns(Village.id).order_by(None).subquery()
+        )
+    ).scalar_one()
+
+    villages = (
+        db.execute(stmt.order_by(*_ordering(sort, bucket)).offset(offset).limit(limit))
+        .unique()
+        .scalars()
+        .all()
+    )
     village_ids = [v.id for v in villages]
     states = _submission_states(db, village_ids)
     activity = _last_activity(db, village_ids)
-    rows = [_row(v, states, activity) for v in villages]
-
-    # Verdicts are derived from the loaded graph rather than stored, so status
-    # filtering and the total happen here rather than in SQL.
-    if status:
-        wanted = status.strip().title()
-        rows = [r for r in rows if r.verdict == wanted]
-    if mine_only:
-        # "Needs me" means different work depending on who is asking. Someone
-        # who validates wants their review queue; someone who files letters
-        # wants what is unfiled or was sent back to them.
-        if user.role.name in _REVIEW_ROLES:
-            rows = [r for r in rows if r.pending_authorities]
-        else:
-            rows = [r for r in rows if r.can_submit or r.returned_authorities]
-
-    total = len(rows)
-    return AcceptanceVillageList(total=total, rows=rows[offset : offset + limit])
+    return AcceptanceVillageList(
+        total=total, rows=[_row(v, states, activity) for v in villages]
+    )
 
 
 @router.get("/villages/{village_id}", response_model=AcceptanceVillageDetail)
@@ -413,6 +617,159 @@ def create_submission(
     return _submission_out(submission, _names(db, {user.id}), village)
 
 
+@router.post("/submissions/bulk", response_model=BulkSubmissionResult, status_code=201)
+def create_bulk_submissions(
+    payload: str = Form(
+        ..., description="A JSON BulkSubmissionCreate, sent alongside the scan"
+    ),
+    file: UploadFile | None = File(None),
+    db: Session = Depends(get_db),
+    user: User = Depends(require_roles(*_SUBMIT_ROLES)),
+) -> BulkSubmissionResult:
+    """File one letter against many villages at once.
+
+    One ICT letter routinely covers a hundred villages. Filing them one at a
+    time is the same form a hundred times, and the hundredth is where the typo
+    goes in.
+
+    It is deliberately all-or-nothing. Every village is checked against the
+    same rules the single-village endpoint applies — its site's drive test must
+    be done, its requested technologies must match the claim, nothing may
+    already be awaiting review — and if any one of them fails, the whole batch
+    rolls back and the response names every village that failed and why. A
+    partly-filed batch would leave the submitter with no way to tell which
+    villages went in.
+
+    The scan is uploaded once. Evidence is content-addressed, so the hundredth
+    village on the same letter costs one row and no bytes.
+    """
+    try:
+        request = BulkSubmissionCreate.model_validate_json(payload)
+    except ValueError as exc:
+        raise HTTPException(400, f"Invalid request: {exc}") from None
+
+    # Order preserved, duplicates dropped: filing the same village twice under
+    # one letter is a mis-click, not an instruction.
+    village_ids = list(dict.fromkeys(request.village_ids))
+
+    villages = {
+        v.id: v
+        for v in db.execute(
+            _village_query(user, db).where(Village.id.in_(village_ids))
+        ).unique().scalars().all()
+    }
+
+    source = SOURCE_CONTRACTOR if user.role.name == CONTRACTOR else SOURCE_COORDINATOR
+    letter_date = _letter_date(request.letter_date_shamsi)
+    claims = _claims(request.technologies)
+
+    created: list = []
+    failures: list[dict] = []
+    for village_id in village_ids:
+        village = villages.get(village_id)
+        if village is None:
+            # Same answer as the single-village endpoint gives, for the same
+            # reason: a contractor must not learn which villages are someone
+            # else's by putting ids into a batch.
+            failures.append({"village_id": village_id, "reason": "Village not found"})
+            continue
+        try:
+            submission = flow.submit(
+                db,
+                village=village,
+                authority=request.authority,
+                letter_number=request.letter_number,
+                letter_date=letter_date,
+                claims=claims,
+                user=user,
+                source=source,
+            )
+        except flow.WorkflowError as exc:
+            failures.append(
+                {
+                    "village_id": village_id,
+                    "village_name": village.village_name or village.village_code,
+                    "reason": str(exc),
+                }
+            )
+            continue
+        created.append((village, submission))
+
+    if failures:
+        db.rollback()
+        raise HTTPException(
+            400,
+            {
+                "message": (
+                    f"{len(failures)} of {len(village_ids)} villages could not be "
+                    "submitted, so none were"
+                ),
+                "failures": failures,
+            },
+        )
+
+    db.flush()
+
+    # Stored only once every village has passed, so a refused batch cannot
+    # leave an orphan blob behind.
+    stored = None
+    if file is not None:
+        try:
+            stored = evidence_store.store(file.filename or "", file.file.read())
+        except evidence_store.EvidenceError as exc:
+            raise HTTPException(400, str(exc)) from None
+
+    if stored is not None:
+        now = datetime.now(timezone.utc)
+        for _village, submission in created:
+            db.add(
+                AcceptanceEvidence(
+                    submission_id=submission.id,
+                    sha256=stored["sha256"],
+                    stored_path=stored["stored_path"],
+                    original_filename=(file.filename or "")[:255],
+                    content_type=file.content_type,
+                    size_bytes=stored["size_bytes"],
+                    uploaded_by=user.id,
+                    uploaded_at=now,
+                )
+            )
+
+    record_audit(
+        db, user_id=user.id, module="Acceptance",
+        entity_type="AcceptanceSubmission", entity_id=None,
+        new_value={
+            "authority": request.authority,
+            "letter_number": request.letter_number,
+            "village_ids": [v.id for v, _s in created],
+            "submission_ids": [s.id for _v, s in created],
+            "claims": {c["technology"]: c["claimed_status"] for c in claims},
+        },
+        reason="Bulk acceptance submission",
+    )
+    # One notification, not one per village. A reviewer told a hundred times
+    # that a letter arrived learns nothing after the first.
+    notify_roles(
+        db, role_names=list(_REVIEW_ROLES), type="AcceptanceBulkSubmitted",
+        message=(
+            f"{request.authority} letter {request.letter_number} submitted for "
+            f"{len(created)} villages"
+        ),
+        entity_type="AcceptanceSubmission",
+        entity_id=created[0][1].id if created else None,
+    )
+    db.commit()
+
+    return BulkSubmissionResult(
+        created=[
+            BulkSubmissionRow(village_id=village.id, submission_id=submission.id)
+            for village, submission in created
+        ],
+        letter_number=request.letter_number,
+        count=len(created),
+    )
+
+
 def _editable(db: Session, user: UserModel, submission_id: int) -> AcceptanceSubmission:
     """Load a submission the caller is allowed to change, or refuse."""
     submission = db.get(AcceptanceSubmission, submission_id)
@@ -481,34 +838,6 @@ def withdraw_submission(
     db.commit()
     db.refresh(submission)
     return _submission_out(submission, _names(db, {submission.submitted_by}))
-
-
-@router.get("/queue", response_model=list[AcceptanceSubmissionOut])
-def review_queue(
-    limit: int = Query(100, le=500),
-    db: Session = Depends(get_db),
-    user: User = Depends(require_roles(*_REVIEW_ROLES, ADMIN)),
-) -> list[AcceptanceSubmissionOut]:
-    """Submissions awaiting review, within this user's province scope."""
-    visible = flow.visible_villages(user, db).with_only_columns(Village.id)
-    submissions = db.execute(
-        select(AcceptanceSubmission)
-        .where(
-            AcceptanceSubmission.review_status == REVIEW_PENDING,
-            AcceptanceSubmission.village_id.in_(visible),
-        )
-        .options(
-            selectinload(AcceptanceSubmission.village)
-            .selectinload(Village.work_item)
-            .selectinload(WorkItem.site)
-            .selectinload(Site.province)
-        )
-        .order_by(AcceptanceSubmission.submitted_at)
-        .limit(limit)
-    ).unique().scalars().all()
-
-    names = _names(db, {s.submitted_by for s in submissions})
-    return [_submission_out(s, names) for s in submissions]
 
 
 @router.post("/submissions/{submission_id}/review", response_model=AcceptanceSubmissionOut)

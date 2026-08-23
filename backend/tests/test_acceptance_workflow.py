@@ -6,7 +6,7 @@ them look wrong until you know the domain:
 * One rejected technology rejects the **whole village**, even when the other
   technologies were approved.
 * A village is finished only when ICT **and** CRA have both approved it.
-* A site with some villages approved and some not is "Open - Partial".
+* A site with some villages approved and some not is "Partial".
 * Only the technologies CPM requested may be answered — asking about a
   technology nobody requested is a data error, not a harmless extra field.
 * Nothing a contractor submits reaches the ``acceptances`` table until a
@@ -228,7 +228,7 @@ def test_one_rejected_technology_rejects_the_whole_village(client):
 
 
 def test_partly_approved_site_is_open_partial(client):
-    """One village approved and one not makes the site Open - Partial."""
+    """One village approved and one not makes the site Partial."""
     _wi, (first, second), _co = _seed("PARTIAL", technologies="2G", villages=2)
     pm = _user_token(client, "PM", "acc_pm")
     coordinator = _user_token(client, "Coordinator", "acc_coord")
@@ -239,11 +239,11 @@ def test_partly_approved_site_is_open_partial(client):
 
     detail = _village(client, coordinator, first)
     assert detail["village"]["verdict"] == "Approved"
-    assert detail["village"]["site_status"] == "Open - Partial"
+    assert detail["village"]["site_status"] == "Partial"
 
     other = _village(client, coordinator, second)
     assert other["village"]["verdict"] == "Pending"
-    assert other["village"]["site_status"] == "Open - Partial"
+    assert other["village"]["site_status"] == "Partial"
 
 
 def test_only_requested_technologies_may_be_answered(client):

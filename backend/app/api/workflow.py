@@ -25,6 +25,7 @@ from app.schemas import (
     ReturnToCoordinatorRequest,
     ReviewRequest,
 )
+from app.services import acceptance_workflow as acceptance_flow
 from app.services.audit import notify_roles, record_audit
 from app.services.visibility import apply_work_item_scope
 from app.services.workflow import refresh_stage
@@ -314,6 +315,12 @@ def update_acceptance(
         acc.cra_status = payload.cra_status
         acc.cra_date = payload.cra_date
     db.flush()
+    # This edits an acceptance without a submission behind it, so the queue's
+    # cached per-authority status has to be rebuilt from what the row now says
+    # — otherwise My Work would keep showing the village where it used to be.
+    village = db.get(Village, village_id)
+    if village is not None:
+        acceptance_flow.recompute_authority_statuses(db, [village])
     record_audit(
         db, user_id=user.id, module="Acceptance", entity_type="Acceptance",
         entity_id=acc.id, old_value=old,

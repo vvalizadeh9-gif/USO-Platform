@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -123,14 +124,6 @@ class VillageOut(ORMModel):
     acceptances: list[AcceptanceOut] = []
 
 
-class VillageAcceptanceRow(ORMModel):
-    """One row for the Acceptance overview: a village plus its parent work item context."""
-
-    work_item_id: int
-    site_type: str
-    village: VillageOut
-
-
 class WorkItemListItem(ORMModel):
     """One row of the Work Items list.
 
@@ -222,6 +215,31 @@ class AcceptanceUpdate(BaseModel):
 
 
 # ---------- Acceptance submissions ----------
+#
+# The vocabulary the My Work workspace renders. These are labels only — what
+# each one *means*, and which one a village is in, is decided in
+# services/acceptance_workflow.py, whose STATUS_* constants carry the same
+# spellings. Nothing here is a rule.
+AuthorityStatus = Literal["Approved", "Rejected", "Returned", "Pending", "NotFiled"]
+"""Where one village stands with one authority (ICT or CRA).
+
+``Approved``  a validated submission approved every requested technology
+``Rejected``  a validated submission rejected at least one
+``Returned``  the most recent submission was sent back, awaiting a new round
+``Pending``   the most recent submission is awaiting a PM or coordinator
+``NotFiled``  nothing has ever been submitted
+"""
+
+RollupStatus = Literal["Closed", "Partial", "Open"]
+"""A village or a site, rolled up.
+
+For a village: ``Closed`` when ICT *and* CRA are Approved, ``Partial`` when one
+is and the other is not, ``Open`` when neither is. For a site: ``Closed`` when
+every village it serves is closed, ``Partial`` when some are, ``Open`` when
+none are.
+"""
+
+
 class TechnologyClaim(BaseModel):
     """One technology's claimed verdict inside a submission."""
 
@@ -302,7 +320,18 @@ class AcceptanceVillageRow(BaseModel):
     ict_verdict: str
     cra_verdict: str
     verdict: str
-    site_status: str
+    # Where each authority stands as the queue reads it — wider than the three
+    # verdicts above, because "returned to me" and "waiting on a reviewer" are
+    # different work even though both are Pending as a verdict.
+    ict_status: AuthorityStatus = "NotFiled"
+    cra_status: AuthorityStatus = "NotFiled"
+    village_status: RollupStatus = "Open"
+    site_status: RollupStatus
+    # Which queue group this village belongs to, so the workspace can head its
+    # list without re-deriving the server's partition in the browser.
+    bucket: Literal[
+        "needs_attention", "ready", "awaiting_review", "closed"
+    ] = "ready"
     # Days since this village's acceptance last moved — a submission sent, a
     # validation, a return. None when nothing has been filed yet. This is what
     # lets the list answer "how long has this been sitting with ICT", which is
@@ -316,6 +345,52 @@ class AcceptanceVillageRow(BaseModel):
 class AcceptanceVillageList(BaseModel):
     total: int
     rows: list[AcceptanceVillageRow]
+
+
+class AcceptanceBucketCounts(BaseModel):
+    """How much work sits in each queue bucket, for the filter chips.
+
+    The four buckets partition the villages this user can see, so they always
+    sum to ``total`` — a village is in exactly one of them, which is what lets
+    the left pane be read as a whole book of work rather than four overlapping
+    searches.
+    """
+
+    needs_attention: int
+    ready: int
+    awaiting_review: int
+    closed: int
+    total: int
+
+
+class BulkSubmissionCreate(BaseModel):
+    """One letter, many villages.
+
+    An ICT letter routinely covers a hundred villages at once. Filing them one
+    at a time is the same form a hundred times, and the hundredth is where the
+    typo goes in.
+    """
+
+    village_ids: list[int] = Field(min_length=1, max_length=200)
+    authority: str  # ICT | CRA
+    letter_number: str = Field(min_length=1, max_length=120)
+    letter_date_shamsi: str | None = None
+    # The same per-technology verdicts are applied to every village. A village
+    # whose requested technologies differ from the claim fails validation, and
+    # the whole batch rolls back naming it — a partial batch would leave the
+    # submitter with no way to tell which villages went in.
+    technologies: list[TechnologyClaim]
+
+
+class BulkSubmissionRow(BaseModel):
+    village_id: int
+    submission_id: int
+
+
+class BulkSubmissionResult(BaseModel):
+    created: list[BulkSubmissionRow]
+    letter_number: str
+    count: int
 
 
 class AcceptanceVillageDetail(BaseModel):
