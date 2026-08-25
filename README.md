@@ -221,6 +221,10 @@ database, so the site goes down instead of going wrong.
 
 **Take a backup first, every time.** `RUNBOOK.md` has the full procedure.
 
+Deploying from a Windows machine, or automatically on every push to `main`?
+See `WINDOWS-DEPLOY.md` — `scripts/deploy.ps1` and the `Deploy` GitHub Actions
+workflow both run this same sequence over SSH.
+
 ---
 
 ## Where to look
@@ -229,6 +233,7 @@ database, so the site goes down instead of going wrong.
 |---|---|
 | **`ARCHITECTURE.md`** | The domain: sites, villages, work items, the health-check lifecycle, the CPM import rules, acceptance, and the full role and permission matrix. Read this first. |
 | **`RUNBOOK.md`** | Deploying, rolling back, restoring, rotating the signing key, resetting a password, and what to do when the backend will not start. |
+| **`WINDOWS-DEPLOY.md`** | Deploying from a Windows workstation via PowerShell, and auto-deploying to the server on every push to `main` via GitHub Actions. |
 | **`MIGRATION-RUNBOOK.md`** | Database migrations: what they do, what the error messages mean, how to roll back. |
 | **`BACKUP-RUNBOOK.md`** | Backups, and the restore drill that proves they work. |
 | **`TLS-SETUP.md`** | Turning on HTTPS, for a public domain or an internal certificate. |

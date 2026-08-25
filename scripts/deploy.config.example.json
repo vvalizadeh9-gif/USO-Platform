@@ -1,0 +1,7 @@
+{
+  "ServerHost": "uep.example.com",
+  "User": "deploy",
+  "RemotePath": "/opt/USO-Platform",
+  "Port": 22,
+  "KeyPath": ""
+}

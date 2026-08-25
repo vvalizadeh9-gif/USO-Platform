@@ -17,6 +17,7 @@ unless a step says otherwise.
 |---|---|
 | Set the server up for the first time | [First-time setup](#first-time-setup) |
 | Deploy a new version | [Deploying](#deploying) |
+| Deploy from Windows, or automatically from GitHub | [`WINDOWS-DEPLOY.md`](WINDOWS-DEPLOY.md) |
 | Undo a deploy | [Rolling back](#rolling-back) |
 | Put back yesterday's data | [Restoring a backup](#restoring-a-backup) |
 | Sign everyone out / replace the signing key | [Rotating the JWT secret](#rotating-the-jwt-secret) |

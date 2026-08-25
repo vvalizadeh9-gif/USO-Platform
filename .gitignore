@@ -31,6 +31,10 @@ dist/
 # Backups produced by scripts/backup.sh
 backups/
 
+# scripts/deploy.ps1 config -- host/user/path, not secret but
+# environment-specific. Copy deploy.config.example.json to start one.
+scripts/deploy.config.json
+
 # OS / editor cruft
 .DS_Store
 Thumbs.db

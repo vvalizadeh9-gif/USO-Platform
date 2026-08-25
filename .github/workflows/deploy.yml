@@ -1,0 +1,76 @@
+# Deploys to the server automatically once the test suite has passed on main.
+#
+# This SSHes into the server and runs exactly what RUNBOOK.md's "Deploying"
+# section describes by hand: pull, back up, rebuild, wait for the backend and
+# frontend to report healthy (scripts/remote-deploy.sh does the second half).
+# It never runs on a commit that hasn't gone green in the "Tests" workflow
+# first. See WINDOWS-DEPLOY.md for the one-time setup this needs -- the
+# repository secrets below, and the server-side deploy user and SSH key.
+#
+# To deploy a specific commit by hand instead (e.g. to roll back), use
+# scripts/deploy.ps1 from a Windows workstation, or ssh in directly -- see
+# RUNBOOK.md's "Rolling back" section.
+
+name: Deploy
+
+on:
+  workflow_run:
+    workflows: ["Tests"]
+    types: [completed]
+    branches: [main]
+  # Lets you re-run a deploy by hand from the Actions tab.
+  workflow_dispatch:
+
+concurrency:
+  # Never run two deploys at once; let one finish before the next starts.
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy to server
+    runs-on: ubuntu-latest
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+    environment: production
+
+    steps:
+      - name: Check required secrets are set
+        run: |
+          missing=""
+          [ -z "${{ secrets.DEPLOY_HOST }}" ] && missing="$missing DEPLOY_HOST"
+          [ -z "${{ secrets.DEPLOY_USER }}" ] && missing="$missing DEPLOY_USER"
+          [ -z "${{ secrets.DEPLOY_PATH }}" ] && missing="$missing DEPLOY_PATH"
+          [ -z "${{ secrets.DEPLOY_SSH_KEY }}" ] && missing="$missing DEPLOY_SSH_KEY"
+          if [ -n "$missing" ]; then
+            echo "::error::Missing repository secrets:$missing -- see WINDOWS-DEPLOY.md."
+            exit 1
+          fi
+
+      - name: Set up SSH
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+        run: |
+          umask 077
+          mkdir -p ~/.ssh
+          echo "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -p "${DEPLOY_PORT:-22}" -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts
+
+      - name: Pull and rebuild on the server
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+        run: |
+          SSH="ssh -p ${DEPLOY_PORT:-22} -i ~/.ssh/deploy_key -o BatchMode=yes ${DEPLOY_USER}@${DEPLOY_HOST}"
+          $SSH "cd '$DEPLOY_PATH' && git fetch origin main && git merge --ff-only origin/main"
+          $SSH "cd '$DEPLOY_PATH' && ./scripts/remote-deploy.sh"
+
+      - name: Clean up key
+        if: always()
+        run: rm -f ~/.ssh/deploy_key
