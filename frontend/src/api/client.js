@@ -18,6 +18,15 @@ api.interceptors.response.use(
       localStorage.removeItem('uep_user')
       window.location.href = '/login'
     }
+    // FastAPI's own validation errors (422 -- a field failing min_length,
+    // for example) return `detail` as a list of objects, not a string. Every
+    // page's error handler assumes a string and hands it straight to a toast,
+    // so an array there crashes the render instead of showing a message.
+    // Normalized once, here, so every page gets a string either way.
+    const detail = err.response?.data?.detail
+    if (Array.isArray(detail)) {
+      err.response.data.detail = detail.map((d) => d.msg || JSON.stringify(d)).join('; ')
+    }
     return Promise.reject(err)
   }
 )
