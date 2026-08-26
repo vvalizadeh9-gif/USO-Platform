@@ -431,9 +431,68 @@ tbody tr:last-child td { border-bottom: none; }
 
 /* ---------- Login ---------- */
 .login-wrap {
-  min-height: 100vh; display: grid; place-items: center; position: relative; z-index: 1;
+  /* 100vh first as the fallback, then 100dvh for browsers that have it. Plain
+     100vh is the *large* viewport on mobile, so the card jumps as the address
+     bar hides; dvh tracks the visible area and it stays put. */
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: grid; place-items: center; position: relative; z-index: 1;
   padding: 20px;
+  overflow: hidden;
 }
+
+/* Its own grid layer rather than a reuse of `body::before`: that one is masked
+   from the top of the viewport, which is right for the app shell where content
+   starts at the top, but leaves the fade sitting well above a vertically
+   centred login card. This one is masked from its own centre. */
+.login-wrap::before {
+  content: '';
+  position: absolute;
+  inset: -80px;
+  background-image:
+    linear-gradient(rgba(20, 35, 60, 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(20, 35, 60, 0.045) 1px, transparent 1px);
+  background-size: 44px 44px;
+  mask-image: radial-gradient(ellipse at 50% 50%, black, transparent 72%);
+  pointer-events: none;
+  z-index: -1;
+  animation: login-grid-drift 24s linear infinite;
+}
+
+/* Transform and opacity only -- deliberately no filter and no animated
+   box-shadow. Those two would repaint this 640px circle every frame for the
+   whole 12s loop; transform and opacity stay on the compositor. */
+.login-wrap::after {
+  content: '';
+  position: absolute;
+  top: 50%; left: 50%;
+  width: 640px; height: 640px;
+  margin: -320px 0 0 -320px;
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--signal-glow), transparent 68%);
+  pointer-events: none;
+  z-index: -1;
+  animation: login-glow-breathe 12s ease-in-out infinite;
+}
+
+/* One full 44px cell, so the loop is seamless. */
+@keyframes login-grid-drift {
+  from { transform: translate3d(0, 0, 0); }
+  to { transform: translate3d(44px, 44px, 0); }
+}
+@keyframes login-glow-breathe {
+  0%, 100% { transform: scale(1); opacity: 0.55; }
+  50% { transform: scale(1.12); opacity: 0.95; }
+}
+
+/* The JS side of the page collapses its durations to zero via
+   useReducedMotion(); these two layers are pure CSS, so they are switched off
+   here. */
+@media (prefers-reduced-motion: reduce) {
+  .login-wrap::before,
+  .login-wrap::after { animation: none; }
+}
+
 .login-card {
   width: 100%; max-width: 400px;
   background: var(--surface-1);
@@ -443,6 +502,27 @@ tbody tr:last-child td { border-bottom: none; }
   box-shadow: var(--shadow-2);
 }
 .login-card .brand { justify-content: center; padding-bottom: 8px; }
+.login-title {
+  font-size: 20px;
+  text-align: center;
+  margin-bottom: 24px;
+}
+
+/* Holds the error banner while its height animates. `overflow: hidden` is what
+   makes that a slide instead of a padded box popping open, and it keeps the
+   banner's own padding and margin measured inside the animated height. */
+.login-banner-slot { overflow: hidden; }
+
+/* Fixed height so swapping label -> spinner -> tick never resizes the button. */
+.login-submit {
+  width: 100%;
+  height: 40px;
+  justify-content: center;
+  margin-top: 6px;
+}
+.login-submit-face { display: inline-flex; align-items: center; justify-content: center; }
+.login-refresh-icon { display: flex; }
+
 .login-footer {
   display: flex; align-items: center; justify-content: center; gap: 6px;
   margin-top: 22px; padding-top: 18px;

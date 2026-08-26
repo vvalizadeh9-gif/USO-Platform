@@ -1,11 +1,22 @@
-import { motion } from 'framer-motion'
-import { Eye, EyeOff, LifeBuoy, RefreshCw } from 'lucide-react'
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
+import { Check, Eye, EyeOff, LifeBuoy, RefreshCw } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import api from '../api/client'
 import { useAuth } from '../context/AuthContext'
 
 const SUPPORT_EMAIL = 'vahid.val@mtnirancell.ir'
+
+// How long the tick should stay on the button before the redirect. Long enough
+// to read as confirmation, short enough that nobody feels held up.
+//
+// KNOWN GAP: it does not get to run. `login()` sets the user on AuthContext,
+// and App.jsx routes `/login` to <Navigate to="/"> as soon as a user exists,
+// so this page is unmounted in the same commit that would have shown the tick
+// -- the `navigate('/')` below is already redundant for the same reason.
+// Showing it needs `login()` split into "authenticate" and "commit the user",
+// which is an AuthContext change and so outside this piece of work.
+const SUCCESS_HOLD_MS = 380
 
 const CAPTCHA_DOWN_HINT =
   'The server did not send a security question. Use the refresh button to try again.'
@@ -53,13 +64,39 @@ export default function Login() {
   const [captcha, setCaptcha] = useState(null)
   const [captchaAnswer, setCaptchaAnswer] = useState('')
   const [captchaDown, setCaptchaDown] = useState(false)
+  const [spins, setSpins] = useState(0)
   const [busy, setBusy] = useState(false)
+  const [done, setDone] = useState(false)
   const [formError, setFormError] = useState('')
   const [captchaError, setCaptchaError] = useState('')
   const captchaInputRef = useRef(null)
+  const holdTimer = useRef(null)
+
+  // One switch for the whole page. Rather than branching the markup on it,
+  // every transition runs through `t()` and collapses to zero, so there is a
+  // single code path to reason about and the CSS layers are handled by their
+  // own prefers-reduced-motion block.
+  const reduceMotion = useReducedMotion()
+  const t = (spec) => (reduceMotion ? { duration: 0 } : spec)
+
+  const container = {
+    hidden: {},
+    show: { transition: t({ staggerChildren: 0.055, delayChildren: 0.14 }) },
+  }
+  const item = {
+    hidden: { opacity: 0, y: 10 },
+    show: { opacity: 1, y: 0, transition: t({ duration: 0.34, ease: [0.16, 1, 0.3, 1] }) },
+  }
+  const swap = {
+    initial: { opacity: 0, scale: 0.86 },
+    animate: { opacity: 1, scale: 1 },
+    exit: { opacity: 0, scale: 0.86 },
+    transition: t({ duration: 0.16, ease: [0.16, 1, 0.3, 1] }),
+  }
 
   useEffect(() => {
     refreshCaptcha()
+    return () => clearTimeout(holdTimer.current)
   }, [])
 
   /**
@@ -93,6 +130,7 @@ export default function Login() {
   }
 
   function onManualRefresh() {
+    setSpins((n) => n + 1)
     setCaptchaError('')
     refreshCaptcha()
   }
@@ -111,10 +149,15 @@ export default function Login() {
     setBusy(true)
     try {
       await login(username, password, captcha.token, captchaAnswer.trim())
-      navigate('/')
-      // No `finally` on purpose: on success `busy` stays true through the
-      // redirect so the button cannot be pressed a second time while the
-      // navigation is in flight. Only the failure path re-enables it.
+      // No `finally` on purpose: on success `busy` stays true through the tick
+      // and the redirect, so the button cannot be pressed a second time while
+      // the navigation is in flight. Only the failure path re-enables it.
+      if (reduceMotion) {
+        navigate('/')
+        return
+      }
+      setDone(true)
+      holdTimer.current = setTimeout(() => navigate('/'), SUCCESS_HOLD_MS)
     } catch (err) {
       const { form, captcha: captchaMessage } = signInError(err)
       if (form) setFormError(form)
@@ -148,123 +191,155 @@ export default function Login() {
         animate={{ opacity: 1, y: 0, scale: 1 }}
         transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
       >
-        <div className="brand">
-          <div className="brand-mark"><span>U</span></div>
-          <div className="brand-text">
-            <b>USO Platform</b>
-            <small>Enterprise Operations</small>
-          </div>
-        </div>
+        <motion.div variants={container} initial="hidden" animate="show">
+          <motion.div className="brand" variants={item}>
+            <div className="brand-mark"><span>U</span></div>
+            <div className="brand-text">
+              <b>USO Platform</b>
+              <small>Enterprise Operations</small>
+            </div>
+          </motion.div>
 
-        <div style={{ textAlign: 'center', marginBottom: 24 }}>
-          <h2 style={{ fontSize: 20 }}>Sign in to continue</h2>
-          <p className="muted" style={{ marginTop: 4, fontSize: 13 }}>
-            Enter your credentials to access the platform
-          </p>
-        </div>
+          <motion.h1 className="login-title" variants={item}>Sign in</motion.h1>
 
-        {formError && (
-          <div className="form-banner form-banner-error" role="alert">
-            {formError}
-          </div>
-        )}
+          <AnimatePresence initial={false}>
+            {formError && (
+              <motion.div
+                className="login-banner-slot"
+                initial={{ height: 0 }}
+                animate={{ height: 'auto' }}
+                exit={{ height: 0 }}
+                transition={t({ duration: 0.24, ease: [0.16, 1, 0.3, 1] })}
+              >
+                <div className="form-banner form-banner-error" role="alert">
+                  {formError}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
-        <form onSubmit={onSubmit} noValidate>
-          <div className="field">
-            <label htmlFor="login-username">Username</label>
-            <input
-              id="login-username"
-              className="input"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              placeholder="your.username"
-              autoComplete="username"
-              autoFocus
-              required
-            />
-          </div>
-          <div className="field">
-            <label htmlFor="login-password">Password</label>
-            <div className="input-with-action">
+          <form onSubmit={onSubmit} noValidate>
+            <motion.div className="field" variants={item}>
+              <label htmlFor="login-username">Username</label>
               <input
-                id="login-password"
+                id="login-username"
                 className="input"
-                type={showPassword ? 'text' : 'password'}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                onKeyDown={handlePasswordKeyEvent}
-                onKeyUp={handlePasswordKeyEvent}
-                placeholder="••••••••"
-                autoComplete="current-password"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                placeholder="your.username"
+                autoComplete="username"
+                autoFocus
                 required
               />
-              <button
-                type="button"
-                className="input-action-btn"
-                onClick={() => setShowPassword((v) => !v)}
-                aria-label={showPassword ? 'Hide password' : 'Show password'}
-                aria-pressed={showPassword}
-                tabIndex={-1}
-              >
-                {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+            </motion.div>
+            <motion.div className="field" variants={item}>
+              <label htmlFor="login-password">Password</label>
+              <div className="input-with-action">
+                <input
+                  id="login-password"
+                  className="input"
+                  type={showPassword ? 'text' : 'password'}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  onKeyDown={handlePasswordKeyEvent}
+                  onKeyUp={handlePasswordKeyEvent}
+                  placeholder="••••••••"
+                  autoComplete="current-password"
+                  required
+                />
+                <button
+                  type="button"
+                  className="input-action-btn"
+                  onClick={() => setShowPassword((v) => !v)}
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  aria-pressed={showPassword}
+                  tabIndex={-1}
+                >
+                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              </div>
+              {capsLockOn && (
+                <div className="field-warning" role="status">
+                  Caps Lock is on
+                </div>
+              )}
+            </motion.div>
+            <motion.div className="field" variants={item}>
+              <div className="captcha-label-row">
+                <label htmlFor="login-captcha">{captchaLabel}</label>
+                <button
+                  type="button"
+                  className="input-action-btn"
+                  onClick={onManualRefresh}
+                  disabled={busy}
+                  aria-label="Get a new captcha question"
+                >
+                  <motion.span
+                    className="login-refresh-icon"
+                    animate={{ rotate: spins * 360 }}
+                    transition={t({ duration: 0.5, ease: [0.16, 1, 0.3, 1] })}
+                  >
+                    <RefreshCw size={14} />
+                  </motion.span>
+                </button>
+              </div>
+              <input
+                id="login-captcha"
+                className={`input${captchaError ? ' input-error' : ''}`}
+                type="text"
+                inputMode="numeric"
+                value={captchaAnswer}
+                onChange={(e) => setCaptchaAnswer(e.target.value)}
+                placeholder="Your answer"
+                required
+                disabled={!captcha}
+                aria-invalid={!!captchaError}
+                aria-describedby={captchaDescribedBy}
+                ref={captchaInputRef}
+              />
+              {captchaError && (
+                <div className="field-error" id="login-captcha-error" role="alert">
+                  {captchaError}
+                </div>
+              )}
+              {captchaDown && (
+                <div className="field-error" id="login-captcha-down" role="alert">
+                  {CAPTCHA_DOWN_HINT}
+                </div>
+              )}
+            </motion.div>
+            {/* The variant lives on a wrapper, not on the button itself: a
+                motion component writes an inline transform, which would beat
+                the `.btn:active` press effect the rest of the app has. */}
+            <motion.div variants={item}>
+              <button className="btn btn-primary login-submit" disabled={busy || !captcha}>
+                <AnimatePresence mode="wait" initial={false}>
+                  {done ? (
+                    <motion.span key="done" className="login-submit-face" {...swap}>
+                      <Check size={18} />
+                    </motion.span>
+                  ) : busy ? (
+                    <motion.span key="busy" className="login-submit-face" {...swap}>
+                      <div className="spinner" />
+                    </motion.span>
+                  ) : (
+                    <motion.span key="label" className="login-submit-face" {...swap}>
+                      Sign in
+                    </motion.span>
+                  )}
+                </AnimatePresence>
               </button>
-            </div>
-            {capsLockOn && (
-              <div className="field-warning" role="status">
-                Caps Lock is on
-              </div>
-            )}
-          </div>
-          <div className="field">
-            <div className="captcha-label-row">
-              <label htmlFor="login-captcha">{captchaLabel}</label>
-              <button
-                type="button"
-                className="input-action-btn"
-                onClick={onManualRefresh}
-                disabled={busy}
-                aria-label="Get a new captcha question"
-              >
-                <RefreshCw size={14} />
-              </button>
-            </div>
-            <input
-              id="login-captcha"
-              className={`input${captchaError ? ' input-error' : ''}`}
-              type="text"
-              inputMode="numeric"
-              value={captchaAnswer}
-              onChange={(e) => setCaptchaAnswer(e.target.value)}
-              placeholder="Your answer"
-              required
-              disabled={!captcha}
-              aria-invalid={!!captchaError}
-              aria-describedby={captchaDescribedBy}
-              ref={captchaInputRef}
-            />
-            {captchaError && (
-              <div className="field-error" id="login-captcha-error" role="alert">
-                {captchaError}
-              </div>
-            )}
-            {captchaDown && (
-              <div className="field-error" id="login-captcha-down" role="alert">
-                {CAPTCHA_DOWN_HINT}
-              </div>
-            )}
-          </div>
-          <button className="btn btn-primary" style={{ width: '100%', justifyContent: 'center', marginTop: 6 }} disabled={busy || !captcha}>
-            {busy ? <div className="spinner" /> : 'Sign in'}
-          </button>
-        </form>
+            </motion.div>
+          </form>
 
-        <div className="login-footer">
-          <LifeBuoy size={13} />
-          <span>
-            Trouble signing in? Contact{' '}
-            <a href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</a>
-          </span>
-        </div>
+          <motion.div className="login-footer" variants={item}>
+            <LifeBuoy size={13} />
+            <span>
+              Trouble signing in? Contact{' '}
+              <a href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</a>
+            </span>
+          </motion.div>
+        </motion.div>
       </motion.div>
     </div>
   )
