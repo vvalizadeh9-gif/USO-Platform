@@ -37,6 +37,7 @@ from app.schemas import (
 )
 from app.services import health_check as hc
 from app.services.audit import record_audit
+from app.services.visibility import visible_work_item_ids
 from app.services.hc_template import (
     build_assignment_feedback_export,
     build_results_export,
@@ -49,6 +50,36 @@ _XLSX_MEDIA_TYPE = (
 )
 
 router = APIRouter(prefix="/hc", tags=["health-check"])
+
+
+# ---------------- Scoped loaders ----------------
+#
+# Every handler below that takes an id in its path goes through one of these.
+# They resolve and authorise in a single query, which is the point: the
+# previous ``db.get(HcTask, task_id)`` calls resolved without authorising at
+# all, so a role guard that said "contractors may submit results" was read as
+# "this contractor may submit *this* result".
+#
+# Both answer 404 rather than 403 for a record that exists but is out of
+# scope, matching ``_load_village`` in the acceptance module: a contractor must
+# not be able to map which task ids belong to a competitor by reading the
+# difference between "no" and "not yours".
+def _load_assignment(db: Session, user: User, assignment_id: int) -> HcAssignment:
+    assignment = db.execute(
+        hc.visible_assignments(db, user).where(HcAssignment.id == assignment_id)
+    ).scalar_one_or_none()
+    if assignment is None:
+        raise HTTPException(404, "Assignment not found")
+    return assignment
+
+
+def _load_task(db: Session, user: User, task_id: int) -> HcTask:
+    task = db.execute(
+        hc.visible_tasks(db, user).where(HcTask.id == task_id)
+    ).scalar_one_or_none()
+    if task is None:
+        raise HTTPException(404, "Task not found")
+    return task
 
 
 # ---------------- Coordinator ----------------
@@ -68,12 +99,15 @@ def create_hc_assignment(
     user: User = Depends(require_roles(PM, COORDINATOR)),
 ):
     """Assign one or many sites to a subcontractor for health check."""
-    assignment = hc.create_assignment(
-        db,
-        contractor_id=payload.contractor_id,
-        work_item_ids=payload.work_item_ids,
-        user=user,
-    )
+    try:
+        assignment = hc.create_assignment(
+            db,
+            contractor_id=payload.contractor_id,
+            work_item_ids=payload.work_item_ids,
+            user=user,
+        )
+    except hc.ScopeError as exc:
+        raise HTTPException(404, str(exc)) from None
     record_audit(
         db, user_id=user.id, module="HealthCheck", entity_type="HcAssignment",
         entity_id=assignment.id,
@@ -94,7 +128,13 @@ def list_hc_assignments(
     # an N+1). That gives us each task's result/completed_at needed for the
     # per-assignment feedback breakdown shown in HC History.
     assignments = (
-        db.query(HcAssignment).order_by(HcAssignment.id.desc()).limit(200).all()
+        db.execute(
+            hc.visible_assignments(db, user)
+            .order_by(HcAssignment.id.desc())
+            .limit(200)
+        )
+        .scalars()
+        .all()
     )
     items = []
     for a in assignments:
@@ -124,10 +164,7 @@ def get_hc_assignment(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    assignment = db.get(HcAssignment, assignment_id)
-    if assignment is None:
-        raise HTTPException(404, "Assignment not found")
-    return hc.build_assignment_out(assignment)
+    return hc.build_assignment_out(_load_assignment(db, user, assignment_id))
 
 
 @router.get("/results", response_model=list[HcResultRow])
@@ -142,7 +179,12 @@ def hc_results(
         .join(Site, WorkItem.site_id == Site.id)
         .join(HcAssignment, HcTask.hc_assignment_id == HcAssignment.id)
         .join(Contractor, HcAssignment.contractor_id == Contractor.id)
-        .where(HcTask.completed_at.isnot(None))
+        .where(
+            HcTask.completed_at.isnot(None),
+            # Province scope. Without this a coordinator granted one province
+            # read — and exported — every health-check result in the country.
+            HcTask.work_item_id.in_(visible_work_item_ids(user, db)),
+        )
         .order_by(HcTask.completed_at.desc())
         .options(selectinload(HcTask.technologies))
     )
@@ -182,7 +224,12 @@ def hc_results_export(
         .join(Site, WorkItem.site_id == Site.id)
         .join(HcAssignment, HcTask.hc_assignment_id == HcAssignment.id)
         .join(Contractor, HcAssignment.contractor_id == Contractor.id)
-        .where(HcTask.completed_at.isnot(None))
+        .where(
+            HcTask.completed_at.isnot(None),
+            # Province scope. Without this a coordinator granted one province
+            # read — and exported — every health-check result in the country.
+            HcTask.work_item_id.in_(visible_work_item_ids(user, db)),
+        )
         .order_by(HcTask.completed_at.desc())
         .options(selectinload(HcTask.technologies))
     )
@@ -225,13 +272,21 @@ def my_hc_assignments(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    """HC assignments belonging to the logged-in subcontractor's company."""
+    """HC assignments belonging to the logged-in subcontractor's company.
+
+    The role test is unchanged: this screen is a subcontractor's own work, and
+    the three staff roles get a management view of it. What is new is that the
+    staff view is now scoped — it used to return every assignment in the
+    country regardless of which provinces the user had been granted.
+    """
     if user.contractor_id is None and user.role.name not in (ADMIN, PM, COORDINATOR):
         return []
-    q = db.query(HcAssignment)
+    stmt = hc.visible_assignments(db, user)
     if user.contractor_id is not None:
-        q = q.filter(HcAssignment.contractor_id == user.contractor_id)
-    assignments = q.order_by(HcAssignment.id.desc()).limit(200).all()
+        stmt = stmt.where(HcAssignment.contractor_id == user.contractor_id)
+    assignments = (
+        db.execute(stmt.order_by(HcAssignment.id.desc()).limit(200)).scalars().all()
+    )
     return [hc.build_assignment_out(a) for a in assignments]
 
 
@@ -243,9 +298,7 @@ def submit_hc_result(
     user: User = Depends(require_roles(PM, CONTRACTOR)),
 ):
     """Subcontractor submits per-technology results for one site (final)."""
-    task = db.get(HcTask, task_id)
-    if task is None:
-        raise HTTPException(404, "Task not found")
+    task = _load_task(db, user, task_id)
 
     requested = set(hc.requested_techs_for_task(task))
     provided = {t.technology for t in payload.technology_results}
@@ -296,9 +349,7 @@ def review_hc_result(
     the subcontractor decides Normal/Not-Normal; the coordinator/PM decides
     which category a Not-Ready site belongs to.
     """
-    task = db.get(HcTask, task_id)
-    if task is None:
-        raise HTTPException(404, "Task not found")
+    task = _load_task(db, user, task_id)
     try:
         hc.review_task(
             db, task=task, problem_categories=payload.selected(), user=user
@@ -443,9 +494,7 @@ def download_template(
     user: User = Depends(get_current_user),
 ):
     """Download a pre-filled Excel template for bulk result entry."""
-    assignment = db.get(HcAssignment, assignment_id)
-    if assignment is None:
-        raise HTTPException(404, "Assignment not found")
+    assignment = _load_assignment(db, user, assignment_id)
     content = build_template(assignment)
     filename = f"{assignment.code}_healthcheck.xlsx"
     return Response(
@@ -463,9 +512,7 @@ def upload_template(
     user: User = Depends(require_roles(PM, CONTRACTOR)),
 ):
     """Apply a filled bulk template: computes every site's Ready/NotReady."""
-    assignment = db.get(HcAssignment, assignment_id)
-    if assignment is None:
-        raise HTTPException(404, "Assignment not found")
+    assignment = _load_assignment(db, user, assignment_id)
     if not file.filename.lower().endswith((".xlsx", ".xls")):
         raise HTTPException(400, "Only Excel files are accepted")
 
@@ -505,9 +552,7 @@ def export_assignment_feedback(
     Lets a PM pick any single assignment from HC History and pull its full
     feedback into a spreadsheet.
     """
-    assignment = db.get(HcAssignment, assignment_id)
-    if assignment is None:
-        raise HTTPException(404, "Assignment not found")
+    assignment = _load_assignment(db, user, assignment_id)
 
     contractor = db.get(Contractor, assignment.contractor_id)
     stats = hc.build_assignment_stats(assignment)

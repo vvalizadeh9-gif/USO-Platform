@@ -43,7 +43,7 @@ from app.models.acceptance_workflow import (
 from app.models.reference import User
 from app.models.workitem import Village, WorkItem
 from app.services.tech_parser import parse_technologies
-from app.services.visibility import apply_work_item_scope
+from app.services.visibility import visible_work_item_ids
 
 # Verdicts. Deliberately the same three words the ``acceptances`` table uses.
 APPROVED = "Approved"
@@ -108,16 +108,14 @@ def _now() -> datetime:
 def visible_villages(user: User, db: Session) -> Select:
     """A ``Village`` select restricted to what this user may see.
 
-    Built on ``apply_work_item_scope`` rather than re-deriving the rules, so a
+    Built on ``visible_work_item_ids`` rather than re-deriving the rules, so a
     contractor sees exactly the villages of the sites assigned to them and a
     coordinator sees exactly their provinces — the requirement that a
     contractor reaches only their own villages is inherited, not re-invented.
     """
-    work_items = select(WorkItem.id).where(WorkItem.deleted_at.is_(None))
-    work_items = apply_work_item_scope(work_items, user, db)
     return select(Village).where(
         Village.deleted_at.is_(None),
-        Village.work_item_id.in_(work_items),
+        Village.work_item_id.in_(visible_work_item_ids(user, db)),
     )
 
 

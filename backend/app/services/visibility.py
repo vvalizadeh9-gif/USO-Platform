@@ -73,3 +73,16 @@ def apply_work_item_scope(stmt: Select, user: User, db: Session) -> Select:
             Site.province_id.in_(province_ids or [-1])
         )
     return stmt
+
+
+def visible_work_item_ids(user: User, db: Session) -> Select:
+    """A select of the work-item ids this user may see, for use as a subquery.
+
+    The same rules as :func:`apply_work_item_scope`, packaged for the callers
+    that need to constrain a query on some *other* table -- a health-check task,
+    a village, a drive test -- by whether its site is in scope. Those callers
+    were previously left to fetch by primary key and hope the role guard had
+    been enough, which is not a scope check at all.
+    """
+    stmt = select(WorkItem.id).where(WorkItem.deleted_at.is_(None))
+    return apply_work_item_scope(stmt, user, db)
