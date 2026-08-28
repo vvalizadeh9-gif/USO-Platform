@@ -1,17 +1,24 @@
-fastapi==0.115.6
+# FastAPI 0.115.6 pinned starlette below 0.42, and every starlette in that
+# range now carries published advisories -- eight of them, in the ASGI layer
+# every request passes through. Clearing those requires moving FastAPI, so the
+# two are upgraded together.
+fastapi==0.141.1
 uvicorn[standard]==0.34.0
 sqlalchemy==2.0.36
 psycopg[binary]==3.2.3
 alembic==1.14.0
 pydantic==2.10.4
 pydantic-settings==2.7.0
-PyJWT==2.10.1
+# 2.10.1 carried eleven advisories, in the library that validates every access
+# token this platform issues.
+PyJWT==2.13.0
 # bcrypt is used directly. passlib was removed: no release since 2020, it read
 # a private bcrypt attribute removed in 4.1 (which is why bcrypt was pinned back
 # to 4.0.1), and it imports the stdlib `crypt` module deleted in Python 3.12+.
 # The stored hash format is identical, so no password had to change.
 bcrypt==4.2.1
-python-multipart==0.0.19
+# 0.0.19 carried six advisories, in the parser every file upload goes through.
+python-multipart==0.0.32
 pandas==2.2.3
 openpyxl==3.1.5
 jdatetime==5.0.0
