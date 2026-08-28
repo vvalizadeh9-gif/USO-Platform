@@ -250,6 +250,10 @@ def update_user(
         user.full_name = payload.full_name
     if payload.password is not None:
         user.password_hash = hash_password(payload.password)
+        # Ends every session this account already has. Resetting a password is
+        # the standard response to a compromised account, and until this line
+        # existed it left the attacker's token working for another eight hours.
+        user.token_version += 1
     if payload.role_id is not None:
         user.role_id = payload.role_id
     # contractor_id needs special handling: None is a valid value here

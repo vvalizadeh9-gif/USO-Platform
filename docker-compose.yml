@@ -84,6 +84,20 @@ services:
     restart: unless-stopped
     depends_on:
       - backend
+    environment:
+      # Switching to HTTPS is these two values plus the certificate mount
+      # below -- no configuration file is edited. Set UEP_ENABLE_TLS=true in
+      # .env and the container serves HTTPS on 8443 and redirects 8080 to it.
+      #
+      # If TLS is on and the certificate is missing, the container refuses to
+      # start rather than serving plain HTTP: a silent downgrade would leave
+      # every password readable on the network while the deployment believed
+      # it was encrypted. See TLS-SETUP.md.
+      UEP_ENABLE_TLS: ${UEP_ENABLE_TLS:-false}
+      UEP_SERVER_NAME: ${UEP_SERVER_NAME:-_}
+      # Only needed when the certificate is not directly at /etc/nginx/certs --
+      # certbot nests its files under live/<domain>/. See TLS-SETUP.md.
+      UEP_CERT_DIR: ${UEP_CERT_DIR:-/etc/nginx/certs}
     ports:
       # host:container. The container listens on 8080 because it runs as an
       # unprivileged user, which cannot bind a port below 1024.

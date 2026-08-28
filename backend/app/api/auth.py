@@ -11,7 +11,7 @@ from app.core.security import (
     create_access_token,
     create_captcha_challenge,
     verify_captcha,
-    verify_password,
+    verify_password_or_dummy,
 )
 from app.models.reference import User
 from app.schemas import CaptchaChallenge, TokenResponse, UserOut
@@ -58,7 +58,9 @@ def login(
             detail="Captcha answer is incorrect or has expired",
         )
     user = db.query(User).filter(User.username == form.username).one_or_none()
-    if user is None or not verify_password(form.password, user.password_hash):
+    if not verify_password_or_dummy(
+        form.password, user.password_hash if user else None
+    ):
         # Counted here, not on the captcha branch above: a wrong captcha is a
         # human mistyping, and locking someone out for it would be a nuisance
         # with no security benefit.
@@ -86,5 +88,7 @@ def login(
     db.commit()
     db.refresh(user)
 
-    token = create_access_token(user.id, {"role": user.role.name})
+    token = create_access_token(
+        user.id, {"role": user.role.name, "ver": user.token_version}
+    )
     return TokenResponse(access_token=token, user=UserOut.model_validate(user))

@@ -7,6 +7,9 @@ denial-of-service. The token payload is unchanged, so tokens issued before the
 switch still validate and nothing about existing sessions changes.
 """
 import random
+import secrets
+import threading
+import time
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -20,6 +23,50 @@ settings = get_settings()
 CAPTCHA_TTL_MINUTES = 5
 
 _pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+
+class _SpentCaptchas:
+    """Remembers which captcha challenges have already been answered.
+
+    Held in memory, for the same reason and with the same limitation as the
+    login throttle: there is one backend container, so one process sees every
+    login. A restart forgets the set, which at worst lets a handful of tokens
+    be reused once; if UEP is ever run as more than one backend, this and
+    ``core/rate_limit.py`` move to Redis together.
+
+    Entries are dropped once their token has expired anyway, so the set stays
+    bounded by the number of captchas issued in five minutes.
+    """
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._spent: dict[str, float] = {}
+
+    def claim(self, jti: str | None, expires_at: float | None) -> bool:
+        """Record *jti* as used. Returns False if it already was."""
+        if not jti:
+            # A challenge minted before this existed. Accept it rather than
+            # locking out anyone holding a login page across the deploy.
+            return True
+        now = time.time()
+        with self._lock:
+            for spent, expiry in list(self._spent.items()):
+                if expiry <= now:
+                    del self._spent[spent]
+            if jti in self._spent:
+                return False
+            self._spent[jti] = float(
+                expires_at or now + CAPTCHA_TTL_MINUTES * 60
+            )
+            return True
+
+    def reset(self) -> None:
+        """Forget everything. For tests."""
+        with self._lock:
+            self._spent.clear()
+
+
+_spent_captchas = _SpentCaptchas()
 
 
 def _bcrypt_safe(password: str) -> str:
@@ -37,6 +84,27 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     return _pwd_context.verify(_bcrypt_safe(plain_password), hashed_password)
 
 
+# A real bcrypt hash of a value nothing can be, computed once at import.
+# ``verify_password_or_dummy`` below burns the same work on it when there is no
+# user, so that a wrong username and a wrong password take the same time.
+_DUMMY_HASH = _pwd_context.hash("uep-no-such-user")
+
+
+def verify_password_or_dummy(plain_password: str, hashed_password: str | None) -> bool:
+    """Verify, doing the same work when there is no hash to check against.
+
+    Login previously short-circuited on an unknown username, returning in
+    microseconds where a known username took the full bcrypt comparison. The
+    response body was identical, but the response *time* said whether the
+    account existed, which is the first thing a password-guessing run wants to
+    know. Hashing against a fixed dummy costs the same and says nothing.
+    """
+    if hashed_password is None:
+        _pwd_context.verify(_bcrypt_safe(plain_password), _DUMMY_HASH)
+        return False
+    return verify_password(plain_password, hashed_password)
+
+
 def create_access_token(subject: str | int, extra_claims: dict[str, Any] | None = None) -> str:
     """Create a signed JWT access token.
 
@@ -47,7 +115,14 @@ def create_access_token(subject: str | int, extra_claims: dict[str, Any] | None 
     expire = datetime.now(timezone.utc) + timedelta(
         minutes=settings.access_token_expire_minutes
     )
-    payload: dict[str, Any] = {"sub": str(subject), "exp": expire}
+    payload: dict[str, Any] = {
+        "sub": str(subject),
+        "exp": expire,
+        # When this token was minted. Not used for expiry -- ``exp`` does that
+        # -- but it is what makes a token auditable after the fact, and it is
+        # one line now against a schema change later.
+        "iat": datetime.now(timezone.utc),
+    }
     if extra_claims:
         payload.update(extra_claims)
     return jwt.encode(payload, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
@@ -83,7 +158,7 @@ def create_captcha_challenge() -> dict[str, Any]:
     a, b = random.randint(1, 9), random.randint(1, 9)
     expire = datetime.now(timezone.utc) + timedelta(minutes=CAPTCHA_TTL_MINUTES)
     token = jwt.encode(
-        {"a": a, "b": b, "exp": expire},
+        {"a": a, "b": b, "exp": expire, "jti": secrets.token_urlsafe(9)},
         settings.captcha_key,
         algorithm=settings.jwt_algorithm,
     )
@@ -91,11 +166,20 @@ def create_captcha_challenge() -> dict[str, Any]:
 
 
 def verify_captcha(token: str, answer: int) -> bool:
-    """Return True if ``answer`` solves the challenge encoded in ``token``."""
+    """Return True if ``answer`` solves the challenge encoded in ``token``.
+
+    Each challenge is accepted once. Without that a solved token authorised
+    unlimited attempts for its full five-minute life, so a guessing run solved
+    one sum and then never saw a captcha again. The login throttle in
+    ``core/rate_limit.py`` remains the real defence -- this just stops the
+    captcha being free to bypass.
+    """
     try:
         claims = jwt.decode(
             token, settings.captcha_key, algorithms=[settings.jwt_algorithm]
         )
     except jwt.PyJWTError:
         return False
-    return claims.get("a", -1) + claims.get("b", -2) == answer
+    if claims.get("a", -1) + claims.get("b", -2) != answer:
+        return False
+    return _spent_captchas.claim(claims.get("jti"), claims.get("exp"))

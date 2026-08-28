@@ -117,6 +117,15 @@ class User(Base):
 
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
+    # Bumped whenever this account's credentials change. Access tokens carry
+    # the value they were minted with, and a token whose value no longer
+    # matches is refused -- which is what makes "reset the password" actually
+    # end the sessions an attacker already holds. Without it a stolen token
+    # stayed valid for its full eight hours after the password was changed,
+    # and the only way to end it was rotating JWT_SECRET_KEY, which signs out
+    # every user in the platform.
+    token_version: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+
     provinces: Mapped[list[Province]] = relationship(
         secondary=user_province_access, lazy="selectin"
     )
