@@ -17,6 +17,15 @@ import reactRefresh from 'eslint-plugin-react-refresh'
 export default [
   { ignores: ['dist/**', 'node_modules/**'] },
   {
+    // Test files. Vitest is configured with globals: true, so describe/it/
+    // expect are available without importing them -- ESLint has to be told,
+    // or every test file reports them as undefined.
+    files: ['**/*.test.{js,jsx}', 'src/test/**/*.{js,jsx}'],
+    languageOptions: {
+      globals: { ...globals.node, ...globals.vitest },
+    },
+  },
+  {
     files: ['**/*.{js,jsx}'],
     languageOptions: {
       ecmaVersion: 2022,

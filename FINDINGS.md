@@ -587,19 +587,39 @@ And one from **Phase 5**:
   `backend/requirements.lock`, with hashes, installed by both the Dockerfile
   and CI, and checked for drift on every run.
 
-## Still open, and deliberately
+## The five that were left open, and then closed
 
-* **Contractors can act on work items reassigned away from them.** The
-  work-item scope deliberately includes historical assignments so a contractor's
-  own history does not vanish — correct for reads — and the two write paths
-  inherit that read scope without narrowing it. `return_to_coordinator` on the
-  same router does narrow it, so the pattern to follow exists.
-* **`GET /hc/sites/{id}/history` is visible to every user.** Its docstring says
-  so, which reads as a decision rather than an oversight, so it was left alone
-  and is flagged here instead.
+The section above originally deferred five items. Four were defensible calls
+stated as they were made; the fifth was a miss. All are now done.
+
+* **Contractors could act on work items reassigned away from them.** Narrowed
+  for contractors only, the way `return_to_coordinator` already did. Staff are
+  unaffected — a PM submitting on a contractor's behalf is normal.
+* **`GET /hc/sites/{id}/history` was visible to every user.** Its docstring
+  said so, which is why it survived the first pass. But the timeline names the
+  subcontractor, the round count and the problem categories, so it let a
+  contractor read how a competitor was doing on any site in the country by
+  walking the ids. Scoped now.
+* **The login throttle and captcha store were per-process.** Moved into the
+  database. The restart case is what settled it: a deploy restarted the
+  backend and cleared any lockout in progress.
+* **Password rules were `min_length=8` and nothing else.** Now length 12, a
+  common-password blocklist that sees through leet substitutions, and a check
+  against the username — and deliberately *no* character-class rule, for the
+  reason set out in `app/core/passwords.py`.
+* **There were no frontend tests.** This one was promised in the phase plan and
+  then skipped, which should have been said at the time rather than glossed.
+  There are now 67, covering the queue-status logic that mirrors backend rules,
+  the localStorage boot path, the API client's 401 handling, the audit-log
+  describer and the route guards. `npm test` runs in CI.
+
+### Still open, deliberately
+
 * **Twelve ESLint warnings**, mostly hook dependency arrays. Each is a real
-  observation and fixing them changes render behaviour, which does not belong in
-  the same change as a lint rollout.
-* **The login throttle and captcha store are per-process.** Fine for one backend
-  container, which is what runs today; both move to Redis together if a second
-  is ever added.
+  observation and fixing them changes render behaviour, which does not belong
+  in the same change as a lint rollout.
+* **`FIRST_ADMIN_PASSWORD` is not held to the new password policy.** The
+  seeded admin is created by `bootstrap.py` calling `hash_password` directly,
+  not through the schema. Production already refuses to start on the published
+  default, which is the case that matters; holding the seed to the full policy
+  would be a sensible follow-up.

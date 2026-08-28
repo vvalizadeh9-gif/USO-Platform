@@ -139,10 +139,10 @@ jobs:
         working-directory: frontend
         run: npm ci
 
-      # There are no frontend tests yet. Building still catches a real class of
-      # mistake: a syntax error, a missing import, a component referring to
-      # something that no longer exists. Those would otherwise only surface at
-      # deploy time, when the site is down.
+      # Building catches a real class of mistake on its own: a syntax error, a
+      # missing import, a component referring to something that no longer
+      # exists. Those would otherwise only surface at deploy time, when the
+      # site is down.
       - name: Build
         working-directory: frontend
         run: npm run build
@@ -150,6 +150,10 @@ jobs:
       - name: Lint
         working-directory: frontend
         run: npm run lint
+
+      - name: Test
+        working-directory: frontend
+        run: npm test
 
       # Same reasoning as the backend audit above, and the same
       # report-do-not-block posture.
