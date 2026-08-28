@@ -512,6 +512,20 @@ def review(
     if submission.review_status != REVIEW_PENDING:
         raise WorkflowError("This submission has already been reviewed")
 
+    # The separation this module's docstring promises: a claim becomes a fact
+    # only when someone *else* agrees. Coordinator and PM are in both the
+    # submit and the review role lists -- correctly, because a coordinator who
+    # chased the approval themselves should be able to file it -- so without
+    # this check one person could file a claim and validate it into the
+    # acceptances table in two API calls. Admin is kept out of both lists for
+    # the same reason, and that intent was undermined by its absence here.
+    if submission.submitted_by is not None and submission.submitted_by == user.id:
+        raise WorkflowError(
+            "You cannot review your own submission. Acceptance is recorded by "
+            "one person and validated by another, so that no single person can "
+            "move a date with contractual consequences."
+        )
+
     decision = str(decision).strip().title()
     comment = (comment or "").strip() or None
 

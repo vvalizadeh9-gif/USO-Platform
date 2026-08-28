@@ -90,12 +90,32 @@ def drive_test_overview(
 
 
 def _previous_totals(db: Session, user: User) -> dict:
-    """Pick the right prior-month snapshot for this user's scope."""
+    """Pick the right prior-month snapshot for this user's scope.
+
+    A user who sees everything gets the global snapshot. A user scoped to some
+    provinces gets the sum of those provinces' snapshots.
+
+    Summing matters: this used to hand the *global* snapshot to anyone with
+    more than one province, so a user granted three provinces out of
+    thirty-one saw current values for three and a baseline for thirty-one. The
+    deltas were not merely imprecise, they were arithmetically meaningless --
+    and they leaked the national totals to a user scoped away from them.
+
+    Returning ``{}`` where there is no snapshot is deliberate: the caller reads
+    ``key in prev`` and renders no delta at all, which is honest about not
+    knowing rather than showing a change of zero.
+    """
     province_ids = visible_province_ids(user)
-    # Single-province user → that province's snapshot; everyone else → global.
-    if province_ids is not None and len(province_ids) == 1:
-        return get_month_over_month(db, province_ids[0])
-    return get_month_over_month(db, None)
+    if province_ids is None:
+        return get_month_over_month(db, None)
+    if not province_ids:
+        return {}
+
+    totals: dict = {}
+    for province_id in province_ids:
+        for key, value in get_month_over_month(db, province_id).items():
+            totals[key] = totals.get(key, 0) + value
+    return totals
 
 
 def _points(rows: list[dict]) -> list[ChartPoint]:

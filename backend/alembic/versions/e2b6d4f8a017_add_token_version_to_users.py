@@ -27,7 +27,19 @@ branch_labels = None
 depends_on = None
 
 
+def _columns() -> set[str]:
+    return {c["name"] for c in sa.inspect(op.get_bind()).get_columns("users")}
+
+
 def upgrade() -> None:
+    # Guarded, following 5348276120bb: a database built from the ORM models and
+    # then stamped at an older revision -- which is what the legacy-repair path
+    # in tests/test_migrations.py reproduces, and what a real database that grew
+    # through the old create_all() looks like -- already has this column, and an
+    # unguarded ADD COLUMN fails against it.
+    if "token_version" in _columns():
+        return
+
     # server_default, not just a Python-side default: existing rows need a
     # value, and the column is NOT NULL.
     op.add_column(
@@ -42,4 +54,5 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_column("users", "token_version")
+    if "token_version" in _columns():
+        op.drop_column("users", "token_version")

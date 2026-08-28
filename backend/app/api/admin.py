@@ -196,7 +196,17 @@ def decide_change_request(
 
     Accept applies the new value to the work item; the others just close it.
     """
-    cr = db.get(CpmChangeRequest, cr_id)
+    # Locked, not just read: the status check and the write that follows it were
+    # a read-then-write with nothing between them, so two admins deciding the
+    # same request at the same time both passed the check and both applied the
+    # change. Harmless for an idempotent field assignment, not for anything
+    # cumulative. SQLite ignores the row lock and does not need it -- one
+    # writer at a time -- so this is a no-op there and real on PostgreSQL.
+    cr = db.execute(
+        select(CpmChangeRequest)
+        .where(CpmChangeRequest.id == cr_id)
+        .with_for_update()
+    ).scalar_one_or_none()
     if cr is None:
         raise HTTPException(404, "Change request not found")
     if cr.status != "Pending":
@@ -255,6 +265,15 @@ def create_user(
     return user
 
 
+def _other_active_admins(db: Session, user: User) -> int:
+    return (
+        db.query(User)
+        .join(User.role)
+        .filter(Role.name == ADMIN, User.id != user.id, User.active.is_(True))
+        .count()
+    )
+
+
 def _guard_deactivation(db: Session, user: User, admin: User) -> None:
     """Refuse the two deactivations that would lock people out.
 
@@ -263,15 +282,29 @@ def _guard_deactivation(db: Session, user: User, admin: User) -> None:
     """
     if user.id == admin.id:
         raise HTTPException(400, "You cannot deactivate your own account.")
-    if user.role and user.role.name == ADMIN:
-        other_admins = (
-            db.query(User)
-            .join(User.role)
-            .filter(Role.name == ADMIN, User.id != user.id, User.active.is_(True))
-            .count()
+    if user.role and user.role.name == ADMIN and _other_active_admins(db, user) == 0:
+        raise HTTPException(400, "Cannot deactivate the last administrator.")
+
+
+def _guard_role_change(db: Session, user: User, new_role_id: int) -> None:
+    """Refuse a role change that would leave the platform with no administrator.
+
+    The deactivation guard above was a lock on one door of two. Deactivating
+    the last admin was refused; changing that same account's role to Viewer was
+    not, and produced exactly the same outcome -- a platform nobody can
+    administer, recoverable only with database access.
+    """
+    if not (user.role and user.role.name == ADMIN):
+        return
+    new_role = db.get(Role, new_role_id)
+    if new_role is not None and new_role.name == ADMIN:
+        return  # Admin to Admin is not a change worth guarding.
+    if user.active and _other_active_admins(db, user) == 0:
+        raise HTTPException(
+            400,
+            "Cannot change the role of the last administrator. Give another "
+            "account the Admin role first.",
         )
-        if other_admins == 0:
-            raise HTTPException(400, "Cannot deactivate the last administrator.")
 
 
 @router.patch("/users/{user_id}", response_model=UserOut)
@@ -293,8 +326,13 @@ def update_user(
         # the standard response to a compromised account, and until this line
         # existed it left the attacker's token working for another eight hours.
         user.token_version += 1
-    if payload.role_id is not None:
+    if payload.role_id is not None and payload.role_id != user.role_id:
+        _guard_role_change(db, user, payload.role_id)
         user.role_id = payload.role_id
+        # A different role is a different set of permissions, and tokens carry
+        # the role they were minted with. Re-issue rather than let a session
+        # keep acting under the old one.
+        user.token_version += 1
     # contractor_id needs special handling: None is a valid value here
     # (clearing the contractor when a user's role changes away from
     # Contractor). "is not None" would silently ignore that clear, so we

@@ -171,10 +171,41 @@ def build_assignment_stats(assignment: HcAssignment) -> dict:
 
 
 def generate_assignment_code(db: Session) -> str:
-    """Produce a friendly sequential code like HC-2026-0001."""
+    """Produce a friendly sequential code like HC-2026-0001.
+
+    Derived from the highest number already issued *this year*, not from the
+    row count. Counting rows was wrong twice: deleting any assignment made the
+    count go back down and reissue a code that already existed, against a
+    unique column -- a 500 that would appear years later under conditions
+    nobody tests for -- and the counter never restarted, so 2027 continued from
+    2026's number despite the year being right there in the format.
+
+    Still a read-then-write, so two simultaneous creations can collide. The
+    unique constraint is what actually guarantees correctness; the caller
+    retries. That is the right division of labour -- the database is the only
+    thing that can promise uniqueness.
+    """
     year = _now().year
-    count = db.query(HcAssignment).count() + 1
-    return f"HC-{year}-{count:04d}"
+    prefix = f"HC-{year}-"
+    highest = db.execute(
+        select(func.max(HcAssignment.code)).where(
+            HcAssignment.code.like(f"{prefix}%")
+        )
+    ).scalar()
+    next_number = 1
+    if highest:
+        try:
+            next_number = int(highest.rsplit("-", 1)[1]) + 1
+        except (IndexError, ValueError):
+            # A hand-edited code that does not parse must not stop the platform
+            # issuing new ones; fall back to counting this year's rows.
+            next_number = (
+                db.query(HcAssignment)
+                .filter(HcAssignment.code.like(f"{prefix}%"))
+                .count()
+                + 1
+            )
+    return f"{prefix}{next_number:04d}"
 
 
 def work_item_ids_in_open_hc(db: Session) -> set[int]:

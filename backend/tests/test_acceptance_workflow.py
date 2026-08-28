@@ -544,3 +544,111 @@ def test_the_workbook_cannot_overwrite_a_decision_made_in_the_app(client):
     assert row.ict_status == "Approved", "the app is the system of record"
     db.rollback()
     db.close()
+
+
+# ---------------------------------------------------------------------------
+# Separation of duties, and the constraint underneath the pending check
+# ---------------------------------------------------------------------------
+def test_a_reviewer_cannot_validate_their_own_submission(client):
+    """A claim becomes a fact only when someone else agrees.
+
+    Coordinator and PM are in both the submit and review role lists, which is
+    correct -- a coordinator who chased the approval themselves should be able
+    to file it. Without an explicit check, though, one person could file a
+    claim and validate it into the acceptances table in two API calls, which is
+    exactly the separation this module's docstring promises is impossible.
+    """
+    _wi, (village_id,), _co = _seed("SELFREVIEW", technologies="2G")
+    coordinator = _user_token(client, "Coordinator", "acc_coord")
+
+    created = _submit(client, coordinator, village_id, "ICT", _approve_all(["2G"]))
+    assert created.status_code == 201, created.text
+
+    mine = _validate(client, coordinator, created.json()["id"])
+    assert mine.status_code == 400, mine.text
+    assert "your own submission" in mine.json()["detail"]
+
+    # Nothing reached the acceptances table.
+    detail = _village(client, coordinator, village_id)
+    assert detail["village"]["ict_verdict"] == "Pending"
+
+
+def test_someone_else_can_validate_that_same_submission(client):
+    """The guard is about who, not about the submission being unreviewable."""
+    _wi, (village_id,), _co = _seed("SELFREVIEW2", technologies="2G")
+    coordinator = _user_token(client, "Coordinator", "acc_coord")
+    pm = _user_token(client, "PM", "acc_pm")
+
+    created = _submit(client, coordinator, village_id, "ICT", _approve_all(["2G"]))
+    assert _validate(client, pm, created.json()["id"]).status_code == 200
+
+    detail = _village(client, pm, village_id)
+    assert detail["village"]["ict_verdict"] == "Approved"
+
+
+def test_a_second_pending_submission_is_refused_by_the_database_too(client):
+    """The application check is a read-then-write; the index is the guarantee.
+
+    ``submit`` reads the table and raises if something is already pending, with
+    nothing between the read and the insert -- so two simultaneous requests
+    both passed it and the village ended up with two pending rows. From that
+    moment ``_open_submission``'s ``scalar_one_or_none()`` raised
+    MultipleResultsFound on every subsequent submit, review and queue refresh:
+    a permanent 500 for that village, with no route to recovery through the
+    interface.
+
+    This drives the insert straight at the database, bypassing the application
+    check the way a concurrent request effectively does.
+    """
+    import sqlalchemy
+
+    from app.models.acceptance_workflow import AcceptanceSubmission
+    from app.core.database import SessionLocal
+
+    _wi, (village_id,), _co = _seed("RACE", technologies="2G")
+    pm = _user_token(client, "PM", "acc_pm")
+
+    created = _submit(client, pm, village_id, "ICT", _approve_all(["2G"]))
+    assert created.status_code == 201, created.text
+
+    db = SessionLocal()
+    try:
+        db.add(
+            AcceptanceSubmission(
+                village_id=village_id,
+                authority="ICT",
+                round_no=99,
+                letter_number="L-RACE",
+                source="Coordinator",
+                review_status="Pending",
+                submitted_by=None,
+            )
+        )
+        with pytest.raises(sqlalchemy.exc.IntegrityError):
+            db.flush()
+    finally:
+        db.rollback()
+        db.close()
+
+
+def test_the_index_still_allows_many_finished_rounds(client):
+    """Only *pending* rows are constrained; a village bounces many times."""
+    _wi, (village_id,), _co = _seed("MANYROUNDS", technologies="2G")
+    pm = _user_token(client, "PM", "acc_pm")
+    coordinator = _user_token(client, "Coordinator", "acc_coord")
+
+    for round_number in range(3):
+        created = _submit(
+            client, pm, village_id, "ICT", _approve_all(["2G"]),
+            letter=f"L-R{round_number}",
+        )
+        assert created.status_code == 201, created.text
+        returned = client.post(
+            f"/api/v1/acceptance/submissions/{created.json()['id']}/review",
+            headers=_auth(coordinator),
+            json={"decision": "Returned", "comment": "Please refile."},
+        )
+        assert returned.status_code == 200, returned.text
+
+    detail = _village(client, pm, village_id)
+    assert len(detail["submissions"]) == 3

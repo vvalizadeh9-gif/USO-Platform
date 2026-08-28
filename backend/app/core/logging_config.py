@@ -30,6 +30,8 @@ from datetime import datetime, timezone
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.core.config import get_settings
+from app.core.rate_limit import client_ip
+from app.core.request_context import reset_client_ip, set_client_ip
 from app.core.security import decode_access_token
 
 settings = get_settings()
@@ -144,6 +146,17 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request, call_next):
         request_id = uuid.uuid4().hex[:12]
         started = time.perf_counter()
+
+        # Published for the duration of this request so record_audit can stamp
+        # the source address without a Request being threaded through every
+        # service that writes an audit entry. See core/request_context.py.
+        ip_token = set_client_ip(client_ip(request))
+        try:
+            return await self._handle(request, call_next, request_id, started)
+        finally:
+            reset_client_ip(ip_token)
+
+    async def _handle(self, request, call_next, request_id, started):
 
         # Deliberately not request.url.query: query strings carry filter values
         # and would end up in copied-around log files.

@@ -5,6 +5,7 @@ place means every workflow service records history consistently.
 """
 from sqlalchemy.orm import Session
 
+from app.core.request_context import current_client_ip
 from app.models.acceptance import AuditLog, Notification
 
 
@@ -20,7 +21,15 @@ def record_audit(
     reason: str | None = None,
     ip_address: str | None = None,
 ) -> None:
-    """Append an immutable audit entry. Caller commits the transaction."""
+    """Append an immutable audit entry. Caller commits the transaction.
+
+    ``ip_address`` defaults to the address of the request being handled. It was
+    a parameter no caller ever passed, so every row in the audit trail recorded
+    who and never from where -- on a platform whose deactivation logic is
+    explicitly designed around a ten-year accountability trail. Taking it from
+    the request context means the ~30 call sites do not each have to remember,
+    which is the only way it stays true.
+    """
     db.add(
         AuditLog(
             user_id=user_id,
@@ -30,7 +39,7 @@ def record_audit(
             old_value=old_value,
             new_value=new_value,
             reason=reason,
-            ip_address=ip_address,
+            ip_address=ip_address or current_client_ip(),
         )
     )
 
