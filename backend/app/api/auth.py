@@ -115,6 +115,7 @@ def read_me(user: User = Depends(get_current_user)) -> UserOut:
 
 @router.post("/me/password")
 def change_my_password(
+    request: Request,
     payload: PasswordChange,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
@@ -130,11 +131,29 @@ def change_my_password(
     authenticated: it is what stops a borrowed unlocked laptop becoming a
     permanent takeover of the account.
     """
+    # Throttled on the same counters as login. Without this the endpoint is an
+    # unlimited oracle for the account's current password: someone holding a
+    # stolen token already has the session, but confirming the password is what
+    # lets them try it on the user's other systems.
+    ip = client_ip(request)
+    retry_after = login_rate_limiter.check(user.username, ip)
+    if retry_after:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=(
+                "Too many attempts. Please wait about "
+                f"{max(1, retry_after // 60)} minute(s) and try again."
+            ),
+            headers={"Retry-After": str(retry_after)},
+        )
+
     if not verify_password(payload.current_password, user.password_hash):
+        login_rate_limiter.record_failure(user.username, ip)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Your current password is not correct",
         )
+    login_rate_limiter.record_success(user.username, ip)
     if payload.new_password == payload.current_password:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

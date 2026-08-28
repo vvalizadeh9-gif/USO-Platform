@@ -313,3 +313,29 @@ def test_a_short_password_is_refused_by_the_schema(client):
         json={"current_password": PASSWORD, "new_password": "short"},
     )
     assert r.status_code == 422, r.text
+
+
+def test_guessing_the_current_password_is_throttled(client):
+    """The endpoint must not be an unlimited oracle for the current password.
+
+    Someone holding a stolen token already has the session; confirming the
+    password is what lets them try it on the user's other systems.
+    """
+    from app.core.rate_limit import login_rate_limiter
+
+    admin_h = _admin(client)
+    _make_user(client, admin_h, "si_throttled")
+    token = _token_for(client, "si_throttled")
+    login_rate_limiter.reset()
+
+    codes = []
+    for _ in range(8):
+        r = client.post(
+            "/api/v1/auth/me/password",
+            headers=token,
+            json={"current_password": "wrong", "new_password": NEW_PASSWORD},
+        )
+        codes.append(r.status_code)
+
+    assert 429 in codes, f"never throttled: {codes}"
+    login_rate_limiter.reset()
