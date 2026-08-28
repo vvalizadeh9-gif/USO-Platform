@@ -3,7 +3,15 @@
 Coordinator: basket, create assignment, list assignments, results.
 Subcontractor: my assignments, submit per-site result, download/upload template.
 """
-from fastapi import APIRouter, Depends, File, HTTPException, Response, UploadFile
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    HTTPException,
+    Query,
+    Response,
+    UploadFile,
+)
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
@@ -36,6 +44,7 @@ from app.schemas import (
     HcTechnologyOut,
 )
 from app.services import health_check as hc
+from app.services import evidence_store
 from app.services.audit import record_audit
 from app.services.visibility import visible_work_item_ids
 from app.services.hc_template import (
@@ -167,8 +176,19 @@ def get_hc_assignment(
     return hc.build_assignment_out(_load_assignment(db, user, assignment_id))
 
 
+# The ceiling on one page of results, and on one export. Both endpoints
+# previously returned every completed task ever recorded, joined five ways --
+# comfortable with a few hundred rows, and a slow degradation into timeouts as
+# the platform ages. A site is health-checked more than once, so this table
+# grows faster than the site count.
+MAX_RESULTS_PAGE = 500
+MAX_EXPORT_ROWS = 20000
+
+
 @router.get("/results", response_model=list[HcResultRow])
 def hc_results(
+    limit: int = Query(default=200, ge=1, le=MAX_RESULTS_PAGE),
+    offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
     user: User = Depends(require_roles(ADMIN, PM, COORDINATOR)),
 ):
@@ -185,8 +205,10 @@ def hc_results(
             # read — and exported — every health-check result in the country.
             HcTask.work_item_id.in_(visible_work_item_ids(user, db)),
         )
-        .order_by(HcTask.completed_at.desc())
+        .order_by(HcTask.completed_at.desc(), HcTask.id.desc())
         .options(selectinload(HcTask.technologies))
+        .offset(offset)
+        .limit(limit)
     )
     rows = db.execute(stmt).all()
     return [
@@ -230,8 +252,12 @@ def hc_results_export(
             # read — and exported — every health-check result in the country.
             HcTask.work_item_id.in_(visible_work_item_ids(user, db)),
         )
-        .order_by(HcTask.completed_at.desc())
+        .order_by(HcTask.completed_at.desc(), HcTask.id.desc())
         .options(selectinload(HcTask.technologies))
+        # A spreadsheet is built entirely in memory before it is sent, so this
+        # is a ceiling on the response and on the container at the same time.
+        # Beyond it the answer is a database query, not a download.
+        .limit(MAX_EXPORT_ROWS)
     )
     rows = db.execute(stmt).all()
     export_rows = [
@@ -516,7 +542,10 @@ def upload_template(
     if not file.filename.lower().endswith((".xlsx", ".xls")):
         raise HTTPException(400, "Only Excel files are accepted")
 
-    content = file.file.read()
+    try:
+        content = evidence_store.read_capped(file.file)
+    except evidence_store.EvidenceError as exc:
+        raise HTTPException(400, str(exc)) from None
     try:
         parsed = parse_template(content, assignment)
     except ValueError as exc:

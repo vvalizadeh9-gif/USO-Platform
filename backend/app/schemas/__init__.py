@@ -86,9 +86,12 @@ class UserOut(ORMModel):
 
 
 class UserCreate(BaseModel):
-    username: str
-    password: str = Field(min_length=8)
-    full_name: str
+    # Lengths match the columns in models/reference.py. Without them an
+    # oversized value travels all the way to the database to be refused there,
+    # as a 500 rather than a 422 naming the field.
+    username: str = Field(min_length=1, max_length=80)
+    password: str = Field(min_length=8, max_length=128)
+    full_name: str = Field(min_length=1, max_length=150)
     role_id: int
     contractor_id: int | None = None
     sees_all_provinces: bool = False
@@ -96,8 +99,8 @@ class UserCreate(BaseModel):
 
 
 class UserUpdate(BaseModel):
-    full_name: str | None = None
-    password: str | None = Field(default=None, min_length=8)
+    full_name: str | None = Field(default=None, min_length=1, max_length=150)
+    password: str | None = Field(default=None, min_length=8, max_length=128)
     role_id: int | None = None
     contractor_id: int | None = None
     sees_all_provinces: bool | None = None
@@ -183,8 +186,17 @@ class AssignmentCreate(BaseModel):
     remarks: str | None = None
 
 
+# How many records one bulk request may name. The acceptance endpoint already
+# capped its list at 200; these two were written without one, and bulk_assign
+# runs a scoped query per id, so an unbounded list holds a transaction open for
+# as long as the caller cares to make it. 500 is comfortably more than the
+# largest real batch (a monthly CPM import touches ~15k rows, but nobody
+# assigns that many sites to one contractor in one action).
+MAX_BULK_IDS = 500
+
+
 class BulkAssignmentCreate(BaseModel):
-    work_item_ids: list[int] = Field(min_length=1)
+    work_item_ids: list[int] = Field(min_length=1, max_length=MAX_BULK_IDS)
     contractor_id: int
     assignment_type: str = "official"  # bulk assign defaults to official
     remarks: str | None = None
@@ -505,7 +517,7 @@ class HcBasketItem(BaseModel):
 
 class HcAssignmentCreate(BaseModel):
     contractor_id: int
-    work_item_ids: list[int] = Field(min_length=1)
+    work_item_ids: list[int] = Field(min_length=1, max_length=MAX_BULK_IDS)
     remarks: str | None = None
 
 

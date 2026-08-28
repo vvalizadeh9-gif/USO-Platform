@@ -47,6 +47,11 @@ services:
     # machine even if the password leaks. To inspect it, see BACKUP-RUNBOOK.md.
     expose:
       - "5432"
+    # A ceiling, so that one container going wrong is a restarted container
+    # rather than a dead machine. Raise these if the server is larger; the
+    # point is that a limit exists, not that these particular numbers are
+    # right for every host.
+    mem_limit: 1g
 
   backend:
     build:
@@ -77,6 +82,10 @@ services:
     # the X-Forwarded-For header trustworthy for per-IP login throttling.
     expose:
       - "8000"
+    # The container that reads uploads and builds spreadsheets in memory, so
+    # the one most worth bounding. Without a limit, an oversized import took
+    # the whole machine down instead of one process.
+    mem_limit: 1g
 
   frontend:
     build:
@@ -110,6 +119,7 @@ services:
     # For Let's Encrypt, TLS-SETUP.md uses named volumes here instead.
     # volumes:
     #   - /root/uep-certs:/etc/nginx/certs:ro
+    mem_limit: 256m
     healthcheck:
       test: ["CMD-SHELL", "wget -q --spider http://localhost:8080/ || exit 1"]
       interval: 30s
