@@ -70,7 +70,7 @@ def test_create_user_returns_contractor_id(client):
         headers=h,
         json={
             "username": "sfo_user",
-            "password": "Passw0rd!",
+            "password": "Test-Fixture-Passphrase",
             "full_name": "SFO Field User",
             "role_id": contractor_role,
             "contractor_id": cid,
@@ -135,7 +135,7 @@ def test_contractor_user_only_sees_their_own_hc_assignments(client):
         headers=h,
         json={
             "username": "user_a",
-            "password": "Passw0rd!",
+            "password": "Test-Fixture-Passphrase",
             "full_name": "User A",
             "role_id": contractor_role,
             "contractor_id": cid_a,
@@ -160,7 +160,7 @@ def test_contractor_user_only_sees_their_own_hc_assignments(client):
         )
         assert created.status_code == 201, created.text
 
-    token_a = _login(client, "user_a", "Passw0rd!")
+    token_a = _login(client, "user_a", "Test-Fixture-Passphrase")
     h_a = {"Authorization": f"Bearer {token_a}"}
     r = client.get("/api/v1/hc/my/assignments", headers=h_a)
     assert r.status_code == 200
@@ -188,7 +188,7 @@ def test_deleting_a_regular_user_deactivates_them(client):
         headers=h,
         json={
             "username": "delete_me",
-            "password": "Passw0rd!",
+            "password": "Test-Fixture-Passphrase",
             "full_name": "Delete Me",
             "role_id": contractor_role,
             "contractor_id": cid,

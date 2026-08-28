@@ -9,15 +9,16 @@ switch still validate and nothing about existing sessions changes.
 import random
 import re
 import secrets
-import threading
-import time
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import bcrypt
 import jwt
+from sqlalchemy import delete
+from sqlalchemy.exc import IntegrityError
 
 from app.core.config import get_settings
+from app.models.auth import SpentCaptcha
 
 settings = get_settings()
 
@@ -39,48 +40,42 @@ CAPTCHA_TTL_MINUTES = 5
 _BCRYPT_ROUNDS = 12
 
 
-class _SpentCaptchas:
-    """Remembers which captcha challenges have already been answered.
+def claim_captcha(db, jti: str | None, expires_at: float | None) -> bool:
+    """Record a captcha challenge as used. Returns False if it already was.
 
-    Held in memory, for the same reason and with the same limitation as the
-    login throttle: there is one backend container, so one process sees every
-    login. A restart forgets the set, which at worst lets a handful of tokens
-    be reused once; if UEP is ever run as more than one backend, this and
-    ``core/rate_limit.py`` move to Redis together.
-
-    Entries are dropped once their token has expired anyway, so the set stays
-    bounded by the number of captchas issued in five minutes.
+    In the database, not in process memory, for the same reason as the login
+    throttle next door: a restart used to forget every spent challenge, and a
+    second backend container would not see the first one's. The primary key on
+    ``spent_captchas`` is what enforces single use -- a read-then-write check
+    cannot make that guarantee under concurrency.
     """
+    if not jti:
+        # A challenge minted before this existed. Accept it rather than locking
+        # out anyone holding a login page across the deploy.
+        return True
 
-    def __init__(self) -> None:
-        self._lock = threading.Lock()
-        self._spent: dict[str, float] = {}
+    now = datetime.now(timezone.utc)
+    expiry = (
+        datetime.fromtimestamp(expires_at, tz=timezone.utc)
+        if expires_at
+        else now + timedelta(minutes=CAPTCHA_TTL_MINUTES)
+    )
 
-    def claim(self, jti: str | None, expires_at: float | None) -> bool:
-        """Record *jti* as used. Returns False if it already was."""
-        if not jti:
-            # A challenge minted before this existed. Accept it rather than
-            # locking out anyone holding a login page across the deploy.
-            return True
-        now = time.time()
-        with self._lock:
-            for spent, expiry in list(self._spent.items()):
-                if expiry <= now:
-                    del self._spent[spent]
-            if jti in self._spent:
-                return False
-            self._spent[jti] = float(
-                expires_at or now + CAPTCHA_TTL_MINUTES * 60
-            )
-            return True
+    # Expired rows can no longer refuse anything, so they are only taking up
+    # space. Pruned on write; the table is small and only grows on a successful
+    # captcha answer.
+    db.execute(delete(SpentCaptcha).where(SpentCaptcha.expires_at < now))
 
-    def reset(self) -> None:
-        """Forget everything. For tests."""
-        with self._lock:
-            self._spent.clear()
-
-
-_spent_captchas = _SpentCaptchas()
+    db.add(SpentCaptcha(jti=jti, expires_at=expiry))
+    try:
+        db.flush()
+    except IntegrityError:
+        # Already claimed. Roll back only this statement's effect, so the
+        # caller's session stays usable for the 400 it is about to raise.
+        db.rollback()
+        return False
+    db.commit()
+    return True
 
 
 def _bcrypt_safe(password: str) -> bytes:
@@ -208,7 +203,7 @@ def create_captcha_challenge() -> dict[str, Any]:
     return {"token": token, "num1": a, "num2": b}
 
 
-def verify_captcha(token: str, answer: int) -> bool:
+def verify_captcha(db, token: str, answer: int) -> bool:
     """Return True if ``answer`` solves the challenge encoded in ``token``.
 
     Each challenge is accepted once. Without that a solved token authorised
@@ -225,4 +220,4 @@ def verify_captcha(token: str, answer: int) -> bool:
         return False
     if claims.get("a", -1) + claims.get("b", -2) != answer:
         return False
-    return _spent_captchas.claim(claims.get("jti"), claims.get("exp"))
+    return claim_captcha(db, claims.get("jti"), claims.get("exp"))

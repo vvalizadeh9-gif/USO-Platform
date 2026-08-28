@@ -15,109 +15,120 @@ Two counters, because they stop different things:
 * **Per IP address** -- someone spraying one common password across many
   usernames, which no single username counter would ever see.
 
-State is held in memory. That is the right trade for this deployment: there is
-one backend container, so one process sees every login attempt. It does mean the
-counters reset if the container restarts, which is a real limitation -- an
-attacker who could restart the backend would not need to guess passwords anyway.
-If UEP is ever run as more than one backend container, this needs to move to
-Redis or the database, or each container will enforce the limit separately.
+State lives in the database. It used to live in a dict on the process, which
+was the right trade for one container and had two acknowledged costs: the
+counters reset whenever the backend restarted, and a second backend would count
+separately. The restart case is the one that bit -- a deploy clears a lockout in
+progress, and the moment you least want that is the moment someone is working
+through a password list while a colleague happens to deploy.
+
+The database needs no new component, is already backed up, and is already on
+the path of every request. The cost is one small query per login attempt, on an
+endpoint that runs bcrypt anyway.
 """
-import threading
-import time
-from dataclasses import dataclass, field
+from datetime import datetime, timedelta, timezone
+
+from sqlalchemy import delete, func, select
+from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
+from app.models.auth import LoginAttempt
 
 settings = get_settings()
 
 
-@dataclass
-class _Attempts:
-    """Failed attempts for one key, and when the lockout ends."""
+def _now() -> datetime:
+    return datetime.now(timezone.utc)
 
-    timestamps: list[float] = field(default_factory=list)
-    locked_until: float = 0.0
+
+def _as_aware(moment: datetime | None) -> datetime | None:
+    """SQLite hands back naive datetimes; treat those as UTC."""
+    if moment is None:
+        return None
+    return moment if moment.tzinfo else moment.replace(tzinfo=timezone.utc)
 
 
 class LoginRateLimiter:
     """Counts failed logins per key and locks the key out past a threshold."""
 
-    def __init__(self) -> None:
-        self._lock = threading.Lock()
-        self._records: dict[str, _Attempts] = {}
-
-    def _retry_after(self, key: str, limit: int, now: float) -> int:
+    def _retry_after(self, db: Session, key: str, limit: int, now: datetime) -> int:
         """Seconds until *key* may try again, or 0 if it may try now.
 
-        Assumes the caller holds the lock.
+        The lockout is derived from the attempts rather than stored separately:
+        once ``limit`` failures sit inside the window, the key is locked until
+        ``lockout_seconds`` after the most recent one. Deriving it means there
+        is one fact in the database, not two that can disagree.
         """
-        record = self._records.get(key)
-        if record is None:
+        window_start = now - timedelta(seconds=settings.login_attempt_window_seconds)
+        row = db.execute(
+            select(func.count(LoginAttempt.id), func.max(LoginAttempt.attempted_at))
+            .where(LoginAttempt.key == key, LoginAttempt.attempted_at > window_start)
+        ).one()
+        count, latest = row[0], _as_aware(row[1])
+
+        if count < limit or latest is None:
             return 0
 
-        if record.locked_until > now:
-            return int(record.locked_until - now) + 1
+        unlock_at = latest + timedelta(seconds=settings.login_lockout_seconds)
+        remaining = (unlock_at - now).total_seconds()
+        return int(remaining) + 1 if remaining > 0 else 0
 
-        # Drop attempts that have aged out of the window.
-        cutoff = now - settings.login_attempt_window_seconds
-        record.timestamps = [t for t in record.timestamps if t > cutoff]
-
-        if len(record.timestamps) >= limit:
-            record.locked_until = now + settings.login_lockout_seconds
-            return settings.login_lockout_seconds
-        return 0
-
-    def check(self, username: str, ip: str) -> int:
+    def check(self, db: Session, username: str, ip: str) -> int:
         """Return 0 if this attempt may proceed, else seconds to wait."""
-        now = time.monotonic()
-        with self._lock:
-            return max(
-                self._retry_after(
-                    f"user:{username.lower()}",
-                    settings.login_max_attempts_per_username,
-                    now,
-                ),
-                self._retry_after(
-                    f"ip:{ip}", settings.login_max_attempts_per_ip, now
-                ),
-            )
+        now = _now()
+        return max(
+            self._retry_after(
+                db, f"user:{username.lower()}", settings.login_max_attempts_per_username, now
+            ),
+            self._retry_after(db, f"ip:{ip}", settings.login_max_attempts_per_ip, now),
+        )
 
-    def record_failure(self, username: str, ip: str) -> None:
-        now = time.monotonic()
-        with self._lock:
-            for key in (f"user:{username.lower()}", f"ip:{ip}"):
-                self._records.setdefault(key, _Attempts()).timestamps.append(now)
-            self._prune(now)
+    def record_failure(self, db: Session, username: str, ip: str) -> None:
+        """Record one failure against both keys. Commits.
 
-    def record_success(self, username: str, ip: str) -> None:
-        """Clear the counters for a successful login.
+        Committed here rather than left to the caller, because the caller's
+        next act is to raise a 401 -- and a counter that is rolled back by the
+        response it belongs to would never count anything.
+        """
+        now = _now()
+        for key in (f"user:{username.lower()}", f"ip:{ip}"):
+            db.add(LoginAttempt(key=key, attempted_at=now))
+        self._prune(db, now)
+        db.commit()
+
+    def record_success(self, db: Session, username: str, ip: str) -> None:
+        """Clear the counters for a successful login. Commits.
 
         Clearing the IP counter too is deliberate: a shared office address
         should not accumulate towards a lockout because several people there
         each mistyped a password once.
         """
-        with self._lock:
-            self._records.pop(f"user:{username.lower()}", None)
-            self._records.pop(f"ip:{ip}", None)
+        db.execute(
+            delete(LoginAttempt).where(
+                LoginAttempt.key.in_([f"user:{username.lower()}", f"ip:{ip}"])
+            )
+        )
+        self._prune(db, _now())
+        db.commit()
 
-    def _prune(self, now: float) -> None:
-        """Forget keys with nothing left to remember. Caller holds the lock.
+    def _prune(self, db: Session, now: datetime) -> None:
+        """Drop rows too old to affect any decision. Caller commits.
 
-        Without this the dictionary would grow forever on a long-running
-        process being sprayed with made-up usernames.
+        Anything older than the window plus the lockout can no longer hold a
+        key locked, so it is only taking up space. Done opportunistically on
+        write rather than on a schedule -- there is no scheduler here, and the
+        table is only written on a failed login.
         """
-        cutoff = now - settings.login_attempt_window_seconds
-        for key in [
-            k
-            for k, r in self._records.items()
-            if r.locked_until <= now and not [t for t in r.timestamps if t > cutoff]
-        ]:
-            del self._records[key]
+        cutoff = now - timedelta(
+            seconds=settings.login_attempt_window_seconds
+            + settings.login_lockout_seconds
+        )
+        db.execute(delete(LoginAttempt).where(LoginAttempt.attempted_at < cutoff))
 
-    def reset(self) -> None:
+    def reset(self, db: Session) -> None:
         """Forget everything. For tests."""
-        with self._lock:
-            self._records.clear()
+        db.execute(delete(LoginAttempt))
+        db.commit()
 
 
 login_rate_limiter = LoginRateLimiter()

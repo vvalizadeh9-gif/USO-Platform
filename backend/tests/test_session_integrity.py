@@ -31,6 +31,22 @@ PASSWORD = "Session-Test-Passw0rd"
 NEW_PASSWORD = "Session-Test-Passw0rd-2"
 
 
+def _reset_throttle() -> None:
+    """Clear the login-attempt table between tests.
+
+    The throttle is database-backed now, so resetting it needs a session
+    rather than clearing a dict.
+    """
+    from app.core.database import SessionLocal
+    from app.core.rate_limit import login_rate_limiter
+
+    db = SessionLocal()
+    try:
+        login_rate_limiter.reset(db)
+    finally:
+        db.close()
+
+
 @pytest.fixture(scope="module")
 def client():
     if os.path.exists("/tmp/uep_session_pytest.db"):
@@ -321,12 +337,11 @@ def test_guessing_the_current_password_is_throttled(client):
     Someone holding a stolen token already has the session; confirming the
     password is what lets them try it on the user's other systems.
     """
-    from app.core.rate_limit import login_rate_limiter
 
     admin_h = _admin(client)
     _make_user(client, admin_h, "si_throttled")
     token = _token_for(client, "si_throttled")
-    login_rate_limiter.reset()
+    _reset_throttle()
 
     codes = []
     for _ in range(8):
@@ -338,4 +353,4 @@ def test_guessing_the_current_password_is_throttled(client):
         codes.append(r.status_code)
 
     assert 429 in codes, f"never throttled: {codes}"
-    login_rate_limiter.reset()
+    _reset_throttle()

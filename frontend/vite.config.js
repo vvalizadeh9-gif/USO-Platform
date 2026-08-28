@@ -14,6 +14,15 @@ export default defineConfig({
       },
     },
   },
+  // Vitest. jsdom because the tests that matter here touch the DOM and
+  // localStorage; the pure modules would run in node, but splitting the suite
+  // by environment costs more than it saves at this size.
+  test: {
+    environment: 'jsdom',
+    globals: true,
+    setupFiles: ['./src/test/setup.js'],
+    include: ['src/**/*.test.{js,jsx}'],
+  },
   build: {
     outDir: 'dist',
     // Split large third-party libraries into their own cacheable chunks so the

@@ -56,7 +56,7 @@ def _role_id(client, h, name):
     return next(r["id"] for r in roles if r["name"] == name)
 
 
-def _make_user(client, admin_h, username, role_name, password="Passw0rd!"):
+def _make_user(client, admin_h, username, role_name, password="Test-Fixture-Passphrase"):
     role_id = _role_id(client, admin_h, role_name)
     r = client.post(
         "/api/v1/admin/users",
@@ -280,7 +280,7 @@ def test_last_login_at_set_on_login(client, tokens):
     finally:
         db.close()
 
-    _login(client, "login_probe_user", "Passw0rd!")
+    _login(client, "login_probe_user", "Test-Fixture-Passphrase")
 
     db = SessionLocal()
     try:

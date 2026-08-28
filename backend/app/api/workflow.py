@@ -77,6 +77,28 @@ def _load_village(village_id: int, db: Session, user: User) -> Village:
     return village
 
 
+def _require_active_assignment(wi: WorkItem, user: User) -> None:
+    """A contractor may only record work on a site currently assigned to them.
+
+    ``apply_work_item_scope`` deliberately includes every assignment a
+    contractor has *ever* held, so a site moved to someone else does not vanish
+    from their history. That is right for reads and too wide for writes: it let
+    a contractor removed from a site keep submitting health checks and drive
+    tests against it, indefinitely.
+
+    Staff roles are unaffected -- a PM submitting on a contractor's behalf is a
+    normal part of the workflow. This narrows the contractor case only, the
+    same way ``return_to_coordinator`` on this router already did.
+    """
+    if user.role.name != CONTRACTOR:
+        return
+    active = next((a for a in wi.assignments if a.is_active), None)
+    if active is None or active.contractor_id != user.contractor_id:
+        raise HTTPException(
+            403, "This site is not currently assigned to your company."
+        )
+
+
 def _now() -> datetime:
     return datetime.now(timezone.utc)
 
@@ -90,6 +112,7 @@ def submit_health_check(
 ):
     """Contractor records the health check result."""
     wi = _load_work_item(work_item_id, db, user)
+    _require_active_assignment(wi, user)
     if payload.status == "Problematic" and payload.problem_category_id is None:
         raise HTTPException(400, "Problematic health check requires a category")
 
@@ -244,6 +267,7 @@ def submit_drive_test(
 ):
     """Contractor submits a drive test. Previous active DT is archived."""
     wi = _load_work_item(work_item_id, db, user)
+    _require_active_assignment(wi, user)
     for prev in wi.drive_tests:
         if prev.is_active:
             prev.is_active = False

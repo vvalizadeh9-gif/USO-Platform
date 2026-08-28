@@ -55,7 +55,7 @@ def test_wipe_requires_admin_role(client):
         headers={"Authorization": f"Bearer {token}"},
         json={
             "username": "coordwipe",
-            "password": "Passw0rd!",
+            "password": "Test-Fixture-Passphrase",
             "full_name": "Coord Wipe",
             "role_id": next(
                 role["id"]
@@ -69,7 +69,7 @@ def test_wipe_requires_admin_role(client):
             "province_ids": [],
         },
     )
-    coord_token = _login_as(client, "coordwipe", "Passw0rd!")
+    coord_token = _login_as(client, "coordwipe", "Test-Fixture-Passphrase")
     r = client.post(
         "/api/v1/admin/cpm/wipe-data",
         headers={"Authorization": f"Bearer {coord_token}"},
