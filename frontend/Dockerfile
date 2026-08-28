@@ -37,7 +37,7 @@ RUN npm run build
 # entirely as an unprivileged user (uid 101) and listens on 8080 instead;
 # docker-compose.yml maps the host's port 80 to it.
 #   nginxinc/nginx-unprivileged:1.27-alpine  (fetched 2026-08-14)
-FROM nginxinc/nginx-unprivileged@sha256:65e3e85dbaed8ba248841d9d58a899b6197106c23cb0ff1a132b7bfe0547e4c0
+FROM nginxinc/nginx-unprivileged@sha256:197f252f060ed357f2ab98d4256762d7d107c76f18ad8f0b9d5178854611566d
 COPY --from=build /app/dist /usr/share/nginx/html
 
 # Both server configurations ship in the image; the entrypoint picks one at
