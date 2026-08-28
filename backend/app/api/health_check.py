@@ -500,7 +500,23 @@ def site_history(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    """The full health-check timeline for one site, visible to every user."""
+    """The full health-check timeline for one site, within the caller's scope.
+
+    This used to be visible to every user, and said so. That reads as a
+    decision rather than an oversight, which is why it survived the access
+    control pass -- but the timeline names the subcontractor, the round count
+    and the problem categories for a site, so "visible to everyone" means a
+    contractor can read how a competitor is performing on work that is not
+    theirs, on any site in the country, by walking the ids.
+
+    Scoped like everything else now. Nobody who could legitimately see the site
+    loses anything.
+    """
+    if work_item_id not in set(
+        db.execute(visible_work_item_ids(user, db)).scalars()
+    ):
+        # Same answer for absent and out-of-scope, as everywhere else here.
+        raise HTTPException(404, "Site not found")
     return hc.site_history(db, work_item_id)
 
 

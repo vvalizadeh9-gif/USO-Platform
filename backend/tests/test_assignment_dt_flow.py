@@ -68,7 +68,7 @@ def _login_as_role(client, role_name: str, username: str) -> str:
             headers=h,
             json={
                 "username": username,
-                "password": "Passw0rd!",
+                "password": "Test-Fixture-Passphrase",
                 "full_name": username,
                 "role_id": role_id,
                 "sees_all_provinces": True,
@@ -76,7 +76,7 @@ def _login_as_role(client, role_name: str, username: str) -> str:
             },
         )
         _ROLE_USER_CREATED.add(username)
-    return _login(client, username, "Passw0rd!")
+    return _login(client, username, "Test-Fixture-Passphrase")
 
 
 def _seed_assigned_site(db, *, days_ago: int = 5):

@@ -38,6 +38,21 @@ GOOD_CONFIG = dict(
 )
 
 
+def _reset_throttle() -> None:
+    """Clear the login-attempt table between tests.
+
+    The throttle is database-backed now, so resetting it needs a session
+    rather than clearing a dict.
+    """
+    from app.core.database import SessionLocal
+
+    db = SessionLocal()
+    try:
+        login_rate_limiter.reset(db)
+    finally:
+        db.close()
+
+
 @pytest.fixture(scope="module")
 def client():
     create_schema()
@@ -50,9 +65,9 @@ def client():
 @pytest.fixture(autouse=True)
 def _clear_rate_limiter():
     """Each test starts with no recorded failures, and leaves none behind."""
-    login_rate_limiter.reset()
+    _reset_throttle()
     yield
-    login_rate_limiter.reset()
+    _reset_throttle()
 
 
 # --------------------------------------------------------------------------
@@ -253,3 +268,76 @@ def test_a_wrong_captcha_does_not_count_towards_the_lockout(client):
         assert response.status_code == 400
 
     assert _attempt(client, "Admin@12345").status_code == 200
+
+
+def test_the_lockout_is_held_in_the_database_not_in_process_memory(client):
+    """The property the database-backed throttle exists for.
+
+    The counters used to live in a dict on the process, so any lockout in
+    progress was cleared by the next deploy -- and the moment you least want
+    that is the one where someone is working through a password list while a
+    colleague happens to restart the backend.
+
+    Constructing a second TestClient would *not* prove this: it makes a new
+    application instance inside the same Python process, where a module-level
+    dict survives just as happily as a table does. What distinguishes the two
+    is where the decision is read from -- so this deletes the rows and checks
+    the lockout lifts. Against the in-memory implementation it would not.
+    """
+    from app.core.config import get_settings
+    from app.core.database import SessionLocal
+    from app.models.auth import LoginAttempt
+
+    limit = get_settings().login_max_attempts_per_username
+    for _ in range(limit + 1):
+        client.post(
+            "/api/v1/auth/login", data=login_form(client, "admin", "wrong-password")
+        )
+
+    locked = client.post("/api/v1/auth/login", data=login_form(client, "admin"))
+    assert locked.status_code == 429, locked.text
+
+    db = SessionLocal()
+    try:
+        rows = db.query(LoginAttempt).filter(LoginAttempt.key == "user:admin").count()
+        # Five, not six: the sixth attempt met the limit and was refused before
+        # it could be counted, which is the throttle working as intended.
+        assert rows == limit, (
+            f"failures were not recorded in the database ({rows} rows)"
+        )
+        db.query(LoginAttempt).delete()
+        db.commit()
+    finally:
+        db.close()
+
+    lifted = client.post("/api/v1/auth/login", data=login_form(client, "admin"))
+    assert lifted.status_code == 200, (
+        "clearing the table did not lift the lockout, so the decision is still "
+        "being read from process memory"
+    )
+
+
+def test_a_spent_captcha_is_recorded_in_the_database(client):
+    """Same reasoning for the replay guard next door."""
+    from app.core.database import SessionLocal
+    from app.models.auth import SpentCaptcha
+
+    challenge = client.get("/api/v1/auth/captcha").json()
+    form = {
+        "username": "admin",
+        "password": "Admin@12345",
+        "captcha_token": challenge["token"],
+        "captcha_answer": challenge["num1"] + challenge["num2"],
+    }
+    assert client.post("/api/v1/auth/login", data=form).status_code == 200
+
+    db = SessionLocal()
+    try:
+        assert db.query(SpentCaptcha).count() >= 1, (
+            "the spent challenge was not recorded, so a restart would forget it"
+        )
+    finally:
+        db.close()
+
+    replayed = client.post("/api/v1/auth/login", data=form)
+    assert replayed.status_code == 400, replayed.text

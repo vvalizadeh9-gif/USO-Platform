@@ -74,7 +74,7 @@ def _user_token(client, role_name: str, username: str, contractor_id=None) -> st
             headers=headers,
             json={
                 "username": username,
-                "password": "Passw0rd!",
+                "password": "Test-Fixture-Passphrase",
                 "full_name": f"Test {role_name}",
                 "role_id": role_id,
                 "contractor_id": contractor_id,
@@ -84,7 +84,7 @@ def _user_token(client, role_name: str, username: str, contractor_id=None) -> st
         )
         assert created.status_code == 201, created.text
         _USERS[username] = True
-    return _login(client, username, "Passw0rd!")
+    return _login(client, username, "Test-Fixture-Passphrase")
 
 
 def _seed(tag: str, *, technologies="2G", villages=1, dt_status="Done"):

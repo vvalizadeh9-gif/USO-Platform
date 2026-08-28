@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.rate_limit import client_ip, login_rate_limiter
 from app.core.deps import get_current_user
+from app.core.passwords import PasswordError, validate_password
 from app.core.security import (
     create_access_token,
     create_captcha_challenge,
@@ -45,7 +46,7 @@ def login(
     know their password.
     """
     ip = client_ip(request)
-    retry_after = login_rate_limiter.check(form.username, ip)
+    retry_after = login_rate_limiter.check(db, form.username, ip)
     if retry_after:
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
@@ -56,7 +57,7 @@ def login(
             headers={"Retry-After": str(retry_after)},
         )
 
-    if not verify_captcha(captcha_token, captcha_answer):
+    if not verify_captcha(db, captcha_token, captcha_answer):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Captcha answer is incorrect or has expired",
@@ -68,7 +69,7 @@ def login(
         # Counted here, not on the captcha branch above: a wrong captcha is a
         # human mistyping, and locking someone out for it would be a nuisance
         # with no security benefit.
-        login_rate_limiter.record_failure(form.username, ip)
+        login_rate_limiter.record_failure(db, form.username, ip)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password",
@@ -78,7 +79,7 @@ def login(
             status_code=status.HTTP_403_FORBIDDEN, detail="Account is disabled"
         )
 
-    login_rate_limiter.record_success(form.username, ip)
+    login_rate_limiter.record_success(db, form.username, ip)
     # Lazily ensure this Shamsi month has a KPI snapshot (for month-over-month
     # deltas). Failure here must never block login, so guard it.
     try:
@@ -136,7 +137,7 @@ def change_my_password(
     # stolen token already has the session, but confirming the password is what
     # lets them try it on the user's other systems.
     ip = client_ip(request)
-    retry_after = login_rate_limiter.check(user.username, ip)
+    retry_after = login_rate_limiter.check(db, user.username, ip)
     if retry_after:
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
@@ -148,12 +149,21 @@ def change_my_password(
         )
 
     if not verify_password(payload.current_password, user.password_hash):
-        login_rate_limiter.record_failure(user.username, ip)
+        login_rate_limiter.record_failure(db, user.username, ip)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Your current password is not correct",
         )
-    login_rate_limiter.record_success(user.username, ip)
+    login_rate_limiter.record_success(db, user.username, ip)
+    # The schema ran the policy; this adds the one check it could not, because
+    # the username is not in that payload.
+    try:
+        validate_password(payload.new_password, username=user.username)
+    except PasswordError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
+        ) from None
+
     if payload.new_password == payload.current_password:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

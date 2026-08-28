@@ -35,6 +35,21 @@ from tests.conftest import create_schema, login_form  # noqa: E402
 REVIEWER_PASSWORD = "reviewer-password-123"
 
 
+def _reset_throttle() -> None:
+    """Clear the login-attempt table between tests.
+
+    The throttle is database-backed now, so resetting it needs a session
+    rather than clearing a dict.
+    """
+    from app.core.database import SessionLocal
+
+    db = SessionLocal()
+    try:
+        login_rate_limiter.reset(db)
+    finally:
+        db.close()
+
+
 @pytest.fixture(scope="module")
 def client():
     create_schema()
@@ -46,9 +61,9 @@ def client():
 
 @pytest.fixture(autouse=True)
 def _clear_rate_limiter():
-    login_rate_limiter.reset()
+    _reset_throttle()
     yield
-    login_rate_limiter.reset()
+    _reset_throttle()
 
 
 @pytest.fixture

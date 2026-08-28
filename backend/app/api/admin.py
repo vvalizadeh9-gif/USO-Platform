@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from app.core.config import get_settings
 from app.core.database import get_db
 from app.core.deps import ADMIN, COORDINATOR, PM, require_roles
+from app.core.passwords import PasswordError, validate_password
 from app.core.security import hash_password
 from app.models.acceptance import AuditLog, CpmChangeRequest, CpmImportBatch
 from app.models.reference import Contractor, Province, Role, User, user_province_access
@@ -320,6 +321,12 @@ def update_user(
     if payload.full_name is not None:
         user.full_name = payload.full_name
     if payload.password is not None:
+        # Same gap as the self-service route: the schema cannot see whose
+        # password this is, so the username check happens here.
+        try:
+            validate_password(payload.password, username=user.username)
+        except PasswordError as exc:
+            raise HTTPException(400, str(exc)) from None
         user.password_hash = hash_password(payload.password)
         # Ends every session this account already has. Resetting a password is
         # the standard response to a compromised account, and until this line

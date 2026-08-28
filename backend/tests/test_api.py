@@ -104,14 +104,14 @@ def test_rbac_contractor_cannot_assign(client):
         headers=_auth(token),
         json={
             "username": "coord1",
-            "password": "Passw0rd!",
+            "password": "Test-Fixture-Passphrase",
             "full_name": "Coord One",
             "role_id": coord_role["id"],
             "sees_all_provinces": True,
             "province_ids": [],
         },
     )
-    coord_token = _login(client, "coord1", "Passw0rd!")
+    coord_token = _login(client, "coord1", "Test-Fixture-Passphrase")
     # Coordinator listing users should be forbidden.
     r = client.get("/api/v1/admin/users", headers=_auth(coord_token))
     assert r.status_code == 403

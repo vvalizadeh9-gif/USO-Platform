@@ -4,7 +4,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 class ORMModel(BaseModel):
@@ -19,6 +19,16 @@ class LoginRequest(BaseModel):
     password: str
 
 
+def _checked_password(value: str, username: str | None = None) -> str:
+    """Run the shared policy, reporting failures as a 422 on the right field."""
+    from app.core.passwords import PasswordError, validate_password
+
+    try:
+        return validate_password(value, username=username)
+    except PasswordError as exc:
+        raise ValueError(str(exc)) from None
+
+
 class PasswordChange(BaseModel):
     """A user changing their own password.
 
@@ -26,8 +36,15 @@ class PasswordChange(BaseModel):
     what stops a borrowed unlocked laptop becoming a permanent takeover.
     """
 
-    current_password: str = Field(min_length=1, max_length=128)
-    new_password: str = Field(min_length=8, max_length=128)
+    current_password: str = Field(min_length=1, max_length=200)
+    new_password: str
+
+    @field_validator("new_password")
+    @classmethod
+    def _policy(cls, value: str) -> str:
+        # The username is not in this payload, so the "not built from the
+        # username" check runs in the endpoint, which knows who is calling.
+        return _checked_password(value)
 
 
 class CaptchaChallenge(BaseModel):
@@ -101,7 +118,7 @@ class UserCreate(BaseModel):
     # oversized value travels all the way to the database to be refused there,
     # as a 500 rather than a 422 naming the field.
     username: str = Field(min_length=1, max_length=80)
-    password: str = Field(min_length=8, max_length=128)
+    password: str
     full_name: str = Field(min_length=1, max_length=150)
     role_id: int
     contractor_id: int | None = None
@@ -109,14 +126,27 @@ class UserCreate(BaseModel):
     province_ids: list[int] = []
 
 
+    @model_validator(mode="after")
+    def _policy(self) -> "UserCreate":
+        _checked_password(self.password, self.username)
+        return self
+
+
 class UserUpdate(BaseModel):
     full_name: str | None = Field(default=None, min_length=1, max_length=150)
-    password: str | None = Field(default=None, min_length=8, max_length=128)
+    password: str | None = None
     role_id: int | None = None
     contractor_id: int | None = None
     sees_all_provinces: bool | None = None
     province_ids: list[int] | None = None
     active: bool | None = None
+
+    @field_validator("password")
+    @classmethod
+    def _policy(cls, value: str | None) -> str | None:
+        # An admin setting someone else's password. The username is not in this
+        # payload; the endpoint adds that check, where the target is known.
+        return _checked_password(value) if value is not None else None
 
 
 # ---------- Work Item / Village ----------
