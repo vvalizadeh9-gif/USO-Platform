@@ -126,3 +126,20 @@ describe('old paths people have bookmarked', () => {
     expect(await landOn('/no-such-page')).toBe('work-items')
   })
 })
+
+describe('the My Work splat route', () => {
+  // One splat rather than two paths is deliberate -- two Route entries
+  // pointing at the same component are still two routes to React Router, so
+  // selecting a village unmounted and remounted the workspace, silently
+  // resetting the chosen bucket and the search box on every click.
+  it.each(['/my-work', '/my-work/v/42'])('%s renders the workspace', async (path) => {
+    signedInAs('Contractor')
+    expect(await landOn(path)).toBe('my-work')
+  })
+
+  // React Router 7 changed how a relative `to` resolves inside a splat route
+  // (the v7_relativeSplatPath flag in v6). MyWork is unaffected because it
+  // navigates by absolute path; that was checked by reading it, not asserted
+  // here — a test that regexes a component's source would pass happily the
+  // moment someone refactored to navigate(someVariable).
+})
