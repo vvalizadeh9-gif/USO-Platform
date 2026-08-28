@@ -1,11 +1,11 @@
 """Admin module endpoints: CPM import, user management, CPM validation."""
+import logging
 import os
-import shutil
 from datetime import date as date_type, datetime, time, timedelta, timezone
 from pathlib import Path
 
 from alembic.script import ScriptDirectory
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from sqlalchemy import func, or_, select, text
 from sqlalchemy.orm import Session
 
@@ -15,7 +15,6 @@ from app.core.deps import ADMIN, COORDINATOR, PM, require_roles
 from app.core.security import hash_password
 from app.models.acceptance import AuditLog, CpmChangeRequest, CpmImportBatch
 from app.models.reference import Contractor, Province, Role, User, user_province_access
-from app.models.workitem import WorkItem
 from app.schemas import (
     AdminStatsOut,
     AuditLogListOut,
@@ -33,7 +32,10 @@ from app.schemas import (
 )
 from app.services.audit import record_audit
 from app.services.cpm_import import CpmImportService
+from app.services import evidence_store
 from app.services.data_wipe import REQUIRED_CONFIRMATION_PHRASE, wipe_cpm_data
+
+logger = logging.getLogger("uep.admin")
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 settings = get_settings()
@@ -49,25 +51,61 @@ def import_cpm(
     user: User = Depends(require_roles(ADMIN)),
 ):
     """Upload and process a monthly CPM Excel file."""
-    if not file.filename.lower().endswith((".xlsx", ".xls")):
+    if not (file.filename or "").lower().endswith((".xlsx", ".xls")):
         raise HTTPException(400, "Only Excel files are accepted")
 
+    # Read with a ceiling before anything touches the disk. The workbook was
+    # previously streamed straight to a file with no size limit at all, so the
+    # only bound on it was nginx's.
+    try:
+        content = evidence_store.read_capped(file.file)
+    except evidence_store.EvidenceError as exc:
+        raise HTTPException(400, str(exc)) from None
+    if not content:
+        raise HTTPException(400, "The file is empty")
+
     os.makedirs(settings.upload_dir, exist_ok=True)
+    # safe_filename, because file.filename is supplied by the caller and lands
+    # in a path. "../../app/x.xlsx" escaped the uploads directory, and /app is
+    # owned by the user this container runs as -- so this was a route from an
+    # admin account to overwriting application code.
     dest = os.path.join(
         settings.upload_dir,
-        f"cpm_{datetime.now(timezone.utc):%Y%m%d%H%M%S}_{file.filename}",
+        f"cpm_{datetime.now(timezone.utc):%Y%m%d%H%M%S}_"
+        f"{evidence_store.safe_filename(file.filename or '')}",
     )
     with open(dest, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
+        buffer.write(content)
 
     service = CpmImportService(db, user_id=user.id)
-    batch = service.import_file(dest, file.filename)
+    try:
+        batch = service.import_file(dest, file.filename)
+    except Exception as exc:
+        # A file that is not the workbook it claims to be reached pandas and
+        # came back as an unhandled 500 with a stack trace -- BadZipFile for
+        # anything that is not really an .xlsx, or a KeyError for a real
+        # workbook without the expected sheet. Neither is a server fault; both
+        # are "that file is not the one we need", and the person who picked it
+        # is the one who can fix it.
+        db.rollback()
+        os.unlink(dest) if os.path.exists(dest) else None
+        # "filename" is a reserved LogRecord attribute; using it raises inside
+        # the logger itself, turning a handled 400 back into an unhandled 500.
+        logger.warning(
+            "CPM import rejected",
+            extra={"upload_filename": file.filename, "error": str(exc)},
+        )
+        raise HTTPException(
+            400,
+            "That file could not be read as a CPM workbook. Check it is the "
+            "monthly CPM Excel file and that it opens correctly.",
+        ) from None
     return batch
 
 
 @router.get("/cpm/import-history", response_model=list[CpmImportSummary])
 def cpm_import_history(
-    limit: int = 50,
+    limit: int = Query(default=50, ge=1, le=200),
     db: Session = Depends(get_db),
     _: User = Depends(require_roles(ADMIN)),
 ):
@@ -157,7 +195,17 @@ def decide_change_request(
 
     Accept applies the new value to the work item; the others just close it.
     """
-    cr = db.get(CpmChangeRequest, cr_id)
+    # Locked, not just read: the status check and the write that follows it were
+    # a read-then-write with nothing between them, so two admins deciding the
+    # same request at the same time both passed the check and both applied the
+    # change. Harmless for an idempotent field assignment, not for anything
+    # cumulative. SQLite ignores the row lock and does not need it -- one
+    # writer at a time -- so this is a no-op there and real on PostgreSQL.
+    cr = db.execute(
+        select(CpmChangeRequest)
+        .where(CpmChangeRequest.id == cr_id)
+        .with_for_update()
+    ).scalar_one_or_none()
     if cr is None:
         raise HTTPException(404, "Change request not found")
     if cr.status != "Pending":
@@ -216,6 +264,15 @@ def create_user(
     return user
 
 
+def _other_active_admins(db: Session, user: User) -> int:
+    return (
+        db.query(User)
+        .join(User.role)
+        .filter(Role.name == ADMIN, User.id != user.id, User.active.is_(True))
+        .count()
+    )
+
+
 def _guard_deactivation(db: Session, user: User, admin: User) -> None:
     """Refuse the two deactivations that would lock people out.
 
@@ -224,15 +281,29 @@ def _guard_deactivation(db: Session, user: User, admin: User) -> None:
     """
     if user.id == admin.id:
         raise HTTPException(400, "You cannot deactivate your own account.")
-    if user.role and user.role.name == ADMIN:
-        other_admins = (
-            db.query(User)
-            .join(User.role)
-            .filter(Role.name == ADMIN, User.id != user.id, User.active.is_(True))
-            .count()
+    if user.role and user.role.name == ADMIN and _other_active_admins(db, user) == 0:
+        raise HTTPException(400, "Cannot deactivate the last administrator.")
+
+
+def _guard_role_change(db: Session, user: User, new_role_id: int) -> None:
+    """Refuse a role change that would leave the platform with no administrator.
+
+    The deactivation guard above was a lock on one door of two. Deactivating
+    the last admin was refused; changing that same account's role to Viewer was
+    not, and produced exactly the same outcome -- a platform nobody can
+    administer, recoverable only with database access.
+    """
+    if not (user.role and user.role.name == ADMIN):
+        return
+    new_role = db.get(Role, new_role_id)
+    if new_role is not None and new_role.name == ADMIN:
+        return  # Admin to Admin is not a change worth guarding.
+    if user.active and _other_active_admins(db, user) == 0:
+        raise HTTPException(
+            400,
+            "Cannot change the role of the last administrator. Give another "
+            "account the Admin role first.",
         )
-        if other_admins == 0:
-            raise HTTPException(400, "Cannot deactivate the last administrator.")
 
 
 @router.patch("/users/{user_id}", response_model=UserOut)
@@ -250,8 +321,17 @@ def update_user(
         user.full_name = payload.full_name
     if payload.password is not None:
         user.password_hash = hash_password(payload.password)
-    if payload.role_id is not None:
+        # Ends every session this account already has. Resetting a password is
+        # the standard response to a compromised account, and until this line
+        # existed it left the attacker's token working for another eight hours.
+        user.token_version += 1
+    if payload.role_id is not None and payload.role_id != user.role_id:
+        _guard_role_change(db, user, payload.role_id)
         user.role_id = payload.role_id
+        # A different role is a different set of permissions, and tokens carry
+        # the role they were minted with. Re-issue rather than let a session
+        # keep acting under the old one.
+        user.token_version += 1
     # contractor_id needs special handling: None is a valid value here
     # (clearing the contractor when a user's role changes away from
     # Contractor). "is not None" would silently ignore that clear, so we
@@ -445,8 +525,11 @@ def system_health(
 
 @router.get("/audit-logs", response_model=AuditLogListOut)
 def list_audit_logs(
-    limit: int = 50,
-    offset: int = 0,
+    # Bounded, unlike before. audit_logs is the table that grows fastest over a
+    # ten-year deployment, and it was the one endpoint that would hand back as
+    # much of it as a single request asked for.
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
     module: str | None = None,
     entity_type: str | None = None,
     user_id: int | None = None,

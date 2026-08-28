@@ -23,7 +23,7 @@ _pg.JSONB = JSON
 
 from fastapi.testclient import TestClient  # noqa: E402
 
-from app.core.database import Base, SessionLocal, engine  # noqa: E402
+from app.core.database import SessionLocal  # noqa: E402
 from tests.conftest import create_schema, login_as_role, login_form, sample_cpm_path  # noqa: E402
 
 

@@ -282,6 +282,50 @@ Then sign in.
 
 ---
 
+## Reclaiming disk space
+
+Two things build up on the uploads volume and nothing removes them on its own:
+the CPM workbook from every import, and evidence files no submission points at
+any more (evidence is shared between submissions, so deleting a row correctly
+does not delete the file — but nothing ever counted the references either).
+
+Neither grows fast. Both grow without limit, on a volume that is **not** part
+of the database backup, and the first symptom of a full disk is PostgreSQL
+failing to write.
+
+Always look before you cut. `--dry-run` prints what would go and removes
+nothing:
+
+```bash
+docker compose exec backend python -m app.scripts.reclaim_uploads --dry-run
+```
+
+If the list looks right:
+
+```bash
+docker compose exec backend python -m app.scripts.reclaim_uploads
+```
+
+Workbooks are kept for 180 days by default. To keep them longer, pass
+`--keep-days 365`. The workbook is only a convenience copy — the import is
+recorded in the database and so is everything it loaded — so the question is
+how far back you want to be able to answer "what exactly was in the file we
+loaded that month".
+
+Worth running monthly. On the host, `crontab -e`:
+
+```
+0 3 1 * * cd /path/to/USO-Platform && docker compose exec -T backend python -m app.scripts.reclaim_uploads
+```
+
+Check free space at any time with:
+
+```bash
+docker system df -v | grep uep_uploads
+```
+
+---
+
 ## Where the logs are
 
 Everything goes to Docker's log stream. Nothing is written to files inside the

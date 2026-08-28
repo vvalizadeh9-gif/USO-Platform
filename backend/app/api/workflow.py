@@ -10,7 +10,6 @@ from app.core.deps import (
     COORDINATOR,
     CONTRACTOR,
     PM,
-    get_current_user,
     require_roles,
 )
 from app.models.reference import User
@@ -27,7 +26,7 @@ from app.schemas import (
 )
 from app.services import acceptance_workflow as acceptance_flow
 from app.services.audit import notify_roles, record_audit
-from app.services.visibility import apply_work_item_scope
+from app.services.visibility import apply_work_item_scope, visible_work_item_ids
 from app.services.workflow import refresh_stage
 
 router = APIRouter(tags=["workflow"])
@@ -42,6 +41,40 @@ def _load_work_item(work_item_id: int, db: Session, user: User) -> WorkItem:
     if wi is None:
         raise HTTPException(status_code=404, detail="Work item not found")
     return wi
+
+
+def _load_drive_test(drive_test_id: int, db: Session, user: User) -> DriveTest:
+    """Load an active drive test whose site this user may see, or 404.
+
+    Resolving by primary key alone let any coordinator approve any drive test
+    in the country — and approving is what writes ``dt_status = "Done"`` onto
+    the work item, so it moved a national KPI for a site the reviewer had no
+    authority over.
+    """
+    stmt = (
+        select(DriveTest)
+        .where(DriveTest.id == drive_test_id, DriveTest.is_active.is_(True))
+        .where(DriveTest.work_item_id.in_(visible_work_item_ids(user, db)))
+    )
+    dt = db.execute(stmt).scalars().one_or_none()
+    if dt is None:
+        raise HTTPException(404, "Active drive test not found")
+    return dt
+
+
+def _load_village(village_id: int, db: Session, user: User) -> Village:
+    """Load a village this user may see, or 404.
+
+    Same rule as the acceptance module's loader of the same name, and for the
+    same reason: a missing village and someone else's village must give the
+    same answer, or the endpoint becomes a way to enumerate them.
+    """
+    village = db.execute(
+        acceptance_flow.visible_villages(user, db).where(Village.id == village_id)
+    ).scalars().one_or_none()
+    if village is None:
+        raise HTTPException(404, "Village not found")
+    return village
 
 
 def _now() -> datetime:
@@ -255,11 +288,10 @@ def coordinator_review(
     and in-app drive tests stay invisible to the dashboard that exists to
     report on them.
     """
-    dt = db.get(DriveTest, drive_test_id)
-    if dt is None or not dt.is_active:
-        raise HTTPException(404, "Active drive test not found")
     if payload.decision not in ("Approved", "Rejected", "Returned"):
         raise HTTPException(400, "decision must be Approved, Rejected or Returned")
+    dt = _load_drive_test(drive_test_id, db, user)
+    wi = _load_work_item(dt.work_item_id, db, user)
 
     dt.status = payload.decision
     dt.coordinator_reviewed_by = user.id
@@ -267,7 +299,6 @@ def coordinator_review(
     dt.coordinator_comment = payload.comment
     db.flush()
 
-    wi = db.get(WorkItem, dt.work_item_id)
     if payload.decision == "Approved":
         # Write-back: the in-app workflow becomes the source of truth for
         # this site's drive-test outcome until the next CPM import.
@@ -298,13 +329,14 @@ def update_acceptance(
     user: User = Depends(require_roles(PM, COORDINATOR)),
 ):
     """Coordinator updates ICT/CRA status for one technology of a village."""
+    village = _load_village(village_id, db, user)
     acc = (
         db.query(Acceptance)
-        .filter(Acceptance.village_id == village_id, Acceptance.technology == technology)
+        .filter(Acceptance.village_id == village.id, Acceptance.technology == technology)
         .one_or_none()
     )
     if acc is None:
-        acc = Acceptance(village_id=village_id, technology=technology)
+        acc = Acceptance(village_id=village.id, technology=technology)
         db.add(acc)
 
     old = {"ict": acc.ict_status, "cra": acc.cra_status}
@@ -318,9 +350,7 @@ def update_acceptance(
     # This edits an acceptance without a submission behind it, so the queue's
     # cached per-authority status has to be rebuilt from what the row now says
     # — otherwise My Work would keep showing the village where it used to be.
-    village = db.get(Village, village_id)
-    if village is not None:
-        acceptance_flow.recompute_authority_statuses(db, [village])
+    acceptance_flow.recompute_authority_statuses(db, [village])
     record_audit(
         db, user_id=user.id, module="Acceptance", entity_type="Acceptance",
         entity_id=acc.id, old_value=old,

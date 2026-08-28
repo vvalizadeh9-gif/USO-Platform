@@ -14,7 +14,7 @@ from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill
 from openpyxl.utils import get_column_letter
 
-from app.models.health_check import HcAssignment, HcTask
+from app.models.health_check import HcAssignment
 from app.services.tech_parser import parse_technologies
 
 # Result cell columns per technology follow the pattern "<tech> Result",

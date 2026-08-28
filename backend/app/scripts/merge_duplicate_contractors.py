@@ -26,7 +26,7 @@ def merge_duplicate_contractors() -> None:
             groups[key].append(c)
 
         merged_count = 0
-        for key, rows in groups.items():
+        for _key, rows in groups.items():
             if len(rows) < 2:
                 continue
             keeper = rows[0]  # earliest-created row wins as the canonical one

@@ -61,7 +61,7 @@ from app.models.acceptance_workflow import (  # noqa: E402
     AcceptanceEvidence,
     AcceptanceSubmission,
 )
-from app.models.reference import Province, User as UserModel  # noqa: E402
+from app.models.reference import User as UserModel  # noqa: E402
 from app.models.workitem import Site, Village, WorkItem  # noqa: E402
 from app.schemas import (  # noqa: E402
     AcceptanceBucketCounts,
@@ -715,7 +715,9 @@ def create_bulk_submissions(
     stored = None
     if file is not None:
         try:
-            stored = evidence_store.store(file.filename or "", file.file.read())
+            stored = evidence_store.store(
+                file.filename or "", evidence_store.read_capped(file.file)
+            )
         except evidence_store.EvidenceError as exc:
             raise HTTPException(400, str(exc)) from None
 
@@ -914,8 +916,8 @@ def upload_evidence(
             f"At most {evidence_store.MAX_FILES_PER_SUBMISSION} files per submission",
         )
 
-    content = file.file.read()
     try:
+        content = evidence_store.read_capped(file.file)
         stored = evidence_store.store(file.filename or "", content)
     except evidence_store.EvidenceError as exc:
         raise HTTPException(400, str(exc)) from None
@@ -956,7 +958,13 @@ def download_evidence(
 
     return Response(
         content=path.read_bytes(),
-        media_type=record.content_type or "application/octet-stream",
+        # Derived from the extension the magic bytes were checked against, not
+        # from the Content-Type the uploader sent. The stored value is a claim
+        # by whoever uploaded the file, and echoing a claim back as the type
+        # the browser should treat the bytes as is how a document becomes a
+        # script. Content-Disposition and nosniff both bound this already; this
+        # removes the need to rely on them.
+        media_type=evidence_store.media_type_for(record.stored_path),
         headers={
             # Quotes escaped so a filename containing one cannot break out of
             # the header value.

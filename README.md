@@ -111,7 +111,8 @@ Useful when working on the Python.
 ```bash
 cd backend
 python3.12 -m venv .venv
-.venv/bin/pip install -r requirements.txt
+# The lock file, with hashes -- the same set the Docker image installs.
+.venv/bin/pip install --require-hashes -r requirements.lock
 
 # Point at a database you have running, then:
 export APP_ENV=development

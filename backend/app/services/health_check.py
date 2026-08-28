@@ -12,25 +12,95 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import func, select
+from sqlalchemy import Select, false, func, select
 from sqlalchemy.orm import Session, selectinload
 
+from app.core.deps import CONTRACTOR
 from app.models.health_check import (
     HcAssignment,
     HcRemediation,
     HcTask,
     HcTaskTechnology,
 )
-from app.models.reference import ProblemCategory, Role, User
+from app.models.reference import ProblemCategory, User
 from app.models.workitem import Site, WorkItem
 from app.services import cpm_columns as C
 from app.services.tech_parser import parse_technologies
-from app.services.visibility import apply_work_item_scope
+from app.services.visibility import apply_work_item_scope, visible_work_item_ids
 from app.services.workflow import refresh_stage
 
 # A site that has been round-tripped this many times is no longer a routine
 # fix — it is surfaced to the PM as an exception rather than quietly looping.
 EXCEPTION_ROUND = 3
+
+
+class ScopeError(ValueError):
+    """A request naming records the caller may not reach.
+
+    Carried as an exception rather than a filtered-down list because these are
+    all-or-nothing operations: quietly dropping the sites a caller may not
+    touch would create an assignment that silently differs from the one they
+    asked for.
+    """
+
+
+# --------------------------------------------------------------------------
+# Scope
+#
+# Health check has its own contractor rule, which is why these cannot simply
+# call ``apply_work_item_scope`` and stop. A subcontractor doing health checks
+# is reached through ``hc_assignments.contractor_id``; the work-item scope
+# knows about drive-test assignments, which are a different relationship
+# entirely. A contractor with an HC assignment usually has no drive-test
+# assignment for the same site, so work-item scope alone would hide their own
+# work from them — and, far worse, was never applied at all, which let any
+# contractor reach every task in the country by its id.
+#
+# Staff (Admin/PM/Coordinator/…) are scoped by province, the same as
+# everywhere else, through the sites their tasks point at.
+# --------------------------------------------------------------------------
+def visible_assignments(db: Session, user: User) -> Select:
+    """An ``HcAssignment`` select restricted to what this user may reach."""
+    stmt = select(HcAssignment)
+    if user.role.name == CONTRACTOR:
+        if user.contractor_id is None:
+            # A contractor account with no company attached has no assignments
+            # of its own, and must not fall through to seeing everyone else's.
+            return stmt.where(false())
+        return stmt.where(HcAssignment.contractor_id == user.contractor_id)
+    return stmt.where(HcAssignment.id.in_(_assignment_ids_in_scope(user, db)))
+
+
+def visible_tasks(db: Session, user: User) -> Select:
+    """An ``HcTask`` select restricted to what this user may reach."""
+    stmt = select(HcTask)
+    if user.role.name == CONTRACTOR:
+        if user.contractor_id is None:
+            return stmt.where(false())
+        return stmt.where(
+            HcTask.hc_assignment_id.in_(
+                select(HcAssignment.id).where(
+                    HcAssignment.contractor_id == user.contractor_id
+                )
+            )
+        )
+    return stmt.where(HcTask.work_item_id.in_(visible_work_item_ids(user, db)))
+
+
+def _assignment_ids_in_scope(user: User, db: Session) -> Select:
+    """Assignments holding at least one site this user may see.
+
+    An assignment spanning two provinces is reachable by a coordinator granted
+    either of them. That is deliberate: the assignment is the unit people work
+    with, and hiding it entirely because one of its sites is out of scope would
+    make the visible half unreachable. The per-task queries above still cut the
+    rows themselves to what the user may see.
+    """
+    return (
+        select(HcTask.hc_assignment_id)
+        .where(HcTask.work_item_id.in_(visible_work_item_ids(user, db)))
+        .distinct()
+    )
 
 
 def _now() -> datetime:
@@ -101,10 +171,41 @@ def build_assignment_stats(assignment: HcAssignment) -> dict:
 
 
 def generate_assignment_code(db: Session) -> str:
-    """Produce a friendly sequential code like HC-2026-0001."""
+    """Produce a friendly sequential code like HC-2026-0001.
+
+    Derived from the highest number already issued *this year*, not from the
+    row count. Counting rows was wrong twice: deleting any assignment made the
+    count go back down and reissue a code that already existed, against a
+    unique column -- a 500 that would appear years later under conditions
+    nobody tests for -- and the counter never restarted, so 2027 continued from
+    2026's number despite the year being right there in the format.
+
+    Still a read-then-write, so two simultaneous creations can collide. The
+    unique constraint is what actually guarantees correctness; the caller
+    retries. That is the right division of labour -- the database is the only
+    thing that can promise uniqueness.
+    """
     year = _now().year
-    count = db.query(HcAssignment).count() + 1
-    return f"HC-{year}-{count:04d}"
+    prefix = f"HC-{year}-"
+    highest = db.execute(
+        select(func.max(HcAssignment.code)).where(
+            HcAssignment.code.like(f"{prefix}%")
+        )
+    ).scalar()
+    next_number = 1
+    if highest:
+        try:
+            next_number = int(highest.rsplit("-", 1)[1]) + 1
+        except (IndexError, ValueError):
+            # A hand-edited code that does not parse must not stop the platform
+            # issuing new ones; fall back to counting this year's rows.
+            next_number = (
+                db.query(HcAssignment)
+                .filter(HcAssignment.code.like(f"{prefix}%"))
+                .count()
+                + 1
+            )
+    return f"{prefix}{next_number:04d}"
 
 
 def work_item_ids_in_open_hc(db: Session) -> set[int]:
@@ -218,7 +319,26 @@ def get_basket(db: Session, user) -> list[dict]:
 def create_assignment(
     db: Session, *, contractor_id: int, work_item_ids: list[int], user
 ) -> HcAssignment:
-    """Create an HC assignment containing one task per given site."""
+    """Create an HC assignment containing one task per given site.
+
+    Every site is checked against the caller's scope first. Without this a
+    coordinator granted one province could assign health checks for sites
+    anywhere in the country simply by putting their ids in the list — and the
+    resulting tasks would then be real work for a real subcontractor.
+    """
+    reachable = set(
+        db.execute(
+            select(WorkItem.id).where(
+                WorkItem.id.in_(work_item_ids),
+                WorkItem.id.in_(visible_work_item_ids(user, db)),
+            )
+        ).scalars()
+    )
+    if set(work_item_ids) - reachable:
+        # Deliberately does not say which ids failed, or whether they exist:
+        # the response must not become a way to probe for site ids.
+        raise ScopeError("One or more of those sites could not be found")
+
     assignment = HcAssignment(
         code=generate_assignment_code(db),
         contractor_id=contractor_id,

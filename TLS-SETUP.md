@@ -8,9 +8,19 @@ between a user's browser and the server — **including their password and their
 session token** — goes across the network as readable text. Anyone able to watch
 that network can read it and can sign in as that person afterwards.
 
-This document explains how to fix that. Nothing here has been applied: the
-configuration is written and sitting in `frontend/nginx.conf`, commented out,
-waiting for a certificate.
+This document explains how to fix that.
+
+**Turning it on is two settings in `.env` and a certificate.** No configuration
+file is edited. The HTTPS configuration ships inside the frontend image
+alongside the plain-HTTP one, and the container picks between them at start-up
+from `UEP_ENABLE_TLS`.
+
+The one behaviour worth knowing before you start: **if TLS is switched on and
+the certificate is not there, the container refuses to start.** It does not fall
+back to plain HTTP. That is deliberate — a silent downgrade is the worst
+outcome available here, because everyone would believe the site was encrypted
+and nothing would say otherwise. A container that will not start is loud,
+and `docker compose logs frontend` tells you exactly which file is missing.
 
 ---
 
@@ -85,21 +95,21 @@ And publish the HTTPS port — uncomment this line under `frontend`:
 > **A note on ports.** The frontend container runs as an unprivileged user, so
 > inside the container nginx listens on **8080** and **8443**, not 80 and 443.
 > `docker-compose.yml` maps the host's real 80 and 443 onto those. You never
-> type the internal numbers into a browser; they only appear in `nginx.conf`
-> and `docker-compose.yml`.
+> type the internal numbers into a browser; they only appear in
+> `frontend/conf/` and `docker-compose.yml`.
 
 ### 2. Let the verification through
 
-In `frontend/nginx.conf`, uncomment **only** the redirect server block, and
-inside it keep the `/.well-known/acme-challenge/` location. Leave the HTTPS
-block commented for now — there is no certificate yet, and nginx refuses to
-start if it is told to load one that does not exist.
+Nothing to do. The plain-HTTP configuration already serves
+`/.well-known/acme-challenge/`, which is how Let's Encrypt checks you control
+the domain. It has to work before a certificate exists, which is exactly why it
+is not only in the HTTPS configuration.
 
-Change `uep.example.com` to your real domain. Then:
+Leave `UEP_ENABLE_TLS` unset for now — there is no certificate yet, and turning
+it on before there is one will (correctly) stop the container from starting.
 
 ```bash
 docker compose up -d --build
-docker compose exec frontend nginx -t
 ```
 
 ### 3. Request the certificate
@@ -123,27 +133,31 @@ Nothing has changed — fix the firewall and run it again.
 
 ### 4. Turn HTTPS on
 
-In `frontend/nginx.conf`:
+Add three lines to `.env` beside `docker-compose.yml`. certbot files sit under
+`live/<domain>/`, which is what the third line is for:
 
-- Comment out the plain-HTTP server block at the top.
-- Uncomment the HTTPS block.
-- Set the certificate paths to:
-
-  ```nginx
-  ssl_certificate     /etc/nginx/certs/live/uep.example.com/fullchain.pem;
-  ssl_certificate_key /etc/nginx/certs/live/uep.example.com/privkey.pem;
-  ```
-
-- **Leave the HSTS line commented for now.** See [the HSTS warning](#a-warning-about-hsts).
-
-Then check and restart:
-
-```bash
-docker compose exec frontend nginx -t     # must say "test is successful"
-docker compose restart frontend
+```
+UEP_ENABLE_TLS=true
+UEP_SERVER_NAME=uep.example.com
+UEP_CERT_DIR=/etc/nginx/certs/live/uep.example.com
 ```
 
+Then:
+
+```bash
+docker compose up -d frontend
+docker compose logs frontend | tail -20
+```
+
+You are looking for `[entrypoint] TLS enabled for uep.example.com.` followed by
+nginx's `test is successful`. If the certificate path is wrong the container
+stops and says which file it could not read — the site is still down at that
+point, so fix the path and bring it up again.
+
 Visit `https://uep.example.com`. You should see a padlock.
+
+HSTS is already on, deliberately at a five-minute lifetime. Read
+[the HSTS warning](#a-warning-about-hsts) before raising it.
 
 ### 5. Prove renewal works
 
@@ -253,27 +267,31 @@ Also uncomment the HTTPS port on that same service:
 
 ### 5. Turn HTTPS on
 
-In `frontend/nginx.conf`:
+Add two lines to `.env` beside `docker-compose.yml`:
 
-- Comment out the plain-HTTP server block at the top.
-- Uncomment the HTTPS block (the redirect block too, so plain HTTP forwards).
-- Set `server_name` to the internal address in both blocks.
-- The certificate paths are already correct for this layout:
+```
+UEP_ENABLE_TLS=true
+UEP_SERVER_NAME=uep.internal.example
+```
 
-  ```nginx
-  ssl_certificate     /etc/nginx/certs/fullchain.pem;
-  ssl_certificate_key /etc/nginx/certs/privkey.pem;
-  ```
-
-- **Leave the HSTS line commented for now.** See below.
+`UEP_CERT_DIR` is not needed here: step 3 put `fullchain.pem` and `privkey.pem`
+directly in the mounted directory, which is where the container looks by
+default.
 
 Then:
 
 ```bash
-docker compose up -d
-docker compose exec frontend nginx -t     # must say "test is successful"
-docker compose restart frontend
+docker compose up -d frontend
+docker compose logs frontend | tail -20
 ```
+
+You are looking for `[entrypoint] TLS enabled for uep.internal.example.`
+followed by nginx's `test is successful`. If a file is missing the container
+stops and names it.
+
+HSTS is already on at a five-minute lifetime. For an internal certificate that
+is renewed by hand, read the warning below before raising it — and consider
+turning it off.
 
 ### 6. Check it from a normal staff computer
 
@@ -294,31 +312,33 @@ docker compose restart frontend
 
 ## A warning about HSTS
 
-The HTTPS block contains this line, commented out:
+`frontend/conf/security-headers-tls.conf` contains this line:
 
 ```nginx
-add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+add_header Strict-Transport-Security "max-age=300" always;
 ```
 
 It tells browsers "never use plain HTTP for this site again". That is a genuine
 security improvement, and it is also the one setting in this document that can
 lock you out.
 
-Once a browser has seen it, it remembers for the full `max-age` — a year — and
-**there is no way to cancel it remotely**. If the certificate later expires and
-is not renewed, users do not get a warning they can click past; the site simply
-stops loading for them.
+Once a browser has seen it, it remembers for the full `max-age` and **there is
+no way to cancel it remotely**. If the certificate later expires and is not
+renewed, users do not get a warning they can click past; the site simply stops
+loading for them.
 
-So:
+That is why it ships at **300 seconds — five minutes — not a year**. At five
+minutes a mistake costs five minutes. The value is only useful once it is long,
+so:
 
-1. Leave it commented until HTTPS has been working for a few weeks.
-2. Turn it on with a short lifetime first — change `31536000` to `300` (five
-   minutes) and confirm nothing breaks.
-3. Only then raise it to the full year.
+1. Run at five minutes until HTTPS has worked unattended for a few weeks.
+2. Confirm renewal has actually happened once, on its own.
+3. Only then raise `max-age=300` to `max-age=31536000; includeSubDomains`,
+   rebuild the frontend image, and restart.
 
-For **Route B especially**, where renewal is manual, consider leaving HSTS off
-entirely. The benefit is modest on an internal network; the failure mode is a
-site nobody can reach.
+For **Route B especially**, where renewal is manual, consider leaving it at 300
+permanently, or removing the line. The benefit is modest on an internal
+network; the failure mode is a site nobody can reach.
 
 ---
 
@@ -346,16 +366,21 @@ in plain text.
 
 ## If something goes wrong
 
-**nginx will not start after the change.**
-Almost always a wrong certificate path. Check with:
+**The frontend container will not start after the change.**
+Almost always a wrong certificate path, and the log says which file it could
+not read:
 
 ```bash
 docker compose logs frontend | tail -20
 ```
 
-To get the site back immediately: re-comment the HTTPS block, uncomment the
-plain-HTTP block, and `docker compose restart frontend`. Then work out the path
-without the site being down.
+To get the site back immediately, set `UEP_ENABLE_TLS=false` in `.env` and
+`docker compose up -d frontend`. That returns it to plain HTTP in one command,
+and you can work out the certificate path without the site being down.
+
+Note that a browser which has already seen the HSTS header will keep refusing
+plain HTTP for the next five minutes — that is HSTS working as designed, and it
+is why the lifetime ships short.
 
 **Browser says "not secure" / "certificate not trusted".**
 Route A: the domain in the certificate does not match the address typed.

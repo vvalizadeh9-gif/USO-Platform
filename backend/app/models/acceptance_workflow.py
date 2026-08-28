@@ -34,6 +34,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -70,6 +71,22 @@ class AcceptanceSubmission(Base):
         # The queue, the basket and the history all filter on these.
         Index("ix_acc_sub_village_authority", "village_id", "authority"),
         Index("ix_acc_sub_review_status", "review_status"),
+        # At most one submission awaiting review per village and authority.
+        # services/acceptance_workflow.py checks this before inserting, but
+        # that is a read-then-write: two simultaneous submits both passed it,
+        # and from then on every query using scalar_one_or_none() on this pair
+        # raised MultipleResultsFound -- a permanent 500 for that village. The
+        # application check stays for its readable message; this is the
+        # guarantee underneath it. Partial, because validated, returned and
+        # withdrawn rounds legitimately accumulate.
+        Index(
+            "uq_acc_sub_one_pending_per_authority",
+            "village_id",
+            "authority",
+            unique=True,
+            postgresql_where=text("review_status = 'Pending'"),
+            sqlite_where=text("review_status = 'Pending'"),
+        ),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)

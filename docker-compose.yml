@@ -47,6 +47,11 @@ services:
     # machine even if the password leaks. To inspect it, see BACKUP-RUNBOOK.md.
     expose:
       - "5432"
+    # A ceiling, so that one container going wrong is a restarted container
+    # rather than a dead machine. Raise these if the server is larger; the
+    # point is that a limit exists, not that these particular numbers are
+    # right for every host.
+    mem_limit: 1g
 
   backend:
     build:
@@ -77,6 +82,10 @@ services:
     # the X-Forwarded-For header trustworthy for per-IP login throttling.
     expose:
       - "8000"
+    # The container that reads uploads and builds spreadsheets in memory, so
+    # the one most worth bounding. Without a limit, an oversized import took
+    # the whole machine down instead of one process.
+    mem_limit: 1g
 
   frontend:
     build:
@@ -84,6 +93,20 @@ services:
     restart: unless-stopped
     depends_on:
       - backend
+    environment:
+      # Switching to HTTPS is these two values plus the certificate mount
+      # below -- no configuration file is edited. Set UEP_ENABLE_TLS=true in
+      # .env and the container serves HTTPS on 8443 and redirects 8080 to it.
+      #
+      # If TLS is on and the certificate is missing, the container refuses to
+      # start rather than serving plain HTTP: a silent downgrade would leave
+      # every password readable on the network while the deployment believed
+      # it was encrypted. See TLS-SETUP.md.
+      UEP_ENABLE_TLS: ${UEP_ENABLE_TLS:-false}
+      UEP_SERVER_NAME: ${UEP_SERVER_NAME:-_}
+      # Only needed when the certificate is not directly at /etc/nginx/certs --
+      # certbot nests its files under live/<domain>/. See TLS-SETUP.md.
+      UEP_CERT_DIR: ${UEP_CERT_DIR:-/etc/nginx/certs}
     ports:
       # host:container. The container listens on 8080 because it runs as an
       # unprivileged user, which cannot bind a port below 1024.
@@ -96,6 +119,7 @@ services:
     # For Let's Encrypt, TLS-SETUP.md uses named volumes here instead.
     # volumes:
     #   - /root/uep-certs:/etc/nginx/certs:ro
+    mem_limit: 256m
     healthcheck:
       test: ["CMD-SHELL", "wget -q --spider http://localhost:8080/ || exit 1"]
       interval: 30s

@@ -1,0 +1,36 @@
+# Ruff: the lint step this project did not have.
+#
+# Deliberately a small rule set. A large one on an existing codebase produces
+# hundreds of findings, which get suppressed wholesale, which is worse than no
+# linter -- the rules chosen here are the ones that catch real mistakes:
+# undefined names, unused imports and variables, mutable default arguments,
+# bare except.
+line-length = 100
+target-version = "py312"
+
+[lint]
+select = [
+    "F",    # pyflakes: undefined names, unused imports, unused variables
+    "E9",   # syntax and IO errors
+    "B",    # bugbear: mutable defaults, unused loop variables, and similar
+]
+
+ignore = [
+    # function-call-in-default-argument. This is `Depends(...)`, which is how
+    # FastAPI declares every dependency in the codebase. Flagging the
+    # framework's core idiom 163 times would teach everyone to ignore the
+    # linter, which is the failure mode this configuration exists to avoid.
+    "B008",
+]
+
+# Import sorting (the "I" rules) is deliberately not enabled. It found 28
+# files, none of them wrong -- only differently ordered -- and a first lint run
+# that is mostly style churn buries the handful of findings that are real.
+
+[lint.per-file-ignores]
+# Test modules set DATABASE_URL before importing the application, so their
+# imports genuinely cannot all sit at the top.
+"tests/*" = ["E402"]
+# Same reason: the acceptance router imports its workflow half below the
+# reporting half, which is explained in the module docstring.
+"app/api/acceptance.py" = ["E402"]

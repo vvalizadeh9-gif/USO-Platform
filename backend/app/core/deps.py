@@ -43,8 +43,23 @@ def get_current_user(
     if claims is None or "sub" not in claims:
         raise credentials_error
 
-    user = db.get(User, int(claims["sub"]))
+    try:
+        user_id = int(claims["sub"])
+    except (TypeError, ValueError):
+        # Cannot happen with a token we signed, but a malformed ``sub`` should
+        # be a 401 rather than an unhandled 500.
+        raise credentials_error from None
+
+    user = db.get(User, user_id)
     if user is None or not user.active:
+        raise credentials_error
+
+    # Credentials changed since this token was minted, so it is no longer
+    # valid -- this is what makes resetting a password actually end the
+    # sessions someone else is holding. Tokens issued before token_version
+    # existed carry no claim and are read as 0, matching the column default,
+    # so a deploy does not sign everyone out.
+    if int(claims.get("ver", 0)) != user.token_version:
         raise credentials_error
     return user
 

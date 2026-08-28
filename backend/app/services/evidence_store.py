@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import re
 from pathlib import Path
 
 from app.core.config import get_settings
@@ -51,6 +52,63 @@ _SUBDIR = "acceptance"
 
 class EvidenceError(ValueError):
     """An upload that must be refused, with a message safe to show the user."""
+
+
+# How much is read at a time when streaming an upload off the wire.
+_CHUNK = 64 * 1024
+
+
+def read_capped(source, limit_mb: int | None = None) -> bytes:
+    """Read an upload, refusing it the moment it passes the size limit.
+
+    Every upload endpoint used to call ``file.file.read()`` and *then* check the
+    length, so a body far larger than the limit was fully in memory before
+    anything rejected it. nginx allowed 75 MB while the application accepted 20,
+    which meant the rejected bytes were paid for in RAM first, and a handful of
+    concurrent uploads could exhaust a single backend container.
+
+    Reading in chunks and stopping at the ceiling costs the same for a
+    legitimate file and bounds the illegitimate one. The limit is enforced
+    here rather than trusted from nginx, because the backend must be safe on
+    its own terms -- nginx is a separate component with a separate config.
+    """
+    limit = (limit_mb or get_settings().max_upload_mb) * 1024 * 1024
+    chunks: list[bytes] = []
+    total = 0
+    while True:
+        chunk = source.read(_CHUNK)
+        if not chunk:
+            break
+        total += len(chunk)
+        if total > limit:
+            raise EvidenceError(
+                f"File is larger than the {limit // (1024 * 1024)} MB limit"
+            )
+        chunks.append(chunk)
+    return b"".join(chunks)
+
+
+def safe_filename(filename: str) -> str:
+    """Reduce an uploaded filename to something safe to put in a path.
+
+    An uploaded name is a claim by whoever uploaded it, and it reaches
+    ``os.path.join``. A name of ``../../app/x.xlsx`` escaped the uploads
+    directory entirely -- and /app is owned by the same user the container runs
+    as, so an admin account could overwrite application code with it.
+
+    Keeps only the base name, and only characters that cannot mean anything to
+    a path.
+    """
+    # Backslashes first: a browser on Windows can send "C:\\Users\\me\\cpm.xlsx",
+    # and os.path.basename on POSIX does not treat those as separators, so the
+    # whole string would survive as one "name".
+    base = os.path.basename((filename or "").replace("\\", "/")).strip()
+    cleaned = "".join(c if (c.isalnum() or c in "._- ") else "_" for c in base)
+    # Collapse runs of dots. A ".." left anywhere in the name cannot traverse
+    # once the separators are gone, but leaving it there means the next reader
+    # has to work that out; removing it means they do not.
+    cleaned = re.sub(r"\.{2,}", "_", cleaned).strip(". ")
+    return cleaned[:120] or "upload"
 
 
 def _extension(filename: str) -> str:
@@ -114,6 +172,31 @@ def store(filename: str, content: bytes) -> dict:
         "size_bytes": len(content),
         "extension": ext,
     }
+
+
+# The type each validated extension is served back as. Keyed by what the magic
+# bytes proved, so the value never came from the uploader.
+_MEDIA_TYPES = {
+    "pdf": "application/pdf",
+    "jpg": "image/jpeg",
+    "jpeg": "image/jpeg",
+    "png": "image/png",
+    "webp": "image/webp",
+    "docx": (
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    ),
+    "xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+}
+
+
+def media_type_for(stored_path: str) -> str:
+    """The Content-Type to serve a stored blob as.
+
+    Read from the stored path, whose extension was set by :func:`validate` from
+    the file's magic bytes -- never from the Content-Type header the uploader
+    supplied.
+    """
+    return _MEDIA_TYPES.get(_extension(stored_path), "application/octet-stream")
 
 
 def absolute_path(stored_path: str) -> Path:

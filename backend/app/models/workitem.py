@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime
+from typing import TYPE_CHECKING
 
 from sqlalchemy import (
     Boolean,
@@ -17,6 +18,14 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
+
+if TYPE_CHECKING:
+    # Only for the annotation on Village.acceptances below. Importing it at
+    # runtime would be circular. It resolved anyway, because
+    # `from __future__ import annotations` makes the annotation a string and
+    # SQLAlchemy looks the name up in its own registry -- but nothing said so,
+    # and a reader (or a linter) had no way to tell the name was defined.
+    from app.models.acceptance import Acceptance
 
 
 class Site(Base):

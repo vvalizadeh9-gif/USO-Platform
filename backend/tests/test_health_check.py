@@ -17,7 +17,7 @@ _pg.JSONB = JSON
 
 from fastapi.testclient import TestClient  # noqa: E402
 
-from app.core.database import Base, SessionLocal, engine  # noqa: E402
+from app.core.database import SessionLocal  # noqa: E402
 from tests.conftest import create_schema, login_as_role, login_form, sample_cpm_path  # noqa: E402
 
 
@@ -85,7 +85,7 @@ def test_basket_only_shows_requested_techs(client):
 
 
 def test_all_normal_gives_ready(client):
-    token = _login(client)
+    _login(client)
     h = _pm(client)
     basket = client.get("/api/v1/hc/basket", headers=h).json()
 
@@ -116,7 +116,7 @@ def test_all_normal_gives_ready(client):
 
 
 def test_any_not_normal_gives_not_ready_with_category(client):
-    token = _login(client)
+    _login(client)
     h = _pm(client)
     basket = client.get("/api/v1/hc/basket", headers=h).json()
 
@@ -156,7 +156,7 @@ def test_any_not_normal_gives_not_ready_with_category(client):
 
 
 def test_not_normal_requires_reason_and_comment(client):
-    token = _login(client)
+    _login(client)
     h = _pm(client)
     basket = client.get("/api/v1/hc/basket", headers=h).json()
 
@@ -188,7 +188,7 @@ def test_not_normal_requires_reason_and_comment(client):
 
 
 def test_wrong_technology_rejected(client):
-    token = _login(client)
+    _login(client)
     h = _pm(client)
     basket = client.get("/api/v1/hc/basket", headers=h).json()
 
@@ -215,7 +215,7 @@ def test_wrong_technology_rejected(client):
 
 
 def test_assigned_site_leaves_basket(client):
-    token = _login(client)
+    _login(client)
     h = _pm(client)
     before = client.get("/api/v1/hc/basket", headers=h).json()
 
@@ -241,7 +241,7 @@ def test_bulk_template_download_and_upload(client):
 
     from openpyxl import load_workbook
 
-    token = _login(client)
+    _login(client)
     h = _pm(client)
     basket = client.get("/api/v1/hc/basket", headers=h).json()
 
