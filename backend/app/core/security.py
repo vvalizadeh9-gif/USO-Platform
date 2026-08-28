@@ -7,14 +7,15 @@ denial-of-service. The token payload is unchanged, so tokens issued before the
 switch still validate and nothing about existing sessions changes.
 """
 import random
+import re
 import secrets
 import threading
 import time
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
+import bcrypt
 import jwt
-from passlib.context import CryptContext
 
 from app.core.config import get_settings
 
@@ -22,7 +23,20 @@ settings = get_settings()
 
 CAPTCHA_TTL_MINUTES = 5
 
-_pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# bcrypt directly, not through passlib.
+#
+# passlib has had no release since 2020. It reads a private attribute of the
+# bcrypt package that was removed in bcrypt 4.1, which is why bcrypt was pinned
+# back to 4.0.1 here -- a security-relevant dependency held at an old version by
+# an unmaintained wrapper. It also imports the stdlib ``crypt`` module, deleted
+# in Python 3.12+, and the backend Dockerfile already notes that Python 3.12
+# reaches end of life inside this platform's expected lifetime.
+#
+# The hash format is unchanged: passlib's bcrypt backend produces exactly what
+# bcrypt.hashpw produces ($2b$, 12 rounds), and each verifies the other's
+# output. Every existing password keeps working, and nothing about stored data
+# changes.
+_BCRYPT_ROUNDS = 12
 
 
 class _SpentCaptchas:
@@ -69,25 +83,54 @@ class _SpentCaptchas:
 _spent_captchas = _SpentCaptchas()
 
 
-def _bcrypt_safe(password: str) -> str:
-    """Truncate to bcrypt's 72-byte limit to avoid backend errors."""
-    return password.encode("utf-8")[:72].decode("utf-8", "ignore")
+def _bcrypt_safe(password: str) -> bytes:
+    """Truncate to bcrypt's 72-byte limit to avoid backend errors.
+
+    Kept explicit rather than left to the library: bcrypt 5 raises on an
+    over-long password where 4 truncated silently, and a user with a long
+    passphrase should not stop being able to sign in because a dependency
+    changed its mind about how to handle them.
+    """
+    return password.encode("utf-8")[:72]
 
 
 def hash_password(plain_password: str) -> str:
     """Return a bcrypt hash for the given plaintext password."""
-    return _pwd_context.hash(_bcrypt_safe(plain_password))
+    return bcrypt.hashpw(
+        _bcrypt_safe(plain_password), bcrypt.gensalt(rounds=_BCRYPT_ROUNDS)
+    ).decode("ascii")
+
+
+# What a bcrypt hash looks like: a version tag, a two-digit cost, then exactly
+# 53 characters of radix-64 salt and digest. Checked before the hash is handed
+# to the library, because a malformed value does not merely raise there -- some
+# shapes panic inside bcrypt's Rust extension, and a PanicException does not
+# inherit from Exception, so no ordinary ``except`` catches it. One corrupted
+# password_hash row would take the worker down instead of failing one login.
+_BCRYPT_HASH = re.compile(r"^\$2[abxy]\$\d{2}\$[./A-Za-z0-9]{53}$")
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    """Return True if the plaintext matches the stored hash."""
-    return _pwd_context.verify(_bcrypt_safe(plain_password), hashed_password)
+    """Return True if the plaintext matches the stored hash.
+
+    Returns False rather than raising for anything that is not a bcrypt hash.
+    passlib used to absorb that case; calling bcrypt directly means absorbing
+    it here.
+    """
+    if not hashed_password or not _BCRYPT_HASH.match(hashed_password):
+        return False
+    try:
+        return bcrypt.checkpw(
+            _bcrypt_safe(plain_password), hashed_password.encode("ascii")
+        )
+    except (ValueError, TypeError):
+        return False
 
 
 # A real bcrypt hash of a value nothing can be, computed once at import.
 # ``verify_password_or_dummy`` below burns the same work on it when there is no
 # user, so that a wrong username and a wrong password take the same time.
-_DUMMY_HASH = _pwd_context.hash("uep-no-such-user")
+_DUMMY_HASH = hash_password("uep-no-such-user")
 
 
 def verify_password_or_dummy(plain_password: str, hashed_password: str | None) -> bool:
@@ -100,7 +143,7 @@ def verify_password_or_dummy(plain_password: str, hashed_password: str | None) -
     know. Hashing against a fixed dummy costs the same and says nothing.
     """
     if hashed_password is None:
-        _pwd_context.verify(_bcrypt_safe(plain_password), _DUMMY_HASH)
+        verify_password(plain_password, _DUMMY_HASH)
         return False
     return verify_password(plain_password, hashed_password)
 

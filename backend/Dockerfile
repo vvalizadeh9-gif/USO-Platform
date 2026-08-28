@@ -19,9 +19,21 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-# System deps for psycopg / pandas wheels are already bundled; keep image lean.
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# Installed from the lock file, with hashes, not from requirements.txt.
+#
+# requirements.txt pins the direct dependencies only, so two builds of the same
+# commit could resolve different versions of everything underneath them --
+# undermining the base-image digest pinning above, which exists for exactly
+# this reason. requirements.lock pins the full tree and --require-hashes means
+# a package whose contents changed on the index will not install at all.
+#
+# Regenerate after editing requirements.txt:
+#   pip-compile --generate-hashes --strip-extras \
+#       --output-file=requirements.lock requirements.txt
+# Run it on the same Python version as this image, or the resolved set can
+# differ from what will be installed here.
+COPY requirements.txt requirements.lock ./
+RUN pip install --no-cache-dir --require-hashes -r requirements.lock
 
 COPY . .
 

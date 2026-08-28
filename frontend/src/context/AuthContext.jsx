@@ -9,9 +9,30 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const stored = localStorage.getItem('uep_user')
-    if (stored) setUser(JSON.parse(stored))
-    setLoading(false)
+    // Guarded, because this runs before anything renders. An unparseable
+    // uep_user threw here and took the whole application down with it -- and
+    // the login screen is behind the same render, so the user got a blank page
+    // with no way back except clearing site data by hand, which nothing on the
+    // page could tell them to do.
+    //
+    // localStorage itself can also throw, not only its contents: a browser set
+    // to block site data raises on access rather than returning null.
+    try {
+      const stored = localStorage.getItem('uep_user')
+      if (stored) setUser(JSON.parse(stored))
+    } catch {
+      // Unreadable means signed out. Clear both keys so the next load starts
+      // clean rather than hitting the same value again.
+      try {
+        localStorage.removeItem('uep_user')
+        localStorage.removeItem('uep_token')
+      } catch {
+        // Storage is unavailable entirely; there is nothing to clear.
+      }
+      setUser(null)
+    } finally {
+      setLoading(false)
+    }
   }, [])
 
   async function login(username, password, captchaToken, captchaAnswer) {

@@ -31,7 +31,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.core import jalali
 from app.models.reference import Contractor, Province
-from app.models.workitem import Site, WorkItem
+from app.models.workitem import WorkItem
 from app.services import cpm_columns as C
 from app.services.visibility import apply_work_item_scope
 from app.services.workflow import STAGE_HEALTH_PROBLEM, latest_problem_category_name

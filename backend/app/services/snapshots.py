@@ -12,10 +12,8 @@ from sqlalchemy.orm import Session
 
 from app.core import jalali
 from app.models.acceptance import MonthlySnapshot
-from app.models.reference import Province, User
-from app.services import cpm_columns as C
+from app.models.reference import Province
 from app.services.drive_test_analytics import DriveTestAnalytics
-from app.models.workitem import WorkItem
 
 
 def ensure_current_month_snapshot(db: Session) -> None:

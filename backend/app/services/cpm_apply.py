@@ -14,7 +14,7 @@ import json
 from sqlalchemy.orm import Session
 
 from app.models.acceptance import CpmChangeRequest
-from app.models.workitem import Site, Village, WorkItem
+from app.models.workitem import Village, WorkItem
 
 
 def apply_change_request(db: Session, cr: CpmChangeRequest) -> None:

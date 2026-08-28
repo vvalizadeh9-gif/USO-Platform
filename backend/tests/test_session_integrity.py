@@ -221,3 +221,95 @@ def test_an_unknown_username_is_not_faster_than_a_wrong_password(client):
         f"unknown username returned in {unknown:.4f}s against {known:.4f}s for a "
         "known one, which tells an attacker which accounts exist"
     )
+
+
+# ---------------------------------------------------------------------------
+# L7 — a user can change their own password, and see who they are
+# ---------------------------------------------------------------------------
+def test_a_user_can_read_their_own_profile(client):
+    admin_h = _admin(client)
+    _make_user(client, admin_h, "si_me")
+    token = _token_for(client, "si_me")
+
+    r = client.get("/api/v1/auth/me", headers=token)
+    assert r.status_code == 200, r.text
+    assert r.json()["username"] == "si_me"
+    assert r.json()["role"]["name"] == "Viewer"
+
+
+def test_auth_me_refuses_an_invalidated_token(client):
+    """Which is what makes it usable for revalidating a cached user."""
+    admin_h = _admin(client)
+    user_id = _make_user(client, admin_h, "si_me_stale")
+    token = _token_for(client, "si_me_stale")
+
+    client.patch(
+        f"/api/v1/admin/users/{user_id}",
+        headers=admin_h,
+        json={"password": NEW_PASSWORD},
+    )
+    assert client.get("/api/v1/auth/me", headers=token).status_code == 401
+
+
+def test_changing_your_own_password_works_and_rotates_the_token(client):
+    admin_h = _admin(client)
+    _make_user(client, admin_h, "si_selfchange")
+    old = _token_for(client, "si_selfchange")
+
+    r = client.post(
+        "/api/v1/auth/me/password",
+        headers=old,
+        json={"current_password": PASSWORD, "new_password": NEW_PASSWORD},
+    )
+    assert r.status_code == 200, r.text
+
+    # The old token went with every other session for this account...
+    assert client.get("/api/v1/auth/me", headers=old).status_code == 401
+    # ...and the caller was handed a working one rather than signed out for
+    # succeeding.
+    fresh = {"Authorization": f"Bearer {r.json()['access_token']}"}
+    assert client.get("/api/v1/auth/me", headers=fresh).status_code == 200
+
+    # And the new password is the one that signs in.
+    assert _still_works(client, _token_for(client, "si_selfchange", NEW_PASSWORD))
+
+
+def test_changing_your_password_requires_the_current_one(client):
+    """A borrowed unlocked laptop must not become a permanent takeover."""
+    admin_h = _admin(client)
+    _make_user(client, admin_h, "si_needs_current")
+    token = _token_for(client, "si_needs_current")
+
+    r = client.post(
+        "/api/v1/auth/me/password",
+        headers=token,
+        json={"current_password": "not-it", "new_password": NEW_PASSWORD},
+    )
+    assert r.status_code == 400, r.text
+    assert _still_works(client, token), "a failed attempt must not sign anyone out"
+
+
+def test_the_new_password_must_actually_be_new(client):
+    admin_h = _admin(client)
+    _make_user(client, admin_h, "si_same_again")
+    token = _token_for(client, "si_same_again")
+
+    r = client.post(
+        "/api/v1/auth/me/password",
+        headers=token,
+        json={"current_password": PASSWORD, "new_password": PASSWORD},
+    )
+    assert r.status_code == 400, r.text
+
+
+def test_a_short_password_is_refused_by_the_schema(client):
+    admin_h = _admin(client)
+    _make_user(client, admin_h, "si_short_pw")
+    token = _token_for(client, "si_short_pw")
+
+    r = client.post(
+        "/api/v1/auth/me/password",
+        headers=token,
+        json={"current_password": PASSWORD, "new_password": "short"},
+    )
+    assert r.status_code == 422, r.text

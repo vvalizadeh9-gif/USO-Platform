@@ -59,8 +59,31 @@ jobs:
         working-directory: backend
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          # From the lock file, with hashes, the same way the Docker image
+          # does it -- so CI is testing the dependency set that will actually
+          # be deployed rather than whatever the index resolves today.
+          pip install --require-hashes -r requirements.lock
           pip install pytest httpx
+
+      # A lock file that has drifted from requirements.txt is worse than none:
+      # it looks authoritative and is not. This regenerates it and fails if the
+      # result differs, so adding a dependency without recompiling is caught
+      # here rather than at the next deploy.
+      - name: Check the lock file is in sync
+        working-directory: backend
+        run: |
+          pip install pip-tools
+          cp requirements.lock requirements.lock.committed
+          pip-compile --generate-hashes --strip-extras \
+            --output-file=requirements.lock --quiet requirements.txt
+          if ! diff -q requirements.lock.committed requirements.lock; then
+            echo "::error::requirements.lock is out of date. Regenerate it with:"
+            echo "  cd backend && pip-compile --generate-hashes --strip-extras \\"
+            echo "      --output-file=requirements.lock requirements.txt"
+            diff requirements.lock.committed requirements.lock || true
+            exit 1
+          fi
+          mv requirements.lock.committed requirements.lock
 
       - name: Run tests
         working-directory: backend
@@ -72,6 +95,26 @@ jobs:
           # Enables the PostgreSQL migration tests. Without it they skip.
           UEP_TEST_POSTGRES_URL: postgresql+psycopg://uep:uep_test_password@localhost:5432/uep_test
         run: pytest -v
+
+      - name: Lint
+        working-directory: backend
+        run: |
+          pip install ruff
+          ruff check .
+
+      # Nothing else in this repository will say when a pinned dependency
+      # acquires a published advisory. Over a ten-year deployment that silence
+      # is the single largest source of security decay, and this is the
+      # cheapest thing that breaks it.
+      - name: Audit dependencies for known vulnerabilities
+        working-directory: backend
+        # Reports without failing the build: an advisory published overnight
+        # would otherwise block an unrelated pull request, which teaches people
+        # to ignore the job. Read it on the Actions tab, or in the PR checks.
+        continue-on-error: true
+        run: |
+          pip install pip-audit
+          pip-audit --requirement requirements.lock --desc
 
   frontend:
     name: Frontend build
@@ -103,3 +146,14 @@ jobs:
       - name: Build
         working-directory: frontend
         run: npm run build
+
+      - name: Lint
+        working-directory: frontend
+        run: npm run lint
+
+      # Same reasoning as the backend audit above, and the same
+      # report-do-not-block posture.
+      - name: Audit dependencies for known vulnerabilities
+        working-directory: frontend
+        continue-on-error: true
+        run: npm audit --audit-level=moderate

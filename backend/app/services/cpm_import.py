@@ -30,10 +30,8 @@ so a full monthly file imports in seconds rather than minutes.
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
 
 import pandas as pd
-from sqlalchemy import func
 from sqlalchemy.orm import Session, selectinload
 
 from app.models.acceptance import Acceptance, CpmChangeRequest, CpmImportBatch
@@ -390,7 +388,7 @@ class CpmImportService:
             if wi_key not in self._seen_village_codes:
                 continue  # work item not touched this import — leave alone
             seen = self._seen_village_codes[wi_key]
-            for code, village in existing.items():
+            for code, _village in existing.items():
                 if code not in seen:
                     self._accumulate_village_change(
                         wi_key, added=None, removed=code

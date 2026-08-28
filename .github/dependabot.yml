@@ -1,0 +1,56 @@
+# Dependabot: the thing that notices a dependency has moved.
+#
+# The CI audit job says when something pinned here has a *published advisory*.
+# This says when a newer version exists at all, and opens the pull request that
+# takes it. The two answer different questions and a ten-year platform wants
+# both -- otherwise upgrades happen only when something has already gone wrong,
+# which is the most expensive moment to start.
+#
+# Weekly, not daily: this repository has one maintainer, and a queue nobody can
+# keep up with gets ignored, which is the same as not having it.
+version: 2
+updates:
+  - package-ecosystem: pip
+    directory: /backend
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      # One pull request for the routine patch traffic, individual ones for
+      # major versions, which need reading.
+      backend-patches:
+        update-types: ["minor", "patch"]
+    commit-message:
+      prefix: "deps"
+
+  - package-ecosystem: npm
+    directory: /frontend
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    groups:
+      frontend-patches:
+        update-types: ["minor", "patch"]
+    commit-message:
+      prefix: "deps"
+
+  # The base images are pinned by digest, which means nothing will ever tell
+  # you they have gone stale. Dependabot reads FROM lines and will.
+  - package-ecosystem: docker
+    directories:
+      - /backend
+      - /frontend
+    schedule:
+      interval: weekly
+      day: monday
+    commit-message:
+      prefix: "deps"
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: "deps"

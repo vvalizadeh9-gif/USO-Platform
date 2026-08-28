@@ -23,7 +23,7 @@ _pg.JSONB = JSON
 
 from fastapi.testclient import TestClient  # noqa: E402
 
-from app.core.database import Base, SessionLocal, engine  # noqa: E402
+from app.core.database import SessionLocal  # noqa: E402
 from tests.conftest import create_schema, login_form, sample_cpm_path  # noqa: E402
 
 # The workbook these tests import and then modify. sample_cpm_path() returns
@@ -63,7 +63,6 @@ def _import(filename):
 def test_first_import_has_no_change_requests(client):
     if not SRC:
         pytest.skip("no sample CPM workbook available")
-    from app.services import cpm_columns as C
     from app.models.reference import User
     from app.services.cpm_import import CpmImportService
 
@@ -97,8 +96,9 @@ def test_requested_tech_change_is_blocked_then_applied(client):
 
     db = SessionLocal()
     admin = db.query(User).filter(User.username == "admin").first()
-    wi_count_before = db.query(WorkItem).count()
-    batch = CpmImportService(db, user_id=admin.id).import_file(mod, "month2.xlsx")
+    # Run for its effect: the import is what creates the change requests
+    # asserted on below.
+    CpmImportService(db, user_id=admin.id).import_file(mod, "month2.xlsx")
     # At least the requested-tech change should be flagged.
     tech_crs = (
         db.query(CpmChangeRequest)

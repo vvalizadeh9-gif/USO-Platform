@@ -21,7 +21,6 @@ _pg.JSONB = JSON  # SQLite has no JSONB
 
 from fastapi.testclient import TestClient  # noqa: E402
 
-from app.core.database import Base, engine  # noqa: E402
 from tests.conftest import create_schema, login_form, sample_cpm_path  # noqa: E402
 
 

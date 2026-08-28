@@ -61,7 +61,7 @@ from app.models.acceptance_workflow import (  # noqa: E402
     AcceptanceEvidence,
     AcceptanceSubmission,
 )
-from app.models.reference import Province, User as UserModel  # noqa: E402
+from app.models.reference import User as UserModel  # noqa: E402
 from app.models.workitem import Site, Village, WorkItem  # noqa: E402
 from app.schemas import (  # noqa: E402
     AcceptanceBucketCounts,

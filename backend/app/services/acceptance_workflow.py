@@ -30,7 +30,6 @@ from sqlalchemy.orm import Session
 from app.models.acceptance import Acceptance
 from app.models.acceptance_workflow import (
     AUTHORITIES,
-    CLAIM_APPROVED,
     CLAIM_REJECTED,
     CLAIMS,
     REVIEW_PENDING,

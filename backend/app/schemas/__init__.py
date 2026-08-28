@@ -19,6 +19,17 @@ class LoginRequest(BaseModel):
     password: str
 
 
+class PasswordChange(BaseModel):
+    """A user changing their own password.
+
+    The current one is required even though the request is authenticated: it is
+    what stops a borrowed unlocked laptop becoming a permanent takeover.
+    """
+
+    current_password: str = Field(min_length=1, max_length=128)
+    new_password: str = Field(min_length=8, max_length=128)
+
+
 class CaptchaChallenge(BaseModel):
     token: str
     num1: int

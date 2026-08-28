@@ -1,4 +1,3 @@
-import { motion } from 'framer-motion'
 import { ClipboardCheck, Search, ChevronDown } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import api from '../../api/client'

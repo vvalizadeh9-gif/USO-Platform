@@ -15,7 +15,6 @@ from app.core.deps import ADMIN, COORDINATOR, PM, require_roles
 from app.core.security import hash_password
 from app.models.acceptance import AuditLog, CpmChangeRequest, CpmImportBatch
 from app.models.reference import Contractor, Province, Role, User, user_province_access
-from app.models.workitem import WorkItem
 from app.schemas import (
     AdminStatsOut,
     AuditLogListOut,

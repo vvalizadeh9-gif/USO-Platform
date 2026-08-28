@@ -22,7 +22,7 @@ from app.models.health_check import (
     HcTask,
     HcTaskTechnology,
 )
-from app.models.reference import ProblemCategory, Role, User
+from app.models.reference import ProblemCategory, User
 from app.models.workitem import Site, WorkItem
 from app.services import cpm_columns as C
 from app.services.tech_parser import parse_technologies

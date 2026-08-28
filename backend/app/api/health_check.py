@@ -381,7 +381,7 @@ def review_hc_result(
             db, task=task, problem_categories=payload.selected(), user=user
         )
     except ValueError as exc:
-        raise HTTPException(400, str(exc))
+        raise HTTPException(400, str(exc)) from None
 
     record_audit(
         db, user_id=user.id, module="HealthCheck", entity_type="HcTask",
@@ -426,7 +426,7 @@ def close_fix(
     try:
         hc.close_remediation(db, remediation=rem, note=payload.note, user=user)
     except ValueError as exc:
-        raise HTTPException(400, str(exc))
+        raise HTTPException(400, str(exc)) from None
 
     returned = hc.returns_to_basket(rem.task)
     record_audit(
@@ -460,7 +460,7 @@ def request_reroute(
             user=user,
         )
     except ValueError as exc:
-        raise HTTPException(400, str(exc))
+        raise HTTPException(400, str(exc)) from None
 
     record_audit(
         db, user_id=user.id, module="HealthCheck", entity_type="HcRemediation",
@@ -484,7 +484,7 @@ def decide_reroute(
     try:
         hc.decide_reroute(db, remediation=rem, approve=payload.approve, user=user)
     except ValueError as exc:
-        raise HTTPException(400, str(exc))
+        raise HTTPException(400, str(exc)) from None
 
     record_audit(
         db, user_id=user.id, module="HealthCheck", entity_type="HcRemediation",
@@ -549,7 +549,7 @@ def upload_template(
     try:
         parsed = parse_template(content, assignment)
     except ValueError as exc:
-        raise HTTPException(400, str(exc))
+        raise HTTPException(400, str(exc)) from None
 
     applied = 0
     task_by_wi = {t.work_item_id: t for t in assignment.tasks}

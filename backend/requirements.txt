@@ -6,8 +6,11 @@ alembic==1.14.0
 pydantic==2.10.4
 pydantic-settings==2.7.0
 PyJWT==2.10.1
-passlib==1.7.4
-bcrypt==4.0.1
+# bcrypt is used directly. passlib was removed: no release since 2020, it read
+# a private bcrypt attribute removed in 4.1 (which is why bcrypt was pinned back
+# to 4.0.1), and it imports the stdlib `crypt` module deleted in Python 3.12+.
+# The stored hash format is identical, so no password had to change.
+bcrypt==4.2.1
 python-multipart==0.0.19
 pandas==2.2.3
 openpyxl==3.1.5

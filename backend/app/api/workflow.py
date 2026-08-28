@@ -10,7 +10,6 @@ from app.core.deps import (
     COORDINATOR,
     CONTRACTOR,
     PM,
-    get_current_user,
     require_roles,
 )
 from app.models.reference import User
