@@ -16,7 +16,7 @@ PyJWT==2.13.0
 # a private bcrypt attribute removed in 4.1 (which is why bcrypt was pinned back
 # to 4.0.1), and it imports the stdlib `crypt` module deleted in Python 3.12+.
 # The stored hash format is identical, so no password had to change.
-bcrypt==4.2.1
+bcrypt==5.0.0
 # 0.0.19 carried six advisories, in the parser every file upload goes through.
 python-multipart==0.0.32
 pandas==2.2.3
