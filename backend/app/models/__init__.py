@@ -14,7 +14,7 @@ from app.models.acceptance_workflow import (
     AcceptanceSubmission,
     AcceptanceSubmissionTech,
 )
-from app.models.auth import LoginAttempt, SpentCaptcha
+from app.models.auth import LoginAttempt, PasswordResetRequest, SpentCaptcha
 from app.models.health_check import HcAssignment, HcTask, HcTaskTechnology
 from app.models.reference import (
     Contractor,
@@ -46,6 +46,7 @@ __all__ = [
     "MonthlySnapshot",
     "HcAssignment",
     "LoginAttempt",
+    "PasswordResetRequest",
     "SpentCaptcha",
     "HcTask",
     "HcTaskTechnology",

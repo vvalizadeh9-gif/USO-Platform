@@ -28,6 +28,7 @@ _pg.JSONB = JSON
 
 from fastapi.testclient import TestClient  # noqa: E402
 
+from app.core import user_status  # noqa: E402
 from app.core.database import SessionLocal  # noqa: E402
 from app.core.deps import CPG_POWER, NWG_PLANNING, PM as PM_ROLE  # noqa: E402
 from app.core.security import hash_password  # noqa: E402
@@ -71,10 +72,10 @@ def _seed_fixtures() -> None:
                     User(
                         username=username,
                         password_hash=hash_password("Owner@12345"),
-                        full_name=f"{role_name} User",
+                        first_name=role_name, family_name="User",
                         role_id=role.id,
                         sees_all_provinces=True,
-                        active=True,
+                        status=user_status.ACTIVE,
                     )
                 )
 

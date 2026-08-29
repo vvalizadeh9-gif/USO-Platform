@@ -106,7 +106,7 @@ def _make_user(
             json={
                 "username": username,
                 "password": PASSWORD,
-                "full_name": f"Test {username}",
+                "first_name": "Test", "family_name": username,
                 "role_id": role_id,
                 "contractor_id": contractor_id,
                 "sees_all_provinces": sees_all,

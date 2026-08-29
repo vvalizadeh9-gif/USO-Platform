@@ -9,6 +9,7 @@ from sqlalchemy import (
     Date,
     DateTime,
     ForeignKey,
+    Index,
     Integer,
     String,
     Table,
@@ -99,12 +100,41 @@ class Notification(Base):
 
 
 class AuditLog(Base):
-    """Append-only. No update/delete allowed at the application layer."""
+    """One thing that happened, and everything needed to explain it later.
+
+    Append-only. Nothing in the application updates or deletes a row, and no
+    endpoint exposes a way to: the whole value of this table is that what it
+    says today is what it will say in five years. The API offers reading and
+    filtering and no more, and only to an administrator.
+
+    The columns answer the questions an audit is actually made of -- who
+    (``user_id``), what (``action``), to which record (``module``,
+    ``entity_type``, ``entity_id``), when (``created_at``, from ``Base``), from
+    where (``ip_address``), what changed (``old_value`` / ``new_value``) and
+    whether it worked (``result``). ``reason`` carries the sentence a person
+    would write, for the cases where the structured fields cannot say it.
+    """
 
     __tablename__ = "audit_logs"
+    __table_args__ = (
+        # The audit screen's two heaviest reads: a filtered page in reverse
+        # time order, and one user's own history. Over a ten-year deployment
+        # this is the fastest-growing table in the platform, so both get an
+        # index rather than a sequential scan that gets slower every month.
+        Index("ix_audit_logs_created_at", "created_at"),
+        Index("ix_audit_logs_user_created", "user_id", "created_at"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+
+    # What happened, from the closed vocabulary in ``core/audit_actions.py``.
+    # This used to be inferred by the frontend from the shape of ``new_value``
+    # and the wording of ``reason``, which meant no event could be counted or
+    # filtered, and any event nobody had written a branch for was described
+    # wrongly.
+    action: Mapped[str] = mapped_column(String(60), nullable=False, index=True)
+
     module: Mapped[str] = mapped_column(String(50), nullable=False)
     entity_type: Mapped[str] = mapped_column(String(50), nullable=False)
     entity_id: Mapped[int | None] = mapped_column(Integer)
@@ -112,6 +142,14 @@ class AuditLog(Base):
     new_value: Mapped[dict | None] = mapped_column(JSONB)
     reason: Mapped[str | None] = mapped_column(Text)
     ip_address: Mapped[str | None] = mapped_column(String(64))
+
+    # "Success" or "Failure". A log that only records what succeeded cannot
+    # show a failed sign-in, an attempt refused by a guard, or anything else
+    # someone tried and could not do -- which is the first thing a reviewer
+    # looks for.
+    result: Mapped[str] = mapped_column(
+        String(20), default="Success", nullable=False
+    )
 
 
 class MonthlySnapshot(Base):

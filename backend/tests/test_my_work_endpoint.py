@@ -75,7 +75,7 @@ def _user_token(client, role_name: str, username: str, contractor_id=None) -> st
             json={
                 "username": username,
                 "password": "Test-Fixture-Passphrase",
-                "full_name": f"Test {role_name}",
+                "first_name": "Test", "family_name": role_name,
                 "role_id": role_id,
                 "contractor_id": contractor_id,
                 "sees_all_provinces": True,

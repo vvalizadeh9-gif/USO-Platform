@@ -15,6 +15,7 @@ from fastapi import (
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
+from app.core import audit_actions
 from app.core.database import get_db
 from app.core.deps import (
     ADMIN,
@@ -118,7 +119,8 @@ def create_hc_assignment(
     except hc.ScopeError as exc:
         raise HTTPException(404, str(exc)) from None
     record_audit(
-        db, user_id=user.id, module="HealthCheck", entity_type="HcAssignment",
+        db, user_id=user.id, action=audit_actions.CREATED,
+        module="HealthCheck", entity_type="HcAssignment",
         entity_id=assignment.id,
         new_value={"code": assignment.code, "sites": len(payload.work_item_ids)},
     )
@@ -354,7 +356,8 @@ def submit_hc_result(
         technology_results=[tr.model_dump() for tr in payload.technology_results],
     )
     record_audit(
-        db, user_id=user.id, module="HealthCheck", entity_type="HcTask",
+        db, user_id=user.id, action=audit_actions.SUBMITTED,
+        module="HealthCheck", entity_type="HcTask",
         entity_id=task.id, new_value={"overall_result": task.overall_result},
     )
     db.commit()
@@ -384,7 +387,8 @@ def review_hc_result(
         raise HTTPException(400, str(exc)) from None
 
     record_audit(
-        db, user_id=user.id, module="HealthCheck", entity_type="HcTask",
+        db, user_id=user.id, action=audit_actions.REVIEWED,
+        module="HealthCheck", entity_type="HcTask",
         entity_id=task.id,
         new_value={"reviewed": True, "problem_category": task.problem_category},
     )
@@ -430,7 +434,8 @@ def close_fix(
 
     returned = hc.returns_to_basket(rem.task)
     record_audit(
-        db, user_id=user.id, module="HealthCheck", entity_type="HcRemediation",
+        db, user_id=user.id, action=audit_actions.UPDATED,
+        module="HealthCheck", entity_type="HcRemediation",
         entity_id=rem.id,
         new_value={"status": rem.status, "returned_to_basket": returned},
     )
@@ -463,7 +468,8 @@ def request_reroute(
         raise HTTPException(400, str(exc)) from None
 
     record_audit(
-        db, user_id=user.id, module="HealthCheck", entity_type="HcRemediation",
+        db, user_id=user.id, action=audit_actions.SUBMITTED,
+        module="HealthCheck", entity_type="HcRemediation",
         entity_id=rem.id, new_value={"reroute_to": payload.to_category},
     )
     db.commit()
@@ -487,7 +493,9 @@ def decide_reroute(
         raise HTTPException(400, str(exc)) from None
 
     record_audit(
-        db, user_id=user.id, module="HealthCheck", entity_type="HcRemediation",
+        db, user_id=user.id,
+        action=audit_actions.APPROVED if payload.approve else audit_actions.REJECTED,
+        module="HealthCheck", entity_type="HcRemediation",
         entity_id=rem.id, new_value={"reroute_approved": payload.approve},
     )
     db.commit()
@@ -579,7 +587,8 @@ def upload_template(
         applied += 1
 
     record_audit(
-        db, user_id=user.id, module="HealthCheck", entity_type="HcAssignment",
+        db, user_id=user.id, action=audit_actions.UPDATED,
+        module="HealthCheck", entity_type="HcAssignment",
         entity_id=assignment.id, new_value={"bulk_applied": applied},
     )
     db.commit()

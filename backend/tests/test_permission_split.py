@@ -64,7 +64,7 @@ def _make_user(client, admin_h, username, role_name, password="Test-Fixture-Pass
         json={
             "username": username,
             "password": password,
-            "full_name": username,
+            "first_name": "Test", "family_name": username,
             "role_id": role_id,
             "sees_all_provinces": True,
             "province_ids": [],

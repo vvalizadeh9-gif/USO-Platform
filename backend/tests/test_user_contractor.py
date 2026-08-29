@@ -71,7 +71,7 @@ def test_create_user_returns_contractor_id(client):
         json={
             "username": "sfo_user",
             "password": "Test-Fixture-Passphrase",
-            "full_name": "SFO Field User",
+            "first_name": "SFO Field", "family_name": "User",
             "role_id": contractor_role,
             "contractor_id": cid,
             "sees_all_provinces": False,
@@ -136,7 +136,7 @@ def test_contractor_user_only_sees_their_own_hc_assignments(client):
         json={
             "username": "user_a",
             "password": "Test-Fixture-Passphrase",
-            "full_name": "User A",
+            "first_name": "User", "family_name": "A",
             "role_id": contractor_role,
             "contractor_id": cid_a,
             "sees_all_provinces": False,
@@ -189,7 +189,7 @@ def test_deleting_a_regular_user_deactivates_them(client):
         json={
             "username": "delete_me",
             "password": "Test-Fixture-Passphrase",
-            "full_name": "Delete Me",
+            "first_name": "Delete", "family_name": "Me",
             "role_id": contractor_role,
             "contractor_id": cid,
             "sees_all_provinces": False,

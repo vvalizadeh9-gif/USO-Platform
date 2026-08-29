@@ -22,3 +22,8 @@ python-multipart==0.0.32
 pandas==2.2.3
 openpyxl==3.1.5
 jdatetime==5.0.0
+# Argon2id, the password hash the platform now stores. bcrypt above is kept
+# because every password set before this change is a bcrypt hash, and those
+# must keep verifying -- they are upgraded to Argon2id the next time their
+# owner signs in. See app/core/security.py.
+argon2-cffi==23.1.0

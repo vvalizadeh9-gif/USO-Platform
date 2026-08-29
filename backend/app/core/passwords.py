@@ -26,20 +26,30 @@ Three checks:
 * **Not built from the username.** ``maryam`` / ``maryam2024`` is the other
   thing people do when told to pick something longer.
 
-And an upper bound, which is a correctness matter rather than a policy one:
-bcrypt reads at most 72 **bytes**. Beyond that the tail is ignored, so two
-different long passwords can be the same password as far as the hash is
-concerned. Bytes, not characters, because Persian text is two bytes per
-character in UTF-8 -- a 40-character Persian passphrase is already over the
-limit, and telling that user "too long" while a 40-character Latin one is
-accepted would be baffling if the message did not explain it.
+And an upper bound, which is a resource matter rather than a policy one.
+Argon2id reads the whole password, however long, and hashing is deliberately
+expensive in memory and time -- so an unbounded field is a way to make the
+server do arbitrary work per request, on the one endpoint that is reachable
+without signing in. The ceiling is generous enough that no passphrase anyone
+actually types will meet it.
+
+The limit is in **bytes**, not characters, because Persian text is two bytes
+per character in UTF-8; saying "characters" would mean a Persian passphrase and
+a Latin one of the same visible length were measured differently, and the
+message explains which it is.
+
+This used to be 72 bytes, which was bcrypt's own limit rather than a choice:
+bcrypt ignores everything past it, so two different long passwords were the
+same password as far as the hash was concerned. Argon2id has no such limit, and
+the ceiling is now set where a resource bound belongs instead. The old hashes
+are unaffected -- see ``core/security.py``.
 """
 from __future__ import annotations
 
 MIN_LENGTH = 12
 
-# bcrypt's own limit. See the module docstring: bytes, not characters.
-MAX_BYTES = 72
+# A resource bound, not a property of the hash. See the module docstring.
+MAX_BYTES = 256
 
 # The shapes that get tried first. Deliberately short -- a long list here would
 # be a poor substitute for a breach corpus, and the value is in catching
@@ -118,7 +128,8 @@ def validate_password(password: str, *, username: str | None = None) -> str:
         raise PasswordError(
             f"That is too long — the limit is {MAX_BYTES} bytes and this is "
             f"{encoded}. Persian text counts as two bytes per character, so "
-            "roughly 36 Persian characters or 72 Latin ones."
+            f"roughly {MAX_BYTES // 2} Persian characters or {MAX_BYTES} Latin "
+            "ones."
         )
 
     if _forms(password) & _COMMON:

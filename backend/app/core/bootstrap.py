@@ -13,6 +13,7 @@ job: it inserts rows, never structure, and it is safe to repeat.
 """
 from sqlalchemy.orm import Session
 
+from app.core import user_status
 from app.core.config import get_settings
 from app.core.database import SessionLocal
 from app.core.deps import (
@@ -132,17 +133,35 @@ def _seed_provinces(db: Session) -> None:
     db.flush()
 
 
+def _split_name(whole: str) -> tuple[str, str]:
+    """Split a configured full name into first and family parts.
+
+    The same rule the migration applies to existing users -- last space wins,
+    and a single word is taken as the family name -- so a deployment that
+    bootstraps a fresh database and one that upgraded an old one end up with
+    the administrator's name stored the same way.
+    """
+    whole = (whole or "").strip()
+    if " " in whole:
+        first, _, family = whole.rpartition(" ")
+        return first, family
+    return "", whole or "Administrator"
+
+
 def _seed_admin(db: Session) -> None:
     if db.query(User).filter(User.username == settings.first_admin_username).first():
         return
     admin_role = db.query(Role).filter(Role.name == "Admin").one()
+    first_name, family_name = _split_name(settings.first_admin_fullname)
     db.add(
         User(
             username=settings.first_admin_username,
             password_hash=hash_password(settings.first_admin_password),
-            full_name=settings.first_admin_fullname,
+            first_name=first_name,
+            family_name=family_name,
+            email=settings.first_admin_email,
             role_id=admin_role.id,
             sees_all_provinces=True,
-            active=True,
+            status=user_status.ACTIVE,
         )
     )

@@ -5,15 +5,23 @@ published advisories for algorithm confusion (a token can ask to be verified
 with an algorithm the server did not intend) and for a decompression
 denial-of-service. The token payload is unchanged, so tokens issued before the
 switch still validate and nothing about existing sessions changes.
+
+Passwords are hashed with **Argon2id**. See the block above
+:func:`hash_password` for why, and for how the bcrypt hashes written before
+this change keep working.
 """
 import random
 import re
 import secrets
+import string
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import bcrypt
 import jwt
+from argon2 import PasswordHasher
+from argon2 import exceptions as argon2_exceptions
+from argon2.low_level import Type as Argon2Type
 from sqlalchemy import delete
 from sqlalchemy.exc import IntegrityError
 
@@ -24,19 +32,51 @@ settings = get_settings()
 
 CAPTCHA_TTL_MINUTES = 5
 
-# bcrypt directly, not through passlib.
+# ---------------------------------------------------------------------------
+# Password hashing
+# ---------------------------------------------------------------------------
 #
-# passlib has had no release since 2020. It reads a private attribute of the
-# bcrypt package that was removed in bcrypt 4.1, which is why bcrypt was pinned
-# back to 4.0.1 here -- a security-relevant dependency held at an old version by
-# an unmaintained wrapper. It also imports the stdlib ``crypt`` module, deleted
-# in Python 3.12+, and the backend Dockerfile already notes that Python 3.12
-# reaches end of life inside this platform's expected lifetime.
+# Argon2id, with bcrypt kept only to read what is already stored.
 #
-# The hash format is unchanged: passlib's bcrypt backend produces exactly what
-# bcrypt.hashpw produces ($2b$, 12 rounds), and each verifies the other's
-# output. Every existing password keeps working, and nothing about stored data
-# changes.
+# bcrypt is not broken, and the platform ran on it for years. What it cannot do
+# is cost an attacker *memory*. bcrypt's work factor buys CPU time only, and the
+# machines that crack password hashes are GPUs and FPGAs with thousands of cores
+# and very little memory per core -- exactly the shape bcrypt does not defend
+# against. Argon2id is the current answer to that: it is the winner of the
+# Password Hashing Competition, the algorithm OWASP names first, and its cost is
+# tuned in memory as well as time, which is what makes a rented GPU farm an
+# expensive way to attack it.
+#
+# The three parameters below are OWASP's minimum recommendation for Argon2id
+# (19 MiB, two passes, one lane), rounded up on memory. They are deliberately
+# named constants rather than inline numbers, because the correct values move
+# with hardware and someone will need to raise them; ``needs_rehash`` below is
+# what makes raising them safe, since it re-hashes each password the next time
+# its owner signs in rather than requiring a reset.
+#
+# Every password set before this change is a bcrypt hash. Those must keep
+# verifying or the platform locks out everyone at once, so ``verify_password``
+# dispatches on the hash's own prefix and still understands both. A successful
+# login against a bcrypt hash quietly rewrites it as Argon2id (see
+# ``needs_rehash`` and its one caller in api/auth.py), so the old format drains
+# away on its own as people sign in, with nothing for an administrator to do
+# and nobody asked to choose a new password.
+_ARGON2_TIME_COST = 2  # passes over memory
+_ARGON2_MEMORY_COST = 64 * 1024  # KiB, i.e. 64 MiB
+_ARGON2_PARALLELISM = 1  # lanes
+
+_hasher = PasswordHasher(
+    time_cost=_ARGON2_TIME_COST,
+    memory_cost=_ARGON2_MEMORY_COST,
+    parallelism=_ARGON2_PARALLELISM,
+    hash_len=32,
+    salt_len=16,
+    type=Argon2Type.ID,
+)
+
+# Legacy only. Nothing writes bcrypt any more; this is the cost the hashes in
+# the database were written with, kept so the constant that documents them does
+# not disappear with the code that produced them.
 _BCRYPT_ROUNDS = 12
 
 
@@ -81,19 +121,19 @@ def claim_captcha(db, jti: str | None, expires_at: float | None) -> bool:
 def _bcrypt_safe(password: str) -> bytes:
     """Truncate to bcrypt's 72-byte limit to avoid backend errors.
 
-    Kept explicit rather than left to the library: bcrypt 5 raises on an
-    over-long password where 4 truncated silently, and a user with a long
-    passphrase should not stop being able to sign in because a dependency
-    changed its mind about how to handle them.
+    Legacy path only: no new hash is written with bcrypt. Kept explicit rather
+    than left to the library, because bcrypt 5 raises on an over-long password
+    where 4 truncated silently, and a user with a long passphrase should not
+    stop being able to sign in -- once -- because a dependency changed its mind
+    about how to handle them. Their next successful login rewrites the hash as
+    Argon2id, which has no such limit.
     """
     return password.encode("utf-8")[:72]
 
 
 def hash_password(plain_password: str) -> str:
-    """Return a bcrypt hash for the given plaintext password."""
-    return bcrypt.hashpw(
-        _bcrypt_safe(plain_password), bcrypt.gensalt(rounds=_BCRYPT_ROUNDS)
-    ).decode("ascii")
+    """Return an Argon2id hash for the given plaintext password."""
+    return _hasher.hash(plain_password)
 
 
 # What a bcrypt hash looks like: a version tag, a two-digit cost, then exactly
@@ -104,15 +144,14 @@ def hash_password(plain_password: str) -> str:
 # password_hash row would take the worker down instead of failing one login.
 _BCRYPT_HASH = re.compile(r"^\$2[abxy]\$\d{2}\$[./A-Za-z0-9]{53}$")
 
+# Argon2's own prefix. Only used to route a hash to the right verifier; the
+# library does the real parsing, and rejects anything it cannot read.
+_ARGON2_PREFIX = "$argon2"
 
-def verify_password(plain_password: str, hashed_password: str) -> bool:
-    """Return True if the plaintext matches the stored hash.
 
-    Returns False rather than raising for anything that is not a bcrypt hash.
-    passlib used to absorb that case; calling bcrypt directly means absorbing
-    it here.
-    """
-    if not hashed_password or not _BCRYPT_HASH.match(hashed_password):
+def _verify_bcrypt(plain_password: str, hashed_password: str) -> bool:
+    """Verify against a hash written before the move to Argon2id."""
+    if not _BCRYPT_HASH.match(hashed_password):
         return False
     try:
         return bcrypt.checkpw(
@@ -122,7 +161,52 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
         return False
 
 
-# A real bcrypt hash of a value nothing can be, computed once at import.
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    """Return True if the plaintext matches the stored hash.
+
+    Understands both formats the database can hold: Argon2id, which is what
+    every hash written from now on is, and bcrypt, which is what every hash
+    written before the switch is. Which one a value is, is decided by the value
+    itself, so no flag column has to stay in step with the data.
+
+    Returns False rather than raising for anything unreadable. One corrupted
+    ``password_hash`` row should fail that one login, not the worker.
+    """
+    if not hashed_password:
+        return False
+    if hashed_password.startswith(_ARGON2_PREFIX):
+        try:
+            return _hasher.verify(hashed_password, plain_password)
+        except (argon2_exceptions.VerificationError, argon2_exceptions.InvalidHash):
+            return False
+    return _verify_bcrypt(plain_password, hashed_password)
+
+
+def needs_rehash(hashed_password: str) -> bool:
+    """True if this stored hash should be rewritten after a successful login.
+
+    Two cases: a bcrypt hash from before the switch, and an Argon2id hash whose
+    cost parameters are below the ones configured now. Both are answered here
+    rather than at the call site, so raising the parameters above is the only
+    edit a future upgrade needs.
+
+    Only ever act on this when the password has just been verified -- it is the
+    one moment the plaintext is in hand and can be re-hashed without asking
+    anybody for anything.
+    """
+    if not hashed_password:
+        return False
+    if not hashed_password.startswith(_ARGON2_PREFIX):
+        return True
+    try:
+        return _hasher.check_needs_rehash(hashed_password)
+    except argon2_exceptions.InvalidHash:
+        # Unreadable, so it cannot be verified against either. Nothing to
+        # upgrade; the login it belongs to has already failed.
+        return False
+
+
+# A real Argon2id hash of a value nothing can be, computed once at import.
 # ``verify_password_or_dummy`` below burns the same work on it when there is no
 # user, so that a wrong username and a wrong password take the same time.
 _DUMMY_HASH = hash_password("uep-no-such-user")
@@ -132,15 +216,36 @@ def verify_password_or_dummy(plain_password: str, hashed_password: str | None) -
     """Verify, doing the same work when there is no hash to check against.
 
     Login previously short-circuited on an unknown username, returning in
-    microseconds where a known username took the full bcrypt comparison. The
-    response body was identical, but the response *time* said whether the
-    account existed, which is the first thing a password-guessing run wants to
-    know. Hashing against a fixed dummy costs the same and says nothing.
+    microseconds where a known username took the full comparison. The response
+    body was identical, but the response *time* said whether the account
+    existed, which is the first thing a password-guessing run wants to know.
+    Hashing against a fixed dummy costs the same and says nothing.
     """
     if hashed_password is None:
         verify_password(plain_password, _DUMMY_HASH)
         return False
     return verify_password(plain_password, hashed_password)
+
+
+# The alphabet a generated temporary password is drawn from. No ``l``/``1`` or
+# ``O``/``0``, and no punctuation: an administrator reads these aloud down a
+# phone line or copies them into a chat message, and a character that can be
+# mistaken for another turns one reset into three. Length is what carries the
+# strength here, not the character set -- and the password is single-use in
+# practice, because the account it belongs to must change it at next sign-in.
+_TEMPORARY_ALPHABET = "".join(
+    c for c in string.ascii_letters + string.digits if c not in "lI1O0"
+)
+
+
+def generate_temporary_password(length: int = 16) -> str:
+    """Return a random password for an administrator to hand to one person.
+
+    ``secrets``, not ``random``: this value is a credential, and the module
+    next door that mints captchas is seeded well enough for arithmetic and not
+    for this.
+    """
+    return "".join(secrets.choice(_TEMPORARY_ALPHABET) for _ in range(length))
 
 
 def create_access_token(subject: str | int, extra_claims: dict[str, Any] | None = None) -> str:
