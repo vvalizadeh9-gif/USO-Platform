@@ -1,5 +1,5 @@
 import { lazy, Suspense } from 'react'
-import { Navigate, Route, Routes } from 'react-router-dom'
+import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import Layout from './components/Layout'
 import { useAuth } from './context/AuthContext'
 import { Loading } from './components/ui'
@@ -19,11 +19,32 @@ const ActionCenter = lazy(() => import('./pages/ActionCenter'))
 const MyWork = lazy(() => import('./pages/mywork/MyWork'))
 const AcceptanceDashboard = lazy(() => import('./pages/reports/AcceptanceDashboard'))
 const Admin = lazy(() => import('./pages/Admin'))
+const ChangePassword = lazy(() => import('./pages/ChangePassword'))
+
+// The one screen an account on an administrator-issued password may use. The
+// server refuses every other endpoint with a 403, so routing here is the
+// interface agreeing with the server rather than deciding anything itself.
+const CHANGE_PASSWORD_PATH = '/change-password'
 
 function Protected({ children, adminOnly, allowedRoles }) {
-  const { user, loading, isAdmin } = useAuth()
+  const { user, loading, isAdmin, mustChangePassword } = useAuth()
+  const location = useLocation()
+
   if (loading) return <Loading />
   if (!user) return <Navigate to="/login" replace />
+
+  // Decided by the path rather than by a prop, because most routes below are
+  // not individually wrapped -- they sit inside the layout's guard. A prop
+  // would only cover the handful that are, and every other screen would slip
+  // through to a platform that answers 403 to everything it does.
+  //
+  // Checked before the role guards, so someone who owes a password change
+  // lands on the screen that says so rather than on a "you do not have
+  // permission" bounce that tells them nothing about what to do next.
+  if (mustChangePassword && location.pathname !== CHANGE_PASSWORD_PATH) {
+    return <Navigate to={CHANGE_PASSWORD_PATH} replace />
+  }
+
   if (adminOnly && !isAdmin) return <Navigate to="/" replace />
   if (allowedRoles && !allowedRoles.includes(user?.role?.name)) return <Navigate to="/" replace />
   return children
@@ -86,6 +107,9 @@ export default function App() {
           <Route path="/acceptance" element={<Navigate to="/my-work" replace />} />
           <Route path="/my-acceptance" element={<Navigate to="/my-work" replace />} />
           <Route path="/admin" element={<Protected allowedRoles={['Admin', 'PM']}><Admin /></Protected>} />
+          {/* Reachable by anyone, including an account that can reach nothing
+              else — see Protected above and app/core/deps.py. */}
+          <Route path={CHANGE_PASSWORD_PATH} element={<ChangePassword />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

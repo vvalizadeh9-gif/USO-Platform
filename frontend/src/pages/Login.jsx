@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion'
-import { Eye, EyeOff, LifeBuoy, RefreshCw } from 'lucide-react'
+import { ArrowLeft, Eye, EyeOff, LifeBuoy, RefreshCw } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import api from '../api/client'
@@ -19,6 +19,7 @@ export default function Login() {
   const [busy, setBusy] = useState(false)
   const [formError, setFormError] = useState('')
   const [captchaError, setCaptchaError] = useState('')
+  const [forgotOpen, setForgotOpen] = useState(false)
   const captchaInputRef = useRef(null)
 
   useEffect(() => {
@@ -81,6 +82,10 @@ export default function Login() {
           </div>
         </div>
 
+        {forgotOpen ? (
+          <ForgotPassword onBack={() => setForgotOpen(false)} />
+        ) : (
+        <>
         <div style={{ textAlign: 'center', marginBottom: 24 }}>
           <h2 style={{ fontSize: 20 }}>Sign in to continue</h2>
           <p className="muted" style={{ marginTop: 4, fontSize: 13 }}>
@@ -109,7 +114,17 @@ export default function Login() {
             />
           </div>
           <div className="field">
-            <label htmlFor="login-password">Password</label>
+            <div className="captcha-label-row">
+              <label htmlFor="login-password">Password</label>
+              <button
+                type="button"
+                className="btn btn-sm btn-ghost"
+                style={{ fontSize: 12.5, padding: '2px 6px' }}
+                onClick={() => setForgotOpen(true)}
+              >
+                Forgot password?
+              </button>
+            </div>
             <div className="input-with-action">
               <input
                 id="login-password"
@@ -180,6 +195,9 @@ export default function Login() {
           </button>
         </form>
 
+        </>
+        )}
+
         <div className="login-footer">
           <LifeBuoy size={13} />
           <span>
@@ -188,6 +206,93 @@ export default function Login() {
           </span>
         </div>
       </motion.div>
+    </div>
+  )
+}
+
+// "I cannot get in."
+//
+// This platform sends no mail, so there is no reset link to send. Building one
+// would mean an SMTP server, a token table and an unauthenticated endpoint that
+// mints credentials — the largest new attack surface in the system, for a few
+// dozen internal users who all know their administrator. So this posts a
+// message, and an administrator issues a temporary password.
+//
+// The confirmation is deliberately non-committal about whether the account
+// exists, and the server answers identically either way: this form is
+// reachable by anyone who can load the page, and an honest "no such user"
+// would make it a way to find out who works here.
+function ForgotPassword({ onBack }) {
+  const [identifier, setIdentifier] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [sent, setSent] = useState(false)
+
+  async function submit(e) {
+    e.preventDefault()
+    setBusy(true)
+    try {
+      await api.post('/auth/password-reset-request', { identifier: identifier.trim() })
+    } catch {
+      // Nothing here depends on the answer, and reporting a failure would say
+      // more about the account than the success case does. The administrator
+      // is reachable by the address in the footer either way.
+    } finally {
+      setBusy(false)
+      setSent(true)
+    }
+  }
+
+  return (
+    <div>
+      <button
+        type="button"
+        className="btn btn-sm btn-ghost"
+        style={{ marginBottom: 12 }}
+        onClick={onBack}
+      >
+        <ArrowLeft size={14} /> Back to sign in
+      </button>
+
+      {sent ? (
+        <div style={{ textAlign: 'center', padding: '12px 0 4px' }}>
+          <h2 style={{ fontSize: 18, marginBottom: 8 }}>Request sent</h2>
+          <p className="muted" style={{ fontSize: 13, lineHeight: 1.7 }}>
+            If that account exists, an administrator has been notified and will
+            be in touch to reset the password. They will give you a temporary
+            one, and you will be asked to choose your own when you sign in.
+          </p>
+        </div>
+      ) : (
+        <form onSubmit={submit} noValidate>
+          <div style={{ textAlign: 'center', marginBottom: 20 }}>
+            <h2 style={{ fontSize: 18 }}>Ask for a password reset</h2>
+            <p className="muted" style={{ marginTop: 4, fontSize: 13, lineHeight: 1.6 }}>
+              An administrator will check who you are and give you a temporary
+              password. Nothing is sent by email.
+            </p>
+          </div>
+          <div className="field">
+            <label htmlFor="forgot-identifier">Username or email address</label>
+            <input
+              id="forgot-identifier"
+              className="input"
+              value={identifier}
+              onChange={(e) => setIdentifier(e.target.value)}
+              placeholder="your.username"
+              autoComplete="username"
+              autoFocus
+              required
+            />
+          </div>
+          <button
+            className="btn btn-primary"
+            style={{ width: '100%', justifyContent: 'center', marginTop: 6 }}
+            disabled={busy || !identifier.trim()}
+          >
+            {busy ? <div className="spinner" /> : 'Send request'}
+          </button>
+        </form>
+      )}
     </div>
   )
 }

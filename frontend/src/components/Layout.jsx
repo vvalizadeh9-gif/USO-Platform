@@ -7,12 +7,13 @@ import {
   Settings,
   LogOut,
   Menu,
+  KeyRound,
   ClipboardList,
   ClipboardCheck,
   Wrench,
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import { NavLink, Outlet, useLocation } from 'react-router-dom'
+import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { CATEGORY_OWNER_ROLES } from '../lib/roles'
 import api from '../api/client'
@@ -52,8 +53,72 @@ function pageKey(pathname) {
   return section === 'reports' ? `reports/${sub}` : section
 }
 
+// The navigation itself. Lifted out of the sidebar's JSX so that hiding it
+// wholesale is one conditional rather than a fragment wrapped around eighty
+// lines at the wrong indentation.
+function SidebarNav({ user, isAdmin, actionCount }) {
+  return (
+    <>
+      <div className="nav-section-label">Operations</div>
+      {NAV.filter((item) => {
+        if (item.roles && !item.roles.includes(user?.role?.name)) return false
+        if (item.hideRoles && item.hideRoles.includes(user?.role?.name)) return false
+        return true
+      }).map((item) => (
+        <NavLink
+          key={item.to}
+          to={item.to}
+          end={item.end}
+          className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
+        >
+          <item.icon size={17} strokeWidth={2} />
+          <span>{item.label}</span>
+          {item.key === 'action' && actionCount > 0 && (
+            <span className="badge">{actionCount}</span>
+          )}
+        </NavLink>
+      ))}
+
+      <div className="nav-section-label">Reports</div>
+      {REPORTS.map((item) => (
+        <NavLink
+          key={item.to}
+          to={item.to}
+          className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
+        >
+          <item.icon size={17} strokeWidth={2} />
+          <span>{item.label}</span>
+        </NavLink>
+      ))}
+
+      {isAdmin && (
+        <>
+          <div className="nav-section-label">Administration</div>
+          <NavLink
+            to="/admin"
+            className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
+          >
+            <Settings size={17} strokeWidth={2} />
+            <span>Admin Console</span>
+          </NavLink>
+        </>
+      )}
+
+      <div className="nav-section-label">Your account</div>
+      <NavLink
+        to="/change-password"
+        className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
+      >
+        <KeyRound size={17} strokeWidth={2} />
+        <span>Change password</span>
+      </NavLink>
+    </>
+  )
+}
+
+
 export default function Layout() {
-  const { user, logout, isAdmin } = useAuth()
+  const { user, logout, isAdmin, mustChangePassword } = useAuth()
   const location = useLocation()
   const [open, setOpen] = useState(false)
   const [actionCount, setActionCount] = useState(0)
@@ -66,6 +131,11 @@ export default function Layout() {
   // interval — NOT on every navigation. Re-fetching on each route change
   // added a network round-trip to every click and made pages feel slow.
   useEffect(() => {
+    // An account that must change its password is refused by every endpoint
+    // but three, this one included. Polling it would produce a 403 every
+    // minute and, through the client's interceptor, a page reload each time.
+    if (mustChangePassword) return undefined
+
     let active = true
     const load = () =>
       api
@@ -80,7 +150,7 @@ export default function Layout() {
       active = false
       clearInterval(id)
     }
-  }, [])
+  }, [mustChangePassword])
 
   const initials = (user?.full_name || 'U')
     .split(' ')
@@ -100,49 +170,11 @@ export default function Layout() {
           </div>
         </div>
 
-        <div className="nav-section-label">Operations</div>
-        {NAV.filter((item) => {
-          if (item.roles && !item.roles.includes(user?.role?.name)) return false
-          if (item.hideRoles && item.hideRoles.includes(user?.role?.name)) return false
-          return true
-        }).map((item) => (
-          <NavLink
-            key={item.to}
-            to={item.to}
-            end={item.end}
-            className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
-          >
-            <item.icon size={17} strokeWidth={2} />
-            <span>{item.label}</span>
-            {item.key === 'action' && actionCount > 0 && (
-              <span className="badge">{actionCount}</span>
-            )}
-          </NavLink>
-        ))}
-
-        <div className="nav-section-label">Reports</div>
-        {REPORTS.map((item) => (
-          <NavLink
-            key={item.to}
-            to={item.to}
-            className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
-          >
-            <item.icon size={17} strokeWidth={2} />
-            <span>{item.label}</span>
-          </NavLink>
-        ))}
-
-        {isAdmin && (
-          <>
-            <div className="nav-section-label">Administration</div>
-            <NavLink
-              to="/admin"
-              className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
-            >
-              <Settings size={17} strokeWidth={2} />
-              <span>Admin Console</span>
-            </NavLink>
-          </>
+        {/* Hidden while an administrator-issued password is outstanding: every
+            one of these leads somewhere the server will refuse, so offering
+            them is offering a way out of the one screen that works. */}
+        {!mustChangePassword && (
+          <SidebarNav user={user} isAdmin={isAdmin} actionCount={actionCount} />
         )}
 
         <div className="sidebar-footer">
@@ -150,7 +182,13 @@ export default function Layout() {
             <div className="user-avatar">{initials}</div>
             <div className="who">
               <b>{user?.full_name}</b>
-              <small>{user?.role?.name}</small>
+              {mustChangePassword ? (
+                <Link to="/change-password" style={{ fontSize: 12 }}>
+                  Set a new password
+                </Link>
+              ) : (
+                <small>{user?.role?.name}</small>
+              )}
             </div>
             <button className="logout-btn" onClick={logout} title="Sign out">
               <LogOut size={16} />

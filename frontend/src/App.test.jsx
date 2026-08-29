@@ -7,7 +7,7 @@
 //
 // The category-owner case is the one worth guarding: those four roles can work
 // exactly one screen, so sending them anywhere else is a dead end.
-import { render, screen } from '@testing-library/react'
+import { cleanup, render, screen } from '@testing-library/react'
 import { MemoryRouter, Outlet } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -29,6 +29,7 @@ vi.mock('./pages/ActionCenter', () => page('action-center'))
 vi.mock('./pages/mywork/MyWork', () => page('my-work'))
 vi.mock('./pages/reports/AcceptanceDashboard', () => page('acceptance'))
 vi.mock('./pages/Admin', () => page('admin'))
+vi.mock('./pages/ChangePassword', () => page('change-password'))
 
 const mockAuth = vi.hoisted(() => ({ current: null }))
 vi.mock('./context/AuthContext', () => ({
@@ -37,11 +38,16 @@ vi.mock('./context/AuthContext', () => ({
 
 const App = (await import('./App')).default
 
-function signedInAs(roleName) {
+function signedInAs(roleName, { mustChangePassword = false } = {}) {
   mockAuth.current = {
-    user: { username: 'someone', role: { name: roleName } },
+    user: {
+      username: 'someone',
+      role: { name: roleName },
+      must_change_password: mustChangePassword,
+    },
     loading: false,
     isAdmin: roleName === 'Admin',
+    mustChangePassword,
   }
 }
 
@@ -55,7 +61,7 @@ async function landOn(path) {
 }
 
 beforeEach(() => {
-  mockAuth.current = { user: null, loading: false, isAdmin: false }
+  mockAuth.current = { user: null, loading: false, isAdmin: false, mustChangePassword: false }
 })
 
 describe('signed out', () => {
@@ -142,4 +148,53 @@ describe('the My Work splat route', () => {
   // navigates by absolute path; that was checked by reading it, not asserted
   // here — a test that regexes a component's source would pass happily the
   // moment someone refactored to navigate(someVariable).
+})
+
+// ---------------------------------------------------------------------------
+// An account on a password an administrator issued
+// ---------------------------------------------------------------------------
+//
+// The server refuses every endpoint but three for such an account. These
+// guards are the interface agreeing with that: without them the person sees a
+// permission error on each screen in turn, which reads as a fault rather than
+// as an instruction.
+describe('when a password reset is outstanding', () => {
+  it('sends "/" straight to the change-password screen', async () => {
+    signedInAs('Coordinator', { mustChangePassword: true })
+    expect(await landOn('/')).toBe('change-password')
+  })
+
+  it('sends every other screen there too, whatever the role', async () => {
+    for (const [role, path] of [
+      ['Admin', '/admin'],
+      ['Coordinator', '/work-items'],
+      ['NwgPlanning', '/my-fix-queue'],
+    ]) {
+      signedInAs(role, { mustChangePassword: true })
+      expect(await landOn(path), path).toBe('change-password')
+      cleanup()
+    }
+  })
+
+  it('lets them onto the change-password screen itself', async () => {
+    // Or there is nowhere to go, and the redirect above is a loop.
+    signedInAs('Coordinator', { mustChangePassword: true })
+    expect(await landOn('/change-password')).toBe('change-password')
+  })
+
+  it('still sends a signed-out visitor to the login screen', async () => {
+    expect(await landOn('/change-password')).toBe('login')
+  })
+})
+
+describe('changing your password when nothing is forcing it', () => {
+  it('is reachable by anyone signed in', async () => {
+    signedInAs('Contractor')
+    expect(await landOn('/change-password')).toBe('change-password')
+  })
+
+  it('does not divert anyone who does not owe a change', async () => {
+    signedInAs('Coordinator')
+    expect(await landOn('/work-items')).toBe('work-items')
+  })
 })

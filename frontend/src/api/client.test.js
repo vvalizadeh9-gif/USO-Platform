@@ -37,7 +37,7 @@ beforeEach(() => {
   Object.defineProperty(window, 'location', {
     configurable: true,
     writable: true,
-    value: { href: '/' },
+    value: { href: '/', pathname: '/' },
   })
 })
 
@@ -88,6 +88,7 @@ describe('when the server rejects the session', () => {
     // A 403 is "you may not do this", not "you are not signed in". Clearing
     // the session there would sign people out for clicking the wrong button.
     expect(localStorage.getItem('uep_token')).toBe('good')
+    expect(window.location.href).toBe('/')
   })
 
   it('leaves the session alone when the request never reached the server', async () => {
@@ -101,5 +102,55 @@ describe('when the server rejects the session', () => {
     // and every form stuck on "saving".
     const original = { response: { status: 500 } }
     await expect(onError(original)).rejects.toBe(original)
+  })
+})
+
+// The one 403 that is an instruction rather than a refusal.
+//
+// An account whose password an administrator has reset may call exactly three
+// endpoints. Everything else answers 403 with a code — and without this
+// handling, the person sees a permission error on every screen in turn, which
+// reads as the platform being broken rather than as "choose a new password".
+describe('when the account owes a password change', () => {
+  const gated = {
+    response: {
+      status: 403,
+      data: {
+        detail: {
+          code: 'password_change_required',
+          message: 'Your password was reset by an administrator.',
+        },
+      },
+    },
+  }
+
+  it('sends the person to the change-password screen', async () => {
+    localStorage.setItem('uep_token', 'valid')
+    await expect(onError(gated)).rejects.toBeDefined()
+    expect(window.location.href).toBe('/change-password')
+  })
+
+  it('keeps the session, because it is still a valid one', async () => {
+    // Clearing it here would sign them out of the only session that can set a
+    // new password, and the reset would be unrecoverable without a second one.
+    localStorage.setItem('uep_token', 'valid')
+    await expect(onError(gated)).rejects.toBeDefined()
+    expect(localStorage.getItem('uep_token')).toBe('valid')
+  })
+
+  it('does not redirect while already on that screen', async () => {
+    // The change-password screen makes its own requests. Redirecting on those
+    // would reload the page in a loop, which is worse than the 403.
+    window.location.pathname = '/change-password'
+    window.location.href = '/change-password'
+    await expect(onError(gated)).rejects.toBeDefined()
+    expect(window.location.href).toBe('/change-password')
+  })
+
+  it('ignores an ordinary 403, which is a refusal and not an instruction', async () => {
+    await expect(
+      onError({ response: { status: 403, data: { detail: 'You may not do that' } } }),
+    ).rejects.toBeDefined()
+    expect(window.location.href).toBe('/')
   })
 })

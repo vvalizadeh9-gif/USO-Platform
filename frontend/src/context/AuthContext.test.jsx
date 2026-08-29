@@ -6,9 +6,17 @@
 // behind the same render the user got a blank page with no way back except
 // clearing site data by hand -- which nothing on the page could tell them to
 // do, because there was no page.
-import { render, screen, waitFor } from '@testing-library/react'
+import { act, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { AuthProvider, useAuth } from './AuthContext'
+
+// The provider talks to the API on sign-out and on refresh. Both are about
+// what it does with the answer, not about the request, so the client is a
+// stub here.
+const post = vi.hoisted(() => vi.fn())
+const get = vi.hoisted(() => vi.fn())
+vi.mock('../api/client', () => ({ default: { post, get } }))
+
+const { AuthProvider, useAuth } = await import('./AuthContext')
 
 function Probe() {
   const { user, loading } = useAuth()
@@ -27,6 +35,8 @@ function renderApp() {
 beforeEach(() => {
   localStorage.clear()
   vi.restoreAllMocks()
+  post.mockReset().mockResolvedValue({ data: { status: 'ok' } })
+  get.mockReset().mockResolvedValue({ data: { username: 'maryam' } })
 })
 
 describe('restoring a session on load', () => {
@@ -88,5 +98,103 @@ describe('useAuth outside a provider', () => {
     // role of null" somewhere far from the actual mistake.
     vi.spyOn(console, 'error').mockImplementation(() => {})
     expect(() => render(<Probe />)).toThrow(/AuthProvider/)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Signing out
+// ---------------------------------------------------------------------------
+function Controls() {
+  const { user, logout, refreshUser, mustChangePassword } = useAuth()
+  return (
+    <div>
+      <p data-testid="who">{user ? user.username : 'signed out'}</p>
+      <p data-testid="forced">{String(mustChangePassword)}</p>
+      <button onClick={logout}>sign out</button>
+      <button onClick={refreshUser}>refresh</button>
+    </div>
+  )
+}
+
+function renderControls() {
+  return render(
+    <AuthProvider>
+      <Controls />
+    </AuthProvider>,
+  )
+}
+
+describe('signing out', () => {
+  it('tells the server, so the audit log records it', async () => {
+    // A session that simply stops being used leaves no trace of when its
+    // holder stopped working, and "logout" is one of the events the audit
+    // trail is required to carry.
+    localStorage.setItem('uep_user', JSON.stringify({ username: 'maryam' }))
+    localStorage.setItem('uep_token', 'a-token')
+    renderControls()
+    await waitFor(() => expect(screen.getByTestId('who')).toHaveTextContent('maryam'))
+
+    await act(async () => screen.getByText('sign out').click())
+
+    expect(post).toHaveBeenCalledWith('/auth/logout')
+    expect(localStorage.getItem('uep_token')).toBeNull()
+    expect(localStorage.getItem('uep_user')).toBeNull()
+  })
+
+  it('signs out locally even when the server call fails', async () => {
+    // The token may already have expired, or the network may be down. Neither
+    // is a reason to trap someone in a session they asked to leave.
+    post.mockRejectedValue(new Error('Network Error'))
+    localStorage.setItem('uep_user', JSON.stringify({ username: 'maryam' }))
+    localStorage.setItem('uep_token', 'a-token')
+    renderControls()
+    await waitFor(() => expect(screen.getByTestId('who')).toHaveTextContent('maryam'))
+
+    await act(async () => screen.getByText('sign out').click())
+
+    await waitFor(() =>
+      expect(screen.getByTestId('who')).toHaveTextContent('signed out'))
+    expect(localStorage.getItem('uep_token')).toBeNull()
+  })
+})
+
+describe('the must-change-password flag', () => {
+  it('is read off the stored user', () => {
+    localStorage.setItem(
+      'uep_user',
+      JSON.stringify({ username: 'maryam', must_change_password: true }),
+    )
+    renderControls()
+    expect(screen.getByTestId('forced')).toHaveTextContent('true')
+  })
+
+  it('clears when the server says the password has been replaced', async () => {
+    // Without this the cached copy keeps the interface locked on the
+    // change-password screen until the next sign-in, even though the change
+    // has already happened.
+    localStorage.setItem(
+      'uep_user',
+      JSON.stringify({ username: 'maryam', must_change_password: true }),
+    )
+    get.mockResolvedValue({ data: { username: 'maryam', must_change_password: false } })
+    renderControls()
+    expect(screen.getByTestId('forced')).toHaveTextContent('true')
+
+    await act(async () => screen.getByText('refresh').click())
+
+    await waitFor(() => expect(screen.getByTestId('forced')).toHaveTextContent('false'))
+    expect(JSON.parse(localStorage.getItem('uep_user')).must_change_password).toBe(false)
+  })
+
+  it('leaves the session alone when the refresh fails', async () => {
+    // A failed refresh is not evidence of anything. Signing someone out for it
+    // would turn a blip into a sign-in.
+    localStorage.setItem('uep_user', JSON.stringify({ username: 'maryam' }))
+    get.mockRejectedValue(new Error('Network Error'))
+    renderControls()
+
+    await act(async () => screen.getByText('refresh').click())
+
+    expect(screen.getByTestId('who')).toHaveTextContent('maryam')
   })
 })

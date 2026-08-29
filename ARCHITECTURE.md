@@ -505,6 +505,78 @@ All of this lives in one function, `apply_work_item_scope` in
 it. **Never write a work-item query that bypasses it** — that is how a data leak
 between contractors would happen.
 
+### User management
+
+A user is a first name, a family name, an email address, a username and an
+Argon2id password hash. `full_name` is derived from the two name fields rather
+than stored, so the ~20 places that display a name did not have to change when
+one column became two.
+
+**Passwords.** Argon2id, at OWASP's recommended cost. bcrypt hashes written
+before the switch still verify and are rewritten as Argon2id the next time
+their owner signs in, so the old format drains away without a mass reset —
+which also means raising the cost parameters later is a one-line change with no
+migration. Nothing anywhere returns a password or a hash. The policy is length
+plus a common-password blocklist, deliberately *not* character classes; see the
+docstring in `app/core/passwords.py` for why.
+
+**Three ways a password changes**, and they are separate on purpose:
+
+| Route | Who | Effect |
+|---|---|---|
+| `POST /auth/me/password` | the account holder | needs the current password; ends every other session |
+| `POST /admin/users/{id}/reset-password` | an administrator | returns a temporary password once; ends every session; sets `must_change_password` |
+| `POST /auth/password-reset-request` | anyone, signed out | records a request. Grants nothing |
+
+Setting a password used to be a field on the general user edit. It is not any
+more, because that made a credential reset and "fix the spelling of their
+surname" the same call — and indistinguishable in the audit log afterwards.
+`UserUpdate` sets `extra="forbid"` so an old client sending `password` gets a
+422 rather than a 200 that silently did nothing.
+
+`must_change_password` is enforced in `get_current_user`: while it is set the
+account may call `/auth/me`, `/auth/me/password` and `/auth/logout`, and
+nothing else. The 403 carries a machine-readable `code` so the frontend routes
+to the change-password screen instead of showing a permission error.
+
+**There is no outbound mail**, which is why "I forgot my password" is a request
+an administrator actions rather than a link. Building the usual flow would mean
+an SMTP server, a token table and an unauthenticated endpoint that mints
+credentials — the largest new attack surface in the system, for a few dozen
+internal users who all know their administrator. The request endpoint answers
+identically whether or not the account exists, because it is reachable by
+anyone who can load the sign-in page.
+
+### The audit log
+
+`audit_logs` is append-only. Nothing in the application updates or deletes a
+row, and no endpoint exposes a way to: `GET /admin/audit-logs` and
+`GET /admin/users/{id}/audit-logs` are the only routes, both Admin-only. A
+record the platform can revise on request is not evidence of anything.
+
+Each row carries who, what (`action`), which record (`module`, `entity_type`,
+`entity_id`), when, from where (`ip_address`), the before and after values, and
+whether it worked (`result`).
+
+`action` comes from a closed vocabulary in `app/core/audit_actions.py`. Before
+it existed the verb was *inferred by the frontend* from the shape of
+`new_value` and the wording of a free-text `reason` — so nothing could be
+filtered or counted by it, and any event nobody had written a branch for was
+described wrongly, confidently, in a table that looks authoritative. Every
+`record_audit` call site now names its action; the parameter has no default,
+which is what forces each new one to decide.
+
+`result` exists so the log can hold what *failed*. Authentication failures are
+written through `record_audit_now`, which commits independently of the request
+— an ordinary `record_audit` would leave the row pending in a session that is
+about to raise a 401 and never commit, so the log would hold every successful
+sign-in and no refused one, which is precisely backwards.
+
+Recorded events: sign-in (success and failure, including against a username
+that does not exist), sign-out, password change, password reset, reset request,
+user created / updated / activated / deactivated / suspended / reactivated /
+role changed — and every operational action across the rest of the portal.
+
 ---
 
 ## 7. Dates: Jalali and Gregorian
@@ -528,7 +600,8 @@ measured which clock the existing values were on rather than assuming — see
 ```
 backend/app/
   api/         HTTP layer: routing, permission dependencies, request/response
-  core/        config, database, security, permission helpers, logging
+  core/        config, database, security, permission helpers, logging,
+               account statuses (user_status.py) and audit verbs (audit_actions.py)
   models/      SQLAlchemy tables
   schemas/     Pydantic request/response shapes
   services/    the business rules
@@ -560,10 +633,17 @@ other. All three are gone. Migrations run at deploy time via `entrypoint.sh`,
 before the application starts, so a failed migration stops the deploy instead of
 going live half-applied. The application only seeds reference data.
 
-**Nothing is deleted.** Users are deactivated, never removed, because they are
-referenced by audit entries and health-check reviews. Work items are
-soft-deleted. Over a ten-year life with normal staff turnover, deletion would
-turn the accountability trail anonymous exactly where it matters most.
+**Nothing is deleted.** Users move between `Active`, `Inactive` and `Suspended`
+and are never removed, because they are referenced by audit entries and
+health-check reviews. Work items are soft-deleted. Over a ten-year life with
+normal staff turnover, deletion would turn the accountability trail anonymous
+exactly where it matters most.
+
+There are three statuses rather than a boolean because an administrator needs
+to answer two questions, not one: whether the account is in use, and *why* it
+is not. "Left the company" and "locked pending an investigation" were the same
+row when this was `active = false`, and the difference is exactly what someone
+reading the trail a year later needs. See `app/core/user_status.py`.
 
 ---
 
@@ -583,6 +663,17 @@ above:
 - **Sites withheld from the basket** while untriaged or unfixed — deliberate;
   it is what makes the loop close itself.
 - **CPM re-import proposing rather than applying** changes — deliberate.
+- **No password field on the general user edit** — deliberate; a credential
+  reset and a corrected surname must be distinguishable in the audit log.
+- **The password reset request granting nothing**, and answering the same for a
+  username that does not exist — deliberate; that endpoint is reachable by
+  anyone who can load the sign-in page.
+- **No character-class rule** in the password policy — deliberate, and the
+  reason is in `app/core/passwords.py`. Adding one measurably moves people
+  towards `Password1!`.
+- **bcrypt still being verifiable** after the move to Argon2id — deliberate;
+  removing it locks out every user at once.
+- **No route that deletes a user** — deliberate; see "Nothing is deleted" above.
 
 The backend tests cover all of these. If a change breaks one, the test is
 probably right.

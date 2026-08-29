@@ -1,13 +1,23 @@
 import { AnimatePresence, motion } from 'framer-motion'
-import { Plus, UserPlus, Search, Check, X, Pencil, UserMinus, RotateCcw, MapPin } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import {
+  History, KeyRound, LifeBuoy, MapPin, Pencil, Plus, Search, ShieldOff, UserPlus, X,
+} from 'lucide-react'
+import { useEffect, useState } from 'react'
 import api from '../../api/client'
 import { useToast } from '../../context/ToastContext'
 import { useAuth } from '../../context/AuthContext'
-import { Loading, StatusPill } from '../../components/ui'
+import { EmptyState, Loading } from '../../components/ui'
 import { roleLabel } from '../../lib/roles'
+import { detailMessage } from '../../lib/apiError'
+import { ACTIVE, USER_STATUSES, statusPillClass } from '../../lib/userStatus'
+import ProvincePicker from './ProvincePicker'
+import ResetRequestsPanel from './ResetRequestsPanel'
+import UserAuditDrawer from './UserAuditDrawer'
+import UserStatusDialog from './UserStatusDialog'
+import PasswordResetDialog from './PasswordResetDialog'
 
 const CONTRACTOR_ROLE_NAME = 'Contractor'
+const EMPTY_FILTERS = { search: '', status: '', role_id: '' }
 
 export default function UsersTab() {
   const toast = useToast()
@@ -16,58 +26,130 @@ export default function UsersTab() {
   const [roles, setRoles] = useState([])
   const [provinces, setProvinces] = useState([])
   const [contractors, setContractors] = useState([])
+  const [filters, setFilters] = useState(EMPTY_FILTERS)
   const [showCreate, setShowCreate] = useState(false)
   const [editingUser, setEditingUser] = useState(null)
-  const [provincePopup, setProvincePopup] = useState(null)  // user whose provinces we're viewing
-  const [deactivateTarget, setDeactivateTarget] = useState(null)
+  const [provincePopup, setProvincePopup] = useState(null)
+  const [statusTarget, setStatusTarget] = useState(null)
+  const [resetTarget, setResetTarget] = useState(null)
+  const [historyTarget, setHistoryTarget] = useState(null)
+  const [requestsVersion, setRequestsVersion] = useState(0)
 
   function load() {
-    api.get('/admin/users').then((r) => setUsers(r.data)).catch(() => setUsers([]))
+    const params = {}
+    if (filters.search.trim()) params.search = filters.search.trim()
+    if (filters.status) params.status = filters.status
+    if (filters.role_id) params.role_id = filters.role_id
+    api.get('/admin/users', { params })
+      .then((r) => setUsers(r.data))
+      .catch(() => setUsers([]))
   }
+
+  // Debounced, because this fires on every keystroke in the search box and the
+  // list is a database query. 250ms is below the threshold where typing starts
+  // to feel like it is waiting for something.
   useEffect(() => {
-    load()
+    const id = setTimeout(load, 250)
+    return () => clearTimeout(id)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filters.search, filters.status, filters.role_id])
+
+  useEffect(() => {
     api.get('/reference/roles').then((r) => setRoles(r.data)).catch(() => {})
     api.get('/reference/provinces').then((r) => setProvinces(r.data)).catch(() => {})
     api.get('/reference/contractors').then((r) => setContractors(r.data)).catch(() => {})
   }, [])
 
-  async function confirmDeactivate() {
+  function setFilter(key, value) {
+    setFilters((f) => ({ ...f, [key]: value }))
+  }
+
+  async function applyStatus(user, status, reason) {
     try {
-      await api.delete(`/admin/users/${deactivateTarget.id}`)
+      await api.post(`/admin/users/${user.id}/status`, { status, reason: reason || null })
       toast.success(
-        'User deactivated',
-        `${deactivateTarget.full_name} can no longer sign in. Their history is kept.`,
+        'Status changed',
+        `${user.full_name} is now ${status.toLowerCase()}. Nothing was deleted — `
+        + 'their history still shows their name.',
       )
-      setDeactivateTarget(null)
+      setStatusTarget(null)
       load()
     } catch (err) {
-      toast.error('Could not deactivate user', err.response?.data?.detail || 'Please try again.')
-      setDeactivateTarget(null)
+      toast.error('Could not change the status', detailMessage(err, 'Please try again.'))
     }
   }
 
-  async function reactivate(user) {
-    try {
-      await api.patch(`/admin/users/${user.id}`, { active: true })
-      toast.success('User reactivated', `${user.full_name} can sign in again.`)
-      load()
-    } catch (err) {
-      toast.error('Could not reactivate user', err.response?.data?.detail || 'Please try again.')
-    }
-  }
-
-  if (!users) return <Loading label="Loading users" />
+  const hasFilters = Object.values(filters).some(Boolean)
 
   return (
     <div>
-      <div className="row between mb-16">
-        <span className="muted">{users.length} users</span>
-        <button
-          className="btn btn-primary btn-sm"
-          onClick={() => { setEditingUser(null); setShowCreate((s) => !s) }}
-        >
-          <UserPlus size={15} /> New user
-        </button>
+      <ResetRequestsPanel
+        version={requestsVersion}
+        // The request row already carries everything the reset dialog needs,
+        // so it is handed over directly rather than looked up in the table
+        // below — which is filtered, and would silently do nothing whenever
+        // the person asking happens not to match the current search.
+        onResetUser={setResetTarget}
+        onChanged={() => setRequestsVersion((v) => v + 1)}
+      />
+
+      <div className="card card-pad mb-16">
+        <div className="row wrap" style={{ gap: 12, alignItems: 'flex-end' }}>
+          <div className="field" style={{ marginBottom: 0, flex: 1, minWidth: 220 }}>
+            <label htmlFor="user-search">Search</label>
+            <div style={{ position: 'relative' }}>
+              <Search
+                size={15}
+                style={{ position: 'absolute', left: 10, top: 11, color: 'var(--text-dim)' }}
+              />
+              <input
+                id="user-search"
+                className="input"
+                style={{ paddingLeft: 32 }}
+                placeholder="Name, username or email…"
+                value={filters.search}
+                onChange={(e) => setFilter('search', e.target.value)}
+              />
+            </div>
+          </div>
+          <div className="field" style={{ marginBottom: 0, minWidth: 150 }}>
+            <label htmlFor="user-status-filter">Status</label>
+            <select
+              id="user-status-filter"
+              className="input"
+              value={filters.status}
+              onChange={(e) => setFilter('status', e.target.value)}
+            >
+              <option value="">All statuses</option>
+              {USER_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+            </select>
+          </div>
+          <div className="field" style={{ marginBottom: 0, minWidth: 180 }}>
+            <label htmlFor="user-role-filter">Role</label>
+            <select
+              id="user-role-filter"
+              className="input"
+              value={filters.role_id}
+              onChange={(e) => setFilter('role_id', e.target.value)}
+            >
+              <option value="">All roles</option>
+              {roles.map((r) => (
+                <option key={r.id} value={r.id}>{roleLabel(r.name)}</option>
+              ))}
+            </select>
+          </div>
+          {hasFilters && (
+            <button className="btn btn-sm btn-ghost" onClick={() => setFilters(EMPTY_FILTERS)}>
+              <X size={13} /> Clear
+            </button>
+          )}
+          <button
+            className="btn btn-primary btn-sm"
+            onClick={() => { setEditingUser(null); setShowCreate((s) => !s) }}
+          >
+            <UserPlus size={15} /> New user
+          </button>
+        </div>
       </div>
 
       {showCreate && (
@@ -95,80 +177,132 @@ export default function UsersTab() {
         />
       )}
 
-      <div className="table-wrap mt-16">
-        <table>
-          <thead>
-            <tr>
-              <th>User</th>
-              <th>Username</th>
-              <th>Role</th>
-              <th>Contractor</th>
-              <th>Province access</th>
-              <th>Status</th>
-              <th style={{ width: 110 }}></th>
-            </tr>
-          </thead>
-          <tbody>
-            {users.map((u) => (
-              <tr key={u.id}>
-                <td style={{ fontWeight: 500 }}>{u.full_name}</td>
-                <td className="dim tnum">{u.username}</td>
-                <td>{roleLabel(u.role?.name)}</td>
-                <td className="text-data dim">
-                  {u.role?.name === CONTRACTOR_ROLE_NAME
-                    ? (contractors.find((c) => c.id === u.contractor_id)?.name || '—')
-                    : '—'}
-                </td>
-                <td>
-                  <ProvinceCell user={u} onView={() => setProvincePopup(u)} />
-                </td>
-                <td><StatusPill status={u.active ? 'Approved' : 'Rejected'} /></td>
-                <td>
-                  <div className="row" style={{ gap: 4 }}>
-                    <button
-                      className="btn btn-sm btn-ghost"
-                      onClick={() => { setShowCreate(false); setEditingUser(u) }}
-                    >
-                      <Pencil size={14} /> Edit
-                    </button>
-                    {u.id !== currentUser?.id && (
-                      u.active ? (
+      {users === null ? (
+        <Loading label="Loading users" />
+      ) : users.length === 0 ? (
+        <div className="card">
+          <EmptyState
+            title="No matching users"
+            hint={hasFilters ? 'Try a different search, or clear the filters.' : 'Create the first user to get started.'}
+          />
+        </div>
+      ) : (
+        <>
+          <div className="row between mb-16">
+            <span className="muted">
+              {users.length} user{users.length === 1 ? '' : 's'}
+              {hasFilters ? ' matching' : ''}
+            </span>
+          </div>
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Username</th>
+                  <th>Email</th>
+                  <th>Role</th>
+                  <th>Contractor</th>
+                  <th>Province access</th>
+                  <th>Status</th>
+                  <th style={{ width: 180 }}></th>
+                </tr>
+              </thead>
+              <tbody>
+                {users.map((u) => (
+                  <tr key={u.id}>
+                    <td style={{ fontWeight: 500 }}>
+                      {u.full_name}
+                      {u.must_change_password && (
+                        <span
+                          className="pill pill-amber"
+                          style={{ marginLeft: 8, fontSize: 11 }}
+                          title="This account is on a temporary password and must set a new one before it can do anything else."
+                        >
+                          must reset
+                        </span>
+                      )}
+                    </td>
+                    <td className="dim tnum">{u.username}</td>
+                    <td className="dim text-data">{u.email || '—'}</td>
+                    <td>{roleLabel(u.role?.name)}</td>
+                    <td className="text-data dim">
+                      {u.role?.name === CONTRACTOR_ROLE_NAME
+                        ? (contractors.find((c) => c.id === u.contractor_id)?.name || '—')
+                        : '—'}
+                    </td>
+                    <td>
+                      <ProvinceCell user={u} onView={() => setProvincePopup(u)} />
+                    </td>
+                    <td>
+                      <span className={`pill ${statusPillClass(u.status)}`}>{u.status}</span>
+                    </td>
+                    <td>
+                      <div className="row" style={{ gap: 4 }}>
                         <button
                           className="btn btn-sm btn-ghost"
-                          style={{ color: 'var(--red)' }}
-                          onClick={() => setDeactivateTarget(u)}
-                          title="Deactivate user"
+                          onClick={() => { setShowCreate(false); setEditingUser(u) }}
+                          title="Edit this user's details"
                         >
-                          <UserMinus size={14} />
+                          <Pencil size={14} />
                         </button>
-                      ) : (
                         <button
                           className="btn btn-sm btn-ghost"
-                          onClick={() => reactivate(u)}
-                          title="Reactivate user"
+                          onClick={() => setResetTarget(u)}
+                          title="Reset this user's password"
                         >
-                          <RotateCcw size={14} />
+                          <KeyRound size={14} />
                         </button>
-                      )
-                    )}
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+                        <button
+                          className="btn btn-sm btn-ghost"
+                          onClick={() => setHistoryTarget(u)}
+                          title="View this user's activity history"
+                        >
+                          <History size={14} />
+                        </button>
+                        {/* An admin cannot take their own account offline, and
+                            the backend refuses it — so the button is not
+                            offered rather than offered and then refused. */}
+                        {u.id !== currentUser?.id && (
+                          <button
+                            className="btn btn-sm btn-ghost"
+                            style={u.status === ACTIVE ? { color: 'var(--red)' } : undefined}
+                            onClick={() => setStatusTarget(u)}
+                            title="Change this user's account status"
+                          >
+                            <ShieldOff size={14} />
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
 
       <AnimatePresence>
         {provincePopup && (
           <ProvincePopup user={provincePopup} onClose={() => setProvincePopup(null)} />
         )}
-        {deactivateTarget && (
-          <DeactivateConfirm
-            user={deactivateTarget}
-            onCancel={() => setDeactivateTarget(null)}
-            onConfirm={confirmDeactivate}
+        {statusTarget && (
+          <UserStatusDialog
+            user={statusTarget}
+            onCancel={() => setStatusTarget(null)}
+            onConfirm={(status, reason) => applyStatus(statusTarget, status, reason)}
           />
+        )}
+        {resetTarget && (
+          <PasswordResetDialog
+            user={resetTarget}
+            onClose={() => { setResetTarget(null); load(); setRequestsVersion((v) => v + 1) }}
+            onError={(m) => toast.error('Could not reset the password', m)}
+          />
+        )}
+        {historyTarget && (
+          <UserAuditDrawer user={historyTarget} onClose={() => setHistoryTarget(null)} />
         )}
       </AnimatePresence>
     </div>
@@ -220,53 +354,25 @@ function ProvincePopup({ user, onClose }) {
   )
 }
 
-function DeactivateConfirm({ user, onCancel, onConfirm }) {
-  return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(20,30,50,0.45)', display: 'grid', placeItems: 'center', zIndex: 200 }} onClick={onCancel}>
-      <motion.div
-        initial={{ opacity: 0, y: 14, scale: 0.97 }}
-        animate={{ opacity: 1, y: 0, scale: 1 }}
-        exit={{ opacity: 0, scale: 0.97 }}
-        className="card card-pad"
-        style={{ width: 400, borderColor: 'var(--red)', borderWidth: 1.5 }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="row" style={{ gap: 8, color: 'var(--red)', marginBottom: 10 }}>
-          <UserMinus size={18} />
-          <h3 style={{ fontSize: 16, color: 'var(--red)' }}>Deactivate user?</h3>
-        </div>
-        <p className="muted" style={{ fontSize: 13, lineHeight: 1.6, marginBottom: 16 }}>
-          <b>{user.full_name}</b> ({user.username}) will no longer be able to sign in, and will
-          stop receiving notifications.
-        </p>
-        <p className="muted" style={{ fontSize: 13, lineHeight: 1.6, marginBottom: 16 }}>
-          Their account is kept, not deleted, so every health check they reviewed and every
-          audit entry still shows their name. You can reactivate them at any time.
-        </p>
-        <div className="row" style={{ gap: 8 }}>
-          <button className="btn" style={{ background: 'var(--red)', color: '#fff', border: 'none' }} onClick={onConfirm}>
-            <UserMinus size={14} /> Yes, deactivate
-          </button>
-          <button className="btn btn-ghost" onClick={onCancel}>No, cancel</button>
-        </div>
-      </motion.div>
-    </div>
-  )
-}
-
 // Shared create/edit form. Contractor dropdown only appears when the
 // selected role is "Contractor" — other roles don't belong to a contractor.
+//
+// There is no password field on the edit side. Setting a password is its own
+// operation with its own dialog, so that "reset their credentials" and "fix
+// the spelling of their surname" are never the same click — and are never the
+// same entry in the audit log afterwards.
 function UserForm({ mode, user, roles, provinces, contractors, onDone, onError, onSuccess }) {
   const isEdit = mode === 'edit'
   const [form, setForm] = useState(() => ({
     username: user?.username || '',
     password: '',
-    full_name: user?.full_name || '',
+    first_name: user?.first_name || '',
+    family_name: user?.family_name || '',
+    email: user?.email || '',
     role_id: user?.role?.id ? String(user.role.id) : '',
     contractor_id: user?.contractor_id ? String(user.contractor_id) : '',
     sees_all_provinces: user?.sees_all_provinces || false,
     province_ids: user?.provinces?.map((p) => p.id) || [],
-    active: user?.active ?? true,
   }))
   const [busy, setBusy] = useState(false)
 
@@ -279,47 +385,109 @@ function UserForm({ mode, user, roles, provinces, contractors, onDone, onError, 
     setBusy(true)
     try {
       const payload = {
-        full_name: form.full_name,
+        first_name: form.first_name.trim(),
+        family_name: form.family_name.trim(),
+        // An empty box means "no address", not "the empty string" — the column
+        // is unique, and two accounts saved with "" would collide.
+        email: form.email.trim() || null,
         role_id: Number(form.role_id),
         contractor_id: isContractorRole && form.contractor_id ? Number(form.contractor_id) : null,
         sees_all_provinces: form.sees_all_provinces,
         province_ids: form.sees_all_provinces ? [] : form.province_ids,
       }
       if (isEdit) {
-        if (form.password) payload.password = form.password
-        payload.active = form.active
         await api.patch(`/admin/users/${user.id}`, payload)
       } else {
-        await api.post('/admin/users', { ...payload, username: form.username, password: form.password })
+        await api.post('/admin/users', {
+          ...payload, username: form.username.trim(), password: form.password,
+        })
       }
       onSuccess()
       onDone()
     } catch (err) {
-      onError(err.response?.data?.detail || 'Please check the fields and try again.')
+      onError(detailMessage(err))
     } finally {
       setBusy(false)
     }
   }
 
   return (
-    <motion.div className="card card-pad" initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }}>
-      <h3 style={{ fontSize: 15, marginBottom: 14 }}>{isEdit ? `Edit user · ${user.full_name}` : 'Create user'}</h3>
+    <motion.div className="card card-pad mb-16" initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }}>
+      <h3 style={{ fontSize: 15, marginBottom: 14 }}>
+        {isEdit ? `Edit user · ${user.full_name}` : 'Create user'}
+      </h3>
       <div className="grid" style={{ gridTemplateColumns: '1fr 1fr' }}>
         <div className="field">
-          <label>Full name</label>
-          <input className="input" value={form.full_name} onChange={(e) => set('full_name', e.target.value)} />
+          <label htmlFor="user-first-name">First name</label>
+          <input
+            id="user-first-name"
+            className="input"
+            value={form.first_name}
+            onChange={(e) => set('first_name', e.target.value)}
+          />
         </div>
         <div className="field">
-          <label>Username</label>
-          <input className="input" value={form.username} disabled={isEdit} onChange={(e) => set('username', e.target.value)} />
+          <label htmlFor="user-family-name">Family name</label>
+          <input
+            id="user-family-name"
+            className="input"
+            value={form.family_name}
+            onChange={(e) => set('family_name', e.target.value)}
+          />
         </div>
         <div className="field">
-          <label>{isEdit ? 'New password (leave blank to keep current)' : 'Password'}</label>
-          <input className="input" type="password" value={form.password} onChange={(e) => set('password', e.target.value)} placeholder="min 8 characters" />
+          <label htmlFor="user-username">Username</label>
+          <input
+            id="user-username"
+            className="input"
+            value={form.username}
+            disabled={isEdit}
+            onChange={(e) => set('username', e.target.value)}
+          />
+          {isEdit && (
+            <span className="dim" style={{ fontSize: 12, marginTop: 4, display: 'block' }}>
+              A username cannot be changed — the audit log identifies this
+              person by it.
+            </span>
+          )}
         </div>
         <div className="field">
-          <label>Role</label>
-          <select className="input" value={form.role_id} onChange={(e) => set('role_id', e.target.value)}>
+          <label htmlFor="user-email">Email address</label>
+          <input
+            id="user-email"
+            className="input"
+            type="email"
+            value={form.email}
+            onChange={(e) => set('email', e.target.value)}
+            placeholder="Optional"
+          />
+        </div>
+        {!isEdit && (
+          <div className="field">
+            <label htmlFor="user-password">Password</label>
+            <input
+              id="user-password"
+              className="input"
+              type="password"
+              value={form.password}
+              onChange={(e) => set('password', e.target.value)}
+              placeholder="At least 12 characters"
+              autoComplete="new-password"
+            />
+            <span className="dim" style={{ fontSize: 12, marginTop: 4, display: 'block' }}>
+              A long phrase you can pass on is better than a short one with
+              symbols in it.
+            </span>
+          </div>
+        )}
+        <div className="field">
+          <label htmlFor="user-role">Role</label>
+          <select
+            id="user-role"
+            className="input"
+            value={form.role_id}
+            onChange={(e) => set('role_id', e.target.value)}
+          >
             <option value="">Select…</option>
             {roles.map((r) => <option key={r.id} value={r.id}>{roleLabel(r.name)}</option>)}
           </select>
@@ -328,8 +496,13 @@ function UserForm({ mode, user, roles, provinces, contractors, onDone, onError, 
 
       {isContractorRole && (
         <div className="field">
-          <label>Contractor</label>
-          <select className="input" value={form.contractor_id} onChange={(e) => set('contractor_id', e.target.value)}>
+          <label htmlFor="user-contractor">Contractor</label>
+          <select
+            id="user-contractor"
+            className="input"
+            value={form.contractor_id}
+            onChange={(e) => set('contractor_id', e.target.value)}
+          >
             <option value="">Select the contractor this user belongs to…</option>
             {contractors.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
@@ -337,13 +510,6 @@ function UserForm({ mode, user, roles, provinces, contractors, onDone, onError, 
             This user will only see assignments belonging to this contractor.
           </span>
         </div>
-      )}
-
-      {isEdit && (
-        <label className="row" style={{ gap: 8, margin: '4px 0 14px', cursor: 'pointer' }}>
-          <input type="checkbox" checked={form.active} onChange={(e) => set('active', e.target.checked)} />
-          <span>Account active (uncheck to disable login)</span>
-        </label>
       )}
 
       <label className="row" style={{ gap: 8, margin: '4px 0 14px', cursor: 'pointer' }}>
@@ -365,113 +531,17 @@ function UserForm({ mode, user, roles, provinces, contractors, onDone, onError, 
         </button>
         <button className="btn btn-ghost" onClick={onDone}>Cancel</button>
       </div>
-    </motion.div>
-  )
-}
 
-// Searchable multi-select province picker. Clearer than a flat button list
-// when there are many provinces: search box, select-all / clear, live count,
-// and scrollable checkbox list.
-function ProvincePicker({ provinces, selected, onChange }) {
-  const [query, setQuery] = useState('')
-
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase()
-    if (!q) return provinces
-    return provinces.filter((p) => p.name.toLowerCase().includes(q))
-  }, [provinces, query])
-
-  function toggle(id) {
-    onChange(
-      selected.includes(id)
-        ? selected.filter((x) => x !== id)
-        : [...selected, id]
-    )
-  }
-  const selectAllFiltered = () =>
-    onChange([...new Set([...selected, ...filtered.map((p) => p.id)])])
-  const clearAll = () => onChange([])
-
-  if (provinces.length === 0) {
-    return (
-      <div className="field">
-        <label>Grant province access</label>
-        <span className="dim">Import a CPM file first to populate provinces.</span>
-      </div>
-    )
-  }
-
-  return (
-    <div className="field">
-      <div className="row between" style={{ marginBottom: 6 }}>
-        <label style={{ margin: 0 }}>Grant province access</label>
-        <span className="dim" style={{ fontSize: 12 }}>
-          {selected.length} selected
-        </span>
-      </div>
-
-      <div className="row" style={{ gap: 8, marginBottom: 8 }}>
-        <div style={{ position: 'relative', flex: 1 }}>
-          <Search
-            size={15}
-            style={{ position: 'absolute', left: 10, top: 11, color: 'var(--text-dim)' }}
-          />
-          <input
-            className="input"
-            style={{ paddingLeft: 32 }}
-            placeholder="Search provinces…"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
-        </div>
-        <button type="button" className="btn btn-sm" onClick={selectAllFiltered}>
-          <Check size={14} /> All
-        </button>
-        <button type="button" className="btn btn-sm btn-ghost" onClick={clearAll}>
-          <X size={14} /> Clear
-        </button>
-      </div>
-
-      <div
-        style={{
-          maxHeight: 220,
-          overflowY: 'auto',
-          border: '1px solid var(--border)',
-          borderRadius: 'var(--radius-sm)',
-          padding: 6,
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))',
-          gap: 2,
-        }}
-      >
-        {filtered.map((p) => {
-          const on = selected.includes(p.id)
-          return (
-            <label
-              key={p.id}
-              className="row"
-              style={{
-                gap: 9,
-                padding: '7px 10px',
-                borderRadius: 6,
-                cursor: 'pointer',
-                background: on ? 'var(--signal-glow)' : 'transparent',
-                transition: 'background 0.13s',
-              }}
-            >
-              <input type="checkbox" checked={on} onChange={() => toggle(p.id)} />
-              <span className="text-data" style={{ color: on ? 'var(--signal-strong)' : 'var(--text)' }}>
-                {p.name}
-              </span>
-            </label>
-          )
-        })}
-        {filtered.length === 0 && (
-          <span className="dim" style={{ padding: 10, fontSize: 13 }}>
-            No provinces match “{query}”.
+      {isEdit && (
+        <div className="row" style={{ gap: 7, marginTop: 14, color: 'var(--text-muted)', fontSize: 12.5 }}>
+          <LifeBuoy size={13} />
+          <span>
+            To set this person&apos;s password, use the key button in their row.
+            To take the account offline, use the shield button — nothing here
+            deletes a user.
           </span>
-        )}
-      </div>
-    </div>
+        </div>
+      )}
+    </motion.div>
   )
 }
