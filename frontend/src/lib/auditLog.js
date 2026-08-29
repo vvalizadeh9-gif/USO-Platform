@@ -151,6 +151,20 @@ function detail(entry) {
   }
 }
 
+// Who the User column should name.
+//
+// `user_id` is nullable, and "System" is the right word for a row a background
+// task wrote. It is the wrong word for a sign-in attempt against a username
+// nobody has — nothing systemic happened there, somebody tried a name. Showing
+// what they typed is both more honest and the only thing that tells one such
+// row from the next.
+export function actorLabel(entry) {
+  if (!entry) return 'System'
+  if (entry.user_full_name) return entry.user_full_name
+  const nv = entry.new_value || {}
+  return nv.username || nv.identifier || 'System'
+}
+
 export function describeAuditEntry(entry) {
   if (!entry) return ''
   const actor = entry.user_full_name || 'System'
@@ -160,13 +174,26 @@ export function describeAuditEntry(entry) {
   // The authentication events are about the actor themselves, so naming the
   // "user #7" they acted on would be saying the same person twice.
   if (AUTH_ACTIONS.includes(entry.action)) {
-    const who = entry.user_full_name
-      || (entry.new_value || {}).username
-      || 'Someone'
-    const why = entry.result === 'Failure' && entry.reason ? ` (${entry.reason})` : ''
+    const nv = entry.new_value || {}
+    // A failed sign-in against a name nobody has, and a reset request for one,
+    // both have no user to resolve — so the only thing identifying them is
+    // what was typed. Without this the log shows a row of identical
+    // "Someone failed to sign in" lines, which is the shape of somebody
+    // working through a list of usernames and says nothing about which.
+    const who = entry.user_full_name || nv.username || nv.identifier || 'Someone'
+
     if (entry.action === 'PASSWORD_RESET') {
-      return `${actor} reset the password for "${(entry.new_value || {}).username || 'a user'}"`
+      // The one authentication event that is about somebody else: an
+      // administrator acting on another person's account.
+      return `${actor} reset the password for "${nv.username || 'a user'}"`
     }
+
+    // Only on a refused sign-in, where the reason says *why* it was refused —
+    // a wrong password, or an account that is suspended. The other events'
+    // reasons restate what the action already said.
+    const why = entry.action === 'LOGIN_FAILED' && entry.reason
+      ? ` (${entry.reason})`
+      : ''
     return `${who} ${phrase}${why}`
   }
 

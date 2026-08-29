@@ -14,6 +14,7 @@ import {
   AUTH_ACTIONS,
   PORTAL_ACTIONS,
   actionLabel,
+  actorLabel,
   describeAuditEntry,
   formatDateTime,
 } from './auditLog'
@@ -95,6 +96,36 @@ describe('describeAuditEntry', () => {
         reason: 'No account with that username',
       }),
     ).toBe('ghost failed to sign in (No account with that username)')
+  })
+
+  it('names the identifier typed into the reset form when it matched nobody', () => {
+    // Same gap as the failed sign-in above: the row has no user to resolve, so
+    // without the identifier the log reads "Someone requested a password
+    // reset" for every one of them — and a run of those is precisely what an
+    // administrator needs to be able to tell apart.
+    expect(
+      describeAuditEntry({
+        ...base,
+        action: 'PASSWORD_RESET_REQUESTED',
+        entity_type: 'User',
+        user_full_name: null,
+        result: 'Failure',
+        new_value: { identifier: 'admin.backup' },
+        reason: 'Password reset requested from the sign-in page',
+      }),
+    ).toBe('admin.backup requested a password reset')
+  })
+
+  it('does not repeat a reason that only restates the action', () => {
+    // The parenthetical earns its place on a refused sign-in, where the reason
+    // says why. On a reset request it restates the verb.
+    const text = describeAuditEntry({
+      ...base,
+      action: 'PASSWORD_RESET_REQUESTED',
+      entity_type: 'User',
+      reason: 'Password reset requested from the sign-in page',
+    })
+    expect(text).toBe('Maryam requested a password reset')
   })
 
   it('distinguishes an admin reset from someone changing their own password', () => {
@@ -202,5 +233,33 @@ describe('formatDateTime', () => {
   it('returns the input rather than throwing on something unparseable', () => {
     // Better a raw string in one cell than a blank Audit Log tab.
     expect(formatDateTime('not a date')).toBeTruthy()
+  })
+})
+
+describe('actorLabel', () => {
+  it('names the person when the row resolves to one', () => {
+    expect(actorLabel(base)).toBe('Maryam')
+  })
+
+  it('says System for a row a background task wrote', () => {
+    expect(actorLabel({ ...base, user_full_name: null })).toBe('System')
+  })
+
+  it('shows what was typed for an attempt against a name nobody has', () => {
+    // "System failed to sign in" is worse than no name at all: it reads as the
+    // platform doing something, when what happened is a person trying a
+    // username. It is also identical for every such row, which hides the one
+    // pattern worth seeing — somebody working through a list.
+    expect(
+      actorLabel({ ...base, user_full_name: null, new_value: { username: 'j.unknown' } }),
+    ).toBe('j.unknown')
+    expect(
+      actorLabel({ ...base, user_full_name: null, new_value: { identifier: 'admin.backup' } }),
+    ).toBe('admin.backup')
+  })
+
+  it('does not throw on an empty row', () => {
+    expect(actorLabel(null)).toBe('System')
+    expect(actorLabel({})).toBe('System')
   })
 })

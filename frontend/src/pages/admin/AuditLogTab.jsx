@@ -11,6 +11,7 @@ import {
   AUTH_ACTIONS,
   PORTAL_ACTIONS,
   actionLabel,
+  actorLabel,
   describeAuditEntry,
   formatDateTime,
 } from '../../lib/auditLog'
@@ -259,9 +260,13 @@ export default function AuditLogTab() {
                           {formatDateTime(e.created_at)}
                         </td>
                         <td style={{ fontWeight: 500 }}>
-                          {e.user_full_name || 'System'}
-                          {e.username && (
+                          {actorLabel(e)}
+                          {e.username ? (
                             <span className="dim" style={{ fontSize: 12 }}> · {e.username}</span>
+                          ) : e.user_id == null && (
+                            // No account resolved, so what is shown above is
+                            // what somebody typed, not who they are.
+                            <span className="dim" style={{ fontSize: 12 }}> · attempted</span>
                           )}
                         </td>
                         <td>
