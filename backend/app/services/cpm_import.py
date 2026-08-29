@@ -34,6 +34,7 @@ import json
 import pandas as pd
 from sqlalchemy.orm import Session, selectinload
 
+from app.core import audit_actions
 from app.models.acceptance import Acceptance, CpmChangeRequest, CpmImportBatch
 from app.services import acceptance_workflow
 from app.services.acceptance_workflow import SOURCE_APP as _APP_SOURCE
@@ -148,6 +149,7 @@ class CpmImportService:
         record_audit(
             self._db,
             user_id=self._user_id,
+            action=audit_actions.IMPORTED,
             module="CPM",
             entity_type="CpmImportBatch",
             entity_id=batch.id,

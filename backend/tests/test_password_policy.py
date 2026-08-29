@@ -85,10 +85,15 @@ def test_the_username_check_is_skipped_when_there_is_no_username():
 
 
 # ---------------------------------------------------------------------------
-# bcrypt's byte limit, which is a correctness matter rather than policy
+# The byte ceiling, which is a resource bound rather than policy
 # ---------------------------------------------------------------------------
-def test_a_password_past_bcrypts_limit_is_refused_rather_than_truncated():
-    """Silently truncating means two different passwords become one password."""
+def test_a_password_past_the_ceiling_is_refused():
+    """Hashing is deliberately expensive, so the input cannot be unbounded.
+
+    This endpoint is reachable without signing in, and Argon2id reads the whole
+    password -- an unlimited field is a way to make the server do arbitrary
+    work per request.
+    """
     too_long = "a" * (MAX_BYTES + 1)
     with pytest.raises(PasswordError, match="too long"):
         validate_password(too_long)
@@ -97,14 +102,30 @@ def test_a_password_past_bcrypts_limit_is_refused_rather_than_truncated():
 def test_the_limit_is_bytes_not_characters():
     """Persian is two bytes per character, and the message has to say so.
 
-    A 40-character Persian passphrase is already over bcrypt's limit while a
-    40-character Latin one is not. Refusing one and accepting the other without
-    explaining why would be baffling for this platform's users in particular.
+    The ceiling is a resource bound now rather than bcrypt's 72-byte cutoff --
+    Argon2id reads the whole password -- but it is still counted in bytes, so a
+    Persian passphrase reaches it at roughly half the visible length of a Latin
+    one. Refusing one and accepting the other without explaining why would be
+    baffling for this platform's users in particular.
     """
-    persian = "رمز" * 13  # 39 characters, 78 bytes
+    # Half as many characters as bytes, and one character past the limit.
+    persian = "رمز" * (MAX_BYTES // 6 + 1)
     assert len(persian) < MAX_BYTES < len(persian.encode("utf-8"))
     with pytest.raises(PasswordError, match="two bytes per character"):
         validate_password(persian)
+
+
+def test_a_passphrase_longer_than_bcrypt_would_take_is_now_accepted():
+    """Argon2id has no 72-byte cutoff, and the policy no longer pretends it does.
+
+    Under bcrypt this was refused, because everything past 72 bytes was ignored
+    by the hash and two different long passphrases could therefore be the same
+    password. That is not true of Argon2id, so refusing them would be a rule
+    with nothing behind it.
+    """
+    long_phrase = "correct horse battery staple grommet lantern winter harbour bell tower keys"
+    assert 72 < len(long_phrase.encode("utf-8")) <= MAX_BYTES
+    assert validate_password(long_phrase)
 
 
 def test_a_persian_phrase_within_the_limit_is_accepted():

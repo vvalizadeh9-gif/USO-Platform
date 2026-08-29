@@ -20,7 +20,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, Index, String
+from sqlalchemy import DateTime, ForeignKey, Index, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
@@ -66,3 +66,53 @@ class SpentCaptcha(Base):
     expires_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, index=True
     )
+
+
+class PasswordResetRequest(Base):
+    """Someone signed out saying they cannot get in.
+
+    This platform has no outbound mail. The usual "we sent you a link" reset is
+    therefore not available, and inventing one -- an SMTP server, a token
+    table, a public endpoint that mints credentials -- would be the largest new
+    attack surface in the system, added for a handful of internal users who all
+    know their administrator personally.
+
+    So the request is a message, not a credential. Someone who cannot sign in
+    says so from the login page; an administrator sees it in the console, checks
+    by whatever means they already use that the person is who they say, and
+    issues a temporary password through the ordinary admin reset. Nothing here
+    grants anything, which is what makes it safe to leave reachable without
+    authentication.
+
+    ``user_id`` is nullable and the submitted identifier is stored as typed:
+    the endpoint answers identically whether or not the account exists -- it
+    must not become a way to test which usernames are real -- so a request for
+    an unknown name is recorded rather than rejected, and an administrator can
+    see that someone has been guessing.
+    """
+
+    __tablename__ = "password_reset_requests"
+    __table_args__ = (
+        # The console's only read: the pending ones, newest first.
+        Index("ix_password_reset_requests_status_time", "status", "requested_at"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+
+    # What the person typed. Not trusted to be a username, or to exist.
+    submitted_identifier: Mapped[str] = mapped_column(String(255), nullable=False)
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+
+    requested_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    requested_ip: Mapped[str | None] = mapped_column(String(64))
+
+    # "Pending", "Completed" or "Dismissed". Completed is set by the admin
+    # password reset; Dismissed is an administrator saying "this was not a real
+    # request", which is the right answer to a name nobody recognises.
+    status: Mapped[str] = mapped_column(
+        String(20), default="Pending", nullable=False
+    )
+    handled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    handled_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"))

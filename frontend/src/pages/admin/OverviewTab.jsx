@@ -5,7 +5,7 @@ import {
 import { useEffect, useState } from 'react'
 import api from '../../api/client'
 import { Loading, fadeUp, stagger } from '../../components/ui'
-import { describeAuditEntry, formatDateTime } from '../../lib/auditLog'
+import { actorLabel, describeAuditEntry, formatDateTime } from '../../lib/auditLog'
 
 export default function OverviewTab({ onNavigateTab }) {
   const [stats, setStats] = useState(null)
@@ -182,7 +182,7 @@ function AuditLogPreview({ entries, onNavigateTab }) {
               {entries.map((e) => (
                 <tr key={e.id}>
                   <td className="dim tnum" style={{ fontSize: 12.5, whiteSpace: 'nowrap' }}>{formatDateTime(e.created_at)}</td>
-                  <td style={{ fontWeight: 500 }}>{e.user_full_name || 'System'}</td>
+                  <td style={{ fontWeight: 500 }}>{actorLabel(e)}</td>
                   <td className="muted" style={{ fontSize: 13 }}>{describeAuditEntry(e)}</td>
                 </tr>
               ))}

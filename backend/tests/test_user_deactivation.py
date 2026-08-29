@@ -117,7 +117,7 @@ def reviewer(client, admin_headers):
         json={
             "username": f"reviewer_{datetime.now(timezone.utc).timestamp()}",
             "password": REVIEWER_PASSWORD,
-            "full_name": "Maryam the Reviewer",
+            "first_name": "Maryam the", "family_name": "Reviewer",
             "role_id": _role_id("Coordinator"),
             "sees_all_provinces": False,
             "province_ids": provinces,
@@ -251,10 +251,10 @@ def test_the_deactivation_itself_is_attributable(client, admin_headers, reviewer
     client.delete(f"/api/v1/admin/users/{reviewer['id']}", headers=admin_headers)
 
     user = _user(reviewer["id"])
-    assert user.deactivated_by is not None
-    assert user.deactivated_at is not None
+    assert user.status_changed_by is not None
+    assert user.status_changed_at is not None
 
-    recorded = user.deactivated_at
+    recorded = user.status_changed_at
     if recorded.tzinfo is None:  # SQLite returns naive datetimes
         recorded = recorded.replace(tzinfo=timezone.utc)
     assert recorded >= before.replace(microsecond=0)
@@ -337,7 +337,7 @@ def test_the_last_administrator_cannot_be_deactivated(client, admin_login):
         json={
             "username": f"admin2_{datetime.now(timezone.utc).timestamp()}",
             "password": "second-admin-password",
-            "full_name": "Second Admin",
+            "first_name": "Second", "family_name": "Admin",
             "role_id": _role_id("Admin"),
             "sees_all_provinces": True,
             "province_ids": [],
@@ -356,16 +356,34 @@ def test_the_last_administrator_cannot_be_deactivated(client, admin_login):
     ).status_code == 400
 
 
-def test_patching_active_false_is_guarded_the_same_way_as_delete(client, admin_login):
-    """Setting active=false does the same thing, so it needs the same lock."""
+@pytest.mark.parametrize("blocked_status", ["Inactive", "Suspended"])
+def test_every_route_out_of_active_is_guarded_the_same_way_as_delete(
+    client, admin_login, blocked_status
+):
+    """Three ways to take an account offline, one lock.
+
+    DELETE, PATCH with a status, and the dedicated status route all end in the
+    same place, so a guard on one of them is a lock on one door of three.
+    Suspending the last administrator locks the platform exactly as thoroughly
+    as deactivating them, which is why both statuses are checked here.
+    """
     admin_headers = admin_login["headers"]
     me = admin_login["user"]
 
-    response = client.patch(
-        f"/api/v1/admin/users/{me['id']}", headers=admin_headers, json={"active": False}
+    patched = client.patch(
+        f"/api/v1/admin/users/{me['id']}",
+        headers=admin_headers,
+        json={"status": blocked_status},
     )
+    assert patched.status_code == 400, patched.text
 
-    assert response.status_code == 400
+    posted = client.post(
+        f"/api/v1/admin/users/{me['id']}/status",
+        headers=admin_headers,
+        json={"status": blocked_status},
+    )
+    assert posted.status_code == 400, posted.text
+
     assert _user(me["id"]).active is True
 
 
@@ -374,17 +392,18 @@ def test_reactivating_restores_access_and_clears_the_deactivation_record(
 ):
     client.delete(f"/api/v1/admin/users/{reviewer['id']}", headers=admin_headers)
 
-    response = client.patch(
-        f"/api/v1/admin/users/{reviewer['id']}",
+    response = client.post(
+        f"/api/v1/admin/users/{reviewer['id']}/status",
         headers=admin_headers,
-        json={"active": True},
+        json={"status": "Active"},
     )
     assert response.status_code == 200, response.text
 
     user = _user(reviewer["id"])
     assert user.active is True
-    assert user.deactivated_at is None, "a live account must not look deactivated"
-    assert user.deactivated_by is None
+    assert user.status == "Active"
+    assert user.status_changed_at is None, "a live account must not look deactivated"
+    assert user.status_changed_by is None
 
     signed_in = client.post(
         "/api/v1/auth/login",
@@ -396,14 +415,14 @@ def test_reactivating_restores_access_and_clears_the_deactivation_record(
 def test_deactivating_twice_keeps_the_original_record(client, admin_headers, reviewer):
     """The audit trail should name whoever actually did it, not the last caller."""
     client.delete(f"/api/v1/admin/users/{reviewer['id']}", headers=admin_headers)
-    first = _user(reviewer["id"]).deactivated_at
+    first = _user(reviewer["id"]).status_changed_at
 
     response = client.delete(
         f"/api/v1/admin/users/{reviewer['id']}", headers=admin_headers
     )
 
     assert response.status_code == 200
-    assert _user(reviewer["id"]).deactivated_at == first
+    assert _user(reviewer["id"]).status_changed_at == first
 
 
 def test_a_deactivated_user_is_still_listed_for_an_admin(client, admin_headers, reviewer):
@@ -415,4 +434,5 @@ def test_a_deactivated_user_is_still_listed_for_an_admin(client, admin_headers, 
 
     assert listed is not None
     assert listed["active"] is False
-    assert listed["deactivated_at"] is not None
+    assert listed["status"] == "Inactive"
+    assert listed["status_changed_at"] is not None

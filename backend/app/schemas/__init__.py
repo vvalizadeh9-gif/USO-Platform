@@ -6,11 +6,56 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from app.core.user_status import USER_STATUSES
+
 
 class ORMModel(BaseModel):
     """Base for schemas read from ORM objects."""
 
     model_config = ConfigDict(from_attributes=True)
+
+
+#: The closed set of account statuses, as a type. Built from the tuple in
+#: ``core/user_status.py`` rather than written out again, so the schema and the
+#: model cannot disagree about what a valid status is -- a typo becomes a 422
+#: naming the field instead of a row nobody can sign in as.
+UserStatusLiteral = Literal[USER_STATUSES]  # type: ignore[valid-type]
+
+
+class EmailStr(str):
+    """An email address, validated for shape and normalised to lower case.
+
+    Hand-rolled rather than pulled from ``email-validator``: that package
+    resolves MX records by default and carries an IDNA dependency tree, and
+    this platform runs on a server with no route to the public internet. What
+    is actually needed here is to catch a typo in an admin form -- an address
+    is a way to reach a colleague, not a credential and not something the
+    application ever sends to.
+    """
+
+    @classmethod
+    def __get_pydantic_core_schema__(cls, source, handler):
+        from pydantic_core import core_schema
+
+        return core_schema.no_info_after_validator_function(
+            cls._validate,
+            core_schema.str_schema(strip_whitespace=True, max_length=255),
+        )
+
+    @staticmethod
+    def _validate(value: str) -> str:
+        # Deliberately permissive: one @, something either side, a dot in the
+        # domain, no spaces. Anything stricter starts rejecting addresses that
+        # genuinely work, which is a worse failure than accepting one that does
+        # not -- nothing here depends on the address being deliverable.
+        local, _, domain = value.partition("@")
+        if not local or not domain or "@" in domain:
+            raise ValueError("Enter an email address, for example name@example.com")
+        if "." not in domain or domain.startswith(".") or domain.endswith("."):
+            raise ValueError("Enter an email address, for example name@example.com")
+        if any(c.isspace() for c in value):
+            raise ValueError("An email address cannot contain spaces")
+        return value.lower()
 
 
 # ---------- Auth ----------
@@ -99,17 +144,37 @@ class RoleOut(ORMModel):
 
 # ---------- Users ----------
 class UserOut(ORMModel):
+    """A user as every screen sees them.
+
+    There is no password field of any kind, and there never will be: the
+    plaintext does not exist anywhere to put in one, and the hash is not
+    something a browser has any use for.
+    """
+
     id: int
     username: str
+    first_name: str
+    family_name: str
+    # Derived from the two names above, not stored. Sent because roughly twenty
+    # places display a person's name and none of them should be assembling it
+    # themselves.
     full_name: str
+    email: str | None = None
     role: RoleOut
     contractor_id: int | None = None
     sees_all_provinces: bool
-    # False means deactivated: cannot sign in, but the account is kept so that
-    # audit entries and health-check reviews stay attributable to a real person.
+    # Active / Inactive / Suspended. See app/core/user_status.py.
+    status: str
+    # Whether this status permits signing in. Redundant with ``status`` today,
+    # and kept because it is what the interface actually branches on -- so a
+    # fourth status would not need every screen to relearn which ones count.
     active: bool
-    deactivated_at: datetime | None = None
-    deactivated_by: int | None = None
+    status_changed_at: datetime | None = None
+    status_changed_by: int | None = None
+    # True while the account is working off a temporary password an
+    # administrator issued, and can do nothing but replace it.
+    must_change_password: bool = False
+    last_login_at: datetime | None = None
     provinces: list[ProvinceOut] = []
 
 
@@ -119,12 +184,17 @@ class UserCreate(BaseModel):
     # as a 500 rather than a 422 naming the field.
     username: str = Field(min_length=1, max_length=80)
     password: str
-    full_name: str = Field(min_length=1, max_length=150)
+    first_name: str = Field(min_length=1, max_length=80)
+    family_name: str = Field(min_length=1, max_length=80)
+    # Optional, because some users genuinely have no work address. Validated
+    # for shape when given, so a typo is caught at the form rather than
+    # discovered when someone needs to reach that person about their account.
+    email: EmailStr | None = None
     role_id: int
     contractor_id: int | None = None
     sees_all_provinces: bool = False
     province_ids: list[int] = []
-
+    status: UserStatusLiteral = "Active"
 
     @model_validator(mode="after")
     def _policy(self) -> "UserCreate":
@@ -133,20 +203,109 @@ class UserCreate(BaseModel):
 
 
 class UserUpdate(BaseModel):
-    full_name: str | None = Field(default=None, min_length=1, max_length=150)
-    password: str | None = None
+    """The fields an administrator may change on someone else's account.
+
+    Note what is *not* here: ``username``, which is the identifier the audit
+    log and every reviewer column point at by name, and ``password``, which now
+    has its own endpoint. Password setting was folded into this general-purpose
+    update, which meant a routine "fix the spelling of their surname" request
+    and a credential reset were the same call, indistinguishable in the log
+    afterwards. They are separate operations and are now separate routes.
+
+    ``extra="forbid"`` so that a caller still sending ``password`` here gets a
+    422 naming the field rather than a 200 that quietly did not set it. On a
+    credential operation, silently ignoring the request is the worst of the
+    available answers: the administrator believes the password was changed, and
+    finds out otherwise from the person who cannot sign in.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    first_name: str | None = Field(default=None, min_length=1, max_length=80)
+    family_name: str | None = Field(default=None, min_length=1, max_length=80)
+    email: EmailStr | None = None
     role_id: int | None = None
     contractor_id: int | None = None
     sees_all_provinces: bool | None = None
     province_ids: list[int] | None = None
-    active: bool | None = None
+    status: UserStatusLiteral | None = None
+    # Why the status is changing. Optional for everything else, because a
+    # corrected surname explains itself; a suspension does not.
+    status_reason: str | None = Field(default=None, max_length=500)
+
+
+class UserStatusChange(BaseModel):
+    """Move one account between Active, Inactive and Suspended."""
+
+    status: UserStatusLiteral
+    reason: str | None = Field(default=None, max_length=500)
+
+
+class AdminPasswordReset(BaseModel):
+    """An administrator resetting somebody else's password.
+
+    ``password`` is optional and usually omitted: leaving it out has the server
+    generate one, which is the better path -- a password an administrator
+    invents for someone else tends to be a pattern they reuse for everyone
+    else. Supplying one is allowed for the case where it has to be read down a
+    phone line and the recipient needs it to be sayable.
+    """
+
+    password: str | None = None
+    reason: str | None = Field(default=None, max_length=500)
 
     @field_validator("password")
     @classmethod
     def _policy(cls, value: str | None) -> str | None:
-        # An admin setting someone else's password. The username is not in this
-        # payload; the endpoint adds that check, where the target is known.
+        # The username is not in this payload; the endpoint adds that check,
+        # where the target account is known.
         return _checked_password(value) if value is not None else None
+
+
+class AdminPasswordResetResult(BaseModel):
+    """What the administrator is shown once, and never again.
+
+    The temporary password is in the response body because this is the only
+    moment it exists in readable form -- what is stored is an Argon2id hash,
+    and nothing can turn that back into text. If the administrator loses it
+    before handing it over, the answer is another reset, not a lookup.
+    """
+
+    status: str = "ok"
+    username: str
+    temporary_password: str
+    must_change_password: bool = True
+
+
+class PasswordResetRequestIn(BaseModel):
+    """Someone on the sign-in page saying they cannot get in.
+
+    One free-text field, because the person typing it should not have to know
+    whether the platform identifies them by username or by email address.
+    """
+
+    identifier: str = Field(min_length=1, max_length=255)
+
+
+class PasswordResetRequestOut(ORMModel):
+    id: int
+    submitted_identifier: str
+    user_id: int | None = None
+    # Filled in by the endpoint when the identifier matched a real account, so
+    # the console can show a name rather than only what was typed.
+    user_full_name: str | None = None
+    username: str | None = None
+    requested_at: datetime
+    requested_ip: str | None = None
+    status: str
+    handled_at: datetime | None = None
+    handled_by: int | None = None
+
+
+class PasswordResetRequestDecision(BaseModel):
+    """Close a reset request that is not going to be actioned."""
+
+    reason: str | None = Field(default=None, max_length=500)
 
 
 # ---------- Work Item / Village ----------
@@ -813,17 +972,27 @@ class SystemHealthOut(BaseModel):
 
 
 class AuditLogOut(BaseModel):
+    """One audit entry, with the user resolved to a name.
+
+    The field order is the order the requirements list them in, and the order
+    the table renders: who, what, where, which record, when, what changed, from
+    where, and whether it worked.
+    """
+
     id: int
     user_id: int | None
     user_full_name: str | None = None
+    username: str | None = None
+    action: str
     module: str
     entity_type: str
     entity_id: int | None
+    created_at: datetime
     old_value: dict | None = None
     new_value: dict | None = None
     reason: str | None = None
     ip_address: str | None = None
-    created_at: datetime
+    result: str
 
 
 class AuditLogListOut(BaseModel):

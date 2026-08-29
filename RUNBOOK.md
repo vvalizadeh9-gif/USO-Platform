@@ -232,13 +232,20 @@ page. Sign in again.
 
 ### If you can still sign in as another administrator
 
-Use the application: **Admin → Users → Edit → set a new password**. That is the
-whole procedure, and it leaves an audit entry.
+Use the application: **Admin → Users → the key button on their row → Reset
+password**. It generates a temporary password, shows it once, and signs that
+account out everywhere. Hand it over; they will be asked to choose their own
+before they can use anything else.
+
+That is the whole procedure, and it leaves an audit entry naming you.
+
+> The temporary password is shown once and cannot be looked up afterwards —
+> what is stored is a hash. If it is lost before you pass it on, reset again.
 
 ### If nobody can sign in as an administrator
 
-Set the password directly in the database. It has to be stored as a bcrypt hash,
-so it is generated first.
+Set the password directly in the database. It has to be stored as an Argon2id
+hash, so it is generated first.
 
 **1. Generate the hash:**
 
@@ -250,29 +257,40 @@ print(hash_password('YOUR-NEW-PASSWORD-HERE'))
 ```
 
 Replace `YOUR-NEW-PASSWORD-HERE` with the real password. It prints a string
-starting `$2b$12$…`. Copy the whole thing.
+starting `$argon2id$…`. Copy the whole thing, including the dollar signs.
+
+> Older installations hold `$2b$12$…` (bcrypt) hashes. Those still work and are
+> rewritten as Argon2id the next time their owner signs in, so a mixture is
+> expected and is not a fault.
 
 **2. Apply it:**
 
 ```bash
 docker compose exec db psql -U uep -d uep -c \
-  "UPDATE users SET password_hash = 'PASTE-THE-HASH-HERE' WHERE username = 'admin';"
+  "UPDATE users SET password_hash = 'PASTE-THE-HASH-HERE', must_change_password = false
+   WHERE username = 'admin';"
 ```
 
 You want `UPDATE 1`. If it says `UPDATE 0`, the username is different — list them:
 
 ```bash
 docker compose exec db psql -U uep -d uep -c \
-  "SELECT id, username, full_name, active FROM users ORDER BY id;"
+  "SELECT id, username, first_name, family_name, status FROM users ORDER BY id;"
 ```
 
-**3. If the account is deactivated**, switch it back on:
+**3. If the account is not `Active`**, switch it back on. `status` is
+`Active`, `Inactive` or `Suspended`; only `Active` can sign in:
 
 ```bash
 docker compose exec db psql -U uep -d uep -c \
-  "UPDATE users SET active = true, deactivated_at = NULL, deactivated_by = NULL
+  "UPDATE users SET status = 'Active', status_changed_at = NULL, status_changed_by = NULL
    WHERE username = 'admin';"
 ```
+
+**4. Sessions.** The two statements above do not end sessions anybody else is
+holding — the application does that by bumping `token_version`, and a hand-run
+`UPDATE` does not. If you are doing this because an account was compromised,
+add `token_version = token_version + 1` to step 2.
 
 Then sign in.
 

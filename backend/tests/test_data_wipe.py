@@ -56,7 +56,7 @@ def test_wipe_requires_admin_role(client):
         json={
             "username": "coordwipe",
             "password": "Test-Fixture-Passphrase",
-            "full_name": "Coord Wipe",
+            "first_name": "Coord", "family_name": "Wipe",
             "role_id": next(
                 role["id"]
                 for role in client.get(

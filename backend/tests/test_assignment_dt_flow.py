@@ -69,7 +69,7 @@ def _login_as_role(client, role_name: str, username: str) -> str:
             json={
                 "username": username,
                 "password": "Test-Fixture-Passphrase",
-                "full_name": username,
+                "first_name": "Test", "family_name": username,
                 "role_id": role_id,
                 "sees_all_provinces": True,
                 "province_ids": [],

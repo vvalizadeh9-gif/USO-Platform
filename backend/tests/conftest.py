@@ -107,7 +107,7 @@ def login_as_role(client, admin_token: str, role_name: str) -> dict:
             json={
                 "username": username,
                 "password": password,
-                "full_name": f"Test {role_name}",
+                "first_name": "Test", "family_name": role_name,
                 "role_id": role_id,
                 "sees_all_provinces": True,
                 "province_ids": [],

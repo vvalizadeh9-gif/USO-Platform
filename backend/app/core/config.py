@@ -56,10 +56,17 @@ class Settings(BaseSettings):
     upload_dir: str = "/data/uploads"
     max_upload_mb: int = 20
 
-    # First admin bootstrapped on startup
+    # First admin bootstrapped on startup.
+    #
+    # ``first_admin_fullname`` is kept, rather than replaced by a pair of
+    # first/family settings, because it is an environment variable that real
+    # deployments already set -- renaming it would silently rename the platform
+    # administrator on the next restart. Bootstrap splits it, the same way the
+    # migration splits every other user's name.
     first_admin_username: str = "admin"
     first_admin_password: str = INSECURE_ADMIN_PASSWORD
     first_admin_fullname: str = "System Administrator"
+    first_admin_email: str | None = None
 
     # Comma-separated list of origins the browser may call the API from.
     # "*" is rejected in production: the API sends credentials, and a wildcard

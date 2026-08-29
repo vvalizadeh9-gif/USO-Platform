@@ -73,7 +73,7 @@ def _make_user(client, admin_h, username: str) -> int:
         json={
             "username": username,
             "password": PASSWORD,
-            "full_name": "Session Test",
+            "first_name": "Session", "family_name": "Test",
             "role_id": role_id,
             "sees_all_provinces": True,
             "province_ids": [],
@@ -93,6 +93,37 @@ def _still_works(client, headers) -> bool:
     return client.get("/api/v1/action-center", headers=headers).status_code == 200
 
 
+def _admin_reset(client, admin_h, user_id: int, password: str | None = None):
+    """Reset someone's password the way an administrator does.
+
+    Setting a password moved off ``PATCH /admin/users/{id}`` onto a route of
+    its own, so that a credential reset and "fix the spelling of their surname"
+    are distinguishable in the audit log afterwards. These tests care about the
+    session consequences, which are unchanged.
+    """
+    return client.post(
+        f"/api/v1/admin/users/{user_id}/reset-password",
+        headers=admin_h,
+        json={"password": password} if password else {},
+    )
+
+
+def _finish_reset(client, user_id: int, username: str, temporary: str) -> dict:
+    """Sign in on a temporary password and replace it, as the user would.
+
+    An admin reset leaves ``must_change_password`` set, so the account can do
+    nothing but this until it is done. Returns a working token afterwards.
+    """
+    headers = _token_for(client, username, temporary)
+    r = client.post(
+        "/api/v1/auth/me/password",
+        headers=headers,
+        json={"current_password": temporary, "new_password": NEW_PASSWORD},
+    )
+    assert r.status_code == 200, r.text
+    return {"Authorization": f"Bearer {r.json()['access_token']}"}
+
+
 # ---------------------------------------------------------------------------
 # H3 — a password change ends existing sessions
 # ---------------------------------------------------------------------------
@@ -103,11 +134,7 @@ def test_changing_a_password_invalidates_tokens_already_issued(client):
     stolen = _token_for(client, "si_compromised")
     assert _still_works(client, stolen), "the token should work before the reset"
 
-    r = client.patch(
-        f"/api/v1/admin/users/{user_id}",
-        headers=admin_h,
-        json={"password": NEW_PASSWORD},
-    )
+    r = _admin_reset(client, admin_h, user_id, NEW_PASSWORD)
     assert r.status_code == 200, r.text
 
     assert not _still_works(client, stolen), (
@@ -117,17 +144,25 @@ def test_changing_a_password_invalidates_tokens_already_issued(client):
 
 
 def test_the_user_can_sign_in_again_with_the_new_password(client):
+    """And the reset password only gets them as far as replacing it.
+
+    The temporary credential is one two people know -- the administrator who
+    issued it and the person they gave it to -- so it buys exactly enough
+    access to replace itself. The account works normally once it has.
+    """
     admin_h = _admin(client)
     user_id = _make_user(client, admin_h, "si_reset_then_login")
     _token_for(client, "si_reset_then_login")
 
-    client.patch(
-        f"/api/v1/admin/users/{user_id}",
-        headers=admin_h,
-        json={"password": NEW_PASSWORD},
+    temporary = "Session-Test-Temporary-1"
+    assert _admin_reset(client, admin_h, user_id, temporary).status_code == 200
+
+    on_temporary = _token_for(client, "si_reset_then_login", temporary)
+    assert not _still_works(client, on_temporary), (
+        "a temporary password must not be usable as an ordinary session"
     )
 
-    fresh = _token_for(client, "si_reset_then_login", NEW_PASSWORD)
+    fresh = _finish_reset(client, user_id, "si_reset_then_login", temporary)
     assert _still_works(client, fresh)
 
 
@@ -137,11 +172,7 @@ def test_resetting_one_password_does_not_sign_anyone_else_out(client):
     _make_user(client, admin_h, "si_bystander")
 
     bystander = _token_for(client, "si_bystander")
-    client.patch(
-        f"/api/v1/admin/users/{target_id}",
-        headers=admin_h,
-        json={"password": NEW_PASSWORD},
-    )
+    _admin_reset(client, admin_h, target_id, NEW_PASSWORD)
     assert _still_works(client, bystander), (
         "rotating one account's sessions must not rotate everybody's -- that "
         "was the only tool available before token_version existed"
@@ -156,7 +187,7 @@ def test_an_unrelated_edit_does_not_sign_the_user_out(client):
     r = client.patch(
         f"/api/v1/admin/users/{user_id}",
         headers=admin_h,
-        json={"full_name": "Renamed Person"},
+        json={"first_name": "Renamed", "family_name": "Person"},
     )
     assert r.status_code == 200, r.text
     assert _still_works(client, token), "only a credential change ends sessions"
@@ -259,11 +290,7 @@ def test_auth_me_refuses_an_invalidated_token(client):
     user_id = _make_user(client, admin_h, "si_me_stale")
     token = _token_for(client, "si_me_stale")
 
-    client.patch(
-        f"/api/v1/admin/users/{user_id}",
-        headers=admin_h,
-        json={"password": NEW_PASSWORD},
-    )
+    _admin_reset(client, admin_h, user_id, NEW_PASSWORD)
     assert client.get("/api/v1/auth/me", headers=token).status_code == 401
 
 

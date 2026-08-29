@@ -3,9 +3,11 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, String, Table, Column, Integer
+from sqlalchemy import Boolean, DateTime, ForeignKey, String, Table, Column, Integer, func
+from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
+from app.core import user_status
 from app.core.database import Base
 
 
@@ -82,12 +84,35 @@ user_province_access = Table(
 
 
 class User(Base):
+    """A person who signs in to the platform.
+
+    Rows are never deleted. ``audit_logs.user_id``, ``hc_tasks.reviewed_by`` and
+    both reviewer columns on ``work_items`` point here, so removing a user turns
+    every health check they signed off into one reviewed by nobody -- the
+    accountability trail goes anonymous exactly where it matters most. Ending
+    someone's access is a :attr:`status` change; see ``core/user_status.py``.
+    """
+
     __tablename__ = "users"
 
     id: Mapped[int] = mapped_column(primary_key=True)
     username: Mapped[str] = mapped_column(String(80), unique=True, nullable=False)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
-    full_name: Mapped[str] = mapped_column(String(150), nullable=False)
+
+    # Stored as two fields rather than one "full name", because they are two
+    # facts. Letters address a person by family name, the operational reports
+    # sort by it, and a single string forces every one of those to guess where
+    # the boundary is -- a guess that is wrong for a good share of Persian
+    # names. ``full_name`` below is derived, so nothing that reads it changed.
+    first_name: Mapped[str] = mapped_column(String(80), nullable=False)
+    family_name: Mapped[str] = mapped_column(String(80), nullable=False)
+
+    # How an administrator reaches this person outside the platform -- to hand
+    # over a temporary password, or to ask about an account they are about to
+    # suspend. Optional, because the deployment has users who genuinely have no
+    # work address, and unique when present, so two accounts cannot claim the
+    # same mailbox. Not a login identifier: ``username`` remains the only one.
+    email: Mapped[str | None] = mapped_column(String(255), unique=True)
 
     role_id: Mapped[int] = mapped_column(ForeignKey("roles.id"), nullable=False)
     role: Mapped[Role] = relationship(back_populates="users")
@@ -103,17 +128,27 @@ class User(Base):
         Boolean, default=False, nullable=False
     )
 
-    # False means deactivated. Deactivated users cannot sign in and receive no
-    # new notifications, but the row itself is never removed: audit_logs,
-    # hc_tasks.reviewed_by and work_items.*_reviewed_by all point at users, and
-    # deleting the row would turn "reviewed by Maryam" into "reviewed by nobody"
-    # across the whole history. Over a ten-year platform, staff turnover makes
-    # that certain.
-    active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    # Active / Inactive / Suspended. See ``core/user_status.py`` for what each
+    # means and why this replaced a boolean.
+    status: Mapped[str] = mapped_column(
+        String(20), default=user_status.ACTIVE, nullable=False, index=True
+    )
 
-    # Who deactivated this account, and when. Both are cleared on reactivation.
-    deactivated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    deactivated_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+    # Who last moved this account between statuses, and when. Cleared on the
+    # way back to Active, so a live account never carries a stale "suspended by
+    # X on Y" -- the audit log is where the history of those moves lives.
+    status_changed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True)
+    )
+    status_changed_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+
+    # Set when an administrator resets the password to a temporary value. While
+    # it is true the account can do exactly two things -- read its own profile
+    # and set a new password -- so the credential the administrator saw is
+    # never the one that stays on the account. Cleared by that password change.
+    must_change_password: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False
+    )
 
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
@@ -125,6 +160,44 @@ class User(Base):
     # and the only way to end it was rotating JWT_SECRET_KEY, which signs out
     # every user in the platform.
     token_version: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+
+    @hybrid_property
+    def full_name(self) -> str:
+        """The person's name as one string, for display and for letters.
+
+        Derived rather than stored. It used to be the only name column, and
+        roughly twenty places read it -- the sidebar, the audit log, the CPM
+        import summary, the acceptance letters. Keeping it as a property means
+        splitting the column underneath changed none of them, and there is no
+        second copy of the name to drift out of step with the first.
+        """
+        return f"{self.first_name} {self.family_name}".strip()
+
+    @full_name.inplace.expression
+    @classmethod
+    def _full_name_expression(cls):
+        """The same value in SQL, so it can still be selected and ordered by.
+
+        ``+`` on two String columns compiles to the dialect's concatenation
+        operator, which is ``||`` on both PostgreSQL and SQLite.
+        """
+        return func.trim(cls.first_name + " " + cls.family_name)
+
+    @hybrid_property
+    def active(self) -> bool:
+        """Whether this account may sign in.
+
+        The boolean this replaced was a column; it is now a reading of
+        :attr:`status`. Kept because "is this user active" is genuinely the
+        question most callers are asking, and spelling it out at each of them
+        would put the definition of Active in a dozen places.
+        """
+        return user_status.may_sign_in(self.status)
+
+    @active.inplace.expression
+    @classmethod
+    def _active_expression(cls):
+        return cls.status.in_(user_status.SIGN_IN_STATUSES)
 
     provinces: Mapped[list[Province]] = relationship(
         secondary=user_province_access, lazy="selectin"

@@ -14,6 +14,7 @@ authorises, and holds no rules of its own.
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
+from app.core import audit_actions
 from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.models.reference import User
@@ -594,7 +595,8 @@ def create_submission(
 
     db.flush()
     record_audit(
-        db, user_id=user.id, module="Acceptance",
+        db, user_id=user.id, action=audit_actions.SUBMITTED,
+        module="Acceptance",
         entity_type="AcceptanceSubmission", entity_id=submission.id,
         new_value={
             "village_id": village_id,
@@ -738,7 +740,8 @@ def create_bulk_submissions(
             )
 
     record_audit(
-        db, user_id=user.id, module="Acceptance",
+        db, user_id=user.id, action=audit_actions.SUBMITTED,
+        module="Acceptance",
         entity_type="AcceptanceSubmission", entity_id=None,
         new_value={
             "authority": request.authority,
@@ -806,7 +809,8 @@ def update_submission(
 
     db.flush()
     record_audit(
-        db, user_id=user.id, module="Acceptance",
+        db, user_id=user.id, action=audit_actions.UPDATED,
+        module="Acceptance",
         entity_type="AcceptanceSubmission", entity_id=submission.id,
         old_value={"claims": before},
         new_value={
@@ -833,7 +837,8 @@ def withdraw_submission(
         raise HTTPException(400, str(exc)) from None
 
     record_audit(
-        db, user_id=user.id, module="Acceptance",
+        db, user_id=user.id, action=audit_actions.UPDATED,
+        module="Acceptance",
         entity_type="AcceptanceSubmission", entity_id=submission.id,
         new_value={"review_status": submission.review_status},
     )
@@ -871,7 +876,13 @@ def review_submission(
 
     village = submission.village
     record_audit(
-        db, user_id=user.id, module="Acceptance",
+        db, user_id=user.id,
+        action=(
+            audit_actions.APPROVED
+            if submission.review_status == "Approved"
+            else audit_actions.REJECTED
+        ),
+        module="Acceptance",
         entity_type="AcceptanceSubmission", entity_id=submission.id,
         new_value={
             "review_status": submission.review_status,

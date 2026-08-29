@@ -55,7 +55,7 @@ def _make_user(client, admin_h, username: str, role: str) -> int:
         json={
             "username": username,
             "password": PASSWORD,
-            "full_name": f"Test {username}",
+            "first_name": "Test", "family_name": username,
             "role_id": _role_id(client, admin_h, role),
             "sees_all_provinces": True,
             "province_ids": [],
@@ -151,7 +151,7 @@ def test_a_forwarded_address_is_what_gets_recorded(client):
         json={
             "username": "ig_forwarded",
             "password": PASSWORD,
-            "full_name": "Forwarded",
+            "first_name": "For", "family_name": "Warded",
             "role_id": _role_id(client, admin_h, "Viewer"),
             "sees_all_provinces": True,
             "province_ids": [],

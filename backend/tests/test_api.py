@@ -105,7 +105,7 @@ def test_rbac_contractor_cannot_assign(client):
         json={
             "username": "coord1",
             "password": "Test-Fixture-Passphrase",
-            "full_name": "Coord One",
+            "first_name": "Coord", "family_name": "One",
             "role_id": coord_role["id"],
             "sees_all_provinces": True,
             "province_ids": [],

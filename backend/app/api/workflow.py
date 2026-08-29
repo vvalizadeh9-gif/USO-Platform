@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core import audit_actions
 from app.core.database import get_db
 from app.core.deps import (
     COORDINATOR,
@@ -128,7 +129,8 @@ def submit_health_check(
     db.flush()
     refresh_stage(wi)
     record_audit(
-        db, user_id=user.id, module="HealthCheck", entity_type="WorkItem",
+        db, user_id=user.id, action=audit_actions.SUBMITTED,
+        module="HealthCheck", entity_type="WorkItem",
         entity_id=wi.id, new_value={"status": payload.status},
     )
     notify_roles(db, role_names=[PM], type="HealthCheckCompleted",
@@ -166,7 +168,8 @@ def create_assignment(
     db.flush()
     refresh_stage(wi)
     record_audit(
-        db, user_id=user.id, module="Assignment", entity_type="WorkItem",
+        db, user_id=user.id, action=audit_actions.ASSIGNED,
+        module="Assignment", entity_type="WorkItem",
         entity_id=wi.id, new_value={"contractor_id": payload.contractor_id},
     )
     db.commit()
@@ -200,7 +203,8 @@ def return_to_coordinator(
     db.flush()
     refresh_stage(wi)
     record_audit(
-        db, user_id=user.id, module="Assignment", entity_type="WorkItem",
+        db, user_id=user.id, action=audit_actions.RETURNED,
+        module="Assignment", entity_type="WorkItem",
         entity_id=wi.id, new_value={"returned": True, "reason": payload.reason},
     )
     notify_roles(
@@ -250,7 +254,8 @@ def bulk_assign(
         assigned += 1
 
     record_audit(
-        db, user_id=user.id, module="Assignment", entity_type="WorkItemBulk",
+        db, user_id=user.id, action=audit_actions.ASSIGNED,
+        module="Assignment", entity_type="WorkItemBulk",
         entity_id=payload.contractor_id,
         new_value={"contractor_id": payload.contractor_id, "count": assigned},
     )
@@ -285,7 +290,8 @@ def submit_drive_test(
     db.flush()
     refresh_stage(wi)
     record_audit(
-        db, user_id=user.id, module="DriveTest", entity_type="WorkItem",
+        db, user_id=user.id, action=audit_actions.SUBMITTED,
+        module="DriveTest", entity_type="WorkItem",
         entity_id=wi.id, new_value={"drive_test_id": dt.id},
     )
     notify_roles(db, role_names=[COORDINATOR], type="DTSubmitted",
@@ -331,7 +337,12 @@ def coordinator_review(
         wi.dt_problem_category = None
     refresh_stage(wi)
     record_audit(
-        db, user_id=user.id, module="DriveTest", entity_type="DriveTest",
+        db, user_id=user.id,
+        action=(
+            audit_actions.APPROVED if payload.decision == "Approved"
+            else audit_actions.REJECTED
+        ),
+        module="DriveTest", entity_type="DriveTest",
         entity_id=dt.id, new_value={"coordinator_decision": payload.decision},
     )
     if payload.decision != "Approved":
@@ -376,7 +387,8 @@ def update_acceptance(
     # — otherwise My Work would keep showing the village where it used to be.
     acceptance_flow.recompute_authority_statuses(db, [village])
     record_audit(
-        db, user_id=user.id, module="Acceptance", entity_type="Acceptance",
+        db, user_id=user.id, action=audit_actions.UPDATED,
+        module="Acceptance", entity_type="Acceptance",
         entity_id=acc.id, old_value=old,
         new_value={"ict": acc.ict_status, "cra": acc.cra_status},
     )
