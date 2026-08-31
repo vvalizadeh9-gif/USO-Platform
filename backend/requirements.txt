@@ -3,12 +3,12 @@
 # every request passes through. Clearing those requires moving FastAPI, so the
 # two are upgraded together.
 fastapi==0.141.1
-uvicorn[standard]==0.34.0
-sqlalchemy==2.0.36
-psycopg[binary]==3.2.3
-alembic==1.14.0
-pydantic==2.10.4
-pydantic-settings==2.7.0
+uvicorn[standard]==0.52.4
+sqlalchemy==2.0.52
+psycopg[binary]==3.3.4
+alembic==1.19.1
+pydantic==2.13.5
+pydantic-settings==2.15.0
 # 2.10.1 carried eleven advisories, in the library that validates every access
 # token this platform issues.
 PyJWT==2.13.0
