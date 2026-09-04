@@ -1,0 +1,887 @@
+/* ===================================================================
+   USO Enterprise Platform — base component layer
+   -------------------------------------------------------------------
+   The design-system primitives, plus the application shell.
+
+   These classes are the contract that components/ui.jsx renders and that
+   every screen already uses by name (`card`, `btn`, `pill`, `input`,
+   `table-wrap`). They are deliberately generic: nothing here knows about
+   work items, health checks or acceptance.
+
+   Screen-specific shapes belong in screens.css.
+   =================================================================== */
+
+/* ===================================================================
+   Application shell
+   =================================================================== */
+
+.app-shell {
+  display: grid;
+  grid-template-columns: 240px 1fr;
+  min-height: 100vh;
+  position: relative;
+  z-index: 1;
+}
+
+.sidebar {
+  background: var(--surface-1);
+  border-right: 1px solid var(--border);
+  padding: 18px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 8px 18px;
+}
+/* A bordered plate rather than a gradient chip: the mark should read as
+   part of the instrument, and light-on-emerald was never legible. */
+.brand-mark {
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius-sm);
+  background: var(--signal-glow);
+  border: 1px solid rgba(52, 211, 153, 0.28);
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+.brand-mark span {
+  font-family: var(--font-display);
+  font-weight: 700;
+  color: var(--signal-strong);
+  font-size: 14px;
+}
+.brand-text b {
+  font-family: var(--font-display);
+  font-size: 14px;
+  display: block;
+  letter-spacing: -0.02em;
+  color: var(--text-strong);
+}
+.brand-text small {
+  color: var(--text-dim);
+  font-size: 10.5px;
+  letter-spacing: 0.05em;
+}
+
+.nav-section-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.13em;
+  color: var(--text-dim);
+  font-weight: 600;
+  padding: 16px 10px 6px;
+}
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 10px;
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  font-weight: 500;
+  font-size: 13px;
+  transition: background 0.14s, color 0.14s;
+  position: relative;
+}
+.nav-item:hover { background: var(--hover); color: var(--text); }
+.nav-item.active {
+  background: var(--signal-glow);
+  color: var(--signal-strong);
+}
+.nav-item.active::before {
+  content: '';
+  position: absolute;
+  left: -12px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 2px;
+  height: 18px;
+  background: var(--signal);
+  border-radius: 0 2px 2px 0;
+}
+.nav-item .badge {
+  margin-left: auto;
+  background: var(--signal-glow);
+  border: 1px solid rgba(52, 211, 153, 0.3);
+  color: var(--signal-strong);
+  font-size: 10.5px;
+  font-weight: 600;
+  padding: 0 6px;
+  border-radius: 3px;
+  font-variant-numeric: tabular-nums;
+}
+
+.sidebar-footer {
+  margin-top: auto;
+  padding: 10px;
+  border-top: 1px solid var(--border-soft);
+}
+.user-chip { display: flex; align-items: center; gap: 9px; }
+.user-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-3);
+  display: grid;
+  place-items: center;
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.user-chip .who { flex: 1; min-width: 0; }
+.user-chip .who b {
+  font-size: 12.5px;
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text);
+}
+.user-chip .who small { color: var(--text-dim); font-size: 11px; }
+.logout-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  padding: 6px;
+  border-radius: var(--radius-sm);
+  display: grid;
+  place-items: center;
+  transition: color 0.15s, background 0.15s;
+}
+.logout-btn:hover { color: var(--red); background: var(--red-dim); }
+
+.main {
+  padding: 24px 30px 60px;
+  max-width: 1680px;
+  width: 100%;
+}
+
+.page-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  margin-bottom: 20px;
+  gap: 20px;
+}
+.page-head .eyebrow {
+  font-size: 10.5px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--signal);
+  font-weight: 600;
+  margin-bottom: 5px;
+}
+.page-head h1 { font-size: 23px; }
+.page-head p {
+  color: var(--text-muted);
+  margin-top: 4px;
+  max-width: 66ch;
+  font-size: 13px;
+}
+
+/* ===================================================================
+   Card — Layer 1
+   =================================================================== */
+
+.card {
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-1);
+  position: relative;
+}
+.card-pad { padding: 16px; }
+
+/* Optional top accent. A 2px rule inset from the corners so it reads as
+   a state marker on the panel, not as a coloured lid. */
+.card[data-accent]::before {
+  content: '';
+  position: absolute;
+  top: -1px;
+  left: -1px;
+  right: -1px;
+  height: 2px;
+  border-radius: var(--radius) var(--radius) 0 0;
+  background: var(--accent, var(--signal));
+}
+.card[data-accent='signal'] { --accent: var(--signal); }
+.card[data-accent='green'] { --accent: var(--green); }
+.card[data-accent='amber'] { --accent: var(--amber); }
+.card[data-accent='red'] { --accent: var(--red); }
+.card[data-accent='blue'] { --accent: var(--blue); }
+.card[data-accent='violet'] { --accent: var(--violet); }
+.card[data-accent='neutral'] { --accent: var(--border-strong); }
+
+.grid { display: grid; gap: 12px; }
+.grid-kpi { grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); }
+
+/* KPI stat card */
+.stat {
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 15px 16px;
+  position: relative;
+  overflow: hidden;
+  box-shadow: var(--shadow-1);
+}
+.stat::after {
+  content: '';
+  position: absolute;
+  right: -34px;
+  top: -34px;
+  width: 96px;
+  height: 96px;
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--accent-glow, var(--signal-glow)), transparent 70%);
+  pointer-events: none;
+}
+.stat .label {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.stat .value {
+  font-family: var(--font-display);
+  font-size: 30px;
+  font-weight: 600;
+  margin-top: 8px;
+  letter-spacing: -0.025em;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-strong);
+  line-height: 1.15;
+}
+.stat .sub { font-size: 11.5px; color: var(--text-dim); margin-top: 3px; }
+
+/* A KPI carries its accent as a top rule and a matching corner glow, so a
+   grid of four reads as four measures rather than four boxes. */
+.stat[data-accent] { border-top: 2px solid var(--accent, var(--signal)); }
+.stat[data-accent='signal'] { --accent: var(--signal); --accent-glow: var(--signal-glow); }
+.stat[data-accent='green'] { --accent: var(--green); --accent-glow: var(--green-dim); }
+.stat[data-accent='amber'] { --accent: var(--amber); --accent-glow: var(--amber-dim); }
+.stat[data-accent='red'] { --accent: var(--red); --accent-glow: var(--red-dim); }
+.stat[data-accent='blue'] { --accent: var(--blue); --accent-glow: var(--blue-dim); }
+.stat[data-accent='violet'] { --accent: var(--violet); --accent-glow: var(--violet-dim); }
+.stat[data-accent='neutral'] { --accent: var(--border-strong); --accent-glow: var(--neutral-dim); }
+
+/* ===================================================================
+   Button
+   =================================================================== */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 7px 13px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text);
+  font-weight: 500;
+  font-size: 13px;
+  line-height: 1.3;
+  white-space: nowrap;
+  transition: background 0.13s, border-color 0.13s, color 0.13s, transform 0.1s;
+}
+.btn:hover:not(:disabled) {
+  background: var(--surface-3);
+  border-color: var(--border-strong);
+  color: var(--text-strong);
+}
+.btn:active:not(:disabled) { transform: translateY(1px); }
+.btn:disabled { opacity: 0.45; cursor: not-allowed; }
+/* A button that is working is disabled, but it is not unavailable — it must
+   stay readable, and say so with the cursor. */
+.btn[aria-busy='true']:disabled { opacity: 0.82; cursor: progress; }
+
+.btn-primary {
+  background: var(--signal);
+  border-color: var(--signal);
+  color: var(--signal-ink);
+  font-weight: 600;
+}
+.btn-primary:hover:not(:disabled) {
+  background: var(--signal-strong);
+  border-color: var(--signal-strong);
+  color: var(--signal-ink);
+}
+
+.btn-danger {
+  background: var(--red);
+  border-color: var(--red);
+  color: var(--red-ink);
+  font-weight: 600;
+}
+.btn-danger:hover:not(:disabled) {
+  background: var(--red-strong);
+  border-color: var(--red-strong);
+  color: var(--red-ink);
+}
+
+.btn-ghost {
+  background: transparent;
+  border-color: transparent;
+  color: var(--text-muted);
+}
+.btn-ghost:hover:not(:disabled) {
+  background: var(--hover);
+  border-color: transparent;
+  color: var(--text);
+}
+
+.btn-sm { padding: 5px 10px; font-size: 12.5px; }
+.btn-icon { padding: 6px; }
+
+/* The spinner inside a button borrows the button's own ink, so it works
+   on a filled primary and on a ghost without a second rule. */
+.btn .spinner {
+  width: 13px;
+  height: 13px;
+  border-width: 1.5px;
+  border-color: currentColor transparent currentColor currentColor;
+  opacity: 0.85;
+}
+
+/* ===================================================================
+   Table — an operational list, not a spreadsheet.
+
+   No vertical rules anywhere: columns are separated by alignment and
+   whitespace. Rows are separated by a slate-800/40 hairline. The header
+   is frosted and sticky, so it survives a long scroll — sticking
+   resolves against the nearest scroll container, so a screen that wants
+   a fixed header gives .table-wrap a max-height (the Table primitive
+   takes a `maxHeight` prop for exactly this).
+   =================================================================== */
+
+.table-wrap {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: auto;
+  background: var(--surface-1);
+  box-shadow: var(--shadow-1);
+}
+
+table { width: 100%; border-collapse: collapse; }
+
+thead th {
+  text-align: left;
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  color: var(--text-dim);
+  font-weight: 600;
+  padding: 9px 14px;
+  background: rgba(15, 23, 42, 0.86);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+tbody td {
+  padding: 9px 14px;
+  border-bottom: 1px solid var(--border-soft);
+  font-size: 13px;
+  vertical-align: middle;
+}
+tbody tr { transition: background 0.12s; }
+tbody tr:hover { background: var(--hover); }
+tbody tr:last-child td { border-bottom: none; }
+
+/* High-density variant: ~34px rows, for the operational queues. */
+.is-dense tbody td { padding: 6px 12px; font-size: 12.5px; }
+.is-dense thead th { padding: 7px 12px; }
+
+/* A selected row is stated twice — a tint and an inline-start marker —
+   so selection survives a monochrome screen. */
+tbody tr.is-selected { background: var(--signal-glow); }
+tbody tr.is-selected:hover { background: rgba(52, 211, 153, 0.16); }
+tbody tr.is-selected > td:first-child { box-shadow: inset 2px 0 0 var(--signal); }
+
+tbody tr.is-clickable { cursor: pointer; }
+tbody tr.is-clickable:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: -2px;
+}
+
+/* The primary scanning column: a site ID has to win the row. */
+.cell-primary {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  font-size: 12.5px;
+  letter-spacing: 0.01em;
+  color: var(--text-strong);
+  direction: ltr;
+  unicode-bidi: isolate;
+  white-space: nowrap;
+}
+.cell-meta {
+  font-size: 11px;
+  color: var(--text-dim);
+  margin-top: 1px;
+}
+.cell-num { font-variant-numeric: tabular-nums; text-align: right; }
+
+/* ===================================================================
+   Badge / status pill
+
+   Colour is the fast read, never the only one: the label is always
+   present, and the indicator distinguishes a settled state (solid dot)
+   from one still in flight (ring).
+   =================================================================== */
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 8px;
+  border-radius: 3px;
+  border: 1px solid transparent;
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 1.55;
+  white-space: nowrap;
+}
+.pill::before {
+  content: '';
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+  flex-shrink: 0;
+}
+
+.pill-green {
+  background: var(--green-dim);
+  border-color: rgba(52, 211, 153, 0.24);
+  color: var(--green);
+}
+.pill-cyan {
+  background: var(--signal-glow);
+  border-color: rgba(52, 211, 153, 0.24);
+  color: var(--signal);
+}
+.pill-amber {
+  background: var(--amber-dim);
+  border-color: rgba(251, 191, 36, 0.24);
+  color: var(--amber);
+}
+.pill-red {
+  background: var(--red-dim);
+  border-color: rgba(251, 113, 133, 0.26);
+  color: var(--red);
+}
+.pill-blue {
+  background: var(--blue-dim);
+  border-color: rgba(96, 165, 250, 0.26);
+  color: var(--blue);
+}
+.pill-violet {
+  background: var(--violet-dim);
+  border-color: rgba(167, 139, 250, 0.26);
+  color: var(--violet);
+}
+.pill-dim {
+  background: var(--neutral-dim);
+  border-color: var(--border);
+  color: var(--text-muted);
+}
+
+/* In flight — a ring, not a disc. */
+.pill-amber::before,
+.pill-violet::before,
+.pill-blue::before {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px currentColor;
+}
+/* Settled and consequential — the dot carries a faint halo. */
+.pill-green::before { box-shadow: 0 0 0 2px var(--green-dim); }
+.pill-red::before { box-shadow: 0 0 0 2px var(--red-dim); }
+
+/* Small enough to ride inside a queue row without setting its height. */
+.pill-xs { font-size: 10.5px; padding: 1px 6px; }
+.pill-xs::before { width: 4px; height: 4px; }
+
+/* ===================================================================
+   Fields
+   =================================================================== */
+
+.field { display: flex; flex-direction: column; gap: 5px; margin-bottom: 13px; }
+.field label {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+.field-req { color: var(--red); margin-left: 2px; }
+
+.input, select.input, textarea.input {
+  background: var(--field);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 8px 11px;
+  color: var(--text);
+  text-align: start;
+  transition: border-color 0.14s, box-shadow 0.14s, background 0.14s;
+  width: 100%;
+}
+.input:hover:not(:disabled):not(:focus) { border-color: var(--border-strong); }
+.input:focus, select.input:focus, textarea.input:focus {
+  outline: none;
+  border-color: var(--signal);
+  box-shadow: 0 0 0 3px var(--signal-glow);
+  background: var(--surface-1);
+}
+.input::placeholder { color: var(--text-dim); opacity: 1; }
+.input:disabled, .input[aria-disabled='true'] {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background: var(--surface-2);
+}
+.input-error, .input-error:focus { border-color: var(--red); }
+.input-error:focus { box-shadow: 0 0 0 3px var(--red-dim); }
+
+/* A technical field — reference codes, IDs, one-time values. */
+/* A technical field: "1404/ص/4471" mixes Latin digits with an Arabic letter,
+   and the bidi algorithm would display it as "1404/4471/ص" — correct for
+   Arabic prose, wrong for an opaque reference code someone will read out over
+   the phone. Override pins every character into the order it was typed; this
+   is the editable counterpart of components/LetterRef.jsx. */
+.input-mono {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+  unicode-bidi: isolate-override;
+}
+
+select.input {
+  appearance: none;
+  padding-right: 30px;
+  background-image: linear-gradient(45deg, transparent 50%, var(--text-dim) 50%),
+    linear-gradient(135deg, var(--text-dim) 50%, transparent 50%);
+  background-position: calc(100% - 15px) 52%, calc(100% - 10px) 52%;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+}
+/* The popup is painted by the OS; color-scheme: dark handles the shell,
+   but the option rows need telling on Windows. */
+select.input option { background: var(--surface-1); color: var(--text); }
+
+.field-error { font-size: 11.5px; color: var(--red); font-weight: 500; }
+.field-warning { font-size: 11.5px; color: var(--amber); font-weight: 500; }
+.field-hint { font-size: 11.5px; color: var(--text-dim); }
+
+/* Inputs with an inline trailing action (e.g. show/hide password) */
+.input-with-action { position: relative; display: flex; }
+.input-with-action .input { padding-right: 38px; }
+.input-action-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: color 0.15s, background 0.15s;
+}
+.input-with-action .input-action-btn {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 28px;
+  height: 28px;
+}
+.input-action-btn:hover { color: var(--text); background: var(--hover); }
+.input-action-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.captcha-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.captcha-label-row label { flex: 1; }
+.captcha-label-row .input-action-btn { width: 24px; height: 24px; flex-shrink: 0; }
+
+/* Persistent, top-level form error banner (in addition to field-level errors) */
+.form-banner {
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  padding: 9px 12px;
+  font-size: 12.5px;
+  font-weight: 500;
+  margin-bottom: 14px;
+}
+.form-banner-error {
+  background: var(--red-dim);
+  border-color: rgba(251, 113, 133, 0.26);
+  color: var(--red);
+}
+
+/* Native controls that pages use directly. */
+input[type='checkbox'], input[type='radio'] {
+  accent-color: var(--signal);
+  width: 14px;
+  height: 14px;
+  cursor: pointer;
+}
+
+/* ===================================================================
+   Layer 2 — floaters
+   =================================================================== */
+
+.scrim {
+  position: fixed;
+  inset: 0;
+  background: var(--scrim);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+  z-index: 60;
+}
+
+.drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  height: 100vh;
+  width: min(560px, 100vw);
+  background: var(--floater);
+  border-left: 1px solid var(--border-strong);
+  box-shadow: var(--shadow-2);
+  z-index: 61;
+  display: flex;
+  flex-direction: column;
+}
+.drawer header, .modal header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 18px;
+  background: var(--surface-1);
+  border-bottom: 1px solid var(--border);
+}
+.drawer .body, .modal .body { overflow-y: auto; padding: 18px; }
+
+/* Centring lives on the wrapper, not the panel: framer-motion animates the
+   panel's transform, which would overwrite a translate(-50%, -50%) and leave
+   the dialog hanging off the bottom-right corner. */
+.modal-wrap {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  z-index: 61;
+  pointer-events: none;
+}
+
+.modal {
+  pointer-events: auto;
+  width: min(760px, calc(100vw - 32px));
+  max-height: min(760px, calc(100vh - 48px));
+  background: var(--floater);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-2);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.toast-stack {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.toast {
+  background: var(--floater);
+  border: 1px solid var(--border-strong);
+  border-left: 2px solid var(--signal);
+  padding: 11px 14px;
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-2);
+  min-width: 260px;
+  max-width: 360px;
+}
+.toast.error { border-left-color: var(--red); }
+.toast.success { border-left-color: var(--green); }
+.toast b { font-size: 12.5px; display: block; color: var(--text-strong); }
+.toast small { color: var(--text-muted); font-size: 12px; }
+
+/* ===================================================================
+   Small shared pieces
+   =================================================================== */
+
+.row { display: flex; align-items: center; gap: 10px; }
+.between { justify-content: space-between; }
+.wrap { flex-wrap: wrap; }
+.muted { color: var(--text-muted); }
+.dim { color: var(--text-dim); }
+.spacer { flex: 1; }
+.mt-8 { margin-top: 8px; } .mt-16 { margin-top: 16px; } .mt-24 { margin-top: 24px; }
+.mb-16 { margin-bottom: 16px; }
+
+.caps {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.surface-soft {
+  background: var(--surface-2);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+}
+
+.tabs {
+  display: flex;
+  gap: 2px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 20px;
+}
+.tab {
+  padding: 9px 15px;
+  color: var(--text-muted);
+  font-weight: 500;
+  font-size: 13px;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+  background: none;
+  border-top: none;
+  border-left: none;
+  border-right: none;
+}
+.tab:hover { color: var(--text); background: var(--hover); }
+.tab.active { color: var(--signal-strong); border-bottom-color: var(--signal); }
+
+.link-btn {
+  border: 0;
+  background: transparent;
+  color: var(--signal-strong);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 0;
+}
+.link-btn:hover { text-decoration: underline; }
+
+.empty {
+  text-align: center;
+  padding: 46px 20px;
+  color: var(--text-dim);
+}
+.empty svg { margin-bottom: 10px; opacity: 0.45; }
+
+.spinner {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid var(--border-strong);
+  border-top-color: var(--signal);
+  animation: spin 0.7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* A segmented control: one choice, read as one control. */
+.seg {
+  display: inline-flex;
+  background: var(--field);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 2px;
+  gap: 2px;
+}
+.seg button {
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 500;
+  padding: 5px 12px;
+  border-radius: 3px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.14s ease, color 0.14s ease;
+}
+.seg button:hover { color: var(--text); }
+.seg button[aria-pressed='true'] {
+  background: var(--surface-3);
+  color: var(--text-strong);
+}
+.seg .seg-count {
+  font-variant-numeric: tabular-nums;
+  opacity: 0.6;
+  margin-left: 6px;
+  font-size: 11.5px;
+}
+
+.check-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 11px;
+  border-radius: var(--radius-sm);
+}
+.check-row:hover { background: var(--hover); }
+.check-row input { width: 15px; height: 15px; }
+
+/* A technology chip: monospaced, LTR, quiet until it is active. */
+.tech-chip {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--text-dim);
+  background: var(--neutral-dim);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 1px 5px;
+  margin-right: 4px;
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+
+/* ===================================================================
+   Narrow
+   =================================================================== */
+
+@media (max-width: 860px) {
+  .app-shell { grid-template-columns: 1fr; }
+  .sidebar {
+    position: fixed;
+    z-index: 40;
+    width: 240px;
+    transform: translateX(-100%);
+    transition: transform 0.22s;
+  }
+  .sidebar.open { transform: translateX(0); }
+  .main { padding: 16px; }
+}
