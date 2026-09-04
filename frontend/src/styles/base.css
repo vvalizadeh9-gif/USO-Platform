@@ -236,6 +236,10 @@
   overflow: hidden;
   box-shadow: var(--shadow-1);
 }
+/* The corner wash. Four screens pass a *solid* accent into --accent-glow;
+   that read as a soft tint on the old light palette but blooms against a
+   dark canvas, so the opacity is clamped here rather than trusted to every
+   caller. Whatever colour arrives, the glow stays restrained. */
 .stat::after {
   content: '';
   position: absolute;
@@ -244,7 +248,8 @@
   width: 96px;
   height: 96px;
   border-radius: 50%;
-  background: radial-gradient(circle, var(--accent-glow, var(--signal-glow)), transparent 70%);
+  background: radial-gradient(circle, var(--accent-glow, var(--signal)), transparent 70%);
+  opacity: 0.16;
   pointer-events: none;
 }
 .stat .label {
@@ -270,13 +275,13 @@
 /* A KPI carries its accent as a top rule and a matching corner glow, so a
    grid of four reads as four measures rather than four boxes. */
 .stat[data-accent] { border-top: 2px solid var(--accent, var(--signal)); }
-.stat[data-accent='signal'] { --accent: var(--signal); --accent-glow: var(--signal-glow); }
-.stat[data-accent='green'] { --accent: var(--green); --accent-glow: var(--green-dim); }
-.stat[data-accent='amber'] { --accent: var(--amber); --accent-glow: var(--amber-dim); }
-.stat[data-accent='red'] { --accent: var(--red); --accent-glow: var(--red-dim); }
-.stat[data-accent='blue'] { --accent: var(--blue); --accent-glow: var(--blue-dim); }
-.stat[data-accent='violet'] { --accent: var(--violet); --accent-glow: var(--violet-dim); }
-.stat[data-accent='neutral'] { --accent: var(--border-strong); --accent-glow: var(--neutral-dim); }
+.stat[data-accent='signal'] { --accent: var(--signal); --accent-glow: var(--signal); }
+.stat[data-accent='green'] { --accent: var(--green); --accent-glow: var(--green); }
+.stat[data-accent='amber'] { --accent: var(--amber); --accent-glow: var(--amber); }
+.stat[data-accent='red'] { --accent: var(--red); --accent-glow: var(--red); }
+.stat[data-accent='blue'] { --accent: var(--blue); --accent-glow: var(--blue); }
+.stat[data-accent='violet'] { --accent: var(--violet); --accent-glow: var(--violet); }
+.stat[data-accent='neutral'] { --accent: var(--border-strong); --accent-glow: var(--text-dim); }
 
 /* ===================================================================
    Button
