@@ -225,6 +225,15 @@ class DriveTest(Base):
         ForeignKey("work_items.id"), nullable=False, index=True
     )
     execution_date: Mapped[date | None] = mapped_column(Date)
+    # When the contractor handed it in, which is not the same fact as
+    # ``execution_date`` -- a drive test driven three weeks ago can be
+    # submitted today, and the review queue ages on the submission.
+    #
+    # Set explicitly rather than read off ``created_at``: that column's server
+    # default is truncated to the second by both PostgreSQL and SQLite, so two
+    # events a fraction of a second apart could order backwards in the site
+    # timeline, which is the one place order is the whole point.
+    submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     report_link: Mapped[str | None] = mapped_column(String(500))
     status: Mapped[str] = mapped_column(
         String(20), default="Submitted", nullable=False
@@ -241,3 +250,38 @@ class DriveTest(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
     work_item: Mapped[WorkItem] = relationship(back_populates="drive_tests")
+    evidence: Mapped[list[DriveTestEvidence]] = relationship(
+        back_populates="drive_test", lazy="selectin",
+        cascade="all, delete-orphan",
+    )
+
+
+class DriveTestEvidence(Base):
+    """One file attached to a drive-test submission.
+
+    The same shape as ``acceptance_evidence`` and sharing its store, because it
+    is the same problem: a reviewer has to approve something, and a date on its
+    own is not something anyone can check. ``report_link`` -- a free-text URL
+    nobody ever filled in -- was all a drive test carried before this.
+
+    Files live on disk; only their metadata is here. ``sha256`` is what makes a
+    stored file checkable against what was received, and makes the same report
+    uploaded twice recognisable as one thing.
+    """
+
+    __tablename__ = "drive_test_evidence"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    drive_test_id: Mapped[int] = mapped_column(
+        ForeignKey("drive_tests.id", ondelete="CASCADE"),
+        nullable=False, index=True,
+    )
+    sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    stored_path: Mapped[str] = mapped_column(String(500), nullable=False)
+    original_filename: Mapped[str] = mapped_column(String(255), nullable=False)
+    content_type: Mapped[str | None] = mapped_column(String(100))
+    size_bytes: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    uploaded_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+    uploaded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+    drive_test: Mapped[DriveTest] = relationship(back_populates="evidence")

@@ -1,7 +1,14 @@
 """Workflow action endpoints: health check, assignment, DT, reviews, acceptance."""
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    HTTPException,
+    Response,
+    UploadFile,
+)
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -11,14 +18,22 @@ from app.core.deps import (
     COORDINATOR,
     CONTRACTOR,
     PM,
+    get_current_user,
     require_review_authority,
     require_roles,
 )
 from app.models.reference import User
-from app.models.workitem import Assignment, DriveTest, Village, WorkItem
+from app.models.workitem import (
+    Assignment,
+    DriveTest,
+    DriveTestEvidence,
+    Village,
+    WorkItem,
+)
 from app.models.acceptance import Acceptance
 from app.schemas import (
     AcceptanceUpdate,
+    EvidenceOut,
     AssignmentCreate,
     BulkAssignmentCreate,
     DriveTestCreate,
@@ -26,6 +41,7 @@ from app.schemas import (
     ReviewRequest,
 )
 from app.services import acceptance_workflow as acceptance_flow
+from app.services import evidence_store
 from app.services import health_check as hc
 from app.services.audit import notify_roles, record_audit
 from app.services.visibility import apply_work_item_scope, visible_work_item_ids
@@ -290,6 +306,7 @@ def submit_drive_test(
         execution_date=payload.execution_date,
         report_link=payload.report_link,
         status="Submitted",
+        submitted_at=_now(),
         is_active=True,
     )
     wi.drive_tests.append(dt)
@@ -365,6 +382,109 @@ def review_drive_test(
         )
     db.commit()
     return {"status": "ok", "stage": wi.current_stage}
+
+
+# ---------------- Drive-test evidence ----------------
+#
+# The same store as acceptance evidence, and deliberately so: capped read,
+# magic-byte validation, SHA-256, safe filename, files on disk with only their
+# metadata in the database, and a download that derives its media type from
+# what the bytes actually are rather than from what the uploader claimed.
+#
+# A drive test previously carried a date and an optional ``report_link`` that
+# no screen ever set, so a reviewer approving one had nothing to approve
+# against -- and approval is what writes ``dt_status = "Done"`` and moves the
+# national KPI.
+@router.post(
+    "/drive-tests/{drive_test_id}/evidence",
+    response_model=EvidenceOut,
+    status_code=201,
+)
+def upload_drive_test_evidence(
+    drive_test_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    user: User = Depends(require_roles(PM, COORDINATOR, CONTRACTOR)),
+):
+    """Attach a report or measurement file to a submitted drive test."""
+    dt = _load_drive_test(drive_test_id, db, user)
+    if dt.status != "Submitted":
+        raise HTTPException(
+            400, "Evidence can only be added while the drive test is awaiting review"
+        )
+    wi = _load_work_item(dt.work_item_id, db, user)
+    _require_active_assignment(wi, user)
+
+    if len(dt.evidence) >= evidence_store.MAX_FILES_PER_SUBMISSION:
+        raise HTTPException(
+            400,
+            f"At most {evidence_store.MAX_FILES_PER_SUBMISSION} files per "
+            "drive test",
+        )
+
+    try:
+        content = evidence_store.read_capped(file.file)
+        stored = evidence_store.store(file.filename or "", content)
+    except evidence_store.EvidenceError as exc:
+        raise HTTPException(400, str(exc)) from None
+
+    record = DriveTestEvidence(
+        drive_test_id=dt.id,
+        sha256=stored["sha256"],
+        stored_path=stored["stored_path"],
+        original_filename=(file.filename or "")[:255],
+        content_type=file.content_type,
+        size_bytes=stored["size_bytes"],
+        uploaded_by=user.id,
+        uploaded_at=_now(),
+    )
+    db.add(record)
+    record_audit(
+        db, user_id=user.id, action=audit_actions.SUBMITTED,
+        module="DriveTest", entity_type="DriveTestEvidence",
+        entity_id=dt.id, new_value={"filename": record.original_filename},
+    )
+    db.commit()
+    db.refresh(record)
+    return EvidenceOut.model_validate(record)
+
+
+@router.get("/drive-tests/evidence/{evidence_id}/download")
+def download_drive_test_evidence(
+    evidence_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Download one drive-test evidence file, if the caller may see its site."""
+    record = db.get(DriveTestEvidence, evidence_id)
+    if record is None:
+        raise HTTPException(404, "Evidence not found")
+    dt = db.get(DriveTest, record.drive_test_id)
+    # Same answer for absent and out-of-scope, as everywhere else: the
+    # difference between "no" and "not yours" is a way to enumerate ids.
+    if dt is None or dt.work_item_id not in set(
+        db.execute(visible_work_item_ids(user, db)).scalars()
+    ):
+        raise HTTPException(404, "Evidence not found")
+
+    path = evidence_store.absolute_path(record.stored_path)
+    if not path.exists():
+        raise HTTPException(404, "The stored file is missing")
+
+    return Response(
+        content=path.read_bytes(),
+        # From the extension the magic bytes were checked against, never the
+        # Content-Type the uploader sent -- echoing that back is how a
+        # document becomes a script.
+        media_type=evidence_store.media_type_for(record.stored_path),
+        headers={
+            "Content-Disposition":
+                'attachment; filename="'
+                + record.original_filename.replace('"', "'")
+                + '"',
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
 
 
 @router.patch("/villages/{village_id}/acceptance/{technology}")

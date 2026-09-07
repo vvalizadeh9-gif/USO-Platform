@@ -15,7 +15,12 @@ from app.models.acceptance_workflow import (
     AcceptanceSubmissionTech,
 )
 from app.models.auth import LoginAttempt, PasswordResetRequest, SpentCaptcha
-from app.models.health_check import HcAssignment, HcTask, HcTaskTechnology
+from app.models.health_check import (
+    HcAssignment,
+    HcRemediation,
+    HcTask,
+    HcTaskTechnology,
+)
 from app.models.reference import (
     Contractor,
     ProblemCategory,
@@ -28,6 +33,7 @@ from app.models.reference import (
 from app.models.workitem import (
     Assignment,
     DriveTest,
+    DriveTestEvidence,
     HealthCheck,
     Site,
     Village,
@@ -45,6 +51,7 @@ __all__ = [
     "Letter",
     "MonthlySnapshot",
     "HcAssignment",
+    "HcRemediation",
     "LoginAttempt",
     "PasswordResetRequest",
     "SpentCaptcha",
@@ -61,6 +68,7 @@ __all__ = [
     "user_province_access",
     "Assignment",
     "DriveTest",
+    "DriveTestEvidence",
     "HealthCheck",
     "Site",
     "Village",

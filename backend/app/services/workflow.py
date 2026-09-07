@@ -8,16 +8,35 @@ from datetime import datetime, timezone
 from app.models.workitem import WorkItem
 
 STAGE_NEW = "New"
+# A health check is out with a subcontractor. Between assignment and
+# submission the site used to read as New, or keep whatever stage it carried
+# before — it had left the pool and not yet reached any results screen, so it
+# was visible nowhere. This is the state that says "somebody is working it".
+STAGE_HC_IN_PROGRESS = "HC In Progress"
+# A result is in and nobody has decided what it means yet. Distinct from the
+# two outcomes below because the decision is the PM/Coordinator's, and a site
+# waiting on it is waiting on *them* — which is exactly what an active queue
+# needs to be able to say.
+STAGE_HC_REVIEW = "HC Review"
 STAGE_HEALTH_PROBLEM = "Problematic"
 STAGE_READY = "Ready for Assignment"
 STAGE_ASSIGNED = "Assigned"
 STAGE_RETURNED = "Returned by Contractor"
 STAGE_DT_SUBMITTED = "DT Submitted"
-# Coordinator approval is terminal: an approved drive test *is* a completed
-# drive test. There is no separate PM sign-off step and no "DT Completed"
-# stage — approving writes the outcome straight through to the work item's
-# dt_status/dt_date_gregorian, which is what the Drive Test dashboard reads.
-STAGE_COORD_APPROVED = "Coordinator Approved"
+# Approval is terminal: an approved drive test *is* a completed drive test.
+# There is no second sign-off — approving writes the outcome straight through
+# to the work item's dt_status/dt_date_gregorian, which is what the Drive Test
+# dashboard reads and what unlocks village acceptance.
+#
+# Named "DT Done" rather than "Coordinator Approved" because the stage says
+# what is true of the site, not who last touched it — and since a PM may now
+# approve as well, the old name had stopped being accurate anyway.
+STAGE_DT_DONE = "DT Done"
+
+#: Superseded spelling of :data:`STAGE_DT_DONE`. Kept as an alias so anything
+#: still importing the old name keeps working; the migration rewrites the
+#: stored rows.
+STAGE_COORD_APPROVED = STAGE_DT_DONE
 
 
 def _completed_at(task) -> datetime:
@@ -42,7 +61,7 @@ def derive_stage(work_item: WorkItem) -> str:
     active_dt = _latest_active_dt(work_item)
     if active_dt is not None:
         if active_dt.status == "Approved":
-            return STAGE_COORD_APPROVED
+            return STAGE_DT_DONE
         if active_dt.status == "Submitted":
             return STAGE_DT_SUBMITTED
         # Rejected and Returned both mean the reviewer handed the drive test
@@ -60,6 +79,22 @@ def derive_stage(work_item: WorkItem) -> str:
         if active_assignment.returned_at is not None:
             return STAGE_RETURNED
         return STAGE_ASSIGNED
+
+    # An open check outranks a finished one: a site on its second round is
+    # being worked now, and reading it as the first round's outcome would put
+    # it in a queue where nothing can be done about it.
+    if any(t.completed_at is None for t in work_item.hc_tasks):
+        return STAGE_HC_IN_PROGRESS
+
+    latest = _latest_completed_task(work_item)
+    if latest is not None:
+        if latest.reviewed_at is None:
+            return STAGE_HC_REVIEW
+        return (
+            STAGE_HEALTH_PROBLEM
+            if latest.overall_result == "NotReady"
+            else STAGE_READY
+        )
 
     hc_status = _latest_hc_status(work_item)
     if hc_status is not None:
@@ -87,6 +122,17 @@ def _latest_active_assignment(work_item: WorkItem):
 
 def _has_active_assignment(work_item: WorkItem) -> bool:
     return _latest_active_assignment(work_item) is not None
+
+
+def _latest_completed_task(work_item: WorkItem):
+    """The site's most recently finished health check, or None.
+
+    By completion time rather than by id: a bulk template upload writes several
+    tasks in one transaction, and ordering by id would pick whichever row the
+    database inserted last rather than the check that finished last.
+    """
+    completed = [t for t in work_item.hc_tasks if t.completed_at is not None]
+    return max(completed, key=_completed_at) if completed else None
 
 
 def _latest_hc_status(work_item: WorkItem) -> str | None:

@@ -461,7 +461,33 @@ def create_assignment(
         db.add(task)
 
     db.flush()
+    # The site is now being checked, and its stage has to say so. Without this
+    # a site between assignment and submission kept whatever stage it carried
+    # before -- the previous round's Problematic, or New -- so it appeared in a
+    # queue where nothing could be done about it.
+    _refresh_stages(db, work_item_ids)
     return assignment
+
+
+def _refresh_stages(db: Session, work_item_ids: list[int]) -> None:
+    """Recompute the derived stage for several sites at once."""
+    items = (
+        db.execute(
+            select(WorkItem)
+            .where(WorkItem.id.in_(work_item_ids))
+            .options(
+                selectinload(WorkItem.hc_tasks),
+                selectinload(WorkItem.health_checks),
+                selectinload(WorkItem.assignments),
+                selectinload(WorkItem.drive_tests),
+            )
+        )
+        .scalars()
+        .all()
+    )
+    for wi in items:
+        refresh_stage(wi)
+    db.flush()
 
 
 def submit_task_result(
@@ -566,6 +592,11 @@ def review_task(
     task.reviewed_by = user.id
     task.reviewed_at = _now()
     db.flush()
+    # Reviewing is what moves the site out of HC Review and into Ready for
+    # Assignment or Problematic, so the stage has to be recomputed here too.
+    if task.work_item is not None:
+        refresh_stage(task.work_item)
+        db.flush()
     return task
 
 
@@ -816,6 +847,9 @@ def site_history(db: Session, work_item_id: int) -> list[dict]:
 
     users = {u.id: u.full_name for u in db.query(User).all()}
     events: list[dict] = []
+    # Drive-test events hang off the round that cleared the site for them, so
+    # the drawer groups them under it rather than opening a round of their own.
+    last_round = max((t.round_no for t in tasks), default=1)
 
     for task in tasks:
         rnd = task.round_no
@@ -851,18 +885,58 @@ def site_history(db: Session, work_item_id: int) -> list[dict]:
                 }
             )
 
-        if task.reviewed_at is not None and task.remediations:
-            names = ", ".join(
-                r.category.name for r in task.remediations if r.category is not None
+        if task.reviewed_at is not None:
+            if task.remediations:
+                names = ", ".join(
+                    r.category.name
+                    for r in task.remediations
+                    if r.category is not None
+                )
+                events.append(
+                    {
+                        "at": _as_aware(task.reviewed_at),
+                        "round_no": rnd,
+                        "kind": "routed",
+                        "title": f"Routed to {names}",
+                        "detail": None,
+                        "actor": users.get(task.reviewed_by),
+                    }
+                )
+            elif task.overall_result == "Ready":
+                # The moment a passing round becomes a business decision, and
+                # the point the drive test may be assigned from. It was absent
+                # from the timeline, so a site appeared to go from "health
+                # check passed" straight to "assigned" with nobody deciding.
+                events.append(
+                    {
+                        "at": _as_aware(task.reviewed_at),
+                        "round_no": rnd,
+                        "kind": "confirmed",
+                        "title": "Confirmed ready for drive test",
+                        "detail": None,
+                        "actor": users.get(task.reviewed_by),
+                    }
+                )
+
+        for rem in task.remediations:
+            if rem.reroute_at is None:
+                continue
+            target = (
+                rem.reroute_to_category.name
+                if rem.reroute_to_category is not None
+                else "another team"
             )
             events.append(
                 {
-                    "at": _as_aware(task.reviewed_at),
+                    "at": _as_aware(rem.reroute_at),
                     "round_no": rnd,
-                    "kind": "routed",
-                    "title": f"Routed to {names}",
-                    "detail": None,
-                    "actor": users.get(task.reviewed_by),
+                    "kind": "reroute",
+                    "title": (
+                        f"{rem.category.name if rem.category else 'A team'} "
+                        f"says this belongs to {target}"
+                    ),
+                    "detail": rem.reroute_reason,
+                    "actor": users.get(rem.reroute_by),
                 }
             )
 
@@ -887,7 +961,139 @@ def site_history(db: Session, work_item_id: int) -> list[dict]:
                 }
             )
 
-    events.sort(key=lambda e: (e["at"] is None, e["at"] or _now()), reverse=True)
+    events.extend(_drive_test_events(db, work_item_id, users, last_round))
+
+    # Newest first, with the round number and the lifecycle order of the event
+    # itself as tiebreakers.
+    #
+    # The tiebreakers are not cosmetic. Timestamps do not all come from the
+    # same place: most are set explicitly and carry microseconds, while a
+    # drive test's submission time is its ``created_at`` server default, which
+    # PostgreSQL and SQLite both truncate. Two events a fraction of a second
+    # apart can therefore compare equal, and a timeline that reads "approved,
+    # assigned, submitted" is worse than useless -- history is the one screen
+    # whose entire job is saying what happened in what order.
+    events.sort(
+        key=lambda e: (
+            e["at"] is None,
+            e["at"] or _now(),
+            e["round_no"],
+            _LIFECYCLE_ORDER.get(e["kind"], 0),
+        ),
+        reverse=True,
+    )
+    return events
+
+
+#: Where each kind of event falls in one pass through the lifecycle. Used only
+#: to order events that share a timestamp; the timestamps themselves decide
+#: everything else.
+_LIFECYCLE_ORDER = {
+    "assigned": 0,
+    "passed": 1,
+    "failed": 1,
+    "routed": 2,
+    "confirmed": 2,
+    "reroute": 3,
+    "fixed": 4,
+    "dt_assigned": 5,
+    "dt_returned": 6,
+    "dt_submitted": 7,
+    "dt_rejected": 8,
+    "dt_approved": 9,
+}
+
+
+def _drive_test_events(
+    db: Session, work_item_id: int, users: dict[int, str], round_no: int
+) -> list[dict]:
+    """The drive-test half of a site's timeline.
+
+    The timeline used to stop at the health check, so the chain the business
+    actually cares about -- HC #1, problem, category, remediation, resolved,
+    HC #2, ready, official DT, submitted, approved, DT Done -- was only ever
+    readable up to "ready". Everything after it lived in the work item's stage,
+    which shows where a site *is* and not how it got there.
+
+    Assembled from ``assignments`` and ``drive_tests`` the same way the rest of
+    this function is assembled from the health-check tables: read from the
+    records, never from an event log, so it cannot drift out of step with them.
+
+    Drive-test events carry the site's last health-check round number so the
+    drawer can group them under the round that cleared the site for it, rather
+    than opening a round of their own.
+    """
+    wi = db.get(WorkItem, work_item_id)
+    if wi is None:
+        return []
+
+    events: list[dict] = []
+
+    for assignment in wi.assignments:
+        if assignment.assignment_type != "official":
+            continue
+        contractor = assignment.contractor.name if assignment.contractor else None
+        events.append(
+            {
+                "at": _as_aware(assignment.assigned_at),
+                "round_no": round_no,
+                "kind": "dt_assigned",
+                "title": "Assigned for official drive test"
+                + (f" — {contractor}" if contractor else ""),
+                "detail": assignment.remarks,
+                "actor": users.get(assignment.assigned_by),
+            }
+        )
+        if assignment.returned_at is not None:
+            events.append(
+                {
+                    "at": _as_aware(assignment.returned_at),
+                    "round_no": round_no,
+                    "kind": "dt_returned",
+                    "title": "Handed back by the contractor",
+                    "detail": assignment.return_reason,
+                    "actor": contractor,
+                }
+            )
+
+    for dt in wi.drive_tests:
+        # created_at is the fallback for rows written before submitted_at
+        # existed; the migration backfills it, so this only covers a row
+        # inserted by something other than the endpoint.
+        submitted_at = _as_aware(dt.submitted_at or dt.created_at)
+        events.append(
+            {
+                "at": submitted_at,
+                "round_no": round_no,
+                "kind": "dt_submitted",
+                "title": "Drive test submitted",
+                "detail": (
+                    f"Executed {dt.execution_date}"
+                    if dt.execution_date
+                    else None
+                ),
+                "actor": None,
+            }
+        )
+        if dt.coordinator_reviewed_at is None:
+            continue
+        approved = dt.status == "Approved"
+        events.append(
+            {
+                "at": _as_aware(dt.coordinator_reviewed_at),
+                "round_no": round_no,
+                # Approval is the end of the lifecycle, so it gets its own kind
+                # rather than sharing one with a rejection — the drawer marks
+                # it differently, and it is the event people scan for.
+                "kind": "dt_approved" if approved else "dt_rejected",
+                "title": "Drive test approved — DT Done"
+                if approved
+                else f"Drive test {dt.status.lower()}",
+                "detail": dt.coordinator_comment,
+                "actor": users.get(dt.coordinator_reviewed_by),
+            }
+        )
+
     return events
 
 
