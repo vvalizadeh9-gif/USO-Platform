@@ -324,7 +324,26 @@ def _returning_summary(task: HcTask) -> str | None:
     return f"{len(names)} fixes closed"
 
 
-def get_basket(db: Session, user) -> list[dict]:
+def scoped_work_items(db: Session, user) -> list[WorkItem]:
+    """Every live work item this user may see, with the graph the queues need.
+
+    Loaded once and passed around rather than re-queried per queue. The pool
+    and the drive-test assignment queue both walk the same set, and the
+    Action Center polls their counts on a timer for every signed-in staff
+    user -- so re-reading it per queue turns one scan into several, on a table
+    that grows with the whole country.
+    """
+    stmt = select(WorkItem).where(WorkItem.deleted_at.is_(None))
+    stmt = apply_work_item_scope(stmt, user, db)
+    stmt = stmt.options(
+        selectinload(WorkItem.site).selectinload(Site.province),
+        selectinload(WorkItem.hc_tasks).selectinload(HcTask.assignment),
+        selectinload(WorkItem.assignments),
+    )
+    return list(db.execute(stmt).scalars().all())
+
+
+def get_basket(db: Session, user, work_items: list[WorkItem] | None = None) -> list[dict]:
     """On-air sites that still need a health check, scoped to the user.
 
     A site is eligible when it is on-air, is not already inside an open HC
@@ -339,10 +358,8 @@ def get_basket(db: Session, user) -> list[dict]:
     (an owner owes the work, visible in their Fix Queue). That is what makes
     the loop close by itself: nobody re-adds a site by hand.
     """
-    stmt = select(WorkItem).where(WorkItem.deleted_at.is_(None))
-    stmt = apply_work_item_scope(stmt, user, db)
-    stmt = stmt.options(selectinload(WorkItem.site).selectinload(Site.province))
-    work_items = db.execute(stmt).scalars().all()
+    if work_items is None:
+        work_items = scoped_work_items(db, user)
 
     busy = work_item_ids_in_open_hc(db)
     latest = latest_completed_tasks(db)

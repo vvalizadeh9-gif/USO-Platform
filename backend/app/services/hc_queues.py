@@ -28,7 +28,7 @@ from sqlalchemy.orm import Session, selectinload
 from app.models.health_check import HcAssignment, HcRemediation, HcTask
 from app.models.reference import Contractor, User
 from app.models.workitem import Assignment, DriveTest, Site, WorkItem
-from app.services.health_check import build_assignment_stats
+from app.services.health_check import build_assignment_stats, scoped_work_items
 from app.services.tech_parser import parse_technologies
 from app.services.visibility import visible_work_item_ids
 
@@ -221,7 +221,9 @@ def reroutes(db: Session, user: User) -> list[dict]:
 # --------------------------------------------------------------------------
 # Drive test
 # --------------------------------------------------------------------------
-def dt_assignment(db: Session, user: User) -> list[dict]:
+def dt_assignment(
+    db: Session, user: User, work_items: list[WorkItem] | None = None
+) -> list[dict]:
     """Sites cleared for an official drive test and not yet assigned to one.
 
     The condition is exactly what ``assert_ready_for_dt`` enforces on the way
@@ -229,22 +231,8 @@ def dt_assignment(db: Session, user: User) -> list[dict]:
     here that the assignment endpoint would then refuse. A queue offering rows
     the server rejects is worse than no queue.
     """
-    work_items = (
-        db.execute(
-            select(WorkItem)
-            .where(
-                WorkItem.id.in_(visible_work_item_ids(user, db)),
-                WorkItem.deleted_at.is_(None),
-            )
-            .options(
-                selectinload(WorkItem.site).selectinload(Site.province),
-                selectinload(WorkItem.hc_tasks).selectinload(HcTask.assignment),
-                selectinload(WorkItem.assignments),
-            )
-        )
-        .scalars()
-        .all()
-    )
+    if work_items is None:
+        work_items = scoped_work_items(db, user)
 
     contractors = _contractor_names(db)
     out = []
@@ -360,13 +348,20 @@ def counts(db: Session, user: User) -> dict[str, int]:
     """
     from app.services.health_check import get_basket
 
+    # One scan, shared by the two queues that walk every work item. Counted by
+    # running the same reads the screens use rather than by separate COUNT
+    # queries, so a badge can never disagree with the list behind it -- which
+    # would be worse than no badge, because a queue reading 3 that opens empty
+    # teaches people to stop trusting the numbers.
+    work_items = scoped_work_items(db, user)
+
     return {
-        "pool": len(get_basket(db, user)),
+        "pool": len(get_basket(db, user, work_items)),
         "in_progress": sum(r["sites_pending"] for r in in_progress(db, user)),
         "hc_review": _hc_review_count(db, user),
         "remediation": len(remediations(db, user)),
         "reroutes": len(reroutes(db, user)),
-        "dt_assignment": len(dt_assignment(db, user)),
+        "dt_assignment": len(dt_assignment(db, user, work_items)),
         "dt_review": len(dt_review(db, user)),
     }
 
