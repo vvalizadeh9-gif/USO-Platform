@@ -13,6 +13,7 @@ from app.models.reference import (
     User,
 )
 from app.schemas import (
+    ActionCenterOut,
     ActionItem,
     ContractorOut,
     ProblemCategoryOut,
@@ -28,13 +29,30 @@ router = APIRouter(tags=["misc"])
 def action_center(
     db: Session = Depends(get_db), user: User = Depends(get_current_user)
 ) -> list[ActionItem]:
-    """Everything this user needs to act on or know about right now.
+    """The flat item feed. Superseded by ``/action-center/summary``.
 
-    Live-derived, self-clearing action items (pending validations,
-    approvals, assignments) plus unread event notifications, merged into one
-    feed. See services/action_center.py for how each source is built.
+    Kept because it is what an older client asks for, and because several
+    screens still deep-link from an individual item. New callers should use
+    the summary, which leads with the counts.
     """
     return action_center_service.build(db, user)
+
+
+@router.get("/action-center/summary", response_model=ActionCenterOut)
+def action_center_summary(
+    db: Session = Depends(get_db), user: User = Depends(get_current_user)
+) -> ActionCenterOut:
+    """Counts first, then the items behind them.
+
+    Both halves are derived from live state and clear themselves: an item
+    exists exactly as long as its condition does, and is never written to a
+    table or dismissed. The counters come from the same reads the queue
+    screens use, so a badge cannot disagree with the list behind it.
+    """
+    return ActionCenterOut(
+        counters=action_center_service.counters(db, user),
+        items=action_center_service.build(db, user),
+    )
 
 
 @router.post("/notifications/{notification_id}/read")

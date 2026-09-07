@@ -31,23 +31,31 @@ from app.models.health_check import HcAssignment, HcRemediation, HcTask
 from app.models.reference import Contractor, User
 from app.models.workitem import Site, WorkItem
 from app.schemas import (
+    DtAssignmentRow,
+    DtReviewRow,
     HcAssignmentCreate,
     HcAssignmentListItem,
     HcAssignmentOut,
     HcBasketItem,
     HcHistoryEvent,
+    HcInProgressRow,
+    HcQueueCounts,
     HcRemediationClose,
     HcRemediationOut,
+    HcRemediationRow,
     HcRerouteDecision,
+    HcRerouteRow,
     HcRerouteRequest,
     HcResultRow,
     HcReviewSubmit,
     HcTaskResultSubmit,
     HcTechnologyOut,
 )
+from app.services import hc_queues
 from app.services import health_check as hc
 from app.services import evidence_store
 from app.services.audit import record_audit
+from app.services.tech_parser import parse_technologies
 from app.services.visibility import visible_work_item_ids
 from app.services.hc_template import (
     build_assignment_feedback_export,
@@ -194,12 +202,26 @@ MAX_EXPORT_ROWS = 20000
 
 @router.get("/results", response_model=list[HcResultRow])
 def hc_results(
+    reviewed: bool | None = Query(
+        default=None,
+        description=(
+            "false for the review queue (results awaiting a decision), true "
+            "for the archive, omitted for both."
+        ),
+    ),
     limit: int = Query(default=200, ge=1, le=MAX_RESULTS_PAGE),
     offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
     user: User = Depends(require_roles(ADMIN, PM, COORDINATOR)),
 ):
-    """Completed health check results (Ready / Not Ready) with site info."""
+    """Completed health check results (Ready / Not Ready) with site info.
+
+    ``reviewed`` is what separates the queue from the archive. This endpoint
+    returned every completed task ever recorded, so one table was both the
+    list of decisions a PM still owes and the record of every decision anyone
+    has ever made — and the queue never emptied, which is the one thing an
+    active queue has to be able to do.
+    """
     stmt = (
         select(HcTask, WorkItem, Site, HcAssignment, Contractor)
         .join(WorkItem, HcTask.work_item_id == WorkItem.id)
@@ -217,6 +239,10 @@ def hc_results(
         .offset(offset)
         .limit(limit)
     )
+    if reviewed is True:
+        stmt = stmt.where(HcTask.reviewed_at.isnot(None))
+    elif reviewed is False:
+        stmt = stmt.where(HcTask.reviewed_at.is_(None))
     rows = db.execute(stmt).all()
     return [
         HcResultRow(
@@ -229,6 +255,7 @@ def hc_results(
                 r.category.name for r in task.remediations if r.category is not None
             ],
             round_no=task.round_no,
+            requested_technologies=parse_technologies(wi.requested_technology),
             reviewed=task.reviewed_at is not None,
             task_id=task.id,
             assignment_code=assignment.code,
@@ -297,6 +324,66 @@ def hc_results_export(
             "Content-Disposition": 'attachment; filename="hc_results.xlsx"'
         },
     )
+
+
+# ---------------- The active queues ----------------
+#
+# Each of these is a read over records that already exist. There is no queue
+# table, nothing is pushed and nothing is dismissed: an item is in a queue
+# exactly while its condition holds, which is why the pool has never gone
+# wrong and why the rest of the lifecycle is now modelled the same way.
+@router.get("/queues/counts", response_model=HcQueueCounts)
+def queue_counts(
+    db: Session = Depends(get_db),
+    user: User = Depends(require_review_authority),
+):
+    """How many items wait in each queue, for the tab badges."""
+    return hc_queues.counts(db, user)
+
+
+@router.get("/queues/in-progress", response_model=list[HcInProgressRow])
+def queue_in_progress(
+    db: Session = Depends(get_db),
+    user: User = Depends(require_review_authority),
+):
+    """Health checks out with a subcontractor, longest outstanding first."""
+    return hc_queues.in_progress(db, user)
+
+
+@router.get("/queues/remediations", response_model=list[HcRemediationRow])
+def queue_remediations(
+    db: Session = Depends(get_db),
+    user: User = Depends(require_review_authority),
+):
+    """Every open fix in scope — the board the people who routed them lacked."""
+    return hc_queues.remediations(db, user)
+
+
+@router.get("/queues/reroutes", response_model=list[HcRerouteRow])
+def queue_reroutes(
+    db: Session = Depends(get_db),
+    user: User = Depends(require_review_authority),
+):
+    """Fixes whose owner disputes the category, awaiting a decision."""
+    return hc_queues.reroutes(db, user)
+
+
+@router.get("/queues/dt-assignment", response_model=list[DtAssignmentRow])
+def queue_dt_assignment(
+    db: Session = Depends(get_db),
+    user: User = Depends(require_review_authority),
+):
+    """Confirmed-Ready sites awaiting an official drive-test assignment."""
+    return hc_queues.dt_assignment(db, user)
+
+
+@router.get("/queues/dt-review", response_model=list[DtReviewRow])
+def queue_dt_review(
+    db: Session = Depends(get_db),
+    user: User = Depends(require_review_authority),
+):
+    """Drive tests submitted and awaiting approval."""
+    return hc_queues.dt_review(db, user)
 
 
 # ---------------- Subcontractor ----------------

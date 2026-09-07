@@ -24,7 +24,7 @@ import api from '../api/client'
 // the day-to-day work queues) while everyone else keeps seeing them.
 const NAV = [
   { to: '/work-items', label: 'Work Items', icon: ListChecks, end: true, hideRoles: ['Admin'] },
-  { to: '/health-check', label: 'Health Check', icon: ClipboardList, roles: ['Admin', 'PM', 'Coordinator'], hideRoles: ['Admin'] },
+  { to: '/health-check', label: 'Health Check', icon: ClipboardList, roles: ['PM', 'Coordinator'] },
   { to: '/my-health-check', label: 'My Health Check', icon: ClipboardCheck, roles: ['Contractor'] },
   // Category owners get exactly one screen: the sites waiting on their team.
   { to: '/my-fix-queue', label: 'My Fix Queue', icon: Wrench, roles: CATEGORY_OWNER_ROLES },
@@ -139,9 +139,18 @@ export default function Layout() {
     let active = true
     const load = () =>
       api
-        .get('/action-center')
+        .get('/action-center/summary')
         .then((r) => {
-          if (active) setActionCount(r.data.length)
+          // The counters, not the item list: the badge should say how many
+          // pieces of work are waiting, and one queue holding thirty sites is
+          // one thing to go and do, not thirty.
+          if (!active) return
+          const counters = r.data.counters || []
+          setActionCount(
+            counters.length
+              ? counters.reduce((n, c) => n + c.count, 0)
+              : (r.data.items || []).length,
+          )
         })
         .catch(() => {})
     load()

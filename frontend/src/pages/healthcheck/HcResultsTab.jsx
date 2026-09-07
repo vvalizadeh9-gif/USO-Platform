@@ -17,7 +17,7 @@ const FALLBACK_CATEGORIES = [
   'Temp Power',
 ]
 
-export default function HcResultsTab({ highlightTaskId } = {}) {
+export default function HcResultsTab({ highlightTaskId, onCountChange } = {}) {
   const { user } = useAuth()
   const toast = useToast()
   // One predicate for both: a role that may decide Ready or Problematic is
@@ -30,7 +30,10 @@ export default function HcResultsTab({ highlightTaskId } = {}) {
   const [results, setResults] = useState(null)
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState('all') // all | ready | notready
+  // Failed rows open by default: a reviewer deciding whether a site is
+  // problematic should not have to click to find out why it failed.
   const [expanded, setExpanded] = useState(() => new Set())
+  const [autoExpanded, setAutoExpanded] = useState(false)
   const [selected, setSelected] = useState(() => new Set())
   const [contractors, setContractors] = useState([])
   const highlightRef = useRef(null)
@@ -43,9 +46,20 @@ export default function HcResultsTab({ highlightTaskId } = {}) {
   const [categories, setCategories] = useState(FALLBACK_CATEGORIES)
   const [history, setHistory] = useState({ id: null, code: null })
 
+  // Unreviewed only. This table used to return every completed task ever
+  // recorded, so one screen was both the list of decisions still owed and the
+  // record of every decision ever made — and the queue never emptied, which is
+  // the one thing an active queue has to be able to do. The archive moved to
+  // the History tab.
   const load = () => {
     setSelected(new Set())
-    api.get('/hc/results').then((r) => setResults(r.data)).catch(() => setResults([]))
+    api
+      .get('/hc/results', { params: { reviewed: false } })
+      .then((r) => {
+        setResults(r.data)
+        onCountChange?.(r.data.length)
+      })
+      .catch(() => setResults([]))
   }
   useEffect(load, [])
 
@@ -56,6 +70,15 @@ export default function HcResultsTab({ highlightTaskId } = {}) {
       highlightRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' })
     }
   }, [highlightTaskId, results])
+
+  useEffect(() => {
+    if (!results || autoExpanded) return
+    const failed = results
+      .map((r, i) => (r.overall_result === 'NotReady' ? `${r.work_item_id}-${i}` : null))
+      .filter(Boolean)
+    if (failed.length) setExpanded(new Set(failed))
+    setAutoExpanded(true)
+  }, [results, autoExpanded])
 
   useEffect(() => {
     if (canAssign) api.get('/reference/contractors').then((r) => setContractors(r.data)).catch(() => {})
@@ -198,7 +221,10 @@ export default function HcResultsTab({ highlightTaskId } = {}) {
 
       {filtered.length === 0 ? (
         <div style={{ padding: 20 }}>
-          <EmptyState title="No results yet" hint="Completed health checks show here." />
+          <EmptyState
+            title="Nothing waiting on you"
+            hint="Results appear here the moment a subcontractor submits one. Decided results move to History."
+          />
         </div>
       ) : (
         <div style={{ maxHeight: 520, overflowY: 'auto' }}>
@@ -209,6 +235,8 @@ export default function HcResultsTab({ highlightTaskId } = {}) {
                 <th style={{ width: 28 }}></th>
                 <th>Site ID</th>
                 <th>Type</th>
+                <th>Round</th>
+                <th>Requested Tech</th>
                 <th>Result</th>
                 <th>Category</th>
                 <th>Subcontractor</th>
@@ -259,6 +287,22 @@ export default function HcResultsTab({ highlightTaskId } = {}) {
                       </td>
                       <td className="text-data">{r.site_type}</td>
                       <td>
+                        {r.round_no > 1 ? (
+                          <span className="pill pill-cyan" style={{ fontSize: 11.5 }}>
+                            #{r.round_no}
+                          </span>
+                        ) : (
+                          <span className="dim tnum">1</span>
+                        )}
+                      </td>
+                      <td>
+                        <div className="row" style={{ gap: 5 }}>
+                          {(r.requested_technologies || []).map((t) => (
+                            <span key={t} className="pill pill-dim" style={{ fontSize: 11.5 }}>{t}</span>
+                          ))}
+                        </div>
+                      </td>
+                      <td>
                         {r.overall_result === 'Ready' ? (
                           <span className="row" style={{ gap: 5, color: 'var(--green)', fontWeight: 500, fontSize: 13 }}>
                             <CheckCircle2 size={15} /> Ready
@@ -279,7 +323,7 @@ export default function HcResultsTab({ highlightTaskId } = {}) {
                       <tr key={`${key}-detail`}>
                         {canAssign && <td></td>}
                         <td></td>
-                        <td colSpan={6} style={{ background: 'var(--surface-2)', padding: '10px 14px' }}>
+                        <td colSpan={8} style={{ background: 'var(--surface-2)', padding: '10px 14px' }}>
                           <TechBreakdown techs={techs} />
                         </td>
                       </tr>

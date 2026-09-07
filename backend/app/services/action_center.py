@@ -25,7 +25,7 @@ from app.models.acceptance import CpmChangeRequest, Notification
 from app.models.health_check import HcAssignment, HcRemediation, HcTask
 from app.models.reference import User
 from app.models.workitem import Site, WorkItem
-from app.schemas import ActionItem
+from app.schemas import ActionCounter, ActionItem
 from app.services.visibility import apply_work_item_scope, visible_work_item_ids
 from app.services.workflow import STAGE_READY
 
@@ -300,3 +300,81 @@ def build(db: Session, user: User) -> list[ActionItem]:
     ]
     items.sort(key=_sort_key, reverse=True)
     return items
+
+
+# What each role is shown as a counter, and where the number leads. The
+# counters are the page: "HC Review 37, DT Assignment 21, DT Review 8" answers
+# "what needs me now" in one glance, where thirty-seven individual cards did
+# not — they filled the screen before the second category appeared.
+_QUEUE_LABELS = {
+    "pool": ("HC Pool", "/health-check?tab=pool"),
+    "in_progress": ("HC In Progress", "/health-check?tab=running"),
+    "hc_review": ("HC Review", "/health-check?tab=review"),
+    "remediation": ("Active Problems", "/health-check?tab=remediation"),
+    "reroutes": ("Re-route Decisions", "/health-check?tab=reroutes"),
+    "dt_assignment": ("DT Assignment", "/health-check?tab=dt-assign"),
+    "dt_review": ("DT Review", "/health-check?tab=dt-review"),
+}
+
+
+def counters(db: Session, user: User) -> list[ActionCounter]:
+    """The count-first summary, role-shaped.
+
+    A counter reading zero is dropped rather than shown as an empty row: the
+    point of the page is what needs doing, and a wall of zeroes is the same
+    "you are all caught up" said seven times.
+    """
+    role = user.role.name
+    out: list[ActionCounter] = []
+
+    if role in (PM, COORDINATOR):
+        from app.services import hc_queues
+
+        for key, count in hc_queues.counts(db, user).items():
+            if not count:
+                continue
+            label, url = _QUEUE_LABELS[key]
+            out.append(
+                ActionCounter(key=key, label=label, count=count, url=url)
+            )
+
+    if user.contractor_id is not None:
+        pending = (
+            db.query(HcTask)
+            .join(HcAssignment)
+            .filter(
+                HcAssignment.contractor_id == user.contractor_id,
+                HcTask.completed_at.is_(None),
+            )
+            .count()
+        )
+        if pending:
+            out.append(ActionCounter(
+                key="hc_submit", label="Health Checks To Submit",
+                count=pending, url="/my-health-check",
+            ))
+
+    if user.role.is_category_owner:
+        open_fixes = (
+            db.query(HcRemediation)
+            .filter(
+                HcRemediation.owner_role_id == user.role_id,
+                HcRemediation.closed_at.is_(None),
+            )
+            .count()
+        )
+        if open_fixes:
+            out.append(ActionCounter(
+                key="my_fixes", label="Fixes Assigned To You",
+                count=open_fixes, url="/my-fix-queue",
+            ))
+
+    if role in (ADMIN, PM):
+        pending_cpm = len(_cpm_change_request_items(db, user))
+        if pending_cpm:
+            out.append(ActionCounter(
+                key="cpm", label="CPM Changes", count=pending_cpm,
+                url="/admin?tab=validate",
+            ))
+
+    return out
