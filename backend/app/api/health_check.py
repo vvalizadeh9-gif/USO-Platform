@@ -24,6 +24,7 @@ from app.core.deps import (
     PM,
     get_current_user,
     require_category_owner,
+    require_review_authority,
     require_roles,
 )
 from app.models.health_check import HcAssignment, HcRemediation, HcTask
@@ -485,9 +486,14 @@ def decide_reroute(
     remediation_id: int,
     payload: HcRerouteDecision,
     db: Session = Depends(get_db),
-    user: User = Depends(require_roles(ADMIN, PM)),
+    user: User = Depends(require_review_authority),
 ):
-    """PM approves or rejects a proposed re-route."""
+    """PM or Coordinator approves or rejects a proposed re-route.
+
+    The Coordinator was excluded here while being trusted to choose the
+    category in the first place, which is the larger decision. Adjudicating a
+    team's objection to that choice belongs to the same authority.
+    """
     rem = db.get(HcRemediation, remediation_id)
     if rem is None:
         raise HTTPException(404, "Fix not found")
@@ -533,8 +539,14 @@ def site_history(
 
 
 def _assert_may_work_fix(user: User, rem: HcRemediation) -> None:
-    """Only the owning role (or Admin/PM acting on their behalf) may act."""
-    if user.role.name in (ADMIN, PM):
+    """Only the owning role, or a PM/Coordinator acting on their behalf.
+
+    Coordinator joins PM here for the same reason as everywhere else in this
+    module: the two roles are peers over this lifecycle, and a rule that lets
+    one of them close a fix on an owner's behalf but not the other is a
+    difference nobody chose.
+    """
+    if user.role.name in (ADMIN, PM, COORDINATOR):
         return
     if user.role.is_category_owner and rem.owner_role_id == user.role_id:
         return

@@ -43,8 +43,17 @@ def derive_stage(work_item: WorkItem) -> str:
     if active_dt is not None:
         if active_dt.status == "Approved":
             return STAGE_COORD_APPROVED
-        if active_dt.status in ("Submitted", "Returned"):
+        if active_dt.status == "Submitted":
             return STAGE_DT_SUBMITTED
+        # Rejected and Returned both mean the reviewer handed the drive test
+        # back, so both fall through to the assignment below and the site
+        # reads as Assigned again -- which is what puts the submission form
+        # back in front of the contractor.
+        #
+        # Returned used to map to DT Submitted, which was a dead end: the site
+        # stayed in the reviewer's own queue while the contractor's form, gated
+        # on stage Assigned, never reappeared. Nothing could move it in either
+        # direction.
 
     active_assignment = _latest_active_assignment(work_item)
     if active_assignment is not None:

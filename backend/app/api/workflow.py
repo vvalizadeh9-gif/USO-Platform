@@ -11,6 +11,7 @@ from app.core.deps import (
     COORDINATOR,
     CONTRACTOR,
     PM,
+    require_review_authority,
     require_roles,
 )
 from app.models.reference import User
@@ -148,9 +149,9 @@ def create_assignment(
     work_item_id: int,
     payload: AssignmentCreate,
     db: Session = Depends(get_db),
-    user: User = Depends(require_roles(PM)),
+    user: User = Depends(require_review_authority),
 ):
-    """PM assigns the work item to a contractor. Deactivates prior assignment."""
+    """PM or Coordinator assigns the work item. Deactivates prior assignment."""
     wi = _load_work_item(work_item_id, db, user)
     _assert_assignable(db, wi, payload.assignment_type)
     for prev in wi.assignments:
@@ -224,9 +225,9 @@ def return_to_coordinator(
 def bulk_assign(
     payload: BulkAssignmentCreate,
     db: Session = Depends(get_db),
-    user: User = Depends(require_roles(PM)),
+    user: User = Depends(require_review_authority),
 ):
-    """PM assigns many work items to one contractor in one action.
+    """PM or Coordinator assigns many work items to one contractor at once.
 
     Backs both the "Ready for Assignment" queue and the HC Result screen.
     Per item: deactivate any prior active assignment (one active per item),
@@ -307,13 +308,19 @@ def submit_drive_test(
 
 
 @router.post("/drive-tests/{drive_test_id}/coordinator-review")
-def coordinator_review(
+def review_drive_test(
     drive_test_id: int,
     payload: ReviewRequest,
     db: Session = Depends(get_db),
-    user: User = Depends(require_roles(COORDINATOR)),
+    user: User = Depends(require_review_authority),
 ):
-    """Coordinator validates a submitted drive test. Approval is terminal.
+    """PM or Coordinator validates a submitted drive test. Approval is terminal.
+
+    The path keeps the ``coordinator-review`` spelling because it is in
+    people's clients and bookmarks, but the Coordinator is no longer the only
+    role that may reach it: a PM could not approve a drive test at all, which
+    left the busiest role in the platform unable to finish the work it had
+    assigned.
 
     Approving is what makes a drive test *count*: besides moving the work
     item to its final stage, it writes the outcome through to the work

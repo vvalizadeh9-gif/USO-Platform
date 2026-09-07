@@ -2,6 +2,7 @@ import { CheckCircle2, XCircle, Search, ChevronRight, ChevronDown, ShieldCheck, 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import api from '../../api/client'
 import { useAuth } from '../../context/AuthContext'
+import { canReview as hasReviewAuthority } from '../../lib/roles'
 import { useToast } from '../../context/ToastContext'
 import { ConfirmDialog, EmptyState, Loading } from '../../components/ui'
 import SiteHistoryDrawer, { SiteCodeButton } from '../../components/SiteHistoryDrawer'
@@ -18,8 +19,12 @@ const FALLBACK_CATEGORIES = [
 export default function HcResultsTab({ highlightTaskId } = {}) {
   const { user } = useAuth()
   const toast = useToast()
-  const canAssign = ['Admin', 'PM'].includes(user?.role?.name)
-  const canReview = ['Admin', 'PM', 'Coordinator'].includes(user?.role?.name)
+  // One predicate for both: a role that may decide Ready or Problematic is
+  // the same role that may send a Ready site for its official drive test.
+  // These used to be two different lists, and the assign one named Admin --
+  // who the server refuses -- while omitting the Coordinator, who it allows.
+  const canAssign = hasReviewAuthority(user)
+  const canReview = canAssign
 
   const [results, setResults] = useState(null)
   const [query, setQuery] = useState('')
@@ -214,7 +219,11 @@ export default function HcResultsTab({ highlightTaskId } = {}) {
                 const key = `${r.work_item_id}-${i}`
                 const isOpen = expanded.has(key)
                 const techs = r.technologies || []
-                const selectable = canAssign && r.overall_result === 'Ready'
+                // Confirming is what makes a Ready site assignable: the
+                // server refuses an official drive test on a round nobody has
+                // reviewed, so offering the checkbox before then would be a
+                // control that answers 400.
+                const selectable = canAssign && r.overall_result === 'Ready' && r.reviewed
                 const isHighlighted = r.task_id != null && String(r.task_id) === String(highlightTaskId)
                 return (
                   <>

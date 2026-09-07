@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import api from '../api/client'
 import { useAuth } from '../context/AuthContext'
+import { canReview } from '../lib/roles'
 import { useToast } from '../context/ToastContext'
 import { EmptyState, Loading, PageHead, StatusPill } from '../components/ui'
 
@@ -75,7 +76,7 @@ export default function WorkItems() {
   const { user } = useAuth()
   const toast = useToast()
   const navigate = useNavigate()
-  const canAssign = ['Admin', 'PM'].includes(user?.role?.name)
+  const canAssign = canReview(user)
   const isContractor = user?.role?.name === 'Contractor'
   const visibleStages = STAGES.filter(
     (s) => !isContractor || !STAGES_HIDDEN_FOR_CONTRACTOR.has(s)

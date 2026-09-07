@@ -6,7 +6,13 @@
 // a test, because "deliberate" wears off and the two drifting apart means a
 // user seeing a nav item that 403s, or not seeing one they can use.
 import { describe, expect, it } from 'vitest'
-import { CATEGORY_OWNER_ROLES, isCategoryOwner, roleLabel } from './roles'
+import {
+  CATEGORY_OWNER_ROLES,
+  REVIEW_AUTHORITY_ROLES,
+  canReview,
+  isCategoryOwner,
+  roleLabel,
+} from './roles'
 
 // The role names seeded in app/core/bootstrap.py. Literal on purpose: if a
 // name changes on the server, this fails rather than quietly disagreeing.
@@ -53,5 +59,36 @@ describe('isCategoryOwner', () => {
     // first render after a reload.
     expect(isCategoryOwner(undefined)).toBe(false)
     expect(isCategoryOwner(null)).toBe(false)
+  })
+})
+
+describe('canReview', () => {
+  // Mirrors app/core/deps.py:require_review_authority. The interface may only
+  // narrow what the server allows, never widen it -- offering a control the
+  // server refuses is how an Admin came to be shown an assign bar that
+  // answered 403.
+  it('is exactly PM and Coordinator', () => {
+    expect(REVIEW_AUTHORITY_ROLES).toEqual(['PM', 'Coordinator'])
+  })
+
+  it('admits both roles that share the lifecycle', () => {
+    expect(canReview({ role: { name: 'PM' } })).toBe(true)
+    expect(canReview({ role: { name: 'Coordinator' } })).toBe(true)
+  })
+
+  it('excludes Admin, who the server refuses on workflow writes', () => {
+    expect(canReview({ role: { name: 'Admin' } })).toBe(false)
+  })
+
+  it('excludes contractors, viewers and category owners', () => {
+    for (const name of ['Contractor', 'Viewer', 'RegionalManager', ...CATEGORY_OWNER_ROLES]) {
+      expect(canReview({ role: { name } }), name).toBe(false)
+    }
+  })
+
+  it('says no rather than throwing when there is no user yet', () => {
+    expect(canReview(undefined)).toBe(false)
+    expect(canReview(null)).toBe(false)
+    expect(canReview({})).toBe(false)
   })
 })

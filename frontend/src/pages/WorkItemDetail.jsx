@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import api from '../api/client'
 import { useAuth } from '../context/AuthContext'
+import { canReview } from '../lib/roles'
 import { useToast } from '../context/ToastContext'
 import { ConfirmDialog, Loading, PageHead, StatusPill } from '../components/ui'
 
@@ -32,6 +33,11 @@ export default function WorkItemDetail() {
   if (!wi) return <Loading label="Loading work item" />
 
   const can = (roles) => roles.includes(role)
+  // PM and Coordinator are peers over this lifecycle. The three guards below
+  // used to name three different sets -- assignment was ['Admin','PM'],
+  // drive-test review was ['Admin','Coordinator'] -- and both included Admin,
+  // whom the server refuses on either.
+  const mayDecide = canReview(user)
 
   async function action(fn, okMsg) {
     try {
@@ -71,7 +77,7 @@ export default function WorkItemDetail() {
         <motion.div className="card card-pad" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.08 }}>
           <h3 style={{ fontSize: 15, marginBottom: 14 }}>Workflow actions</h3>
 
-          {can(['Admin', 'PM']) && (
+          {mayDecide && (
             <AssignAction contractors={contractors} onSubmit={(payload) =>
               action(() => api.post(`/work-items/${id}/assignment`, payload), 'Contractor assigned')
             } />
@@ -89,7 +95,7 @@ export default function WorkItemDetail() {
             } />
           )}
 
-          {can(['Admin', 'Coordinator']) && wi.current_stage === 'DT Submitted' && wi.active_drive_test_id && (
+          {mayDecide && wi.current_stage === 'DT Submitted' && wi.active_drive_test_id && (
             <CoordinatorReviewAction
               submissionDate={wi.dt_submission_date}
               onDecide={(payload) =>
@@ -101,9 +107,8 @@ export default function WorkItemDetail() {
             />
           )}
 
-          {!can(['Admin', 'PM']) &&
-            !(can(['Contractor']) && wi.current_stage === 'Assigned') &&
-            !(can(['Coordinator']) && wi.current_stage === 'DT Submitted') && (
+          {!mayDecide &&
+            !(can(['Contractor']) && wi.current_stage === 'Assigned') && (
               <p className="dim" style={{ fontSize: 13 }}>
                 No actions available at the current stage ({wi.current_stage}).
               </p>

@@ -4,13 +4,17 @@ import { useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { PageHead } from '../components/ui'
 import { useAuth } from '../context/AuthContext'
+import { canReview } from '../lib/roles'
 import HcBasketTab from './healthcheck/HcBasketTab'
 import HcResultsTab from './healthcheck/HcResultsTab'
 import HcHistoryTab from './healthcheck/HcHistoryTab'
 
 export default function HealthCheck() {
   const { user } = useAuth()
-  const canSeeHistory = ['Admin', 'PM'].includes(user?.role?.name)
+  // The Coordinator assigns health checks, so hiding contractor performance
+  // from them meant the role doing the assigning could not see how the
+  // subcontractors it chose were performing.
+  const canSeeHistory = canReview(user)
   const tabs = [
     { key: 'basket', label: 'HC Basket', icon: ClipboardList },
     { key: 'results', label: 'HC Results', icon: ListChecks },
