@@ -18,7 +18,7 @@ import {
 // name changes on the server, this fails rather than quietly disagreeing.
 const SEEDED_ROLES = [
   'Admin', 'PM', 'Coordinator', 'RegionalManager', 'Contractor', 'Viewer',
-  'CpgPower', 'CpgRolloutPM', 'ManagedService', 'NwgPlanning',
+  'CpgPower', 'CpgRolloutPM', 'ManagedService', 'NwgPlanning', 'HuaweiCleanup',
 ]
 
 describe('roleLabel', () => {
@@ -41,11 +41,17 @@ describe('roleLabel', () => {
 })
 
 describe('isCategoryOwner', () => {
-  it('recognises the four problem-category owners', () => {
+  it('recognises every problem-category owner the server seeds', () => {
     for (const role of CATEGORY_OWNER_ROLES) {
       expect(isCategoryOwner(role), role).toBe(true)
     }
-    expect(CATEGORY_OWNER_ROLES).toHaveLength(4)
+    // Five since Huawei Cleanup joined. Pinned to a literal rather than a
+    // count so adding an owner role fails here loudly, which is the point:
+    // this list and app/core/deps.py:CATEGORY_OWNER_ROLES must agree, or a
+    // team gets a nav item that 403s, or none at all.
+    expect(CATEGORY_OWNER_ROLES).toEqual([
+      'CpgPower', 'CpgRolloutPM', 'ManagedService', 'NwgPlanning', 'HuaweiCleanup',
+    ])
   })
 
   it('does not treat a staff role as a category owner', () => {

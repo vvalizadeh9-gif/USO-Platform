@@ -137,6 +137,40 @@ class ProblemCategoryCreate(BaseModel):
     name: str
 
 
+class ProblemCategoryAdminOut(ORMModel):
+    """A category as the Admin console shows it: routing and current load.
+
+    ``open_fixes`` is why this is a separate schema from the dropdown's
+    ``ProblemCategoryOut``. Re-pointing a category at a different role, or
+    deactivating it, is a decision about work in flight, and the number of
+    fixes currently open against it is the fact that makes that decision
+    answerable.
+    """
+
+    id: int
+    name: str
+    active: bool
+    owner_role_id: int | None = None
+    owner_role_name: str | None = None
+    sla_days: int
+    open_fixes: int = 0
+    total_fixes: int = 0
+
+
+class ProblemCategoryWrite(BaseModel):
+    """Create or update a category. Every field optional on update.
+
+    ``sla_days`` is bounded rather than free: zero means every fix is overdue
+    the moment it opens, and a value in the hundreds silently disables the
+    only pressure the remediation loop applies.
+    """
+
+    name: str | None = Field(default=None, min_length=2, max_length=120)
+    owner_role_id: int | None = None
+    sla_days: int | None = Field(default=None, ge=1, le=365)
+    active: bool | None = None
+
+
 class RoleOut(ORMModel):
     id: int
     name: str

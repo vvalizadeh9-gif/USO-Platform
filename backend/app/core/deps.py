@@ -26,8 +26,15 @@ CPG_POWER = "CpgPower"
 CPG_ROLLOUT_PM = "CpgRolloutPM"
 MANAGED_SERVICE = "ManagedService"
 NWG_PLANNING = "NwgPlanning"
+HUAWEI_CLEANUP = "HuaweiCleanup"
 
-CATEGORY_OWNER_ROLES = (CPG_POWER, CPG_ROLLOUT_PM, MANAGED_SERVICE, NWG_PLANNING)
+CATEGORY_OWNER_ROLES = (
+    CPG_POWER,
+    CPG_ROLLOUT_PM,
+    MANAGED_SERVICE,
+    NWG_PLANNING,
+    HUAWEI_CLEANUP,
+)
 
 
 def get_current_user_allowing_password_change(

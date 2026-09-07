@@ -6,7 +6,7 @@ from pathlib import Path
 
 from alembic.script import ScriptDirectory
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
-from sqlalchemy import func, or_, select, text
+from sqlalchemy import case, func, or_, select, text
 from sqlalchemy.orm import Session
 
 from app.core import audit_actions, user_status
@@ -17,7 +17,15 @@ from app.core.passwords import PasswordError, validate_password
 from app.core.security import generate_temporary_password, hash_password
 from app.models.acceptance import AuditLog, CpmChangeRequest, CpmImportBatch
 from app.models.auth import PasswordResetRequest
-from app.models.reference import Contractor, Province, Role, User, user_province_access
+from app.models.health_check import HcRemediation
+from app.models.reference import (
+    Contractor,
+    ProblemCategory,
+    Province,
+    Role,
+    User,
+    user_province_access,
+)
 from app.schemas import (
     AdminPasswordReset,
     AdminPasswordResetResult,
@@ -32,6 +40,8 @@ from app.schemas import (
     LastCpmImportOut,
     PasswordResetRequestDecision,
     PasswordResetRequestOut,
+    ProblemCategoryAdminOut,
+    ProblemCategoryWrite,
     SystemHealthOut,
     UserCreate,
     UserOut,
@@ -847,6 +857,226 @@ def dismiss_password_reset_request(
 
 
 # ---------------- Admin Dashboard ----------------
+# ---------------- Problem categories: the remediation routing table ----------
+#
+# A category is a row that says: this kind of failure belongs to that team, and
+# they have this many days. The remediation loop reads it to decide whose queue
+# a failed health check lands in, which makes it the one piece of workflow
+# configuration that genuinely changes with the business rather than with the
+# code.
+#
+# It was always meant to be editable -- ``owner_role_id`` and ``sla_days`` are
+# columns, permission checks ask ``Role.is_category_owner`` rather than
+# comparing against a list of names, and the seeding deliberately only fills in
+# what is missing so an administrator's choices survive a restart. The
+# documentation said an Admin could add a category and point it at a role. The
+# API to do it was never written, so the only way was a code change and a
+# deploy.
+def _category_row(category: ProblemCategory, counts: dict) -> dict:
+    open_count, total_count = counts.get(category.id, (0, 0))
+    return {
+        "id": category.id,
+        "name": category.name,
+        "active": category.active,
+        "owner_role_id": category.owner_role_id,
+        "owner_role_name": (
+            category.owner_role.name if category.owner_role else None
+        ),
+        "sla_days": category.sla_days,
+        "open_fixes": open_count,
+        "total_fixes": total_count,
+    }
+
+
+def _fix_counts(db: Session) -> dict[int, tuple[int, int]]:
+    """Open and lifetime fix counts per category, in one query.
+
+    Shown beside every row because re-pointing a category at another role, or
+    deactivating it, is a decision about work in flight -- and the number of
+    fixes riding on it is what makes that decision answerable.
+    """
+    rows = db.execute(
+        select(
+            HcRemediation.problem_category_id,
+            func.count(HcRemediation.id),
+            func.sum(
+                case((HcRemediation.closed_at.is_(None), 1), else_=0)
+            ),
+        ).group_by(HcRemediation.problem_category_id)
+    ).all()
+    return {
+        category_id: (int(open_count or 0), int(total or 0))
+        for category_id, total, open_count in rows
+    }
+
+
+def _load_category(db: Session, category_id: int) -> ProblemCategory:
+    category = db.get(ProblemCategory, category_id)
+    if category is None:
+        raise HTTPException(404, "Problem category not found")
+    return category
+
+
+def _assert_owner_role(db: Session, role_id: int | None) -> None:
+    """A category may only be owned by a role flagged as a category owner.
+
+    Pointing one at, say, Contractor would open fixes into a queue that role's
+    screens do not have and its permissions do not reach -- the work would
+    simply never be seen. Refusing here is the difference between a
+    configuration mistake and a silently lost site.
+    """
+    if role_id is None:
+        return
+    role = db.get(Role, role_id)
+    if role is None:
+        raise HTTPException(400, "That role does not exist")
+    if not role.is_category_owner:
+        raise HTTPException(
+            400,
+            f"{role.name} is not a problem-category owner role, so fixes "
+            "routed to it would appear in nobody's queue.",
+        )
+
+
+@router.get("/problem-categories", response_model=list[ProblemCategoryAdminOut])
+def list_problem_categories(
+    db: Session = Depends(get_db),
+    _: User = Depends(require_roles(ADMIN)),
+):
+    """Every category, active or not, with its routing and current load."""
+    categories = (
+        db.query(ProblemCategory).order_by(ProblemCategory.name).all()
+    )
+    counts = _fix_counts(db)
+    return [_category_row(c, counts) for c in categories]
+
+
+@router.post(
+    "/problem-categories", response_model=ProblemCategoryAdminOut, status_code=201
+)
+def create_problem_category(
+    payload: ProblemCategoryWrite,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_roles(ADMIN)),
+):
+    """Add a category. Its owning role's Fix Queue appears with no release."""
+    name = (payload.name or "").strip()
+    if not name:
+        raise HTTPException(400, "A category needs a name")
+    if db.query(ProblemCategory).filter(ProblemCategory.name == name).first():
+        raise HTTPException(409, f'A category called "{name}" already exists')
+    _assert_owner_role(db, payload.owner_role_id)
+
+    category = ProblemCategory(
+        name=name,
+        owner_role_id=payload.owner_role_id,
+        sla_days=payload.sla_days or 7,
+        active=True if payload.active is None else payload.active,
+    )
+    db.add(category)
+    db.flush()
+    record_audit(
+        db, user_id=user.id, action=audit_actions.CREATED,
+        module="HealthCheck", entity_type="ProblemCategory",
+        entity_id=category.id,
+        new_value={
+            "name": category.name,
+            "owner_role_id": category.owner_role_id,
+            "sla_days": category.sla_days,
+        },
+    )
+    db.commit()
+    db.refresh(category)
+    return _category_row(category, _fix_counts(db))
+
+
+@router.patch(
+    "/problem-categories/{category_id}", response_model=ProblemCategoryAdminOut
+)
+def update_problem_category(
+    category_id: int,
+    payload: ProblemCategoryWrite,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_roles(ADMIN)),
+):
+    """Rename a category, re-point it at another role, or change its SLA.
+
+    Renaming is safe and is the intended way to change a category's wording:
+    the row keeps its id, so every open fix and every historical round that
+    points at it keeps pointing at it. Deleting is not offered at all, for the
+    same reason -- there is no version of removing a category that does not
+    also remove the record of the work done under it. Deactivating takes it out
+    of the pickers and leaves the history intact.
+
+    Re-pointing affects only fixes opened *afterwards*.
+    ``hc_remediations.owner_role_id`` is copied from the category when the fix
+    is created precisely so that a later change of ownership cannot silently
+    reassign work someone is already doing.
+    """
+    category = _load_category(db, category_id)
+    before = {
+        "name": category.name,
+        "owner_role_id": category.owner_role_id,
+        "sla_days": category.sla_days,
+        "active": category.active,
+    }
+
+    if payload.name is not None:
+        name = payload.name.strip()
+        if not name:
+            raise HTTPException(400, "A category needs a name")
+        clash = (
+            db.query(ProblemCategory)
+            .filter(ProblemCategory.name == name, ProblemCategory.id != category.id)
+            .first()
+        )
+        if clash is not None:
+            raise HTTPException(409, f'A category called "{name}" already exists')
+        category.name = name
+
+    if payload.owner_role_id is not None:
+        _assert_owner_role(db, payload.owner_role_id)
+        category.owner_role_id = payload.owner_role_id
+
+    if payload.sla_days is not None:
+        category.sla_days = payload.sla_days
+
+    if payload.active is not None:
+        if not payload.active:
+            open_fixes = (
+                db.query(HcRemediation)
+                .filter(
+                    HcRemediation.problem_category_id == category.id,
+                    HcRemediation.closed_at.is_(None),
+                )
+                .count()
+            )
+            if open_fixes:
+                raise HTTPException(
+                    409,
+                    f"{open_fixes} fix(es) are still open against this "
+                    "category. Close or re-route them before deactivating it, "
+                    "or they will sit in a queue nobody is looking at.",
+                )
+        category.active = payload.active
+
+    db.flush()
+    record_audit(
+        db, user_id=user.id, action=audit_actions.UPDATED,
+        module="HealthCheck", entity_type="ProblemCategory",
+        entity_id=category.id, old_value=before,
+        new_value={
+            "name": category.name,
+            "owner_role_id": category.owner_role_id,
+            "sla_days": category.sla_days,
+            "active": category.active,
+        },
+    )
+    db.commit()
+    db.refresh(category)
+    return _category_row(category, _fix_counts(db))
+
+
 @router.get("/stats", response_model=AdminStatsOut)
 def admin_stats(
     db: Session = Depends(get_db),

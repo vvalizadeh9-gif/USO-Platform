@@ -19,6 +19,7 @@ from app.core.database import SessionLocal
 from app.core.deps import (
     CPG_POWER,
     CPG_ROLLOUT_PM,
+    HUAWEI_CLEANUP,
     MANAGED_SERVICE,
     NWG_PLANNING,
 )
@@ -44,16 +45,18 @@ CATEGORY_OWNER_ROLES = [
     CPG_ROLLOUT_PM,
     MANAGED_SERVICE,
     NWG_PLANNING,
+    HUAWEI_CLEANUP,
 ]
 
 # category name -> (owning role, SLA in days). This is the routing table for
 # the remediation loop; it is seeded here but owned by Admin afterwards, so a
 # re-pointed category is never overwritten on restart.
 DEFAULT_PROBLEM_CATEGORIES: dict[str, tuple[str, int]] = {
-    "Temporary Power": (CPG_POWER, 7),
-    "Project Responsibility": (CPG_ROLLOUT_PM, 7),
-    "MS Responsibility": (MANAGED_SERVICE, 10),
-    "NWG Responsibility": (NWG_PLANNING, 14),
+    "Temp Power": (CPG_POWER, 7),
+    "CPG Project": (CPG_ROLLOUT_PM, 7),
+    "Managed Service": (MANAGED_SERVICE, 10),
+    "NWG RND": (NWG_PLANNING, 14),
+    "Huawei Cleanup": (HUAWEI_CLEANUP, 7),
 }
 
 

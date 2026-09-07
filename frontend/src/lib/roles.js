@@ -14,9 +14,10 @@ const ROLE_LABELS = {
   CpgRolloutPM: 'CPG Rollout Project Manager (On-Site)',
   ManagedService: 'Managed Service (MS)',
   NwgPlanning: 'NWG Planning',
+  HuaweiCleanup: 'Huawei Cleanup',
 }
 
-// The four roles that own a health-check problem category. Used for route
+// The roles that own a health-check problem category. Used for route
 // guards and nav visibility; the backend decides permissions from
 // Role.is_category_owner, so this list only shapes what the UI offers.
 export const CATEGORY_OWNER_ROLES = [
@@ -24,6 +25,7 @@ export const CATEGORY_OWNER_ROLES = [
   'CpgRolloutPM',
   'ManagedService',
   'NwgPlanning',
+  'HuaweiCleanup',
 ]
 
 export function isCategoryOwner(roleName) {

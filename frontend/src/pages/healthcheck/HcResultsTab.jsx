@@ -10,10 +10,11 @@ import SiteHistoryDrawer, { SiteCodeButton } from '../../components/SiteHistoryD
 // Fallback only. Categories are admin-extendable, so the live list comes from
 // /reference/problem-categories; this keeps the screen usable if that fails.
 const FALLBACK_CATEGORIES = [
-  'Temporary Power',
-  'NWG Responsibility',
-  'MS Responsibility',
-  'Project Responsibility',
+  'Managed Service',
+  'CPG Project',
+  'NWG RND',
+  'Huawei Cleanup',
+  'Temp Power',
 ]
 
 export default function HcResultsTab({ highlightTaskId } = {}) {

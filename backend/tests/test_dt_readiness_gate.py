@@ -38,7 +38,7 @@ from app.core.security import hash_password  # noqa: E402
 from app.services import cpm_columns as C  # noqa: E402
 from tests.conftest import create_schema, login_form  # noqa: E402
 
-POWER = "Temporary Power"
+POWER = "Temp Power"
 
 
 @pytest.fixture(scope="module")
