@@ -17,16 +17,16 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from sqlalchemy import select
+from sqlalchemy import Select, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.core.deps import ADMIN, COORDINATOR, CONTRACTOR, PM
 from app.models.acceptance import CpmChangeRequest, Notification
 from app.models.health_check import HcAssignment, HcRemediation, HcTask
 from app.models.reference import User
-from app.models.workitem import WorkItem
+from app.models.workitem import Site, WorkItem
 from app.schemas import ActionItem
-from app.services.visibility import apply_work_item_scope
+from app.services.visibility import apply_work_item_scope, visible_work_item_ids
 from app.services.workflow import STAGE_READY
 
 
@@ -97,7 +97,10 @@ def _cpm_change_request_items(db: Session, user: User) -> list[ActionItem]:
         return []
     pending = (
         db.query(CpmChangeRequest)
-        .filter(CpmChangeRequest.status == "Pending")
+        .filter(
+            CpmChangeRequest.status == "Pending",
+            CpmChangeRequest.site_code.in_(_visible_site_codes(db, user)),
+        )
         .order_by(CpmChangeRequest.id.desc())
         .all()
     )
@@ -113,6 +116,21 @@ def _cpm_change_request_items(db: Session, user: User) -> list[ActionItem]:
     ]
 
 
+def _visible_site_codes(db: Session, user: User) -> Select:
+    """Site codes inside this user's province scope, as a subquery.
+
+    Change requests are keyed by site code rather than by work item, so they
+    cannot reuse ``visible_work_item_ids`` directly. A PM who sees every
+    province still sees every request; this only narrows a scoped user.
+    """
+    return (
+        select(Site.site_code)
+        .join(WorkItem, WorkItem.site_id == Site.id)
+        .where(WorkItem.id.in_(visible_work_item_ids(user, db)))
+        .distinct()
+    )
+
+
 def _health_check_items(db: Session, user: User) -> list[ActionItem]:
     """HC results awaiting Coordinator/PM review, and, for a subcontractor,
     the sites in their own open assignments still awaiting submission."""
@@ -123,7 +141,16 @@ def _health_check_items(db: Session, user: User) -> list[ActionItem]:
         review_q = (
             db.query(HcTask)
             .join(HcAssignment)
-            .filter(HcTask.completed_at.isnot(None), HcTask.reviewed_at.is_(None))
+            .filter(
+                HcTask.completed_at.isnot(None),
+                HcTask.reviewed_at.is_(None),
+                # Province scope, the same rule every other read in the
+                # platform applies. Without it this feed named the site code,
+                # the round and the readiness of every health check in the
+                # country to a coordinator granted a single province -- the
+                # one place row-level security was never wired in.
+                HcTask.work_item_id.in_(visible_work_item_ids(user, db)),
+            )
             .options(selectinload(HcTask.work_item).selectinload(WorkItem.site))
             .order_by(HcTask.id.desc())
             .all()
@@ -186,7 +213,14 @@ def _remediation_items(db: Session, user: User) -> list[ActionItem]:
         .order_by(HcRemediation.id.desc())
     )
     if is_owner:
+        # An owner is scoped by what is routed to their role, not by
+        # geography -- the same rule ``apply_work_item_scope`` uses for them.
         q = q.filter(HcRemediation.owner_role_id == user.role_id)
+    else:
+        # Staff are scoped by province, here as everywhere else.
+        q = q.filter(
+            HcRemediation.work_item_id.in_(visible_work_item_ids(user, db))
+        )
 
     for rem in q.all():
         wi = db.get(WorkItem, rem.work_item_id)

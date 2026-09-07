@@ -14,18 +14,18 @@ from app.core.deps import (
     require_roles,
 )
 from app.models.reference import User
-from app.models.workitem import Assignment, DriveTest, HealthCheck, Village, WorkItem
+from app.models.workitem import Assignment, DriveTest, Village, WorkItem
 from app.models.acceptance import Acceptance
 from app.schemas import (
     AcceptanceUpdate,
     AssignmentCreate,
     BulkAssignmentCreate,
     DriveTestCreate,
-    HealthCheckCreate,
     ReturnToCoordinatorRequest,
     ReviewRequest,
 )
 from app.services import acceptance_workflow as acceptance_flow
+from app.services import health_check as hc
 from app.services.audit import notify_roles, record_audit
 from app.services.visibility import apply_work_item_scope, visible_work_item_ids
 from app.services.workflow import refresh_stage
@@ -100,44 +100,47 @@ def _require_active_assignment(wi: WorkItem, user: User) -> None:
         )
 
 
+def _assert_assignable(
+    db: Session, wi: WorkItem, assignment_type: str
+) -> None:
+    """An official drive test may only be assigned to a site that passed HC.
+
+    This is the lifecycle's central rule, and until now it was enforced by
+    which checkbox the interface chose to draw -- so the Work Items bulk bar
+    and this router's own single-site form would both accept a Problematic or
+    never-checked site. Enforced here, both endpoints get it, and so does
+    whatever calls them next.
+
+    Only ``official`` assignments are gated. ``first`` is the vestigial type
+    that predates ``hc_assignments`` and no longer means a drive test.
+    """
+    if assignment_type != "official":
+        return
+    label = wi.site.site_code if wi.site else f"Work item {wi.id}"
+    try:
+        hc.assert_ready_for_dt(db, wi.id, site_label=label)
+    except hc.NotReadyForDriveTest as exc:
+        raise HTTPException(400, str(exc)) from None
+
+
 def _now() -> datetime:
     return datetime.now(timezone.utc)
 
 
-@router.post("/work-items/{work_item_id}/health-check")
-def submit_health_check(
-    work_item_id: int,
-    payload: HealthCheckCreate,
-    db: Session = Depends(get_db),
-    user: User = Depends(require_roles(PM, CONTRACTOR)),
-):
-    """Contractor records the health check result."""
-    wi = _load_work_item(work_item_id, db, user)
-    _require_active_assignment(wi, user)
-    if payload.status == "Problematic" and payload.problem_category_id is None:
-        raise HTTPException(400, "Problematic health check requires a category")
-
-    hc = HealthCheck(
-        work_item_id=wi.id,
-        status=payload.status,
-        problem_category_id=payload.problem_category_id,
-        comment=payload.comment,
-        checked_by=user.id,
-        checked_at=_now(),
-    )
-    db.add(hc)
-    db.flush()
-    refresh_stage(wi)
-    record_audit(
-        db, user_id=user.id, action=audit_actions.SUBMITTED,
-        module="HealthCheck", entity_type="WorkItem",
-        entity_id=wi.id, new_value={"status": payload.status},
-    )
-    notify_roles(db, role_names=[PM], type="HealthCheckCompleted",
-                 message=f"Health check completed for work item {wi.id}",
-                 entity_type="WorkItem", entity_id=wi.id)
-    db.commit()
-    return {"status": "ok", "stage": wi.current_stage}
+# The single-flag health check endpoint that used to live here is gone.
+#
+# It wrote a ``health_checks`` row: a Ready/Problematic verdict with no round,
+# no per-technology detail, no remediation and no history -- which is every
+# part of the health check the lifecycle is made of. It survived the move to
+# ``hc_tasks`` as a second way to declare a site ready, reachable by PM and
+# Contractor, and ``derive_stage`` still honoured it. A site could therefore
+# reach an official drive test on a verdict that no subcontractor measured and
+# no coordinator reviewed.
+#
+# The table and the read-side fallback stay, so pre-migration rows still
+# resolve. Only the ability to write new ones is withdrawn. Health checks are
+# created through ``/hc/assignments`` and submitted through
+# ``/hc/tasks/{id}/result``.
 
 
 @router.post("/work-items/{work_item_id}/assignment")
@@ -149,6 +152,7 @@ def create_assignment(
 ):
     """PM assigns the work item to a contractor. Deactivates prior assignment."""
     wi = _load_work_item(work_item_id, db, user)
+    _assert_assignable(db, wi, payload.assignment_type)
     for prev in wi.assignments:
         if prev.is_active:
             prev.is_active = False
@@ -234,6 +238,7 @@ def bulk_assign(
     assigned = 0
     for wid in dict.fromkeys(payload.work_item_ids):  # de-dupe, preserve order
         wi = _load_work_item(wid, db, user)
+        _assert_assignable(db, wi, payload.assignment_type)
         for prev in wi.assignments:
             if prev.is_active:
                 prev.is_active = False

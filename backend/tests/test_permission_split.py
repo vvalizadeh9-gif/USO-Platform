@@ -90,14 +90,35 @@ def tokens(client):
 
 
 # ---------- PM keeps its previous write access ----------
-def test_pm_can_still_reach_health_check_endpoint(client, tokens):
+def test_legacy_health_check_endpoint_is_gone(client, tokens):
+    """The single-flag health check endpoint no longer exists, for anyone.
+
+    It wrote a readiness verdict carrying no round, no per-technology detail,
+    no remediation and no history -- a second way to declare a site ready that
+    bypassed the whole lifecycle. Asserted for the PM specifically because the
+    PM is the role that could still reach it last.
+    """
     r = client.post(
         "/api/v1/work-items/999999/health-check",
         headers=_auth(tokens["PM"]),
         json={"status": "Ready"},
     )
-    # Role gate passes; 404 (no such work item) proves the request reached
-    # the business logic instead of being rejected as 403 Forbidden.
+    assert r.status_code == 404, r.text
+    assert r.json()["detail"] == "Not Found"
+
+
+def test_pm_can_still_reach_hc_assignment_endpoint(client, tokens):
+    """The replacement path is open to the PM.
+
+    Role gate passes; the 404 is the scope check refusing an absent site,
+    which proves the request reached the business logic rather than being
+    turned away as 403 Forbidden.
+    """
+    r = client.post(
+        "/api/v1/hc/assignments",
+        headers=_auth(tokens["PM"]),
+        json={"contractor_id": 1, "work_item_ids": [999999]},
+    )
     assert r.status_code == 404, r.text
 
 
@@ -159,7 +180,10 @@ def test_pm_can_still_reach_hc_upload(client, tokens):
 @pytest.mark.parametrize(
     "method,url,kwargs",
     [
-        ("post", "/api/v1/work-items/1/health-check", {"json": {"status": "Ready"}}),
+        # The legacy /work-items/{id}/health-check endpoint used to be listed
+        # here. It no longer exists -- health checks are created through
+        # /hc/assignments and submitted through /hc/tasks/{id}/result, both of
+        # which are still covered below.
         (
             "post",
             "/api/v1/work-items/1/assignment",

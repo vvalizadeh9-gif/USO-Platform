@@ -29,10 +29,6 @@ from app.services.tech_parser import parse_technologies
 from app.services.visibility import apply_work_item_scope, visible_work_item_ids
 from app.services.workflow import refresh_stage
 
-# A site that has been round-tripped this many times is no longer a routine
-# fix — it is surfaced to the PM as an exception rather than quietly looping.
-EXCEPTION_ROUND = 3
-
 
 class ScopeError(ValueError):
     """A request naming records the caller may not reach.
@@ -41,6 +37,15 @@ class ScopeError(ValueError):
     all-or-nothing operations: quietly dropping the sites a caller may not
     touch would create an assignment that silently differs from the one they
     asked for.
+    """
+
+
+class AlreadyInHealthCheck(ValueError):
+    """One or more sites already sit inside a health check that is still open.
+
+    Separate from :class:`ScopeError` because it means something different to
+    the person on the other end: not "you may not touch this", but "somebody
+    already did". The screen answers it by refreshing.
     """
 
 
@@ -228,6 +233,71 @@ def completed_hc_work_item_ids(db: Session) -> set[int]:
     return {r[0] for r in rows}
 
 
+def latest_completed_task(db: Session, work_item_id: int) -> HcTask | None:
+    """The most recent completed health check for one site, or None.
+
+    "Most recent" is by completion time, not by id: a bulk template upload
+    writes several tasks in one transaction, and ordering those by id would
+    pick whichever row the database happened to insert last rather than the
+    check that actually finished last.
+    """
+    tasks = (
+        db.query(HcTask)
+        .filter(
+            HcTask.work_item_id == work_item_id,
+            HcTask.completed_at.isnot(None),
+        )
+        .all()
+    )
+    if not tasks:
+        return None
+    return max(tasks, key=lambda t: _as_aware(t.completed_at))
+
+
+class NotReadyForDriveTest(ValueError):
+    """A site was sent for official drive test before it passed a health check.
+
+    Carried as a named exception so the API can answer 400 with the reason,
+    and so the rule reads the same from every caller. The check lives here
+    rather than in the endpoints because there are two of them (single and
+    bulk) and a third would otherwise be written without it -- which is how
+    the rule came to be enforced only by which checkbox the interface drew.
+    """
+
+
+def assert_ready_for_dt(db: Session, work_item_id: int, *, site_label: str) -> None:
+    """Refuse an official drive-test assignment unless the site passed HC.
+
+    Two conditions, both required:
+
+    * the latest completed health check says ``Ready`` -- every requested
+      technology reported Normal, and
+    * a PM or Coordinator has reviewed it.
+
+    The review half matters as much as the result. A contractor's ``Ready``
+    is a measurement; the review is the business decision that the site may
+    proceed, and the lifecycle puts that decision before the drive test.
+    Without it a site could reach an official drive test with nobody having
+    agreed it should.
+    """
+    task = latest_completed_task(db, work_item_id)
+    if task is None:
+        raise NotReadyForDriveTest(
+            f"{site_label} has no completed health check yet."
+        )
+    if task.overall_result != "Ready":
+        raise NotReadyForDriveTest(
+            f"{site_label} did not pass its last health check "
+            f"(round {task.round_no}). It must be remediated and re-checked "
+            "before an official drive test."
+        )
+    if task.reviewed_at is None:
+        raise NotReadyForDriveTest(
+            f"{site_label} passed its health check but has not been confirmed "
+            "yet. Confirm it in HC Review first."
+        )
+
+
 def latest_completed_tasks(db: Session) -> dict[int, HcTask]:
     """The most recent completed HC task per work item."""
     tasks = (
@@ -338,6 +408,27 @@ def create_assignment(
         # Deliberately does not say which ids failed, or whether they exist:
         # the response must not become a way to probe for site ids.
         raise ScopeError("One or more of those sites could not be found")
+
+    # A site already inside an open check must not be handed to a second
+    # subcontractor. The basket hides such a site, so this cannot happen by
+    # working the screen -- but two coordinators on two stale basket pages,
+    # or any retry of a request that already succeeded, would otherwise
+    # create a duplicate task, and both would be submittable. The basket
+    # query is the only thing that has ever enforced this, and a query
+    # cannot enforce anything about a write.
+    already_open = set(
+        db.execute(
+            select(HcTask.work_item_id).where(
+                HcTask.work_item_id.in_(work_item_ids),
+                HcTask.completed_at.is_(None),
+            )
+        ).scalars()
+    )
+    if already_open:
+        raise AlreadyInHealthCheck(
+            f"{len(already_open)} of those sites are already in an open "
+            "health check. Refresh the pool and try again."
+        )
 
     assignment = HcAssignment(
         code=generate_assignment_code(db),

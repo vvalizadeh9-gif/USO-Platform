@@ -118,6 +118,10 @@ def create_hc_assignment(
         )
     except hc.ScopeError as exc:
         raise HTTPException(404, str(exc)) from None
+    except hc.AlreadyInHealthCheck as exc:
+        # 409, not 400: the request was well formed and would have been valid
+        # a moment ago. The screen answers this by reloading the pool.
+        raise HTTPException(409, str(exc)) from None
     record_audit(
         db, user_id=user.id, action=audit_actions.CREATED,
         module="HealthCheck", entity_type="HcAssignment",
