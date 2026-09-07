@@ -1,5 +1,5 @@
 import { CheckCircle2, XCircle, Search, ChevronRight, ChevronDown, ShieldCheck, Download } from 'lucide-react'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import api from '../../api/client'
 import { useAuth } from '../../context/AuthContext'
 import { canReview as hasReviewAuthority } from '../../lib/roles'
@@ -255,9 +255,10 @@ export default function HcResultsTab({ highlightTaskId, onCountChange } = {}) {
                 const selectable = canAssign && r.overall_result === 'Ready' && r.reviewed
                 const isHighlighted = r.task_id != null && String(r.task_id) === String(highlightTaskId)
                 return (
-                  <>
+                  // The key belongs on the Fragment: each result renders a row
+                  // and, when expanded, a second detail row beneath it.
+                  <Fragment key={key}>
                     <tr
-                      key={key}
                       ref={isHighlighted ? highlightRef : null}
                       style={isHighlighted ? { outline: '2px solid var(--signal)', outlineOffset: -2 } : undefined}
                     >
@@ -320,7 +321,7 @@ export default function HcResultsTab({ highlightTaskId, onCountChange } = {}) {
                       <td className="dim" style={{ fontSize: 12.5 }}>{r.assignment_code}</td>
                     </tr>
                     {isOpen && (
-                      <tr key={`${key}-detail`}>
+                      <tr>
                         {canAssign && <td></td>}
                         <td></td>
                         <td colSpan={8} style={{ background: 'var(--surface-2)', padding: '10px 14px' }}>
@@ -328,7 +329,7 @@ export default function HcResultsTab({ highlightTaskId, onCountChange } = {}) {
                         </td>
                       </tr>
                     )}
-                  </>
+                  </Fragment>
                 )
               })}
             </tbody>

@@ -1,5 +1,5 @@
 import { Plus, Wrench } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { Fragment, useEffect, useState } from 'react'
 import api from '../../api/client'
 import { EmptyState, Loading } from '../../components/ui'
 import { useToast } from '../../context/ToastContext'
@@ -120,8 +120,11 @@ export default function ProblemCategoriesTab() {
           </thead>
           <tbody>
             {categories.map((c) => (
-              <>
-                <tr key={c.id} style={{ opacity: c.active ? 1 : 0.55 }}>
+              // Keyed on the Fragment, not the rows inside it: a category renders
+              // two sibling rows when it is being edited, and React reconciles
+              // the outermost element of each iteration.
+              <Fragment key={c.id}>
+                <tr style={{ opacity: c.active ? 1 : 0.55 }}>
                   <td style={{ fontWeight: 500 }}>
                     <span className="row" style={{ gap: 7 }}>
                       <Wrench size={14} style={{ color: 'var(--text-dim)' }} />
@@ -153,7 +156,7 @@ export default function ProblemCategoriesTab() {
                   </td>
                 </tr>
                 {editing === c.id && (
-                  <tr key={`${c.id}-edit`}>
+                  <tr>
                     <td colSpan={6} style={{ background: 'var(--surface-2)', padding: '12px 14px' }}>
                       <CategoryForm
                         category={c}
@@ -165,7 +168,7 @@ export default function ProblemCategoriesTab() {
                     </td>
                   </tr>
                 )}
-              </>
+              </Fragment>
             ))}
           </tbody>
         </table>
