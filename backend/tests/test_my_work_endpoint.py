@@ -108,7 +108,7 @@ def _seed(tag: str, *, technologies="2G", villages=1, dt_status="Done"):
         requested_technology=technologies,
         dt_status=dt_status,
         dt_sc_contractor_id=contractor.id,
-        current_stage="Coordinator Approved",
+        current_stage="DT Done",
     )
     db.add(work_item)
     db.flush()

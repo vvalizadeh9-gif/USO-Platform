@@ -3,18 +3,26 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import api from '../api/client'
 import { useAuth } from '../context/AuthContext'
+import { canReview } from '../lib/roles'
 import { useToast } from '../context/ToastContext'
 import { EmptyState, Loading, PageHead, StatusPill } from '../components/ui'
 
-// "DT Completed" is gone: coordinator approval IS completion, so an approved
-// drive test terminates at "Coordinator Approved" (see services/workflow.py).
+// The stage tabs, in lifecycle order. Approval IS completion — there is no
+// separate "DT Completed" step — so an approved drive test terminates at
+// "DT Done" (see services/workflow.py).
+//
+// "HC In Progress" and "HC Review" fill the gap where a site being checked, or
+// waiting on a review decision, previously read as New or kept the stage it
+// carried before — visible in no queue at all.
 const STAGES = [
   'All',
+  'HC In Progress',
+  'HC Review',
   'Ready for Assignment',
   'Assigned',
   'Returned by Contractor',
   'DT Submitted',
-  'Coordinator Approved',
+  'DT Done',
   'Problematic',
 ]
 
@@ -53,11 +61,13 @@ const BASE = ['id', 'site_code', 'site_type', 'requested_technology']
 
 const STAGE_COLUMNS = {
   All: [...BASE, 'stage'],
+  'HC In Progress': [...BASE, 'stage'],
+  'HC Review': [...BASE, 'stage'],
   'Ready for Assignment': [...BASE, 'stage'],
   Assigned: [...BASE, 'assignment_date', 'assignment_user', 'stage'],
   'Returned by Contractor': [...BASE, 'assignment_date', 'assignment_user', 'returned_date', 'stage'],
   'DT Submitted': [...BASE, 'assignment_date', 'contractor_name', 'dt_submission_date', 'stage'],
-  'Coordinator Approved': [
+  'DT Done': [
     ...BASE, 'assignment_date', 'contractor_name', 'dt_submission_date',
     'aging_days', 'dt_approval_date', 'dt_approval_user', 'stage',
   ],
@@ -75,7 +85,7 @@ export default function WorkItems() {
   const { user } = useAuth()
   const toast = useToast()
   const navigate = useNavigate()
-  const canAssign = ['Admin', 'PM'].includes(user?.role?.name)
+  const canAssign = canReview(user)
   const isContractor = user?.role?.name === 'Contractor'
   const visibleStages = STAGES.filter(
     (s) => !isContractor || !STAGES_HIDDEN_FOR_CONTRACTOR.has(s)

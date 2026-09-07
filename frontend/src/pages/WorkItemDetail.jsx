@@ -1,9 +1,10 @@
 import { motion } from 'framer-motion'
-import { ArrowLeft, CheckCircle2, CornerUpLeft, Radio, XCircle } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { ArrowLeft, CheckCircle2, CornerUpLeft, Paperclip, Radio, XCircle } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import api from '../api/client'
 import { useAuth } from '../context/AuthContext'
+import { canReview } from '../lib/roles'
 import { useToast } from '../context/ToastContext'
 import { ConfirmDialog, Loading, PageHead, StatusPill } from '../components/ui'
 
@@ -32,14 +33,23 @@ export default function WorkItemDetail() {
   if (!wi) return <Loading label="Loading work item" />
 
   const can = (roles) => roles.includes(role)
+  // PM and Coordinator are peers over this lifecycle. The three guards below
+  // used to name three different sets -- assignment was ['Admin','PM'],
+  // drive-test review was ['Admin','Coordinator'] -- and both included Admin,
+  // whom the server refuses on either.
+  const mayDecide = canReview(user)
 
+  // Returns the response body: the drive-test submission needs the new
+  // drive_test_id back so it can attach the report to it.
   async function action(fn, okMsg) {
     try {
-      await fn()
+      const res = await fn()
       toast.success(okMsg)
       await load()
+      return res?.data
     } catch (err) {
       toast.error('Action failed', err.response?.data?.detail || 'Please try again.')
+      return undefined
     }
   }
 
@@ -71,16 +81,21 @@ export default function WorkItemDetail() {
         <motion.div className="card card-pad" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.08 }}>
           <h3 style={{ fontSize: 15, marginBottom: 14 }}>Workflow actions</h3>
 
-          {can(['Admin', 'PM']) && (
+          {mayDecide && (
             <AssignAction contractors={contractors} onSubmit={(payload) =>
               action(() => api.post(`/work-items/${id}/assignment`, payload), 'Contractor assigned')
             } />
           )}
 
-          {can(['Admin', 'PM', 'Contractor']) && wi.current_stage === 'Assigned' && (
-            <DriveTestSubmitAction onSubmit={(payload) =>
-              action(() => api.post(`/work-items/${id}/drive-test`, payload), 'Drive test submitted to coordinator')
-            } />
+          {can(['PM', 'Contractor']) && wi.current_stage === 'Assigned' && (
+            <DriveTestSubmitAction
+              onSubmit={(payload) =>
+                action(
+                  () => api.post(`/work-items/${id}/drive-test`, payload),
+                  'Drive test submitted for review',
+                )
+              }
+            />
           )}
 
           {can(['Contractor']) && wi.current_stage === 'Assigned' && (
@@ -89,7 +104,7 @@ export default function WorkItemDetail() {
             } />
           )}
 
-          {can(['Admin', 'Coordinator']) && wi.current_stage === 'DT Submitted' && wi.active_drive_test_id && (
+          {mayDecide && wi.current_stage === 'DT Submitted' && wi.active_drive_test_id && (
             <CoordinatorReviewAction
               submissionDate={wi.dt_submission_date}
               onDecide={(payload) =>
@@ -101,9 +116,8 @@ export default function WorkItemDetail() {
             />
           )}
 
-          {!can(['Admin', 'PM']) &&
-            !(can(['Contractor']) && wi.current_stage === 'Assigned') &&
-            !(can(['Coordinator']) && wi.current_stage === 'DT Submitted') && (
+          {!mayDecide &&
+            !(can(['Contractor']) && wi.current_stage === 'Assigned') && (
               <p className="dim" style={{ fontSize: 13 }}>
                 No actions available at the current stage ({wi.current_stage}).
               </p>
@@ -158,18 +172,15 @@ function DetailRow({ label, value }) {
   )
 }
 
+// Assigning here means one thing: the official drive test. The old
+// "assignment type" dropdown offered "first" as well, which predates the
+// hc_assignments table — initial health checks have had their own assignment
+// flow for some time, and nothing in the app sends that value any more.
+// Leaving it on screen meant offering a choice with one real answer.
 function AssignAction({ contractors, onSubmit }) {
   const [contractorId, setContractorId] = useState('')
-  const [type, setType] = useState('first')
   return (
     <div className="mb-16">
-      <div className="field">
-        <label>Assignment type</label>
-        <select className="input" value={type} onChange={(e) => setType(e.target.value)}>
-          <option value="first">First (initial)</option>
-          <option value="official">Official</option>
-        </select>
-      </div>
       <div className="field">
         <label>Contractor</label>
         <select className="input" value={contractorId} onChange={(e) => setContractorId(e.target.value)}>
@@ -181,40 +192,68 @@ function AssignAction({ contractors, onSubmit }) {
         className="btn"
         style={{ width: '100%', justifyContent: 'center' }}
         disabled={!contractorId}
-        onClick={() => onSubmit({ assignment_type: type, contractor_id: Number(contractorId) })}
+        onClick={() =>
+          onSubmit({ assignment_type: 'official', contractor_id: Number(contractorId) })
+        }
       >
-        Assign contractor
+        Assign for drive test
       </button>
+      <small className="dim" style={{ display: 'block', marginTop: 6 }}>
+        Only a site that passed its health check and was confirmed can be
+        assigned.
+      </small>
     </div>
   )
 }
 
-// Contractor records the drive test date and submits — nothing more is
-// required. The coordinator picks it up for approval; approving is what
-// marks the site DT-Done on the Drive Test dashboard.
+// Contractor records when the drive test was actually executed and attaches
+// the report. A PM or Coordinator picks it up for approval; approving is what
+// marks the site DT Done on the dashboard.
+//
+// The date field is open. It used to be capped at today with Today/Yesterday
+// chips, which assumed drive tests get logged the day they happen — the
+// backend never had that restriction, so the rule only ever existed in this
+// form. A date far from today gets a note rather than a second hard rule: the
+// contractor is the one who knows when they drove the route.
 function DriveTestSubmitAction({ onSubmit }) {
   const today = new Date().toISOString().slice(0, 10)
   const [date, setDate] = useState(today)
+  const [files, setFiles] = useState([])
   const [busy, setBusy] = useState(false)
+  const fileRef = useRef(null)
+  const toast = useToast()
 
   const submit = async () => {
     setBusy(true)
-    await onSubmit({ execution_date: date })
-    setBusy(false)
+    try {
+      const created = await onSubmit({ execution_date: date })
+      const driveTestId = created?.drive_test_id
+      if (driveTestId && files.length) {
+        for (const file of files) {
+          const form = new FormData()
+          form.append('file', file)
+          await api.post(`/drive-tests/${driveTestId}/evidence`, form, {
+            headers: { 'Content-Type': 'multipart/form-data' },
+          })
+        }
+      }
+    } catch (err) {
+      toast.error(
+        'Report not attached',
+        err.response?.data?.detail ||
+          'The drive test was submitted, but the file did not upload. Open the site again to retry.',
+      )
+    } finally {
+      setBusy(false)
+      setFiles([])
+    }
   }
 
-  // Most drive tests are logged the day of, or the day after. Two chips cover
-  // the overwhelming majority of entries; the field itself stays available
-  // for anything older, so nobody has to fight a calendar for the common case.
-  const shift = (days) => {
-    const d = new Date()
-    d.setDate(d.getDate() - days)
-    return d.toISOString().slice(0, 10)
-  }
-  const quick = [
-    { label: 'Today', value: today },
-    { label: 'Yesterday', value: shift(1) },
-  ]
+  const dayDelta = Math.round(
+    (new Date(today) - new Date(date)) / 86400000,
+  )
+  const unusualDate =
+    Number.isFinite(dayDelta) && (dayDelta < 0 || dayDelta > 60)
 
   return (
     <div
@@ -226,32 +265,51 @@ function DriveTestSubmitAction({ onSubmit }) {
         <b style={{ fontSize: 13.5 }}>Submit Drive Test</b>
       </div>
 
-      <div className="row" style={{ gap: 6, marginBottom: 10 }}>
-        {quick.map((q) => (
-          <button
-            key={q.label}
-            className={`btn btn-sm ${date === q.value ? 'btn-primary' : ''}`}
-            onClick={() => setDate(q.value)}
-          >
-            {q.label}
-          </button>
-        ))}
-      </div>
-
       <div className="field">
-        <label>Drive test date</label>
+        <label>Date the drive test was carried out</label>
         <input
           type="date"
           className="input"
           value={date}
           onChange={(e) => setDate(e.target.value)}
-          max={today}
           style={{ fontFamily: 'var(--font-mono, inherit)', fontVariantNumeric: 'tabular-nums' }}
         />
+        {unusualDate && (
+          <small className="dim" style={{ display: 'block', marginTop: 5 }}>
+            {dayDelta < 0
+              ? 'That date is in the future — check it before submitting.'
+              : `That is ${dayDelta} days ago. Fine if the drive test really was that long ago.`}
+          </small>
+        )}
+      </div>
+
+      <div className="field">
+        <label>Report / measurement files</label>
+        <div className="row wrap" style={{ gap: 8 }}>
+          <button className="btn btn-sm" onClick={() => fileRef.current?.click()}>
+            <Paperclip size={14} /> Attach file
+          </button>
+          <input
+            ref={fileRef}
+            type="file"
+            hidden
+            multiple
+            onChange={(e) => setFiles([...e.target.files])}
+          />
+          {files.length > 0 && (
+            <span className="dim" style={{ fontSize: 12.5 }}>
+              {files.map((f) => f.name).join(', ')}
+            </span>
+          )}
+        </div>
+        <small className="dim" style={{ display: 'block', marginTop: 5 }}>
+          Optional, but the reviewer approves against this — approval is what
+          counts the site as DT Done.
+        </small>
       </div>
 
       <button className="btn btn-primary" style={{ width: '100%', justifyContent: 'center' }} disabled={!date || busy} onClick={submit}>
-        {busy ? 'Submitting…' : 'Submit to coordinator'}
+        {busy ? 'Submitting…' : 'Submit for review'}
       </button>
     </div>
   )

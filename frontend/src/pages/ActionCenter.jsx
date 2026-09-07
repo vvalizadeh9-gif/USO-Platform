@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion'
-import { Radio, ClipboardCheck, GitCompare, ClipboardList, Bell, Check, ChevronRight } from 'lucide-react'
+import { Radio, ClipboardCheck, GitCompare, ClipboardList, Bell, Check, ChevronRight, Wrench } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import api from '../api/client'
@@ -22,8 +22,19 @@ export default function ActionCenter() {
   const [busy, setBusy] = useState(null)
   const navigate = useNavigate()
 
+  const [counters, setCounters] = useState([])
+
   function load() {
-    api.get('/action-center').then((r) => setItems(r.data)).catch(() => setItems([]))
+    api
+      .get('/action-center/summary')
+      .then((r) => {
+        setCounters(r.data.counters || [])
+        setItems(r.data.items || [])
+      })
+      .catch(() => {
+        setCounters([])
+        setItems([])
+      })
   }
   useEffect(load, [])
 
@@ -50,29 +61,30 @@ export default function ActionCenter() {
       <PageHead
         eyebrow="My work"
         title="Action Center"
-        subtitle="Everything that needs your attention right now, derived from live state — clears itself as things get handled."
+        subtitle="What needs you now. Every number is counted from live state and clears itself the moment the work is done."
       />
 
       {groups.length === 0 ? (
         <div className="card"><EmptyState title="You're all caught up" hint="Nothing pending right now." /></div>
       ) : (
         <>
-          <motion.div
-            className="grid grid-kpi"
-            style={{ marginBottom: 24 }}
-            variants={stagger}
-            initial="hidden"
-            animate="show"
-          >
-            {groups.map(({ category, rows }) => (
-              <CategoryKpiCard
-                key={category}
-                meta={CATEGORY_META[category]}
-                count={rows.length}
-                onOpen={() => navigate(rows[0].url)}
-              />
-            ))}
-          </motion.div>
+          {counters.length > 0 && (
+            <motion.div
+              className="grid grid-kpi"
+              style={{ marginBottom: 24 }}
+              variants={stagger}
+              initial="hidden"
+              animate="show"
+            >
+              {counters.map((c) => (
+                <QueueCounter
+                  key={c.key}
+                  counter={c}
+                  onOpen={() => navigate(c.url)}
+                />
+              ))}
+            </motion.div>
+          )}
 
           <motion.div style={{ display: 'flex', flexDirection: 'column', gap: 22 }} variants={stagger} initial="hidden" animate="show">
             {groups.map(({ category, rows }) => {
@@ -123,7 +135,28 @@ export default function ActionCenter() {
   )
 }
 
-function CategoryKpiCard({ meta, count, onOpen }) {
+// One queue, its size, and where the number leads.
+//
+// The counters are the page. A flat list of every item answered "what needs me
+// now" badly at scale: thirty-seven review rows filled the screen before the
+// second category appeared, so the question the page exists to answer took
+// scrolling to answer. The items are still below, behind the numbers.
+const COUNTER_META = {
+  pool: { icon: ClipboardList, color: 'var(--signal)' },
+  in_progress: { icon: Radio, color: 'var(--text-dim)' },
+  hc_review: { icon: ClipboardCheck, color: 'var(--green)' },
+  remediation: { icon: Wrench, color: 'var(--amber)' },
+  reroutes: { icon: GitCompare, color: 'var(--amber)' },
+  dt_assignment: { icon: Radio, color: 'var(--violet, var(--signal-strong))' },
+  dt_review: { icon: ClipboardCheck, color: 'var(--signal)' },
+  hc_submit: { icon: ClipboardList, color: 'var(--signal)' },
+  my_fixes: { icon: Wrench, color: 'var(--amber)' },
+  cpm: { icon: GitCompare, color: 'var(--amber)' },
+}
+
+function QueueCounter({ counter, onOpen }) {
+  const meta = COUNTER_META[counter.key] || { icon: Bell, color: 'var(--text-dim)' }
+  const Icon = meta.icon
   return (
     <motion.div
       className="stat"
@@ -133,8 +166,10 @@ function CategoryKpiCard({ meta, count, onOpen }) {
       transition={{ type: 'spring', stiffness: 300, damping: 20 }}
       onClick={onOpen}
     >
-      <div className="label"><meta.icon size={15} strokeWidth={2} style={{ color: meta.color }} /> {meta.label}</div>
-      <div className="value tnum">{count}</div>
+      <div className="label">
+        <Icon size={15} strokeWidth={2} style={{ color: meta.color }} /> {counter.label}
+      </div>
+      <div className="value tnum">{counter.count}</div>
     </motion.div>
   )
 }

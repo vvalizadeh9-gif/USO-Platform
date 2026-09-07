@@ -12,7 +12,7 @@ const STATUS_CLASS = {
   Submitted: 'pill-amber',
   'DT Submitted': 'pill-amber',
   // Coordinator approval is now terminal — an approved DT is a completed DT.
-  'Coordinator Approved': 'pill-green',
+  'DT Done': 'pill-green',
   Returned: 'pill-amber',
   'Returned by Contractor': 'pill-amber',
   Assigned: 'pill-violet',

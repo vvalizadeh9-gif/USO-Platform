@@ -1,7 +1,8 @@
 import { CheckCircle2, XCircle, Search, ChevronRight, ChevronDown, ShieldCheck, Download } from 'lucide-react'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import api from '../../api/client'
 import { useAuth } from '../../context/AuthContext'
+import { canReview as hasReviewAuthority } from '../../lib/roles'
 import { useToast } from '../../context/ToastContext'
 import { ConfirmDialog, EmptyState, Loading } from '../../components/ui'
 import SiteHistoryDrawer, { SiteCodeButton } from '../../components/SiteHistoryDrawer'
@@ -9,22 +10,30 @@ import SiteHistoryDrawer, { SiteCodeButton } from '../../components/SiteHistoryD
 // Fallback only. Categories are admin-extendable, so the live list comes from
 // /reference/problem-categories; this keeps the screen usable if that fails.
 const FALLBACK_CATEGORIES = [
-  'Temporary Power',
-  'NWG Responsibility',
-  'MS Responsibility',
-  'Project Responsibility',
+  'Managed Service',
+  'CPG Project',
+  'NWG RND',
+  'Huawei Cleanup',
+  'Temp Power',
 ]
 
-export default function HcResultsTab({ highlightTaskId } = {}) {
+export default function HcResultsTab({ highlightTaskId, onCountChange } = {}) {
   const { user } = useAuth()
   const toast = useToast()
-  const canAssign = ['Admin', 'PM'].includes(user?.role?.name)
-  const canReview = ['Admin', 'PM', 'Coordinator'].includes(user?.role?.name)
+  // One predicate for both: a role that may decide Ready or Problematic is
+  // the same role that may send a Ready site for its official drive test.
+  // These used to be two different lists, and the assign one named Admin --
+  // who the server refuses -- while omitting the Coordinator, who it allows.
+  const canAssign = hasReviewAuthority(user)
+  const canReview = canAssign
 
   const [results, setResults] = useState(null)
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState('all') // all | ready | notready
+  // Failed rows open by default: a reviewer deciding whether a site is
+  // problematic should not have to click to find out why it failed.
   const [expanded, setExpanded] = useState(() => new Set())
+  const [autoExpanded, setAutoExpanded] = useState(false)
   const [selected, setSelected] = useState(() => new Set())
   const [contractors, setContractors] = useState([])
   const highlightRef = useRef(null)
@@ -37,9 +46,20 @@ export default function HcResultsTab({ highlightTaskId } = {}) {
   const [categories, setCategories] = useState(FALLBACK_CATEGORIES)
   const [history, setHistory] = useState({ id: null, code: null })
 
+  // Unreviewed only. This table used to return every completed task ever
+  // recorded, so one screen was both the list of decisions still owed and the
+  // record of every decision ever made — and the queue never emptied, which is
+  // the one thing an active queue has to be able to do. The archive moved to
+  // the History tab.
   const load = () => {
     setSelected(new Set())
-    api.get('/hc/results').then((r) => setResults(r.data)).catch(() => setResults([]))
+    api
+      .get('/hc/results', { params: { reviewed: false } })
+      .then((r) => {
+        setResults(r.data)
+        onCountChange?.(r.data.length)
+      })
+      .catch(() => setResults([]))
   }
   useEffect(load, [])
 
@@ -50,6 +70,15 @@ export default function HcResultsTab({ highlightTaskId } = {}) {
       highlightRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' })
     }
   }, [highlightTaskId, results])
+
+  useEffect(() => {
+    if (!results || autoExpanded) return
+    const failed = results
+      .map((r, i) => (r.overall_result === 'NotReady' ? `${r.work_item_id}-${i}` : null))
+      .filter(Boolean)
+    if (failed.length) setExpanded(new Set(failed))
+    setAutoExpanded(true)
+  }, [results, autoExpanded])
 
   useEffect(() => {
     if (canAssign) api.get('/reference/contractors').then((r) => setContractors(r.data)).catch(() => {})
@@ -192,7 +221,10 @@ export default function HcResultsTab({ highlightTaskId } = {}) {
 
       {filtered.length === 0 ? (
         <div style={{ padding: 20 }}>
-          <EmptyState title="No results yet" hint="Completed health checks show here." />
+          <EmptyState
+            title="Nothing waiting on you"
+            hint="Results appear here the moment a subcontractor submits one. Decided results move to History."
+          />
         </div>
       ) : (
         <div style={{ maxHeight: 520, overflowY: 'auto' }}>
@@ -203,6 +235,8 @@ export default function HcResultsTab({ highlightTaskId } = {}) {
                 <th style={{ width: 28 }}></th>
                 <th>Site ID</th>
                 <th>Type</th>
+                <th>Round</th>
+                <th>Requested Tech</th>
                 <th>Result</th>
                 <th>Category</th>
                 <th>Subcontractor</th>
@@ -214,12 +248,17 @@ export default function HcResultsTab({ highlightTaskId } = {}) {
                 const key = `${r.work_item_id}-${i}`
                 const isOpen = expanded.has(key)
                 const techs = r.technologies || []
-                const selectable = canAssign && r.overall_result === 'Ready'
+                // Confirming is what makes a Ready site assignable: the
+                // server refuses an official drive test on a round nobody has
+                // reviewed, so offering the checkbox before then would be a
+                // control that answers 400.
+                const selectable = canAssign && r.overall_result === 'Ready' && r.reviewed
                 const isHighlighted = r.task_id != null && String(r.task_id) === String(highlightTaskId)
                 return (
-                  <>
+                  // The key belongs on the Fragment: each result renders a row
+                  // and, when expanded, a second detail row beneath it.
+                  <Fragment key={key}>
                     <tr
-                      key={key}
                       ref={isHighlighted ? highlightRef : null}
                       style={isHighlighted ? { outline: '2px solid var(--signal)', outlineOffset: -2 } : undefined}
                     >
@@ -249,6 +288,22 @@ export default function HcResultsTab({ highlightTaskId } = {}) {
                       </td>
                       <td className="text-data">{r.site_type}</td>
                       <td>
+                        {r.round_no > 1 ? (
+                          <span className="pill pill-cyan" style={{ fontSize: 11.5 }}>
+                            #{r.round_no}
+                          </span>
+                        ) : (
+                          <span className="dim tnum">1</span>
+                        )}
+                      </td>
+                      <td>
+                        <div className="row" style={{ gap: 5 }}>
+                          {(r.requested_technologies || []).map((t) => (
+                            <span key={t} className="pill pill-dim" style={{ fontSize: 11.5 }}>{t}</span>
+                          ))}
+                        </div>
+                      </td>
+                      <td>
                         {r.overall_result === 'Ready' ? (
                           <span className="row" style={{ gap: 5, color: 'var(--green)', fontWeight: 500, fontSize: 13 }}>
                             <CheckCircle2 size={15} /> Ready
@@ -266,15 +321,15 @@ export default function HcResultsTab({ highlightTaskId } = {}) {
                       <td className="dim" style={{ fontSize: 12.5 }}>{r.assignment_code}</td>
                     </tr>
                     {isOpen && (
-                      <tr key={`${key}-detail`}>
+                      <tr>
                         {canAssign && <td></td>}
                         <td></td>
-                        <td colSpan={6} style={{ background: 'var(--surface-2)', padding: '10px 14px' }}>
+                        <td colSpan={8} style={{ background: 'var(--surface-2)', padding: '10px 14px' }}>
                           <TechBreakdown techs={techs} />
                         </td>
                       </tr>
                     )}
-                  </>
+                  </Fragment>
                 )
               })}
             </tbody>

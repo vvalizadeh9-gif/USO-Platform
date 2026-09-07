@@ -153,7 +153,7 @@ def test_coordinator_approval_writes_dt_status_through(client):
     )
     assert r.status_code == 200, r.text
     # Approval is terminal — no PM step, no "DT Completed".
-    assert r.json()["stage"] == "Coordinator Approved"
+    assert r.json()["stage"] == "DT Done"
 
     db = SessionLocal()
     wi = db.get(WorkItem, wi_id)
@@ -221,7 +221,7 @@ def test_list_row_carries_assignment_and_aging(client):
     rows = client.get(
         "/api/v1/work-items",
         headers=_auth(token),
-        params={"stage": "Coordinator Approved"},
+        params={"stage": "DT Done"},
     ).json()
     assert len(rows) >= 1
 

@@ -186,10 +186,10 @@ def test_coordinator_review_sets_category(client):
     r = client.post(
         f"/api/v1/hc/tasks/{task['id']}/review",
         headers=h,
-        json={"problem_category": "Temporary Power"},
+        json={"problem_category": "Temp Power"},
     )
     assert r.status_code == 200, r.text
-    assert r.json()["problem_category"] == "Temporary Power"
+    assert r.json()["problem_category"] == "Temp Power"
     assert r.json()["reviewed"] is True
 
 

@@ -2,7 +2,7 @@
 
 The Work Items screen shows a different column set per stage tab (assignment
 date & user for Assigned, returned date for Returned, DT + approval metadata
-and aging for Coordinator Approved, ...). Rather than one endpoint per tab,
+and aging for DT Done, ...). Rather than one endpoint per tab,
 the list endpoint returns the union of those columns and the frontend renders
 the subset it needs.
 

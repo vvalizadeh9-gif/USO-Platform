@@ -137,6 +137,40 @@ class ProblemCategoryCreate(BaseModel):
     name: str
 
 
+class ProblemCategoryAdminOut(ORMModel):
+    """A category as the Admin console shows it: routing and current load.
+
+    ``open_fixes`` is why this is a separate schema from the dropdown's
+    ``ProblemCategoryOut``. Re-pointing a category at a different role, or
+    deactivating it, is a decision about work in flight, and the number of
+    fixes currently open against it is the fact that makes that decision
+    answerable.
+    """
+
+    id: int
+    name: str
+    active: bool
+    owner_role_id: int | None = None
+    owner_role_name: str | None = None
+    sla_days: int
+    open_fixes: int = 0
+    total_fixes: int = 0
+
+
+class ProblemCategoryWrite(BaseModel):
+    """Create or update a category. Every field optional on update.
+
+    ``sla_days`` is bounded rather than free: zero means every fix is overdue
+    the moment it opens, and a value in the hundreds silently disables the
+    only pressure the remediation loop applies.
+    """
+
+    name: str | None = Field(default=None, min_length=2, max_length=120)
+    owner_role_id: int | None = None
+    sla_days: int | None = Field(default=None, ge=1, le=365)
+    active: bool | None = None
+
+
 class RoleOut(ORMModel):
     id: int
     name: str
@@ -702,6 +736,26 @@ class ActionItem(BaseModel):
     source: str = "action"  # "action" (derived, clears itself) | "event" (dismissible)
 
 
+class ActionCounter(BaseModel):
+    """One queue, its size, and where to go to work it.
+
+    The Action Center's job is answering "what needs me now", and a flat list
+    of every item answered it badly at scale: thirty-seven review rows filled
+    the page before the second category appeared. The counters go first and the
+    items sit behind them.
+    """
+
+    key: str
+    label: str
+    count: int
+    url: str
+
+
+class ActionCenterOut(BaseModel):
+    counters: list[ActionCounter] = []
+    items: list[ActionItem] = []
+
+
 # ---------- Health Check workflow (Phase A) ----------
 class HcBasketItem(BaseModel):
     work_item_id: int
@@ -803,6 +857,94 @@ class HcRerouteDecision(BaseModel):
     approve: bool
 
 
+# ---------- The active queues ----------
+#
+# One shape per queue rather than one generic row, because each answers a
+# different question and the columns that make it answerable differ. A shared
+# "queue item" would carry every field for every queue and leave each screen
+# to work out which of them mean anything.
+class HcQueueCounts(BaseModel):
+    """How many items wait in each queue. Drives the tab badges."""
+
+    pool: int = 0
+    in_progress: int = 0
+    hc_review: int = 0
+    remediation: int = 0
+    reroutes: int = 0
+    dt_assignment: int = 0
+    dt_review: int = 0
+
+
+class HcInProgressRow(BaseModel):
+    assignment_id: int
+    code: str
+    contractor_name: str | None = None
+    assigned_at: datetime | None = None
+    days_outstanding: int = 0
+    sites_total: int = 0
+    sites_submitted: int = 0
+    sites_pending: int = 0
+    pending_sites: list[str | None] = []
+
+
+class HcRemediationRow(BaseModel):
+    id: int
+    work_item_id: int
+    site_code: str | None = None
+    province: str | None = None
+    category: str | None = None
+    owner_role: str | None = None
+    round_no: int = 1
+    technologies: list[str] = []
+    issue: str | None = None
+    days_open: int = 0
+    days_late: int = 0
+    due_at: datetime | None = None
+    reroute_pending: bool = False
+
+
+class HcRerouteRow(BaseModel):
+    id: int
+    work_item_id: int
+    site_code: str | None = None
+    province: str | None = None
+    from_category: str | None = None
+    to_category: str | None = None
+    reason: str | None = None
+    proposed_by: str | None = None
+    proposed_at: datetime | None = None
+    days_open: int = 0
+
+
+class DtAssignmentRow(BaseModel):
+    work_item_id: int
+    site_code: str | None = None
+    site_type: str | None = None
+    province: str | None = None
+    requested_technologies: list[str] = []
+    rounds_taken: int = 1
+    hc_contractor: str | None = None
+    ready_since: datetime | None = None
+    days_waiting: int = 0
+    # Set when the site is back from a contractor who could not proceed.
+    # Re-assigning is the same action, so it belongs in the same queue.
+    returned_reason: str | None = None
+
+
+class DtReviewRow(BaseModel):
+    drive_test_id: int
+    work_item_id: int
+    site_code: str | None = None
+    site_type: str | None = None
+    province: str | None = None
+    contractor_name: str | None = None
+    execution_date: date | None = None
+    submitted_at: datetime | None = None
+    days_waiting: int = 0
+    report_link: str | None = None
+    evidence: list[EvidenceOut] = []
+
+
 class HcHistoryEvent(BaseModel):
     """One entry on a site's health-check timeline."""
     at: datetime | None = None
@@ -851,6 +993,11 @@ class HcResultRow(BaseModel):
     problem_category: str | None
     problem_categories: list[str] = []
     round_no: int = 1
+    # What the site actually asked for, which is the set the reviewer's Ready /
+    # Not Ready verdict was computed over. Rendering it beside the per-
+    # technology detail is what makes "all requested technologies normal"
+    # checkable rather than something to take on trust.
+    requested_technologies: list[str] = []
     reviewed: bool = False
     assignment_code: str
     contractor_name: str | None = None       # the subcontractor (SC) who did the HC

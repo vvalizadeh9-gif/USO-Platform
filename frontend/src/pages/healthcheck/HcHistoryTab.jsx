@@ -1,12 +1,23 @@
 import { motion } from 'framer-motion'
 import { ChevronDown, ChevronRight, CheckCircle2, XCircle, Download } from 'lucide-react'
 import { Fragment, useEffect, useState } from 'react'
+import SiteHistoryDrawer, { SiteCodeButton } from '../../components/SiteHistoryDrawer'
 import api from '../../api/client'
 import { useToast } from '../../context/ToastContext'
 import { EmptyState, Loading } from '../../components/ui'
 
+/**
+ * The archive, in two shapes.
+ *
+ * "By assignment" is the contractor-performance view that has always been
+ * here: how many sites, how many ready, how long feedback took. "By site" is
+ * new, and it is where the decided results went when HC Review became a queue
+ * that empties — without it, confirming a result would have made it
+ * unreachable.
+ */
 export default function HcHistoryTab() {
   const toast = useToast()
+  const [view, setView] = useState('assignment')
   const [assignments, setAssignments] = useState(null)
   const [contractors, setContractors] = useState({})
   const [expanded, setExpanded] = useState(() => new Set())
@@ -56,11 +67,38 @@ export default function HcHistoryTab() {
 
   if (!assignments) return <Loading label="Loading health check history" />
 
+  const switcher = (
+    <div className="row" style={{ gap: 6, marginBottom: 12 }}>
+      <ViewChip active={view === 'assignment'} onClick={() => setView('assignment')}>
+        By assignment
+      </ViewChip>
+      <ViewChip active={view === 'site'} onClick={() => setView('site')}>
+        By site
+      </ViewChip>
+    </div>
+  )
+
+  if (view === 'site') {
+    return (
+      <>
+        {switcher}
+        <DecidedResults />
+      </>
+    )
+  }
+
   if (assignments.length === 0) {
-    return <div className="card card-pad"><EmptyState title="No assignments yet" hint="Assignments you create appear here." /></div>
+    return (
+      <>
+        {switcher}
+        <div className="card card-pad"><EmptyState title="No assignments yet" hint="Assignments you create appear here." /></div>
+      </>
+    )
   }
 
   return (
+    <>
+    {switcher}
     <div className="card" style={{ overflow: 'hidden' }}>
       <div style={{ maxHeight: 560, overflowY: 'auto' }}>
         <table>
@@ -127,6 +165,127 @@ export default function HcHistoryTab() {
           </tbody>
         </table>
       </div>
+    </div>
+    </>
+  )
+}
+
+function ViewChip({ active, onClick, children }) {
+  return (
+    <button
+      className="btn btn-sm"
+      onClick={onClick}
+      style={{
+        background: active ? 'var(--signal)' : 'var(--surface-2)',
+        color: active ? '#fff' : 'var(--text-muted)',
+        border: active ? 'none' : '1px solid var(--border)',
+      }}
+    >
+      {children}
+    </button>
+  )
+}
+
+/**
+ * Every health check that has been decided, newest first.
+ *
+ * The counterpart to HC Review holding only what is undecided. Site codes open
+ * the full timeline, which now runs all the way to DT Done.
+ */
+function DecidedResults() {
+  const [rows, setRows] = useState(null)
+  const [query, setQuery] = useState('')
+  const [history, setHistory] = useState({ id: null, code: null })
+
+  useEffect(() => {
+    api
+      .get('/hc/results', { params: { reviewed: true, limit: 500 } })
+      .then((r) => setRows(r.data))
+      .catch(() => setRows([]))
+  }, [])
+
+  if (!rows) return <Loading label="Loading decided results" />
+
+  if (rows.length === 0) {
+    return (
+      <div className="card card-pad">
+        <EmptyState
+          title="Nothing decided yet"
+          hint="Results move here once a PM or Coordinator has reviewed them."
+        />
+      </div>
+    )
+  }
+
+  const q = query.trim().toLowerCase()
+  const filtered = q
+    ? rows.filter((r) => (r.site_code || '').toLowerCase().includes(q))
+    : rows
+
+  return (
+    <div className="card" style={{ overflow: 'hidden' }}>
+      <div className="card-pad" style={{ paddingBottom: 12 }}>
+        <input
+          className="input"
+          placeholder="Search site ID…"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+        />
+      </div>
+      <div style={{ maxHeight: 560, overflowY: 'auto' }}>
+        <table>
+          <thead>
+            <tr>
+              <th>Site ID</th>
+              <th>Type</th>
+              <th>Round</th>
+              <th>Outcome</th>
+              <th>Category</th>
+              <th>Subcontractor</th>
+              <th>Assignment</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.map((r) => (
+              <tr key={r.task_id}>
+                <td>
+                  <SiteCodeButton
+                    workItemId={r.work_item_id}
+                    siteCode={r.site_code}
+                    onOpen={(id, code) => setHistory({ id, code })}
+                  />
+                </td>
+                <td className="text-data">{r.site_type}</td>
+                <td className="tnum">{r.round_no}</td>
+                <td>
+                  {r.overall_result === 'Ready' ? (
+                    <span className="row" style={{ gap: 5, color: 'var(--green)', fontSize: 13 }}>
+                      <CheckCircle2 size={14} /> Ready
+                    </span>
+                  ) : (
+                    <span className="row" style={{ gap: 5, color: 'var(--red)', fontSize: 13 }}>
+                      <XCircle size={14} /> Not Ready
+                    </span>
+                  )}
+                </td>
+                <td className="dim">
+                  {(r.problem_categories?.length
+                    ? r.problem_categories.join(', ')
+                    : r.problem_category) || '—'}
+                </td>
+                <td className="text-data">{r.contractor_name || '—'}</td>
+                <td className="dim" style={{ fontSize: 12.5 }}>{r.assignment_code}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <SiteHistoryDrawer
+        workItemId={history.id}
+        siteCode={history.code}
+        onClose={() => setHistory({ id: null, code: null })}
+      />
     </div>
   )
 }

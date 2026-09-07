@@ -6,13 +6,19 @@
 // a test, because "deliberate" wears off and the two drifting apart means a
 // user seeing a nav item that 403s, or not seeing one they can use.
 import { describe, expect, it } from 'vitest'
-import { CATEGORY_OWNER_ROLES, isCategoryOwner, roleLabel } from './roles'
+import {
+  CATEGORY_OWNER_ROLES,
+  REVIEW_AUTHORITY_ROLES,
+  canReview,
+  isCategoryOwner,
+  roleLabel,
+} from './roles'
 
 // The role names seeded in app/core/bootstrap.py. Literal on purpose: if a
 // name changes on the server, this fails rather than quietly disagreeing.
 const SEEDED_ROLES = [
   'Admin', 'PM', 'Coordinator', 'RegionalManager', 'Contractor', 'Viewer',
-  'CpgPower', 'CpgRolloutPM', 'ManagedService', 'NwgPlanning',
+  'CpgPower', 'CpgRolloutPM', 'ManagedService', 'NwgPlanning', 'HuaweiCleanup',
 ]
 
 describe('roleLabel', () => {
@@ -35,11 +41,17 @@ describe('roleLabel', () => {
 })
 
 describe('isCategoryOwner', () => {
-  it('recognises the four problem-category owners', () => {
+  it('recognises every problem-category owner the server seeds', () => {
     for (const role of CATEGORY_OWNER_ROLES) {
       expect(isCategoryOwner(role), role).toBe(true)
     }
-    expect(CATEGORY_OWNER_ROLES).toHaveLength(4)
+    // Five since Huawei Cleanup joined. Pinned to a literal rather than a
+    // count so adding an owner role fails here loudly, which is the point:
+    // this list and app/core/deps.py:CATEGORY_OWNER_ROLES must agree, or a
+    // team gets a nav item that 403s, or none at all.
+    expect(CATEGORY_OWNER_ROLES).toEqual([
+      'CpgPower', 'CpgRolloutPM', 'ManagedService', 'NwgPlanning', 'HuaweiCleanup',
+    ])
   })
 
   it('does not treat a staff role as a category owner', () => {
@@ -53,5 +65,36 @@ describe('isCategoryOwner', () => {
     // first render after a reload.
     expect(isCategoryOwner(undefined)).toBe(false)
     expect(isCategoryOwner(null)).toBe(false)
+  })
+})
+
+describe('canReview', () => {
+  // Mirrors app/core/deps.py:require_review_authority. The interface may only
+  // narrow what the server allows, never widen it -- offering a control the
+  // server refuses is how an Admin came to be shown an assign bar that
+  // answered 403.
+  it('is exactly PM and Coordinator', () => {
+    expect(REVIEW_AUTHORITY_ROLES).toEqual(['PM', 'Coordinator'])
+  })
+
+  it('admits both roles that share the lifecycle', () => {
+    expect(canReview({ role: { name: 'PM' } })).toBe(true)
+    expect(canReview({ role: { name: 'Coordinator' } })).toBe(true)
+  })
+
+  it('excludes Admin, who the server refuses on workflow writes', () => {
+    expect(canReview({ role: { name: 'Admin' } })).toBe(false)
+  })
+
+  it('excludes contractors, viewers and category owners', () => {
+    for (const name of ['Contractor', 'Viewer', 'RegionalManager', ...CATEGORY_OWNER_ROLES]) {
+      expect(canReview({ role: { name } }), name).toBe(false)
+    }
+  })
+
+  it('says no rather than throwing when there is no user yet', () => {
+    expect(canReview(undefined)).toBe(false)
+    expect(canReview(null)).toBe(false)
+    expect(canReview({})).toBe(false)
   })
 })

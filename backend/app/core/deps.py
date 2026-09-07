@@ -26,8 +26,15 @@ CPG_POWER = "CpgPower"
 CPG_ROLLOUT_PM = "CpgRolloutPM"
 MANAGED_SERVICE = "ManagedService"
 NWG_PLANNING = "NwgPlanning"
+HUAWEI_CLEANUP = "HuaweiCleanup"
 
-CATEGORY_OWNER_ROLES = (CPG_POWER, CPG_ROLLOUT_PM, MANAGED_SERVICE, NWG_PLANNING)
+CATEGORY_OWNER_ROLES = (
+    CPG_POWER,
+    CPG_ROLLOUT_PM,
+    MANAGED_SERVICE,
+    NWG_PLANNING,
+    HUAWEI_CLEANUP,
+)
 
 
 def get_current_user_allowing_password_change(
@@ -123,6 +130,23 @@ def require_roles(*allowed_roles: str) -> Callable[[User], User]:
         return current_user
 
     return guard
+
+
+#: The two roles that carry the same authority over the health-check and
+#: drive-test lifecycle. PM and Coordinator are peers throughout: either may
+#: assign an initial health check, review its result, decide Ready or
+#: Problematic, route a problematic site, assign an official drive test,
+#: choose or change the drive-test contractor, and approve a drive test.
+#:
+#: It exists because that equality was previously spelled out at each call
+#: site and spelled differently at several of them -- drive-test assignment was
+#: PM-only, drive-test review was Coordinator-only (so a PM could not approve a
+#: drive test at all), and re-route decisions excluded the Coordinator. One
+#: name means the next endpoint cannot invent a sixth answer.
+#:
+#: Admin is deliberately absent. Admin administers the platform and does not
+#: perform workflow writes; that separation predates this and is unchanged.
+require_review_authority = require_roles(PM, COORDINATOR)
 
 
 def require_category_owner(

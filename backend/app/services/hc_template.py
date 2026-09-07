@@ -19,7 +19,12 @@ from app.services.tech_parser import parse_technologies
 
 # Result cell columns per technology follow the pattern "<tech> Result",
 # "<tech> Reason", "<tech> Comment".
-_ALL_TECHS = ("2G", "3G", "4G")
+# Every technology the platform recognises, in the order columns appear in
+# the bulk template and the exports. This must stay in step with
+# ``tech_parser.KNOWN_TECHNOLOGIES``: a technology missing here is silently
+# dropped from a bulk submission, and readiness is then computed from an
+# incomplete set -- which is exactly what happened to 5G.
+_ALL_TECHS = ("2G", "3G", "4G", "5G")
 _HEADER_FILL = PatternFill("solid", fgColor="0B8477")
 _HEADER_FONT = Font(color="FFFFFF", bold=True)
 
@@ -107,7 +112,7 @@ def _tech_detail_columns(technologies: list[dict]) -> list:
     """Flatten a task's technology results into Result/Comment cell pairs.
 
     ``technologies`` is a list of {technology, result, comment}. Produces two
-    cells per fixed technology (2G/3G/4G); a tech the site never reported keeps
+    cells per fixed technology (2G/3G/4G/5G); a tech the site never reported keeps
     blank cells so every export row lines up under the same header.
     """
     by_tech = {t["technology"]: t for t in technologies}

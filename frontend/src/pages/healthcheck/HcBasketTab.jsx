@@ -30,7 +30,7 @@ function BasketBadge({ count }) {
   )
 }
 
-export default function HcBasketTab() {
+export default function HcBasketTab({ onCountChange } = {}) {
   const toast = useToast()
   const [basket, setBasket] = useState(null)
   const [contractors, setContractors] = useState([])
@@ -43,7 +43,13 @@ export default function HcBasketTab() {
 
   function load() {
     setSelected(new Set())
-    api.get('/hc/basket').then((r) => setBasket(r.data)).catch(() => setBasket([]))
+    api
+      .get('/hc/basket')
+      .then((r) => {
+        setBasket(r.data)
+        onCountChange?.(r.data.length)
+      })
+      .catch(() => setBasket([]))
   }
   useEffect(() => {
     load()
@@ -100,6 +106,9 @@ export default function HcBasketTab() {
       load()
     } catch (err) {
       toast.error('Assignment failed', err.response?.data?.detail || 'Please try again.')
+      // 409 means somebody assigned one of these while this page was open.
+      // Reloading is the answer the message tells them to give.
+      if (err.response?.status === 409) load()
     } finally {
       setBusy(false)
     }
@@ -111,7 +120,7 @@ export default function HcBasketTab() {
     <div className="card" style={{ overflow: 'hidden' }}>
       <div className="card-pad" style={{ paddingBottom: 12 }}>
         <div className="row" style={{ gap: 10, alignItems: 'center', marginBottom: 12 }}>
-          <h3 style={{ fontSize: 15 }}>Health Check Basket</h3>
+          <h3 style={{ fontSize: 15 }}>Health Check Pool</h3>
           <BasketBadge count={basket.length} />
           <span className="dim" style={{ fontSize: 12.5 }}>site{basket.length === 1 ? '' : 's'} awaiting assignment</span>
         </div>
@@ -229,7 +238,10 @@ export default function HcBasketTab() {
 
       {filtered.length === 0 ? (
         <div style={{ padding: 20 }}>
-          <EmptyState title="No sites awaiting health check" hint="On-air sites appear here once imported." />
+          <EmptyState
+            title="No sites awaiting health check"
+            hint="On-air sites appear here once imported, and problematic sites return once every fix is closed."
+          />
         </div>
       ) : (
         <div style={{ maxHeight: 520, overflowY: 'auto' }}>
