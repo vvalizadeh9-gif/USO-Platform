@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion'
-import { ArrowLeft, CheckCircle2, CornerUpLeft, Paperclip, Radio, XCircle } from 'lucide-react'
+import { ArrowLeft, CheckCircle2, ChevronDown, CornerUpLeft, Paperclip, Radio, XCircle } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import api from '../api/client'
@@ -7,6 +7,8 @@ import { useAuth } from '../context/AuthContext'
 import { canReview } from '../lib/roles'
 import { useToast } from '../context/ToastContext'
 import { ConfirmDialog, Loading, PageHead, StatusPill } from '../components/ui'
+import DateField from '../components/DateField'
+import { daysBetween, todayIso } from '../lib/dates'
 
 export default function WorkItemDetail() {
   const { id } = useParams()
@@ -52,6 +54,12 @@ export default function WorkItemDetail() {
     }
   }
 
+  const mayAssign = mayDecide
+  const maySubmitDt = can(['PM', 'Contractor']) && wi.current_stage === 'Assigned'
+  const mayReturn = can(['Contractor']) && wi.current_stage === 'Assigned'
+  const mayReview = mayDecide && wi.current_stage === 'DT Submitted' && wi.active_drive_test_id
+  const hasAction = mayAssign || maySubmitDt || mayReturn || mayReview
+
   return (
     <>
       <button className="btn btn-ghost btn-sm mb-16" onClick={() => navigate('/work-items')}>
@@ -65,44 +73,17 @@ export default function WorkItemDetail() {
         actions={<StatusPill status={wi.current_stage} />}
       />
 
-      <div className="grid" style={{ gridTemplateColumns: '1fr 1fr', alignItems: 'start' }}>
-        {/* Details.
-            A subcontractor is shown the assignment and nothing else: which
-            site, where, since when, and how long it has been theirs. Project
-            manager, power status and deployed technology are the operator's
-            internal picture of the site, and a contractor reading them can
-            only be misled about which of them is their business. */}
-        <motion.div className="card card-pad" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-          <h3 style={{ fontSize: 15, marginBottom: 14 }}>Details</h3>
-          <DetailRow label="Site ID" value={wi.site_code} />
-          <DetailRow label="Province" value={wi.province} />
-          <DetailRow label="Site Type" value={wi.site_type} />
-          {!isContractor && (
-            <>
-              <DetailRow label="Requested Technology" value={wi.requested_technology} />
-              <DetailRow label="Deployed Technology" value={wi.deployed_technology} />
-              <DetailRow label="Project Manager" value={wi.pm_name} />
-              <DetailRow label="Power Status" value={wi.power_status} />
-            </>
-          )}
-          <DetailRow label="Assignment Date" value={fmtDate(wi.assignment_date)} />
-          <DetailRow
-            label="Aging (from assigned date)"
-            value={<Aging days={wi.assigned_aging_days} />}
-          />
-        </motion.div>
-
-        {/* Workflow actions */}
-        <motion.div className="card card-pad" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.08 }}>
-          <h3 style={{ fontSize: 15, marginBottom: 14 }}>Workflow actions</h3>
-
-          {mayDecide && (
+      {/* The action is why the page was opened, so it holds the wide column;
+          the record is what you glance at while doing it. */}
+      <div className="detail-grid">
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} style={{ display: 'grid', gap: 16 }}>
+          {mayAssign && (
             <AssignAction contractors={contractors} onSubmit={(payload) =>
               action(() => api.post(`/work-items/${id}/assignment`, payload), 'Contractor assigned')
             } />
           )}
 
-          {can(['PM', 'Contractor']) && wi.current_stage === 'Assigned' && (
+          {maySubmitDt && (
             <DriveTestSubmitAction
               onSubmit={(payload) =>
                 action(
@@ -110,16 +91,15 @@ export default function WorkItemDetail() {
                   'Drive test submitted for review',
                 )
               }
+              footer={mayReturn && (
+                <ReturnToCoordinatorAction onSubmit={(payload) =>
+                  action(() => api.post(`/work-items/${id}/return-to-coordinator`, payload), 'Site returned to coordinator')
+                } />
+              )}
             />
           )}
 
-          {can(['Contractor']) && wi.current_stage === 'Assigned' && (
-            <ReturnToCoordinatorAction onSubmit={(payload) =>
-              action(() => api.post(`/work-items/${id}/return-to-coordinator`, payload), 'Site returned to coordinator')
-            } />
-          )}
-
-          {mayDecide && wi.current_stage === 'DT Submitted' && wi.active_drive_test_id && (
+          {mayReview && (
             <CoordinatorReviewAction
               submissionDate={wi.dt_submission_date}
               onDecide={(payload) =>
@@ -131,12 +111,44 @@ export default function WorkItemDetail() {
             />
           )}
 
-          {!mayDecide &&
-            !(can(['Contractor']) && wi.current_stage === 'Assigned') && (
+          {!hasAction && (
+            <div className="card card-pad">
               <p className="dim" style={{ fontSize: 13 }}>
                 No actions available at the current stage ({wi.current_stage}).
               </p>
-            )}
+            </div>
+          )}
+        </motion.div>
+
+        {/* Details.
+            A subcontractor is shown the assignment and nothing else: which
+            site, where, since when, and how long it has been theirs. Project
+            manager, power status and deployed technology are the operator's
+            internal picture of the site, and a contractor reading them can
+            only be misled about which of them is their business.
+
+            Site code and province are not repeated here when the header above
+            already says them -- two of the contractor's five rows used to be
+            an echo of the heading directly above the card. */}
+        <motion.div
+          className="card card-pad detail-rail"
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.08 }}
+        >
+          <h3>Details</h3>
+          {!isContractor && <RailRow label="Province" value={wi.province} />}
+          <RailRow label="Site Type" value={wi.site_type} />
+          {!isContractor && (
+            <>
+              <RailRow label="Requested Technology" value={wi.requested_technology} />
+              <RailRow label="Deployed Technology" value={wi.deployed_technology} />
+              <RailRow label="Project Manager" value={wi.pm_name} />
+              <RailRow label="Power Status" value={wi.power_status} />
+            </>
+          )}
+          <RailRow label="Assignment Date" value={fmtDate(wi.assignment_date)} mono />
+          <RailRow label="Aging" value={<Aging days={wi.assigned_aging_days} />} />
         </motion.div>
       </div>
     </>
@@ -152,8 +164,12 @@ function fmtDate(value) {
 // How long this site has been with its contractor. Amber at two weeks, red at
 // a month: the number exists to say when a site has gone quiet, and a plain
 // figure leaves the reader to work that out for every row they ever read.
+//
+// Day zero is spelled out. "0 days" is a figure the reader has to decode into
+// "it arrived today", which is the one thing it never needs to warn about.
 function Aging({ days }) {
   if (days == null) return null
+  if (days === 0) return <span>Assigned today</span>
   const color = days >= 30 ? 'var(--red)' : days >= 14 ? 'var(--amber)' : undefined
   return (
     <span className="tnum" style={{ color }}>
@@ -162,11 +178,13 @@ function Aging({ days }) {
   )
 }
 
-function DetailRow({ label, value }) {
+function RailRow({ label, value, mono }) {
   return (
-    <div className="row between" style={{ padding: '8px 0', borderBottom: '1px solid var(--border-soft)' }}>
-      <span className="muted" style={{ fontSize: 13 }}>{label}</span>
-      <span style={{ fontWeight: 500 }}>{value || '—'}</span>
+    <div className="rail-row">
+      <span className="k">{label}</span>
+      <span className={`v ${mono ? 'tnum' : ''}`} dir="auto" style={{ unicodeBidi: 'isolate' }}>
+        {value || '—'}
+      </span>
     </div>
   )
 }
@@ -179,8 +197,12 @@ function DetailRow({ label, value }) {
 function AssignAction({ contractors, onSubmit }) {
   const [contractorId, setContractorId] = useState('')
   return (
-    <div className="mb-16">
-      <div className="field">
+    <div className="card card-pad">
+      <h3 style={{ fontSize: 15, marginBottom: 4 }}>Assign for drive test</h3>
+      <p className="muted" style={{ fontSize: 13, marginBottom: 16, maxWidth: '60ch' }}>
+        Only a site that passed its health check and was confirmed can be assigned.
+      </p>
+      <div className="field" style={{ maxWidth: 320 }}>
         <label>Contractor</label>
         <select className="input" value={contractorId} onChange={(e) => setContractorId(e.target.value)}>
           <option value="">Select…</option>
@@ -188,8 +210,8 @@ function AssignAction({ contractors, onSubmit }) {
         </select>
       </div>
       <button
-        className="btn"
-        style={{ width: '100%', justifyContent: 'center' }}
+        className="btn btn-primary"
+        style={{ padding: '11px 22px' }}
         disabled={!contractorId}
         onClick={() =>
           onSubmit({ assignment_type: 'official', contractor_id: Number(contractorId) })
@@ -197,10 +219,6 @@ function AssignAction({ contractors, onSubmit }) {
       >
         Assign for drive test
       </button>
-      <small className="dim" style={{ display: 'block', marginTop: 6 }}>
-        Only a site that passed its health check and was confirmed can be
-        assigned.
-      </small>
     </div>
   )
 }
@@ -214,8 +232,8 @@ function AssignAction({ contractors, onSubmit }) {
 // backend never had that restriction, so the rule only ever existed in this
 // form. A date far from today gets a note rather than a second hard rule: the
 // contractor is the one who knows when they drove the route.
-function DriveTestSubmitAction({ onSubmit }) {
-  const today = new Date().toISOString().slice(0, 10)
+function DriveTestSubmitAction({ onSubmit, footer }) {
+  const today = todayIso()
   const [date, setDate] = useState(today)
   const [files, setFiles] = useState([])
   const [busy, setBusy] = useState(false)
@@ -248,68 +266,66 @@ function DriveTestSubmitAction({ onSubmit }) {
     }
   }
 
-  const dayDelta = Math.round(
-    (new Date(today) - new Date(date)) / 86400000,
-  )
-  const unusualDate =
-    Number.isFinite(dayDelta) && (dayDelta < 0 || dayDelta > 60)
+  const dayDelta = daysBetween(today, date)
+  const unusualDate = dayDelta !== null && (dayDelta < 0 || dayDelta > 60)
 
   return (
-    <div
-      className="mb-16"
-      style={{ padding: 16, borderRadius: 'var(--radius-sm)', background: 'var(--surface-2)', border: '1px solid var(--border-soft)' }}
-    >
-      <div className="row" style={{ gap: 6, marginBottom: 12, color: 'var(--signal)' }}>
-        <Radio size={15} />
-        <b style={{ fontSize: 13.5 }}>Submit Drive Test</b>
+    <div className="card card-pad">
+      <div className="row" style={{ gap: 8, marginBottom: 4, color: 'var(--signal)' }}>
+        <Radio size={17} />
+        <h3 style={{ fontSize: 15 }}>Submit drive test</h3>
       </div>
+      <p className="muted" style={{ fontSize: 13, marginBottom: 18, maxWidth: '60ch' }}>
+        Record when the drive test was carried out and attach the report. A PM or
+        coordinator approves it — approval is what counts the site as DT Done.
+      </p>
 
-      <div className="field">
-        <label>Date the drive test was carried out</label>
-        <input
-          type="date"
-          className="input"
-          value={date}
-          onChange={(e) => setDate(e.target.value)}
-          style={{ fontFamily: 'var(--font-mono, inherit)', fontVariantNumeric: 'tabular-nums' }}
-        />
-        {unusualDate && (
-          <small className="dim" style={{ display: 'block', marginTop: 5 }}>
-            {dayDelta < 0
-              ? 'That date is in the future — check it before submitting.'
-              : `That is ${dayDelta} days ago. Fine if the drive test really was that long ago.`}
-          </small>
-        )}
-      </div>
-
-      <div className="field">
-        <label>Report / measurement files</label>
-        <div className="row wrap" style={{ gap: 8 }}>
-          <button className="btn btn-sm" onClick={() => fileRef.current?.click()}>
-            <Paperclip size={14} /> Attach file
-          </button>
-          <input
-            ref={fileRef}
-            type="file"
-            hidden
-            multiple
-            onChange={(e) => setFiles([...e.target.files])}
-          />
-          {files.length > 0 && (
-            <span className="dim" style={{ fontSize: 12.5 }}>
-              {files.map((f) => f.name).join(', ')}
-            </span>
+      <div className="field-pair">
+        <div className="field">
+          <label htmlFor="dt-date">Date the drive test was carried out</label>
+          <DateField id="dt-date" value={date} onChange={setDate} />
+          {unusualDate && (
+            <small className="field-warning">
+              {dayDelta < 0
+                ? 'That date is in the future — check it before submitting.'
+                : `That is ${dayDelta} days ago. Fine if the drive test really was that long ago.`}
+            </small>
           )}
         </div>
-        <small className="dim" style={{ display: 'block', marginTop: 5 }}>
-          Optional, but the reviewer approves against this — approval is what
-          counts the site as DT Done.
-        </small>
+
+        <div className="field">
+          <label>Report / measurement files</label>
+          <div className="row wrap" style={{ gap: 8 }}>
+            <button className="btn btn-sm" onClick={() => fileRef.current?.click()}>
+              <Paperclip size={14} /> Attach file
+            </button>
+            <input
+              ref={fileRef}
+              type="file"
+              hidden
+              multiple
+              onChange={(e) => setFiles([...e.target.files])}
+            />
+            <span className="dim" style={{ fontSize: 12.5 }}>
+              {files.length > 0 ? files.map((f) => f.name).join(', ') : 'No files yet'}
+            </span>
+          </div>
+          <small className="dim" style={{ fontSize: 12 }}>
+            Optional, but the reviewer approves against this.
+          </small>
+        </div>
       </div>
 
-      <button className="btn btn-primary" style={{ width: '100%', justifyContent: 'center' }} disabled={!date || busy} onClick={submit}>
+      <button
+        className="btn btn-primary"
+        style={{ padding: '11px 22px', marginTop: 4 }}
+        disabled={!date || busy}
+        onClick={submit}
+      >
         {busy ? 'Submitting…' : 'Submit for review'}
       </button>
+
+      {footer && <div className="card-foot">{footer}</div>}
     </div>
   )
 }
@@ -332,21 +348,17 @@ function CoordinatorReviewAction({ submissionDate, onDecide }) {
   }
 
   return (
-    <div
-      className="mb-16"
-      style={{ padding: 16, borderRadius: 'var(--radius-sm)', background: 'var(--surface-2)', border: '1px solid var(--border-soft)' }}
-    >
-      <div className="row" style={{ gap: 6, marginBottom: 10, color: 'var(--amber)' }}>
-        <CheckCircle2 size={15} />
-        <b style={{ fontSize: 13.5 }}>Drive test awaiting your validation</b>
+    <div className="card card-pad">
+      <div className="row" style={{ gap: 8, marginBottom: 4, color: 'var(--amber)' }}>
+        <CheckCircle2 size={17} />
+        <h3 style={{ fontSize: 15 }}>Drive test awaiting your validation</h3>
       </div>
+      <p className="muted" style={{ fontSize: 13, marginBottom: 16, maxWidth: '60ch' }}>
+        Carried out on <b className="tnum">{submissionDate || '—'}</b>. Approving is the
+        final step: the site is marked DT Done and counted on the dashboard.
+      </p>
 
-      <div className="row between" style={{ padding: '8px 0', marginBottom: 8 }}>
-        <span className="muted" style={{ fontSize: 13 }}>Submitted for</span>
-        <span className="tnum" style={{ fontWeight: 500 }}>{submissionDate || '—'}</span>
-      </div>
-
-      <div className="field">
+      <div className="field" style={{ maxWidth: 480 }}>
         <label>Comment (required when rejecting)</label>
         <textarea
           className="input"
@@ -360,14 +372,14 @@ function CoordinatorReviewAction({ submissionDate, onDecide }) {
       <div className="row" style={{ gap: 8 }}>
         <button
           className="btn btn-primary"
-          style={{ flex: 1, justifyContent: 'center' }}
+          style={{ padding: '11px 22px' }}
           onClick={() => setPending('Approved')}
         >
           <CheckCircle2 size={15} /> Approve
         </button>
         <button
           className="btn"
-          style={{ flex: 1, justifyContent: 'center', color: 'var(--red)', borderColor: 'var(--red)' }}
+          style={{ padding: '11px 22px', color: 'var(--red)', borderColor: 'var(--red)' }}
           disabled={comment.trim().length < 3}
           onClick={() => setPending('Rejected')}
         >
@@ -397,7 +409,11 @@ function CoordinatorReviewAction({ submissionDate, onDecide }) {
 // with (road blocked, site down, access denied...). Hands the site back to
 // the coordinator/PM queue with a required reason, instead of forcing a
 // pointless drive-test submission.
+//
+// Collapsed by default. It is the rare path, and open it took as much of the
+// panel as the drive test itself — the thing the contractor came here to do.
 function ReturnToCoordinatorAction({ onSubmit }) {
+  const [open, setOpen] = useState(false)
   const [reason, setReason] = useState('')
   const [confirming, setConfirming] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -408,32 +424,41 @@ function ReturnToCoordinatorAction({ onSubmit }) {
     setBusy(false)
     setConfirming(false)
     setReason('')
+    setOpen(false)
   }
 
   return (
-    <div style={{ padding: 14, borderRadius: 'var(--radius-sm)', border: '1px dashed var(--border)' }}>
-      <div className="row" style={{ gap: 6, marginBottom: 10, color: 'var(--text-muted)' }}>
+    <div>
+      <button className="disclosure" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
         <CornerUpLeft size={15} />
-        <b style={{ fontSize: 13.5 }}>Can't proceed with this site?</b>
-      </div>
-      <div className="field">
-        <label>Reason (road blocked, site down, access denied…)</label>
-        <textarea
-          className="input"
-          rows={2}
-          value={reason}
-          onChange={(e) => setReason(e.target.value)}
-          placeholder="Describe why this site can't be drive-tested right now"
+        Can't proceed with this site?
+        <ChevronDown
+          size={14}
+          style={{ opacity: 0.6, transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }}
         />
-      </div>
-      <button
-        className="btn"
-        style={{ width: '100%', justifyContent: 'center' }}
-        disabled={reason.trim().length < 3}
-        onClick={() => setConfirming(true)}
-      >
-        Return to coordinator
       </button>
+
+      {open && (
+        <div style={{ marginTop: 12, maxWidth: 480 }}>
+          <div className="field">
+            <label>Reason (road blocked, site down, access denied…)</label>
+            <textarea
+              className="input"
+              rows={2}
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              placeholder="Describe why this site can't be drive-tested right now"
+            />
+          </div>
+          <button
+            className="btn"
+            disabled={reason.trim().length < 3}
+            onClick={() => setConfirming(true)}
+          >
+            Return to coordinator
+          </button>
+        </div>
+      )}
 
       <ConfirmDialog
         open={confirming}
