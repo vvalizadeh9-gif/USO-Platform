@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion'
-import { Radio, ClipboardCheck, GitCompare, ClipboardList, Bell, Check, ChevronRight, Wrench } from 'lucide-react'
+import { Radio, ClipboardCheck, GitCompare, ClipboardList, Bell, Check, ChevronRight, MapPin, Wrench } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import api from '../api/client'
@@ -64,72 +64,74 @@ export default function ActionCenter() {
         subtitle="What needs you now. Every number is counted from live state and clears itself the moment the work is done."
       />
 
+      {/* Counters first, and outside the empty branch: a queue can be a
+          standing workload rather than a to-do list — a contractor holding
+          forty assigned sites has no item rows to clear, and was told they
+          were all caught up while the number sat unrendered. */}
+      {counters.length > 0 && (
+        <motion.div
+          className="grid grid-kpi"
+          style={{ marginBottom: 24 }}
+          variants={stagger}
+          initial="hidden"
+          animate="show"
+        >
+          {counters.map((c) => (
+            <QueueCounter
+              key={c.key}
+              counter={c}
+              onOpen={() => navigate(c.url)}
+            />
+          ))}
+        </motion.div>
+      )}
+
       {groups.length === 0 ? (
         <div className="card"><EmptyState title="You're all caught up" hint="Nothing pending right now." /></div>
       ) : (
-        <>
-          {counters.length > 0 && (
-            <motion.div
-              className="grid grid-kpi"
-              style={{ marginBottom: 24 }}
-              variants={stagger}
-              initial="hidden"
-              animate="show"
-            >
-              {counters.map((c) => (
-                <QueueCounter
-                  key={c.key}
-                  counter={c}
-                  onOpen={() => navigate(c.url)}
-                />
-              ))}
-            </motion.div>
-          )}
-
-          <motion.div style={{ display: 'flex', flexDirection: 'column', gap: 22 }} variants={stagger} initial="hidden" animate="show">
-            {groups.map(({ category, rows }) => {
-              const meta = CATEGORY_META[category]
-              return (
-                <div key={category}>
-                  <div className="row" style={{ gap: 8, marginBottom: 10, color: 'var(--text-dim)', fontSize: 12.5, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.4 }}>
-                    <meta.icon size={14} style={{ color: meta.color }} />
-                    {meta.label}
-                    <span style={{ color: meta.color }}>{rows.length}</span>
-                  </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    {rows.map((item) => (
-                      <motion.div
-                        key={item.id}
-                        className="card card-pad row between"
-                        variants={fadeUp}
-                        whileHover={{ y: -2 }}
-                        onClick={() => navigate(item.url)}
-                        style={{ cursor: 'pointer', borderLeft: `3px solid ${meta.color}` }}
-                      >
-                        <div>
-                          <div style={{ fontWeight: 500 }}>{item.label}</div>
-                          {item.subtitle && <small className="dim">{item.subtitle}</small>}
-                        </div>
-                        <div className="row" style={{ gap: 10 }}>
-                          {item.source === 'event' && (
-                            <button
-                              className="btn btn-sm btn-ghost"
-                              disabled={busy === item.id}
-                              onClick={(e) => dismiss(item, e)}
-                            >
-                              <Check size={14} /> Mark handled
-                            </button>
-                          )}
-                          <ChevronRight size={15} style={{ color: 'var(--text-dim)' }} />
-                        </div>
-                      </motion.div>
-                    ))}
-                  </div>
+        <motion.div style={{ display: 'flex', flexDirection: 'column', gap: 22 }} variants={stagger} initial="hidden" animate="show">
+          {groups.map(({ category, rows }) => {
+            const meta = CATEGORY_META[category]
+            return (
+              <div key={category}>
+                <div className="row" style={{ gap: 8, marginBottom: 10, color: 'var(--text-dim)', fontSize: 12.5, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.4 }}>
+                  <meta.icon size={14} style={{ color: meta.color }} />
+                  {meta.label}
+                  <span style={{ color: meta.color }}>{rows.length}</span>
                 </div>
-              )
-            })}
-          </motion.div>
-        </>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {rows.map((item) => (
+                    <motion.div
+                      key={item.id}
+                      className="card card-pad row between"
+                      variants={fadeUp}
+                      whileHover={{ y: -2 }}
+                      onClick={() => navigate(item.url)}
+                      style={{ cursor: 'pointer', borderLeft: `3px solid ${meta.color}` }}
+                    >
+                      <div>
+                        <div style={{ fontWeight: 500 }}>{item.label}</div>
+                        {item.subtitle && <small className="dim">{item.subtitle}</small>}
+                      </div>
+                      <div className="row" style={{ gap: 10 }}>
+                        {item.source === 'event' && (
+                          <button
+                            className="btn btn-sm btn-ghost"
+                            disabled={busy === item.id}
+                            onClick={(e) => dismiss(item, e)}
+                          >
+                            <Check size={14} /> Mark handled
+                          </button>
+                        )}
+                        <ChevronRight size={15} style={{ color: 'var(--text-dim)' }} />
+                      </div>
+                    </motion.div>
+                  ))}
+                </div>
+              </div>
+            )
+          })}
+        </motion.div>
       )}
     </>
   )
@@ -151,6 +153,7 @@ const COUNTER_META = {
   dt_review: { icon: ClipboardCheck, color: 'var(--signal)' },
   hc_submit: { icon: ClipboardList, color: 'var(--signal)' },
   my_fixes: { icon: Wrench, color: 'var(--amber)' },
+  assigned_sites: { icon: MapPin, color: 'var(--violet, var(--signal-strong))' },
   cpm: { icon: GitCompare, color: 'var(--amber)' },
 }
 

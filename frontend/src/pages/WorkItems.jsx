@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion'
+import { Download } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import api from '../api/client'
 import { useAuth } from '../context/AuthContext'
 import { canReview } from '../lib/roles'
@@ -43,6 +44,7 @@ const COL = {
   site_code: { label: 'Site ID', render: (r) => <span className="text-data">{r.site_code || '—'}</span> },
   site_type: { label: 'Site Type', render: (r) => <span style={{ fontWeight: 500 }}>{r.site_type}</span> },
   requested_technology: { label: 'Requested Tech', render: (r) => r.requested_technology || '—' },
+  province: { label: 'Province', render: (r) => r.province || '—' },
   assignment_date: { label: 'Assignment Date', render: (r) => fmtDate(r.assignment_date) },
   assignment_user: { label: 'Assignment User', render: (r) => <span className="muted">{r.assignment_user || '—'}</span> },
   contractor_name: { label: 'Contractor', render: (r) => <span className="text-data">{r.contractor_name || '—'}</span> },
@@ -51,6 +53,12 @@ const COL = {
   aging_days: {
     label: 'Aging (days)',
     render: (r) => (r.aging_days == null ? '—' : <span className="tnum">{r.aging_days}</span>),
+  },
+  // Aging that runs while the work is still open — the number a site is
+  // judged on before anything has been submitted.
+  assigned_aging_days: {
+    label: 'Aging (days)',
+    render: (r) => <AgingCell days={r.assigned_aging_days} />,
   },
   dt_approval_date: { label: 'DT Approval Date', render: (r) => fmtDate(r.dt_approval_date) },
   dt_approval_user: { label: 'DT Approval User', render: (r) => <span className="muted">{r.dt_approval_user || '—'}</span> },
@@ -64,7 +72,7 @@ const STAGE_COLUMNS = {
   'HC In Progress': [...BASE, 'stage'],
   'HC Review': [...BASE, 'stage'],
   'Ready for Assignment': [...BASE, 'stage'],
-  Assigned: [...BASE, 'assignment_date', 'assignment_user', 'stage'],
+  Assigned: [...BASE, 'province', 'assignment_date', 'assigned_aging_days', 'assignment_user', 'stage'],
   'Returned by Contractor': [...BASE, 'assignment_date', 'assignment_user', 'returned_date', 'stage'],
   'DT Submitted': [...BASE, 'assignment_date', 'contractor_name', 'dt_submission_date', 'stage'],
   'DT Done': [
@@ -91,10 +99,18 @@ export default function WorkItems() {
     (s) => !isContractor || !STAGES_HIDDEN_FOR_CONTRACTOR.has(s)
   )
 
+  // The stage lives in the URL so a counter on the Action Center can land on
+  // the tab it counted, and so a filtered list is a link someone can send.
+  const [searchParams, setSearchParams] = useSearchParams()
+  const requested = searchParams.get('stage')
+  const stage = visibleStages.includes(requested) ? requested : 'All'
+  const setStage = (next) =>
+    setSearchParams(next === 'All' ? {} : { stage: next }, { replace: true })
+
   const [items, setItems] = useState(null)
-  const [stage, setStage] = useState('All')
   const [contractors, setContractors] = useState([])
   const [selected, setSelected] = useState(() => new Set())
+  const [exporting, setExporting] = useState(false)
 
   const load = () => {
     setItems(null)
@@ -107,6 +123,29 @@ export default function WorkItems() {
   useEffect(() => {
     if (canAssign) api.get('/reference/contractors').then((r) => setContractors(r.data)).catch(() => {})
   }, [canAssign])
+
+  // The list as a spreadsheet: the same rows, the same scope, five columns.
+  // A contractor plans a week of driving from this file, so it carries what
+  // they need to reach a site and nothing about who assigned it.
+  async function exportExcel() {
+    setExporting(true)
+    try {
+      const res = await api.get('/work-items/export', {
+        params: stage === 'All' ? {} : { stage },
+        responseType: 'blob',
+      })
+      const url = URL.createObjectURL(res.data)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `${stage.toLowerCase().replace(/ /g, '_')}_sites.xlsx`
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch {
+      toast.error('Export failed', 'Could not generate the file. Please try again.')
+    } finally {
+      setExporting(false)
+    }
+  }
 
   const toggle = (id) =>
     setSelected((prev) => {
@@ -128,7 +167,21 @@ export default function WorkItems() {
       <PageHead
         eyebrow="Operations"
         title="Work Items"
-        subtitle="Every deployment unit (Site + Type) within your assigned provinces."
+        subtitle={
+          isContractor
+            ? 'Every site assigned to you, and where each one stands.'
+            : 'Every deployment unit (Site + Type) within your assigned provinces.'
+        }
+        actions={
+          <button
+            className="btn"
+            onClick={exportExcel}
+            disabled={exporting || !items?.length}
+            title="Download these sites as an Excel file"
+          >
+            {exporting ? <div className="spinner" /> : <><Download size={15} /> Export Excel</>}
+          </button>
+        }
       />
 
       <div className="row wrap mb-16" style={{ gap: 8 }}>
@@ -212,6 +265,25 @@ export default function WorkItems() {
         </div>
       )}
     </>
+  )
+}
+
+// Days a site has been sitting with its contractor, coloured by how long.
+// A column of plain numbers makes the reader do the comparison; the point of
+// the number is the two or three rows that have gone quiet.
+const AGING_AMBER = 14
+const AGING_RED = 30
+
+function AgingCell({ days }) {
+  if (days == null) return '—'
+  const color =
+    days >= AGING_RED ? 'var(--red)'
+      : days >= AGING_AMBER ? 'var(--amber)'
+      : undefined
+  return (
+    <span className="tnum" style={{ color, fontWeight: color ? 600 : undefined }}>
+      {days}
+    </span>
   )
 }
 

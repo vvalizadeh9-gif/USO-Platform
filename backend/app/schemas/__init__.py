@@ -174,6 +174,10 @@ class ProblemCategoryWrite(BaseModel):
 class RoleOut(ORMModel):
     id: int
     name: str
+    # True for the roles that own a health-check problem category. Exposed so
+    # a screen can say what picking this role actually signs someone up for,
+    # instead of the frontend keeping its own copy of the list.
+    is_category_owner: bool = False
 
 
 # ---------- Users ----------
@@ -373,6 +377,7 @@ class WorkItemListItem(ORMModel):
     id: int
     site_code: str | None = None
     site_type: str
+    province: str | None = None
     requested_technology: str | None
     current_stage: str
     project_name: str | None
@@ -389,18 +394,33 @@ class WorkItemListItem(ORMModel):
     dt_approval_user: str | None = None
     # Whole days between assignment and DT submission.
     aging_days: int | None = None
+    # Whole days since the assignment — running to the DT if one was
+    # submitted, to today if not. This is the one a contractor is judged on.
+    assigned_aging_days: int | None = None
 
 
 class WorkItemDetail(ORMModel):
+    """One work item, as the assignment screen shows it.
+
+    Villages and their ICT/CRA acceptances used to hang off this response and
+    fill half the screen. They belong to the acceptance process, which has its
+    own workspace (My Work) and its own dashboard; carrying them here also
+    meant every open of an assignment paid for the whole village/acceptance
+    graph.
+    """
+
     id: int
+    site_code: str | None = None
     site_type: str
+    province: str | None = None
     requested_technology: str | None
     deployed_technology: str | None
     project_name: str | None
     pm_name: str | None
     power_status: str | None
     current_stage: str
-    villages: list[VillageOut] = []
+    assignment_date: datetime | None = None
+    assigned_aging_days: int | None = None
     # The drive test currently awaiting/holding a decision, if any. The
     # coordinator's approve/reject panel needs its id to act on.
     active_drive_test_id: int | None = None

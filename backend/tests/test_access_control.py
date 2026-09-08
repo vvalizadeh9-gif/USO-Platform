@@ -365,12 +365,21 @@ def test_an_in_scope_coordinator_can_still_approve(client, world):
 # ---------------------------------------------------------------------------
 # C6 — writing acceptance status for a village outside your scope
 # ---------------------------------------------------------------------------
+def _a_village_of(client, headers, work_item_id: int) -> int:
+    """One village id belonging to a work item, read the way a screen reads it.
+
+    The work-item detail no longer carries villages — acceptance is its own
+    process with its own workspace — so these tests ask the acceptance queue
+    for them, which is where a person would look too.
+    """
+    rows = client.get(
+        "/api/v1/acceptance/villages", headers=headers, params={"limit": 500}
+    ).json()["rows"]
+    return next(r["village_id"] for r in rows if r["work_item_id"] == work_item_id)
+
+
 def test_out_of_province_coordinator_cannot_write_acceptance(client, world):
-    pm_h = world["pm"]
-    detail = client.get(
-        f"/api/v1/work-items/{world['other_work_item_id']}", headers=pm_h
-    ).json()
-    village_id = detail["villages"][0]["id"]
+    village_id = _a_village_of(client, world["pm"], world["other_work_item_id"])
     technology = world["technologies"][0]
 
     r = client.patch(
@@ -393,10 +402,7 @@ def test_writing_acceptance_for_a_village_that_does_not_exist_is_a_404(client, w
 
 def test_an_in_scope_pm_can_still_write_acceptance(client, world):
     pm_h = world["pm"]
-    detail = client.get(
-        f"/api/v1/work-items/{world['other_work_item_id']}", headers=pm_h
-    ).json()
-    village_id = detail["villages"][0]["id"]
+    village_id = _a_village_of(client, pm_h, world["other_work_item_id"])
 
     r = client.patch(
         f"/api/v1/villages/{village_id}/acceptance/{world['technologies'][0]}",

@@ -26,6 +26,7 @@ export default function UsersTab() {
   const [roles, setRoles] = useState([])
   const [provinces, setProvinces] = useState([])
   const [contractors, setContractors] = useState([])
+  const [categories, setCategories] = useState([])
   const [filters, setFilters] = useState(EMPTY_FILTERS)
   const [showCreate, setShowCreate] = useState(false)
   const [editingUser, setEditingUser] = useState(null)
@@ -58,6 +59,10 @@ export default function UsersTab() {
     api.get('/reference/roles').then((r) => setRoles(r.data)).catch(() => {})
     api.get('/reference/provinces').then((r) => setProvinces(r.data)).catch(() => {})
     api.get('/reference/contractors').then((r) => setContractors(r.data)).catch(() => {})
+    // Which problem categories each role owns. Read live rather than hardcoded:
+    // an Admin can rename a category or re-point it at another role from the
+    // Problem Categories tab, and this form must not go on claiming otherwise.
+    api.get('/admin/problem-categories').then((r) => setCategories(r.data)).catch(() => {})
   }, [])
 
   function setFilter(key, value) {
@@ -158,6 +163,7 @@ export default function UsersTab() {
           roles={roles}
           provinces={provinces}
           contractors={contractors}
+          categories={categories}
           onDone={() => { setShowCreate(false); load() }}
           onError={(m) => toast.error('Could not create user', m)}
           onSuccess={() => toast.success('User created')}
@@ -171,6 +177,7 @@ export default function UsersTab() {
           roles={roles}
           provinces={provinces}
           contractors={contractors}
+          categories={categories}
           onDone={() => { setEditingUser(null); load() }}
           onError={(m) => toast.error('Could not update user', m)}
           onSuccess={() => toast.success('User updated')}
@@ -354,6 +361,45 @@ function ProvincePopup({ user, onClose }) {
   )
 }
 
+/**
+ * What a problem-category role actually receives, said at the moment of
+ * choosing it.
+ *
+ * The role names and the category names were never the same words — "CPG
+ * Power" owns *Temp Power*, "NWG Planning" owns *NWG RND* — so an
+ * administrator creating a user for a fix queue had to know the routing table
+ * by heart to know which queue they were creating. Worse, the routing table is
+ * editable: a category can be renamed or re-pointed at another role from the
+ * Problem Categories tab, so any list written into this file would drift.
+ * This reads the live mapping instead.
+ *
+ * A category-owner role that owns nothing is the failure this is really here
+ * to catch: the account is created, the person signs in, and their Fix Queue
+ * is permanently empty because no category routes to them.
+ */
+function CategoryOwnershipHint({ role, categories }) {
+  if (!role?.is_category_owner) return null
+  return (
+    <span className="dim" style={{ fontSize: 12, marginTop: 4, display: 'block' }}>
+      {categories.length > 0 ? (
+        <>
+          Fixes for{' '}
+          <strong style={{ color: 'var(--text)' }}>
+            {categories.map((c) => c.name).join(', ')}
+          </strong>{' '}
+          are routed to this role — they will appear in this user&apos;s Fix Queue.
+        </>
+      ) : (
+        <>
+          No active problem category is routed to this role yet, so this
+          user&apos;s Fix Queue will stay empty. Point one at it under
+          Admin → Problem Categories.
+        </>
+      )}
+    </span>
+  )
+}
+
 // Shared create/edit form. Contractor dropdown only appears when the
 // selected role is "Contractor" — other roles don't belong to a contractor.
 //
@@ -361,7 +407,7 @@ function ProvincePopup({ user, onClose }) {
 // operation with its own dialog, so that "reset their credentials" and "fix
 // the spelling of their surname" are never the same click — and are never the
 // same entry in the audit log afterwards.
-function UserForm({ mode, user, roles, provinces, contractors, onDone, onError, onSuccess }) {
+function UserForm({ mode, user, roles, provinces, contractors, categories, onDone, onError, onSuccess }) {
   const isEdit = mode === 'edit'
   const [form, setForm] = useState(() => ({
     username: user?.username || '',
@@ -380,6 +426,9 @@ function UserForm({ mode, user, roles, provinces, contractors, onDone, onError, 
 
   const selectedRole = roles.find((r) => String(r.id) === form.role_id)
   const isContractorRole = selectedRole?.name === CONTRACTOR_ROLE_NAME
+  const ownedCategories = (categories || []).filter(
+    (c) => c.owner_role_id === selectedRole?.id && c.active
+  )
 
   async function submit() {
     setBusy(true)
@@ -491,6 +540,7 @@ function UserForm({ mode, user, roles, provinces, contractors, onDone, onError, 
             <option value="">Select…</option>
             {roles.map((r) => <option key={r.id} value={r.id}>{roleLabel(r.name)}</option>)}
           </select>
+          <CategoryOwnershipHint role={selectedRole} categories={ownedCategories} />
         </div>
       </div>
 

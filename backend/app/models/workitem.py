@@ -104,10 +104,8 @@ class WorkItem(Base):
     dt_sc_contractor = relationship("Contractor", foreign_keys=[dt_sc_contractor_id])
     # NOTE: no default eager loading here (deliberately). Loading the full
     # villages+acceptances graph is expensive and most endpoints (work item
-    # list, CPM admin, etc.) never touch it. Endpoints that DO need it
-    # (work item detail, dashboards, Drive Test analytics, Acceptance
-    # overview) request it explicitly via selectinload() query options —
-    # see services/eager_loading.py for the single shared helper.
+    # list, work item detail, CPM admin, etc.) never touch it. The acceptance
+    # screens that DO need it request it explicitly via selectinload().
     villages: Mapped[list[Village]] = relationship(back_populates="work_item")
     health_checks: Mapped[list[HealthCheck]] = relationship(back_populates="work_item")
     hc_tasks = relationship(

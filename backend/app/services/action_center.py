@@ -24,10 +24,10 @@ from app.core.deps import ADMIN, COORDINATOR, CONTRACTOR, PM
 from app.models.acceptance import CpmChangeRequest, Notification
 from app.models.health_check import HcAssignment, HcRemediation, HcTask
 from app.models.reference import User
-from app.models.workitem import Site, WorkItem
+from app.models.workitem import Assignment, Site, WorkItem
 from app.schemas import ActionCounter, ActionItem
 from app.services.visibility import apply_work_item_scope, visible_work_item_ids
-from app.services.workflow import STAGE_READY
+from app.services.workflow import STAGE_ASSIGNED, STAGE_READY
 
 
 def _site_label(wi: WorkItem | None, fallback: str) -> str:
@@ -79,7 +79,7 @@ def _work_item_items(db: Session, user: User) -> list[ActionItem]:
 
     if role == CONTRACTOR:
         for wi in work_items:
-            if wi.current_stage == "Assigned":
+            if wi.current_stage == STAGE_ASSIGNED:
                 items.append(ActionItem(
                     id=f"assigned:{wi.id}", category="assignment",
                     label=_site_label(wi, f"Work item {wi.id}"),
@@ -339,6 +339,28 @@ def counters(db: Session, user: User) -> list[ActionCounter]:
             )
 
     if user.contractor_id is not None:
+        # The sites this contractor is expected to drive-test right now. A
+        # contractor's Action Center listed these one card per site and gave
+        # no total, so the first thing they wanted to know -- how many do I
+        # owe -- was the one thing the page made them count by hand.
+        assigned_sites = (
+            db.query(WorkItem.id)
+            .join(Assignment, Assignment.work_item_id == WorkItem.id)
+            .filter(
+                WorkItem.deleted_at.is_(None),
+                WorkItem.current_stage == STAGE_ASSIGNED,
+                Assignment.contractor_id == user.contractor_id,
+                Assignment.is_active.is_(True),
+            )
+            .distinct()
+            .count()
+        )
+        if assigned_sites:
+            out.append(ActionCounter(
+                key="assigned_sites", label="Assigned Sites",
+                count=assigned_sites, url="/work-items?stage=Assigned",
+            ))
+
         pending = (
             db.query(HcTask)
             .join(HcAssignment)
