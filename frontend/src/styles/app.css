@@ -1115,3 +1115,78 @@ tbody tr:last-child td { border-bottom: none; }
   .field-pair { grid-template-columns: minmax(0, 1fr) !important; }
   .form-foot { flex-wrap: wrap; }
 }
+
+/* ---------- Date field ---------- */
+.datefield { position: relative; display: flex; flex-direction: column; gap: 5px; max-width: 210px; }
+.datefield-control {
+  display: flex; align-items: center;
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.datefield-control:focus-within {
+  border-color: var(--signal);
+  box-shadow: 0 0 0 3px var(--signal-glow);
+}
+.datefield-input {
+  flex: 1; min-width: 0;
+  border: none; background: none; outline: none;
+  padding: 10px 0 10px 12px;
+  color: var(--text);
+  letter-spacing: 0.02em;
+}
+.datefield-toggle {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 34px; height: 34px; margin-right: 3px;
+  border: none; background: none; border-radius: var(--radius-sm);
+  color: var(--text-dim); transition: color 0.15s, background 0.15s;
+}
+.datefield-toggle:hover { color: var(--text); background: var(--surface-2); }
+
+.datefield-pop {
+  position: absolute; top: calc(100% + 6px); left: 0; z-index: 30;
+  width: 268px; padding: 12px;
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-2);
+}
+.datefield-head {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 10px;
+}
+.datefield-head b { font-size: 13.5px; font-family: var(--font-display); }
+.datefield-nav {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 26px; height: 26px; border-radius: var(--radius-sm);
+  border: none; background: none; color: var(--text-muted);
+}
+.datefield-nav:hover { background: var(--surface-2); color: var(--text); }
+.datefield-week, .datefield-grid {
+  display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px;
+}
+.datefield-week span {
+  text-align: center; font-size: 10.5px; font-weight: 600;
+  color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.04em;
+  padding-bottom: 4px;
+}
+.datefield-grid { outline: none; }
+.datefield-grid:focus-visible { box-shadow: 0 0 0 3px var(--signal-glow); border-radius: var(--radius-sm); }
+.datefield-day {
+  height: 32px; border: none; background: none; border-radius: var(--radius-sm);
+  font-size: 13px; color: var(--text); font-variant-numeric: tabular-nums;
+  transition: background 0.12s, color 0.12s;
+}
+.datefield-day:hover { background: var(--surface-2); }
+.datefield-day.is-outside { color: var(--text-dim); opacity: 0.55; }
+.datefield-day.is-today { box-shadow: inset 0 0 0 1px var(--signal); color: var(--signal-strong); font-weight: 600; }
+.datefield-day.is-selected {
+  background: var(--signal); color: #fff; font-weight: 600;
+  box-shadow: none;
+}
+.datefield-foot {
+  display: flex; justify-content: flex-end;
+  margin-top: 10px; padding-top: 10px;
+  border-top: 1px solid var(--border-soft);
+}
