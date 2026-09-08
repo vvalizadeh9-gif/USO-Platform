@@ -141,16 +141,15 @@ export default function Layout() {
       api
         .get('/action-center/summary')
         .then((r) => {
-          // The counters, not the item list: the badge should say how many
+          // The counters, and only the counters: the badge should say how many
           // pieces of work are waiting, and one queue holding thirty sites is
-          // one thing to go and do, not thirty.
+          // one thing to go and do, not thirty. Falling back to the item feed
+          // when there are no counters would put a number on a screen that
+          // now shows counters alone -- a badge reading 3 over a page saying
+          // "you're all caught up".
           if (!active) return
           const counters = r.data.counters || []
-          setActionCount(
-            counters.length
-              ? counters.reduce((n, c) => n + c.count, 0)
-              : (r.data.items || []).length,
-          )
+          setActionCount(counters.reduce((n, c) => n + c.count, 0))
         })
         .catch(() => {})
     load()

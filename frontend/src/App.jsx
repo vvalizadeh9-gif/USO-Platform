@@ -3,7 +3,7 @@ import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import Layout from './components/Layout'
 import { useAuth } from './context/AuthContext'
 import { Loading } from './components/ui'
-import { CATEGORY_OWNER_ROLES, isCategoryOwner } from './lib/roles'
+import { CATEGORY_OWNER_ROLES } from './lib/roles'
 import Login from './pages/Login'
 
 // Route pages are code-split so the initial load only ships the shell +
@@ -50,13 +50,14 @@ function Protected({ children, adminOnly, allowedRoles }) {
   return children
 }
 
-// Where "/" lands for each kind of user. A category owner only ever works one
-// screen, so sending them to Work Items (which they cannot act on) would be a
-// dead end.
-function homeFor(user, isAdmin) {
+// Where "/" lands for each kind of user. Everyone who does the work lands on
+// the Action Center: it is the one screen that answers "what needs me now"
+// for every role, counted from live state, and it links on to whichever
+// queue holds the work. Admin is the exception -- they manage the platform
+// from the Admin Console and have no operational queue of their own.
+function homeFor(isAdmin) {
   if (isAdmin) return '/admin'
-  if (isCategoryOwner(user?.role?.name)) return '/my-fix-queue'
-  return '/work-items'
+  return '/action-center'
 }
 
 export default function App() {
@@ -73,7 +74,7 @@ export default function App() {
             </Protected>
           }
         >
-          <Route path="/" element={<Navigate to={homeFor(user, isAdmin)} replace />} />
+          <Route path="/" element={<Navigate to={homeFor(isAdmin)} replace />} />
           <Route path="/reports/drive-test" element={<DriveTestProject />} />
           <Route path="/reports/acceptance" element={<AcceptanceDashboard />} />
           {/* Both dashboards moved under Reports when the Acceptance page was
