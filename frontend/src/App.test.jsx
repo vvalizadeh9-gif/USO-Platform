@@ -79,25 +79,20 @@ describe('where "/" lands', () => {
   // it.each rather than a loop: each case gets its own render and its own
   // cleanup, so the second iteration is not querying a document that still
   // holds the first one's page.
-  it.each(['CpgPower', 'CpgRolloutPM', 'ManagedService', 'NwgPlanning'])(
-    'sends %s to their fix queue, the one screen they work',
+  it.each(['Coordinator', 'PM', 'Contractor', 'CpgPower', 'CpgRolloutPM', 'ManagedService', 'NwgPlanning'])(
+    'sends %s to the Action Center, which counts whatever their role owes',
     async (role) => {
       signedInAs(role)
-      expect(await landOn('/')).toBe('my-fix-queue')
+      expect(await landOn('/')).toBe('action-center')
     },
   )
-
-  it('sends everyone else to work items', async () => {
-    signedInAs('Coordinator')
-    expect(await landOn('/')).toBe('work-items')
-  })
 })
 
 describe('guarded routes', () => {
   it('keeps a non-owner out of the fix queue', async () => {
     signedInAs('Coordinator')
-    // Bounced to "/", which for a coordinator is work items.
-    expect(await landOn('/my-fix-queue')).toBe('work-items')
+    // Bounced to "/", which for everyone but Admin is the Action Center.
+    expect(await landOn('/my-fix-queue')).toBe('action-center')
   })
 
   it('lets a category owner into the fix queue', async () => {
@@ -107,7 +102,7 @@ describe('guarded routes', () => {
 
   it('keeps a contractor out of the admin console', async () => {
     signedInAs('Contractor')
-    expect(await landOn('/admin')).toBe('work-items')
+    expect(await landOn('/admin')).toBe('action-center')
   })
 
   it('lets a PM into the admin console, where the backend narrows what they see', async () => {
@@ -129,7 +124,7 @@ describe('old paths people have bookmarked', () => {
 
   it('sends an unknown path home rather than showing nothing', async () => {
     signedInAs('Coordinator')
-    expect(await landOn('/no-such-page')).toBe('work-items')
+    expect(await landOn('/no-such-page')).toBe('action-center')
   })
 })
 

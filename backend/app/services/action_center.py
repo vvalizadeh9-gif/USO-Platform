@@ -16,6 +16,7 @@ rendering) needs to know about the new category ahead of time.
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from urllib.parse import quote
 
 from sqlalchemy import Select, select
 from sqlalchemy.orm import Session, selectinload
@@ -27,7 +28,7 @@ from app.models.reference import User
 from app.models.workitem import Assignment, Site, WorkItem
 from app.schemas import ActionCounter, ActionItem
 from app.services.visibility import apply_work_item_scope, visible_work_item_ids
-from app.services.workflow import STAGE_ASSIGNED, STAGE_READY
+from app.services.workflow import STAGE_ASSIGNED, STAGE_READY, STAGE_RETURNED
 
 
 def _site_label(wi: WorkItem | None, fallback: str) -> str:
@@ -337,6 +338,30 @@ def counters(db: Session, user: User) -> list[ActionCounter]:
             out.append(
                 ActionCounter(key=key, label=label, count=count, url=url)
             )
+
+    if role == PM:
+        # The two stages a PM, and only a PM, clears by hand. They had no
+        # counter while the page also listed one row per site; the page is
+        # counters alone now, so without these the work a PM is expected to
+        # pick up would not appear on the screen they land on.
+        for stage, key, label in (
+            (STAGE_READY, "ready_to_assign", "Ready to Assign"),
+            (STAGE_RETURNED, "returned", "Returned by Contractor"),
+        ):
+            count = (
+                db.query(WorkItem.id)
+                .filter(
+                    WorkItem.deleted_at.is_(None),
+                    WorkItem.current_stage == stage,
+                    WorkItem.id.in_(visible_work_item_ids(user, db)),
+                )
+                .count()
+            )
+            if count:
+                out.append(ActionCounter(
+                    key=key, label=label, count=count,
+                    url=f"/work-items?stage={quote(stage)}",
+                ))
 
     if user.contractor_id is not None:
         # The sites this contractor is expected to drive-test right now. A

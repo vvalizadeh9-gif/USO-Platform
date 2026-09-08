@@ -220,3 +220,66 @@ def test_remediation_items_are_province_scoped(client):
         "an overdue fix outside the coordinator's provinces must not appear"
     )
     assert HERE in seen
+
+
+# ---------------------------------------------------------------------------
+# The stages a PM clears by hand, as counters
+# ---------------------------------------------------------------------------
+#
+# The Action Center is counters alone now -- it no longer lists a row per site
+# code underneath them. "Ready for Assignment" and "Returned by Contractor"
+# only ever had rows, so without these counters the two stages a PM is
+# expected to pick up would be invisible on the screen they land on. They are
+# scoped like every other read, so a coordinator's province grant still
+# decides what the number is counted from.
+def _seed_staged_site(site_code, province_index, stage):
+    from app.models.reference import Province
+    from app.models.workitem import Site, WorkItem
+
+    db = SessionLocal()
+    try:
+        province = db.query(Province).order_by(Province.id).limit(2).all()[province_index]
+        site = db.query(Site).filter(Site.site_code == site_code).first()
+        if site is None:
+            site = Site(site_code=site_code, province_id=province.id)
+            db.add(site)
+            db.flush()
+            db.add(WorkItem(
+                site_id=site.id, site_type="Greenfield",
+                requested_technology="2G",
+                last_stage=C.STAGE_PERM_ONAIR, dt_status=None,
+                current_stage=stage,
+            ))
+        db.commit()
+    finally:
+        db.close()
+
+
+def _counter(client, headers, key):
+    summary = client.get("/api/v1/action-center/summary", headers=headers).json()
+    return next((c for c in summary["counters"] if c["key"] == key), None)
+
+
+def test_pm_gets_a_counter_for_each_stage_they_clear(client):
+    _seed_staged_site("STAGE-READY-1", 0, "Ready for Assignment")
+    _seed_staged_site("STAGE-READY-2", 1, "Ready for Assignment")
+    _seed_staged_site("STAGE-RETURNED-1", 0, "Returned by Contractor")
+
+    pm = _headers(client, "pm")
+
+    ready = _counter(client, pm, "ready_to_assign")
+    assert ready is not None, "a PM must be told how many sites await assignment"
+    assert ready["count"] == 2
+    assert ready["url"] == "/work-items?stage=Ready%20for%20Assignment"
+
+    returned = _counter(client, pm, "returned")
+    assert returned is not None
+    assert returned["count"] == 1
+    assert returned["url"] == "/work-items?stage=Returned%20by%20Contractor"
+
+
+def test_these_counters_belong_to_the_pm_alone(client):
+    """A coordinator does not assign work, so the number is not theirs."""
+    coord = _headers(client, "coord")
+    assert _counter(client, coord, "ready_to_assign") is None
+    assert _counter(client, coord, "returned") is None
