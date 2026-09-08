@@ -210,6 +210,60 @@ openssl rand -hex 32
 
 ## Deploying
 
+A deploy replaces the two things that are built from code, and leaves the two
+things that hold data alone. That is the whole picture:
+
+```text
+          DEVELOPMENT
+          ───────────
+           Claude Code
+                │
+                │ git push
+                ▼
+             GitHub
+                │
+════════════════│══════════════
+  SERVER        │
+                │  1. take a backup
+                │  2. git pull
+                │  3. up -d --build
+                ▼
+        ┌───────┴───────┐
+        ▼               ▼
+    REPLACED        UNTOUCHED
+  every deploy    every deploy
+        │               │
+   ┌────┴───┐    ┌──────┴─────┐
+   │ IMAGES │    │  VOLUMES   │
+   ├────────┤    ├────────────┤
+   │backend │    │uep_db_data │
+   │frontend│    │uep_uploads │
+   └────────┘    └────────────┘
+     the CODE       the DATA
+```
+
+`--build` discards the old `backend` and `frontend` images and builds new ones
+from the code that was just pulled, which is why updating the code is safe. It
+never addresses the volumes, so `uep_db_data` (the database) and `uep_uploads`
+(the uploaded letters and workbooks) survive every deploy.
+
+The one step that does reach the data is inside the new backend container,
+which applies any pending migrations before it starts serving:
+
+```text
+   backend container starts
+             │
+             ▼
+    alembic upgrade head   ← the only step
+             │               that touches data
+             ▼
+      uvicorn serves
+```
+
+Because that migration is the only part of a deploy that changes data, the
+migration file is the part of a new feature that deserves a careful read
+before you deploy it.
+
 ```bash
 git pull
 docker compose up -d --build
