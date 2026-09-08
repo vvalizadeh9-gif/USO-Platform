@@ -1116,6 +1116,50 @@ tbody tr:last-child td { border-bottom: none; }
   .form-foot { flex-wrap: wrap; }
 }
 
+/* ---------- Record detail: work, with the record beside it ----------
+   A detail page is not two equal halves. The action is why the page was
+   opened; the record is what you glance at while doing it. Two 1fr columns
+   gave a five-row summary the same 745px as the form, which is what made
+   one card read half-empty and the other cramped -- and, being an inline
+   style, it had no breakpoint, so it stayed two columns on a tablet. */
+.detail-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: 20px;
+  align-items: start;
+  max-width: 1020px;
+}
+@media (max-width: 1000px) {
+  .detail-grid { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* Two fields sharing a row, so a card fills its width instead of trailing
+   off into empty space. Collapses with everything else on a phone. */
+.field-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+@media (max-width: 600px) { .field-pair { grid-template-columns: minmax(0, 1fr); } }
+
+.detail-rail h3 {
+  font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em;
+  color: var(--text-dim); margin-bottom: 6px;
+}
+.rail-row {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+  padding: 9px 0; border-bottom: 1px solid var(--border-soft);
+}
+.rail-row:last-child { border-bottom: none; }
+.rail-row .k { font-size: 12.5px; color: var(--text-muted); }
+.rail-row .v { font-weight: 500; font-size: 13.5px; text-align: right; }
+
+/* An action card's secondary escape hatch, below a hairline rather than in
+   a competing box of its own. */
+.card-foot { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--border-soft); }
+.disclosure {
+  background: none; border: none; padding: 0;
+  display: inline-flex; align-items: center; gap: 7px;
+  color: var(--text-muted); font-size: 13px; font-weight: 500;
+}
+.disclosure:hover { color: var(--text); }
+
 /* ---------- Date field ---------- */
 .datefield { position: relative; display: flex; flex-direction: column; gap: 5px; max-width: 210px; }
 .datefield-control {
