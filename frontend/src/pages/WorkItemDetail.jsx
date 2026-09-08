@@ -8,8 +8,6 @@ import { canReview } from '../lib/roles'
 import { useToast } from '../context/ToastContext'
 import { ConfirmDialog, Loading, PageHead, StatusPill } from '../components/ui'
 
-const TECHS = ['2G', '3G', '4G']
-
 export default function WorkItemDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
@@ -33,6 +31,7 @@ export default function WorkItemDetail() {
   if (!wi) return <Loading label="Loading work item" />
 
   const can = (roles) => roles.includes(role)
+  const isContractor = role === 'Contractor'
   // PM and Coordinator are peers over this lifecycle. The three guards below
   // used to name three different sets -- assignment was ['Admin','PM'],
   // drive-test review was ['Admin','Coordinator'] -- and both included Admin,
@@ -61,20 +60,36 @@ export default function WorkItemDetail() {
 
       <PageHead
         eyebrow={`Work Item #${wi.id}`}
-        title={`${wi.site_type}`}
-        subtitle={wi.project_name || 'No project name'}
+        title={wi.site_code || wi.site_type}
+        subtitle={isContractor ? wi.province || '' : wi.project_name || 'No project name'}
         actions={<StatusPill status={wi.current_stage} />}
       />
 
       <div className="grid" style={{ gridTemplateColumns: '1fr 1fr', alignItems: 'start' }}>
-        {/* Details */}
+        {/* Details.
+            A subcontractor is shown the assignment and nothing else: which
+            site, where, since when, and how long it has been theirs. Project
+            manager, power status and deployed technology are the operator's
+            internal picture of the site, and a contractor reading them can
+            only be misled about which of them is their business. */}
         <motion.div className="card card-pad" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
           <h3 style={{ fontSize: 15, marginBottom: 14 }}>Details</h3>
-          <DetailRow label="Requested Technology" value={wi.requested_technology} />
-          <DetailRow label="Deployed Technology" value={wi.deployed_technology} />
-          <DetailRow label="Project Manager" value={wi.pm_name} />
-          <DetailRow label="Power Status" value={wi.power_status} />
-          <DetailRow label="Villages (target)" value={wi.villages.length} />
+          <DetailRow label="Site ID" value={wi.site_code} />
+          <DetailRow label="Province" value={wi.province} />
+          <DetailRow label="Site Type" value={wi.site_type} />
+          {!isContractor && (
+            <>
+              <DetailRow label="Requested Technology" value={wi.requested_technology} />
+              <DetailRow label="Deployed Technology" value={wi.deployed_technology} />
+              <DetailRow label="Project Manager" value={wi.pm_name} />
+              <DetailRow label="Power Status" value={wi.power_status} />
+            </>
+          )}
+          <DetailRow label="Assignment Date" value={fmtDate(wi.assignment_date)} />
+          <DetailRow
+            label="Aging (from assigned date)"
+            value={<Aging days={wi.assigned_aging_days} />}
+          />
         </motion.div>
 
         {/* Workflow actions */}
@@ -124,42 +139,26 @@ export default function WorkItemDetail() {
             )}
         </motion.div>
       </div>
-
-      {/* Villages & acceptance */}
-      <motion.div className="card mt-24" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }}>
-        <div className="card-pad"><h3 style={{ fontSize: 15 }}>Villages & acceptance</h3></div>
-        <div className="table-wrap" style={{ border: 'none', borderRadius: 0 }}>
-          <table>
-            <thead>
-              <tr>
-                <th>Village</th>
-                <th>Code</th>
-                {TECHS.map((t) => <th key={t}>{t} ICT / CRA</th>)}
-              </tr>
-            </thead>
-            <tbody>
-              {wi.villages.map((v) => (
-                <tr key={v.id}>
-                  <td style={{ fontWeight: 500 }}>{v.village_name || '—'}</td>
-                  <td className="dim tnum">{v.village_code || '—'}</td>
-                  {TECHS.map((t) => {
-                    const acc = v.acceptances.find((a) => a.technology === t)
-                    return (
-                      <td key={t}>
-                        <div className="row" style={{ gap: 6 }}>
-                          <StatusPill status={acc?.ict_status || 'Pending'} />
-                          <StatusPill status={acc?.cra_status || 'Pending'} />
-                        </div>
-                      </td>
-                    )
-                  })}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </motion.div>
     </>
+  )
+}
+
+function fmtDate(value) {
+  if (!value) return null
+  const d = new Date(value)
+  return Number.isNaN(d.getTime()) ? null : d.toISOString().slice(0, 10)
+}
+
+// How long this site has been with its contractor. Amber at two weeks, red at
+// a month: the number exists to say when a site has gone quiet, and a plain
+// figure leaves the reader to work that out for every row they ever read.
+function Aging({ days }) {
+  if (days == null) return null
+  const color = days >= 30 ? 'var(--red)' : days >= 14 ? 'var(--amber)' : undefined
+  return (
+    <span className="tnum" style={{ color }}>
+      {days} {days === 1 ? 'day' : 'days'}
+    </span>
   )
 }
 

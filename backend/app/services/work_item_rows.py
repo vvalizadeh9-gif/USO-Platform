@@ -27,7 +27,7 @@ def _as_aware(dt: datetime | None) -> datetime | None:
     return dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt
 
 
-def _relevant_assignment(work_item: WorkItem) -> Assignment | None:
+def relevant_assignment(work_item: WorkItem) -> Assignment | None:
     """The assignment whose metadata the row should show.
 
     Prefers the currently-active one; falls back to the most recent historical
@@ -66,13 +66,37 @@ def _aging_days(
     return max(delta.days, 0)
 
 
+def aging_since_assignment(
+    assignment: Assignment | None, drive_test: DriveTest | None
+) -> int | None:
+    """Whole days the site has been with its contractor.
+
+    Distinct from :func:`_aging_days`, which measures the closed interval
+    assignment -> drive test and is therefore None while the work is still
+    open — precisely the period a contractor needs to see. This one runs to
+    the drive test if one has been submitted, and to today if not, so a site
+    sitting untouched for three weeks says twenty-one rather than a dash.
+    """
+    if assignment is None:
+        return None
+    assigned_at = _as_aware(assignment.assigned_at)
+    if assigned_at is None:
+        return None
+    end = (
+        drive_test.execution_date
+        if drive_test is not None and drive_test.execution_date is not None
+        else datetime.now(timezone.utc).date()
+    )
+    return max((end - assigned_at.date()).days, 0)
+
+
 def build_list_row(work_item: WorkItem, user_names: dict[int, str]) -> dict:
     """Flatten one work item into the Work Items list-row shape.
 
     ``user_names`` maps user id -> full name, resolved in one query by the
     caller so this stays free of per-row database access (no N+1).
     """
-    assignment = _relevant_assignment(work_item)
+    assignment = relevant_assignment(work_item)
     drive_test = _active_drive_test(work_item)
 
     approval_date = None
@@ -87,6 +111,11 @@ def build_list_row(work_item: WorkItem, user_names: dict[int, str]) -> dict:
     return {
         "id": work_item.id,
         "site_code": work_item.site.site_code if work_item.site else None,
+        "province": (
+            work_item.site.province.name
+            if work_item.site is not None and work_item.site.province is not None
+            else None
+        ),
         "site_type": work_item.site_type,
         "requested_technology": work_item.requested_technology,
         "current_stage": work_item.current_stage,
@@ -105,6 +134,7 @@ def build_list_row(work_item: WorkItem, user_names: dict[int, str]) -> dict:
         "dt_approval_date": approval_date,
         "dt_approval_user": approval_user,
         "aging_days": _aging_days(assignment, drive_test),
+        "assigned_aging_days": aging_since_assignment(assignment, drive_test),
     }
 
 
