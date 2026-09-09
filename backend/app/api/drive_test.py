@@ -1,9 +1,16 @@
-"""Drive Test Project dashboard endpoint.
+"""Drive Test Project dashboard endpoints.
 
-One combined endpoint returns all KPIs and chart datasets for the current
-user's province scope, plus month-over-month deltas from the latest snapshot.
+``/overview`` returns all KPIs and chart datasets for the current user's
+province scope, plus month-over-month deltas from the latest snapshot.
+
+``/plan-delivery`` returns one month's commitment against its delivery. It is
+a second endpoint rather than more fields on the overview because it answers a
+different question over a different period — the overview is a running state
+of the whole programme, this is one month closing — and because it is the one
+payload on this dashboard that can name a contractor, which is worth keeping
+where it can be read in one place.
 """
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.core import jalali
@@ -12,11 +19,14 @@ from app.core.deps import get_current_user
 from app.models.reference import User
 from app.schemas import (
     ChartPoint,
+    ContractorAchievementRow,
     DriveTestKpis,
     DriveTestOverview,
     KpiWithDelta,
+    PlanAndDelivery,
     ProvinceProgressPoint,
 )
+from app.services import monthly_plan as plans
 from app.services.drive_test_analytics import DriveTestAnalytics
 from app.services.snapshots import get_month_over_month
 from app.services.visibility import visible_province_ids
@@ -86,6 +96,38 @@ def drive_test_overview(
             for row in analytics.chart_progress_by_province()
         ],
         current_month_label=f"{jalali.month_name(month)} {year}",
+    )
+
+
+@router.get("/plan-delivery", response_model=PlanAndDelivery)
+def plan_delivery(
+    year: int | None = Query(None, description="Shamsi year; defaults to the current one"),
+    month: int | None = Query(None, ge=1, le=12, description="Shamsi month 1-12"),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> PlanAndDelivery:
+    """PIP, Assigned, Actual and Achievement for one Shamsi month.
+
+    Open to every signed-in role, because the answer is already scoped to the
+    caller: staff see the contractors their work-item scope reaches, and a
+    contractor sees one row — their own — plus an unnamed programme average.
+    That narrowing happens in the service's queries, not in this layer.
+
+    The period defaults to the current Shamsi month, which is what the
+    dashboard asks for; it is a parameter so the same figures can be read for
+    a month that has closed without waiting for the calendar.
+    """
+    if year is None or month is None:
+        year, month = jalali.current_shamsi_period()
+    try:
+        plans.validate_period(year, month)
+    except plans.PlanError as exc:
+        raise HTTPException(400, str(exc)) from None
+
+    data = DriveTestAnalytics(db, user).plan_and_delivery(year, month)
+    return PlanAndDelivery(
+        **{k: v for k, v in data.items() if k != "rows"},
+        rows=[ContractorAchievementRow(**row) for row in data["rows"]],
     )
 
 

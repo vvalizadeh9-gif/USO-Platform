@@ -1063,6 +1063,50 @@ class ProvinceProgressPoint(BaseModel):
     done_percent: float
 
 
+class ContractorAchievementRow(BaseModel):
+    """One contractor's month: what they committed to and what they delivered.
+
+    A contractor account receives exactly one of these — its own. The filter
+    that guarantees that is in the query, not in this shape.
+    """
+
+    contractor_id: int
+    name: str
+    pip: int
+    actual: int
+    #: Actual over PIP. ``None``, never ``0``, when there is no approved plan
+    #: to measure against — the two are different facts and the screen renders
+    #: them differently.
+    achievement_percent: float | None = None
+
+
+class PlanAndDelivery(BaseModel):
+    """The plan-and-delivery section of the Drive Test dashboard, one month."""
+
+    shamsi_year: int
+    shamsi_month: int
+    month_label: str
+
+    pip: int
+    assigned: int
+    actual: int
+    achievement_percent: float | None = None
+
+    #: How many of the contractors expected to file for this month have an
+    #: approved plan, and how many do not. The second number is why a PIP
+    #: total can be lower than the programme really is, said out loud rather
+    #: than left to be inferred from a total that looks complete.
+    committed_contractors: int
+    uncommitted_contractors: int
+
+    #: The programme-wide achievement, unnamed and unattributed. Present for
+    #: contractor accounts, for whom it is the only view past their own row,
+    #: and ``None`` for staff, who have the rows themselves.
+    programme_achievement_percent: float | None = None
+
+    rows: list[ContractorAchievementRow] = []
+
+
 class DriveTestOverview(BaseModel):
     kpis: DriveTestKpis
     ongoing_by_contractor: list[ChartPoint]
