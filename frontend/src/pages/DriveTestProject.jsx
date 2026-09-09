@@ -21,6 +21,9 @@ import {
   TrendingDown,
   CornerDownRight,
   CalendarCheck,
+  Target,
+  ClipboardList,
+  Gauge,
 } from 'lucide-react'
 import api from '../api/client'
 import { Loading, PageHead, fadeUp, stagger } from '../components/ui'
@@ -28,12 +31,21 @@ import { Loading, PageHead, fadeUp, stagger } from '../components/ui'
 export default function DriveTestProject() {
   const [data, setData] = useState(null)
   const [error, setError] = useState(false)
+  const [plan, setPlan] = useState(null)
 
   useEffect(() => {
     api
       .get('/drive-test/overview')
       .then((r) => setData(r.data))
       .catch(() => setError(true))
+    // Fetched and failed separately from the overview on purpose. This is one
+    // section of a page with six of them, and a dashboard that goes blank
+    // because its newest block could not load is worse than a dashboard
+    // missing its newest block.
+    api
+      .get('/drive-test/plan-delivery')
+      .then((r) => setPlan(r.data))
+      .catch(() => setPlan(null))
   }, [])
 
   if (error) return <div className="card"><div className="empty">Could not load Drive Test data.</div></div>
@@ -110,6 +122,8 @@ export default function DriveTestProject() {
         </div>
       </motion.div>
 
+      <PlanAndDelivery data={plan} />
+
       {/* Row 1: Ongoing by contractor + Problematic by category */}
       <div className="grid mt-24" style={{ gridTemplateColumns: '1fr 1fr' }}>
         <ChartCard title="Ongoing sites per contractor" delay={0.05}>
@@ -140,6 +154,217 @@ export default function DriveTestProject() {
         </ChartCard>
       </div>
     </>
+  )
+}
+
+// Plan and delivery: what was committed for the month against what was
+// delivered. Additive to everything above it — nothing here reads or changes
+// a figure the rest of the dashboard already shows.
+//
+// A contractor signed in here receives one row (their own) and an unnamed
+// programme average; that is enforced by the endpoint, not by this component,
+// which simply renders whatever rows it was given.
+function PlanAndDelivery({ data }) {
+  if (!data) return null
+
+  const { achievement_percent: achievement, uncommitted_contractors: uncommitted } = data
+
+  return (
+    <motion.div
+      className="card mt-24"
+      initial={{ opacity: 0, y: 14 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 0.04, duration: 0.4 }}
+    >
+      <div style={{ padding: '20px 20px 0' }}>
+        <h3 style={{ fontSize: 15, marginBottom: 4 }}>Plan and delivery</h3>
+        <div className="dim" style={{ fontSize: 12.5, marginBottom: 16 }}>{data.month_label}</div>
+      </div>
+
+      <div
+        className="grid"
+        style={{ gridTemplateColumns: 'repeat(4, 1fr)', padding: '0 20px', gap: 12 }}
+      >
+        <PlanFigure
+          icon={Target}
+          label="PIP"
+          value={data.pip}
+          color="var(--violet, var(--signal-glow))"
+          note={
+            uncommitted > 0
+              ? `${uncommitted} not committed`
+              : `${data.committed_contractors} committed`
+          }
+        />
+        <PlanFigure
+          icon={ClipboardList}
+          label="Assigned"
+          value={data.assigned}
+          color="var(--signal)"
+        />
+        <PlanFigure
+          icon={CheckCircle2}
+          label="Actual"
+          value={data.actual}
+          color="var(--green-dim, var(--green))"
+        />
+        <PlanFigure
+          icon={Gauge}
+          label="Achievement"
+          value={achievement == null ? '—' : `${achievement}%`}
+          color={bandColor(achievement)}
+          // Null, not zero: there is no plan to have achieved a share of, and
+          // "0%" would report a failure that has not happened.
+          note={achievement == null ? 'no approved plan' : null}
+        />
+      </div>
+
+      <div style={{ padding: '20px' }}>
+        <div className="label" style={{ marginBottom: 12 }}>Contractor achievement</div>
+        <ContractorAchievement
+          rows={data.rows}
+          programme={data.programme_achievement_percent}
+        />
+      </div>
+    </motion.div>
+  )
+}
+
+function PlanFigure({ icon: Icon, label, value, color, note }) {
+  return (
+    <div
+      style={{
+        background: 'var(--surface-2)',
+        border: '1px solid var(--border-soft)',
+        borderRadius: 'var(--radius-sm)',
+        padding: '13px 16px',
+      }}
+    >
+      <div className="row" style={{ gap: 6, color: 'var(--text-dim)' }}>
+        <Icon size={14} strokeWidth={2} style={{ color }} />
+        <span style={{ fontSize: 12.5, fontWeight: 500, color: 'var(--text-muted)' }}>{label}</span>
+      </div>
+      <div className="row" style={{ alignItems: 'baseline', gap: 8, marginTop: 6 }}>
+        <span className="tnum" style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 600 }}>{value}</span>
+      </div>
+      {note && <div className="dim" style={{ fontSize: 11.5, marginTop: 2 }}>{note}</div>}
+    </div>
+  )
+}
+
+// At or above target, close to it, or short of it. Three bands rather than a
+// gradient, because the question the row answers is which of the three a
+// contractor is in.
+function bandColor(percent) {
+  if (percent == null) return 'var(--text-dim)'
+  if (percent >= 100) return 'var(--green)'
+  if (percent >= 80) return 'var(--amber)'
+  return 'var(--red)'
+}
+
+function ContractorAchievement({ rows, programme }) {
+  if (!rows || rows.length === 0) {
+    return <div className="empty">No contractor plans for this month.</div>
+  }
+
+  // The track runs past 100% so the target marker sits inside it rather than
+  // on the end cap — otherwise everyone at or above target renders as a full
+  // bar and the marker is invisible exactly when it matters.
+  const highest = Math.max(
+    100,
+    ...rows.map((r) => r.achievement_percent || 0),
+    programme || 0,
+  )
+  const scaleMax = Math.ceil((highest * 1.15) / 10) * 10
+
+  return (
+    <div style={{ display: 'grid', gap: 10 }}>
+      {rows.map((row) => (
+        <AchievementRow
+          key={row.contractor_id}
+          label={row.name}
+          percent={row.achievement_percent}
+          detail={`${row.actual} of ${row.pip || '—'}`}
+          scaleMax={scaleMax}
+        />
+      ))}
+      {programme != null && (
+        <AchievementRow
+          label="Programme average"
+          percent={programme}
+          detail="all contractors"
+          scaleMax={scaleMax}
+          anonymous
+        />
+      )}
+    </div>
+  )
+}
+
+function AchievementRow({ label, percent, detail, scaleMax, anonymous }) {
+  const width = percent == null ? 0 : Math.min(100, (percent / scaleMax) * 100)
+  const marker = (100 / scaleMax) * 100
+  const color = anonymous ? 'var(--text-dim)' : bandColor(percent)
+
+  return (
+    <div className="row" style={{ gap: 12, alignItems: 'center' }}>
+      <div
+        className="text-data"
+        style={{
+          width: 150,
+          fontSize: 12.5,
+          fontWeight: anonymous ? 400 : 500,
+          fontStyle: anonymous ? 'italic' : 'normal',
+          color: anonymous ? 'var(--text-muted)' : undefined,
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+        }}
+        title={label}
+      >
+        {label}
+      </div>
+      <div
+        style={{
+          position: 'relative',
+          flex: 1,
+          height: 10,
+          background: 'var(--surface-3)',
+          borderRadius: 5,
+        }}
+      >
+        <div
+          data-testid="achievement-bar"
+          style={{
+            width: `${width}%`,
+            height: '100%',
+            background: color,
+            borderRadius: 5,
+            opacity: anonymous ? 0.55 : 1,
+          }}
+        />
+        {/* The target: 100% of this contractor's own PIP. */}
+        <div
+          data-testid="target-marker"
+          title="100% of plan"
+          style={{
+            position: 'absolute',
+            top: -3,
+            left: `${marker}%`,
+            width: 2,
+            height: 16,
+            background: 'var(--text-muted)',
+            borderRadius: 1,
+          }}
+        />
+      </div>
+      <span className="tnum dim" style={{ fontSize: 12.5, minWidth: 52, textAlign: 'right' }}>
+        {percent == null ? 'no plan' : `${percent}%`}
+      </span>
+      <span className="tnum dim" style={{ fontSize: 11.5, minWidth: 68, textAlign: 'right' }}>
+        {detail}
+      </span>
+    </div>
   )
 }
 
