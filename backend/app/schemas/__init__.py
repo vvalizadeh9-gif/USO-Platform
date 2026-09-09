@@ -7,6 +7,14 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.core.user_status import USER_STATUSES
+# The PIP bounds are defined once, in the service that enforces them, and
+# imported here so the request schema and the rule cannot disagree.
+from app.services.monthly_plan import (
+    MAX_COMMITTED_COUNT,
+    MAX_RETURN_COMMENT,
+    MAX_SHAMSI_YEAR,
+    MIN_SHAMSI_YEAR,
+)
 
 
 class ORMModel(BaseModel):
@@ -1165,6 +1173,129 @@ class AuditLogOut(BaseModel):
 class AuditLogListOut(BaseModel):
     total_count: int
     items: list[AuditLogOut]
+
+
+# ---------------------------------------------------------------------------
+# Contractor monthly plan (PIP)
+#
+# The bounds these schemas enforce are imported from the service that enforces
+# them rather than written out again, so a schema and its rule cannot drift
+# apart -- the failure mode being a 422 the service would have allowed, or
+# worse, a 200 the service then refuses.
+# ---------------------------------------------------------------------------
+class MonthlyPlanOut(ORMModel):
+    """One version of one contractor's plan for one month."""
+
+    id: int
+    contractor_id: int
+    shamsi_year: int
+    shamsi_month: int
+    version: int
+    is_current: bool
+    committed_count: int | None
+    status: str
+    is_default: bool
+    submitted_by: int | None
+    submitted_at: datetime | None
+    decided_by: int | None
+    decided_at: datetime | None
+    return_comment: str | None
+    #: Handed in after day 3 of the month it covers. Derived from
+    #: ``submitted_at``, not stored -- see services/monthly_plan.is_late.
+    is_late: bool = False
+
+
+class MonthlyPlanContext(BaseModel):
+    """This month's plan plus what the SC needs in order to fill it in.
+
+    One response rather than three calls, because every one of these is on the
+    same form: the number they committed last month, how much work they are
+    already carrying, and how long they have left.
+    """
+
+    shamsi_year: int
+    shamsi_month: int
+    shamsi_month_name: str
+    plan: MonthlyPlanOut | None = None
+    previous_month_committed: int | None = None
+    open_assignments: int
+    deadline_shamsi: str
+    deadline_gregorian: date
+    deadline_passed: bool
+
+
+class MonthlyPlanHistoryRow(BaseModel):
+    """One month of a contractor's own history.
+
+    ``committed_count`` is filled in only for an approved plan. A number that
+    was submitted and not yet decided is a proposal, and showing it in a
+    history of commitments would make it look like one.
+    """
+
+    shamsi_year: int
+    shamsi_month: int
+    shamsi_month_name: str
+    committed_count: int | None = None
+    status: str | None = None
+    version: int | None = None
+
+
+class MonthlyPlanQueueRow(BaseModel):
+    """One contractor in the PM's queue for a month, whether they filed or not."""
+
+    contractor_id: int
+    contractor_name: str
+    plan_id: int | None = None
+    status: str | None = None
+    committed_count: int | None = None
+    previous_month_committed: int | None = None
+    version: int | None = None
+    submitted_at: datetime | None = None
+    is_late: bool = False
+    return_comment: str | None = None
+
+
+class MonthlyPlanQueueOut(BaseModel):
+    shamsi_year: int
+    shamsi_month: int
+    shamsi_month_name: str
+    deadline_shamsi: str
+    deadline_passed: bool
+    rows: list[MonthlyPlanQueueRow]
+
+
+class MonthlyPlanWrite(BaseModel):
+    """Save or submit this month's plan.
+
+    ``committed_count`` is optional because a draft may legitimately not have
+    one yet; the service requires it when ``submit`` is true, which is the only
+    moment it becomes a commitment.
+    """
+
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    shamsi_year: int = Field(alias="year", ge=MIN_SHAMSI_YEAR, le=MAX_SHAMSI_YEAR)
+    shamsi_month: int = Field(alias="month", ge=1, le=12)
+    committed_count: int | None = Field(default=None, ge=0, le=MAX_COMMITTED_COUNT)
+    submit: bool = False
+
+
+class MonthlyPlanRevise(BaseModel):
+    """Open the next version of an approved plan."""
+
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    shamsi_year: int = Field(alias="year", ge=MIN_SHAMSI_YEAR, le=MAX_SHAMSI_YEAR)
+    shamsi_month: int = Field(alias="month", ge=1, le=12)
+    committed_count: int = Field(ge=0, le=MAX_COMMITTED_COUNT)
+
+
+class MonthlyPlanReturn(BaseModel):
+    """A PM sending a plan back. The comment is the point of the endpoint."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    comment: str = Field(min_length=1, max_length=MAX_RETURN_COMMENT)
 
 
 UserOut.model_rebuild()
