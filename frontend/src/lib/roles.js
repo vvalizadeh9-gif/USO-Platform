@@ -53,3 +53,25 @@ export const REVIEW_AUTHORITY_ROLES = ['PM', 'Coordinator']
 export function canReview(user) {
   return REVIEW_AUTHORITY_ROLES.includes(user?.role?.name)
 }
+
+// The monthly plan (PIP) screen. Contractors fill one in; PM decides them;
+// Coordinator, Regional Manager and Viewer read the queue. Admin is absent on
+// purpose -- setting a contractor's monthly target is an operational act, and
+// Admin is a systems role (ARCHITECTURE.md, and api/monthly_plan.py, which
+// gives the decision to PM alone).
+//
+// Must agree with app/api/monthly_plan.py: the queue's readers plus the
+// contractor side. Backend-side Admin may read the queue; the interface does
+// not offer it, because there is nothing on that screen Admin acts on.
+export const MONTHLY_PLAN_ROLES = [
+  'Contractor',
+  'PM',
+  'Coordinator',
+  'RegionalManager',
+  'Viewer',
+]
+
+// Who decides a plan. PM alone, as on the server.
+export function canDecidePlans(user) {
+  return user?.role?.name === 'PM'
+}

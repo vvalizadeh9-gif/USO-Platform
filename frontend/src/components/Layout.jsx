@@ -11,11 +11,12 @@ import {
   ClipboardList,
   ClipboardCheck,
   Wrench,
+  CalendarRange,
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { CATEGORY_OWNER_ROLES } from '../lib/roles'
+import { CATEGORY_OWNER_ROLES, MONTHLY_PLAN_ROLES } from '../lib/roles'
 import api from '../api/client'
 
 // hideRoles hides an item for the given roles, on top of any `roles`
@@ -30,6 +31,10 @@ const NAV = [
   { to: '/my-fix-queue', label: 'My Fix Queue', icon: Wrench, roles: CATEGORY_OWNER_ROLES },
   { to: '/action-center', label: 'Action Center', icon: Radio, key: 'action' },
   { to: '/my-work', label: 'My Work', icon: BadgeCheck, hideRoles: ['Admin'] },
+  // Two shapes behind one item: the contractor's own form, and the month's
+  // queue for everyone with an oversight interest in it. Admin is absent from
+  // MONTHLY_PLAN_ROLES, which is what keeps it out of their sidebar.
+  { to: '/monthly-plan', label: 'Monthly Plan', icon: CalendarRange, roles: MONTHLY_PLAN_ROLES },
 ]
 
 // Reporting is separated from the work itself, because they are read at
