@@ -27,6 +27,7 @@ vi.mock('./pages/WorkItems', () => page('work-items'))
 vi.mock('./pages/WorkItemDetail', () => page('work-item-detail'))
 vi.mock('./pages/ActionCenter', () => page('action-center'))
 vi.mock('./pages/mywork/MyWork', () => page('my-work'))
+vi.mock('./pages/monthlyplan/MonthlyPlan', () => page('monthly-plan'))
 vi.mock('./pages/reports/AcceptanceDashboard', () => page('acceptance'))
 vi.mock('./pages/Admin', () => page('admin'))
 vi.mock('./pages/ChangePassword', () => page('change-password'))
@@ -98,6 +99,28 @@ describe('guarded routes', () => {
   it('lets a category owner into the fix queue', async () => {
     signedInAs('NwgPlanning')
     expect(await landOn('/my-fix-queue')).toBe('my-fix-queue')
+  })
+
+  // The monthly plan is the one screen Admin is deliberately kept off. Not a
+  // permission the interface invents -- deciding a contractor's monthly target
+  // is an operational act, and Admin is a systems role (ARCHITECTURE.md).
+  it.each(['Contractor', 'PM', 'Coordinator', 'RegionalManager', 'Viewer'])(
+    'lets %s onto the monthly plan',
+    async (role) => {
+      signedInAs(role)
+      expect(await landOn('/monthly-plan')).toBe('monthly-plan')
+    },
+  )
+
+  it('sends an admin away from the monthly plan', async () => {
+    signedInAs('Admin')
+    // "/" for an admin is the console, which is where they belong.
+    expect(await landOn('/monthly-plan')).toBe('admin')
+  })
+
+  it('keeps a category owner off it too, as the server does', async () => {
+    signedInAs('NwgPlanning')
+    expect(await landOn('/monthly-plan')).toBe('action-center')
   })
 
   it('keeps a contractor out of the admin console', async () => {

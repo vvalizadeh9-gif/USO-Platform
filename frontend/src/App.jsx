@@ -3,7 +3,7 @@ import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import Layout from './components/Layout'
 import { useAuth } from './context/AuthContext'
 import { Loading } from './components/ui'
-import { CATEGORY_OWNER_ROLES } from './lib/roles'
+import { CATEGORY_OWNER_ROLES, MONTHLY_PLAN_ROLES } from './lib/roles'
 import Login from './pages/Login'
 
 // Route pages are code-split so the initial load only ships the shell +
@@ -17,6 +17,7 @@ const WorkItems = lazy(() => import('./pages/WorkItems'))
 const WorkItemDetail = lazy(() => import('./pages/WorkItemDetail'))
 const ActionCenter = lazy(() => import('./pages/ActionCenter'))
 const MyWork = lazy(() => import('./pages/mywork/MyWork'))
+const MonthlyPlan = lazy(() => import('./pages/monthlyplan/MonthlyPlan'))
 const AcceptanceDashboard = lazy(() => import('./pages/reports/AcceptanceDashboard'))
 const Admin = lazy(() => import('./pages/Admin'))
 const ChangePassword = lazy(() => import('./pages/ChangePassword'))
@@ -105,6 +106,17 @@ export default function App() {
               remounted it — silently resetting the chosen bucket and the
               search box on every click. */}
           <Route path="/my-work/*" element={<MyWork />} />
+          {/* Admin is not in MONTHLY_PLAN_ROLES, so this bounces them home:
+              setting a contractor's monthly target is an operational act and
+              Admin is a systems role. See lib/roles and ARCHITECTURE.md. */}
+          <Route
+            path="/monthly-plan"
+            element={
+              <Protected allowedRoles={MONTHLY_PLAN_ROLES}>
+                <MonthlyPlan />
+              </Protected>
+            }
+          />
           <Route path="/acceptance" element={<Navigate to="/my-work" replace />} />
           <Route path="/my-acceptance" element={<Navigate to="/my-work" replace />} />
           <Route path="/admin" element={<Protected allowedRoles={['Admin', 'PM']}><Admin /></Protected>} />

@@ -8,7 +8,9 @@
 import { describe, expect, it } from 'vitest'
 import {
   CATEGORY_OWNER_ROLES,
+  MONTHLY_PLAN_ROLES,
   REVIEW_AUTHORITY_ROLES,
+  canDecidePlans,
   canReview,
   isCategoryOwner,
   roleLabel,
@@ -96,5 +98,36 @@ describe('canReview', () => {
     expect(canReview(undefined)).toBe(false)
     expect(canReview(null)).toBe(false)
     expect(canReview({})).toBe(false)
+  })
+})
+
+// The monthly plan (PIP). Same deliberate duplication as above, of
+// app/api/monthly_plan.py: the contractor side plus the queue's readers.
+describe('who the monthly plan is offered to', () => {
+  it('is every role the server lets near it', () => {
+    expect(MONTHLY_PLAN_ROLES).toEqual(
+      expect.arrayContaining(['Contractor', 'PM', 'Coordinator', 'RegionalManager', 'Viewer']),
+    )
+  })
+
+  // Deciding a contractor's monthly target is an operational act and Admin is
+  // a systems role -- the separation ARCHITECTURE.md draws, and the one a test
+  // "fixing" a 403 tends to erase.
+  it('is not offered to Admin', () => {
+    expect(MONTHLY_PLAN_ROLES).not.toContain('Admin')
+  })
+
+  it('is not offered to a category owner, who the server would refuse', () => {
+    for (const role of CATEGORY_OWNER_ROLES) {
+      expect(MONTHLY_PLAN_ROLES, role).not.toContain(role)
+    }
+  })
+
+  it('gives the decision to the PM alone', () => {
+    expect(canDecidePlans({ role: { name: 'PM' } })).toBe(true)
+    for (const role of ['Admin', 'Coordinator', 'RegionalManager', 'Viewer', 'Contractor']) {
+      expect(canDecidePlans({ role: { name: role } }), role).toBe(false)
+    }
+    expect(canDecidePlans(undefined)).toBe(false)
   })
 })

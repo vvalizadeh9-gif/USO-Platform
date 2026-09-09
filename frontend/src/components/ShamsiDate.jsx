@@ -5,14 +5,15 @@
 // to Gregorian happens on the server (core/jalali.py). Two calendar
 // implementations that must agree is a bug waiting to happen, and letter dates
 // are the field where being one day out matters most.
-const MONTHS = [
-  'فروردین', 'اردیبهشت', 'خرداد', 'تیر', 'مرداد', 'شهریور',
-  'مهر', 'آبان', 'آذر', 'دی', 'بهمن', 'اسفند',
-]
 
-// Wide enough for historical letters and a few years ahead.
-const FIRST_YEAR = 1398
-const LAST_YEAR = 1415
+// The month names and the year bounds live in lib/shamsi.js, so that this
+// widget and the screens organised by Shamsi month offer the same twelve
+// names and the same range rather than each keeping a copy.
+import {
+  FIRST_SHAMSI_YEAR as FIRST_YEAR,
+  LAST_SHAMSI_YEAR as LAST_YEAR,
+  SHAMSI_MONTHS as MONTHS,
+} from '../lib/shamsi'
 
 const pad = (n) => String(n).padStart(2, '0')
 
