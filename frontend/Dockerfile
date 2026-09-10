@@ -22,31 +22,53 @@ WORKDIR /app
 # variable moves, every other one needs to be held still.
 COPY package.json package-lock.json ./
 
-# `--maxsockets 3` and the `test -x` are both here because of one deployment
-# failure, and they address its two halves.
+# Overridable so a build on a network that cannot reach registry.npmjs.org can
+# be pointed at a mirror without editing this file:
+#   docker compose build --build-arg NPM_REGISTRY=https://<mirror>/ frontend
+ARG NPM_REGISTRY=https://registry.npmjs.org/
+
+# A slow or interrupted route to the registry is the ordinary case on some
+# networks, not an exceptional one. Left at npm's defaults, a stalled socket
+# fails the whole install; these give it room to wait and to try again.
+ENV NPM_CONFIG_REGISTRY=${NPM_REGISTRY} \
+    NPM_CONFIG_FETCH_RETRIES=5 \
+    NPM_CONFIG_FETCH_RETRY_MINTIMEOUT=20000 \
+    NPM_CONFIG_FETCH_RETRY_MAXTIMEOUT=120000 \
+    NPM_CONFIG_FETCH_TIMEOUT=600000
+
+# Three attempts, then verify -- because of one deployment that shipped nothing.
 #
-# npm ci died partway through with "Exit handler never called!" -- an npm bug
-# that surfaces when the install process is killed under memory pressure, which
-# this dependency set (React, recharts, framer-motion) reaches on a small build
-# VM. The half that made it hard to diagnose is that npm exited 0 anyway. Docker
-# recorded the layer as DONE, the build carried on with an empty node_modules,
-# and the failure finally appeared two steps later as `sh: vite: not found` --
-# a message pointing at the build tool rather than at the install that never
-# happened.
+# npm ci died partway through with "Exit handler never called!", an npm bug that
+# surfaces when the install is interrupted, and exited 0 anyway. Docker recorded
+# the layer as DONE, the build carried on against an empty node_modules, and the
+# failure appeared two steps later as `sh: vite: not found` -- naming the build
+# tool rather than the install that never happened. No image was produced, so
+# `up -d` recreated the container from the previous image still on disk and
+# reported it healthy. The deployment served two-day-old code and said nothing.
 #
-# --maxsockets caps concurrent downloads, which is what keeps the install inside
-# the memory it has. --no-audit and --no-fund drop two network round-trips that
-# do nothing for a container build.
+# node_modules is removed before each attempt so a retry starts from a known
+# state rather than inheriting whatever the crash left behind.
 #
-# The `test -x` is the part that matters even so: it asserts the install
-# actually produced something, so a silent exit-0 crash stops the build here,
-# where the error names the real problem. A build that cannot install its
-# dependencies must fail, not ship the previous image's behaviour -- when this
-# happened, `docker compose up -d` recreated the container from a stale image
-# and reported it healthy, so the deployment looked successful for two days
-# while serving old code.
-RUN npm ci --no-audit --no-fund --maxsockets 3 \
-    && test -x node_modules/.bin/vite
+# The `test` is what makes exit status irrelevant: the question asked is not
+# "did npm claim success" but "is there a runnable vite here". An install that
+# cannot answer yes fails the build at this step, where the error is about the
+# thing that actually broke.
+RUN set -e; \
+    for attempt in 1 2 3; do \
+        echo "[build] npm ci, attempt $attempt of 3"; \
+        rm -rf node_modules; \
+        if npm ci --no-audit --no-fund --maxsockets 3 \
+           && test -x node_modules/.bin/vite; then \
+            echo "[build] dependencies installed on attempt $attempt"; \
+            exit 0; \
+        fi; \
+        echo "[build] attempt $attempt produced no usable install" >&2; \
+        sleep 10; \
+    done; \
+    echo "[build] npm ci failed three times -- see the errors above." >&2; \
+    echo "[build] If the registry is unreachable from this network, rebuild" >&2; \
+    echo "[build] with --build-arg NPM_REGISTRY=<mirror>." >&2; \
+    exit 1
 
 # Copy source after the install so source changes don't invalidate the
 # dependency layer. A build-time ARG busts the cache when we explicitly pass
