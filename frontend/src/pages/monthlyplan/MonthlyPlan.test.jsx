@@ -109,11 +109,30 @@ const MIXED_QUEUE = queue([
   }),
 ])
 
-function serve({ my, queue: q }) {
+//: The scorecard that now sits above the form. Its own behaviour is covered
+//: in Scorecard.test.jsx; here it only has to render so that the form below it
+//: can be reached, which is what these tests are about.
+const SCORECARD = {
+  months: [
+    {
+      shamsi_year: 1405, shamsi_month: 5, shamsi_month_name: 'مرداد',
+      pip: 30, carried_in: 4, newly_assigned: 28, available: 32,
+      delivered: 26, released: 2, carried_out: 4,
+      achievement_percent: 86.7, coverage_percent: 106.7, execution_percent: 81.3,
+      committed_contractors: 1, uncommitted_contractors: 0, rows: [],
+    },
+  ],
+  summable: ['newly_assigned', 'delivered', 'released', 'pip'],
+  balances: ['carried_in', 'available', 'carried_out'],
+  is_contractor: false,
+}
+
+function serve({ my, queue: q, scorecard = SCORECARD }) {
   api.get.mockImplementation((url) => {
     if (url === '/pip/my') return Promise.resolve({ data: my })
     if (url === '/pip/my/history') return Promise.resolve({ data: HISTORY })
     if (url === '/pip/queue') return Promise.resolve({ data: q })
+    if (url === '/pip/scorecard') return Promise.resolve({ data: scorecard })
     return Promise.reject(new Error(`unexpected GET ${url}`))
   })
 }
@@ -233,9 +252,11 @@ describe('a contractor filling in the month', () => {
     serve({ my: context() })
     show()
 
-    const history = await screen.findByText(/your last 6 months/i)
-    expect(history).toBeInTheDocument()
-    expect(screen.getByText(/مرداد 1405/)).toBeInTheDocument()
+    // Scoped to the history card. The scorecard above it names months too,
+    // so an unscoped query now matches both and would pass on either.
+    const history = (await screen.findByText(/your last 6 months/i)).closest('.card')
+    expect(within(history).getByText(/مرداد 1405/)).toBeInTheDocument()
+    expect(within(history).getByText('30')).toBeInTheDocument()
   })
 
   it('says so rather than showing an empty form when the server refuses', async () => {

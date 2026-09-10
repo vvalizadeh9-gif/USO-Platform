@@ -6,6 +6,7 @@ import { currentShamsiPeriod } from '../../lib/shamsi'
 import ContractorPlan from './ContractorPlan'
 import PeriodPicker from './PeriodPicker'
 import PlanQueue from './PlanQueue'
+import Scorecard from './Scorecard'
 
 /**
  * The monthly plan (PIP), which is two screens wearing one name.
@@ -44,21 +45,32 @@ export default function MonthlyPlan() {
         actions={<PeriodPicker period={period} onChange={setPeriod} />}
       />
 
-      {complete ? (
-        isContractor ? (
-          <ContractorPlan period={period} />
+      {/* The record first, then the month.
+          A commitment is decided by looking at the last few months, so the
+          record is above the form rather than behind a tab: splitting them
+          would put the main input to this month's number one click away from
+          the field it goes in. The scorecard carries its own range, which is
+          why it is not driven by the picker above -- that picks the month
+          being filed for, and this is about the ones already filed. */}
+      <Scorecard canSeeAllContractors={!isContractor} />
+
+      <div className="mt-24">
+        {complete ? (
+          isContractor ? (
+            <ContractorPlan period={period} />
+          ) : (
+            <PlanQueue period={period} canDecide={canDecidePlans(user)} />
+          )
         ) : (
-          <PlanQueue period={period} canDecide={canDecidePlans(user)} />
-        )
-      ) : (
         // Reached when the browser could not name today's Shamsi month (see
         // lib/shamsi), or when someone clears one of the selects. Asking is
         // better than opening on a month nobody chose.
-        <EmptyState
-          title="Pick a month"
-          hint="Choose the Shamsi year and month above."
-        />
-      )}
+          <EmptyState
+            title="Pick a month"
+            hint="Choose the Shamsi year and month above."
+          />
+        )}
+      </div>
     </>
   )
 }
