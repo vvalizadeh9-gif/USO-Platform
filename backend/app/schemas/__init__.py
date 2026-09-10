@@ -1365,6 +1365,84 @@ class MonthlyPlanQueueOut(BaseModel):
     rows: list[MonthlyPlanQueueRow]
 
 
+class ScorecardRow(BaseModel):
+    """One contractor inside one month of the scorecard."""
+
+    contractor_id: int
+    name: str | None
+    #: None, never 0 — a contractor with no approved plan has not committed to
+    #: nothing, they have not committed, and the three percentages below are
+    #: None with it rather than reporting a failure that has not happened.
+    pip: int | None
+    carried_in: int
+    newly_assigned: int
+    available: int
+    delivered: int
+    released: int
+    carried_out: int
+    achievement_percent: float | None
+    execution_percent: float | None
+    coverage_percent: float | None
+
+
+class ScorecardMonth(BaseModel):
+    shamsi_year: int
+    shamsi_month: int
+    shamsi_month_name: str
+    pip: int
+    carried_in: int
+    newly_assigned: int
+    available: int
+    delivered: int
+    released: int
+    carried_out: int
+    achievement_percent: float | None
+    coverage_percent: float | None
+    execution_percent: float | None
+    committed_contractors: int
+    uncommitted_contractors: int
+    rows: list[ScorecardRow]
+
+
+class ScorecardOut(BaseModel):
+    """Several Shamsi months of commitment against delivery.
+
+    ``summable`` and ``balances`` are part of the payload because the
+    distinction is not cosmetic: ``carried_in``, ``available`` and
+    ``carried_out`` are balances, and a site open for three months appears in
+    all three of their months. Adding a balance column down the page counts
+    that site three times. Only the flows in ``summable`` may be totalled.
+    """
+
+    months: list[ScorecardMonth]
+    summable: list[str]
+    balances: list[str]
+    is_contractor: bool
+
+
+class PlanRevision(BaseModel):
+    """One version of one contractor's plan, in the order it happened."""
+
+    version: int
+    status: str
+    committed_count: int | None
+    is_current: bool
+    is_late: bool
+    return_comment: str | None
+    submitted_shamsi: str | None
+    decided_shamsi: str | None
+    decided_by: str | None
+
+
+class PlanRevisionsOut(BaseModel):
+    contractor_id: int
+    contractor_name: str
+    shamsi_year: int
+    shamsi_month: int
+    shamsi_month_name: str
+    revisions: list[PlanRevision]
+
+
 class MonthlyPlanWrite(BaseModel):
     """Save or submit this month's plan.
 
