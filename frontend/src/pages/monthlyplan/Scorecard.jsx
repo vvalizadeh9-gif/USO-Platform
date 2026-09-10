@@ -339,7 +339,7 @@ function DeliveryChart({ months }) {
   return (
     <div style={{ padding: '10px 20px 20px' }}>
       <div className="row wrap" style={{ gap: 16, fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>
-        <LegendItem swatch="var(--violet-dim)" border="var(--violet)" label="Available" />
+        <LegendItem swatch="var(--violet)" opacity={0.28} border="var(--violet)" label="Available" />
         <LegendItem swatch="var(--signal)" label="Delivered" />
         <span className="row" style={{ gap: 6 }}>
           <span style={{ width: 13, height: 2, background: 'var(--text)' }} />
@@ -379,7 +379,8 @@ function DeliveryChart({ months }) {
                 width={rangeWidth}
                 height={plotHeight - (y(m.available) - padTop)}
                 rx="4"
-                fill="var(--violet-dim)"
+                fill="var(--violet)"
+                opacity="0.28"
               />
               <rect
                 data-testid="delivered-bar"
@@ -427,7 +428,7 @@ function DeliveryChart({ months }) {
   )
 }
 
-function LegendItem({ swatch, border, label }) {
+function LegendItem({ swatch, border, opacity, label }) {
   return (
     <span className="row" style={{ gap: 6 }}>
       <span
@@ -436,6 +437,7 @@ function LegendItem({ swatch, border, label }) {
           height: 11,
           borderRadius: 3,
           background: swatch,
+          opacity,
           border: border ? `1px solid ${border}` : undefined,
         }}
       />
@@ -592,9 +594,13 @@ function AvailableCell({ month }) {
       style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'flex-end', gap: 3 }}
     >
       <span>{total}</span>
+      {/* Both segments are the same hue at two strengths, and neither is
+          --violet-dim: at 12% alpha it is indistinguishable from the track
+          behind it, so a month that was all new work looked like a month with
+          no work in it. */}
       <span style={{ display: 'flex', width: 54, height: 4, borderRadius: 2, overflow: 'hidden', background: 'var(--surface-3)' }}>
         <span style={{ width: `${carried}%`, background: 'var(--violet)' }} />
-        <span style={{ width: `${100 - carried}%`, background: 'var(--violet-dim)' }} />
+        <span style={{ width: `${100 - carried}%`, background: 'var(--violet)', opacity: 0.38 }} />
       </span>
     </span>
   )
