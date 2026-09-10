@@ -1,7 +1,12 @@
 """Drive Test Project dashboard endpoints.
 
 ``/overview`` returns all KPIs and chart datasets for the current user's
-province scope, plus month-over-month deltas from the latest snapshot.
+province scope, plus month-over-month deltas from the latest snapshot, plus
+the ongoing, problematic and per-province breakdowns that split those totals
+up. The breakdowns ride on this endpoint rather than on one of their own
+because they are the same totals seen from closer up, computed from the same
+cached pass: a second endpoint would re-read the database and could answer
+with figures the cards on the same screen disagree with.
 
 ``/plan-delivery`` returns one month's commitment against its delivery. It is
 a second endpoint rather than more fields on the overview because it answers a
@@ -23,7 +28,10 @@ from app.schemas import (
     DriveTestKpis,
     DriveTestOverview,
     KpiWithDelta,
+    OngoingBreakdown,
     PlanAndDelivery,
+    ProblematicBreakdown,
+    ProvinceBreakdownRow,
     ProvinceProgressPoint,
 )
 from app.services import monthly_plan as plans
@@ -41,6 +49,10 @@ def drive_test_overview(
     """Return the full Drive Test Project dashboard payload for this user."""
     analytics = DriveTestAnalytics(db, user)
     kpis = analytics.compute_kpis()
+    # Off the same cached work items the KPIs were counted from, so the
+    # breakdowns reconcile to the cards rather than to a second reading of the
+    # database taken a moment later.
+    breakdowns = analytics.breakdowns()
 
     # Month-over-month deltas. Use the global snapshot when the user sees all
     # provinces; otherwise fall back to the global one (per-province delta only
@@ -96,6 +108,11 @@ def drive_test_overview(
             for row in analytics.chart_progress_by_province()
         ],
         current_month_label=f"{jalali.month_name(month)} {year}",
+        ongoing_breakdown=_ongoing_breakdown(breakdowns["ongoing"]),
+        problematic_breakdown=_problematic_breakdown(breakdowns["problematic"]),
+        province_breakdown=[
+            ProvinceBreakdownRow(**row) for row in breakdowns["provinces"]
+        ],
     )
 
 
@@ -158,6 +175,24 @@ def _previous_totals(db: Session, user: User) -> dict:
         for key, value in get_month_over_month(db, province_id).items():
             totals[key] = totals.get(key, 0) + value
     return totals
+
+
+def _ongoing_breakdown(data: dict) -> OngoingBreakdown:
+    return OngoingBreakdown(
+        total=data["total"],
+        by_stage=_points(data["by_stage"]),
+        by_contractor=_points(data["by_contractor"]),
+        without_contractor=data["without_contractor"],
+        by_province=_points(data["by_province"]),
+    )
+
+
+def _problematic_breakdown(data: dict) -> ProblematicBreakdown:
+    return ProblematicBreakdown(
+        total=data["total"],
+        by_category=_points(data["by_category"]),
+        by_province=_points(data["by_province"]),
+    )
 
 
 def _points(rows: list[dict]) -> list[ChartPoint]:

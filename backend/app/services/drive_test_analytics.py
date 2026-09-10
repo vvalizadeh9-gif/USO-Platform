@@ -41,7 +41,57 @@ from app.models.reference import Contractor, Province
 from app.models.workitem import WorkItem
 from app.services import cpm_columns as C
 from app.services.visibility import apply_work_item_scope
-from app.services.workflow import STAGE_HEALTH_PROBLEM, latest_problem_category_name
+from app.services.workflow import (
+    STAGE_ASSIGNED,
+    STAGE_DT_SUBMITTED,
+    STAGE_HC_IN_PROGRESS,
+    STAGE_HC_REVIEW,
+    STAGE_HEALTH_PROBLEM,
+    STAGE_NEW,
+    STAGE_READY,
+    STAGE_RETURNED,
+    latest_problem_category_name,
+)
+
+#: The stages an *ongoing* site can be sitting in, in workflow order.
+#:
+#: Ongoing excludes Problematic by definition, and a site whose drive test is
+#: approved is DT-Done rather than ongoing, so neither of those stages appears
+#: here. Every other stage a work item can hold does, which is what makes the
+#: stage tab a partition rather than a selection: read in order it says how far
+#: each ongoing site has got — never health-checked, out with a checker,
+#: waiting on a reviewer's decision, ready but unassigned, with a contractor,
+#: handed back, or waiting on approval.
+ONGOING_STAGE_ORDER = (
+    STAGE_NEW,
+    STAGE_HC_IN_PROGRESS,
+    STAGE_HC_REVIEW,
+    STAGE_READY,
+    STAGE_ASSIGNED,
+    STAGE_RETURNED,
+    STAGE_DT_SUBMITTED,
+)
+
+#: Catch-all bucket for an ongoing site whose stage is not in the list above.
+#:
+#: Nothing should land here, and it exists precisely because "should" is not a
+#: guarantee: a stage added to the workflow without being added to the tuple
+#: above, or a row written by an older build, would otherwise be dropped
+#: silently and the buckets would quietly stop summing to the total. Better a
+#: visible bucket nobody can explain than a total that is wrong by a number
+#: nobody can see. It is emitted only when it is non-zero.
+STAGE_OTHER = "Other"
+
+#: The label a contractor account sees in place of every other company's name.
+#: See :meth:`DriveTestAnalytics._label_ongoing_contractors`.
+OTHER_CONTRACTORS = "Other contractors"
+
+#: Stands in for a name that cannot be resolved — a work item whose site
+#: carries no province, or a contractor row whose company has since been
+#: deleted. An em dash rather than "Unknown" or "None" because it reads as an
+#: absent value in both the Farsi and English column layouts on this page, and
+#: matches what the existing province table already renders.
+NO_LABEL = "\u2014"
 
 
 class DriveTestAnalytics:
@@ -236,6 +286,138 @@ class DriveTestAnalytics:
                 }
             )
         rows.sort(key=lambda r: r["done"], reverse=True)
+        return rows
+
+    # ---------- breakdowns ----------
+    def breakdowns(self) -> dict:
+        """Ongoing, Problematic and per-province breakdowns, in one pass.
+
+        Every figure here comes off the *same* iteration of the same cached
+        work items the KPI cards are computed from — deliberately, and for two
+        reasons. The cheap one is cost: three sections asking the same
+        questions of the same rows is one loop, not three scans. The one that
+        matters is that it makes the page reconcile by construction rather
+        than by coincidence. The stage buckets sum to the ongoing card, the
+        contractor rows plus the sites with no contractor sum to the same
+        figure, the category rows sum to the problematic card, and the
+        province rows sum to the programme totals, because all of them are
+        incremented from one visit to one work item under the very predicates
+        (:meth:`_is_problematic`, :meth:`_is_ongoing`) the cards use. A second
+        pass with its own copy of those predicates is how two numbers for one
+        fact get onto a dashboard.
+
+        There is no problematic *aging* here. Nothing in the schema records
+        when a site became problematic: the CPM-imported signal is a bare
+        status column, and the in-app signal is a stage. Aging bands off any
+        other date would be a different fact wearing the same label, so they
+        are absent rather than approximated.
+        """
+        stage_counts: dict[str, int] = defaultdict(int)
+        ongoing_by_contractor: dict[int, int] = defaultdict(int)
+        ongoing_without_contractor = 0
+        ongoing_by_province: dict[int | None, int] = defaultdict(int)
+        problem_categories: dict[str, int] = defaultdict(int)
+        problem_by_province: dict[int | None, int] = defaultdict(int)
+        province_rows: dict[int | None, dict[str, int]] = defaultdict(
+            lambda: {"onair": 0, "done": 0, "ongoing": 0, "problematic": 0}
+        )
+        ongoing_total = 0
+        problematic_total = 0
+
+        for w in self._onair_items():
+            province_id = w.site.province_id if w.site else None
+            row = province_rows[province_id]
+            row["onair"] += 1
+
+            if w.dt_status == "Done":
+                row["done"] += 1
+
+            if self._is_problematic(w):
+                problematic_total += 1
+                row["problematic"] += 1
+                problem_categories[self._effective_problem_category(w)] += 1
+                problem_by_province[province_id] += 1
+
+            if self._is_ongoing(w):
+                ongoing_total += 1
+                row["ongoing"] += 1
+                ongoing_by_province[province_id] += 1
+                stage = w.current_stage
+                stage_counts[stage if stage in ONGOING_STAGE_ORDER else STAGE_OTHER] += 1
+                contractor_id = self._effective_contractor_id(w)
+                if contractor_id is None:
+                    ongoing_without_contractor += 1
+                else:
+                    ongoing_by_contractor[contractor_id] += 1
+
+        names = self._province_names(list(province_rows))
+        return {
+            "ongoing": {
+                "total": ongoing_total,
+                "by_stage": self._stage_points(stage_counts),
+                "by_contractor": self._label_ongoing_contractors(ongoing_by_contractor),
+                "without_contractor": ongoing_without_contractor,
+                "by_province": _province_points(ongoing_by_province, names),
+            },
+            "problematic": {
+                "total": problematic_total,
+                "by_category": [
+                    {"name": k, "value": v} for k, v in _sorted_desc(problem_categories)
+                ],
+                "by_province": _province_points(problem_by_province, names),
+            },
+            "provinces": _province_table(province_rows, names),
+        }
+
+    @staticmethod
+    def _stage_points(counts: dict[str, int]) -> list[dict]:
+        """Stage buckets in workflow order, zeros included.
+
+        Sorting these by size, the way the contractor and province views are
+        sorted, would destroy what the tab is for. The reader's question is
+        "how far have the ongoing sites got", and the answer is only legible
+        if the buckets stay in the order the work moves through them. A zero
+        is kept for the same reason: "nothing is waiting on approval" is an
+        answer, and a bucket that disappears when it empties makes the row of
+        buckets mean something different every time it is read.
+        """
+        points = [
+            {"name": stage, "value": counts.get(stage, 0)}
+            for stage in ONGOING_STAGE_ORDER
+        ]
+        if counts.get(STAGE_OTHER):
+            points.append({"name": STAGE_OTHER, "value": counts[STAGE_OTHER]})
+        return points
+
+    def _label_ongoing_contractors(self, counts: dict[int, int]) -> list[dict]:
+        """Ongoing-per-contractor rows, with other companies hidden from a
+        contractor account.
+
+        Staff get named rows, the same as everywhere else on this dashboard.
+
+        A contractor gets their own row and a single unnamed ``Other
+        contractors`` row. That second row is not padding: ``apply_work_item_scope``
+        hands a contractor every site they have *ever* held, so a site they
+        have since handed on is still in this set and is now attributed to
+        whoever holds it. Naming that company would put a competitor's
+        workload on their dashboard; dropping the site would break the one
+        property this section is built to have. Folding it into an unnamed
+        aggregate keeps the arithmetic and gives away nothing — the same
+        trade already made for ``programme_achievement_percent``.
+        """
+        own = self._own_contractor_id()
+        if own is None:
+            return self._label_contractors(counts)
+
+        others = sum(value for cid, value in counts.items() if cid != own)
+        rows = [
+            {
+                "name": self._contractor_names({own}, {}).get(own, NO_LABEL),
+                "value": counts.get(own, 0),
+            }
+        ]
+        if others:
+            rows.append({"name": OTHER_CONTRACTORS, "value": others})
         return rows
 
     # ---------- plan and delivery (PIP vs actual) ----------
@@ -502,6 +684,54 @@ class DriveTestAnalytics:
 # ---------- module-level helpers ----------
 def _sorted_desc(counts: dict) -> list[tuple]:
     return sorted(counts.items(), key=lambda kv: kv[1], reverse=True)
+
+
+def _province_points(
+    counts: dict[int | None, int], names: dict[int, str]
+) -> list[dict]:
+    """Province counts as chart points, biggest first, zeros dropped.
+
+    Zeros are dropped here and kept in :meth:`DriveTestAnalytics._stage_points`
+    because the two lists answer different questions. Stage buckets are a
+    fixed sequence whose empty members are informative; a province with no
+    ongoing sites is simply not part of this answer, and thirty-one rows of
+    which twenty are zero would bury the ones that are not.
+    """
+    rows = [
+        {"name": names.get(province_id, NO_LABEL), "value": value}
+        for province_id, value in counts.items()
+        if value
+    ]
+    rows.sort(key=lambda r: (-r["value"], r["name"]))
+    return rows
+
+
+def _province_table(
+    rows: dict[int | None, dict[str, int]], names: dict[int, str]
+) -> list[dict]:
+    """The per-province table, worst first.
+
+    Sorted by *remaining* rather than by name or by done: the table exists to
+    say where the outstanding drive tests are, and alphabetical order answers
+    a question nobody asked while burying the answer to the one they did.
+    Ties break on name so the order is stable between requests.
+    """
+    out = []
+    for province_id, row in rows.items():
+        onair, done = row["onair"], row["done"]
+        out.append(
+            {
+                "name": names.get(province_id, NO_LABEL),
+                "onair": onair,
+                "done": done,
+                "remaining": onair - done,
+                "ongoing": row["ongoing"],
+                "problematic": row["problematic"],
+                "done_percent": round(done / onair * 100, 1) if onair else 0.0,
+            }
+        )
+    out.sort(key=lambda r: (-r["remaining"], r["name"]))
+    return out
 
 
 def _percent(part: int, whole: int) -> float | None:

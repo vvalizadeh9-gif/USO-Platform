@@ -1107,6 +1107,60 @@ class PlanAndDelivery(BaseModel):
     rows: list[ContractorAchievementRow] = []
 
 
+class OngoingBreakdown(BaseModel):
+    """The ongoing total, split three ways.
+
+    Each list is a partition of ``total``: the stage buckets sum to it, and so
+    do the contractor rows once ``without_contractor`` is added back. That is
+    the property the section exists to have, and it is asserted in the tests
+    rather than left to the reader to trust.
+    """
+
+    total: int
+    #: Workflow order, not size order, and zero buckets are kept — the tab is
+    #: read as a pipeline.
+    by_stage: list[ChartPoint]
+    #: A contractor account sees its own row plus one unnamed aggregate; staff
+    #: see every company by name.
+    by_contractor: list[ChartPoint]
+    #: Ongoing sites attributed to nobody. Not a contractor row — an
+    #: unassigned site is a queue item, not a workload — but reported so the
+    #: contractor rows visibly reconcile to ``total``.
+    without_contractor: int
+    by_province: list[ChartPoint]
+
+
+class ProblematicBreakdown(BaseModel):
+    """The problematic total by category and by province.
+
+    There are no aging bands. Nothing in the schema records when a site
+    *became* problematic — the CPM signal is a bare status column and the
+    in-app signal is a stage — so the bands would have to be computed from a
+    date that means something else. See ``DriveTestAnalytics.breakdowns``.
+    """
+
+    total: int
+    by_category: list[ChartPoint]
+    by_province: list[ChartPoint]
+
+
+class ProvinceBreakdownRow(BaseModel):
+    """One province's full picture, for the province table.
+
+    A superset of :class:`ProvinceProgressPoint`, which the existing progress
+    table still uses and which is deliberately left alone. The rows arrive
+    sorted by ``remaining`` descending.
+    """
+
+    name: str
+    onair: int
+    done: int
+    remaining: int
+    ongoing: int
+    problematic: int
+    done_percent: float
+
+
 class DriveTestOverview(BaseModel):
     kpis: DriveTestKpis
     ongoing_by_contractor: list[ChartPoint]
@@ -1116,6 +1170,9 @@ class DriveTestOverview(BaseModel):
     dt_done_monthly: list[dict]
     progress_by_province: list[ProvinceProgressPoint]
     current_month_label: str
+    ongoing_breakdown: OngoingBreakdown
+    problematic_breakdown: ProblematicBreakdown
+    province_breakdown: list[ProvinceBreakdownRow]
 
 
 # ----- Acceptance dashboard -----
