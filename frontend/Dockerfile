@@ -21,7 +21,32 @@ WORKDIR /app
 # This matters most at the moment the base image above has to change: when one
 # variable moves, every other one needs to be held still.
 COPY package.json package-lock.json ./
-RUN npm ci
+
+# `--maxsockets 3` and the `test -x` are both here because of one deployment
+# failure, and they address its two halves.
+#
+# npm ci died partway through with "Exit handler never called!" -- an npm bug
+# that surfaces when the install process is killed under memory pressure, which
+# this dependency set (React, recharts, framer-motion) reaches on a small build
+# VM. The half that made it hard to diagnose is that npm exited 0 anyway. Docker
+# recorded the layer as DONE, the build carried on with an empty node_modules,
+# and the failure finally appeared two steps later as `sh: vite: not found` --
+# a message pointing at the build tool rather than at the install that never
+# happened.
+#
+# --maxsockets caps concurrent downloads, which is what keeps the install inside
+# the memory it has. --no-audit and --no-fund drop two network round-trips that
+# do nothing for a container build.
+#
+# The `test -x` is the part that matters even so: it asserts the install
+# actually produced something, so a silent exit-0 crash stops the build here,
+# where the error names the real problem. A build that cannot install its
+# dependencies must fail, not ship the previous image's behaviour -- when this
+# happened, `docker compose up -d` recreated the container from a stale image
+# and reported it healthy, so the deployment looked successful for two days
+# while serving old code.
+RUN npm ci --no-audit --no-fund --maxsockets 3 \
+    && test -x node_modules/.bin/vite
 
 # Copy source after the install so source changes don't invalidate the
 # dependency layer. A build-time ARG busts the cache when we explicitly pass
