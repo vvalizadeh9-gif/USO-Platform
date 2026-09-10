@@ -780,6 +780,212 @@ class DriveTestAnalytics:
         rows = self._db.query(Province).filter(Province.id.in_(clean_ids)).all()
         return {p.id: p.name for p in rows}
 
+    # ---------- the PIP scorecard: many months, as a ledger ----------
+    #
+    # :meth:`plan_and_delivery` answers "how did this month go". This answers
+    # "how have the last N months gone", and the difference is not only the
+    # loop.
+    #
+    # A month's workload is not what was handed over during it. A contractor
+    # given twenty sites in فروردین and none in خرداد is still carrying the
+    # fifteen they have not finished, and a figure that reports خرداد as zero
+    # assigned says the PM gave them nothing when the truth is that they were
+    # already full. So the workload figure here is what they could actually
+    # have worked on:
+    #
+    #     available = carried in + newly assigned
+    #
+    # The cost of that choice is that ``available`` and the two balances
+    # either side of it cannot be added up: a site open for three months is in
+    # all three of them, and a twelve-month total would count it three times.
+    # Only the flows -- newly assigned, delivered, released -- sum. Both facts
+    # are stated in the payload (``summable``) rather than left for the screen
+    # to rediscover.
+    #
+    # What makes the figures checkable is the same property the drive-test
+    # snapshot rests on (services/snapshots.py): the ledger closes.
+    #
+    #     carried_in + newly_assigned - delivered - released == carried_out
+    #     carried_out(M) == carried_in(M+1)
+    #
+    # It closes by construction rather than by arithmetic -- ``carried_out``
+    # is computed as "held at the end of the month", which is the same
+    # question ``carried_in`` asks of the next one -- and the tests assert it
+    # anyway, because a ledger nobody checks is a ledger that has already
+    # stopped balancing.
+
+    def _holdings(self, wi: WorkItem) -> list[tuple[int, date, date | None]]:
+        """When each contractor held this work item, as ``(id, from, until)``.
+
+        A contractor holds a site from the moment it is assigned to them until
+        one of two things happens: the drive test is done, or the site is
+        assigned to somebody else. Reassignment is what ends the first
+        company's holding, which is why this is derived from the assignment
+        list in order rather than from ``is_active`` -- the flag says which
+        assignment is live *now*, and this section is asked about فروردین.
+
+        ``until`` is None for a holding that has not ended. Dates, not
+        datetimes: every boundary in this section is a Shamsi month, and the
+        drive-test date the platform dates work by is itself a date.
+        """
+        ordered = sorted(
+            (a for a in wi.assignments if a.assigned_at is not None),
+            key=lambda a: a.assigned_at,
+        )
+        done_on = wi.dt_date_gregorian if wi.dt_status == "Done" else None
+
+        spans: list[tuple[int, date, date | None]] = []
+        for i, a in enumerate(ordered):
+            start = a.assigned_at.date()
+            # Whichever comes first: the next company taking it, or the drive
+            # test being finished. A site finished before it was handed on is
+            # not still in the first company's hands.
+            end = ordered[i + 1].assigned_at.date() if i + 1 < len(ordered) else None
+            if done_on is not None and (end is None or done_on < end):
+                end = done_on if done_on >= start else start
+            spans.append((a.contractor_id, start, end))
+        return spans
+
+    def scorecard(self, periods: list[tuple[int, int]]) -> dict:
+        """PIP against delivery for several Shamsi months, per contractor.
+
+        One pass over the work items for every month asked about, rather than
+        one pass per month: the loop is over the (few) periods inside the
+        (many) items, so adding a month costs a comparison and not a scan.
+
+        A contractor account gets only its own figures -- ``_plan_scope_items``
+        and ``_approved_pip`` are both already narrowed to them, and no row
+        for another company is built at all, so there is nothing here to leak
+        by forgetting to filter it afterwards.
+        """
+        own = self._own_contractor_id()
+        items = self._plan_scope_items()
+        bounds = [(_shamsi_month_bounds(y, m)) for y, m in periods]
+
+        # (period index, contractor id) -> count, for each of the five figures.
+        carried_in: dict[tuple[int, int], int] = defaultdict(int)
+        carried_out: dict[tuple[int, int], int] = defaultdict(int)
+        newly: dict[tuple[int, int], int] = defaultdict(int)
+        delivered: dict[tuple[int, int], int] = defaultdict(int)
+        released: dict[tuple[int, int], int] = defaultdict(int)
+
+        for w in items:
+            if not self._is_onair(w):
+                continue
+            spans = self._holdings(w)
+            for cid, held_from, held_until in spans:
+                # A contractor's own scorecard measures what was theirs. Their
+                # visible set still holds sites they have since handed on, and
+                # those sites' later holdings are another company's months.
+                if own is not None and cid != own:
+                    continue
+                for i, (start, end) in enumerate(bounds):
+                    if held_from < start and (held_until is None or held_until >= start):
+                        carried_in[(i, cid)] += 1
+                    if held_from < end and (held_until is None or held_until >= end):
+                        carried_out[(i, cid)] += 1
+                    if start <= held_from < end:
+                        newly[(i, cid)] += 1
+                    # Released: the holding ended inside the month for a
+                    # reason other than the drive test being done -- the site
+                    # went to another company. Counted so the ledger's
+                    # outflows explain the fall in the balance.
+                    if (
+                        held_until is not None
+                        and start <= held_until < end
+                        and not self._dated_into(w, *periods[i])
+                    ):
+                        released[(i, cid)] += 1
+
+            if w.dt_status == "Done":
+                cid = self._effective_contractor_id(w)
+                if cid is None or (own is not None and cid != own):
+                    continue
+                for i, (year, month) in enumerate(periods):
+                    if self._dated_into(w, year, month):
+                        delivered[(i, cid)] += 1
+
+        return {
+            "months": [
+                self._scorecard_month(
+                    i, year, month, carried_in, carried_out, newly, delivered, released
+                )
+                for i, (year, month) in enumerate(periods)
+            ],
+            # Spelled out rather than implied: the screen and the export both
+            # need to know which columns may be totalled, and guessing wrong
+            # produces a footer that counts the same site several times.
+            "summable": ["newly_assigned", "delivered", "released", "pip"],
+            "balances": ["carried_in", "available", "carried_out"],
+            "is_contractor": own is not None,
+        }
+
+    def _scorecard_month(
+        self, i, year, month, carried_in, carried_out, newly, delivered, released
+    ) -> dict:
+        """One month of the scorecard, with a row per contractor inside it."""
+        pip = self._approved_pip(year, month)
+        universe = self._plan_universe(year, month)
+
+        # Every contractor the month touches: one that owes a plan, one that
+        # committed, and one that merely carried or delivered work. A company
+        # deactivated mid-year still did the drive tests it did.
+        ids = set(universe) | set(pip)
+        for book in (carried_in, carried_out, newly, delivered, released):
+            ids |= {cid for (idx, cid) in book if idx == i}
+
+        # Resolved once for the month, not once per row: the names not already
+        # in ``universe`` belong to companies that carried or delivered work
+        # without owing a plan, and there are never many of them.
+        names = self._contractor_names(ids, universe)
+
+        rows = []
+        for cid in ids:
+            available = carried_in[(i, cid)] + newly[(i, cid)]
+            rows.append(
+                {
+                    "contractor_id": cid,
+                    "name": names.get(cid),
+                    # None, never 0: a contractor with no approved plan has not
+                    # committed to nothing, they have not committed.
+                    "pip": pip.get(cid),
+                    "carried_in": carried_in[(i, cid)],
+                    "newly_assigned": newly[(i, cid)],
+                    "available": available,
+                    "delivered": delivered[(i, cid)],
+                    "released": released[(i, cid)],
+                    "carried_out": carried_out[(i, cid)],
+                    "achievement_percent": _percent(delivered[(i, cid)], pip.get(cid) or 0),
+                    "execution_percent": _percent(delivered[(i, cid)], available),
+                    "coverage_percent": _percent(available, pip.get(cid) or 0),
+                }
+            )
+        rows.sort(key=lambda r: (r["name"] or ""))
+
+        total_pip = sum(r["pip"] or 0 for r in rows)
+        total_available = sum(r["available"] for r in rows)
+        total_delivered = sum(r["delivered"] for r in rows)
+        return {
+            "shamsi_year": year,
+            "shamsi_month": month,
+            "shamsi_month_name": jalali.SHAMSI_MONTHS[month - 1],
+            "pip": total_pip,
+            "carried_in": sum(r["carried_in"] for r in rows),
+            "newly_assigned": sum(r["newly_assigned"] for r in rows),
+            "available": total_available,
+            "delivered": total_delivered,
+            "released": sum(r["released"] for r in rows),
+            "carried_out": sum(r["carried_out"] for r in rows),
+            "achievement_percent": _percent(total_delivered, total_pip),
+            "coverage_percent": _percent(total_available, total_pip),
+            "execution_percent": _percent(total_delivered, total_available),
+            "committed_contractors": sum(1 for r in rows if r["pip"] is not None),
+            "uncommitted_contractors": sum(
+                1 for cid in universe if pip.get(cid) is None
+            ),
+            "rows": rows,
+        }
+
 
 # ---------- module-level helpers ----------
 def _sorted_desc(counts: dict) -> list[tuple]:

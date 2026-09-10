@@ -4,8 +4,6 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
-  Line,
-  LineChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -135,28 +133,23 @@ export default function DriveTestProject() {
       <ProblematicBreakdownCard data={data.problematic_breakdown} />
       <ProvinceBreakdownCard rows={data.province_breakdown} />
 
-      {/* Row 1: Ongoing by contractor + Problematic by category */}
-      <div className="grid mt-24" style={{ gridTemplateColumns: '1fr 1fr' }}>
-        <ChartCard title="Ongoing sites per contractor" delay={0.05}>
-          <BarChartBlock data={data.ongoing_by_contractor} color="var(--signal)" />
-        </ChartCard>
-        <ChartCard title="Problematic per category" delay={0.1}>
-          <BarChartBlock data={data.problematic_by_category} color="var(--red)" />
-        </ChartCard>
-      </div>
+      {/* Four charts used to sit here and no longer do.
 
-      {/* Row 2: Yearly + Monthly (Shamsi) */}
-      <div className="grid mt-16" style={{ gridTemplateColumns: '1fr 1fr' }}>
-        <ChartCard title="Drive tests done per year (Shamsi)" delay={0.15}>
-          <BarChartBlock data={data.dt_done_yearly} color="var(--violet)" />
-        </ChartCard>
-        <ChartCard title={`Drive tests done per month (Shamsi ${data.current_month_label.split(' ').pop()})`} delay={0.2}>
-          <MonthlyLineBlock data={data.dt_done_monthly} />
-        </ChartCard>
-      </div>
+          Two of them — ongoing per contractor, problematic per category — drew
+          exactly the data the Contractor and Category tabs above already draw,
+          one card higher up the same page. A reader who scrolled past the
+          breakdown to reach them learned nothing and had to work out which of
+          the two to trust.
 
-      {/* Row 3: DT done per contractor (all time) + province table */}
-      <div className="grid mt-16" style={{ gridTemplateColumns: '1fr 1.3fr' }}>
+          The other two were about time, and neither was readable. The yearly
+          chart was four bars carrying four numbers. The monthly one plotted
+          every month of the Shamsi year including the ones that have not
+          happened, so the line fell to zero at the current month and stayed
+          there — a cliff that reads as a collapse in delivery.
+
+          Delivery over time is now the Monthly Plan scorecard, where it is
+          drawn against what was committed and stops at the current month. */}
+      <div className="grid mt-24" style={{ gridTemplateColumns: '1fr 1.3fr' }}>
         <ChartCard title="Drive tests done per contractor (all time)" delay={0.25}>
           <BarChartBlock data={data.dt_done_by_contractor} color="var(--green)" />
         </ChartCard>
@@ -485,21 +478,6 @@ function BarChartBlock({ data, color }) {
   )
 }
 
-function MonthlyLineBlock({ data }) {
-  if (!data || data.every((d) => d.value === 0)) return <EmptyChart />
-  return (
-    <ResponsiveContainer width="100%" height={240}>
-      <LineChart data={data} margin={{ top: 5, right: 10, bottom: 0, left: -20 }}>
-        <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-        <XAxis dataKey="name" tick={{ fill: 'var(--text-muted)', fontSize: 11.5 }} axisLine={{ stroke: 'var(--border)' }} tickLine={false} interval={0} angle={-30} textAnchor="end" height={50} />
-        <YAxis tick={{ fill: 'var(--text-dim)', fontSize: 12 }} axisLine={false} tickLine={false} allowDecimals={false} />
-        <Tooltip contentStyle={TOOLTIP_STYLE} />
-        <Line type="monotone" dataKey="value" stroke="var(--signal)" strokeWidth={2.5} dot={{ r: 3, fill: 'var(--signal)' }} activeDot={{ r: 5 }} />
-      </LineChart>
-    </ResponsiveContainer>
-  )
-}
-
 // Province progress as a sortable, scrollable table instead of a bar chart —
 // with 31 real provinces, a bar chart becomes unreadable (tiny slivers,
 // illegible rotated labels). A table scales cleanly to any count and is
@@ -562,9 +540,6 @@ function ProvinceProgressTable({ data }) {
 // this page with a tab selected that means nothing to the person arriving.
 
 const ONGOING_TABS = [
-  // Stage first, and it is the reason the section exists: it is the only view
-  // that says what is actually holding each site up.
-  { key: 'stage', label: 'Stage' },
   { key: 'contractor', label: 'Contractor' },
   { key: 'province', label: 'Province' },
 ]
@@ -593,20 +568,15 @@ function collapseProvinces(points) {
 }
 
 function OngoingBreakdownCard({ data }) {
-  const [tab, setTab] = useState('stage')
+  const [tab, setTab] = useState('contractor')
   const [table, setTable] = useState(false)
 
   if (!data) return null
 
+  // by_stage is still sent by the endpoint and deliberately not rendered: the
+  // stage a site is sitting in is what the work queues are for, and reading it
+  // here meant reading a pipeline as a chart of unrelated buckets.
   const views = {
-    stage: {
-      points: data.by_stage,
-      unit: 'Stage',
-      // Stage arrives in workflow order and must stay in it: the row of
-      // buckets is read left to right as a pipeline, and re-sorting it by
-      // size would turn a sequence into a ranking of nothing.
-      note: null,
-    },
     contractor: {
       points: data.by_contractor,
       unit: 'Contractor',

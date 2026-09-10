@@ -246,6 +246,46 @@ def history(
     return out
 
 
+def all_versions(
+    db: Session, contractor_id: int, year: int, month: int
+) -> list[ContractorMonthlyPlan]:
+    """Every version of one contractor's plan for one month, oldest first.
+
+    Nothing is reconstructed and nothing is inferred: the append-on-revision
+    rule already writes a row per version, so the revision history *is* the
+    table, read in version order. That is the whole reason revising appends
+    instead of updating in place.
+    """
+    return list(
+        db.execute(
+            select(ContractorMonthlyPlan)
+            .where(
+                ContractorMonthlyPlan.contractor_id == contractor_id,
+                ContractorMonthlyPlan.shamsi_year == year,
+                ContractorMonthlyPlan.shamsi_month == month,
+            )
+            .order_by(ContractorMonthlyPlan.version)
+        )
+        .scalars()
+        .all()
+    )
+
+
+def decider_names(
+    db: Session, plans: list[ContractorMonthlyPlan]
+) -> dict[int, str]:
+    """Display names for the PMs who decided these versions, by user id.
+
+    One query for the whole list rather than one per row: a plan revised four
+    times is four rows and, more often than not, the same PM on all of them.
+    """
+    ids = {p.decided_by for p in plans if p.decided_by is not None}
+    if not ids:
+        return {}
+    rows = db.execute(select(User.id, User.full_name, User.username).where(User.id.in_(ids))).all()
+    return {uid: (full or username) for uid, full, username in rows}
+
+
 def queue_rows(
     db: Session, year: int, month: int
 ) -> list[tuple[Contractor, ContractorMonthlyPlan | None, int | None]]:

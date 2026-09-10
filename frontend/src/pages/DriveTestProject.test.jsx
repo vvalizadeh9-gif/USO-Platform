@@ -307,54 +307,43 @@ describe('breakdown sections', () => {
 
     // Chart first, table on request: bars are present, the table's own
     // Total row is not.
-    expect(within(ongoing).getAllByTestId('breakdown-bar')).toHaveLength(7)
+    expect(within(ongoing).getAllByTestId('breakdown-bar')).toHaveLength(2)
     expect(within(ongoing).queryByText('Total')).not.toBeInTheDocument()
     expect(within(problematic).getAllByTestId('breakdown-bar')).toHaveLength(2)
     // The province section is a table by nature and has no chart view.
     expect(within(provinces).getByText('Kerman')).toBeInTheDocument()
   })
 
-  it('shows the ongoing total and its stage buckets in workflow order', async () => {
+  it('shows the ongoing total, and opens on the contractor split', async () => {
+    // The Stage tab this section used to open on has been removed: which
+    // stage a site is sitting in is what the work queues answer, and reading
+    // a pipeline as a row of unrelated buckets answered it badly. by_stage is
+    // still in the payload below, deliberately unrendered.
     serve(planDelivery())
     render(<DriveTestProject />)
 
     const ongoing = await card('Ongoing breakdown')
     expect(within(ongoing).getByText('50')).toBeInTheDocument()
     expect(within(ongoing).getByText('ongoing')).toBeInTheDocument()
-
-    // Order is the meaning of this tab, so it is asserted rather than the
-    // presence of the labels. The zero bucket stays in it.
-    const labels = within(ongoing)
-      .getAllByTestId('breakdown-bar')
-      .map((bar) => bar.closest('.row').firstChild.textContent)
-    expect(labels).toEqual([
-      'New',
-      'HC In Progress',
-      'HC Review',
-      'Ready for Assignment',
-      'Assigned',
-      'Returned by Contractor',
-      'DT Submitted',
-    ])
+    expect(within(ongoing).queryByRole('button', { name: 'Stage' })).not.toBeInTheDocument()
+    expect(within(ongoing).queryByText('Ready for Assignment')).not.toBeInTheDocument()
+    expect(within(ongoing).getByText('Alfa Drive Tests')).toBeInTheDocument()
   })
 
-  it('switches the ongoing section between its three tabs', async () => {
+  it('switches the ongoing section between its two tabs', async () => {
     serve(planDelivery())
     render(<DriveTestProject />)
 
     const ongoing = await card('Ongoing breakdown')
-    expect(within(ongoing).getByText('Ready for Assignment')).toBeInTheDocument()
-
-    await userEvent.click(within(ongoing).getByRole('button', { name: 'Contractor' }))
     expect(within(ongoing).getByText('Alfa Drive Tests')).toBeInTheDocument()
-    expect(within(ongoing).queryByText('Ready for Assignment')).not.toBeInTheDocument()
 
     await userEvent.click(within(ongoing).getByRole('button', { name: 'Province' }))
     expect(within(ongoing).getByText('Kerman')).toBeInTheDocument()
     expect(within(ongoing).queryByText('Alfa Drive Tests')).not.toBeInTheDocument()
 
-    await userEvent.click(within(ongoing).getByRole('button', { name: 'Stage' }))
-    expect(within(ongoing).getByText('Ready for Assignment')).toBeInTheDocument()
+    await userEvent.click(within(ongoing).getByRole('button', { name: 'Contractor' }))
+    expect(within(ongoing).getByText('Alfa Drive Tests')).toBeInTheDocument()
+    expect(within(ongoing).queryByText('Kerman')).not.toBeInTheDocument()
   })
 
   it('states how many ongoing sites have no contractor, so the tab reconciles', async () => {
@@ -395,7 +384,7 @@ describe('breakdown sections', () => {
     render(<DriveTestProject />)
 
     for (const [title, unit] of [
-      ['Ongoing breakdown', 'Stage'],
+      ['Ongoing breakdown', 'Contractor'],
       ['Problematic breakdown', 'Category'],
     ]) {
       const section = await card(title)
