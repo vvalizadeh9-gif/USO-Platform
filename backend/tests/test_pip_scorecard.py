@@ -264,7 +264,9 @@ def test_each_month_ledger_closes(client, actors):
 
 def test_carried_out_is_the_next_months_carried_in(client, actors):
     body = _ask(client, actors["pm"])
-    for earlier, later in zip(body["months"], body["months"][1:]):
+    # strict=False is the point, not an oversight: the second sequence is the
+    # first shifted by one, so it is deliberately a month shorter.
+    for earlier, later in zip(body["months"], body["months"][1:], strict=False):
         assert earlier["carried_out"] == later["carried_in"]
 
 
