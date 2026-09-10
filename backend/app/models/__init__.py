@@ -7,6 +7,7 @@ from app.models.acceptance import (
     Letter,
     MonthlySnapshot,
     Notification,
+    SnapshotContractorCompletion,
     letter_villages,
 )
 from app.models.acceptance_workflow import (
@@ -51,6 +52,7 @@ __all__ = [
     "CpmImportBatch",
     "Letter",
     "MonthlySnapshot",
+    "SnapshotContractorCompletion",
     "HcAssignment",
     "HcRemediation",
     "LoginAttempt",
