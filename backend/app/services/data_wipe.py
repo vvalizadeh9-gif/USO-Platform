@@ -19,6 +19,7 @@ from app.models.acceptance import (
     CpmImportBatch,
     Letter,
     MonthlySnapshot,
+    SnapshotContractorCompletion,
     letter_villages,
 )
 from app.models.health_check import HcAssignment, HcTask, HcTaskTechnology
@@ -63,6 +64,11 @@ def wipe_cpm_data(db: Session) -> dict[str, int]:
     counts["cpm_import_batches"] = db.query(CpmImportBatch).delete(
         synchronize_session=False
     )
+    # The per-contractor movement rows hang off monthly_snapshots, so they go
+    # first — the foreign key would refuse the parent delete otherwise.
+    counts["snapshot_contractor_completions"] = db.query(
+        SnapshotContractorCompletion
+    ).delete(synchronize_session=False)
     counts["monthly_snapshots"] = db.query(MonthlySnapshot).delete(
         synchronize_session=False
     )

@@ -200,6 +200,106 @@ class DriveTestAnalytics:
         cur_year, cur_month = jalali.current_shamsi_period()
         return sum(1 for w in done_items if self._dated_into(w, cur_year, cur_month))
 
+    # ---------- monthly movement (see services/snapshots.py) ----------
+    #
+    # The KPIs above are balances: where the project stands. These are flows:
+    # what moved during a given month. Both are asked of the same loaded set
+    # through the same rules -- ``_dated_into`` decides which month a drive
+    # test lands in here exactly as it does for ``current_month_dt_done``, so
+    # the movement figures and the dashboard can never disagree about it.
+
+    def month_dt_completed(self, year: int, month: int) -> int:
+        """Drive tests completed in a Shamsi month, by the existing date rule."""
+        return sum(
+            1
+            for w in self._onair_items()
+            if w.dt_status == "Done" and self._dated_into(w, year, month)
+        )
+
+    def month_dt_completed_by_contractor(
+        self, year: int, month: int
+    ) -> dict[int | None, int]:
+        """The same count, split by the contractor it is attributable to.
+
+        Keyed by contractor id, with ``None`` for work no contractor can be
+        attributed to. That key is kept rather than dropped -- unlike
+        :meth:`chart_dt_done_by_contractor`, which drops it because an
+        unassigned site is not a workload data point -- so that the values sum
+        to :meth:`month_dt_completed`. A ledger whose parts do not add up to
+        its total cannot be checked against anything.
+        """
+        counts: dict[int | None, int] = defaultdict(int)
+        for w in self._onair_items():
+            if w.dt_status == "Done" and self._dated_into(w, year, month):
+                counts[self._effective_contractor_id(w)] += 1
+        return dict(counts)
+
+    def month_problematic_transitions(self, year: int, month: int) -> tuple[int, int]:
+        """``(flagged, resolved)`` for a Shamsi month, from dated evidence.
+
+        Counts the times a site crossed into or out of Problematic during the
+        month, by replaying the dated events the platform records against it.
+        A site flagged, fixed and flagged again inside one month counts twice
+        on each side, which is the point: net movement is what hides that.
+
+        Only transitions the platform *dates* are visible here. A site whose
+        Problematic status arrives in a CPM workbook carries no transition
+        date -- the import overwrites ``dt_status`` and there is nothing to
+        say when the change happened -- so that movement is not counted here.
+        The caller reconciles it against the balances; see
+        :func:`app.services.snapshots.reconcile`.
+        """
+        flagged = 0
+        resolved = 0
+        for wi in self._onair_items():
+            problematic = False
+            for event_date, _, now_problematic in self._problem_events(wi):
+                if now_problematic == problematic:
+                    continue
+                problematic = now_problematic
+                if jalali.to_shamsi(event_date) == (year, month):
+                    if now_problematic:
+                        flagged += 1
+                    else:
+                        resolved += 1
+        return flagged, resolved
+
+    @staticmethod
+    def _problem_events(wi: WorkItem) -> list[tuple[date, int, bool]]:
+        """This site's dated Problematic-state changes, oldest first.
+
+        Each entry is ``(date, tie-break, is_problematic_after)``. The
+        tie-break orders events that share a date in the order the workflow
+        would apply them: a legacy health check first, the HC workflow's
+        verdict over it, and an approved drive test last, because approval is
+        terminal.
+
+        The three sources mirror :func:`app.services.workflow.derive_stage`
+        exactly, so a replay ends in the state that function would report:
+
+        * ``hc_tasks`` -- a Not-Ready result only reads as Problematic once a
+          Coordinator or PM has validated it, so ``reviewed_at`` (not
+          ``completed_at``) is when the state actually changed.
+        * ``health_checks`` -- the superseded single-flag table, still
+          replayed so pre-migration history is not silently dropped.
+        * an approved drive test, which writes ``dt_status = 'Done'`` and ends
+          any Problematic state. Dated by ``dt_date_gregorian``, the same
+          column every other DT date in this module is read from.
+        """
+        events: list[tuple[date, int, bool]] = []
+        for hc in wi.health_checks:
+            if hc.checked_at is not None:
+                events.append((hc.checked_at.date(), 0, hc.status == "Problematic"))
+        for task in wi.hc_tasks:
+            if task.completed_at is not None and task.reviewed_at is not None:
+                events.append(
+                    (task.reviewed_at.date(), 1, task.overall_result == "NotReady")
+                )
+        if wi.dt_status == "Done" and wi.dt_date_gregorian is not None:
+            events.append((wi.dt_date_gregorian, 2, False))
+        events.sort(key=lambda e: (e[0], e[1]))
+        return events
+
     # ---------- charts ----------
     def chart_ongoing_by_contractor(self) -> list[dict]:
         """Ongoing sites grouped by their *current* contractor.

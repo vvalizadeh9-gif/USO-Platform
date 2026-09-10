@@ -158,6 +158,14 @@ class MonthlySnapshot(Base):
     One row per (year, month, province). ``province_id`` NULL means the
     global (all-provinces) snapshot. The UNIQUE constraint makes snapshot
     creation idempotent — re-running in the same month is a no-op.
+
+    The row now carries two things that read differently. The ``total_*``
+    columns are the original balances the dashboard's delta chips are computed
+    from, written once when the period's row is created and never rewritten.
+    The ``opening_*`` / ``closing_*`` / ``flow_*`` columns below capture the
+    *movement* through the month, and are refreshed while the month is still
+    open. Keeping them apart is deliberate: refreshing the ``total_*`` columns
+    would silently change what every existing delta on the dashboard means.
     """
 
     __tablename__ = "monthly_snapshots"
@@ -178,6 +186,116 @@ class MonthlySnapshot(Base):
     total_ongoing: Mapped[int] = mapped_column(Integer, default=0)
     total_problematic: Mapped[int] = mapped_column(Integer, default=0)
     current_month_dt_done: Mapped[int] = mapped_column(Integer, default=0)
+
+    # ----- Movement capture (opening/closing balances and the flows between) -----
+    #
+    # The six columns above are balances and nothing else: they say where the
+    # project stood, so the dashboard can render "remaining down 144". They
+    # cannot say *how* it got there, and that difference matters -- a month of
+    # 250 completions against 106 new arrivals reads identically to 186 against
+    # 42, and "+47 problematic" is a different situation depending on whether
+    # 47 were flagged and none resolved or 60 were flagged and 13 resolved.
+    #
+    # Everything below is additive and nullable. Rows written before this
+    # existed keep NULLs here and stay readable; the dashboard deltas read only
+    # the six columns above and are untouched by any of it.
+    #
+    # Opening is the previous period's *closing*, carried forward, so a month's
+    # opening and the prior month's closing are the same observation rather
+    # than two readings that can disagree. ``opening_source`` says which:
+    # OPENING_CHAINED for a carried-forward closing, OPENING_OBSERVED for the
+    # first month ever captured (or the first after a gap), where there is
+    # nothing to carry and the balance is simply read live.
+    opening_onair: Mapped[int | None] = mapped_column(Integer)
+    opening_dt_done: Mapped[int | None] = mapped_column(Integer)
+    opening_remaining: Mapped[int | None] = mapped_column(Integer)
+    opening_ongoing: Mapped[int | None] = mapped_column(Integer)
+    opening_problematic: Mapped[int | None] = mapped_column(Integer)
+
+    closing_onair: Mapped[int | None] = mapped_column(Integer)
+    closing_dt_done: Mapped[int | None] = mapped_column(Integer)
+    closing_remaining: Mapped[int | None] = mapped_column(Integer)
+    closing_ongoing: Mapped[int | None] = mapped_column(Integer)
+    closing_problematic: Mapped[int | None] = mapped_column(Integer)
+
+    # The flows. See services/snapshots.py for how each is arrived at and
+    # which of them is measured rather than derived.
+    flow_new_onair: Mapped[int | None] = mapped_column(Integer)
+    flow_dt_completed: Mapped[int | None] = mapped_column(Integer)
+    flow_newly_problematic: Mapped[int | None] = mapped_column(Integer)
+    flow_problematic_resolved: Mapped[int | None] = mapped_column(Integer)
+
+    # Movement in or out of *ongoing* that none of the four flows accounts
+    # for. In ordinary operation it is zero, and the ongoing ledger reads as
+    # the plain identity. It is non-zero only when a site is DT-Done and
+    # Problematic at the same time -- a CPM ``Done`` status sitting over an
+    # in-app Not-Ready health check -- which belongs to neither the done
+    # bucket nor the ongoing one, so a month that gains or loses such sites
+    # moves ``ongoing`` without any of the four flows having happened. It is
+    # stored rather than absorbed into a neighbouring flow so that the
+    # reconciliation is exact and the anomaly stays visible.
+    flow_ongoing_adjustment: Mapped[int | None] = mapped_column(Integer)
+
+    opening_source: Mapped[str | None] = mapped_column(String(20))
+
+    # When each balance was actually read. The snapshot is written on demand
+    # (first sign-in of the month, then periodically), not on a scheduler, so
+    # "closing" means "the last reading taken before the month ended" and
+    # these two columns are what let a reader tell how close to the boundary
+    # that was. Without them the figures look more precise than they are.
+    opening_captured_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True)
+    )
+    closing_captured_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True)
+    )
+
+    contractor_completions: Mapped[list[SnapshotContractorCompletion]] = relationship(
+        back_populates="snapshot", cascade="all, delete-orphan"
+    )
+
+
+#: ``opening_*`` carried forward from the previous period's closing balance.
+OPENING_CHAINED = "chained"
+#: ``opening_*`` read live because there was no previous period to carry.
+OPENING_OBSERVED = "observed"
+
+
+class SnapshotContractorCompletion(Base):
+    """Drive tests completed by one contractor inside one snapshot's month.
+
+    A companion table rather than more columns, because this is one row per
+    contractor per month and the set of contractors changes: columns would
+    mean a migration every time a company is added.
+
+    ``contractor_id`` is nullable on purpose. A completed drive test with no
+    contractor attributable to it -- never assigned in-app and carrying no
+    CPM subcontractor -- still happened, and dropping it would make these rows
+    stop summing to the month's total, which is the one property that makes
+    them checkable. The charts drop unattributed work because an unassigned
+    site is not a contractor workload data point; a ledger cannot afford to.
+    """
+
+    __tablename__ = "snapshot_contractor_completions"
+    __table_args__ = (
+        UniqueConstraint(
+            "snapshot_id", "contractor_id", name="uq_snapshot_contractor"
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    snapshot_id: Mapped[int] = mapped_column(
+        ForeignKey("monthly_snapshots.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    contractor_id: Mapped[int | None] = mapped_column(ForeignKey("contractors.id"))
+    dt_completed: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+
+    snapshot: Mapped[MonthlySnapshot] = relationship(
+        back_populates="contractor_completions"
+    )
+    contractor = relationship("Contractor")
 
 
 class CpmImportBatch(Base):
