@@ -1129,6 +1129,20 @@ class OngoingBreakdown(BaseModel):
     without_contractor: int
     by_province: list[ChartPoint]
 
+    #: How long each ongoing site has been waiting, in bands, oldest last.
+    #:
+    #: The clock is the site's launch date — the day it went on air and became
+    #: something a drive test was owed on. That is a real recorded date, and
+    #: it measures the thing the backlog is actually judged on: how long a
+    #: live site has gone untested. It is deliberately not "time since
+    #: assignment", which restarts every time a site is reassigned and would
+    #: make a site bounced between three contractors look new.
+    by_age: list[ChartPoint] = []
+    #: Ongoing sites whose launch date is missing, so no age can be computed.
+    #: Reported for the same reason ``without_contractor`` is: without it the
+    #: bands look short by exactly this many and the view stops reconciling.
+    without_launch_date: int = 0
+
 
 class ProblematicBreakdown(BaseModel):
     """The problematic total by category and by province.
@@ -1161,6 +1175,41 @@ class ProvinceBreakdownRow(BaseModel):
     done_percent: float
 
 
+class ContractorScorecardRow(BaseModel):
+    """One contractor's whole book of work, on a scale that compares.
+
+    The ongoing breakdown ranks contractors by a raw count, which mostly ranks
+    them by size: a company holding 400 sites will sit above one holding 100
+    whatever either of them is doing. These rows carry the denominator, so
+    ``done_percent`` says how far through its own book each company is and two
+    contractors of different sizes can be read against each other.
+
+    ``contractor_id`` is ``None`` for the unattributed row — on-air sites no
+    company can be tied to. It is kept rather than dropped so the rows still
+    sum to the programme, and it carries no drill-through because there is no
+    contractor to drill into.
+    """
+
+    contractor_id: int | None = None
+    name: str
+    onair: int
+    done: int
+    ongoing: int
+    problematic: int
+    done_percent: float
+
+
+class ProvinceOption(BaseModel):
+    """One province the caller is allowed to narrow the dashboard to.
+
+    Only provinces already inside the caller's scope appear here, so the
+    filter control cannot offer a province the answer would then refuse.
+    """
+
+    id: int
+    name: str
+
+
 class DriveTestOverview(BaseModel):
     kpis: DriveTestKpis
     ongoing_by_contractor: list[ChartPoint]
@@ -1173,6 +1222,79 @@ class DriveTestOverview(BaseModel):
     ongoing_breakdown: OngoingBreakdown
     problematic_breakdown: ProblematicBreakdown
     province_breakdown: list[ProvinceBreakdownRow]
+
+    #: Every contractor's book of work with its denominator attached, so the
+    #: screen can rank by completion rather than by size.
+    contractor_scorecard: list[ContractorScorecardRow] = []
+
+    #: When this payload was computed, so the screen can say how old it is
+    #: instead of describing a one-time fetch as "live".
+    generated_at: datetime
+
+    #: The provinces this caller may narrow to, and which one is applied.
+    #: ``province_id`` of ``None`` means the caller's full scope.
+    provinces: list[ProvinceOption] = []
+    province_id: int | None = None
+
+
+class TrendPoint(BaseModel):
+    """One Shamsi month on the trend axis.
+
+    Every balance is optional because an uncaptured month has none. See
+    ``services/dt_trends`` for why such a month is returned at all rather
+    than dropped: the gap is information, and a line that closes over it
+    would draw a continuity that was never observed.
+    """
+
+    shamsi_year: int
+    shamsi_month: int
+    label: str
+
+    #: False when nobody signed in during this month, so nothing was captured.
+    captured: bool = False
+    #: True when the balances came from the row's original ``total_*`` reading
+    #: (taken near the start of the month) because the row predates movement
+    #: capture and carries no closing balance.
+    estimated: bool = False
+    #: True for the month still in progress: its figures are the last reading
+    #: taken, not a final one.
+    is_open: bool = False
+
+    onair: int | None = None
+    dt_done: int | None = None
+    remaining: int | None = None
+    ongoing: int | None = None
+    problematic: int | None = None
+
+
+class MonthFlows(BaseModel):
+    """What moved through one month, as a ledger that closes.
+
+    ``opening_remaining + new_onair - dt_completed == closing_remaining`` by
+    construction. See ``services/snapshots.reconcile`` for which of these
+    figures is measured outright and which is derived — they are not equally
+    direct, and a reader drawing conclusions from them should know which.
+    """
+
+    shamsi_year: int
+    shamsi_month: int
+    label: str
+    is_open: bool
+
+    opening_remaining: int
+    closing_remaining: int
+    new_onair: int
+    dt_completed: int
+    newly_problematic: int
+    problematic_resolved: int
+
+
+class DriveTestTrend(BaseModel):
+    """The trailing-month series plus the newest month that has a ledger."""
+
+    months: list[TrendPoint]
+    latest_flows: MonthFlows | None = None
+    province_id: int | None = None
 
 
 # ----- Acceptance dashboard -----

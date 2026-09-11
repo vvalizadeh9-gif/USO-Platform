@@ -19,7 +19,7 @@ vi.mock('./components/Layout', () => ({
 
 const page = (name) => ({ default: () => <p data-testid="page">{name}</p> })
 vi.mock('./pages/Login', () => page('login'))
-vi.mock('./pages/DriveTestProject', () => page('drive-test'))
+vi.mock('./pages/drivetest/DriveTestProject', () => page('drive-test'))
 vi.mock('./pages/HealthCheck', () => page('health-check'))
 vi.mock('./pages/MyHealthCheck', () => page('my-health-check'))
 vi.mock('./pages/MyFixQueue', () => page('my-fix-queue'))

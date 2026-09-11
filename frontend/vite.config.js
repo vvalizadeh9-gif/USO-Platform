@@ -27,12 +27,11 @@ export default defineConfig({
     outDir: 'dist',
     // Split large third-party libraries into their own cacheable chunks so the
     // initial app bundle stays small and pages become interactive faster. The
-    // heavy charting/animation libs load only on the routes that use them.
+    // animation library loads only on the routes that use it.
     rollupOptions: {
       output: {
         manualChunks: {
           'react-vendor': ['react', 'react-dom', 'react-router-dom'],
-          'chart-vendor': ['recharts'],
           'motion-vendor': ['framer-motion'],
         },
       },

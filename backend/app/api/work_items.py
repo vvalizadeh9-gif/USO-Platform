@@ -1,6 +1,6 @@
 """Work Item endpoints (list, detail & export) with row-level security."""
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
-from sqlalchemy import select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.core.database import get_db
@@ -37,17 +37,56 @@ def _scoped_work_items(
     stage: str | None,
     limit: int,
     offset: int = 0,
+    province_id: int | None = None,
+    contractor_id: int | None = None,
 ) -> list[WorkItem]:
     """The work items this user may see, eager-loaded for row building.
 
     Shared by the list and the export so the file can never contain a row the
     screen would not have shown — the province scope, the contractor scope and
     the stage filter are applied in exactly one place.
+
+    ``province_id`` and ``contractor_id`` are the drill-through filters the
+    Drive Test dashboard links with, and both are applied *after*
+    ``apply_work_item_scope``. That ordering is what makes them safe to accept
+    from a URL: they can only ever narrow the set the caller was already
+    entitled to, so a crafted link cannot reach another province's sites or
+    another company's workload.
+
+    ``contractor_id`` matches the same attribution the dashboard counts by —
+    the live in-app assignment, or the CPM-seeded subcontractor where there is
+    no active assignment. Matching only one of the two would land a reader on
+    a list shorter than the figure they clicked.
     """
     stmt = select(WorkItem).where(WorkItem.deleted_at.is_(None))
     stmt = apply_work_item_scope(stmt, user, db)
     if stage:
         stmt = stmt.where(WorkItem.current_stage == stage)
+    if province_id is not None:
+        stmt = stmt.where(
+            WorkItem.site_id.in_(
+                select(Site.id).where(Site.province_id == province_id)
+            )
+        )
+    if contractor_id is not None:
+        active_for = (
+            select(Assignment.work_item_id)
+            .where(Assignment.contractor_id == contractor_id)
+            .where(Assignment.is_active.is_(True))
+        )
+        has_active = (
+            select(Assignment.work_item_id)
+            .where(Assignment.is_active.is_(True))
+        )
+        stmt = stmt.where(
+            or_(
+                WorkItem.id.in_(active_for),
+                and_(
+                    WorkItem.dt_sc_contractor_id == contractor_id,
+                    WorkItem.id.not_in(has_active),
+                ),
+            )
+        )
     stmt = stmt.order_by(WorkItem.id.desc()).limit(limit).offset(offset)
     stmt = stmt.options(
         selectinload(WorkItem.site).selectinload(Site.province),
@@ -70,6 +109,8 @@ def _rows_for(db: Session, user: User, work_items: list[WorkItem]) -> list[dict]
 @router.get("", response_model=list[WorkItemListItem])
 def list_work_items(
     stage: str | None = Query(default=None),
+    province_id: int | None = Query(default=None),
+    contractor_id: int | None = Query(default=None),
     limit: int = Query(default=100, le=500),
     offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
@@ -80,9 +121,20 @@ def list_work_items(
     Rows carry the union of columns every stage tab needs. The assignment /
     drive-test graph is eager-loaded and user names resolved in one query, so
     the row count doesn't drive the query count.
+
+    ``province_id`` and ``contractor_id`` exist so a figure on the Drive Test
+    dashboard can be a link to the sites behind it. Both narrow within the
+    caller's existing scope and neither can widen it — see
+    :func:`_scoped_work_items`.
     """
     work_items = _scoped_work_items(
-        db, user, stage=stage, limit=limit, offset=offset
+        db,
+        user,
+        stage=stage,
+        limit=limit,
+        offset=offset,
+        province_id=province_id,
+        contractor_id=contractor_id,
     )
     return _rows_for(db, user, work_items)
 
@@ -90,18 +142,27 @@ def list_work_items(
 @router.get("/export")
 def export_work_items(
     stage: str | None = Query(default=None),
+    province_id: int | None = Query(default=None),
+    contractor_id: int | None = Query(default=None),
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> Response:
     """Download the visible work items as an Excel file.
 
-    Same scope and same stage filter as the list above, so what a contractor
-    downloads is exactly the tab they are looking at — their assigned sites,
-    never anyone else's. Declared before ``/{work_item_id}`` because FastAPI
-    matches routes in order and "export" would otherwise be read as an id.
+    Same scope and the same three filters as the list above, so what a
+    contractor downloads is exactly the tab they are looking at — their
+    assigned sites, never anyone else's — and a file downloaded from a
+    drilled-through list holds that list rather than the unfiltered one.
+    Declared before ``/{work_item_id}`` because FastAPI matches routes in
+    order and "export" would otherwise be read as an id.
     """
     work_items = _scoped_work_items(
-        db, user, stage=stage, limit=MAX_EXPORT_ROWS
+        db,
+        user,
+        stage=stage,
+        limit=MAX_EXPORT_ROWS,
+        province_id=province_id,
+        contractor_id=contractor_id,
     )
     rows = _rows_for(db, user, work_items)
     content = build_assigned_sites_export(rows)

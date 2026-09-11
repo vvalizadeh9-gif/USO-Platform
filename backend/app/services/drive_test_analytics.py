@@ -38,7 +38,7 @@ from app.core import jalali
 from app.core.deps import CONTRACTOR
 from app.models.monthly_plan import STATUS_APPROVED, ContractorMonthlyPlan
 from app.models.reference import Contractor, Province
-from app.models.workitem import WorkItem
+from app.models.workitem import Site, WorkItem
 from app.services import cpm_columns as C
 from app.services.visibility import apply_work_item_scope
 from app.services.workflow import (
@@ -93,13 +93,38 @@ OTHER_CONTRACTORS = "Other contractors"
 #: matches what the existing province table already renders.
 NO_LABEL = "\u2014"
 
+#: The label the contractor scorecard gives on-air sites no company holds.
+UNATTRIBUTED = "Unattributed"
+
+#: Age bands for ongoing sites, as ``(upper bound in days, label)`` read in
+#: order, with the final ``None`` bound catching everything above the last.
+#:
+#: The clock is the site's launch date \u2014 the day it went on air and a drive
+#: test started being owed on it. That date is recorded, which is the whole
+#: reason these bands can exist where the problematic ones cannot: nothing
+#: records when a site *became* problematic, so bands off any other date would
+#: be a different fact wearing the same label. See :meth:`breakdowns`.
+#:
+#: The bounds are a month, a quarter, half a year and a year. They are
+#: deliberately unequal \u2014 the question changes as a site ages, from "is this
+#: moving" to "has this been forgotten" \u2014 and equal buckets would put every
+#: long-overdue site into one indistinguishable tail.
+AGE_BANDS: tuple[tuple[int | None, str], ...] = (
+    (30, "Under a month"),
+    (90, "1\u20133 months"),
+    (180, "3\u20136 months"),
+    (365, "6\u201312 months"),
+    (None, "Over a year"),
+)
+
 
 class DriveTestAnalytics:
     """Encapsulates all Drive Test dashboard computations for one user."""
 
-    def __init__(self, db: Session, user) -> None:
+    def __init__(self, db: Session, user, province_id: int | None = None) -> None:
         self._db = db
         self._user = user
+        self._province_id = province_id
         self._work_items: list[WorkItem] | None = None
 
     # ---------- data loading ----------
@@ -110,10 +135,23 @@ class DriveTestAnalytics:
         ``assignments`` (needed for live contractor attribution), and the HC
         workflow relations (needed to detect in-app Problematic status and
         its category) — all in the same query, avoiding N+1 lazy loads.
+
+        A ``province_id`` narrows the result *after* ``apply_work_item_scope``
+        has run, and is applied as an additional ``WHERE`` on the same
+        statement. Order is the whole point: the province filter can only ever
+        remove rows the scope already allowed, so a caller cannot reach a
+        province they were not granted by asking for it by id. The filter is a
+        view control, never an access one.
         """
         if self._work_items is None:
             stmt = select(WorkItem).where(WorkItem.deleted_at.is_(None))
             stmt = apply_work_item_scope(stmt, self._user, self._db)
+            if self._province_id is not None:
+                stmt = stmt.where(
+                    WorkItem.site_id.in_(
+                        select(Site.id).where(Site.province_id == self._province_id)
+                    )
+                )
             stmt = stmt.options(
                 selectinload(WorkItem.site),
                 selectinload(WorkItem.assignments),
@@ -406,41 +444,59 @@ class DriveTestAnalytics:
         pass with its own copy of those predicates is how two numbers for one
         fact get onto a dashboard.
 
-        There is no problematic *aging* here. Nothing in the schema records
-        when a site became problematic: the CPM-imported signal is a bare
-        status column, and the in-app signal is a stage. Aging bands off any
-        other date would be a different fact wearing the same label, so they
-        are absent rather than approximated.
+        There is no problematic *aging* here, and there is ongoing aging. The
+        difference is not an inconsistency, it is the whole rule: an ongoing
+        site has a recorded launch date, so "how long has this live site gone
+        untested" is a real measurement. Nothing records when a site *became*
+        problematic — the CPM-imported signal is a bare status column and the
+        in-app signal is a stage — so the same bands over there would be a
+        different fact wearing the same label. They stay absent rather than
+        approximated. See :data:`AGE_BANDS`.
         """
         stage_counts: dict[str, int] = defaultdict(int)
         ongoing_by_contractor: dict[int, int] = defaultdict(int)
         ongoing_without_contractor = 0
         ongoing_by_province: dict[int | None, int] = defaultdict(int)
+        age_counts: dict[str, int] = defaultdict(int)
+        ongoing_without_launch = 0
         problem_categories: dict[str, int] = defaultdict(int)
         problem_by_province: dict[int | None, int] = defaultdict(int)
         province_rows: dict[int | None, dict[str, int]] = defaultdict(
             lambda: {"onair": 0, "done": 0, "ongoing": 0, "problematic": 0}
         )
+        contractor_rows: dict[int | None, dict[str, int]] = defaultdict(
+            lambda: {"onair": 0, "done": 0, "ongoing": 0, "problematic": 0}
+        )
         ongoing_total = 0
         problematic_total = 0
+        today = date.today()
 
         for w in self._onair_items():
             province_id = w.site.province_id if w.site else None
             row = province_rows[province_id]
             row["onair"] += 1
 
+            # The scorecard attributes every on-air site, done or not — that
+            # denominator is the entire reason it can be compared across
+            # companies of different sizes.
+            book = contractor_rows[self._effective_contractor_id(w)]
+            book["onair"] += 1
+
             if w.dt_status == "Done":
                 row["done"] += 1
+                book["done"] += 1
 
             if self._is_problematic(w):
                 problematic_total += 1
                 row["problematic"] += 1
+                book["problematic"] += 1
                 problem_categories[self._effective_problem_category(w)] += 1
                 problem_by_province[province_id] += 1
 
             if self._is_ongoing(w):
                 ongoing_total += 1
                 row["ongoing"] += 1
+                book["ongoing"] += 1
                 ongoing_by_province[province_id] += 1
                 stage = w.current_stage
                 stage_counts[stage if stage in ONGOING_STAGE_ORDER else STAGE_OTHER] += 1
@@ -450,6 +506,12 @@ class DriveTestAnalytics:
                 else:
                     ongoing_by_contractor[contractor_id] += 1
 
+                band = self._age_band(w.launch_date_gregorian, today)
+                if band is None:
+                    ongoing_without_launch += 1
+                else:
+                    age_counts[band] += 1
+
         names = self._province_names(list(province_rows))
         return {
             "ongoing": {
@@ -458,6 +520,8 @@ class DriveTestAnalytics:
                 "by_contractor": self._label_ongoing_contractors(ongoing_by_contractor),
                 "without_contractor": ongoing_without_contractor,
                 "by_province": _province_points(ongoing_by_province, names),
+                "by_age": self._age_points(age_counts),
+                "without_launch_date": ongoing_without_launch,
             },
             "problematic": {
                 "total": problematic_total,
@@ -467,7 +531,79 @@ class DriveTestAnalytics:
                 "by_province": _province_points(problem_by_province, names),
             },
             "provinces": _province_table(province_rows, names),
+            "contractors": self._contractor_scorecard(contractor_rows),
         }
+
+    @staticmethod
+    def _age_band(launch: date | None, today: date) -> str | None:
+        """Which age band a site falls in, or ``None`` with no launch date.
+
+        ``None`` rather than a "0 days" bucket: a missing launch date is an
+        unknown age, not a young site, and quietly filing it under the newest
+        band would make an untested backlog look fresher than it is.
+        """
+        if launch is None:
+            return None
+        days = (today - launch).days
+        for bound, label in AGE_BANDS:
+            if bound is None or days <= bound:
+                return label
+        return AGE_BANDS[-1][1]
+
+    @staticmethod
+    def _age_points(counts: dict[str, int]) -> list[dict]:
+        """Age bands in age order, zeros included.
+
+        Same reasoning as :meth:`_stage_points`: these are an ordered scale,
+        not a ranking, and a band that vanishes when it empties would change
+        what the row of bands means between one reading and the next. "Nothing
+        has been waiting over a year" is an answer worth showing.
+        """
+        return [{"name": label, "value": counts.get(label, 0)} for _, label in AGE_BANDS]
+
+    def _contractor_scorecard(
+        self, books: dict[int | None, dict[str, int]]
+    ) -> list[dict]:
+        """Each contractor's book of on-air work, ranked by completion.
+
+        Ranked by ``done_percent`` rather than by size, which is the point of
+        carrying the denominator at all — see
+        :class:`app.schemas.ContractorScorecardRow`.
+
+        The unattributed row sorts last regardless of its rate. It is not a
+        company and cannot be compared with one; leaving it in the ranking
+        would put a bucket above or below real contractors as though it had
+        outperformed them.
+
+        A contractor account gets its own row and nothing else. The unnamed
+        aggregate that the ongoing breakdown offers is not available here: a
+        rate over other companies' books is a comparison against named
+        competitors with the name removed, which is exactly what
+        :meth:`_label_ongoing_contractors` is careful not to publish.
+        """
+        own = self._own_contractor_id()
+        if own is not None:
+            books = {cid: book for cid, book in books.items() if cid == own}
+
+        ids = {cid for cid in books if cid is not None}
+        names = self._contractor_names(ids, {})
+
+        rows = [
+            {
+                "contractor_id": cid,
+                "name": names.get(cid, NO_LABEL) if cid is not None else UNATTRIBUTED,
+                "onair": book["onair"],
+                "done": book["done"],
+                "ongoing": book["ongoing"],
+                "problematic": book["problematic"],
+                "done_percent": (
+                    round(book["done"] / book["onair"] * 100, 1) if book["onair"] else 0.0
+                ),
+            }
+            for cid, book in books.items()
+        ]
+        rows.sort(key=lambda r: (r["contractor_id"] is None, -r["done_percent"]))
+        return rows
 
     @staticmethod
     def _stage_points(counts: dict[str, int]) -> list[dict]:
