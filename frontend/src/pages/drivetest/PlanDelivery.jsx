@@ -1,6 +1,6 @@
 import { CheckCircle2, ClipboardList, Gauge, Target } from 'lucide-react'
-import { achievement, achievementScale, bandColor, count } from './format'
-import BulletBar from './charts/BulletBar'
+import { achievement, bandColor, count, planScale } from './format'
+import BulletBar, { BulletKey } from './charts/BulletBar'
 import Section from './Section'
 
 /**
@@ -89,7 +89,7 @@ function ContractorAchievement({ rows, programme }) {
   if (!rows || rows.length === 0) {
     return <div className="dt-empty">No contractor plans for this month.</div>
   }
-  const scaleMax = achievementScale(rows, programme)
+  const scaleMax = planScale(rows)
 
   return (
     <div className="dt-achievement">
@@ -97,31 +97,46 @@ function ContractorAchievement({ rows, programme }) {
         <span className="dt-label">Contractor achievement</span>
         {/* The target explained once, in place, instead of a tooltip on a
             two-pixel tick that a touch screen can never reveal. */}
-        <span className="dt-target-key">
-          <i aria-hidden="true" />
-          100% of each contractor&rsquo;s own plan
-        </span>
+        <BulletKey scaleMax={scaleMax} />
       </div>
       {rows.map((row, i) => (
         <BulletBar
           key={row.contractor_id}
           label={row.name}
           percent={row.achievement_percent}
+          pip={row.pip}
+          actual={row.actual}
           detail={`${count(row.actual)} of ${row.pip || '—'}`}
           scaleMax={scaleMax}
           index={i}
         />
       ))}
       {programme != null && (
-        <BulletBar
-          label="Programme average"
-          percent={programme}
-          detail="all contractors"
-          scaleMax={scaleMax}
-          index={rows.length}
-          anonymous
-        />
+        <ProgrammeAverage percent={programme} />
       )}
+    </div>
+  )
+}
+
+/** The unnamed programme benchmark a contractor account sees.
+ *
+ * A rate, not a bullet: there is no single plan or delivery behind it to draw
+ * as bars, and inventing one on the shared count scale would put a commitment
+ * on the chart that no company made.
+ */
+function ProgrammeAverage({ percent }) {
+  return (
+    <div className="dt-bullet dt-anon">
+      <span className="dt-bullet-label">Programme average</span>
+      <span className="dt-bullet-track dt-bullet-rate">
+        <span
+          data-testid="achievement-bar"
+          className="dt-bullet-fill"
+          style={{ width: `${Math.min(100, percent)}%`, background: 'var(--text-dim)' }}
+        />
+      </span>
+      <span className="dt-bullet-detail tnum">all contractors</span>
+      <span className="dt-bullet-pct tnum">{achievement(percent)}</span>
     </div>
   )
 }

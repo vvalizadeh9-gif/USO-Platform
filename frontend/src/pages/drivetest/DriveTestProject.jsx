@@ -208,6 +208,7 @@ export default function DriveTestProject() {
       <PlanDelivery state={plan} onRetry={refresh} />
 
       {has('ongoing_breakdown') && (
+      <div className="dt-pair">
       <Section
         title="Ongoing breakdown"
         state={overview}
@@ -233,9 +234,6 @@ export default function DriveTestProject() {
           />
         )}
       </Section>
-      )}
-
-      {has('ongoing_breakdown') && (
       <Section
         title="Where the ongoing work is stuck"
         subtitle="In workflow order — who each site is waiting on"
@@ -250,6 +248,7 @@ export default function DriveTestProject() {
           />
         )}
       </Section>
+      </div>
       )}
 
       {has('problematic_breakdown') && (

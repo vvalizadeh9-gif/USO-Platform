@@ -256,16 +256,51 @@ describe('plan and delivery', () => {
     }
   })
 
-  it('explains the target line on screen rather than in a tooltip', async () => {
+  it('says on screen what the two bars mean, rather than in a tooltip', async () => {
     // The old dashboard's only explanation of the marker was a title
-    // attribute, which a touch screen can never reveal.
+    // attribute, which a touch screen can never reveal. The bullet now names
+    // both marks and the scale they are drawn on.
     serve()
     draw()
 
     const card = await section('Plan and delivery')
-    expect(
-      within(card).getByText(/100% of each contractor’s own plan/),
-    ).toBeInTheDocument()
+    expect(within(card).getByText('plan')).toBeInTheDocument()
+    expect(within(card).getByText('delivered')).toBeInTheDocument()
+    // PIP tops out at 10 in the fixture, so the scale rounds to a readable 15.
+    expect(within(card).getByText(/drive tests$/)).toBeInTheDocument()
+  })
+
+  it('draws the plan as a ghost bar behind what was delivered', async () => {
+    // The bar used to encode the ratio alone, so a contractor who committed
+    // to 48 and one who committed to 4 drew identical marks at the same rate.
+    serve()
+    draw()
+
+    const card = await section('Plan and delivery')
+    const row = within(card).getByText('Gamma Networks').closest('.dt-bullet')
+    // Gamma delivered 1 of 10 on a scale that tops out at 15.
+    expect(row.querySelector('.dt-bullet-plan')).toHaveStyle({ width: `${(10 / 15) * 100}%` })
+    expect(within(row).getByTestId('achievement-bar')).toHaveStyle({
+      width: `${(1 / 15) * 100}%`,
+    })
+  })
+
+  it('gives a contractor with no plan no ghost bar and no target', async () => {
+    serve(
+      planDelivery({
+        rows: [
+          { contractor_id: 1, name: 'Alfa Drive Tests', pip: 0, actual: 5, achievement_percent: null },
+        ],
+      }),
+    )
+    draw()
+
+    const card = await section('Plan and delivery')
+    const row = within(card).getByText('Alfa Drive Tests').closest('.dt-bullet')
+    expect(row.querySelector('.dt-bullet-plan')).toBeNull()
+    expect(within(row).queryByTestId('target-marker')).not.toBeInTheDocument()
+    // The work still draws, because it happened.
+    expect(within(row).getByTestId('achievement-bar')).toBeInTheDocument()
   })
 
   it('colours each bar by band: at target, close to it, short of it', async () => {
