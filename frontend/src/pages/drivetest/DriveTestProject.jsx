@@ -5,7 +5,7 @@ import { PageHead } from '../../components/ui'
 import { useToast } from '../../context/ToastContext'
 import BreakdownCard from './BreakdownCard'
 import ContractorScorecard from './ContractorScorecard'
-import KpiRail from './KpiRail'
+import KpiBand from './KpiBand'
 import PlanDelivery from './PlanDelivery'
 import ProvinceTable from './ProvinceTable'
 import Section from './Section'
@@ -202,51 +202,8 @@ export default function DriveTestProject() {
       ) : overview.loading && !data ? (
         <KpiSkeleton />
       ) : data ? (
-        <KpiRail kpis={data.kpis} monthName={monthName} provinceId={provinceId} />
+        <KpiBand kpis={data.kpis} monthName={monthName} provinceId={provinceId} />
       ) : null}
-
-      <Section
-        title="Where this is going"
-        subtitle={
-          trend.data?.months?.length
-            ? `Last ${trend.data.months.length} months, ending this one`
-            : undefined
-        }
-        state={trend}
-        onRetry={refresh}
-        skeletonRows={6}
-        className="dt-section-trend"
-      >
-        {(t) =>
-          t.months?.some((m) => m.captured) ? (
-            <>
-              <TrendChart months={t.months} seriesLabel={TREND_LABELS} />
-              <TrendLegend />
-            </>
-          ) : (
-            <div className="dt-empty">
-              No monthly snapshots have been captured yet. The series fills in as the
-              months are recorded.
-            </div>
-          )
-        }
-      </Section>
-
-      {trend.data?.latest_flows && (
-        <Section
-          title="What moved"
-          subtitle={`${trend.data.latest_flows.label} ${trend.data.latest_flows.shamsi_year}${
-            trend.data.latest_flows.is_open ? ' · still in progress' : ''
-          }`}
-          state={trend}
-          onRetry={refresh}
-          className="dt-section-flow"
-        >
-          {(t) => (
-            <FlowLedger flows={t.latest_flows} monthLabel={t.latest_flows.label} />
-          )}
-        </Section>
-      )}
 
       <PlanDelivery state={plan} onRetry={refresh} />
 
@@ -352,6 +309,49 @@ export default function DriveTestProject() {
         )}
       </Section>
       )}
+
+      <Section
+        title="Where this is going"
+        subtitle={
+          trend.data?.months?.length
+            ? `Last ${trend.data.months.length} months, ending this one`
+            : undefined
+        }
+        state={trend}
+        onRetry={refresh}
+        skeletonRows={6}
+        className="dt-section-trend"
+      >
+        {(t) =>
+          t.months?.some((m) => m.captured) ? (
+            <>
+              <TrendChart months={t.months} seriesLabel={TREND_LABELS} />
+              <TrendLegend />
+            </>
+          ) : (
+            <div className="dt-empty">
+              No monthly snapshots have been captured yet. The series fills in as the
+              months are recorded.
+            </div>
+          )
+        }
+      </Section>
+
+      {trend.data?.latest_flows && (
+        <Section
+          title="What moved"
+          subtitle={`${trend.data.latest_flows.label} ${trend.data.latest_flows.shamsi_year}${
+            trend.data.latest_flows.is_open ? ' · still in progress' : ''
+          }`}
+          state={trend}
+          onRetry={refresh}
+          className="dt-section-flow"
+        >
+          {(t) => (
+            <FlowLedger flows={t.latest_flows} monthLabel={t.latest_flows.label} />
+          )}
+        </Section>
+      )}
     </>
   )
 }
@@ -386,12 +386,10 @@ function TrendLegend() {
 
 function KpiSkeleton() {
   return (
-    <div className="dt-kpi-grid" aria-hidden="true">
-      {[0, 1, 2].map((i) => (
-        <div key={i} className="dt-kpi dt-kpi-skeleton">
-          <span className="dt-skeleton-row" style={{ animationDelay: `${i * 0.08}s` }} />
-        </div>
-      ))}
+    <div className="dt-band dt-band-skeleton" aria-hidden="true">
+      <span className="dt-skeleton-row" style={{ width: '40%', height: 30 }} />
+      <span className="dt-skeleton-row" style={{ height: 46, animationDelay: '0.08s' }} />
+      <span className="dt-skeleton-row" style={{ width: '60%', animationDelay: '0.16s' }} />
     </div>
   )
 }

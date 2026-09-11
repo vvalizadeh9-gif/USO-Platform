@@ -613,17 +613,16 @@ describe('delta direction', () => {
   }
 
   // "Remaining", "Problematic" and "Drive tests done" each name the same
-  // concept in three places — a KPI, a chart legend entry and a table column
-  // — so every query below is scoped to the rank of cards it means.
-  const topRank = () => document.querySelector('.dt-kpi-grid')
-  const remainingRank = () => screen.getByLabelText('Remaining work')
+  // concept in more than one place — a band figure, a chart legend entry, a
+  // table column — so every query below is scoped to the band.
+  const band = () => screen.getByLabelText('Programme totals')
 
   it('reads a falling backlog as good news', async () => {
     serve(planDelivery(), moving)
     draw()
 
-    await screen.findByLabelText('Remaining work')
-    const chip = within(remainingRank()).getByText(/-12/)
+    await screen.findByLabelText('Programme totals')
+    const chip = within(band()).getByText(/-12/)
     expect(chip).toHaveStyle({ color: 'var(--green)' })
   })
 
@@ -631,8 +630,8 @@ describe('delta direction', () => {
     serve(planDelivery(), moving)
     draw()
 
-    await screen.findByLabelText('Remaining work')
-    const chip = within(remainingRank()).getByText(/\+4/)
+    await screen.findByLabelText('Programme totals')
+    const chip = within(band()).getByText(/\+4/)
     expect(chip).toHaveStyle({ color: 'var(--red)' })
   })
 
@@ -640,8 +639,8 @@ describe('delta direction', () => {
     serve(planDelivery(), moving)
     draw()
 
-    await screen.findByText('Total on-air')
-    const chip = within(topRank()).getByText(/\+12/)
+    await screen.findByLabelText('Programme totals')
+    const chip = within(band()).getByText(/\+12/)
     expect(chip).toHaveStyle({ color: 'var(--green)' })
   })
 
@@ -649,8 +648,64 @@ describe('delta direction', () => {
     serve()
     draw()
 
-    await screen.findByText('Total on-air')
+    await screen.findByLabelText('Programme totals')
     expect(screen.getAllByText('no baseline yet').length).toBeGreaterThan(0)
+  })
+})
+
+describe('the band', () => {
+  it('shows every on-air site in exactly one of three segments', async () => {
+    serve()
+    draw()
+
+    const band = await screen.findByLabelText('Programme totals')
+    // 40 done + 50 ongoing + 10 problematic = 100 on-air, and the bar says so
+    // because the segments are the total rather than a picture of it.
+    const bar = within(band).getByRole('img')
+    expect(bar).toHaveAttribute(
+      'aria-label',
+      'Drive tests done: 40, 40 per cent. Ongoing: 50, 50 per cent. Problematic: 10, 10 per cent',
+    )
+  })
+
+  it('brackets Remaining under the two segments it is made of', async () => {
+    // Remaining is not a fourth figure. The old page asserted the
+    // relationship with a heading and a nesting convention; here it is the
+    // geometry, and the figure is the sum of the two segments above it.
+    serve()
+    draw()
+
+    const band = await screen.findByLabelText('Programme totals')
+    const bracket = within(band).getByText('Remaining').closest('.dt-bracket-text')
+    expect(within(bracket).getByText('60')).toBeInTheDocument()
+    expect(within(bracket).getByText('60%')).toBeInTheDocument()
+  })
+})
+
+describe('the order of the page', () => {
+  it('puts the PIP summary above the ongoing and problematic detail', async () => {
+    serve()
+    draw()
+
+    await screen.findByLabelText('Programme totals')
+    const headings = screen
+      .getAllByRole('heading')
+      .map((h) => h.textContent)
+      .filter((t) =>
+        [
+          'Plan and delivery',
+          'Ongoing breakdown',
+          'Problematic breakdown',
+          'Where this is going',
+        ].includes(t),
+      )
+
+    expect(headings).toEqual([
+      'Plan and delivery',
+      'Ongoing breakdown',
+      'Problematic breakdown',
+      'Where this is going',
+    ])
   })
 })
 
@@ -659,14 +714,12 @@ describe('drill-through', () => {
     serve()
     draw()
 
-    await screen.findByText('Total on-air')
-    const top = document.querySelector('.dt-kpi-grid')
-    expect(within(top).getByText('Drive tests done').closest('a')).toHaveAttribute(
+    const band = await screen.findByLabelText('Programme totals')
+    expect(within(band).getByText('Drive tests done').closest('a')).toHaveAttribute(
       'href',
       '/work-items?stage=DT+Done',
     )
-    const remaining = screen.getByLabelText('Remaining work')
-    expect(within(remaining).getByText('Problematic').closest('a')).toHaveAttribute(
+    expect(within(band).getByText('Problematic').closest('a')).toHaveAttribute(
       'href',
       '/work-items?stage=Problematic',
     )
@@ -676,8 +729,8 @@ describe('drill-through', () => {
     serve()
     draw('/reports/drive-test?province=7')
 
-    const remaining = await screen.findByLabelText('Remaining work')
-    expect(within(remaining).getByText('Problematic').closest('a')).toHaveAttribute(
+    const band = await screen.findByLabelText('Programme totals')
+    expect(within(band).getByText('Problematic').closest('a')).toHaveAttribute(
       'href',
       '/work-items?stage=Problematic&province_id=7',
     )
@@ -789,8 +842,8 @@ describe('failure and freshness', () => {
     expect(await screen.findByText('Drive Test Overview')).toBeInTheDocument()
     await waitFor(() => expect(screen.queryByText('Ongoing breakdown')).not.toBeInTheDocument())
     expect(screen.queryByText('Province breakdown')).not.toBeInTheDocument()
-    // The KPI rank above them is untouched by their absence.
-    expect(screen.getByLabelText('Remaining work')).toBeInTheDocument()
+    // The band above them is untouched by their absence.
+    expect(screen.getByLabelText('Programme totals')).toBeInTheDocument()
   })
 })
 
