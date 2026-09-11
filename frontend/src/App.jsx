@@ -9,7 +9,7 @@ import Login from './pages/Login'
 // Route pages are code-split so the initial load only ships the shell +
 // current page. Each page's JS (and its heavy deps like charts) is fetched on
 // demand, making first paint and navigation noticeably faster.
-const DriveTestProject = lazy(() => import('./pages/DriveTestProject'))
+const DriveTestProject = lazy(() => import('./pages/drivetest/DriveTestProject'))
 const HealthCheck = lazy(() => import('./pages/HealthCheck'))
 const MyHealthCheck = lazy(() => import('./pages/MyHealthCheck'))
 const MyFixQueue = lazy(() => import('./pages/MyFixQueue'))

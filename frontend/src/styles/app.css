@@ -116,16 +116,6 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
   font-weight: 500;
 }
 
-/* Recharts renders axis/legend/tooltip labels as SVG <text>, which doesn't
-   inherit font-family from CSS custom properties reliably across browsers.
-   Force Vazirmatn there too so contractor/category/province names in
-   charts render clearly instead of falling back to a generic sans-serif. */
-.recharts-text, .recharts-legend-item-text, .recharts-tooltip-wrapper {
-  font-family: var(--font-farsi) !important;
-}
-.recharts-cartesian-axis-tick text {
-  font-size: 12.5px !important;
-}
 
 /* Scrollbar */
 ::-webkit-scrollbar { width: 12px; height: 12px; }
@@ -1234,3 +1224,468 @@ tbody tr:last-child td { border-bottom: none; }
   margin-top: 10px; padding-top: 10px;
   border-top: 1px solid var(--border-soft);
 }
+
+/* ===================================================================
+   Drive Test dashboard.
+
+   The page it replaces gave eight sections one border, one radius and one
+   shadow, which flattened the hierarchy: nothing on screen said which figure
+   mattered. Weight is spent deliberately here — full cards for the programme
+   totals, a quieter subordinate rank for the parts of Remaining, and hairline
+   separation for the sections that are read rather than scanned.
+
+   Semantic colour (green good / amber watch / red bad) is kept clear of the
+   brand teal. The old dashboard drew the Ongoing series in the same teal as
+   the nav-active state and the primary button, so a neutral series read as
+   "the selected thing".
+   =================================================================== */
+
+.dt-sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+
+.dt-farsi { font-family: var(--font-farsi); }
+.dt-good { color: var(--green); font-weight: 500; }
+.dt-label {
+  font-size: 12px; color: var(--text-muted); font-weight: 500;
+}
+
+/* ---------- toolbar ---------- */
+.dt-toolbar {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+.dt-toolbar-right { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+.dt-filter {
+  display: flex; align-items: center; gap: 8px;
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 4px 6px 4px 13px;
+  color: var(--text-dim);
+  box-shadow: var(--shadow-1);
+}
+.dt-select {
+  border: 0; background: transparent; font: inherit; font-size: 13.5px;
+  color: var(--text); padding: 4px 2px; outline: none; max-width: 190px;
+  font-family: var(--font-farsi);
+}
+.dt-clear {
+  display: grid; place-items: center;
+  width: 24px; height: 24px; border: 0; border-radius: 50%;
+  background: var(--surface-3); color: var(--text-muted);
+}
+.dt-clear:hover { background: var(--red-dim); color: var(--red); }
+.dt-freshness {
+  font-size: 12px; color: var(--text-dim); font-variant-numeric: tabular-nums;
+}
+.dt-spin { animation: spin 0.9s linear infinite; }
+
+/* ---------- KPI rank ---------- */
+.dt-kpi-grid {
+  display: grid; gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+.dt-kpi {
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-1);
+  position: relative; overflow: hidden;
+}
+.dt-kpi::after {
+  content: ''; position: absolute; right: -30px; top: -30px;
+  width: 90px; height: 90px; border-radius: 50%;
+  background: radial-gradient(circle, var(--accent-glow, var(--signal-glow)), transparent 70%);
+  pointer-events: none;
+}
+.dt-kpi-body {
+  display: flex; flex-direction: column; gap: 4px;
+  padding: 18px; color: inherit;
+}
+a.dt-kpi-body:hover .dt-kpi-go { opacity: 1; transform: translateX(2px); }
+.dt-kpi-label {
+  display: flex; align-items: center; gap: 7px;
+  font-size: 12px; color: var(--text-muted); font-weight: 500;
+}
+.dt-kpi-go {
+  opacity: 0; margin-left: auto; color: var(--signal-strong);
+  transition: opacity .15s, transform .15s;
+}
+.dt-kpi-value {
+  font-family: var(--font-display); font-size: 34px; font-weight: 600;
+  letter-spacing: -0.02em; font-variant-numeric: tabular-nums;
+  margin-top: 6px; color: var(--text);
+}
+.dt-kpi-foot { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.dt-kpi-sub { font-size: 12px; color: var(--text-dim); }
+.dt-kpi-skeleton { min-height: 116px; display: grid; place-items: center; padding: 18px; }
+
+.dt-delta {
+  display: inline-flex; align-items: center; gap: 4px; font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+.dt-delta-none { color: var(--text-dim); font-weight: 400; }
+
+/* Remaining: a parent figure with its two parts nested beneath, so the
+   relationship is visible instead of asserted. */
+.dt-remaining {
+  margin-top: 16px;
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--amber);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-1);
+}
+.dt-remaining-head { padding: 18px 20px 12px; display: flex; flex-direction: column; gap: 8px; }
+.dt-remaining-figure { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.dt-figure-lg {
+  font-family: var(--font-display); font-size: 34px; font-weight: 600;
+  letter-spacing: -0.02em;
+}
+.dt-figure {
+  font-family: var(--font-display); font-size: 22px; font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.dt-remaining-split {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
+  padding: 0 20px 20px;
+}
+.dt-subkpi {
+  background: var(--surface-2);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+}
+.dt-subkpi-body { display: block; padding: 13px 16px; color: inherit; }
+a.dt-subkpi-body:hover { background: var(--surface-3); border-radius: var(--radius-sm); }
+a.dt-subkpi-body:hover .dt-kpi-go { opacity: 1; }
+.dt-subkpi-label {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 12.5px; font-weight: 500; color: var(--text-muted);
+}
+.dt-subkpi-figure {
+  display: flex; align-items: baseline; gap: 8px; margin-top: 6px; flex-wrap: wrap;
+}
+.dt-subkpi-pct { font-size: 11.5px; color: var(--text-dim); }
+
+/* ---------- sections ---------- */
+.dt-section {
+  margin-top: 22px;
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-1);
+}
+.dt-section-head {
+  display: flex; align-items: flex-start; gap: 16px;
+  padding: 18px 20px 0;
+}
+.dt-section-title {
+  font-size: 15px; font-family: var(--font-display); font-weight: 600;
+}
+.dt-section-sub { font-size: 12.5px; color: var(--text-dim); margin: 3px 0 0; }
+.dt-section-actions { margin-left: auto; }
+.dt-section-body { padding: 16px 20px 20px; }
+.dt-section-total {
+  display: inline-flex; align-items: baseline; gap: 7px;
+  font-size: 12.5px; color: var(--text-dim);
+}
+.dt-section-total b {
+  font-family: var(--font-display); font-size: 22px; font-weight: 600; color: var(--text);
+}
+.dt-section-total svg { align-self: center; }
+
+.dt-empty {
+  text-align: center; padding: 34px 20px; color: var(--text-dim); font-size: 13px;
+}
+.dt-note { font-size: 12px; color: var(--text-dim); margin: 14px 0 0; line-height: 1.5; }
+.dt-note-inline { font-size: 12px; color: var(--text-dim); margin-left: 10px; }
+
+.dt-failed {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  background: var(--red-dim); color: var(--red);
+  border-radius: var(--radius-sm); padding: 13px 16px; font-size: 13px;
+}
+.dt-failed b { font-weight: 600; }
+.dt-failed span { flex: 1; min-width: 200px; color: var(--text); }
+.dt-page-error {
+  display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+  border-left: 3px solid var(--red);
+}
+.dt-page-error svg { color: var(--red); }
+.dt-page-error p { margin: 3px 0 0; color: var(--text-muted); font-size: 13px; }
+.dt-page-error button { margin-left: auto; }
+
+.dt-skeleton { display: grid; gap: 10px; }
+.dt-skeleton-row {
+  height: 14px; border-radius: 7px; width: 100%;
+  background: linear-gradient(90deg, var(--surface-2), var(--surface-3), var(--surface-2));
+  background-size: 200% 100%;
+  animation: dt-shimmer 1.3s ease-in-out infinite;
+}
+@keyframes dt-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* ---------- bars ---------- */
+.dt-bars { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.dt-bar-link {
+  display: grid; align-items: center; gap: 12px;
+  grid-template-columns: 170px 1fr 46px 44px 16px;
+  padding: 7px 8px; border-radius: var(--radius-sm);
+  color: inherit; transition: background .13s;
+}
+a.dt-bar-link:hover { background: var(--surface-2); }
+a.dt-bar-link:hover .dt-bar-go { opacity: 1; transform: translateX(2px); }
+.dt-bar-static { cursor: default; }
+.dt-bar-label {
+  font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.dt-muted .dt-bar-label { color: var(--text-muted); font-style: italic; }
+.dt-bar-value { font-size: 12.5px; font-weight: 500; text-align: right; }
+.dt-bar-share { font-size: 11.5px; color: var(--text-dim); text-align: right; }
+.dt-bar-go { opacity: 0; color: var(--signal-strong); transition: opacity .15s, transform .15s; }
+
+/* The track is a visible object, not a two-per-cent tint. The old bars sat on
+   --surface-3 over --surface-1, so the unfilled remainder never read and the
+   bars floated with no scale behind them. */
+.dt-track {
+  display: block; position: relative; height: 10px;
+  background: var(--surface-3);
+  box-shadow: inset 0 0 0 1px rgba(20, 35, 60, 0.05);
+  border-radius: 5px; overflow: hidden;
+}
+.dt-track-fill { display: block; height: 100%; border-radius: 5px; }
+
+/* ---------- stage pipeline ---------- */
+.dt-pipeline { list-style: none; margin: 0; padding: 0; }
+.dt-pipe-step { display: grid; grid-template-columns: 18px 1fr; gap: 12px; }
+.dt-pipe-rail { position: relative; display: flex; flex-direction: column; align-items: center; }
+.dt-pipe-dot {
+  width: 9px; height: 9px; border-radius: 50%; margin-top: 15px;
+  background: var(--signal); box-shadow: 0 0 0 3px var(--signal-glow);
+}
+.dt-pipe-line { flex: 1; width: 2px; background: var(--border); margin: 3px 0 -3px; }
+.dt-pipe-empty .dt-pipe-dot { background: var(--border); box-shadow: none; }
+.dt-pipe-empty .dt-pipe-name, .dt-pipe-empty .dt-pipe-value { color: var(--text-dim); }
+.dt-pipe-body {
+  display: grid; align-items: center; gap: 12px;
+  grid-template-columns: 190px 1fr 44px 44px;
+  padding: 9px 10px; border-radius: var(--radius-sm); color: inherit;
+  transition: background .13s;
+}
+.dt-pipe-body:hover { background: var(--surface-2); }
+.dt-pipe-name { font-size: 13px; font-weight: 500; }
+.dt-pipe-bar {
+  display: block; height: 8px; background: var(--surface-3);
+  box-shadow: inset 0 0 0 1px rgba(20, 35, 60, 0.05);
+  border-radius: 4px; overflow: hidden;
+}
+.dt-pipe-bar > span {
+  display: block; height: 100%; border-radius: 4px;
+  background: linear-gradient(90deg, var(--signal), var(--signal-strong));
+}
+.dt-pipe-value { font-size: 12.5px; font-weight: 600; text-align: right; }
+.dt-pipe-share { font-size: 11.5px; color: var(--text-dim); text-align: right; }
+
+/* ---------- plan and delivery ---------- */
+.dt-figures {
+  display: grid; gap: 12px; margin-bottom: 20px;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+}
+.dt-figure-tile {
+  background: var(--surface-2);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+  padding: 13px 16px; display: flex; flex-direction: column; gap: 5px;
+}
+.dt-figure-emphasis { background: var(--surface-1); border-color: var(--border); }
+.dt-figure-label {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 12.5px; font-weight: 500; color: var(--text-muted);
+}
+.dt-figure-note { font-size: 11.5px; color: var(--text-dim); }
+
+.dt-achievement { display: grid; gap: 10px; }
+.dt-achievement-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 16px; flex-wrap: wrap; margin-bottom: 4px;
+}
+/* The target line, explained once above the group instead of hidden in a
+   title attribute on a two-pixel tick no touch screen can reveal. */
+.dt-target-key {
+  display: inline-flex; align-items: center; gap: 7px;
+  font-size: 11.5px; color: var(--text-dim);
+}
+.dt-target-key i {
+  display: inline-block; width: 2px; height: 13px; border-radius: 1px;
+  background: var(--text-muted);
+}
+.dt-bullet {
+  display: grid; align-items: center; gap: 12px;
+  grid-template-columns: 150px 1fr 58px 70px;
+}
+.dt-bullet-label {
+  font-size: 12.5px; font-weight: 500;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.dt-anon .dt-bullet-label { font-style: italic; font-weight: 400; color: var(--text-muted); }
+.dt-bullet-track {
+  position: relative; display: block; height: 10px;
+  background: var(--surface-3);
+  box-shadow: inset 0 0 0 1px rgba(20, 35, 60, 0.05);
+  border-radius: 5px;
+}
+.dt-bullet-fill { display: block; height: 100%; border-radius: 5px; }
+.dt-anon .dt-bullet-fill { opacity: 0.55; }
+.dt-bullet-target {
+  position: absolute; top: -3px; width: 2px; height: 16px;
+  background: var(--text-muted); border-radius: 1px;
+}
+.dt-bullet-pct {
+  font-size: 12.5px; font-weight: 500; text-align: right;
+}
+.dt-noplan .dt-bullet-pct { font-weight: 400; font-style: italic; }
+.dt-bullet-detail { font-size: 11.5px; color: var(--text-dim); text-align: right; }
+
+/* ---------- breakdown chrome ---------- */
+.dt-breakdown-controls {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 16px; flex-wrap: wrap; margin-bottom: 16px;
+}
+.dt-tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--border); flex: 1; }
+.dt-tab {
+  position: relative; padding: 9px 14px; font-size: 13px; font-weight: 500;
+  color: var(--text-muted); background: none; border: 0; margin-bottom: -1px;
+  transition: color .15s;
+}
+.dt-tab:hover { color: var(--text); }
+.dt-tab-active { color: var(--signal-strong); }
+.dt-tab-underline {
+  position: absolute; left: 0; right: 0; bottom: 0; height: 2px;
+  background: var(--signal); border-radius: 2px 2px 0 0;
+}
+.dt-viewtoggle { display: flex; gap: 4px; }
+
+.dt-total-row td, .dt-total-row th {
+  border-top: 1px solid var(--border); font-weight: 600; text-align: left;
+  padding: 13px 16px; font-size: 13.5px;
+}
+
+/* ---------- tables ---------- */
+.dt-sort-btn {
+  display: inline-flex; align-items: center; gap: 4px;
+  background: none; border: 0; padding: 0; font: inherit;
+  color: inherit; text-transform: inherit; letter-spacing: inherit;
+}
+.dt-sort-btn:hover { color: var(--text-muted); }
+.dt-cell-link { color: var(--signal-strong); font-weight: 500; }
+.dt-cell-link:hover { text-decoration: underline; }
+/* A drill-through on a column that carries semantic colour keeps the colour:
+   "problematic" is red whether or not it is also a link. */
+.dt-cell-link-bad { color: var(--red); }
+.dt-col-action { width: 40px; }
+.dt-col-rate { width: 190px; }
+.dt-row-filter {
+  display: grid; place-items: center; width: 26px; height: 26px;
+  border: 0; border-radius: 6px; background: transparent; color: var(--text-dim);
+  opacity: 0; transition: opacity .13s, background .13s, color .13s;
+}
+tbody tr:hover .dt-row-filter { opacity: 1; }
+.dt-row-filter:hover { background: var(--signal-glow); color: var(--signal-strong); }
+.dt-row-filter:focus-visible { opacity: 1; }
+.dt-progress-cell { display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
+.dt-progress-track {
+  display: block; width: 70px; height: 6px; border-radius: 4px;
+  background: var(--surface-3);
+  box-shadow: inset 0 0 0 1px rgba(20, 35, 60, 0.05);
+  overflow: hidden;
+}
+.dt-progress-wide .dt-progress-track { width: 110px; }
+.dt-progress-track > span { display: block; height: 100%; border-radius: 4px; }
+.dt-progress-pct { font-size: 12.5px; color: var(--text-dim); min-width: 36px; text-align: right; }
+.dt-unattributed td { color: var(--text-muted); font-style: italic; }
+.dt-expand { display: flex; align-items: center; padding-top: 12px; }
+
+/* ---------- trend ---------- */
+.dt-trend { position: relative; }
+.dt-trend-svg { width: 100%; height: auto; display: block; overflow: visible; }
+.dt-gridline { stroke: var(--border); stroke-dasharray: 3 4; }
+.dt-axis-label { fill: var(--text-dim); font-size: 11px; font-variant-numeric: tabular-nums; }
+.dt-axis-current { fill: var(--text); font-weight: 600; }
+.dt-hover-rule { stroke: var(--text-dim); stroke-width: 1; stroke-dasharray: 3 3; }
+.dt-trend-readout {
+  display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+  margin-top: 12px; padding: 10px 14px;
+  background: var(--surface-2); border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm); font-size: 12.5px;
+}
+.dt-readout-month { font-weight: 600; }
+.dt-readout-item { display: inline-flex; align-items: center; gap: 6px; color: var(--text-muted); }
+.dt-readout-item i { width: 9px; height: 9px; border-radius: 3px; }
+.dt-readout-item b { color: var(--text); }
+.dt-trend-readout em { color: var(--text-dim); font-size: 11.5px; }
+
+.dt-legend {
+  display: flex; align-items: center; gap: 18px; flex-wrap: wrap;
+  margin-top: 14px; font-size: 12px; color: var(--text-muted);
+}
+.dt-legend-item { display: inline-flex; align-items: center; gap: 7px; }
+.dt-legend-item i { width: 14px; height: 3px; border-radius: 2px; }
+.dt-legend-item em { color: var(--text-dim); font-size: 11px; }
+.dt-legend-hollow {
+  width: 9px !important; height: 9px !important; border-radius: 50% !important;
+  background: var(--surface-1) !important; border: 2px solid var(--text-dim);
+}
+.dt-legend-note { color: var(--text-dim); }
+
+/* ---------- flow ledger ---------- */
+.dt-flow { display: grid; grid-template-columns: 1.5fr 1fr; gap: 24px; align-items: start; }
+.dt-flow-svg { width: 100%; height: auto; display: block; overflow: visible; }
+.dt-flow-connector { stroke: var(--text-dim); stroke-width: 1; stroke-dasharray: 3 3; }
+.dt-flow-value {
+  fill: var(--text); font-size: 12px; font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.dt-flow-label { fill: var(--text-muted); font-size: 11px; }
+.dt-flow-side { display: grid; gap: 10px; }
+.dt-flow-stat {
+  display: flex; align-items: center; gap: 10px;
+  background: var(--surface-2); border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm); padding: 11px 14px; font-size: 13px;
+}
+.dt-flow-stat-label { flex: 1; color: var(--text-muted); }
+.dt-flow-stat b { font-family: var(--font-display); font-size: 17px; }
+.dt-flow-stat-icon { display: grid; place-items: center; width: 24px; height: 24px; border-radius: 6px; }
+.dt-tone-good { background: var(--green-dim); color: var(--green); }
+.dt-tone-bad { background: var(--red-dim); color: var(--red); }
+.dt-flow-note {
+  font-size: 11.5px; color: var(--text-dim); line-height: 1.55; margin: 2px 0 0;
+}
+
+/* ---------- responsive ---------- */
+@media (max-width: 1000px) {
+  .dt-flow { grid-template-columns: 1fr; }
+  .dt-col-rate { width: auto; }
+}
+@media (max-width: 760px) {
+  .dt-remaining-split { grid-template-columns: 1fr; }
+  .dt-bar-link { grid-template-columns: 110px 1fr 42px; }
+  .dt-bar-share, .dt-bar-go { display: none; }
+  .dt-pipe-body { grid-template-columns: 120px 1fr 40px; }
+  .dt-pipe-share { display: none; }
+  .dt-bullet { grid-template-columns: 100px 1fr 52px; }
+  .dt-bullet-detail { display: none; }
+  .dt-toolbar-right { margin-left: 0; width: 100%; }
+  .dt-row-filter { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dt-skeleton-row, .dt-spin { animation: none; }
+}
+
+/* The flow ledger's vertical scale is truncated on purpose — see
+   charts/FlowLedger — so the floor says so on the chart itself. */
+.dt-flow-floor { fill: var(--text-dim); font-size: 10.5px; font-style: italic; }

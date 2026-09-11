@@ -23,8 +23,12 @@ grows new stages:
   name is not theirs to see, and getting that combination right is the whole
   reason the contractor view is not just the existing chart.
 
-Aging bands are absent by design, not by omission: nothing records when a
-site became problematic. See ``DriveTestAnalytics.breakdowns``.
+Aging bands exist for ongoing sites and deliberately do not exist for
+problematic ones. An ongoing site has a recorded launch date, so "how long has
+this live site gone untested" is a measurement; nothing records when a site
+*became* problematic, so the same bands over there would be a different fact
+wearing the same label. See ``DriveTestAnalytics.breakdowns``, and
+``tests/test_dt_filters.py`` for the bands themselves.
 
 Run with:  cd backend && pytest tests/test_dt_breakdowns.py -q
 """
