@@ -198,10 +198,32 @@ function serve(plan = planDelivery(), body = overview, series = trend()) {
   })
 }
 
+/** The province select, once its options have arrived.
+ *
+ * Same trap as `section` below: the toolbar renders the select immediately,
+ * carrying only "All provinces", and the rest of the options arrive with the
+ * payload. Finding the element is not finding its options.
+ */
+async function provinceSelect() {
+  const select = await screen.findByLabelText('Narrow to one province')
+  await waitFor(() =>
+    expect(within(select).getAllByRole('option').length).toBeGreaterThan(1),
+  )
+  return select
+}
+
 /** A section by its heading, once the page has loaded. */
 async function section(title) {
   const heading = await screen.findByRole('heading', { name: title })
-  return heading.closest('.dt-section')
+  const node = heading.closest('.dt-section')
+  // The heading is not evidence that the data arrived. Section renders its
+  // title immediately and the body as a skeleton until the fetch resolves, so
+  // awaiting the heading alone awaits nothing, and every assertion after it
+  // races the promise. It won on a quiet machine and lost on a loaded CI
+  // runner, which is the worst way for a test to be wrong. Wait for the
+  // skeleton to go instead — that is the thing "loaded" actually means.
+  await waitFor(() => expect(node.querySelector('.dt-skeleton')).toBeNull())
+  return node
 }
 
 beforeEach(() => {
@@ -908,7 +930,7 @@ describe('the province filter', () => {
     serve()
     draw()
 
-    const select = await screen.findByLabelText('Narrow to one province')
+    const select = await provinceSelect()
     expect(within(select).getByRole('option', { name: 'Kerman' })).toBeInTheDocument()
     expect(within(select).getByRole('option', { name: 'All provinces' })).toBeInTheDocument()
     expect(within(select).getAllByRole('option')).toHaveLength(3)
@@ -918,7 +940,7 @@ describe('the province filter', () => {
     serve()
     draw()
 
-    const select = await screen.findByLabelText('Narrow to one province')
+    const select = await provinceSelect()
     await userEvent.selectOptions(select, '9')
 
     await waitFor(() =>
