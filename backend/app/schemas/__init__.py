@@ -1558,7 +1558,15 @@ class MonthlyPlanHistoryRow(BaseModel):
 
 
 class MonthlyPlanQueueRow(BaseModel):
-    """One contractor in the PM's queue for a month, whether they filed or not."""
+    """One contractor in the PM's queue for a month, whether they filed or not.
+
+    Two months meet in this row and they are not the same month. The plan
+    fields — ``committed_count``, ``status``, ``version`` — belong to the month
+    being decided. The three figures below them belong to the month now
+    running, and are what the PM is judging the proposal against: a number is
+    credible or not in the light of what this company is holding and finishing
+    right now.
+    """
 
     contractor_id: int
     contractor_name: str
@@ -1570,14 +1578,31 @@ class MonthlyPlanQueueRow(BaseModel):
     submitted_at: datetime | None = None
     is_late: bool = False
     return_comment: str | None = None
+    #: Sites held in the month now running: carried in plus newly assigned.
+    assignment: int = 0
+    #: What was approved for the running month. None, never 0.
+    pip: int | None = None
+    #: Drive tests completed in the running month.
+    delivered: int = 0
 
 
 class MonthlyPlanQueueOut(BaseModel):
+    """Every contractor's standing for the month being decided.
+
+    ``current_month`` is the programme's own version of the three figures on
+    each row — the same computation, summed — so the PM reads the month as a
+    whole above the companies that make it up.
+    """
+
     shamsi_year: int
     shamsi_month: int
     shamsi_month_name: str
+    #: "مهر 1405" — the month being decided, as a person reads it.
+    label: str
     deadline_shamsi: str
     deadline_passed: bool
+    days_remaining: int
+    current_month: MonthStanding
     rows: list[MonthlyPlanQueueRow]
 
 

@@ -666,3 +666,91 @@ def test_pip_and_delivered_agree_with_the_drive_test_dashboard(client, actors):
 
     assert point["pip"] == row["pip"]
     assert point["delivered"] == row["actual"]
+
+
+# ---------------------------------------------------------------------------
+# 10. The PM's queue reads the same three figures
+#
+# The queue is about two months at once: the plan fields are the month being
+# decided, and Assignment/PIP/Delivered are the month now running, which is
+# what makes a proposed number credible or not. Both come from the same
+# scorecard the contractor's own screen reads — these tests are what stops the
+# two screens drifting into two answers about one company.
+# ---------------------------------------------------------------------------
+def _queue(client, headers, year=None, month=None):
+    if year is None:
+        year, month = _shift(1)
+    r = client.get(PIP + "/queue", headers=headers, params={"year": year, "month": month})
+    assert r.status_code == 200, r.text
+    return r.json()
+
+
+def _queue_row(body, name):
+    return next(r for r in body["rows"] if r["contractor_name"] == name)
+
+
+def test_queue_rows_carry_the_running_month_figures(client, actors):
+    body = _queue(client, actors["pm"])
+    scorecard = _ask(client, actors["pm"], months=1)
+    running = _month(scorecard, _YEAR, _MONTH)
+
+    for row in body["rows"]:
+        mine = next(
+            (r for r in running["rows"] if r["contractor_id"] == row["contractor_id"]),
+            None,
+        )
+        assert row["assignment"] == (mine["available"] if mine else 0), row["contractor_name"]
+        assert row["delivered"] == (mine["delivered"] if mine else 0), row["contractor_name"]
+        assert row["pip"] == (mine["pip"] if mine else None), row["contractor_name"]
+
+
+def test_queue_totals_are_the_programme_not_a_sum_of_what_was_shown(client, actors):
+    body = _queue(client, actors["pm"])
+    scorecard = _ask(client, actors["pm"], months=1)
+    running = _month(scorecard, _YEAR, _MONTH)
+    standing = body["current_month"]
+
+    assert standing["assignment"] == running["available"]
+    assert standing["delivered"] == running["delivered"]
+    assert standing["carried_in"] + standing["newly_assigned"] == standing["assignment"]
+    # Zero approved is nobody approved, not a programme that committed to none.
+    assert standing["pip"] == (running["pip"] or None)
+    assert 0 <= standing["pace_pct"] <= 100
+
+
+def test_the_queue_names_the_month_being_decided_not_the_one_running(client, actors):
+    year, month = _shift(1)
+    body = _queue(client, actors["pm"], year, month)
+
+    assert (body["shamsi_year"], body["shamsi_month"]) == (year, month)
+    assert body["label"] == f"{jalali.month_name(month)} {year}"
+    assert body["days_remaining"] > 0
+    # ...while the standing beside it is this month.
+    assert (
+        body["current_month"]["shamsi_year"],
+        body["current_month"]["shamsi_month"],
+    ) == (_YEAR, _MONTH)
+
+
+def test_a_contractor_cannot_read_the_queue_at_all(client, actors):
+    year, month = _shift(1)
+    r = client.get(
+        PIP + "/queue", headers=actors["alfa"], params={"year": year, "month": month}
+    )
+    # The queue is every competitor's commitments. Not filtered — refused.
+    assert r.status_code == 403, r.text
+
+
+def test_admin_reads_the_queue_and_cannot_decide_a_row(client, actors):
+    """Separation of duties: Admin is a systems role, not an operational one."""
+    body = _queue(client, actors["admin"])
+    assert body["rows"], "admin should still read the queue"
+
+    year, month = _shift(2)
+    plan_id = client.post(
+        f"{PIP}/my",
+        headers=actors["alfa"],
+        json={"year": year, "month": month, "committed_count": 7, "submit": True},
+    ).json()["id"]
+    refused = client.post(f"{PIP}/{plan_id}/approve", headers=actors["admin"])
+    assert refused.status_code == 403, refused.text
