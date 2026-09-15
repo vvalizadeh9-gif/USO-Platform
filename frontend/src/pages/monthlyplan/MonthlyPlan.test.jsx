@@ -112,15 +112,22 @@ const queueRow = (over = {}) => ({
   submitted_at: '2026-08-24T09:00:00Z',
   is_late: false,
   return_comment: null,
+  // The running month, not the one being decided — see MonthlyPlanQueueRow.
+  assignment: 76,
+  pip: 38,
+  delivered: 24,
   ...over,
 })
 
-const queue = (rows) => ({
+const queue = (rows, over = {}) => ({
   shamsi_year: 1405,
-  shamsi_month: 6,
-  shamsi_month_name: 'شهریور',
-  deadline_shamsi: '1405/06/03',
+  shamsi_month: 7,
+  shamsi_month_name: 'مهر',
+  label: 'مهر 1405',
+  deadline_shamsi: '1405/07/03',
   deadline_passed: false,
+  days_remaining: 6,
+  current_month: month(over.current_month),
   rows,
 })
 
@@ -131,10 +138,12 @@ const MIXED_QUEUE = queue([
   queueRow({
     contractor_id: 2, contractor_name: 'Beta Networks', plan_id: 12,
     status: 'Approved', committed_count: 25, previous_month_committed: 20,
+    assignment: 52, pip: 44, delivered: 39,
   }),
   queueRow({
     contractor_id: 3, contractor_name: 'Gamma Survey', plan_id: null,
     status: null, committed_count: null, previous_month_committed: 18, version: null,
+    assignment: 31, pip: null, delivered: 11,
   }),
 ])
 
@@ -405,7 +414,56 @@ describe('a contractor filing next month', () => {
 })
 
 // ---------------------------------------------------------------- the queue
+//
+// The PM's screen answers two questions about two different months at once:
+// what is being proposed for next month, and how this month is actually
+// going. Keeping those apart is the whole design, so most of what is checked
+// here is that a figure is attributed to the right month and the right
+// company.
 describe('the PM deciding the month', () => {
+  it('names the month being decided and counts what is outstanding', async () => {
+    signedInAs('PM')
+    serve({ queue: MIXED_QUEUE })
+    show()
+
+    expect(await screen.findByText('Deciding مهر 1405')).toBeInTheDocument()
+    expect(screen.getByText('1 awaiting a decision')).toBeInTheDocument()
+    expect(screen.getByText('1 approved')).toBeInTheDocument()
+    expect(screen.getByText('1 not filed')).toBeInTheDocument()
+    expect(screen.getByText(/6 days left/)).toBeInTheDocument()
+  })
+
+  it('shows the programme in the same three words the contractor sees', async () => {
+    signedInAs('PM')
+    serve({ queue: MIXED_QUEUE })
+    show()
+
+    await screen.findByText(/شهریور 1405 — where the programme stands/)
+    // Scoped to the three cards: "PIP" is also a column heading in the table
+    // below, and an unscoped query now matches both.
+    const trio = within(document.querySelector('.pip-trio'))
+    const card = (label) => trio.getByText(label).closest('.stat')
+    expect(within(card('Assignment')).getByText('76')).toBeInTheDocument()
+    expect(within(card('PIP')).getByText('38')).toBeInTheDocument()
+    expect(within(card('Delivered')).getByText('24')).toBeInTheDocument()
+    // Same bar, same marker, and the sentence is about the programme.
+    expect(screen.getByTestId('pip-pace')).toHaveStyle({ left: '81%' })
+    expect(screen.getByText(/The programme is 7 drive tests behind that pace/)).toBeInTheDocument()
+  })
+
+  it('puts each company\'s running month beside what they are proposing', async () => {
+    signedInAs('PM')
+    serve({ queue: MIXED_QUEUE })
+    show()
+
+    const row = (await screen.findByText('Beta Networks')).closest('tr')
+    expect(within(row).getByText('52')).toBeInTheDocument()   // assignment
+    expect(within(row).getByText('44')).toBeInTheDocument()   // pip
+    expect(within(row).getByText('39')).toBeInTheDocument()   // delivered
+    expect(within(row).getByText('89%')).toBeInTheDocument()  // 39 of 44
+    expect(within(row).getByText('25')).toBeInTheDocument()   // proposed for مهر
+  })
+
   it('lists every contractor, including one who has not filed', async () => {
     signedInAs('PM')
     serve({ queue: MIXED_QUEUE })
@@ -414,17 +472,23 @@ describe('the PM deciding the month', () => {
     expect(await screen.findByText('Alpha Telecom')).toBeInTheDocument()
     expect(screen.getByText('Beta Networks')).toBeInTheDocument()
     expect(screen.getByText('Gamma Survey')).toBeInTheDocument()
-    expect(screen.getByText('Not submitted')).toBeInTheDocument()
-    expect(screen.getByText(/1 not submitted/)).toBeInTheDocument()
+    expect(screen.getByText('Not filed')).toBeInTheDocument()
+
+    // Gamma has no approved PIP this month, so there is no share to draw.
+    const row = screen.getByText('Gamma Survey').closest('tr')
+    expect(within(row).queryByText(/%/)).not.toBeInTheDocument()
   })
 
-  it('totals what the month has been committed to', async () => {
+  it('totals the proposals but never the assignment column', async () => {
     signedInAs('PM')
     serve({ queue: MIXED_QUEUE })
     show()
 
     const totals = (await screen.findByText(/total — 3 contractors/i)).closest('tr')
-    expect(within(totals).getByText('65')).toBeInTheDocument()
+    expect(within(totals).getByText('65')).toBeInTheDocument()   // 40 + 25 proposed
+    // Assignment is a balance: the programme's own figure, not a sum of rows
+    // (52 + 76 + 31 would count a site held by two months twice).
+    expect(within(totals).getByText('76')).toBeInTheDocument()
   })
 
   it('will not return a plan until there is a reason to send back', async () => {
@@ -459,6 +523,17 @@ describe('the PM deciding the month', () => {
     await waitFor(() => expect(api.post).toHaveBeenCalledWith('/pip/11/approve'))
   })
 
+  it('carries both months into the panel it opens', async () => {
+    signedInAs('PM')
+    serve({ queue: MIXED_QUEUE })
+    show()
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Alpha Telecom' }))
+    expect(
+      screen.getByText(/Proposing.*for مهر 1405, against 76 held and 24 delivered in شهریور/s),
+    ).toBeInTheDocument()
+  })
+
   it('offers no decision on a plan that is not waiting on them', async () => {
     signedInAs('PM')
     serve({ queue: MIXED_QUEUE })
@@ -467,6 +542,19 @@ describe('the PM deciding the month', () => {
     await userEvent.click(await screen.findByRole('button', { name: 'Beta Networks' }))
     expect(screen.getByText(/approved and locked/i)).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /^approve$/i })).not.toBeInTheDocument()
+  })
+
+  it('keeps the scorecard ledger, below the decisions rather than above them', async () => {
+    signedInAs('PM')
+    serve({ queue: MIXED_QUEUE })
+    show()
+
+    const decisions = await screen.findByText('Decisions')
+    const ledger = await screen.findByText(/commitment against delivery/i)
+    // The PM opens this screen to decide a month; the record is what you read
+    // afterwards.
+    expect(decisions.compareDocumentPosition(ledger) & Node.DOCUMENT_POSITION_FOLLOWING)
+      .toBeTruthy()
   })
 })
 

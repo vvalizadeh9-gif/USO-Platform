@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { EmptyState, PageHead } from '../../components/ui'
 import { useAuth } from '../../context/AuthContext'
 import { canDecidePlans } from '../../lib/roles'
-import { currentShamsiPeriod, planningPeriod } from '../../lib/shamsi'
+import { planningPeriod } from '../../lib/shamsi'
 import ContractorPlan from './ContractorPlan'
 import PeriodPicker from './PeriodPicker'
 import PlanQueue from './PlanQueue'
@@ -24,15 +24,15 @@ import Scorecard from './Scorecard'
 export default function MonthlyPlan() {
   const { user } = useAuth()
   const isContractor = user?.role?.name === 'Contractor'
-  // The month each side opens on is the month it has business with, and they
-  // are not the same month. A contractor is filing for the month *after* this
-  // one -- opening their form on today's month opens it on the one they can no
-  // longer change. Everybody else is chasing the month now running. Neither is
-  // stored: it is a default the picker can change, and the server converts
+  // Both sides open on the month being decided, which is the month *after*
+  // this one. A plan is filed and approved during the month before the month
+  // it covers, so opening on today's month opens both screens on the month
+  // nobody can change any more -- the contractor cannot refile it and the PM
+  // has nothing left to approve. Where the running month matters, and it does
+  // to both, it is on the screen as figures rather than as the month picked.
+  // Not stored: it is a default the picker can change, and the server converts
   // every date that is kept.
-  const [period, setPeriod] = useState(
-    isContractor ? planningPeriod : currentShamsiPeriod,
-  )
+  const [period, setPeriod] = useState(planningPeriod)
   const complete = Boolean(period?.year && period?.month)
 
   return (
@@ -43,22 +43,12 @@ export default function MonthlyPlan() {
         subtitle={
           isContractor
             ? 'The drive tests you commit to for next month, and how the month now running is going. The PM approves the number, or sends it back with a comment.'
-            : 'What each contractor has committed to this month, and who has not filed yet.'
+            : 'What each contractor is proposing for next month, judged against what they are holding and finishing in this one.'
         }
         actions={<PeriodPicker period={period} onChange={setPeriod} />}
       />
 
-      {/* The record first, then the month.
-          A commitment is decided by looking at the last few months, so the
-          record is above the form rather than behind a tab. It is no longer
-          shown to a contractor: the three cards and the six-month chart on
-          their own screen answer the same question about their own company, in
-          the same words, and an eleven-column ledger beside them was a second
-          answer to it. Everyone else still reads it, because for them it is
-          the one place every contractor's months sit side by side. */}
-      {!isContractor && <Scorecard canSeeAllContractors />}
-
-      <div className={isContractor ? undefined : 'mt-24'}>
+      <div>
         {complete ? (
           isContractor ? (
             <ContractorPlan period={period} />
@@ -75,6 +65,21 @@ export default function MonthlyPlan() {
           />
         )}
       </div>
+
+      {/* The record, under the decisions rather than over them.
+          It used to be the first thing on the page for everybody. For a
+          contractor it is gone entirely -- the three cards and the six-month
+          chart on their own screen answer the same question about their own
+          company, in the same words. For everyone else it stays, because it is
+          the one place every contractor's months sit side by side and the only
+          way out to the spreadsheet; but the PM opens this screen to decide a
+          month, and an eleven-column ledger is what you read after deciding,
+          not before reaching the decision. */}
+      {!isContractor && complete && (
+        <div className="mt-24">
+          <Scorecard canSeeAllContractors />
+        </div>
+      )}
     </>
   )
 }

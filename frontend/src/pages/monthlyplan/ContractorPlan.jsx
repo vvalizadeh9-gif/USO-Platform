@@ -4,8 +4,9 @@ import { useCallback, useEffect, useState } from 'react'
 import api from '../../api/client'
 import { EmptyState, Loading, StatusPill, fadeUp, stagger } from '../../components/ui'
 import { useToast } from '../../context/ToastContext'
-import { sharePercent } from './figures'
+import { figure } from './figures'
 import SixMonthChart, { ChartLegend } from './SixMonthChart'
+import { FigureCards, Standing } from './Standing'
 
 // What the server accepts (services/monthly_plan.MAX_COMMITTED_COUNT). Checked
 // here so a typo is refused where it was typed, not after a round trip; the
@@ -21,85 +22,6 @@ const EDITABLE = ['Draft', 'Returned', 'Reopened']
 // something that happened earlier. 'Reopened' is here for the state the PM's
 // own screen creates; a server that does not produce it simply never matches.
 const ANSWERING = ['Returned', 'Reopened']
-
-/** A dash, not a zero: nothing approved is not the same as approved nothing. */
-function figure(value) {
-  return value == null ? '—' : value
-}
-
-/** One of the three figures, with its own name on it. */
-function Card({ label, value, sub, highlight }) {
-  return (
-    <div className={`stat${highlight ? ' pip-stat-hl' : ''}`}>
-      <div className="label">{label}</div>
-      <div className="value tnum">{figure(value)}</div>
-      {sub && <div className="sub">{sub}</div>}
-    </div>
-  )
-}
-
-/**
- * Delivered against PIP for the month now running, with the calendar on it.
- *
- * The marker is where delivery would be if it tracked the days, and the line
- * underneath says how far off that the contractor is in drive tests rather
- * than in percentage points — "seven behind" is a number of days' work, and
- * "eighteen points behind" is not a number of anything.
- *
- * Pace decides nothing. A contractor who does the month's work in its first
- * week is not behind on day three, and nothing here treats them as though
- * they were.
- */
-function Standing({ month }) {
-  const { pip, delivered, pace_pct: pace, label } = month
-  if (pip == null) {
-    return (
-      <p className="muted pip-pacelbl">
-        No PIP has been approved for {label}, so there is nothing to measure
-        this month's drive tests against yet.
-      </p>
-    )
-  }
-
-  const percent = sharePercent(delivered, pip)
-  const expected = Math.round((pip * pace) / 100)
-  const gap = delivered - expected
-  // A month whose days are done has no pace left to be ahead of.
-  const running = pace < 100
-
-  return (
-    <div className="pip-standing">
-      <div className="pip-standtop">
-        <span>Delivered against PIP</span>
-        <span>
-          <b className="tnum">{delivered}</b> of {pip}
-          {percent == null ? '' : ` · ${percent}%`}
-        </span>
-      </div>
-      <div className="pip-trackwrap">
-        <div className="pip-track">
-          {/* Capped at the track's width so a month that passed its target
-              draws full rather than past the end of the card; the figures
-              above say by how much. */}
-          <i style={{ width: `${Math.min(100, percent ?? 0)}%` }} />
-        </div>
-        {running && (
-          <span className="pip-pace" style={{ left: `${pace}%` }} data-testid="pip-pace" />
-        )}
-      </div>
-      <p className="pip-pacelbl">
-        {running
-          ? `Marker at ${Math.round(pace)}% — where you would be if delivery tracked the calendar. `
-          : 'The month is over. '}
-        {gap === 0
-          ? running ? 'You are exactly on that pace.' : 'You finished level with the calendar.'
-          : `You are ${Math.abs(gap)} drive test${Math.abs(gap) === 1 ? '' : 's'} ${
-              gap > 0 ? 'ahead of' : 'behind'
-            } that pace.`}
-      </p>
-    </div>
-  )
-}
 
 /**
  * The contractor's own side of the monthly plan.
@@ -290,15 +212,7 @@ export default function ContractorPlan({ period }) {
 
         <div className="pip-sep">
           <div className="pip-lbl">{running.label} — where you stand</div>
-          <div className="pip-trio">
-            <Card
-              label="Assignment"
-              value={running.assignment}
-              sub={`${running.carried_in} carried in + ${running.newly_assigned} new`}
-            />
-            <Card label="PIP" value={running.pip} sub="Approved for this month" />
-            <Card label="Delivered" value={running.delivered} sub="Drive tests done" highlight />
-          </div>
+          <FigureCards month={running} />
           <Standing month={running} />
         </div>
 

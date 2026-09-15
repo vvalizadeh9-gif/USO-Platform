@@ -25,3 +25,8 @@ export function sharePercent(delivered, pip) {
   if (!pip) return null
   return Math.round((delivered / pip) * 100)
 }
+
+/** A dash, not a zero: nothing approved is not the same as approved nothing. */
+export function figure(value) {
+  return value == null ? '—' : value
+}
