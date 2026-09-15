@@ -6,7 +6,9 @@ import { describe, expect, it } from 'vitest'
 import {
   SHAMSI_MONTHS,
   currentShamsiPeriod,
+  nextPeriod,
   periodLabel,
+  planningPeriod,
   previousPeriod,
   shamsiMonthName,
 } from './shamsi'
@@ -68,5 +70,20 @@ describe('currentShamsiPeriod', () => {
   it('is null rather than a Gregorian year in disguise', () => {
     const outOfRange = new Date(1980, 0, 1)
     expect(currentShamsiPeriod(outOfRange)).toBeNull()
+  })
+})
+
+describe('planningPeriod', () => {
+  it('is the month after this one, because that is the month being filed for', () => {
+    // 9 September 2026 is 18 Shahrivar 1405; the plan being written is Mehr's.
+    expect(planningPeriod(new Date(2026, 8, 9, 12))).toEqual({ year: 1405, month: 7 })
+  })
+
+  it('rolls into Farvardin of the next year at the end of Esfand', () => {
+    expect(nextPeriod(1405, 12)).toEqual({ year: 1406, month: 1 })
+  })
+
+  it('is null when the browser cannot say what month it is', () => {
+    expect(planningPeriod(new Date(1980, 0, 1))).toBeNull()
   })
 })
