@@ -683,3 +683,74 @@ def test_every_decision_is_written_to_the_audit_log(client, actors):
     assert approval["old_value"]["status"] == "Submitted"
     assert approval["new_value"]["status"] == "Approved"
     assert approval["new_value"]["committed_count"] == 19
+
+
+# ---------------------------------------------------------------------------
+# The Shamsi month's own length
+#
+# ``days_remaining`` and ``pace_pct`` are both divisions by the length of a
+# Shamsi month, which is 31, 30 or — in اسفند — 29 or 30 depending on the leap
+# year. Deriving it from the calendar rather than from a table is what keeps
+# that right without anybody remembering the rule, and this is what says so.
+# ---------------------------------------------------------------------------
+def test_shamsi_months_are_the_length_the_calendar_says():
+    year = jalali.current_shamsi_period()[0]
+    assert [jalali.days_in_month(year, m) for m in range(1, 7)] == [31] * 6
+    assert [jalali.days_in_month(year, m) for m in range(7, 12)] == [30] * 5
+    assert jalali.days_in_month(year, 12) in (29, 30)
+
+    # Every month of the year, added up, is the year.
+    total = sum(jalali.days_in_month(year, m) for m in range(1, 13))
+    assert total in (365, 366)
+
+
+def test_pace_is_a_share_of_the_running_month():
+    from app.services import monthly_plan as plans
+
+    year, month = jalali.current_shamsi_period()
+    length = jalali.days_in_month(year, month)
+
+    # Day one of the month is one day's worth of it, not none: the day being
+    # worked on counts.
+    first = jalali.from_shamsi_date(year, month, 1)
+    assert plans.pace_percent(year, month, first) == round(100 / length, 1)
+
+    last = jalali.from_shamsi_date(year, month, length)
+    assert plans.pace_percent(year, month, last) == 100.0
+
+    # A month already behind us is finished; one ahead has not started.
+    prev = jalali.previous_period(year, month)
+    assert plans.pace_percent(*prev, first) == 100.0
+    assert plans.pace_percent(*jalali.next_period(year, month), first) == 0.0
+
+
+def test_days_remaining_goes_negative_once_the_deadline_is_past():
+    from app.services import monthly_plan as plans
+
+    year, month = jalali.current_shamsi_period()
+    assert plans.days_remaining(year, month, jalali.from_shamsi_date(year, month, 1)) == 2
+    assert plans.days_remaining(year, month, jalali.from_shamsi_date(year, month, 3)) == 0
+    assert plans.days_remaining(year, month, jalali.from_shamsi_date(year, month, 9)) == -6
+
+
+def test_a_returned_plan_names_the_pm_who_sent_it_back(client, actors):
+    """Who disagreed is part of what the contractor is answering."""
+    year, month = _future(23)
+    plan_id = _save(client, actors["a1"], year, month, 90, True).json()["id"]
+    client.post(
+        f"{PIP}/{plan_id}/return",
+        headers=actors["pm"],
+        json={"comment": "Ninety against the sites you hold is not credible."},
+    )
+
+    planning = _current(client, actors["a1"], year, month)["planning"]
+    assert planning["status"] == "Returned"
+    assert planning["return_comment"].startswith("Ninety")
+    assert planning["returned_by"], "the comment arrived without a name on it"
+
+    # Nothing returned, nothing to name.
+    other_year, other_month = _future(24)
+    assert (
+        _current(client, actors["a1"], other_year, other_month)["planning"]["returned_by"]
+        is None
+    )

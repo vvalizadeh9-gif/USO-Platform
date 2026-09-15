@@ -1428,12 +1428,101 @@ class MonthlyPlanOut(ORMModel):
     is_late: bool = False
 
 
+class PlanningMonth(BaseModel):
+    """The month being submitted: the number, its standing, and the clock.
+
+    Everything about the month the contractor is filing *for*, in one place,
+    so the form has one object to read rather than a plan that may be null and
+    five sibling fields that describe it anyway.
+
+    ``days_remaining`` is computed here rather than in the browser because the
+    arithmetic needs the length of a Shamsi month, and the platform's rule is
+    that one implementation converts dates and it is the server's.
+    """
+
+    shamsi_year: int
+    shamsi_month: int
+    shamsi_month_name: str
+    #: "مهر 1405" — the month as a person reads it.
+    label: str
+    version: int | None = None
+    #: None when nothing has been filed. Not an error and not a 404: on day
+    #: one of the month it is the normal state, and it is the state the form
+    #: most needs to render.
+    status: str | None = None
+    committed_count: int | None = None
+    return_comment: str | None = None
+    #: The PM who wrote that comment, by display name. The comment is the
+    #: first thing the contractor should read and "somebody sent this back"
+    #: is a worse thing to be told than who did.
+    returned_by: str | None = None
+    deadline_shamsi: str
+    deadline_gregorian: date
+    deadline_passed: bool
+    is_late: bool = False
+    #: Signed: negative once the deadline is behind us. "Three days late" and
+    #: "due today" are different things to be told.
+    days_remaining: int
+
+
+class MonthStanding(BaseModel):
+    """Where the contractor stands in the month now running.
+
+    The three figures, and the split behind the first of them. All of them
+    come from ``DriveTestAnalytics.scorecard`` — the same computation the
+    Drive Test dashboard reads — so this screen and that one cannot report
+    different numbers for the same contractor and month.
+    """
+
+    shamsi_year: int
+    shamsi_month: int
+    shamsi_month_name: str
+    label: str
+    #: Sites held this month: ``carried_in + newly_assigned``. A stock, not a
+    #: flow — two months of it cannot be added together, because a site open
+    #: across both is in both.
+    assignment: int
+    carried_in: int
+    newly_assigned: int
+    #: None, never 0. A contractor with no approved plan has not committed to
+    #: nothing, they have not committed.
+    pip: int | None = None
+    delivered: int
+    #: Days elapsed over days in the Shamsi month, as a percentage. Display
+    #: only — nothing decides anything from it.
+    pace_pct: float
+
+
+class PlanMonthPoint(BaseModel):
+    """One month on the contractor's six-month chart.
+
+    No percentages: a percentage is a way of drawing two numbers that are
+    already here, and computing it on both sides of the wire is how the two
+    come to disagree. The screen divides.
+    """
+
+    shamsi_year: int
+    shamsi_month: int
+    shamsi_month_name: str
+    label: str
+    assignment: int
+    pip: int | None = None
+    delivered: int
+    #: True on the last entry only — the month still being worked on, whose
+    #: figures are not final.
+    in_progress: bool = False
+
+
 class MonthlyPlanContext(BaseModel):
     """This month's plan plus what the SC needs in order to fill it in.
 
-    One response rather than three calls, because every one of these is on the
-    same form: the number they committed last month, how much work they are
-    already carrying, and how long they have left.
+    One response rather than four calls, because it is all one screen: the
+    number being submitted, where the running month stands, and the six months
+    behind it.
+
+    The four fields above ``planning`` are the response's older shape and are
+    kept so that nothing reading ``/pip/my`` breaks; the screen reads the
+    blocks below them.
     """
 
     shamsi_year: int
@@ -1445,6 +1534,11 @@ class MonthlyPlanContext(BaseModel):
     deadline_shamsi: str
     deadline_gregorian: date
     deadline_passed: bool
+    planning: PlanningMonth
+    current_month: MonthStanding
+    #: Oldest first, the running month last. Six entries unless the programme
+    #: itself is younger than that.
+    history: list[PlanMonthPoint] = []
 
 
 class MonthlyPlanHistoryRow(BaseModel):
