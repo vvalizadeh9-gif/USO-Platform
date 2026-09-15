@@ -71,3 +71,21 @@ export function currentShamsiPeriod(now = new Date()) {
 export function previousPeriod(year, month) {
   return month === 1 ? { year: year - 1, month: 12 } : { year, month: month - 1 }
 }
+
+/** The Shamsi period immediately after this one. Mirrors jalali.next_period. */
+export function nextPeriod(year, month) {
+  return month === 12 ? { year: year + 1, month: 1 } : { year, month: month + 1 }
+}
+
+/**
+ * The month a contractor is filing a plan for: the one after this one.
+ *
+ * A plan is submitted during the month before the month it covers, so opening
+ * the form on today's month opens it on the one already being worked, which is
+ * the month they cannot change. Null when this browser cannot say what today's
+ * Shamsi month is — the picker then asks rather than guessing.
+ */
+export function planningPeriod(now = new Date()) {
+  const current = currentShamsiPeriod(now)
+  return current && nextPeriod(current.year, current.month)
+}

@@ -45,6 +45,26 @@ def previous_period(year: int, month: int) -> tuple[int, int]:
     return year, month - 1
 
 
+def next_period(year: int, month: int) -> tuple[int, int]:
+    """Return the (year, month) immediately after the given Shamsi period."""
+    if month == 12:
+        return year + 1, 1
+    return year, month + 1
+
+
+def days_in_month(year: int, month: int) -> int:
+    """How many days that Shamsi month has: 29, 30 or 31.
+
+    Derived from the calendar rather than from a table, so اسفند in a leap
+    year is right without anybody remembering the leap rule. It is here and
+    not in a caller because the length of a Shamsi month is a fact about the
+    calendar, and this module is the one place allowed to know those.
+    """
+    start = from_shamsi_date(year, month, 1)
+    next_year, next_month = next_period(year, month)
+    return (from_shamsi_date(next_year, next_month, 1) - start).days
+
+
 def month_name(month: int) -> str:
     """Return the Shamsi month name for month number 1..12."""
     if 1 <= month <= 12:

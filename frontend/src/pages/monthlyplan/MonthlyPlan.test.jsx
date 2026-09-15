@@ -29,48 +29,77 @@ function signedInAs(roleName) {
 // ---------------------------------------------------------------------- data
 // Shaped from app/schemas: MonthlyPlanContext, MonthlyPlanQueueOut and the
 // rows they carry. Field names come from the backend, not from a guess.
-const plan = (over = {}) => ({
-  id: 7,
-  contractor_id: 3,
+const planning = (over = {}) => ({
   shamsi_year: 1405,
-  shamsi_month: 6,
+  shamsi_month: 7,
+  shamsi_month_name: 'مهر',
+  label: 'مهر 1405',
   version: 1,
-  is_current: true,
-  committed_count: 40,
-  status: 'Draft',
-  is_default: false,
-  submitted_by: null,
-  submitted_at: null,
-  decided_by: null,
-  decided_at: null,
+  status: null,
+  committed_count: null,
   return_comment: null,
+  returned_by: null,
+  deadline_shamsi: '1405/07/03',
+  deadline_gregorian: '2026-09-25',
+  deadline_passed: false,
   is_late: false,
+  days_remaining: 6,
   ...over,
 })
 
-const context = (over = {}) => ({
+const month = (over = {}) => ({
   shamsi_year: 1405,
   shamsi_month: 6,
   shamsi_month_name: 'شهریور',
-  plan: null,
-  previous_month_committed: 30,
-  open_assignments: 12,
-  deadline_shamsi: '1405/06/03',
-  deadline_gregorian: '2026-08-25',
-  deadline_passed: false,
+  label: 'شهریور 1405',
+  assignment: 76,
+  carried_in: 52,
+  newly_assigned: 24,
+  pip: 38,
+  delivered: 24,
+  pace_pct: 81,
   ...over,
 })
 
-const HISTORY = [
-  {
-    shamsi_year: 1405, shamsi_month: 6, shamsi_month_name: 'شهریور',
-    committed_count: null, status: 'Draft', version: 1,
-  },
-  {
-    shamsi_year: 1405, shamsi_month: 5, shamsi_month_name: 'مرداد',
-    committed_count: 30, status: 'Approved', version: 1,
-  },
+const point = (over = {}) => ({
+  shamsi_year: 1405,
+  shamsi_month: 5,
+  shamsi_month_name: 'مرداد',
+  label: 'مرداد 1405',
+  assignment: 60,
+  pip: 50,
+  delivered: 22,
+  in_progress: false,
+  ...over,
+})
+
+const HISTORY_POINTS = [
+  point({ shamsi_month: 4, shamsi_month_name: 'تیر', label: 'تیر 1405', pip: 45, delivered: 38 }),
+  point(),
+  point({
+    shamsi_month: 6, shamsi_month_name: 'شهریور', label: 'شهریور 1405',
+    assignment: 76, pip: 38, delivered: 24, in_progress: true,
+  }),
 ]
+
+const context = (over = {}) => {
+  const { planning: p, current_month: c, ...rest } = over
+  return {
+    shamsi_year: 1405,
+    shamsi_month: 7,
+    shamsi_month_name: 'مهر',
+    plan: null,
+    previous_month_committed: 30,
+    open_assignments: 12,
+    deadline_shamsi: '1405/07/03',
+    deadline_gregorian: '2026-09-25',
+    deadline_passed: false,
+    planning: planning(p),
+    current_month: month(c),
+    history: HISTORY_POINTS,
+    ...rest,
+  }
+}
 
 const queueRow = (over = {}) => ({
   contractor_id: 1,
@@ -130,7 +159,6 @@ const SCORECARD = {
 function serve({ my, queue: q, scorecard = SCORECARD }) {
   api.get.mockImplementation((url) => {
     if (url === '/pip/my') return Promise.resolve({ data: my })
-    if (url === '/pip/my/history') return Promise.resolve({ data: HISTORY })
     if (url === '/pip/queue') return Promise.resolve({ data: q })
     if (url === '/pip/scorecard') return Promise.resolve({ data: scorecard })
     return Promise.reject(new Error(`unexpected GET ${url}`))
@@ -145,13 +173,20 @@ beforeEach(() => {
 })
 
 // ----------------------------------------------------------------- the form
-describe('a contractor filling in the month', () => {
-  it('offers the number and hands it in', async () => {
+//
+// The contractor's screen is one card read top to bottom: what the PM said,
+// the number being filed, where the running month stands, and the six months
+// behind it. What these tests hold up is that order, the three words the
+// figures are called by, and the two buttons that are no longer there.
+describe('a contractor filing next month', () => {
+  it('names the month being planned and hands the number in', async () => {
     signedInAs('Contractor')
     serve({ my: context() })
     show()
 
-    const input = await screen.findByLabelText(/drive tests committed/i)
+    expect(await screen.findByText('Planning مهر 1405')).toBeInTheDocument()
+
+    const input = await screen.findByLabelText(/your مهر PIP/i)
     await userEvent.type(input, '42')
     await userEvent.click(screen.getByRole('button', { name: 'Submit' }))
 
@@ -163,100 +198,197 @@ describe('a contractor filling in the month', () => {
     )
   })
 
-  it('saves a draft without submitting it', async () => {
+  it('offers no draft to save and no revision to open', async () => {
     signedInAs('Contractor')
     serve({ my: context() })
     show()
 
-    await userEvent.type(await screen.findByLabelText(/drive tests committed/i), '15')
-    await userEvent.click(screen.getByRole('button', { name: 'Save draft' }))
-
-    await waitFor(() =>
-      expect(api.post).toHaveBeenCalledWith(
-        '/pip/my',
-        expect.objectContaining({ committed_count: 15, submit: false }),
-      ),
-    )
+    await screen.findByRole('button', { name: 'Submit' })
+    // The endpoints behind both are gone; offering either would be a button
+    // whose only outcome is an error.
+    expect(screen.queryByRole('button', { name: /save draft/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /revise/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /open revision/i })).not.toBeInTheDocument()
   })
 
-  it('shows the context the number is decided against', async () => {
+  it('shows the version, the deadline and how long is left beside the field', async () => {
     signedInAs('Contractor')
     serve({ my: context() })
     show()
 
-    // Scoped to the tile each number belongs to: the same figures appear in
-    // the history table underneath, and a bare getByText('30') would pass on
-    // the wrong one.
-    const tile = (label) => screen.getByText(label).closest('.stat')
-    await screen.findByText(/last month, approved/i)
-    expect(within(tile(/last month, approved/i)).getByText('30')).toBeInTheDocument()
-    expect(within(tile(/sites you hold now/i)).getByText('12')).toBeInTheDocument()
-    expect(within(tile(/^due$/i)).getByText('1405/06/03')).toBeInTheDocument()
+    const meta = (await screen.findByText(/1405\/07\/03/)).closest('.pip-meta')
+    expect(meta).toHaveTextContent('Version 1')
+    expect(meta).toHaveTextContent('6 days left')
   })
 
-  it('puts the PM comment in front of them when the plan came back', async () => {
+  it('says how late it is once the deadline is behind them', async () => {
+    signedInAs('Contractor')
+    serve({ my: context({ planning: { days_remaining: -4, deadline_passed: true } }) })
+    show()
+
+    expect(await screen.findByText('4 days late')).toBeInTheDocument()
+  })
+
+  it('puts the PM comment, and their name, in front of the field that answers it', async () => {
     signedInAs('Contractor')
     serve({
       my: context({
-        plan: plan({ status: 'Returned', return_comment: 'Too low against your 30 open sites.' }),
+        planning: {
+          status: 'Returned',
+          return_comment: 'You delivered 22 in مرداد against a PIP of 50. Resubmit closer to 30.',
+          returned_by: 'Ali Karimi',
+        },
       }),
     })
     show()
 
-    expect(await screen.findByText(/the pm sent this back/i)).toBeInTheDocument()
-    expect(screen.getByText('Too low against your 30 open sites.')).toBeInTheDocument()
+    const note = (await screen.findByText(/Ali Karimi, PM/)).closest('.pip-note')
+    expect(within(note).getByText(/Resubmit closer to 30/)).toBeInTheDocument()
     // And the way to answer it, labelled as the answer it is.
     expect(screen.getByRole('button', { name: 'Resubmit' })).toBeInTheDocument()
   })
 
-  it('locks an approved plan and offers a revision instead', async () => {
+  it('renders the PM comment as text and never as markup', async () => {
     signedInAs('Contractor')
-    serve({ my: context({ plan: plan({ status: 'Approved', committed_count: 40 }) }) })
+    serve({
+      my: context({
+        planning: {
+          status: 'Returned',
+          return_comment: '<img src=x onerror="alert(1)">too low',
+          returned_by: 'Ali Karimi',
+        },
+      }),
+    })
     show()
 
-    const card = (await screen.findByText('YOUR COMMITMENT')).closest('.card')
-    expect(within(card).getByText('Approved')).toBeInTheDocument()
-    expect(within(card).getByText('40')).toBeInTheDocument()
-    expect(within(card).getByText(/locked/i)).toBeInTheDocument()
-    // No way to edit the number that is somebody's target.
+    const note = (await screen.findByText(/Ali Karimi, PM/)).closest('.pip-note')
+    expect(note.querySelector('img')).toBeNull()
+    expect(note).toHaveTextContent('<img src=x onerror="alert(1)">too low')
+  })
+
+  it('locks a plan the PM has already approved', async () => {
+    signedInAs('Contractor')
+    serve({
+      my: context({ planning: { status: 'Approved', committed_count: 40 } }),
+    })
+    show()
+
+    expect(await screen.findByText(/this is your target for the month/i)).toBeInTheDocument()
+    expect(document.querySelector('.pip-locked')).toHaveTextContent('40')
     expect(screen.queryByRole('spinbutton')).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Submit' })).not.toBeInTheDocument()
-
-    await userEvent.click(screen.getByRole('button', { name: 'Revise' }))
-    const input = screen.getByLabelText(/drive tests committed/i)
-    expect(input).toHaveValue(40)
-
-    await userEvent.clear(input)
-    await userEvent.type(input, '45')
-    await userEvent.click(screen.getByRole('button', { name: 'Open revision' }))
-
-    await waitFor(() =>
-      expect(api.post).toHaveBeenCalledWith(
-        '/pip/my/revise',
-        expect.objectContaining({ committed_count: 45 }),
-      ),
-    )
+    expect(screen.queryByRole('button', { name: /submit|revise/i })).not.toBeInTheDocument()
   })
 
   it('holds a submitted plan read-only while the PM has it', async () => {
     signedInAs('Contractor')
-    serve({ my: context({ plan: plan({ status: 'Submitted' }) }) })
+    serve({ my: context({ planning: { status: 'Submitted', committed_count: 40 } }) })
     show()
 
     expect(await screen.findByText(/waiting on the pm/i)).toBeInTheDocument()
     expect(screen.queryByRole('spinbutton')).not.toBeInTheDocument()
   })
 
-  it('shows their own months, and only an approved figure as a commitment', async () => {
+  // ------------------------------------------------- where the month stands
+  it('shows the three figures, with the split behind the assignment', async () => {
     signedInAs('Contractor')
     serve({ my: context() })
     show()
 
-    // Scoped to the history card. The scorecard above it names months too,
-    // so an unscoped query now matches both and would pass on either.
-    const history = (await screen.findByText(/your last 6 months/i)).closest('.card')
-    expect(within(history).getByText(/مرداد 1405/)).toBeInTheDocument()
-    expect(within(history).getByText('30')).toBeInTheDocument()
+    await screen.findByText(/شهریور 1405 — where you stand/)
+    const card = (label) => screen.getByText(label).closest('.stat')
+    expect(within(card('Assignment')).getByText('76')).toBeInTheDocument()
+    expect(within(card('Assignment')).getByText('52 carried in + 24 new')).toBeInTheDocument()
+    expect(within(card('PIP')).getByText('38')).toBeInTheDocument()
+    expect(within(card('Delivered')).getByText('24')).toBeInTheDocument()
+  })
+
+  it('measures delivery against the calendar, in drive tests', async () => {
+    signedInAs('Contractor')
+    serve({ my: context() })
+    show()
+
+    // 24 of 38 is 63%; the calendar is 81% through, which is 31 of them.
+    const standing = (await screen.findByText(/delivered against pip/i)).closest('.pip-standtop')
+    expect(standing).toHaveTextContent('24 of 38 · 63%')
+    expect(screen.getByText(/Marker at 81%/)).toBeInTheDocument()
+    expect(screen.getByText(/7 drive tests behind that pace/)).toBeInTheDocument()
+    expect(screen.getByTestId('pip-pace')).toHaveStyle({ left: '81%' })
+  })
+
+  it('shows a dash rather than a zero when no PIP was approved', async () => {
+    signedInAs('Contractor')
+    serve({ my: context({ current_month: { pip: null } }) })
+    show()
+
+    const card = (await screen.findByText('PIP')).closest('.stat')
+    expect(within(card).getByText('—')).toBeInTheDocument()
+    // Nothing to measure against, so nothing is measured — and no bar.
+    expect(screen.getByText(/nothing to measure this month/i)).toBeInTheDocument()
+    expect(screen.queryByTestId('pip-pace')).not.toBeInTheDocument()
+  })
+
+  it('drops the pace marker once the month is over', async () => {
+    signedInAs('Contractor')
+    serve({ my: context({ current_month: { pace_pct: 100, delivered: 38 } }) })
+    show()
+
+    await screen.findByText(/the month is over/i)
+    expect(screen.queryByTestId('pip-pace')).not.toBeInTheDocument()
+  })
+
+  it('survives a month with no assignment at all', async () => {
+    signedInAs('Contractor')
+    serve({
+      my: context({
+        current_month: { assignment: 0, carried_in: 0, newly_assigned: 0, delivered: 0, pip: null },
+      }),
+    })
+    show()
+
+    const card = (await screen.findByText('Assignment')).closest('.stat')
+    expect(within(card).getByText('0')).toBeInTheDocument()
+  })
+
+  // -------------------------------------------------------------- the chart
+  it('draws a month for every one that came back, and no more', async () => {
+    signedInAs('Contractor')
+    serve({ my: context() })
+    show()
+
+    const chart = await screen.findByRole('img', { name: /delivered against the approved PIP/i })
+    // Three months of history, not six: a programme younger than the window
+    // draws what happened, not blanks where it did not.
+    expect(chart.querySelectorAll('.pip-band')).toHaveLength(3)
+    expect(chart.querySelectorAll('.pip-target')).toHaveLength(3)
+    expect(chart).toHaveAccessibleName(/تیر 1405: 38 delivered, 84% of 45/)
+    expect(chart).toHaveAccessibleName(/شهریور 1405: 24 delivered, 63% of 38, still running/)
+  })
+
+  it('draws no target and no percentage for a month with no PIP', async () => {
+    signedInAs('Contractor')
+    serve({
+      my: context({
+        history: [point({ pip: null, delivered: 4 }), point({ shamsi_month: 6, in_progress: true })],
+      }),
+    })
+    show()
+
+    const chart = await screen.findByRole('img', { name: /delivered against the approved PIP/i })
+    expect(chart.querySelectorAll('.pip-target')).toHaveLength(1)
+    expect(within(chart).getByText('—')).toBeInTheDocument()
+  })
+
+  // ---------------------------------------------------------- what is gone
+  it('shows neither the scorecard ledger nor a table of past months', async () => {
+    signedInAs('Contractor')
+    serve({ my: context() })
+    show()
+
+    await screen.findByText('Planning مهر 1405')
+    // The three cards and the chart say what both of them said.
+    expect(document.querySelector('table')).toBeNull()
+    expect(api.get).not.toHaveBeenCalledWith('/pip/scorecard', expect.anything())
+    expect(api.get).not.toHaveBeenCalledWith('/pip/my/history', expect.anything())
   })
 
   it('says so rather than showing an empty form when the server refuses', async () => {

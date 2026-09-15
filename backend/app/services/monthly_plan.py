@@ -246,6 +246,132 @@ def history(
     return out
 
 
+# ---------------------------------------------------------------------------
+# The three figures the contractor's screen is built on
+#
+# Assignment, PIP and Delivered mean one thing on every screen in the
+# platform, and they mean it because they come from one place:
+# ``DriveTestAnalytics.scorecard``, which is also what the Drive Test
+# dashboard reads. Nothing here recomputes them. If the screen and the
+# dashboard could disagree about a month, eventually they would, and the
+# argument that followed would be about which one to believe rather than
+# about the work.
+#
+# The vocabulary, once, so the rest of this section can use it plainly:
+#
+#   Assignment -- the sites the contractor holds in that month: carried in
+#                 from earlier months plus newly assigned during it. A stock,
+#                 not a flow, which is why two months' assignment cannot be
+#                 added together.
+#   PIP        -- the count the PM approved for that month. None, never 0,
+#                 when nothing was approved: a contractor with no approved
+#                 plan has not committed to nothing, they have not committed.
+#   Delivered  -- drive tests completed in that month.
+# ---------------------------------------------------------------------------
+
+#: How many months the contractor's screen shows behind them, the running one
+#: included. Six is what fits across the chart without the bars going thin.
+MONTHS_ON_SCREEN = 6
+
+
+def month_label(year: int, month: int) -> str:
+    """"مرداد 1405" — a Shamsi period as a person reads it.
+
+    Built here rather than in the browser so the month names have one source,
+    the same reason ``shamsi_month_name`` is already on every response.
+    """
+    return f"{jalali.month_name(month)} {year}"
+
+
+def days_remaining(year: int, month: int, today: date | None = None) -> int:
+    """Days between today and this month's deadline. Negative once it is past.
+
+    Signed rather than clamped at zero: "3 days late" and "on the day" are
+    different things to be told, and a screen that only ever sees 0 cannot
+    tell them apart. Computed here because the arithmetic needs the length of
+    a Shamsi month, and that knowledge lives on the server.
+    """
+    return (deadline_for(year, month) - (today or date.today())).days
+
+
+def pace_percent(year: int, month: int, today: date | None = None) -> float:
+    """How far through that Shamsi month we are, as a percentage.
+
+    Display only. Nothing decides anything from it: a contractor who does a
+    month's work in its first week is not behind on day three, and this figure
+    would say they were. It is on the screen as a marker against which the
+    reader can place themselves, and for no other purpose.
+
+    Clamped to 0..100 so a month that is not the running one — which nothing
+    currently asks for, but which is one caller away — reads as finished
+    rather than as 340%.
+    """
+    reference = today or date.today()
+    ref_year, ref_month, ref_day = jalali.to_shamsi_date(reference)
+    if (ref_year, ref_month) > (year, month):
+        return 100.0
+    if (ref_year, ref_month) < (year, month):
+        return 0.0
+    return round(min(100.0, ref_day / jalali.days_in_month(year, month) * 100), 1)
+
+
+def recent_months(
+    db: Session, user: User, contractor_id: int, months: int = MONTHS_ON_SCREEN
+) -> list[dict]:
+    """This contractor's last *months* Shamsi periods, oldest first.
+
+    Each entry carries the three figures and nothing else: no percentages,
+    because a percentage is a way of drawing two numbers that are already
+    here, and computing it twice — once for the screen and once for the export
+    — is how the two come to disagree.
+
+    One scorecard call for the whole window rather than one per month: the
+    service loops the periods inside the work items, so a sixth month costs a
+    comparison and not a scan.
+
+    The caller is a contractor account, so the scorecard has already narrowed
+    itself to their company on the way in; picking their row out below is
+    finding the row, not filtering the response.
+    """
+    from app.services.drive_test_analytics import DriveTestAnalytics
+
+    months = max(1, min(months, MAX_HISTORY_MONTHS))
+    year, month = jalali.current_shamsi_period()
+    periods: list[tuple[int, int]] = []
+    for _ in range(months):
+        periods.append((year, month))
+        year, month = jalali.previous_period(year, month)
+    periods.reverse()
+
+    data = DriveTestAnalytics(db, user).scorecard(periods)
+    out = []
+    for index, entry in enumerate(data["months"]):
+        row = next(
+            (r for r in entry["rows"] if r["contractor_id"] == contractor_id), None
+        )
+        out.append(
+            {
+                "shamsi_year": entry["shamsi_year"],
+                "shamsi_month": entry["shamsi_month"],
+                "shamsi_month_name": entry["shamsi_month_name"],
+                "label": month_label(entry["shamsi_year"], entry["shamsi_month"]),
+                # A contractor who held nothing that month has no row at all,
+                # which is a real answer and not a missing one: they were
+                # assigned nothing and delivered nothing. ``pip`` stays None
+                # through it, because not committing is still not committing.
+                "assignment": row["available"] if row else 0,
+                "carried_in": row["carried_in"] if row else 0,
+                "newly_assigned": row["newly_assigned"] if row else 0,
+                "pip": row["pip"] if row else None,
+                "delivered": row["delivered"] if row else 0,
+                # The window always ends with the month now running, so the
+                # last entry is the one still being worked on.
+                "in_progress": index == len(data["months"]) - 1,
+            }
+        )
+    return out
+
+
 def all_versions(
     db: Session, contractor_id: int, year: int, month: int
 ) -> list[ContractorMonthlyPlan]:

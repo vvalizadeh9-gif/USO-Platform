@@ -1,10 +1,11 @@
 import { motion } from 'framer-motion'
-import { AlertCircle, CalendarClock, ClipboardList, Lock } from 'lucide-react'
+import { AlertCircle } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import api from '../../api/client'
 import { EmptyState, Loading, StatusPill, fadeUp, stagger } from '../../components/ui'
 import { useToast } from '../../context/ToastContext'
-import { periodLabel } from '../../lib/shamsi'
+import { sharePercent } from './figures'
+import SixMonthChart, { ChartLegend } from './SixMonthChart'
 
 // What the server accepts (services/monthly_plan.MAX_COMMITTED_COUNT). Checked
 // here so a typo is refused where it was typed, not after a round trip; the
@@ -14,20 +15,88 @@ const MAX_COMMITTED = 10000
 // The two states the contractor still owns. Anything else -- Submitted, which
 // the PM is holding, or Approved, which is a target -- is read-only, and the
 // server refuses an edit to either.
-const EDITABLE = ['Draft', 'Returned']
+const EDITABLE = ['Draft', 'Returned', 'Reopened']
 
-const HISTORY_MONTHS = 6
+// The states in which the PM's comment is the first thing to read, rather than
+// something that happened earlier. 'Reopened' is here for the state the PM's
+// own screen creates; a server that does not produce it simply never matches.
+const ANSWERING = ['Returned', 'Reopened']
 
-/** One piece of context beside the number: what it is, and what it is. */
-function Fact({ icon: Icon, label, value, sub, tone }) {
+/** A dash, not a zero: nothing approved is not the same as approved nothing. */
+function figure(value) {
+  return value == null ? '—' : value
+}
+
+/** One of the three figures, with its own name on it. */
+function Card({ label, value, sub, highlight }) {
   return (
-    <div className="stat">
-      <div className="label">
-        <Icon size={14} strokeWidth={2} />
-        {label}
-      </div>
-      <div className="value tnum" style={tone ? { color: tone } : undefined}>{value}</div>
+    <div className={`stat${highlight ? ' pip-stat-hl' : ''}`}>
+      <div className="label">{label}</div>
+      <div className="value tnum">{figure(value)}</div>
       {sub && <div className="sub">{sub}</div>}
+    </div>
+  )
+}
+
+/**
+ * Delivered against PIP for the month now running, with the calendar on it.
+ *
+ * The marker is where delivery would be if it tracked the days, and the line
+ * underneath says how far off that the contractor is in drive tests rather
+ * than in percentage points — "seven behind" is a number of days' work, and
+ * "eighteen points behind" is not a number of anything.
+ *
+ * Pace decides nothing. A contractor who does the month's work in its first
+ * week is not behind on day three, and nothing here treats them as though
+ * they were.
+ */
+function Standing({ month }) {
+  const { pip, delivered, pace_pct: pace, label } = month
+  if (pip == null) {
+    return (
+      <p className="muted pip-pacelbl">
+        No PIP has been approved for {label}, so there is nothing to measure
+        this month's drive tests against yet.
+      </p>
+    )
+  }
+
+  const percent = sharePercent(delivered, pip)
+  const expected = Math.round((pip * pace) / 100)
+  const gap = delivered - expected
+  // A month whose days are done has no pace left to be ahead of.
+  const running = pace < 100
+
+  return (
+    <div className="pip-standing">
+      <div className="pip-standtop">
+        <span>Delivered against PIP</span>
+        <span>
+          <b className="tnum">{delivered}</b> of {pip}
+          {percent == null ? '' : ` · ${percent}%`}
+        </span>
+      </div>
+      <div className="pip-trackwrap">
+        <div className="pip-track">
+          {/* Capped at the track's width so a month that passed its target
+              draws full rather than past the end of the card; the figures
+              above say by how much. */}
+          <i style={{ width: `${Math.min(100, percent ?? 0)}%` }} />
+        </div>
+        {running && (
+          <span className="pip-pace" style={{ left: `${pace}%` }} data-testid="pip-pace" />
+        )}
+      </div>
+      <p className="pip-pacelbl">
+        {running
+          ? `Marker at ${Math.round(pace)}% — where you would be if delivery tracked the calendar. `
+          : 'The month is over. '}
+        {gap === 0
+          ? running ? 'You are exactly on that pace.' : 'You finished level with the calendar.'
+          : `You are ${Math.abs(gap)} drive test${Math.abs(gap) === 1 ? '' : 's'} ${
+              gap > 0 ? 'ahead of' : 'behind'
+            } that pace.`}
+      </p>
     </div>
   )
 }
@@ -35,17 +104,22 @@ function Fact({ icon: Icon, label, value, sub, tone }) {
 /**
  * The contractor's own side of the monthly plan.
  *
- * One number for the month, and beside it the three things anybody deciding
- * that number actually looks at: what they committed last month, how much
- * work they are already carrying, and how long they have left. All of it
- * arrives in one response (GET /pip/my), because it is all one form.
+ * One screen, in the order the person using it reads: what the PM said if they
+ * said anything, the number being filed, where the month now running stands,
+ * and the six months behind it. Everything arrives in one response
+ * (GET /pip/my), because it is all one screen — and every figure on it comes
+ * from the same service the Drive Test dashboard reads, so this page and that
+ * one cannot report different numbers for the same month.
+ *
+ * Three words carry the whole screen, and they mean the same here as
+ * everywhere else on the platform. **Assignment** is the sites held in the
+ * month, carried in plus newly assigned. **PIP** is what the PM approved.
+ * **Delivered** is drive tests done.
  */
 export default function ContractorPlan({ period }) {
   const toast = useToast()
   const [context, setContext] = useState(null)
-  const [history, setHistory] = useState(null)
   const [count, setCount] = useState('')
-  const [revising, setRevising] = useState(false)
   const [busy, setBusy] = useState(false)
   const [denied, setDenied] = useState(false)
 
@@ -58,13 +132,14 @@ export default function ContractorPlan({ period }) {
       .then((r) => {
         setContext(r.data)
         // The input follows the server's number on every load, including
-        // after a save: the value on screen should be the value on record,
+        // after a submit: the value on screen should be the value on record,
         // and a half-typed one that survived a successful submit would read
         // as the one that was submitted.
         setCount(
-          r.data.plan?.committed_count == null ? '' : String(r.data.plan.committed_count),
+          r.data.planning?.committed_count == null
+            ? ''
+            : String(r.data.planning.committed_count),
         )
-        setRevising(false)
       })
       .catch((err) => {
         // A staff account reaching this screen, which the route guard should
@@ -78,13 +153,6 @@ export default function ContractorPlan({ period }) {
 
   useEffect(load, [load])
 
-  useEffect(() => {
-    api
-      .get('/pip/my/history', { params: { months: HISTORY_MONTHS } })
-      .then((r) => setHistory(r.data))
-      .catch(() => setHistory([]))
-  }, [year, month])
-
   if (denied) {
     return (
       <EmptyState
@@ -95,10 +163,11 @@ export default function ContractorPlan({ period }) {
   }
   if (!context) return <Loading label="Loading your plan" />
 
-  const plan = context.plan
-  const status = plan?.status || null
-  const editable = !plan || EDITABLE.includes(status)
-  const approved = status === 'Approved'
+  const planning = context.planning
+  const running = context.current_month
+  const status = planning.status
+  const editable = status == null || EDITABLE.includes(status)
+  const answering = ANSWERING.includes(status)
 
   /** The typed number, or null for "nothing typed", or undefined if it is not one. */
   function parsed() {
@@ -109,250 +178,137 @@ export default function ContractorPlan({ period }) {
     return value > MAX_COMMITTED ? undefined : value
   }
 
-  async function save(submit) {
+  async function submit() {
     const value = parsed()
     if (value === undefined) {
       toast.error('That is not a number of drive tests', `A whole number between 0 and ${MAX_COMMITTED}.`)
       return
     }
-    if (submit && value === null) {
+    if (value === null) {
       toast.error('Nothing to submit', 'Enter the number you are committing to for this month.')
       return
     }
     setBusy(true)
     try {
-      await api.post('/pip/my', { year, month, committed_count: value, submit })
-      toast.success(
-        submit ? 'Handed in' : 'Saved',
-        submit
-          ? `Your ${periodLabel(year, month)} plan is with the PM.`
-          : 'Kept as a draft. Nobody else sees it until you submit.',
-      )
+      await api.post('/pip/my', { year, month, committed_count: value, submit: true })
+      toast.success('Handed in', `Your ${planning.label} PIP is with the PM.`)
       load()
     } catch (err) {
-      toast.error('Could not save', err.response?.data?.detail || 'Please try again.')
+      toast.error('Could not submit', err.response?.data?.detail || 'Please try again.')
     } finally {
       setBusy(false)
     }
   }
 
-  async function revise() {
-    const value = parsed()
-    if (value === undefined || value === null) {
-      toast.error('Enter the new number', `A whole number between 0 and ${MAX_COMMITTED}.`)
-      return
-    }
-    setBusy(true)
-    try {
-      await api.post('/pip/my/revise', { year, month, committed_count: value })
-      toast.success(
-        'Revision opened',
-        'The approved figure stays on the record. Submit the new one when you are ready.',
-      )
-      load()
-    } catch (err) {
-      toast.error('Could not revise', err.response?.data?.detail || 'Please try again.')
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  const deadlineTone = context.deadline_passed ? 'var(--amber)' : undefined
+  const days = planning.days_remaining
+  const deadline = (
+    <>
+      due {planning.deadline_shamsi} ·{' '}
+      <span className={days < 0 ? 'pip-late' : undefined}>
+        {days < 0
+          ? `${Math.abs(days)} day${Math.abs(days) === 1 ? '' : 's'} late`
+          : days === 0
+            ? 'due today'
+            : `${days} day${days === 1 ? '' : 's'} left`}
+      </span>
+    </>
+  )
 
   return (
     <motion.div variants={stagger} initial="hidden" animate="show">
-      <motion.div variants={fadeUp} className="card card-pad" style={{ marginBottom: 16 }}>
-        <div className="row wrap between" style={{ marginBottom: 4 }}>
-          <div>
-            <div style={{ fontSize: 11, letterSpacing: '0.08em', color: 'var(--text-dim)', fontWeight: 600 }}>
-              YOUR COMMITMENT
-            </div>
-            <h2 className="text-data-lg" style={{ fontFamily: 'var(--font-display)', fontSize: 19, marginTop: 2 }}>
-              {context.shamsi_month_name} {context.shamsi_year}
-            </h2>
-          </div>
+      <motion.div variants={fadeUp} className="card card-pad">
+        <div className="row wrap between">
+          <h2 className="pip-title">Planning {planning.label}</h2>
           <div className="row" style={{ gap: 8 }}>
             <StatusPill status={status || 'Not started'} />
-            {plan?.version > 1 && <span className="pill pill-dim">Version {plan.version}</span>}
-            {plan?.is_late && <span className="pill pill-amber">Handed in late</span>}
+            {planning.is_late && <span className="pill pill-amber">Handed in late</span>}
           </div>
         </div>
 
-        {/* The PM's comment, where the person answering it is looking. Kept
-            after a resubmission too, quietly: it is what the new number is
-            answering, and the server keeps it for the same reason. */}
-        {plan?.return_comment && (
-          status === 'Returned' ? (
-            <div
-              className="form-banner"
-              style={{ background: 'var(--amber-dim)', color: 'var(--amber)', marginTop: 14, marginBottom: 0 }}
-              role="status"
-            >
-              <div className="row" style={{ gap: 8, alignItems: 'flex-start' }}>
-                <AlertCircle size={16} style={{ flexShrink: 0, marginTop: 1 }} />
-                <div>
-                  <b style={{ display: 'block' }}>The PM sent this back</b>
-                  <span style={{ fontWeight: 400, lineHeight: 1.5 }}>{plan.return_comment}</span>
-                </div>
+        {/* What the PM said, directly above the field that answers it. Rendered
+            as text and never as markup: the comment is typed by one user and
+            read by another. */}
+        {planning.return_comment && (
+          answering ? (
+            <div className="pip-note" role="status">
+              <div className="pip-note-who">
+                <AlertCircle size={14} />
+                {planning.returned_by
+                  ? `${planning.returned_by}, PM`
+                  : 'The PM sent this back'}
               </div>
+              <div className="pip-note-msg">{planning.return_comment}</div>
             </div>
           ) : (
-            <div className="dim" style={{ fontSize: 12.5, marginTop: 12 }}>
-              Returned earlier: “{plan.return_comment}”
+            <div className="dim mt-8" style={{ fontSize: 12.5 }}>
+              Returned earlier: “{planning.return_comment}”
             </div>
           )
         )}
 
-        <div
-          className="grid grid-kpi"
-          style={{ marginTop: 16 }}
-        >
-          <Fact
-            icon={ClipboardList}
-            label="Last month, approved"
-            value={context.previous_month_committed ?? '—'}
-            sub={
-              context.previous_month_committed == null
-                ? 'No approved plan last month'
-                : 'Most plans are this, adjusted'
-            }
-          />
-          <Fact
-            icon={ClipboardList}
-            label="Sites you hold now"
-            value={context.open_assignments}
-            sub="Assigned and not yet drive-test done"
-          />
-          <Fact
-            icon={CalendarClock}
-            label="Due"
-            value={context.deadline_shamsi}
-            sub={context.deadline_passed ? 'The deadline has passed — file anyway' : 'Day 3 of the month'}
-            tone={deadlineTone}
-          />
-        </div>
-
-        <div style={{ marginTop: 20, maxWidth: 460 }}>
-          {approved && !revising ? (
-            <>
-              <div className="field" style={{ marginBottom: 8 }}>
-                <label>Drive tests committed</label>
-                <div className="row" style={{ gap: 10 }}>
-                  <span
-                    className="tnum"
-                    style={{ fontFamily: 'var(--font-display)', fontSize: 34, fontWeight: 600 }}
-                  >
-                    {plan.committed_count}
-                  </span>
-                  <span className="pill pill-green"><Lock size={11} /> Locked</span>
-                </div>
-              </div>
-              <p className="muted" style={{ fontSize: 13, lineHeight: 1.5, marginBottom: 12 }}>
-                This is your target for the month. Revising keeps it on the record and
-                opens a new version beside it, as a draft.
-              </p>
-              <button className="btn" onClick={() => setRevising(true)}>Revise</button>
-            </>
-          ) : !editable && !revising ? (
-            /* Submitted: the number is with the PM, and the server refuses an
-               edit to it until they hand it back. */
-            <>
-              <div className="field" style={{ marginBottom: 8 }}>
-                <label>Drive tests committed</label>
-                <span
-                  className="tnum"
-                  style={{ fontFamily: 'var(--font-display)', fontSize: 34, fontWeight: 600 }}
-                >
-                  {plan.committed_count}
-                </span>
-              </div>
-              <p className="muted" style={{ fontSize: 13, lineHeight: 1.5 }}>
-                Waiting on the PM. Ask for it to be returned if the number needs to change.
-              </p>
-            </>
-          ) : (
-            <>
-              <label className="field" htmlFor="pip-count">
-                <span style={{ fontSize: 12.5, color: 'var(--text-muted)', fontWeight: 500 }}>
-                  Drive tests committed
-                </span>
-                <input
-                  id="pip-count"
-                  className="input"
-                  type="number"
-                  min="0"
-                  max={MAX_COMMITTED}
-                  step="1"
-                  inputMode="numeric"
-                  disabled={busy}
-                  placeholder="e.g. 40"
-                  value={count}
-                  onChange={(e) => setCount(e.target.value)}
-                />
-              </label>
-              <div className="row wrap" style={{ gap: 9 }}>
-                {revising ? (
-                  <>
-                    <button className="btn btn-primary" disabled={busy} onClick={revise}>
-                      Open revision
-                    </button>
-                    <button className="btn" disabled={busy} onClick={() => { setRevising(false); load() }}>
-                      Cancel
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <button className="btn" disabled={busy} onClick={() => save(false)}>
-                      Save draft
-                    </button>
-                    <button className="btn btn-primary" disabled={busy} onClick={() => save(true)}>
-                      {status === 'Returned' ? 'Resubmit' : 'Submit'}
-                    </button>
-                  </>
-                )}
-              </div>
-            </>
-          )}
-        </div>
-      </motion.div>
-
-      <motion.div variants={fadeUp} className="card">
-        <div className="row" style={{ padding: '15px 20px', borderBottom: '1px solid var(--border)' }}>
-          <b style={{ fontFamily: 'var(--font-display)', fontSize: 14.5 }}>
-            Your last {HISTORY_MONTHS} months
-          </b>
-        </div>
-        {history === null ? (
-          <Loading label="Loading history" />
+        {/* The entry row: the number, the one thing to do with it, and the
+            three facts about where it stands. */}
+        {editable ? (
+          <div className="pip-entry">
+            <label className="pip-entry-field" htmlFor="pip-count">
+              <span className="pip-lbl">Your {planning.shamsi_month_name} PIP</span>
+              <input
+                id="pip-count"
+                className="input pip-num tnum"
+                type="number"
+                min="0"
+                max={MAX_COMMITTED}
+                step="1"
+                inputMode="numeric"
+                disabled={busy}
+                placeholder="e.g. 40"
+                value={count}
+                onChange={(e) => setCount(e.target.value)}
+              />
+            </label>
+            <button className="btn btn-primary" disabled={busy} onClick={submit}>
+              {answering ? 'Resubmit' : 'Submit'}
+            </button>
+            <div className="pip-meta">
+              Version {planning.version || 1} · {deadline}
+            </div>
+          </div>
         ) : (
-          <div
-            className="table-wrap"
-            style={{ border: 'none', borderRadius: 0, boxShadow: 'none', overflowX: 'auto' }}
-          >
-            <table>
-              <thead>
-                <tr>
-                  <th>Month</th>
-                  <th style={{ textAlign: 'right' }}>Committed</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {history.map((row) => (
-                  <tr key={`${row.shamsi_year}-${row.shamsi_month}`}>
-                    <td className="text-data">{row.shamsi_month_name} {row.shamsi_year}</td>
-                    {/* Only an approved figure is a commitment. A number still
-                        being decided shows as a dash rather than as history. */}
-                    <td className="tnum" style={{ textAlign: 'right' }}>
-                      {row.committed_count ?? '—'}
-                    </td>
-                    <td><StatusPill status={row.status || 'Not submitted'} /></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="pip-entry">
+            <div className="pip-entry-field">
+              <span className="pip-lbl">Your {planning.shamsi_month_name} PIP</span>
+              <span className="pip-locked tnum">{figure(planning.committed_count)}</span>
+            </div>
+            <div className="pip-meta">
+              {status === 'Approved'
+                ? 'Approved — this is your target for the month.'
+                : 'Waiting on the PM. Ask for it to be returned if the number needs to change.'}
+              {' · '}Version {planning.version || 1}
+            </div>
           </div>
         )}
+
+        <div className="pip-sep">
+          <div className="pip-lbl">{running.label} — where you stand</div>
+          <div className="pip-trio">
+            <Card
+              label="Assignment"
+              value={running.assignment}
+              sub={`${running.carried_in} carried in + ${running.newly_assigned} new`}
+            />
+            <Card label="PIP" value={running.pip} sub="Approved for this month" />
+            <Card label="Delivered" value={running.delivered} sub="Drive tests done" highlight />
+          </div>
+          <Standing month={running} />
+        </div>
+
+        <div className="pip-sep">
+          <div className="row wrap between">
+            <div className="pip-lbl">Last {context.history.length} months</div>
+            <ChartLegend />
+          </div>
+          <SixMonthChart months={context.history} />
+        </div>
       </motion.div>
     </motion.div>
   )

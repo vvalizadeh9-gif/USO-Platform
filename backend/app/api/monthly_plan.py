@@ -47,6 +47,9 @@ from app.schemas import (
     MonthlyPlanReturn,
     MonthlyPlanRevise,
     MonthlyPlanWrite,
+    MonthStanding,
+    PlanMonthPoint,
+    PlanningMonth,
     PlanRevision,
     PlanRevisionsOut,
     ScorecardOut,
@@ -114,6 +117,12 @@ def my_plan(
 ) -> MonthlyPlanContext:
     """This contractor's current plan for the month, plus the context to fill it in.
 
+    Three blocks, one request, because they are one screen: ``planning`` is
+    the month being filed for, ``current_month`` is where the running month
+    stands, and ``history`` is the six months behind it. The numeric ones come
+    from ``DriveTestAnalytics.scorecard``, which is what the Drive Test
+    dashboard reads, so neither screen can report a figure the other does not.
+
     Returns ``plan: null`` rather than a 404 when nothing has been started.
     Not having filed yet is the normal state on day one of the month, and it is
     the state the form most needs to render.
@@ -123,6 +132,14 @@ def my_plan(
 
     plan = plans.current_plan(db, contractor_id, year, month)
     deadline = plans.deadline_for(year, month)
+
+    # The six months behind the planning month, the running one last. One
+    # scorecard call answers both this and ``current_month`` below — the
+    # figures come from the service the Drive Test dashboard reads, so the two
+    # screens cannot disagree about a contractor's month.
+    months = plans.recent_months(db, user, contractor_id)
+    running = months[-1]
+
     return MonthlyPlanContext(
         shamsi_year=year,
         shamsi_month=month,
@@ -135,6 +152,45 @@ def my_plan(
         deadline_shamsi=jalali.format_shamsi(deadline),
         deadline_gregorian=deadline,
         deadline_passed=plans.deadline_has_passed(year, month),
+        planning=PlanningMonth(
+            shamsi_year=year,
+            shamsi_month=month,
+            shamsi_month_name=jalali.month_name(month),
+            label=plans.month_label(year, month),
+            version=plan.version if plan is not None else None,
+            status=plan.status if plan is not None else None,
+            committed_count=plan.committed_count if plan is not None else None,
+            return_comment=plan.return_comment if plan is not None else None,
+            returned_by=(
+                plans.decider_names(db, [plan]).get(plan.decided_by)
+                if plan is not None and plan.return_comment
+                else None
+            ),
+            deadline_shamsi=jalali.format_shamsi(deadline),
+            deadline_gregorian=deadline,
+            deadline_passed=plans.deadline_has_passed(year, month),
+            is_late=plans.is_late(plan) if plan is not None else False,
+            days_remaining=plans.days_remaining(year, month),
+        ),
+        current_month=MonthStanding(
+            **{k: v for k, v in running.items() if k != "in_progress"},
+            pace_pct=plans.pace_percent(
+                running["shamsi_year"], running["shamsi_month"]
+            ),
+        ),
+        history=[
+            PlanMonthPoint(
+                shamsi_year=point["shamsi_year"],
+                shamsi_month=point["shamsi_month"],
+                shamsi_month_name=point["shamsi_month_name"],
+                label=point["label"],
+                assignment=point["assignment"],
+                pip=point["pip"],
+                delivered=point["delivered"],
+                in_progress=point["in_progress"],
+            )
+            for point in months
+        ],
     )
 
 

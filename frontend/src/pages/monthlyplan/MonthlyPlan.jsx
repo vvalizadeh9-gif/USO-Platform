@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { EmptyState, PageHead } from '../../components/ui'
 import { useAuth } from '../../context/AuthContext'
 import { canDecidePlans } from '../../lib/roles'
-import { currentShamsiPeriod } from '../../lib/shamsi'
+import { currentShamsiPeriod, planningPeriod } from '../../lib/shamsi'
 import ContractorPlan from './ContractorPlan'
 import PeriodPicker from './PeriodPicker'
 import PlanQueue from './PlanQueue'
@@ -23,13 +23,16 @@ import Scorecard from './Scorecard'
  */
 export default function MonthlyPlan() {
   const { user } = useAuth()
-  // Opens on the current Shamsi month, which is the month somebody is filing
-  // for or chasing on almost every visit. Not stored anywhere: it is a
-  // default the picker can change, and the server converts every date that
-  // is kept.
-  const [period, setPeriod] = useState(currentShamsiPeriod)
-
   const isContractor = user?.role?.name === 'Contractor'
+  // The month each side opens on is the month it has business with, and they
+  // are not the same month. A contractor is filing for the month *after* this
+  // one -- opening their form on today's month opens it on the one they can no
+  // longer change. Everybody else is chasing the month now running. Neither is
+  // stored: it is a default the picker can change, and the server converts
+  // every date that is kept.
+  const [period, setPeriod] = useState(
+    isContractor ? planningPeriod : currentShamsiPeriod,
+  )
   const complete = Boolean(period?.year && period?.month)
 
   return (
@@ -39,7 +42,7 @@ export default function MonthlyPlan() {
         title="Monthly Plan"
         subtitle={
           isContractor
-            ? 'How many drive tests you commit to this month. The PM approves it, or sends it back with a comment.'
+            ? 'The drive tests you commit to for next month, and how the month now running is going. The PM approves the number, or sends it back with a comment.'
             : 'What each contractor has committed to this month, and who has not filed yet.'
         }
         actions={<PeriodPicker period={period} onChange={setPeriod} />}
@@ -47,14 +50,15 @@ export default function MonthlyPlan() {
 
       {/* The record first, then the month.
           A commitment is decided by looking at the last few months, so the
-          record is above the form rather than behind a tab: splitting them
-          would put the main input to this month's number one click away from
-          the field it goes in. The scorecard carries its own range, which is
-          why it is not driven by the picker above -- that picks the month
-          being filed for, and this is about the ones already filed. */}
-      <Scorecard canSeeAllContractors={!isContractor} />
+          record is above the form rather than behind a tab. It is no longer
+          shown to a contractor: the three cards and the six-month chart on
+          their own screen answer the same question about their own company, in
+          the same words, and an eleven-column ledger beside them was a second
+          answer to it. Everyone else still reads it, because for them it is
+          the one place every contractor's months sit side by side. */}
+      {!isContractor && <Scorecard canSeeAllContractors />}
 
-      <div className="mt-24">
+      <div className={isContractor ? undefined : 'mt-24'}>
         {complete ? (
           isContractor ? (
             <ContractorPlan period={period} />

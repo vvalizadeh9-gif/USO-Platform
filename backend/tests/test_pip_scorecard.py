@@ -518,3 +518,151 @@ def test_a_contractor_cannot_read_another_companys_revisions(client, actors):
     # confirm the other contractor exists.
     assert r.status_code == 200, r.text
     assert r.json()["contractor_id"] == actors["alfa_id"]
+
+
+# ---------------------------------------------------------------------------
+# 9. The contractor's own screen reads the same figures
+#
+# ``GET /pip/my`` carries what one screen needs: the month being filed for,
+# where the running month stands, and the six months behind it. The figures in
+# it are not computed a second time — they are the scorecard's, fetched for one
+# contractor — and these tests are what holds that true. If the screen and the
+# dashboard could disagree about a contractor's month, the argument that
+# followed would be about which one to believe.
+# ---------------------------------------------------------------------------
+def _mine(client, headers, year=None, month=None):
+    if year is None:
+        year, month = _shift(1)
+    r = client.get(PIP + "/my", headers=headers, params={"year": year, "month": month})
+    assert r.status_code == 200, r.text
+    return r.json()
+
+
+def test_my_payload_history_runs_oldest_first_ending_with_the_running_month(
+    client, actors
+):
+    body = _mine(client, actors["alfa"])
+    history = body["history"]
+    assert len(history) == 6
+
+    periods = [(h["shamsi_year"], h["shamsi_month"]) for h in history]
+    assert periods == sorted(periods), "history must arrive oldest first"
+    assert periods[-1] == (_YEAR, _MONTH)
+
+    # Exactly one month is still being worked on, and it is the last one.
+    assert [h["in_progress"] for h in history] == [False] * 5 + [True]
+
+
+def test_my_payload_assignment_matches_what_the_scorecard_reports(client, actors):
+    """The whole reason the payload calls the scorecard instead of querying."""
+    mine = _mine(client, actors["alfa"])
+    scorecard = _ask(client, actors["alfa"], months=6)
+
+    for point in mine["history"]:
+        row = _row(
+            _month(scorecard, point["shamsi_year"], point["shamsi_month"]),
+            "Alfa Drive Tests",
+        )
+        expected = row["available"] if row else 0
+        assert point["assignment"] == expected, point["label"]
+        assert point["delivered"] == (row["delivered"] if row else 0), point["label"]
+        assert point["pip"] == (row["pip"] if row else None), point["label"]
+
+    running = mine["current_month"]
+    row = _row(_month(scorecard, _YEAR, _MONTH), "Alfa Drive Tests")
+    assert running["assignment"] == (row["available"] if row else 0)
+    # And the split the screen shows underneath it adds up to it.
+    assert running["carried_in"] + running["newly_assigned"] == running["assignment"]
+
+
+def test_my_payload_reports_an_unapproved_month_as_null_not_zero(client, actors):
+    """A contractor with no approved plan has not committed to nothing."""
+    mine = _mine(client, actors["alfa"])
+    by_period = {(h["shamsi_year"], h["shamsi_month"]): h for h in mine["history"]}
+
+    # The seeded months were approved; the two most recent were never filed.
+    assert by_period[_seeded_month(0)]["pip"] == 2
+    assert by_period[(_YEAR, _MONTH)]["pip"] is None
+    assert mine["current_month"]["pip"] is None
+
+
+def _seeded_month(index):
+    return _shift(-4 + index)
+
+
+def test_my_payload_carries_the_planning_month_and_its_clock(client, actors):
+    year, month = _shift(1)
+    mine = _mine(client, actors["alfa"], year, month)
+    planning = mine["planning"]
+
+    assert (planning["shamsi_year"], planning["shamsi_month"]) == (year, month)
+    assert planning["label"] == f"{jalali.month_name(month)} {year}"
+    # Day 3 of a month that has not started yet is still ahead of us.
+    assert planning["days_remaining"] > 0
+    assert planning["deadline_passed"] is False
+    # Nothing filed for it yet, and that is not an error.
+    assert planning["status"] is None
+    assert planning["committed_count"] is None
+
+    # Pace is a share of the running month, so it is a percentage and nothing
+    # decides anything from it.
+    assert 0 <= mine["current_month"]["pace_pct"] <= 100
+
+
+def test_my_payload_names_only_the_contractor_asking(client, actors):
+    """No parameter names a company, and none can be smuggled in as one."""
+    alfa = _mine(client, actors["alfa"])
+    beta = _mine(client, actors["beta"])
+    assert "Beta Surveys" not in str(alfa)
+
+    year, month = _shift(1)
+    r = client.get(
+        PIP + "/my",
+        headers=actors["alfa"],
+        params={"year": year, "month": month, "contractor_id": actors["beta_id"]},
+    )
+    assert r.status_code == 200, r.text
+    # The extra parameter changes nothing: the contractor is read off the
+    # account, so the payload is Alfa's either way.
+    assert r.json()["history"] == alfa["history"]
+    assert beta["history"] != alfa["history"]
+
+
+def test_a_staff_account_has_no_my_payload_to_read(client, actors):
+    year, month = _shift(1)
+    r = client.get(
+        PIP + "/my", headers=actors["pm"], params={"year": year, "month": month}
+    )
+    assert r.status_code == 403, r.text
+
+
+def test_pip_and_delivered_agree_with_the_drive_test_dashboard(client, actors):
+    """The contractor's screen and the dashboard, on the same month.
+
+    Two of the three figures are the same computation reached by two routes,
+    and this is what says so. ``assignment`` is deliberately absent from this
+    comparison: the dashboard's ``assigned`` is a *flow* — what was handed over
+    during the month — and the screen's Assignment is a *stock*, what was held
+    during it. They are different quantities with different names, not one
+    quantity disagreeing with itself, and the screen shows the flow underneath
+    the stock as "+ N new" so both are on the page.
+    """
+    year, month = _shift(-2)
+    mine = _mine(client, actors["alfa"], *_shift(1))
+    point = next(
+        h
+        for h in mine["history"]
+        if (h["shamsi_year"], h["shamsi_month"]) == (year, month)
+    )
+
+    r = client.get(
+        "/api/v1/drive-test/plan-delivery",
+        headers=actors["alfa"],
+        params={"year": year, "month": month},
+    )
+    assert r.status_code == 200, r.text
+    dashboard = r.json()
+    row = next(x for x in dashboard["rows"] if x["contractor_id"] == actors["alfa_id"])
+
+    assert point["pip"] == row["pip"]
+    assert point["delivered"] == row["actual"]
