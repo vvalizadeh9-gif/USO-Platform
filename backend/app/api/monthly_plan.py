@@ -331,12 +331,24 @@ def queue(
     programme has committed to, and no contractor has any business reading it.
     """
     rows = _guard(lambda: plans.queue_rows(db, year, month))
+
+    # The month now running, for every contractor this caller may see. Same
+    # service the contractor's own screen reads, so a figure here and a figure
+    # there cannot disagree about the same company and month.
+    running = plans.running_month(db, user)
+    standing = running["rows"]
+
     return MonthlyPlanQueueOut(
         shamsi_year=year,
         shamsi_month=month,
         shamsi_month_name=jalali.month_name(month),
+        label=plans.month_label(year, month),
         deadline_shamsi=jalali.format_shamsi(plans.deadline_for(year, month)),
         deadline_passed=plans.deadline_has_passed(year, month),
+        days_remaining=plans.days_remaining(year, month),
+        current_month=MonthStanding(
+            **{k: v for k, v in running.items() if k != "rows"}
+        ),
         rows=[
             MonthlyPlanQueueRow(
                 contractor_id=contractor.id,
@@ -349,6 +361,12 @@ def queue(
                 submitted_at=plan.submitted_at if plan is not None else None,
                 is_late=plans.is_late(plan) if plan is not None else False,
                 return_comment=plan.return_comment if plan is not None else None,
+                # A contractor the running month never touched has no row in
+                # the scorecard, which is an answer and not a gap: they held
+                # nothing and delivered nothing.
+                assignment=standing.get(contractor.id, {}).get("available", 0),
+                pip=standing.get(contractor.id, {}).get("pip"),
+                delivered=standing.get(contractor.id, {}).get("delivered", 0),
             )
             for contractor, plan, previous in rows
         ],

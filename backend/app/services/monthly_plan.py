@@ -372,6 +372,40 @@ def recent_months(
     return out
 
 
+def running_month(db: Session, user: User) -> dict:
+    """The month now running, for every contractor the caller may see.
+
+    The PM's side of the same question the contractor's screen asks about
+    itself, and answered by the same service, so a figure on the queue and the
+    figure on that contractor's own screen cannot disagree.
+
+    Returns the month's totals with a ``rows`` mapping keyed by contractor id,
+    because the queue is driven by the contractor list and looks each one up
+    rather than iterating what the scorecard happened to return.
+    """
+    from app.services.drive_test_analytics import DriveTestAnalytics
+
+    year, month = jalali.current_shamsi_period()
+    data = DriveTestAnalytics(db, user).scorecard([(year, month)])
+    entry = data["months"][0]
+    return {
+        "shamsi_year": entry["shamsi_year"],
+        "shamsi_month": entry["shamsi_month"],
+        "shamsi_month_name": entry["shamsi_month_name"],
+        "label": month_label(entry["shamsi_year"], entry["shamsi_month"]),
+        "assignment": entry["available"],
+        "carried_in": entry["carried_in"],
+        "newly_assigned": entry["newly_assigned"],
+        # The programme's PIP is a sum of approved plans, so zero means nobody
+        # was approved rather than "approved for none" -- the same distinction
+        # the per-contractor figure makes, made once more at the top.
+        "pip": entry["pip"] or None,
+        "delivered": entry["delivered"],
+        "pace_pct": pace_percent(entry["shamsi_year"], entry["shamsi_month"]),
+        "rows": {r["contractor_id"]: r for r in entry["rows"]},
+    }
+
+
 def all_versions(
     db: Session, contractor_id: int, year: int, month: int
 ) -> list[ContractorMonthlyPlan]:
