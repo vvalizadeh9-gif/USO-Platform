@@ -18,8 +18,16 @@ import Section from './Section'
  * A contractor signed in here receives one row — their own — and an unnamed
  * programme average. That is enforced by the endpoint, not by this component,
  * which renders whatever rows it was given.
+ *
+ * THIS CARD IS NOT NARROWED BY THE PROVINCE SCOPE, and it says so when one is
+ * applied. A PIP is a commitment a contractor makes for a month; it carries
+ * no province, so there is no province figure to compare a province's
+ * delivery against. Narrowing the delivery half alone would produce an
+ * achievement rate with a numerator from one province and a denominator from
+ * thirty-one — a figure that looks like a measurement and is arithmetic
+ * nonsense. Saying so costs one line and is the only honest option.
  */
-export default function PlanDelivery({ state, onRetry }) {
+export default function PlanDelivery({ state, onRetry, provinceName }) {
   return (
     <Section
       title="Plan and delivery"
@@ -32,6 +40,22 @@ export default function PlanDelivery({ state, onRetry }) {
         const uncommitted = data.uncommitted_contractors
         return (
           <>
+            {/* Said out loud, because this is the one card on the page a
+                province filter does not reach, and a reader who has narrowed
+                everything else would otherwise read these as narrowed too.
+                It cannot be narrowed: a PIP is a commitment a contractor
+                makes for a month, with no province on it -- see
+                `ContractorMonthlyPlan`. Scoping the delivery side alone would
+                divide one province's actual by the whole programme's
+                commitment and call the result achievement, which is worse
+                than not narrowing at all. */}
+            {provinceName && (
+              <p className="dt-scope-note">
+                PIP is committed per contractor for the whole programme, not per
+                province, so these figures cover every province — not just{' '}
+                <span className="dt-farsi">{provinceName}</span>.
+              </p>
+            )}
             <div className="dt-figures">
               <Figure
                 icon={Target}
@@ -68,9 +92,9 @@ export default function PlanDelivery({ state, onRetry }) {
                 label="Achievement"
                 value={achievement(data.achievement_percent) ?? '—'}
                 color={bandColor(data.achievement_percent)}
-                // Null, not zero: there is no plan to have achieved a share
+                // Null, not zero: there is no PIP to have achieved a share
                 // of, and "0%" would report a failure that has not happened.
-                note={data.achievement_percent == null ? 'no approved plan' : null}
+                note={data.achievement_percent == null ? 'no approved PIP' : null}
                 emphasis
               />
             </div>
@@ -113,7 +137,7 @@ function Figure({ icon: Icon, label, value, color, note, emphasis, href }) {
 
 function ContractorAchievement({ rows, programme, year, month }) {
   if (!rows || rows.length === 0) {
-    return <div className="dt-empty">No contractor plans for this month.</div>
+    return <div className="dt-empty">No contractor PIP for this month.</div>
   }
   const scaleMax = planScale(rows)
 

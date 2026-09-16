@@ -275,16 +275,15 @@ export default function DriveTestProject() {
         }
       />
 
-      {/* The command bar sticks. Everything in it changes what the page
-          shows, and the page is long enough to scroll; a filter you have to
-          scroll back to the top to reach is a filter that gets used once. The
-          freshness clock has the same problem in reverse — it is only honest
-          while it is on screen. */}
+      {/* The command bar sticks. It carries the scope the page is showing and
+          the way out of it, and the page is long enough to scroll; a way out
+          you have to scroll back to the top to reach is one people give up
+          on and reload the page instead. The freshness clock has the same
+          problem in reverse — it is only honest while it is on screen. */}
       <div className="dt-command">
         <Toolbar
-          provinces={provinces}
-          provinceId={provinceId}
-          onProvince={setProvince}
+          provinceName={provinceName}
+          onClearProvince={() => setProvince(null)}
           onRefresh={refresh}
           refreshing={refreshing}
           generatedAt={data?.generated_at}
@@ -311,7 +310,7 @@ export default function DriveTestProject() {
           <KpiBand kpis={data.kpis} monthName={monthName} provinceId={provinceId} />
         ) : null}
 
-        <PlanDelivery state={plan} onRetry={refresh} />
+        <PlanDelivery state={plan} onRetry={refresh} provinceName={provinceName} />
 
         <div className="dt-pair">
           {has('ongoing_breakdown') && (

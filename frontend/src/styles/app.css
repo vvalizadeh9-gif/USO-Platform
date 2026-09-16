@@ -1331,19 +1331,25 @@ tbody tr:last-child td { border-bottom: none; }
   display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
 }
 .dt-toolbar-right { display: flex; align-items: center; gap: 8px; margin-left: auto; }
-.dt-filter {
+/* The scope the page is showing. A chip when it is narrowed, a word when it
+   is not -- so the row keeps its height either way and the toolbar does not
+   jump when a filter is applied or cleared. */
+.dt-scope { display: flex; align-items: center; min-height: 32px; }
+.dt-scope-all { font-size: 13px; color: var(--text-dim); }
+.dt-scope-chip {
   display: flex; align-items: center; gap: 8px;
   background: var(--surface-1);
   border: 1px solid var(--border);
   border-radius: 999px;
-  padding: 4px 6px 4px 13px;
-  color: var(--text-dim);
+  padding: 3px 5px 3px 13px;
+  font-size: 13.5px;
+  color: var(--text);
   box-shadow: var(--shadow-1);
 }
-.dt-select {
-  border: 0; background: transparent; font: inherit; font-size: 13.5px;
-  color: var(--text); padding: 4px 2px; outline: none; max-width: 190px;
-  font-family: var(--font-farsi);
+.dt-scope-chip svg { color: var(--text-dim); flex: none; }
+/* Why this card's figures did not narrow with the rest of the page. */
+.dt-scope-note {
+  margin: 0 0 14px; font-size: 12.5px; line-height: 1.5; color: var(--text-dim);
 }
 .dt-clear {
   display: grid; place-items: center;

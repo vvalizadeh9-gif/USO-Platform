@@ -3,17 +3,31 @@ import { useEffect, useState } from 'react'
 import { freshness } from './format'
 
 /**
- * Filter, refresh and export — the three things the old page could not do.
+ * Refresh, export, and the scope the page is currently showing.
  *
- * The freshness clock is not decoration. The page described itself as "live
- * on-air and drive-test status" while fetching once on mount, so a tab left
- * open all morning served breakfast's numbers under a claim of being current.
- * Either the claim goes or the clock does; the clock is more useful.
+ * THE PROVINCE PICKER IS GONE, and the province scope is not. They are two
+ * different things and only the first was worth removing.
+ *
+ * The picker was a filter offered before the reader had seen anything to
+ * filter — thirty-one names in a select, at the top of a page whose whole
+ * job is to tell you which province to look at. Nobody arrives knowing. The
+ * way people actually narrow this dashboard is from the province table, by
+ * the row they just read, and that button is still there.
+ *
+ * What replaces it is the chip below, which appears only when a province is
+ * applied. That is not decoration either: without it, narrowing from a table
+ * row would leave the reader in a scoped dashboard with no control anywhere
+ * on the page to leave it — a filter you can enter and not exit. The chip is
+ * the way out, and it says where you are on the way.
+ *
+ * The freshness clock stays. The page described itself as "live on-air and
+ * drive-test status" while fetching once on mount, so a tab left open all
+ * morning served breakfast's numbers under a claim of being current. Either
+ * the claim goes or the clock does; the clock is more useful.
  */
 export default function Toolbar({
-  provinces,
-  provinceId,
-  onProvince,
+  provinceName,
+  onClearProvince,
   onRefresh,
   refreshing,
   generatedAt,
@@ -21,37 +35,25 @@ export default function Toolbar({
   exporting,
 }) {
   const age = useTicking(generatedAt)
-  const selected = provinces?.find((p) => p.id === provinceId)
 
   return (
     <div className="dt-toolbar">
-      <div className="dt-filter">
-        <MapPin size={14} strokeWidth={2} aria-hidden="true" />
-        <label htmlFor="dt-province" className="dt-sr-only">
-          Narrow to one province
-        </label>
-        <select
-          id="dt-province"
-          className="dt-select"
-          value={provinceId ?? ''}
-          onChange={(e) => onProvince(e.target.value === '' ? null : Number(e.target.value))}
-        >
-          <option value="">All provinces</option>
-          {(provinces || []).map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.name}
-            </option>
-          ))}
-        </select>
-        {selected && (
-          <button
-            type="button"
-            className="dt-clear"
-            onClick={() => onProvince(null)}
-            aria-label="Clear the province filter"
-          >
-            <X size={13} aria-hidden="true" />
-          </button>
+      <div className="dt-scope">
+        {provinceName ? (
+          <span className="dt-scope-chip">
+            <MapPin size={13} strokeWidth={2} aria-hidden="true" />
+            <span className="dt-farsi">{provinceName}</span>
+            <button
+              type="button"
+              className="dt-clear"
+              onClick={onClearProvince}
+              aria-label={`Show every province again, not just ${provinceName}`}
+            >
+              <X size={13} aria-hidden="true" />
+            </button>
+          </span>
+        ) : (
+          <span className="dt-scope-all">All provinces</span>
         )}
       </div>
 
