@@ -1,6 +1,7 @@
 import { AlertTriangle, CircleDashed } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import api from '../../api/client'
+import { describeBlobError, filenameFrom, saveBlob } from '../../lib/download'
 import { PageHead } from '../../components/ui'
 import { useToast } from '../../context/ToastContext'
 import BreakdownCard from './BreakdownCard'
@@ -118,6 +119,9 @@ export default function DriveTestProject() {
    * The saved filename comes from the server where it sends one: the backend
    * already builds a dated, scope-named, ASCII-safe name, and inventing a
    * second one here is how the two come to disagree.
+   *
+   * Saving and failing are both `lib/download`'s job, because the site list
+   * does exactly this and had exactly the same two bugs.
    */
   async function exportWorkbook() {
     setExporting(true)
@@ -126,14 +130,18 @@ export default function DriveTestProject() {
         params: provinceId == null ? {} : { province_id: provinceId },
         responseType: 'blob',
       })
-      const url = URL.createObjectURL(res.data)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = filenameFrom(res.headers, provinceName)
-      a.click()
-      URL.revokeObjectURL(url)
-    } catch {
-      toast.error('Export failed', 'Could not generate the file. Please try again.')
+      saveBlob(
+        res.data,
+        filenameFrom(
+          res.headers,
+          provinceName ? `dt-delivery-${provinceName}.xlsx` : 'dt-delivery.xlsx',
+        ),
+      )
+    } catch (err) {
+      // What actually went wrong, not "try again". The body of a failed
+      // request made with `responseType: 'blob'` is a Blob, so the reason the
+      // server gave has to be read back out of it -- see `lib/download`.
+      toast.error('Export failed', await describeBlobError(err))
     } finally {
       setExporting(false)
     }
@@ -477,17 +485,4 @@ function KpiSkeleton() {
       </div>
     </div>
   )
-}
-
-/** The filename the server named the file, or a readable fallback.
- *
- * `content-disposition` is not always readable — a proxy can strip it, and a
- * cross-origin response without `Access-Control-Expose-Headers` hides it — so
- * this never depends on it being there.
- */
-function filenameFrom(headers, provinceName) {
-  const disposition = headers?.['content-disposition'] ?? ''
-  const match = /filename="([^"]+)"/.exec(disposition)
-  if (match) return match[1]
-  return provinceName ? `dt-delivery-${provinceName}.xlsx` : 'dt-delivery.xlsx'
 }

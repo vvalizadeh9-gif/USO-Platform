@@ -80,18 +80,41 @@ _FILTER_LABELS: list[tuple[str, str]] = [
 ]
 
 
-def _cell(value) -> object:
+#: The characters openpyxl refuses to write, stripped before they reach a cell.
+#:
+#: XML has no way to encode most C0 control characters, so openpyxl raises
+#: rather than emit a file Excel would reject -- and one such character
+#: anywhere in the data fails the whole export with a stack trace, not a bad
+#: cell. This matters here because much of what this file writes came out of a
+#: CPM workbook that came out of somebody else's system: site names and
+#: comments picked up stray control bytes on the way, and none of them are
+#: worth losing a spreadsheet over. Tab, newline and carriage return are
+#: legal and deliberately not touched.
+_ILLEGAL = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f]")
+
+
+def cell_value(value) -> object:
     """Render one value for a spreadsheet cell.
 
     Lists are joined rather than written as their Python repr, and a missing
     value is an empty cell rather than a zero -- a site with no open fix has
     not waited nought days.
+
+    Public because the DT delivery workbook writes these same rows and has to
+    render them the same way; a second copy of this is how one file comes to
+    disagree with the other about what an empty cell means.
     """
     if isinstance(value, (list, tuple)):
-        return ", ".join(str(v) for v in value)
+        value = ", ".join(str(v) for v in value)
     if value is None:
         return ""
+    if isinstance(value, str):
+        return _ILLEGAL.sub("", value)
     return value
+
+
+#: The old private name, kept because this module already reads it internally.
+_cell = cell_value
 
 
 def build_site_list_export(

@@ -308,10 +308,11 @@ def _sites_sheet(ws, rows: list[dict]) -> None:
 
     for r, row in enumerate(rows, start=2):
         for c, (_, key) in enumerate(columns, start=1):
-            value = row.get(key)
-            if isinstance(value, (list, tuple)):
-                value = ", ".join(str(v) for v in value)
-            cell = ws.cell(row=r, column=c, value=value if value is not None else "")
+            # Through the drill-through export's own renderer, so the two
+            # files agree on what an empty cell means -- and so the control
+            # characters CPM-imported text carries are stripped before they
+            # fail the whole workbook. See ``dt_site_export.cell_value``.
+            cell = ws.cell(row=r, column=c, value=dt_site_export.cell_value(row.get(key)))
             if key in _FARSI_KEYS:
                 cell.alignment = _RTL
 
@@ -350,8 +351,9 @@ def _fixes_sheet(ws, rows: list[dict]) -> None:
             "reroute": "Yes" if row.get("reroute_pending") else "No",
         }
         for c, (_, _, key) in enumerate(_FIX_COLUMNS, start=1):
-            value = values.get(key)
-            cell = ws.cell(row=r, column=c, value=value if value is not None else "")
+            cell = ws.cell(
+                row=r, column=c, value=dt_site_export.cell_value(values.get(key))
+            )
             if key == "province":
                 cell.alignment = _RTL
 
@@ -375,7 +377,9 @@ def _provinces_sheet(ws, rows: list[dict]) -> None:
     _header(ws, [h for h, _, _ in _PROVINCE_COLUMNS], [w for _, w, _ in _PROVINCE_COLUMNS])
     for r, row in enumerate(rows, start=2):
         for c, (_, _, key) in enumerate(_PROVINCE_COLUMNS, start=1):
-            cell = ws.cell(row=r, column=c, value=row.get(key))
+            cell = ws.cell(
+                row=r, column=c, value=dt_site_export.cell_value(row.get(key))
+            )
             if key == "name":
                 cell.alignment = _RTL
     ws.freeze_panes = "A2"

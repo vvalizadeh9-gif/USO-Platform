@@ -245,6 +245,7 @@ def world(client):
         "alfa": alfa.id, "beta": beta.id,
         "kerman": kerman.id, "yazd": yazd.id,
         "flagged": flagged.id, "owner_role": owner_role,
+        "kerman_site": k_site.id,
     }
     db.close()
 
@@ -452,6 +453,39 @@ def test_an_empty_scope_still_produces_every_sheet_and_header(client, world):
         assert wb[sheet].cell(row=1, column=1).value == first_header
         assert _rows(wb[sheet]) == []
     assert _summary(wb["Summary"])["On-air"] == 0
+
+
+def test_a_control_character_in_the_data_does_not_kill_the_export(client, world):
+    """One stray byte used to fail the whole file, not one cell.
+
+    XML cannot encode most C0 control characters, so openpyxl raises rather
+    than write a file Excel would refuse -- and the caller saw a 500 with no
+    hint that the cause was a single character in one site's name. Much of
+    what this workbook holds came out of a CPM workbook that came out of
+    somebody else's system, so those bytes turn up. They are stripped on the
+    way into the cell; the rest of the name survives.
+    """
+    from app.core.database import SessionLocal
+    from app.models.workitem import Site
+
+    db = SessionLocal()
+    site = db.get(Site, world["ids"]["kerman_site"])
+    original = site.site_code
+    site.site_code = f"{original}\x07BELL"
+    db.commit()
+    db.close()
+
+    try:
+        wb = _workbook(client, world["admin"])
+        codes = [c for c in _all_cells(wb) if isinstance(c, str) and "BELL" in c]
+        assert codes, "the row is still in the file"
+        assert all("\x07" not in c for c in codes), "the control byte is gone"
+        assert all(original in c for c in codes), "the rest of the name survived"
+    finally:
+        db = SessionLocal()
+        db.get(Site, world["ids"]["kerman_site"]).site_code = original
+        db.commit()
+        db.close()
 
 
 def test_numbers_are_stored_as_numbers(client, world):

@@ -91,16 +91,36 @@ function lastCall(url) {
   return [...api.get.mock.calls].reverse().find((call) => call[0] === url)
 }
 
-function serve(body = payload()) {
+/** The endpoints this screen reads.
+ *
+ * `exportFails` replaces the export's answer with a rejection, so a test can
+ * exercise the failure path without also having to restate every reference
+ * list the filter bar needs to render.
+ */
+function serve(body = payload(), { exportFails = null } = {}) {
   api.get.mockImplementation((url) => {
     if (url === '/drive-test/sites') return Promise.resolve({ data: body })
     if (url === '/reference/provinces') return Promise.resolve({ data: PROVINCES })
     if (url === '/reference/contractors') return Promise.resolve({ data: CONTRACTORS })
     if (url === '/reference/problem-categories') return Promise.resolve({ data: CATEGORIES })
-    if (url === '/drive-test/sites/export') return Promise.resolve({ data: new Blob(['x']) })
+    if (url === '/drive-test/sites/export') {
+      return exportFails
+        ? Promise.reject(exportFails)
+        : Promise.resolve({ data: new Blob(['x']) })
+    }
     return Promise.reject(new Error(`unexpected ${url}`))
   })
 }
+
+/** A failed export, shaped the way axios delivers one for a blob request. */
+const exportRejection = (status, detail) => ({
+  response: {
+    status,
+    data: new Blob([detail == null ? '' : JSON.stringify({ detail })], {
+      type: 'application/json',
+    }),
+  },
+})
 
 const STAFF = { id: 1, username: 'pm', role: { name: 'PM' } }
 const CONTRACTOR = { id: 2, username: 'alfa', role: { name: 'Contractor' }, contractor_id: 1 }
@@ -332,6 +352,39 @@ describe('the export', () => {
       province_id: '7',
     })
     expect(config.responseType).toBe('blob')
+  })
+
+  it('tells the reader why the export failed, not just that it did', async () => {
+    // `responseType: 'blob'` applies to the failure too, so the reason the
+    // server gave arrives as a Blob and every `data.detail` reads undefined.
+    // This used to render one sentence -- "Could not generate the file.
+    // Please try again." -- for a row-cap refusal, a timeout and a server
+    // fault alike, which tells the reader nothing and tells whoever they
+    // report it to even less.
+    serve(payload(), {
+      exportFails: exportRejection(400, 'The Sites sheet would hold 40000 rows'),
+    })
+    draw('/drive-test/sites?bucket=problematic')
+
+    await screen.findByText('K-0001')
+    await userEvent.click(screen.getByRole('button', { name: /Export this list/ }))
+
+    expect(await screen.findByText(/would hold 40000 rows/)).toBeInTheDocument()
+    expect(screen.getByText(/400/)).toBeInTheDocument()
+  })
+
+  it('names a missing endpoint rather than blaming the reader', async () => {
+    // The usual cause of a 404 here is a backend older than this page, which
+    // is nobody's fault and not fixed by trying again.
+    serve(payload(), { exportFails: exportRejection(404) })
+    draw('/drive-test/sites?bucket=problematic')
+
+    await screen.findByText('K-0001')
+    await userEvent.click(screen.getByRole('button', { name: /Export this list/ }))
+
+    expect(
+      await screen.findByText(/not available on the server this page is talking to/),
+    ).toBeInTheDocument()
   })
 })
 

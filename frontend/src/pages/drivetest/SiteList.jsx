@@ -2,6 +2,7 @@ import { Download, ExternalLink, X } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import api from '../../api/client'
+import { describeBlobError, filenameFrom, saveBlob } from '../../lib/download'
 import SiteHistoryDrawer, { SiteCodeButton } from '../../components/SiteHistoryDrawer'
 import { EmptyState, Loading, PageHead } from '../../components/ui'
 import { useAuth } from '../../context/AuthContext'
@@ -239,14 +240,11 @@ export default function SiteList() {
         params: query,
         responseType: 'blob',
       })
-      const url = URL.createObjectURL(res.data)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `drive-test-${bucket}.xlsx`
-      a.click()
-      URL.revokeObjectURL(url)
-    } catch {
-      toast.error('Export failed', 'Could not generate the file. Please try again.')
+      saveBlob(res.data, filenameFrom(res.headers, `drive-test-${bucket}.xlsx`))
+    } catch (err) {
+      // The reason the server gave, read back out of the blob the failure
+      // arrived as -- see `lib/download`.
+      toast.error('Export failed', await describeBlobError(err))
     } finally {
       setExporting(false)
     }
