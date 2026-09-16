@@ -1718,6 +1718,112 @@ tbody tr:hover .dt-row-filter { opacity: 1; }
 
 /* Two readings of the same figure, side by side. Also what keeps a five-row
    bar chart from stretching its marks across a 1280px page. */
+/* ---------- the workbench ----------
+   The page is a surface worked at, not a document read once. Every figure on
+   it links into the work queue, so the traffic is arrive → drill → come back →
+   re-filter, and that traffic is what these three rules serve: a command bar
+   that stays reachable, a rail that says where you are among the panels, and
+   a bench that pairs the panels read together.
+
+   Source order is the single source of truth. The rail is built from the same
+   list the panels are, and the grid below places in source order rather than
+   by named tracks, so nothing here can reorder the argument the page makes. */
+
+.dt-command {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  /* Bled to the gutters so the backdrop covers the full width of the content
+     column as panels scroll under it. Without the negative margin the panels
+     show through at the edges, which reads as a rendering fault. */
+  margin: 0 -14px 20px;
+  padding: 10px 14px 0;
+  background: var(--bg);
+  /* Not a hard edge: the bar carries no border of its own, so a panel sliding
+     under it fades rather than being clipped against a line. */
+  box-shadow: 0 10px 12px -10px rgba(20, 35, 60, 0.16);
+}
+.dt-command .dt-toolbar { margin-bottom: 10px; }
+
+.dt-workbench {
+  display: grid;
+  grid-template-columns: 186px minmax(0, 1fr);
+  gap: 34px;
+  align-items: start;
+}
+/* minmax(0, 1fr) above, not 1fr: the bench holds a horizontally scrolling
+   table, and a bare 1fr track floors at the table's min-content width, so the
+   whole grid grows wider than the viewport instead of the table scrolling. */
+
+.dt-bench { min-width: 0; }
+/* The first panel on the bench sets its own top rule against the command bar,
+   which already draws one. */
+.dt-bench > .dt-section:first-child { margin-top: 0; border-top: 0; padding-top: 0; }
+
+/* ---------- the bench rail ---------- */
+.dt-rail {
+  position: sticky;
+  /* Clears the command bar, which is sticky at 0 and about 56px tall. */
+  top: 74px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.dt-rail-cap {
+  font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--text-dim); font-weight: 600; padding-left: 11px;
+}
+.dt-rail ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 1px; }
+.dt-rail-link {
+  display: grid;
+  grid-template-columns: 2px 1fr auto;
+  align-items: center;
+  gap: 9px;
+  padding: 7px 9px 7px 0;
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  text-decoration: none;
+  font-size: 12.5px;
+  line-height: 1.3;
+  transition: color .15s, background .15s;
+}
+.dt-rail-link:hover { background: var(--surface-2); color: var(--text); }
+/* The tick is the position indicator: a 2px rule that fills in on the current
+   panel. It occupies its column whether or not it is lit, so nothing shifts
+   sideways as the reader scrolls from one panel to the next. */
+.dt-rail-tick {
+  align-self: stretch;
+  border-radius: 2px;
+  background: var(--border);
+  transition: background .18s;
+}
+.dt-rail-name { min-width: 0; }
+.dt-rail-figure {
+  font-family: var(--font-display); font-size: 12.5px; font-weight: 600;
+  color: var(--text-dim);
+}
+.dt-rail-current { color: var(--text); font-weight: 500; }
+.dt-rail-current .dt-rail-tick { background: var(--signal); }
+
+/* Anchor jumps land under the sticky command bar without this. */
+.dt-section[id] { scroll-margin-top: 84px; }
+
+/* Below the breakpoint the rail stops being a rail: there is no room beside
+   the bench for it, and a horizontal strip of jump links above three screens
+   of content is a second navigation to maintain for very little. The panels
+   are then simply read in order, as they were before. */
+@media (max-width: 1100px) {
+  .dt-workbench { grid-template-columns: minmax(0, 1fr); gap: 0; }
+  .dt-rail { display: none; }
+  .dt-bench > .dt-section:first-child { padding-top: 0; }
+}
+
+@media (max-width: 720px) {
+  /* A sticky bar that wraps to three rows on a phone eats half the viewport;
+     below this width it scrolls away with the page. */
+  .dt-command { position: static; margin: 0 0 20px; padding: 0; box-shadow: none; }
+}
+
 .dt-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; align-items: start; }
 .dt-pair > .dt-section:last-child { border-top-color: transparent; }
 .dt-pair .dt-bars, .dt-pair .dt-achievement { max-width: none; }

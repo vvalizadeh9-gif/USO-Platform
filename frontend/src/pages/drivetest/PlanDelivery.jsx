@@ -10,9 +10,10 @@ import Section from './Section'
  * programme average. That is enforced by the endpoint, not by this component,
  * which renders whatever rows it was given.
  */
-export default function PlanDelivery({ state, onRetry }) {
+export default function PlanDelivery({ state, onRetry, id }) {
   return (
     <Section
+      id={id}
       title="Plan and delivery"
       subtitle={state.data?.month_label}
       state={state}

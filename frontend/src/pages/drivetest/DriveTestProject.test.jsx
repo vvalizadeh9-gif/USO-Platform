@@ -1002,3 +1002,104 @@ describe('the trend section', () => {
     await waitFor(() => expect(screen.queryByText('What moved')).not.toBeInTheDocument())
   })
 })
+
+describe('the bench rail', () => {
+  /** The rail, once the page has loaded. */
+  async function rail() {
+    const nav = await screen.findByRole('navigation', { name: 'Dashboard panels' })
+    await screen.findByRole('heading', { name: 'Province breakdown' })
+    return nav
+  }
+
+  it('lists the panels in the order the page presents them', async () => {
+    serve()
+    draw()
+
+    const links = within(await rail()).getAllByRole('link')
+    // The rail's job is to be a true map of the page. Asserting the order
+    // here, and the heading order separately above, is what keeps the two
+    // from drifting apart — a contents list in the wrong order is worse than
+    // none, because it is believed.
+    expect(links.map((a) => a.textContent.replace(/\d+(\.\d+)?%?$/, ''))).toEqual([
+      'Plan and delivery',
+      'Ongoing breakdown',
+      'Where it is stuck',
+      'Problematic breakdown',
+      'Contractor scorecard',
+      'Province breakdown',
+      'Where this is going',
+      'What moved',
+    ])
+  })
+
+  it('points each entry at the panel it names', async () => {
+    serve()
+    draw()
+
+    const nav = await rail()
+    for (const [name, id] of [
+      ['Plan and delivery', 'dt-panel-plan'],
+      ['Ongoing breakdown', 'dt-panel-ongoing'],
+      ['Province breakdown', 'dt-panel-provinces'],
+    ]) {
+      const link = within(nav).getByRole('link', { name: new RegExp(`^${name}`) })
+      expect(link).toHaveAttribute('href', `#${id}`)
+      // The anchor has to exist, or the link is a jump to nowhere. This is
+      // the assertion that catches an id renamed on one side only.
+      expect(document.getElementById(id)).not.toBeNull()
+    }
+  })
+
+  it('carries the headline figure for the panels that have one', async () => {
+    serve()
+    draw()
+
+    const nav = await rail()
+    expect(within(nav).getByRole('link', { name: /^Plan and delivery/ })).toHaveTextContent('37.5%')
+    expect(within(nav).getByRole('link', { name: /^Ongoing breakdown/ })).toHaveTextContent('50')
+    expect(within(nav).getByRole('link', { name: /^Problematic breakdown/ })).toHaveTextContent('10')
+  })
+
+  it('names, without a figure, the panels whose headline would change unit', async () => {
+    serve()
+    draw()
+
+    const nav = await rail()
+    // A count of contractors sitting in the same column as counts of sites
+    // reads as a count of sites. These entries are deliberately bare.
+    expect(
+      within(nav).getByRole('link', { name: 'Contractor scorecard' }).textContent,
+    ).toBe('Contractor scorecard')
+    expect(within(nav).getByRole('link', { name: 'Province breakdown' }).textContent).toBe(
+      'Province breakdown',
+    )
+  })
+
+  it('drops the entry for a panel the payload does not carry', async () => {
+    const older = { ...overview }
+    delete older.province_breakdown
+    delete older.contractor_scorecard
+    serve(planDelivery(), older)
+    draw()
+
+    const nav = await screen.findByRole('navigation', { name: 'Dashboard panels' })
+    await waitFor(() =>
+      expect(within(nav).queryByRole('link', { name: 'Province breakdown' })).toBeNull(),
+    )
+    expect(within(nav).queryByRole('link', { name: 'Contractor scorecard' })).toBeNull()
+    // The panels that are still served keep their entries.
+    expect(within(nav).getByRole('link', { name: /^Ongoing breakdown/ })).toBeInTheDocument()
+  })
+
+  it('stays a usable contents list where the browser cannot track position', async () => {
+    // jsdom has no IntersectionObserver, which is the same situation as an old
+    // browser: nothing is marked current, and every entry is still a link.
+    serve()
+    draw()
+
+    const links = within(await rail()).getAllByRole('link')
+    expect(links.length).toBeGreaterThan(0)
+    expect(links.every((a) => a.getAttribute('href')?.startsWith('#'))).toBe(true)
+    expect(links.some((a) => a.getAttribute('aria-current'))).toBe(false)
+  })
+})

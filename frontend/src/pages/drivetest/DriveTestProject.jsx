@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react'
 import api from '../../api/client'
 import { PageHead } from '../../components/ui'
 import { useToast } from '../../context/ToastContext'
+import BenchRail from './BenchRail'
 import BreakdownCard from './BreakdownCard'
 import ContractorScorecard from './ContractorScorecard'
 import KpiBand from './KpiBand'
@@ -14,7 +15,7 @@ import FlowLedger from './charts/FlowLedger'
 import StagePipeline from './charts/StagePipeline'
 import TrendChart from './charts/TrendChart'
 import { PROVINCE_LIMIT, TREND_SERIES } from './constants'
-import { count } from './format'
+import { achievement, count } from './format'
 import { ongoingLink, problematicLink } from './links'
 import { useDashboard } from './useDashboard'
 
@@ -30,6 +31,24 @@ import { useDashboard } from './useDashboard'
  * the endpoints, not by this component. The province filter narrows what is
  * already visible and can never widen it — see
  * `api/drive_test._resolve_province`.
+ *
+ * THE WORKBENCH LAYOUT. The four questions are still answered in that order —
+ * the order is the argument and it has not changed. What changed is that the
+ * page stopped being a document you read once and became a surface you work
+ * at, because that is what it is used for: every figure on it is a link into
+ * the work queue, so the reader arrives, drills through, comes back, and
+ * re-filters.
+ *
+ * That use is what the two moves here serve. The command bar sticks, so the
+ * province filter and the freshness clock stay reachable from the bottom of a
+ * three-screen page instead of being stranded at the top. The bench rail says
+ * which panels exist, what each one's headline figure is, and which one you
+ * are in. The panels themselves are unchanged, pairing included.
+ *
+ * Source order is unchanged and is load-bearing: the rail, the panel grid and
+ * the reading order are all driven by `panels` below, and the grid places by
+ * source order rather than by explicit track assignment. A panel added to
+ * `panels` therefore appears in the rail and on the bench in the one place.
  */
 
 const ONGOING_TABS = [
@@ -44,6 +63,20 @@ const PROBLEMATIC_TABS = [
 ]
 
 const TREND_LABELS = Object.fromEntries(TREND_SERIES.map((s) => [s.key, s.label]))
+
+/** Anchor ids for the panels, shared by the bench rail and the panels
+ * themselves. Named here rather than written twice, because a rail entry whose
+ * id has drifted from its panel's is a link that silently goes nowhere. */
+const PANEL = {
+  plan: 'dt-panel-plan',
+  ongoing: 'dt-panel-ongoing',
+  stuck: 'dt-panel-stuck',
+  problematic: 'dt-panel-problematic',
+  contractors: 'dt-panel-contractors',
+  provinces: 'dt-panel-provinces',
+  trend: 'dt-panel-trend',
+  flow: 'dt-panel-flow',
+}
 
 /** Top `limit` points with the tail folded into one line.
  *
@@ -165,6 +198,63 @@ export default function DriveTestProject() {
     }
   }, [data, provinces, provinceId])
 
+  /** The rail's entries, and the reading order of the bench.
+   *
+   * Built from the same `has` conditions the panels themselves are rendered
+   * under, so a panel an older backend does not serve is absent from both. It
+   * lists every panel while the payload is still in flight — `has` is true
+   * with no data — which keeps the rail from reshuffling under the pointer as
+   * the sections land.
+   *
+   * Only three entries carry a figure. Every figure in this column has to be
+   * readable against the ones above and below it, and the honest headline for
+   * the scorecard or the province table is a count of contractors or of
+   * provinces — a different unit sitting in the same column as counts of
+   * sites. A column that silently changes unit is worse than a column with
+   * gaps in it, so those entries are named only.
+   */
+  const panels = useMemo(() => {
+    const items = [
+      {
+        id: PANEL.plan,
+        label: 'Plan and delivery',
+        figure: plan.data ? achievement(plan.data.achievement_percent) : null,
+        color: 'var(--violet)',
+      },
+    ]
+    if (has('ongoing_breakdown')) {
+      items.push({
+        id: PANEL.ongoing,
+        label: 'Ongoing breakdown',
+        figure: data ? count(data.ongoing_breakdown.total) : null,
+        color: 'var(--signal-strong)',
+      })
+      items.push({ id: PANEL.stuck, label: 'Where it is stuck' })
+    }
+    if (has('problematic_breakdown')) {
+      items.push({
+        id: PANEL.problematic,
+        label: 'Problematic breakdown',
+        figure: data ? count(data.problematic_breakdown.total) : null,
+        color: 'var(--red)',
+      })
+    }
+    if (has('contractor_scorecard')) {
+      items.push({ id: PANEL.contractors, label: 'Contractor scorecard' })
+    }
+    if (has('province_breakdown')) {
+      items.push({ id: PANEL.provinces, label: 'Province breakdown' })
+    }
+    items.push({ id: PANEL.trend, label: 'Where this is going' })
+    if (trend.data?.latest_flows) {
+      items.push({ id: PANEL.flow, label: 'What moved' })
+    }
+    return items
+    // `has` closes over `data` and is redefined each render; depending on
+    // `data` directly is the same condition without the churn.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data, plan.data, trend.data])
+
   return (
     <>
       <PageHead
@@ -177,17 +267,28 @@ export default function DriveTestProject() {
         }
       />
 
-      <Toolbar
-        provinces={provinces}
-        provinceId={provinceId}
-        onProvince={setProvince}
-        onRefresh={refresh}
-        refreshing={refreshing}
-        generatedAt={data?.generated_at}
-        onExport={exportSites}
-        exporting={exporting}
-      />
+      {/* The command bar sticks. Everything in it changes what the page
+          shows, and the page is three screens long; a filter you have to
+          scroll back to the top to reach is a filter that gets used once. The
+          freshness clock has the same problem in reverse — it is only honest
+          while it is on screen. */}
+      <div className="dt-command">
+        <Toolbar
+          provinces={provinces}
+          provinceId={provinceId}
+          onProvince={setProvince}
+          onRefresh={refresh}
+          refreshing={refreshing}
+          generatedAt={data?.generated_at}
+          onExport={exportSites}
+          exporting={exporting}
+        />
+      </div>
 
+      <div className="dt-workbench">
+        <BenchRail items={panels} />
+
+        <div className="dt-bench">
       {overview.error ? (
         <div className="dt-page-error card card-pad" role="alert">
           <AlertTriangle size={18} aria-hidden="true" />
@@ -205,11 +306,12 @@ export default function DriveTestProject() {
         <KpiBand kpis={data.kpis} monthName={monthName} provinceId={provinceId} />
       ) : null}
 
-      <PlanDelivery state={plan} onRetry={refresh} />
+      <PlanDelivery id={PANEL.plan} state={plan} onRetry={refresh} />
 
       {has('ongoing_breakdown') && (
       <div className="dt-pair">
       <Section
+        id={PANEL.ongoing}
         title="Ongoing breakdown"
         state={overview}
         onRetry={refresh}
@@ -235,6 +337,7 @@ export default function DriveTestProject() {
         )}
       </Section>
       <Section
+        id={PANEL.stuck}
         title="Where the ongoing work is stuck"
         subtitle="In workflow order — who each site is waiting on"
         state={overview}
@@ -253,6 +356,7 @@ export default function DriveTestProject() {
 
       {has('problematic_breakdown') && (
       <Section
+        id={PANEL.problematic}
         title="Problematic breakdown"
         state={overview}
         onRetry={refresh}
@@ -281,6 +385,7 @@ export default function DriveTestProject() {
 
       {has('contractor_scorecard') && (
       <Section
+        id={PANEL.contractors}
         title="Contractor scorecard"
         subtitle="Ranked by how far through its own book of work each company is"
         state={overview}
@@ -294,6 +399,7 @@ export default function DriveTestProject() {
 
       {has('province_breakdown') && (
       <Section
+        id={PANEL.provinces}
         title="Province breakdown"
         subtitle="Sort any column; filter the whole dashboard from a row"
         state={overview}
@@ -310,6 +416,7 @@ export default function DriveTestProject() {
       )}
 
       <Section
+        id={PANEL.trend}
         title="Where this is going"
         subtitle={
           trend.data?.months?.length
@@ -338,6 +445,7 @@ export default function DriveTestProject() {
 
       {trend.data?.latest_flows && (
         <Section
+          id={PANEL.flow}
           title="What moved"
           subtitle={`${trend.data.latest_flows.label} ${trend.data.latest_flows.shamsi_year}${
             trend.data.latest_flows.is_open ? ' · still in progress' : ''
@@ -351,6 +459,8 @@ export default function DriveTestProject() {
           )}
         </Section>
       )}
+        </div>
+      </div>
     </>
   )
 }
