@@ -45,6 +45,7 @@ from app.schemas import (
     DriveTestSiteList,
     DriveTestSiteRow,
     DriveTestTrend,
+    FilterOption,
     KpiWithDelta,
     MonthFlows,
     OngoingBreakdown,
@@ -62,7 +63,14 @@ from app.services import (
     dt_workbook,
     monthly_plan as plans,
 )
-from app.services.drive_test_analytics import DriveTestAnalytics
+from app.services.drive_test_analytics import (
+    AGE_BAND_KEYS,
+    AGE_BAND_LABEL_BY_KEY,
+    NO_ASSIGNMENT_DATE,
+    ONGOING_STAGE_ORDER,
+    STAGE_OTHER,
+    DriveTestAnalytics,
+)
 from app.services.snapshots import get_month_over_month
 from app.services.visibility import visible_province_ids
 
@@ -374,7 +382,37 @@ def drive_test_sites(
         rows=[DriveTestSiteRow(**row) for row in page],
         filters_applied=filters.applied,
         generated_at=datetime.now(timezone.utc),
+        age_bands=_age_band_options(),
+        ongoing_stages=_ongoing_stage_options(),
     )
+
+
+def _age_band_options() -> list[FilterOption]:
+    """The ongoing age bands, in age order, plus the sites with no clock.
+
+    Straight off the service that validates them, so the control the screen
+    builds from this cannot offer a band the next request would reject. The
+    unassigned bucket is last because it is not a band — it is the sites the
+    bands cannot speak for — and putting it inside the ordered scale would
+    read as an age.
+    """
+    return [
+        FilterOption(key=key, label=AGE_BAND_LABEL_BY_KEY[key])
+        for key in AGE_BAND_KEYS
+    ] + [FilterOption(key=NO_ASSIGNMENT_DATE, label="Not assigned yet")]
+
+
+def _ongoing_stage_options() -> list[FilterOption]:
+    """The stages an ongoing site can sit in, in workflow order.
+
+    The stage is its own label here: these strings are the vocabulary the
+    workflow uses in the screens people act in, and renaming them on the way
+    to this one filter would make the two impossible to talk about together.
+    """
+    return [
+        FilterOption(key=stage, label=stage)
+        for stage in (*ONGOING_STAGE_ORDER, STAGE_OTHER)
+    ]
 
 
 @router.get("/sites/export")
@@ -524,6 +562,8 @@ def _problematic_breakdown(data: dict) -> ProblematicBreakdown:
         total=data["total"],
         by_category=_points(data["by_category"]),
         by_province=_points(data["by_province"]),
+        by_age=_points(data["by_age"]),
+        without_problem_date=data["without_problem_date"],
     )
 
 

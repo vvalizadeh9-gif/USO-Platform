@@ -62,6 +62,7 @@ const ONGOING_TABS = [
 
 const PROBLEMATIC_TABS = [
   { key: 'category', label: 'Category' },
+  { key: 'age', label: 'How long' },
   { key: 'province', label: 'Province' },
 ]
 
@@ -211,6 +212,7 @@ export default function DriveTestProject() {
   const problematicViews = useMemo(() => {
     const b = data?.problematic_breakdown
     if (!b) return {}
+    const scope = provinceId == null ? {} : { provinceId }
     return {
       category: {
         points: b.by_category,
@@ -219,10 +221,27 @@ export default function DriveTestProject() {
         // Each bar opens its own category. It used to open every problematic
         // site whichever bar was clicked, so a reader who clicked 64 landed
         // on 194.
-        hrefFor: (p) => {
-          const scope = provinceId == null ? {} : { provinceId }
-          return problematicLink(p.key ? { ...scope, category: p.key } : scope)
-        },
+        hrefFor: (p) => problematicLink(p.key ? { ...scope, category: p.key } : scope),
+      },
+      // How long each of these has been a problem. The category split says
+      // what is wrong and cannot say whether it is this week's news or last
+      // year's, and only the second is somebody's to answer for. Same bands
+      // as the ongoing card, on a different clock: the day each site last
+      // entered the state.
+      age: {
+        points: b.by_age,
+        unit: 'Stuck for',
+        hrefFor: (p) => (p.key ? problematicLink({ ...scope, ageBand: p.key }) : null),
+        color: (_point, i) => AGE_RAMP[Math.min(i, AGE_RAMP.length - 1)],
+        note:
+          b.without_problem_date > 0
+            ? `Measured from the day each site last became problematic. ` +
+              `${count(b.without_problem_date)} ` +
+              `${b.without_problem_date === 1 ? 'site was' : 'sites were'} flagged by a ` +
+              'CPM import, which records no date, so no clock has started on them and they ' +
+              'are not shown above.'
+            : 'Measured from the day each site last became problematic \u2014 a site ' +
+              'flagged, fixed and flagged again is aged from the latest flag.',
       },
       province: {
         points: collapse(b.by_province),
@@ -319,7 +338,7 @@ export default function DriveTestProject() {
           {has('problematic_breakdown') && (
             <Section
               title="Problematic breakdown"
-              subtitle="Sites the programme is blocked on"
+              subtitle="Sites the programme is blocked on, and how long each has been"
               state={overview}
               onRetry={refresh}
               actions={

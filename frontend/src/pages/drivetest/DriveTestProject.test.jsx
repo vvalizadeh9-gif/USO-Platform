@@ -95,7 +95,8 @@ const overview = {
       { name: '1–2 weeks', value: 15, key: 'w1_2' },
       { name: '2–3 weeks', value: 8, key: 'w2_3' },
       { name: '3 weeks – 1 month', value: 4, key: 'w3_1m' },
-      { name: 'More than 1 month', value: 1, key: 'gt_1m' },
+      { name: '1–2 months', value: 3, key: 'm1_2' },
+      { name: 'More than 2 months', value: 1, key: 'gt_2m' },
     ],
     without_assignment_date: 2,
   },
@@ -109,6 +110,15 @@ const overview = {
       { name: 'Kerman', value: 7 },
       { name: 'Yazd', value: 3 },
     ],
+    by_age: [
+      { name: 'Up to 1 week', value: 2, key: 'lte_1w' },
+      { name: '1–2 weeks', value: 1, key: 'w1_2' },
+      { name: '2–3 weeks', value: 0, key: 'w2_3' },
+      { name: '3 weeks – 1 month', value: 0, key: 'w3_1m' },
+      { name: '1–2 months', value: 1, key: 'm1_2' },
+      { name: 'More than 2 months', value: 2, key: 'gt_2m' },
+    ],
+    without_problem_date: 4,
   },
   province_breakdown: [
     { name: 'Kerman', onair: 60, done: 23, remaining: 37, ongoing: 30, problematic: 7, done_percent: 38.3 },
@@ -462,7 +472,7 @@ describe('breakdown sections', () => {
     expect(within(ongoing).queryByText('Alfa Drive Tests')).not.toBeInTheDocument()
 
     await userEvent.click(within(ongoing).getByRole('tab', { name: 'How long' }))
-    expect(within(ongoing).getByText('More than 1 month')).toBeInTheDocument()
+    expect(within(ongoing).getByText('More than 2 months')).toBeInTheDocument()
     expect(within(ongoing).queryByText('Kerman')).not.toBeInTheDocument()
 
     await userEvent.click(within(ongoing).getByRole('tab', { name: 'Contractor' }))
@@ -543,8 +553,62 @@ describe('breakdown sections', () => {
       '1–2 weeks',
       '2–3 weeks',
       '3 weeks – 1 month',
-      'More than 1 month',
+      '1–2 months',
+      'More than 2 months',
     ])
+  })
+
+  it('ages the problematic sites too, on their own clock', async () => {
+    // The card used to say what was wrong and could not say for how long, so
+    // a bar reading 64 sites on temporary power could be this week's news or
+    // last year's -- and only one of those is somebody's to answer for.
+    serve()
+    draw()
+
+    const problematic = await section('Problematic breakdown')
+    await userEvent.click(within(problematic).getByRole('tab', { name: 'How long' }))
+
+    const bands = within(problematic)
+      .getAllByTestId('dt-bar')
+      .map((bar) => bar.closest('.dt-bar-row').querySelector('.dt-bar-label').textContent)
+    expect(bands).toEqual([
+      'Up to 1 week',
+      '1–2 weeks',
+      '2–3 weeks',
+      '3 weeks – 1 month',
+      '1–2 months',
+      'More than 2 months',
+    ])
+  })
+
+  it('names the problematic sites it cannot age, rather than hiding them', async () => {
+    // Four of the ten carry no date, so the bars sum to six. A reader who is
+    // not told that reads the bars as the whole picture -- and the direction
+    // of the error is the dangerous one: the backlog looks fresher than it is.
+    serve()
+    draw()
+
+    const problematic = await section('Problematic breakdown')
+    await userEvent.click(within(problematic).getByRole('tab', { name: 'How long' }))
+
+    expect(within(problematic).getByText(/4 sites were flagged by a CPM import/)).
+      toBeInTheDocument()
+  })
+
+  it('opens each problematic age band on the sites in that band', async () => {
+    serve()
+    draw()
+
+    const problematic = await section('Problematic breakdown')
+    await userEvent.click(within(problematic).getByRole('tab', { name: 'How long' }))
+
+    const link = within(problematic)
+      .getAllByRole('link')
+      .find((a) => a.getAttribute('href')?.includes('age_band=gt_2m'))
+    expect(link).toHaveAttribute(
+      'href',
+      '/drive-test/sites?bucket=problematic&age_band=gt_2m',
+    )
   })
 
   it('toggles each section to a table and back, in the same card', async () => {

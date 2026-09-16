@@ -43,6 +43,7 @@ export const AGE_RAMP = [
   'var(--dt-age-3)',
   'var(--dt-age-4)',
   'var(--dt-age-5)',
+  'var(--dt-age-6)',
 ]
 
 /** Which way "good" points for each KPI, for delta colouring.
@@ -89,36 +90,6 @@ export const BUCKET_LABEL = {
   remaining: 'remaining sites',
   delivered: 'drive tests delivered',
 }
-
-/** Age bands, keyed exactly as `AGE_BAND_KEYS` in drive_test_analytics.py.
- *
- * Keys travel in URLs and labels are shown; the backend owns both and this is
- * the mirror. `no_launch_date` is not a band — it is the ongoing sites whose
- * age nobody recorded — and it is offered here because the dashboard reports
- * them beside the bands and a reader needs to be able to open them.
- */
-export const AGE_BANDS = [
-  { key: 'lt_1m', label: 'Under a month' },
-  { key: 'm1_3', label: '1\u20133 months' },
-  { key: 'm3_6', label: '3\u20136 months' },
-  { key: 'm6_12', label: '6\u201312 months' },
-  { key: 'gt_12m', label: 'Over a year' },
-  { key: 'no_launch_date', label: 'No launch date' },
-]
-
-/** The stages an ongoing site can be in, in workflow order, plus the
- * catch-all the backend emits when a stage is not one of them. Must match
- * `ONGOING_STAGE_ORDER` and `STAGE_OTHER`. */
-export const ONGOING_STAGES = [
-  'New',
-  'HC In Progress',
-  'HC Review',
-  'Ready for Assignment',
-  'Assigned',
-  'Returned by Contractor',
-  'DT Submitted',
-  'Other',
-]
 
 /** The value the endpoint uses for sites no contractor can be tied to. */
 export const UNATTRIBUTED = 'none'

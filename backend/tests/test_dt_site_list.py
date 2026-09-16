@@ -44,6 +44,7 @@ from app.services.dt_site_list import UNATTRIBUTED  # noqa: E402
 from app.services.drive_test_analytics import (  # noqa: E402
     AGE_BAND_LABEL_BY_KEY,
     NO_ASSIGNMENT_DATE,
+    NO_PROBLEM_DATE,
 )
 from app.services.workflow import (  # noqa: E402
     STAGE_ASSIGNED,
@@ -386,6 +387,22 @@ def test_every_figure_opens_a_list_of_exactly_that_many_sites(client, world):
         )
     )
 
+    for point in body["problematic_breakdown"]["by_age"]:
+        checks.append(
+            (
+                f"problematic/age/{point['name']}",
+                {"bucket": "problematic", "age_band": point["key"]},
+                point["value"],
+            )
+        )
+    checks.append(
+        (
+            "problematic/age/no date",
+            {"bucket": "problematic", "age_band": NO_PROBLEM_DATE},
+            body["problematic_breakdown"]["without_problem_date"],
+        )
+    )
+
     for point in body["ongoing_breakdown"]["by_stage"]:
         checks.append(
             (
@@ -632,18 +649,41 @@ def test_the_age_band_runs_on_the_assignment_clock_not_the_launch_date(client, w
     The seeded site went on air 400 days ago and was assigned 40 days ago.
     Aged from its launch it would read as the oldest band there is; the
     dashboard asks how long the company holding it has held it, so it is a
-    site that has been held for more than a month and no more than that.
+    site held between one and two months and no more than that.
     """
     rows = _sites(client, world["admin"], bucket="ongoing")["rows"]
     row = next(r for r in rows if r["work_item_id"] == world["ids"]["held_long"])
 
     assert row["days_since_launch"] == 400
     assert row["days_since_assignment"] == 40
-    assert row["age_band"] == AGE_BAND_LABEL_BY_KEY["gt_1m"]
+    assert row["age_band"] == AGE_BAND_LABEL_BY_KEY["m1_2"]
 
     # And a site with no assignment has no clock, rather than a clock at zero.
     unassigned = next(r for r in rows if r["days_since_assignment"] is None)
     assert unassigned["age_band"] is None
+
+
+def test_a_retired_age_band_key_still_opens_the_sites_it_used_to_mean(client, world):
+    """A drill-through URL outlives the band it names.
+
+    ``gt_1m`` was everything held for more than a month. That is now two
+    bands, so a link someone pasted into a message last week has to resolve
+    to both of them -- answering with one would be a list that looks right
+    and is short, which is the failure this whole screen exists to prevent.
+    """
+    legacy = _sites(client, world["admin"], bucket="ongoing", age_band="gt_1m")
+    m1_2 = _sites(client, world["admin"], bucket="ongoing", age_band="m1_2")
+    gt_2m = _sites(client, world["admin"], bucket="ongoing", age_band="gt_2m")
+
+    assert legacy["total"] == m1_2["total"] + gt_2m["total"]
+    assert legacy["total"] > 0, "the fixture holds a site past a month"
+
+    ids = {r["work_item_id"] for r in legacy["rows"]}
+    assert ids == {r["work_item_id"] for r in [*m1_2["rows"], *gt_2m["rows"]]}
+
+    # The pill reads back what was clicked, not what it resolved to: there is
+    # no single band label spanning the two.
+    assert legacy["filters_applied"]["age_band"] == "gt_1m"
 
 
 def test_rows_carry_the_site_and_its_villages(client, world):

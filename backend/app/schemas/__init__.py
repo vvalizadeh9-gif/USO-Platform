@@ -1156,17 +1156,26 @@ class OngoingBreakdown(BaseModel):
 
 
 class ProblematicBreakdown(BaseModel):
-    """The problematic total by category and by province.
+    """The problematic total by category, by province, and by how long.
 
-    There are no aging bands. Nothing in the schema records when a site
-    *became* problematic — the CPM signal is a bare status column and the
-    in-app signal is a stage — so the bands would have to be computed from a
-    date that means something else. See ``DriveTestAnalytics.breakdowns``.
+    ``by_age`` answers the question the category split cannot: a bar saying
+    64 sites are on temporary power does not say whether that is this week's
+    news or last year's, and only the second is somebody's to answer for.
+    The clock is when each site last *entered* the state, replayed from the
+    platform's dated transitions — see ``DriveTestAnalytics.problematic_since``
+    — and it shares the ongoing breakdown's bands so the two cards compare.
+
+    ``without_problem_date`` is the sites that clock cannot speak for: a
+    Problematic status imported from a CPM workbook is a bare column with no
+    date behind it. They are reported beside the bands rather than inside
+    them, because a site with no clock is not a site whose clock reads zero.
     """
 
     total: int
     by_category: list[ChartPoint]
     by_province: list[ChartPoint]
+    by_age: list[ChartPoint] = []
+    without_problem_date: int = 0
 
 
 class ProvinceBreakdownRow(BaseModel):
@@ -1218,6 +1227,19 @@ class DriveTestSiteRow(BaseModel):
     days_since_assignment: int | None = None
     age_band: str | None = None             # display label, or None
 
+    #: When this site last *became* problematic, and how long ago. This is
+    #: the answer to "how long has this site been a problem", per site, which
+    #: is the figure somebody gets asked about by name. Replayed from the
+    #: platform's dated transitions, so a site flagged, fixed and flagged
+    #: again is aged from the latest flag rather than the first.
+    #:
+    #: ``None`` on a site that is not problematic, and on one whose
+    #: Problematic status arrived in a CPM workbook with no date behind it.
+    #: Never estimated -- the same rule as ``oldest_open_fix_days`` below.
+    problematic_since: str | None = None     # Shamsi
+    days_problematic: int | None = None
+    problem_age_band: str | None = None      # display label, or None
+
     problem_categories: list[str] = []
     fix_owners: list[str] = []
 
@@ -1237,6 +1259,21 @@ class DriveTestSiteRow(BaseModel):
     dt_evidence_count: int = 0
 
 
+class FilterOption(BaseModel):
+    """One value a filter control may offer, as the endpoint spells it.
+
+    The screen used to keep its own copy of these vocabularies, transcribed
+    from the service that owns them. That copy went stale the first time a
+    band was re-cut: the dropdown went on offering keys the endpoint had
+    stopped accepting, so every option in it answered 422 — a filter control
+    that cannot filter. Serving the list from the one place that validates it
+    is what makes drift impossible rather than merely unlikely.
+    """
+
+    key: str
+    label: str
+
+
 class DriveTestSiteList(BaseModel):
     """The sites behind one dashboard figure.
 
@@ -1252,6 +1289,13 @@ class DriveTestSiteList(BaseModel):
     #: than from its own.
     filters_applied: dict[str, str] = {}
     generated_at: datetime
+
+    #: The vocabularies this endpoint accepts, for the screen's own controls.
+    #: Sent with every response rather than fetched separately: they are small,
+    #: and a control built from them can never offer a value the request that
+    #: carried them would refuse.
+    age_bands: list[FilterOption] = []
+    ongoing_stages: list[FilterOption] = []
 
 
 class ContractorScorecardRow(BaseModel):

@@ -66,10 +66,11 @@
      provinces — get a flat colour instead; shading those by size would
      colour a bar by the length it already has. */
   --dt-age-1: #9cb3e8;
-  --dt-age-2: #7590dc;
-  --dt-age-3: #5170ce;
-  --dt-age-4: #3b57b4;
-  --dt-age-5: #28408c;
+  --dt-age-2: #859cd6;
+  --dt-age-3: #6e85c3;
+  --dt-age-4: #566eb1;
+  --dt-age-5: #3f579e;
+  --dt-age-6: #28408c;
 
   /* Chart furniture. Everything that is not a state is a step of the neutral
      ramp: the unfilled part of a track, and the ghost bar a commitment is

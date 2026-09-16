@@ -41,6 +41,12 @@ COLUMNS: list[tuple[str, str]] = [
     ("Assigned", "assignment_date"),
     ("Days held", "days_since_assignment"),
     ("How long", "age_band"),
+    # The problematic clock, beside the ongoing one rather than merged into
+    # it: they measure different things and a single "how long" column would
+    # silently mean one on some rows and the other on the rest.
+    ("Problem since", "problematic_since"),
+    ("Days problematic", "days_problematic"),
+    ("Problem for", "problem_age_band"),
     ("Problem categories", "problem_categories"),
     ("Fix owners", "fix_owners"),
     ("Oldest open fix (days)", "oldest_open_fix_days"),
@@ -53,7 +59,10 @@ COLUMNS: list[tuple[str, str]] = [
 
 #: Column widths, in the order of :data:`COLUMNS`. Public because the DT
 #: delivery workbook writes the same columns and must size them the same way.
-WIDTHS = [16, 28, 16, 22, 14, 22, 14, 17, 14, 12, 14, 26, 24, 20, 12, 10, 18, 14, 10]
+WIDTHS = [
+    16, 28, 16, 22, 14, 22, 14, 17, 14, 12, 14,
+    14, 17, 20, 26, 24, 20, 12, 10, 18, 14, 10,
+]
 
 #: How the header block names each filter, in the order it reads them.
 _FILTER_LABELS: list[tuple[str, str]] = [
