@@ -117,6 +117,127 @@ AGE_BANDS: tuple[tuple[int | None, str], ...] = (
     (None, "Over a year"),
 )
 
+#: A stable key per age band, in the same order as :data:`AGE_BANDS`.
+#:
+#: The labels above are display text \u2014 they carry an en dash, they are
+#: wordings somebody may improve, and they are the wrong thing to put in a URL
+#: or compare a query parameter against. These keys are what a drill-through
+#: link travels with, so re-wording a band cannot silently break every saved
+#: link to it. Positional rather than a dict literal so that a band added to
+#: AGE_BANDS without a key here fails loudly at import.
+AGE_BAND_KEYS: tuple[str, ...] = ("lt_1m", "m1_3", "m3_6", "m6_12", "gt_12m")
+
+assert len(AGE_BAND_KEYS) == len(AGE_BANDS), "every age band needs a key"
+
+#: label -> key and key -> label, derived so the two can never disagree.
+AGE_BAND_KEY_BY_LABEL: dict[str, str] = {
+    label: key for (_, label), key in zip(AGE_BANDS, AGE_BAND_KEYS, strict=True)
+}
+AGE_BAND_LABEL_BY_KEY: dict[str, str] = {
+    key: label for label, key in AGE_BAND_KEY_BY_LABEL.items()
+}
+
+#: The key for an ongoing site whose launch date is missing, so no age can be
+#: computed. Not a band \u2014 see :func:`age_band` \u2014 but the breakdown reports
+#: those sites beside the bands, so a drill-through needs a way to name them.
+NO_LAUNCH_DATE = "no_launch_date"
+
+
+# ---------- the predicates, shared ----------
+#
+# These say what the dashboard *means* by on-air, problematic, ongoing, whose
+# a site is, why it is problematic, how old it is and which month its drive
+# test lands in. They are module level rather than private methods for one
+# reason: the drill-through site list must count exactly what the dashboard
+# counted, and the only way to guarantee that is for both to call the same
+# function. Their behaviour is unchanged from when they were methods on
+# :class:`DriveTestAnalytics`, which still exposes them under their original
+# names.
+
+
+def own_contractor_id(user) -> int | None:
+    """The contractor this caller *is*, or None for a staff account.
+
+    The one place the drive-test figures ask "who is asking". Everything that
+    could name a contractor goes through it — the dashboard's plan section,
+    the scorecard and now the site list — so the rule that a contractor sees
+    only their own work has a single point of enforcement rather than one per
+    figure.
+    """
+    role = getattr(user, "role", None)
+    if getattr(role, "name", None) != CONTRACTOR:
+        return None
+    return getattr(user, "contractor_id", None)
+
+
+def is_onair(wi: WorkItem) -> bool:
+    """The last completed stage is a temporary or permanent launch."""
+    return C.normalize_stage(wi.last_stage) in C.ONAIR_STAGES
+
+
+def is_problematic(wi: WorkItem) -> bool:
+    """CPM-imported Problematic status OR an in-app HC Problematic flag."""
+    return wi.dt_status == "Problematic" or wi.current_stage == STAGE_HEALTH_PROBLEM
+
+
+def is_ongoing(wi: WorkItem) -> bool:
+    """Not DT-Done, and not Problematic by either signal.
+
+    Read together with :func:`is_onair`, which every caller applies first.
+    """
+    return wi.dt_status != "Done" and not is_problematic(wi)
+
+
+def effective_contractor_id(wi: WorkItem) -> int | None:
+    """Prefer the live in-app assignment's contractor over the CPM-seeded
+    drive-test subcontractor, which goes stale the moment a site is
+    reassigned inside the app after the last CPM import."""
+    active = next((a for a in wi.assignments if a.is_active), None)
+    if active is not None:
+        return active.contractor_id
+    return wi.dt_sc_contractor_id
+
+
+def effective_problem_category(wi: WorkItem) -> str:
+    """Prefer the Admin/PM/Coordinator-selected category over CPM free
+    text — the dropdown value is validated and app-controlled; the CPM
+    column is whatever the field team typed into Excel."""
+    return (
+        latest_problem_category_name(wi)
+        or wi.dt_problem_category
+        or "Uncategorized"
+    )
+
+
+def age_band(launch: date | None, today: date) -> str | None:
+    """Which age band a site falls in, or ``None`` with no launch date.
+
+    ``None`` rather than a "0 days" bucket: a missing launch date is an
+    unknown age, not a young site, and quietly filing it under the newest
+    band would make an untested backlog look fresher than it is.
+    """
+    if launch is None:
+        return None
+    days = (today - launch).days
+    for bound, label in AGE_BANDS:
+        if bound is None or days <= bound:
+            return label
+    return AGE_BANDS[-1][1]
+
+
+def dated_into(wi: WorkItem, year: int, month: int) -> bool:
+    """Whether this work item's drive test falls in a given Shamsi month.
+
+    This is the platform's one rule for dating a drive test into a month,
+    and it is unchanged: the DT date column converted to Shamsi, compared on
+    year and month, with an item that carries no DT date counting into no
+    month at all.
+    """
+    if not wi.dt_date_gregorian:
+        return False
+    y, m = jalali.to_shamsi(wi.dt_date_gregorian)
+    return y == year and m == month
+
 
 class DriveTestAnalytics:
     """Encapsulates all Drive Test dashboard computations for one user."""
@@ -162,42 +283,31 @@ class DriveTestAnalytics:
         return self._work_items
 
     # ---------- KPI helpers ----------
-    @staticmethod
-    def _is_onair(wi: WorkItem) -> bool:
-        return C.normalize_stage(wi.last_stage) in C.ONAIR_STAGES
-
-    @staticmethod
-    def _is_problematic(wi: WorkItem) -> bool:
-        """CPM-imported Problematic status OR an in-app HC Problematic flag."""
-        return wi.dt_status == "Problematic" or wi.current_stage == STAGE_HEALTH_PROBLEM
-
-    def _is_ongoing(self, wi: WorkItem) -> bool:
-        """On-air, not DT-Done, and not Problematic by either signal."""
-        return wi.dt_status != "Done" and not self._is_problematic(wi)
+    #
+    # These are the module-level predicates, bound here under their original
+    # names. They moved out of the class unchanged so the drill-through site
+    # list can ask the same questions through the same code
+    # (``services/dt_site_list.py``) rather than through a second copy of
+    # them: a list whose definition of "problematic" has drifted from the
+    # dashboard's is worse than no list, because it looks right.
+    _is_onair = staticmethod(is_onair)
+    _is_problematic = staticmethod(is_problematic)
+    _is_ongoing = staticmethod(is_ongoing)
+    _effective_contractor_id = staticmethod(effective_contractor_id)
+    _effective_problem_category = staticmethod(effective_problem_category)
 
     def _onair_items(self) -> list[WorkItem]:
-        return [w for w in self._load() if self._is_onair(w)]
+        return [w for w in self._load() if is_onair(w)]
 
-    @staticmethod
-    def _effective_contractor_id(wi: WorkItem) -> int | None:
-        """Prefer the live in-app assignment's contractor over the CPM-seeded
-        drive-test subcontractor, which goes stale the moment a site is
-        reassigned inside the app after the last CPM import."""
-        active = next((a for a in wi.assignments if a.is_active), None)
-        if active is not None:
-            return active.contractor_id
-        return wi.dt_sc_contractor_id
+    def onair_items(self) -> list[WorkItem]:
+        """The scoped on-air work items, for a caller outside this class.
 
-    @staticmethod
-    def _effective_problem_category(wi: WorkItem) -> str:
-        """Prefer the Admin/PM/Coordinator-selected category over CPM free
-        text — the dropdown value is validated and app-controlled; the CPM
-        column is whatever the field team typed into Excel."""
-        return (
-            latest_problem_category_name(wi)
-            or wi.dt_problem_category
-            or "Uncategorized"
-        )
+        The drill-through site list builds from exactly this set rather than
+        from a query of its own: same ``apply_work_item_scope``, same province
+        narrowing, same on-air predicate. Anything it does afterwards can only
+        remove rows, never reach one the dashboard did not count.
+        """
+        return self._onair_items()
 
     def compute_kpis(self) -> dict:
         """Return the KPI counts for the user's scope."""
@@ -216,22 +326,7 @@ class DriveTestAnalytics:
             "current_month_dt_done": self._current_month_done_count(done),
         }
 
-    @staticmethod
-    def _dated_into(wi: WorkItem, year: int, month: int) -> bool:
-        """Whether this work item's drive test falls in a given Shamsi month.
-
-        This is the platform's one rule for dating a drive test into a month,
-        and it is unchanged: the DT date column converted to Shamsi, compared
-        on year and month, with an item that carries no DT date counting into
-        no month at all. It was inlined in
-        :meth:`_current_month_done_count`; it is a named method now only so
-        that the plan-and-delivery figures ask the same question through the
-        same code rather than through a second copy of it that could drift.
-        """
-        if not wi.dt_date_gregorian:
-            return False
-        y, m = jalali.to_shamsi(wi.dt_date_gregorian)
-        return y == year and m == month
+    _dated_into = staticmethod(dated_into)
 
     def _current_month_done_count(self, done_items: list) -> int:
         """Count DT-done work items whose DT date falls in the current Shamsi month."""
@@ -526,7 +621,12 @@ class DriveTestAnalytics:
             "problematic": {
                 "total": problematic_total,
                 "by_category": [
-                    {"name": k, "value": v} for k, v in _sorted_desc(problem_categories)
+                    # The key is the category name as-is, ``Uncategorized``
+                    # included: it is what ``effective_problem_category``
+                    # returns and what the site list filters on, so the two
+                    # cannot drift apart into two spellings of one bucket.
+                    {"name": k, "value": v, "key": k}
+                    for k, v in _sorted_desc(problem_categories)
                 ],
                 "by_province": _province_points(problem_by_province, names),
             },
@@ -534,21 +634,7 @@ class DriveTestAnalytics:
             "contractors": self._contractor_scorecard(contractor_rows),
         }
 
-    @staticmethod
-    def _age_band(launch: date | None, today: date) -> str | None:
-        """Which age band a site falls in, or ``None`` with no launch date.
-
-        ``None`` rather than a "0 days" bucket: a missing launch date is an
-        unknown age, not a young site, and quietly filing it under the newest
-        band would make an untested backlog look fresher than it is.
-        """
-        if launch is None:
-            return None
-        days = (today - launch).days
-        for bound, label in AGE_BANDS:
-            if bound is None or days <= bound:
-                return label
-        return AGE_BANDS[-1][1]
+    _age_band = staticmethod(age_band)
 
     @staticmethod
     def _age_points(counts: dict[str, int]) -> list[dict]:
@@ -559,7 +645,14 @@ class DriveTestAnalytics:
         what the row of bands means between one reading and the next. "Nothing
         has been waiting over a year" is an answer worth showing.
         """
-        return [{"name": label, "value": counts.get(label, 0)} for _, label in AGE_BANDS]
+        return [
+            {
+                "name": label,
+                "value": counts.get(label, 0),
+                "key": AGE_BAND_KEY_BY_LABEL[label],
+            }
+            for _, label in AGE_BANDS
+        ]
 
     def _contractor_scorecard(
         self, books: dict[int | None, dict[str, int]]
@@ -618,11 +711,17 @@ class DriveTestAnalytics:
         buckets mean something different every time it is read.
         """
         points = [
-            {"name": stage, "value": counts.get(stage, 0)}
+            {"name": stage, "value": counts.get(stage, 0), "key": stage}
             for stage in ONGOING_STAGE_ORDER
         ]
         if counts.get(STAGE_OTHER):
-            points.append({"name": STAGE_OTHER, "value": counts[STAGE_OTHER]})
+            points.append(
+                {
+                    "name": STAGE_OTHER,
+                    "value": counts[STAGE_OTHER],
+                    "key": STAGE_OTHER,
+                }
+            )
         return points
 
     def _label_ongoing_contractors(self, counts: dict[int, int]) -> list[dict]:
@@ -658,17 +757,7 @@ class DriveTestAnalytics:
 
     # ---------- plan and delivery (PIP vs actual) ----------
     def _own_contractor_id(self) -> int | None:
-        """The contractor this caller *is*, or None for a staff account.
-
-        The one place this section asks "who is asking". Everything that could
-        name a contractor goes through it, so the rule that a contractor sees
-        only their own row has a single point of enforcement rather than one
-        per figure.
-        """
-        role = getattr(self._user, "role", None)
-        if getattr(role, "name", None) != CONTRACTOR:
-            return None
-        return getattr(self._user, "contractor_id", None)
+        return own_contractor_id(self._user)
 
     def _plan_scope_items(self) -> list[WorkItem]:
         """The work items this section counts, for this caller.

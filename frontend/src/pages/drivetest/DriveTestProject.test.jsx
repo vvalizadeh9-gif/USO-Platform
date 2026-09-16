@@ -70,14 +70,16 @@ const overview = {
     total: 50,
     // Workflow order, zeros kept — the order and the empty buckets are both
     // part of what the pipeline says, so the fixture carries them.
+    // `key` is what a drill-through link travels with; the backend fills it
+    // for stages, age bands and categories. See ChartPoint.
     by_stage: [
-      { name: 'New', value: 14 },
-      { name: 'HC In Progress', value: 6 },
-      { name: 'HC Review', value: 3 },
-      { name: 'Ready for Assignment', value: 9 },
-      { name: 'Assigned', value: 12 },
-      { name: 'Returned by Contractor', value: 0 },
-      { name: 'DT Submitted', value: 6 },
+      { name: 'New', value: 14, key: 'New' },
+      { name: 'HC In Progress', value: 6, key: 'HC In Progress' },
+      { name: 'HC Review', value: 3, key: 'HC Review' },
+      { name: 'Ready for Assignment', value: 9, key: 'Ready for Assignment' },
+      { name: 'Assigned', value: 12, key: 'Assigned' },
+      { name: 'Returned by Contractor', value: 0, key: 'Returned by Contractor' },
+      { name: 'DT Submitted', value: 6, key: 'DT Submitted' },
     ],
     by_contractor: [
       { name: 'Alfa Drive Tests', value: 12 },
@@ -89,19 +91,19 @@ const overview = {
       { name: 'Yazd', value: 20 },
     ],
     by_age: [
-      { name: 'Under a month', value: 20 },
-      { name: '1–3 months', value: 15 },
-      { name: '3–6 months', value: 8 },
-      { name: '6–12 months', value: 4 },
-      { name: 'Over a year', value: 1 },
+      { name: 'Under a month', value: 20, key: 'lt_1m' },
+      { name: '1–3 months', value: 15, key: 'm1_3' },
+      { name: '3–6 months', value: 8, key: 'm3_6' },
+      { name: '6–12 months', value: 4, key: 'm6_12' },
+      { name: 'Over a year', value: 1, key: 'gt_12m' },
     ],
     without_launch_date: 2,
   },
   problematic_breakdown: {
     total: 10,
     by_category: [
-      { name: 'Power', value: 6 },
-      { name: 'Access', value: 4 },
+      { name: 'Power', value: 6, key: 'Power' },
+      { name: 'Access', value: 4, key: 'Access' },
     ],
     by_province: [
       { name: 'Kerman', value: 7 },
@@ -767,19 +769,115 @@ describe('the order of the page', () => {
 })
 
 describe('drill-through', () => {
-  it('links each KPI that has sites behind it into the work queue', async () => {
+  // Table-driven, and the table mirrors the backend's parity test: every
+  // figure the dashboard makes clickable appears here with the URL it must
+  // produce. The two lists are the same list — one asserts that the count is
+  // right, this one that the link asks for the right count.
+  //
+  // The destination changed with this feature. These used to point at
+  // `/work-items`, whose stage filter is not what this dashboard counts: a
+  // CPM-flagged problematic site keeps its own stage and was missing from the
+  // queue the number linked to, and the queue has no on-air filter so an
+  // ongoing link opened sites the dashboard never counted. Every figure now
+  // opens `/drive-test/sites`.
+  const CASES = [
+    {
+      name: 'the on-air total',
+      open: async () => await screen.findByLabelText('Programme totals'),
+      // By its accessible name: the label sits beside the figure and only
+      // the figure is the link.
+      label: 'Total on-air: 100 sites',
+      href: '/drive-test/sites?bucket=onair',
+    },
+    {
+      name: 'the done segment',
+      open: async () => await screen.findByLabelText('Programme totals'),
+      text: 'Drive tests done',
+      href: '/drive-test/sites?bucket=done',
+    },
+    {
+      name: 'the ongoing segment',
+      open: async () => await screen.findByLabelText('Programme totals'),
+      text: 'Ongoing',
+      href: '/drive-test/sites?bucket=ongoing',
+    },
+    {
+      name: 'the problematic segment',
+      open: async () => await screen.findByLabelText('Programme totals'),
+      text: 'Problematic',
+      href: '/drive-test/sites?bucket=problematic',
+    },
+    {
+      name: 'the remaining bracket',
+      open: async () => await screen.findByLabelText('Programme totals'),
+      text: '60',
+      href: '/drive-test/sites?bucket=remaining',
+    },
+    {
+      name: 'a stage in the pipeline',
+      open: () => section('Where the ongoing work is stuck'),
+      text: 'Ready for Assignment',
+      href: '/drive-test/sites?bucket=ongoing&stage=Ready+for+Assignment',
+    },
+    {
+      name: 'a problematic category',
+      open: () => section('Problematic breakdown'),
+      text: 'Power',
+      href: '/drive-test/sites?bucket=problematic&category=Power',
+    },
+    {
+      name: 'a problematic province',
+      open: async () => {
+        const card = await section('Problematic breakdown')
+        await userEvent.click(within(card).getByRole('tab', { name: 'Province' }))
+        return card
+      },
+      text: 'Kerman',
+      href: '/drive-test/sites?bucket=problematic&province_id=7',
+    },
+    {
+      name: 'an ongoing contractor',
+      open: () => section('Ongoing breakdown'),
+      text: 'Alfa Drive Tests',
+      href: '/drive-test/sites?bucket=ongoing&contractor_id=1',
+    },
+    {
+      name: 'an ongoing province',
+      open: async () => {
+        const card = await section('Ongoing breakdown')
+        await userEvent.click(within(card).getByRole('tab', { name: 'Province' }))
+        return card
+      },
+      text: 'Yazd',
+      href: '/drive-test/sites?bucket=ongoing&province_id=9',
+    },
+    {
+      name: 'an ongoing age band',
+      open: async () => {
+        const card = await section('Ongoing breakdown')
+        await userEvent.click(within(card).getByRole('tab', { name: 'How long waiting' }))
+        return card
+      },
+      text: '3–6 months',
+      href: '/drive-test/sites?bucket=ongoing&age_band=m3_6',
+    },
+    {
+      name: "a contractor's delivered count",
+      open: () => section('Plan and delivery'),
+      text: '2 of 2',
+      href: '/drive-test/sites?bucket=delivered&contractor_id=2&year=1405&month=6',
+    },
+  ]
+
+  it.each(CASES)('links $name to the sites behind it', async ({ open, text, label, href }) => {
     serve()
     draw()
 
-    const band = await screen.findByLabelText('Programme totals')
-    expect(within(band).getByText('Drive tests done').closest('a')).toHaveAttribute(
-      'href',
-      '/work-items?stage=DT+Done',
-    )
-    expect(within(band).getByText('Problematic').closest('a')).toHaveAttribute(
-      'href',
-      '/work-items?stage=Problematic',
-    )
+    const scope = await open()
+    const link = label
+      ? within(scope).getByRole('link', { name: label })
+      : within(scope).getByText(text).closest('a')
+    expect(link).toHaveAttribute('href', href)
   })
 
   it('carries the province filter into the links it builds', async () => {
@@ -789,44 +887,115 @@ describe('drill-through', () => {
     const band = await screen.findByLabelText('Programme totals')
     expect(within(band).getByText('Problematic').closest('a')).toHaveAttribute(
       'href',
-      '/work-items?stage=Problematic&province_id=7',
+      '/drive-test/sites?bucket=problematic&province_id=7',
     )
   })
 
-  it('links every stage in the pipeline to that stage of the queue', async () => {
-    serve()
-    draw()
-
-    const pipeline = await section('Where the ongoing work is stuck')
-    expect(within(pipeline).getByText('Ready for Assignment').closest('a')).toHaveAttribute(
-      'href',
-      '/work-items?stage=Ready+for+Assignment',
-    )
-    // A stage with nothing in it is still drawn — "nothing is waiting on
-    // approval" is an answer, and a bucket that vanishes when it empties
-    // changes what the row of buckets means between readings.
-    expect(within(pipeline).getByText('Returned by Contractor')).toBeInTheDocument()
-  })
-
-  it('links a contractor row to that contractor’s sites', async () => {
+  it('links all three scorecard cells for a contractor', async () => {
     serve()
     draw()
 
     const card = await section('Contractor scorecard')
     const row = within(card).getByText('Alfa Drive Tests').closest('tr')
-    expect(within(row).getByText('15').closest('a')).toHaveAttribute(
-      'href',
-      '/work-items?contractor_id=1',
-    )
+    for (const [value, href] of [
+      ['40', '/drive-test/sites?bucket=done&contractor_id=1'],
+      ['15', '/drive-test/sites?bucket=ongoing&contractor_id=1'],
+      ['5', '/drive-test/sites?bucket=problematic&contractor_id=1'],
+    ]) {
+      expect(within(row).getByText(value).closest('a')).toHaveAttribute('href', href)
+    }
   })
 
-  it('gives the unattributed row no contractor link, because there is no contractor', async () => {
+  it('links the unattributed row through contractor_id=none', async () => {
+    // There is no contractor to name, and there is still a list: the on-air
+    // sites nobody holds are the ones most worth reading.
     serve()
     draw()
 
     const card = await section('Contractor scorecard')
     const row = within(card).getByText('Unattributed').closest('tr')
-    expect(within(row).queryByRole('link')).not.toBeInTheDocument()
+    expect(within(row).getByText('6').closest('a')).toHaveAttribute(
+      'href',
+      '/drive-test/sites?bucket=ongoing&contractor_id=none',
+    )
+  })
+
+  it('links every count in a province row', async () => {
+    serve()
+    draw()
+
+    const table = await section('Province breakdown')
+    const row = within(table).getByText('Kerman').closest('tr')
+    for (const [value, href] of [
+      ['60', '/drive-test/sites?bucket=onair&province_id=7'],
+      ['23', '/drive-test/sites?bucket=done&province_id=7'],
+      ['37', '/drive-test/sites?bucket=remaining&province_id=7'],
+      ['30', '/drive-test/sites?bucket=ongoing&province_id=7'],
+      ['7', '/drive-test/sites?bucket=problematic&province_id=7'],
+    ]) {
+      expect(within(row).getByText(value).closest('a')).toHaveAttribute('href', href)
+    }
+  })
+
+  it('links the month’s delivered figure to that month’s drive tests', async () => {
+    serve()
+    draw()
+
+    const card = await section('Plan and delivery')
+    const tile = within(card).getByText('Actual').closest('.dt-figure-tile')
+    expect(within(tile).getByText('6').closest('a')).toHaveAttribute(
+      'href',
+      '/drive-test/sites?bucket=delivered&year=1405&month=6',
+    )
+  })
+
+  it('leaves the trend chart and the flow ledger unlinked', async () => {
+    // Both are built from monthly snapshots. There is no list of sites behind
+    // a snapshot, and a link that opened one would be answering a different
+    // question with the same number.
+    serve()
+    draw()
+
+    const trend = await section('Where this is going')
+    const flow = await section('What moved')
+    expect(within(trend).queryAllByRole('link')).toHaveLength(0)
+    expect(within(flow).queryAllByRole('link')).toHaveLength(0)
+  })
+
+  it('gives a contractor no link out of the "Other contractors" bar', async () => {
+    // That bar is several companies folded into one unnamed aggregate, so
+    // that a contractor's own figures still reconcile without naming a
+    // competitor. There is no list behind it they are allowed to open.
+    const contractorView = {
+      ...overview,
+      ongoing_breakdown: {
+        ...overview.ongoing_breakdown,
+        by_contractor: [
+          { name: 'Alfa Drive Tests', value: 12 },
+          { name: 'Other contractors', value: 6 },
+        ],
+      },
+      contractor_scorecard: [
+        {
+          contractor_id: 1,
+          name: 'Alfa Drive Tests',
+          onair: 60,
+          done: 40,
+          ongoing: 15,
+          problematic: 5,
+          done_percent: 66.7,
+        },
+      ],
+    }
+    serve(planDelivery(), contractorView)
+    draw()
+
+    const card = await section('Ongoing breakdown')
+    expect(within(card).getByText('Alfa Drive Tests').closest('a')).toHaveAttribute(
+      'href',
+      '/drive-test/sites?bucket=ongoing&contractor_id=1',
+    )
+    expect(within(card).getByText('Other contractors').closest('a')).toBeNull()
   })
 })
 

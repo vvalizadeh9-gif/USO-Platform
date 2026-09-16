@@ -1,7 +1,8 @@
 import { motion, useReducedMotion } from 'framer-motion'
 import { Link } from 'react-router-dom'
 import { count, percent, progressColor } from './format'
-import { ongoingLink, problematicLink } from './links'
+import { UNATTRIBUTED } from './constants'
+import { doneLink, ongoingLink, problematicLink } from './links'
 
 /**
  * Each contractor's whole book of work, ranked by how far through it they are.
@@ -21,7 +22,9 @@ import { ongoingLink, problematicLink } from './links'
  *
  * The unattributed row sits last and is styled apart. It is not a company and
  * cannot be beaten or beat anyone; the backend sorts it out of the ranking
- * for the same reason.
+ * for the same reason. Its cells still open their sites — there is a real list
+ * behind "nobody holds these", and it is the one worth reading — through
+ * `contractor_id=none`, which is what the endpoint calls them.
  */
 export default function ContractorScorecard({ rows, provinceId }) {
   const reduced = useReducedMotion()
@@ -30,6 +33,8 @@ export default function ContractorScorecard({ rows, provinceId }) {
   }
 
   const scope = provinceId == null ? {} : { provinceId }
+  /** The id this row's links carry: the company, or the unattributed bucket. */
+  const idFor = (row) => (row.contractor_id == null ? UNATTRIBUTED : row.contractor_id)
 
   return (
     <div className="table-wrap scroll-x">
@@ -59,26 +64,29 @@ export default function ContractorScorecard({ rows, provinceId }) {
                   {row.name}
                 </td>
                 <td className="tnum" style={{ textAlign: 'right' }}>{count(row.onair)}</td>
-                <td className="tnum dt-good" style={{ textAlign: 'right' }}>{count(row.done)}</td>
+                <td className="tnum dt-good" style={{ textAlign: 'right' }}>
+                  <Link
+                    to={doneLink({ ...scope, contractorId: idFor(row) })}
+                    className="dt-cell-link"
+                  >
+                    {count(row.done)}
+                  </Link>
+                </td>
                 <td className="tnum" style={{ textAlign: 'right' }}>
-                  {unattributed ? (
-                    count(row.ongoing)
-                  ) : (
-                    <Link
-                      to={ongoingLink({ ...scope, contractorId: row.contractor_id })}
-                      className="dt-cell-link"
-                    >
-                      {count(row.ongoing)}
-                    </Link>
-                  )}
+                  <Link
+                    to={ongoingLink({ ...scope, contractorId: idFor(row) })}
+                    className="dt-cell-link"
+                  >
+                    {count(row.ongoing)}
+                  </Link>
                 </td>
                 <td
                   className="tnum"
                   style={{ textAlign: 'right', color: row.problematic > 0 ? 'var(--red)' : undefined }}
                 >
-                  {!unattributed && row.problematic > 0 ? (
+                  {row.problematic > 0 ? (
                     <Link
-                      to={problematicLink({ ...scope, contractorId: row.contractor_id })}
+                      to={problematicLink({ ...scope, contractorId: idFor(row) })}
                       className="dt-cell-link dt-cell-link-bad"
                     >
                       {count(row.problematic)}

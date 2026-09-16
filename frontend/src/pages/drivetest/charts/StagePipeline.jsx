@@ -1,7 +1,7 @@
 import { motion, useReducedMotion } from 'framer-motion'
 import { Link } from 'react-router-dom'
 import { count, share } from '../format'
-import { queueLink } from '../links'
+import { ongoingLink } from '../links'
 
 /**
  * Where the ongoing sites are actually stuck.
@@ -15,6 +15,11 @@ import { queueLink } from '../links'
  * waiting on a contractor; one in DT Submitted is waiting on a reviewer. That
  * distinction decides who gets chased, and it was being computed, sent over
  * the wire, and discarded.
+ *
+ * Each step opens the ongoing sites sitting in that stage. It used to open
+ * the work queue's tab for the stage, which is a different set: the queue has
+ * no on-air filter and no notion of ongoing, so a step saying 12 could land on
+ * a list of 30.
  *
  * Drawn in workflow order, never sorted by size, with empty stages kept.
  * Both rules come from the backend's own `_stage_points`, and both matter for
@@ -41,7 +46,7 @@ export default function StagePipeline({ points, total, provinceId }) {
               {i < points.length - 1 && <span className="dt-pipe-line" />}
             </span>
             <Link
-              to={queueLink({ stage: p.name, provinceId })}
+              to={ongoingLink({ stage: p.key ?? p.name, provinceId })}
               className="dt-pipe-body"
               aria-label={`${p.name}: ${p.value} ongoing sites`}
             >
