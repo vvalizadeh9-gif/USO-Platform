@@ -11,7 +11,7 @@ import {
 import { Link } from 'react-router-dom'
 import { KPI_DIRECTION } from './constants'
 import { count, deltaTone, percent, TONE_COLOR } from './format'
-import { doneLink, ongoingLink, problematicLink } from './links'
+import { doneLink, onairLink, ongoingLink, problematicLink, remainingLink } from './links'
 import { AnimatedNumber } from './charts/primitives'
 
 /**
@@ -31,8 +31,10 @@ import { AnimatedNumber } from './charts/primitives'
  * is the bracket under the two segments that compose it, which is what it has
  * always been.
  *
- * Each segment is a link to the sites inside it. The bar is the drill-through,
- * not a picture of one.
+ * Each segment is a link to the sites inside it, and so are the total above it
+ * and the Remaining bracket below. The bar is the drill-through, not a picture
+ * of one. Every one of those links opens the site list, which counts through
+ * the same predicates these figures were counted with — see `links.js`.
  */
 
 function DeltaChip({ delta, direction = 'up', small }) {
@@ -142,9 +144,9 @@ export default function KpiBand({ kpis, monthName, provinceId }) {
       <header className="dt-band-head">
         <div className="dt-band-total">
           <span className="dt-band-label">Total on-air</span>
-          <span className="dt-band-figure">
+          <Link to={onairLink(scope)} className="dt-band-figure" aria-label={`Total on-air: ${onair} sites`}>
             <AnimatedNumber value={onair} />
-          </span>
+          </Link>
           <DeltaChip delta={kpis.total_onair.delta} direction={KPI_DIRECTION.total_onair} />
         </div>
 
@@ -187,9 +189,18 @@ export default function KpiBand({ kpis, monthName, provinceId }) {
           <span className="dt-bracket-rule" aria-hidden="true" />
           <span className="dt-bracket-text">
             <span className="dt-bracket-label">Remaining</span>
-            <b className="tnum">
-              <AnimatedNumber value={kpis.total_remaining.value} />
-            </b>
+            {/* The <b> stays inside the link: `.dt-bracket-text b` is what
+                gives this figure its display font and size, and a link in its
+                place would quietly render it as body text. */}
+            <Link
+              to={remainingLink(scope)}
+              className="dt-cell-link"
+              aria-label={`Remaining: ${kpis.total_remaining.value} sites`}
+            >
+              <b className="tnum">
+                <AnimatedNumber value={kpis.total_remaining.value} />
+              </b>
+            </Link>
             <span className="dt-bracket-pct tnum">{percent(remainingShare)}</span>
             <DeltaChip
               delta={kpis.total_remaining.delta}

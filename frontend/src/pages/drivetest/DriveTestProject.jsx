@@ -35,9 +35,9 @@ import { useDashboard } from './useDashboard'
  * THE WORKBENCH LAYOUT. The four questions are still answered in that order —
  * the order is the argument and it has not changed. What changed is that the
  * page stopped being a document you read once and became a surface you work
- * at, because that is what it is used for: every figure on it is a link into
- * the work queue, so the reader arrives, drills through, comes back, and
- * re-filters.
+ * at, because that is what it is used for: every figure on it is a link to the
+ * sites behind it (`/drive-test/sites`), so the reader arrives, drills
+ * through, comes back, and re-filters.
  *
  * That use is what the two moves here serve. The command bar sticks, so the
  * province filter and the freshness clock stay reachable from the bottom of a
@@ -136,14 +136,36 @@ export default function DriveTestProject() {
     }
   }
 
+  /** Contractor name -> id, for the ongoing breakdown's bars.
+   *
+   * Those points carry a name and a count and no id, so the id comes from the
+   * scorecard in the same payload — the one place this page already has both.
+   * A name with no row is not linked, which is exactly what should happen to
+   * the unnamed "Other contractors" aggregate a contractor account sees: it
+   * stands for several companies and there is no list behind it that they are
+   * allowed to open.
+   */
+  const contractorIdByName = useMemo(() => {
+    const map = new Map()
+    for (const row of data?.contractor_scorecard ?? []) {
+      if (row.contractor_id != null) map.set(row.name, row.contractor_id)
+    }
+    return map
+  }, [data])
+
   const ongoingViews = useMemo(() => {
     const b = data?.ongoing_breakdown
     if (!b) return {}
+    const scope = provinceId == null ? {} : { provinceId }
     return {
       contractor: {
         points: b.by_contractor,
         unit: 'Contractor',
         color: 'var(--signal)',
+        hrefFor: (p) => {
+          const id = contractorIdByName.get(p.name)
+          return id == null ? null : ongoingLink({ ...scope, contractorId: id })
+        },
         // Stated rather than left to be inferred from a total that does not
         // match: sites with no contractor are deliberately not a bar here.
         note:
@@ -166,6 +188,10 @@ export default function DriveTestProject() {
         points: b.by_age,
         unit: 'Waiting',
         color: 'var(--amber)',
+        // The band's key, not its label: the label carries an en dash and is
+        // a wording somebody may improve, and a URL built out of it would
+        // break silently — with an empty list rather than an error.
+        hrefFor: (p) => (p.key ? ongoingLink({ ...scope, ageBand: p.key }) : null),
         note:
           b.without_launch_date > 0
             ? `Measured from each site's launch date. ${count(b.without_launch_date)} ongoing ` +
@@ -174,7 +200,7 @@ export default function DriveTestProject() {
             : "Measured from each site's launch date — how long a live site has gone untested.",
       },
     }
-  }, [data, provinces])
+  }, [data, provinces, provinceId, contractorIdByName])
 
   const problematicViews = useMemo(() => {
     const b = data?.problematic_breakdown
@@ -184,7 +210,13 @@ export default function DriveTestProject() {
         points: b.by_category,
         unit: 'Category',
         color: 'var(--red)',
-        hrefFor: () => problematicLink(provinceId == null ? {} : { provinceId }),
+        // Each bar opens its own category. It used to open every problematic
+        // site whichever bar was clicked, so a reader who clicked 64 landed
+        // on 194.
+        hrefFor: (p) => {
+          const scope = provinceId == null ? {} : { provinceId }
+          return problematicLink(p.key ? { ...scope, category: p.key } : scope)
+        },
       },
       province: {
         points: collapse(b.by_province),

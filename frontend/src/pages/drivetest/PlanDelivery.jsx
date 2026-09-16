@@ -1,5 +1,7 @@
 import { CheckCircle2, ClipboardList, Gauge, Target } from 'lucide-react'
+import { Link } from 'react-router-dom'
 import { achievement, bandColor, count, planScale } from './format'
+import { deliveredLink } from './links'
 import BulletBar, { BulletKey } from './charts/BulletBar'
 import Section from './Section'
 
@@ -9,6 +11,11 @@ import Section from './Section'
  * A contractor signed in here receives one row — their own — and an unnamed
  * programme average. That is enforced by the endpoint, not by this component,
  * which renders whatever rows it was given.
+ *
+ * Delivered is the one figure here with a list behind it: PIP and Assigned are
+ * counts of commitments and handovers, not of sites this dashboard can open.
+ * So Actual links to the month's drive tests, and each contractor's delivered
+ * count to theirs — the same month, the same dating rule, the same figure.
  */
 export default function PlanDelivery({ state, onRetry, id }) {
   return (
@@ -47,6 +54,10 @@ export default function PlanDelivery({ state, onRetry, id }) {
                 label="Actual"
                 value={count(data.actual)}
                 color="var(--green)"
+                href={deliveredLink({
+                  year: data.shamsi_year,
+                  month: data.shamsi_month,
+                })}
               />
               <Figure
                 icon={Gauge}
@@ -63,6 +74,8 @@ export default function PlanDelivery({ state, onRetry, id }) {
             <ContractorAchievement
               rows={data.rows}
               programme={data.programme_achievement_percent}
+              year={data.shamsi_year}
+              month={data.shamsi_month}
             />
           </>
         )
@@ -71,22 +84,31 @@ export default function PlanDelivery({ state, onRetry, id }) {
   )
 }
 
-function Figure({ icon: Icon, label, value, color, note, emphasis }) {
+function Figure({ icon: Icon, label, value, color, note, emphasis, href }) {
+  const figure = (
+    <span className="dt-figure" style={emphasis ? { color } : undefined}>
+      {value}
+    </span>
+  )
   return (
     <div className={`dt-figure-tile${emphasis ? ' dt-figure-emphasis' : ''}`}>
       <span className="dt-figure-label">
         <Icon size={14} strokeWidth={2} style={{ color }} aria-hidden="true" />
         {label}
       </span>
-      <span className="dt-figure" style={emphasis ? { color } : undefined}>
-        {value}
-      </span>
+      {href ? (
+        <Link to={href} className="dt-cell-link" aria-label={`${label}: ${value}`}>
+          {figure}
+        </Link>
+      ) : (
+        figure
+      )}
       {note && <span className="dt-figure-note">{note}</span>}
     </div>
   )
 }
 
-function ContractorAchievement({ rows, programme }) {
+function ContractorAchievement({ rows, programme, year, month }) {
   if (!rows || rows.length === 0) {
     return <div className="dt-empty">No contractor plans for this month.</div>
   }
@@ -108,6 +130,7 @@ function ContractorAchievement({ rows, programme }) {
           pip={row.pip}
           actual={row.actual}
           detail={`${count(row.actual)} of ${row.pip || '—'}`}
+          href={deliveredLink({ year, month, contractorId: row.contractor_id })}
           scaleMax={scaleMax}
           index={i}
         />

@@ -10,6 +10,7 @@ import Login from './pages/Login'
 // current page. Each page's JS (and its heavy deps like charts) is fetched on
 // demand, making first paint and navigation noticeably faster.
 const DriveTestProject = lazy(() => import('./pages/drivetest/DriveTestProject'))
+const DriveTestSiteList = lazy(() => import('./pages/drivetest/SiteList'))
 const HealthCheck = lazy(() => import('./pages/HealthCheck'))
 const MyHealthCheck = lazy(() => import('./pages/MyHealthCheck'))
 const MyFixQueue = lazy(() => import('./pages/MyFixQueue'))
@@ -82,6 +83,10 @@ export default function App() {
               split into a read surface and a work surface. The old paths still
               answer, because they are in people's bookmarks. */}
           <Route path="/drive-test" element={<Navigate to="/reports/drive-test" replace />} />
+          {/* The drill-through: the sites behind any figure on the dashboard.
+              Declared after /drive-test, which is an exact path and does not
+              swallow it. */}
+          <Route path="/drive-test/sites" element={<DriveTestSiteList />} />
           <Route path="/health-check" element={<HealthCheck />} />
           <Route path="/my-health-check" element={<MyHealthCheck />} />
           <Route

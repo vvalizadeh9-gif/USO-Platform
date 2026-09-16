@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { PROVINCE_LIMIT } from './constants'
 import { count, percent, progressColor } from './format'
-import { ongoingLink, problematicLink } from './links'
+import { doneLink, onairLink, ongoingLink, problematicLink, remainingLink } from './links'
 
 /**
  * Every province's full picture, sortable, worst first by default.
@@ -19,6 +19,10 @@ import { ongoingLink, problematicLink } from './links'
  * work is. Sorting is now the reader's to change — the old table fixed the
  * order on the grounds that re-sorting by name would bury the answer, which
  * is true of *that* sort and not of sorting in general.
+ *
+ * Every count in a row opens that province's sites for that figure. They used
+ * to be four numbers of which two were links, which is an odd thing for a
+ * table of the same kind of number.
  */
 
 const COLUMNS = [
@@ -116,19 +120,17 @@ export default function ProvinceTable({ rows, provinces, onProvince }) {
                   transition={{ delay: Math.min(i * 0.02, 0.2), duration: 0.25 }}
                 >
                   <td className="dt-farsi" style={{ fontWeight: 500 }}>{row.name}</td>
-                  <td className="tnum" style={{ textAlign: 'right' }}>{count(row.onair)}</td>
-                  <td className="tnum dt-good" style={{ textAlign: 'right' }}>{count(row.done)}</td>
+                  <td className="tnum" style={{ textAlign: 'right' }}>
+                    <Cell id={id} href={onairLink} value={row.onair} />
+                  </td>
+                  <td className="tnum dt-good" style={{ textAlign: 'right' }}>
+                    <Cell id={id} href={doneLink} value={row.done} />
+                  </td>
                   <td className="tnum" style={{ textAlign: 'right', fontWeight: 600 }}>
-                    {count(row.remaining)}
+                    <Cell id={id} href={remainingLink} value={row.remaining} />
                   </td>
                   <td className="tnum" style={{ textAlign: 'right' }}>
-                    {id ? (
-                      <Link to={ongoingLink({ provinceId: id })} className="dt-cell-link">
-                        {count(row.ongoing)}
-                      </Link>
-                    ) : (
-                      count(row.ongoing)
-                    )}
+                    <Cell id={id} href={ongoingLink} value={row.ongoing} />
                   </td>
                   <td
                     className="tnum"
@@ -190,5 +192,20 @@ export default function ProvinceTable({ rows, provinces, onProvince }) {
         </div>
       )}
     </>
+  )
+}
+
+/** One count in a province row, as a link where the province is known.
+ *
+ * A province the payload names but the filter list does not know has no id to
+ * build a link from — it is plain text rather than a link that would open the
+ * whole programme and look like that province's list.
+ */
+function Cell({ id, href, value }) {
+  if (!id) return count(value)
+  return (
+    <Link to={href({ provinceId: id })} className="dt-cell-link">
+      {count(value)}
+    </Link>
   )
 }

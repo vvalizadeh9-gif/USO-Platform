@@ -1,4 +1,5 @@
 import { motion, useReducedMotion } from 'framer-motion'
+import { Link } from 'react-router-dom'
 import { achievement, bandColor, count } from '../format'
 
 /**
@@ -26,6 +27,10 @@ import { achievement, bandColor, count } from '../format'
  * A contractor with no approved plan has no ghost and no target: there is
  * nothing to have delivered a share of. Their work still draws, in a neutral
  * colour, because it happened.
+ *
+ * `href`, where it is given, opens the drive tests the delivered figure counts.
+ * It goes on the count rather than on the whole row: the row also carries a
+ * plan and a rate, and neither of those is a list of sites.
  */
 export default function BulletBar({
   label,
@@ -36,6 +41,7 @@ export default function BulletBar({
   scaleMax,
   anonymous,
   index = 0,
+  href,
 }) {
   const reduced = useReducedMotion()
   const noPlan = percent == null
@@ -79,7 +85,15 @@ export default function BulletBar({
         )}
       </span>
 
-      <span className="dt-bullet-detail tnum">{detail}</span>
+      <span className="dt-bullet-detail tnum">
+        {href ? (
+          <Link to={href} className="dt-cell-link" aria-label={`${label}: ${detail} delivered`}>
+            {detail}
+          </Link>
+        ) : (
+          detail
+        )}
+      </span>
       <span className="dt-bullet-pct tnum" style={{ color: noPlan ? 'var(--text-dim)' : color }}>
         {noPlan ? 'no plan' : achievement(percent)}
       </span>
