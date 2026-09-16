@@ -77,7 +77,7 @@ export default function Toolbar({
         </button>
         <button type="button" className="btn btn-sm" onClick={onExport} disabled={exporting}>
           <Download size={13} aria-hidden="true" />
-          {exporting ? 'Preparing…' : 'Export'}
+          {exporting ? 'Preparing…' : 'Export DT workbook'}
         </button>
       </div>
     </div>

@@ -1037,6 +1037,63 @@ describe('drill-through', () => {
   })
 })
 
+describe('the export button', () => {
+  // A deliberate behaviour change: it used to download `/work-items/export`,
+  // which is every work item in scope whether on-air or not. A reader pressed
+  // Export on this dashboard and got a file whose row count matched no figure
+  // on the page.
+  it('downloads the DT delivery workbook for the current scope', async () => {
+    // jsdom implements neither, and the download path calls both. Without the
+    // stubs the handler throws on the first line after the request and the
+    // assertion below would pass on a click that visibly failed.
+    URL.createObjectURL = vi.fn(() => 'blob:x')
+    URL.revokeObjectURL = vi.fn()
+    api.get.mockImplementation((url) => {
+      if (url === '/drive-test/overview') return Promise.resolve({ data: overview })
+      if (url === '/drive-test/plan-delivery') return Promise.resolve({ data: planDelivery() })
+      if (url === '/drive-test/trend') return Promise.resolve({ data: trend() })
+      if (url === '/drive-test/export') {
+        return Promise.resolve({
+          data: new Blob(['x']),
+          headers: { 'content-disposition': 'attachment; filename="dt-delivery-1405-06-25.xlsx"' },
+        })
+      }
+      return Promise.reject(new Error(`unexpected ${url}`))
+    })
+    draw('/reports/drive-test?province=7')
+
+    await screen.findByLabelText('Programme totals')
+    await userEvent.click(screen.getByRole('button', { name: /Export DT workbook/ }))
+
+    await waitFor(() =>
+      expect(api.get).toHaveBeenCalledWith('/drive-test/export', {
+        params: { province_id: 7 },
+        responseType: 'blob',
+      }),
+    )
+    // Never the old endpoint.
+    expect(api.get).not.toHaveBeenCalledWith('/work-items/export', expect.anything())
+    // And the file is saved under the name the server gave it.
+    expect(URL.createObjectURL).toHaveBeenCalled()
+    expect(screen.queryByText('Export failed')).not.toBeInTheDocument()
+  })
+
+  it('says so instead of failing silently when the file cannot be built', async () => {
+    api.get.mockImplementation((url) => {
+      if (url === '/drive-test/overview') return Promise.resolve({ data: overview })
+      if (url === '/drive-test/plan-delivery') return Promise.resolve({ data: planDelivery() })
+      if (url === '/drive-test/trend') return Promise.resolve({ data: trend() })
+      return Promise.reject(new Error('too big'))
+    })
+    draw()
+
+    await screen.findByLabelText('Programme totals')
+    await userEvent.click(screen.getByRole('button', { name: /Export DT workbook/ }))
+
+    expect(await screen.findByText('Export failed')).toBeInTheDocument()
+  })
+})
+
 describe('failure and freshness', () => {
   it('says a section failed instead of quietly removing it', async () => {
     // The old page set the section's data to null and returned null from the

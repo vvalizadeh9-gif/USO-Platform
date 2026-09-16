@@ -105,17 +105,30 @@ export default function DriveTestProject() {
    * drawn is not drawn, and nothing around it is affected. */
   const has = (field) => !data || Boolean(data[field])
 
-  async function exportSites() {
+  /** Download the DT delivery workbook for what is currently on screen.
+   *
+   * This used to fetch `/work-items/export`, which is a different set: every
+   * work item in scope, on-air or not, with five columns. A reader pressed
+   * Export on this dashboard and got a file whose row count matched no figure
+   * on the page — the one thing the drill-through exists to prevent, left in
+   * the toolbar. It now asks for the workbook, which is built from these very
+   * figures.
+   *
+   * The saved filename comes from the server where it sends one: the backend
+   * already builds a dated, scope-named, ASCII-safe name, and inventing a
+   * second one here is how the two come to disagree.
+   */
+  async function exportWorkbook() {
     setExporting(true)
     try {
-      const res = await api.get('/work-items/export', {
+      const res = await api.get('/drive-test/export', {
         params: provinceId == null ? {} : { province_id: provinceId },
         responseType: 'blob',
       })
       const url = URL.createObjectURL(res.data)
       const a = document.createElement('a')
       a.href = url
-      a.download = provinceName ? `drive_test_${provinceName}.xlsx` : 'drive_test_sites.xlsx'
+      a.download = filenameFrom(res.headers, provinceName)
       a.click()
       URL.revokeObjectURL(url)
     } catch {
@@ -248,7 +261,7 @@ export default function DriveTestProject() {
           onRefresh={refresh}
           refreshing={refreshing}
           generatedAt={data?.generated_at}
-          onExport={exportSites}
+          onExport={exportWorkbook}
           exporting={exporting}
         />
       </div>
@@ -445,4 +458,17 @@ function KpiSkeleton() {
       </div>
     </div>
   )
+}
+
+/** The filename the server named the file, or a readable fallback.
+ *
+ * `content-disposition` is not always readable — a proxy can strip it, and a
+ * cross-origin response without `Access-Control-Expose-Headers` hides it — so
+ * this never depends on it being there.
+ */
+function filenameFrom(headers, provinceName) {
+  const disposition = headers?.['content-disposition'] ?? ''
+  const match = /filename="([^"]+)"/.exec(disposition)
+  if (match) return match[1]
+  return provinceName ? `dt-delivery-${provinceName}.xlsx` : 'dt-delivery.xlsx'
 }

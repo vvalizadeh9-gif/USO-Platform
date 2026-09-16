@@ -109,6 +109,23 @@ def _write_row(ws, row: int, leading: list, source: dict) -> None:
         ws.cell(row=row, column=len(leading) + 8).fill = fill
 
 
+def write_contractor_sheet(ws, months: list[dict]) -> None:
+    """One row per contractor per month, header included, on *ws*.
+
+    Lifted out of :func:`scorecard_workbook` unchanged so the DT delivery
+    workbook can carry the same ledger sheet without a second copy of these
+    columns. Two exports whose ledgers are written by different code are two
+    exports that will one day disagree about a column.
+    """
+    _header(ws, CONTRACTOR_COLUMNS)
+    r = 2
+    for month in months:
+        label = f"{month['shamsi_month_name']} {month['shamsi_year']}"
+        for row in month["rows"]:
+            _write_row(ws, r, [label, row["name"] or _DASH], row)
+            r += 1
+
+
 def scorecard_workbook(data: dict) -> bytes:
     """The scorecard payload as .xlsx bytes."""
     wb = Workbook()
@@ -165,14 +182,7 @@ def scorecard_workbook(data: dict) -> bytes:
         ),
     ).font = _NOTE
 
-    detail = wb.create_sheet("Contractors")
-    _header(detail, CONTRACTOR_COLUMNS)
-    r = 2
-    for month in months:
-        label = f"{month['shamsi_month_name']} {month['shamsi_year']}"
-        for row in month["rows"]:
-            _write_row(detail, r, [label, row["name"] or _DASH], row)
-            r += 1
+    write_contractor_sheet(wb.create_sheet("Contractors"), months)
 
     buffer = io.BytesIO()
     wb.save(buffer)

@@ -465,12 +465,7 @@ def _periods(months: int, year: int | None) -> list[tuple[int, int]]:
     """
     if year is not None:
         return [(year, m) for m in range(1, 13)]
-    y, m = jalali.current_shamsi_period()
-    out: list[tuple[int, int]] = []
-    for _ in range(months):
-        out.append((y, m))
-        y, m = jalali.previous_period(y, m)
-    return list(reversed(out))
+    return plans.trailing_periods(months)
 
 
 @router.get("/scorecard", response_model=ScorecardOut)

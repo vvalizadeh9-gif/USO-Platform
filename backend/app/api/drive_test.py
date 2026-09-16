@@ -15,6 +15,10 @@ of the whole programme, this is one month closing — and because it is the one
 payload on this dashboard that can name a contractor, which is worth keeping
 where it can be read in one place.
 
+``/export`` is the delivery workbook: the whole picture -- summary, sites,
+open fixes, contractor ledger, provinces -- in one file for an audit or a
+meeting, every figure taken from the same service calls the screens use.
+
 ``/sites`` and ``/sites/export`` are the drill-through: the list of sites
 behind any figure above, and the same list as a spreadsheet. They are a third
 endpoint rather than parameters on ``/work-items`` because that screen's
@@ -51,7 +55,13 @@ from app.schemas import (
     ProvinceProgressPoint,
     TrendPoint,
 )
-from app.services import dt_site_export, dt_site_list, dt_trends, monthly_plan as plans
+from app.services import (
+    dt_site_export,
+    dt_site_list,
+    dt_trends,
+    dt_workbook,
+    monthly_plan as plans,
+)
 from app.services.drive_test_analytics import DriveTestAnalytics
 from app.services.snapshots import get_month_over_month
 from app.services.visibility import visible_province_ids
@@ -396,6 +406,67 @@ def export_drive_test_sites(
             "Content-Disposition": (
                 f'attachment; filename="{dt_site_export.filename(filters.applied)}"'
             )
+        },
+    )
+
+
+@router.get("/export")
+def export_delivery_workbook(
+    province_id: int | None = Query(
+        None, description="Narrow the whole file to one province inside your scope"
+    ),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> Response:
+    """The Drive Test delivery workbook for this caller's scope.
+
+    Five sheets, every figure from the same service calls the dashboard and
+    the drill-through use, so the file agrees with the screen it was taken
+    from. ``province_id`` is resolved the same way ``/overview`` resolves it,
+    and the workbook applies it inside ``DriveTestAnalytics`` -- after the
+    scope, never instead of it.
+
+    A province outside the caller's scope produces an empty file rather than
+    the 404 ``/overview`` answers with. Both refuse to say whether that
+    province exists; a workbook that opens and is empty says "nothing here for
+    you" in a form the person can read, where a failed download says only that
+    something went wrong. It is also what ``/sites`` already does, and this
+    file is that list's sibling.
+
+    The service is thin on purpose: this function resolves the province,
+    names the file and turns an over-cap workbook into a 400. Everything about
+    what is in the file lives in ``services/dt_workbook.py``.
+    """
+    allowed = visible_province_ids(user)
+    in_scope = (
+        province_id is None or allowed is None or province_id in allowed
+    )
+    province = (
+        db.get(Province, province_id) if province_id is not None and in_scope else None
+    )
+    name = province.name if province is not None else None
+    # "" matches no province, so an out-of-scope id narrows the file to
+    # nothing instead of quietly widening it back to the whole scope.
+    filter_name = None if province_id is None else (name or "")
+    label = name or (f"Province {province_id}" if province_id is not None else None)
+
+    try:
+        content = dt_workbook.build(
+            db,
+            user,
+            province_id=province_id,
+            province_name=filter_name,
+            scope_label=label,
+            max_rows=MAX_EXPORT_ROWS,
+        )
+    except dt_workbook.WorkbookTooLarge as exc:
+        raise HTTPException(400, str(exc)) from None
+
+    return Response(
+        content=content,
+        media_type=_XLSX_MEDIA_TYPE,
+        headers={
+            "Content-Disposition": f'attachment; filename="{dt_workbook.filename(name)}"'
         },
     )
 
