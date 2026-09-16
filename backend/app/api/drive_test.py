@@ -14,13 +14,20 @@ different question over a different period — the overview is a running state
 of the whole programme, this is one month closing — and because it is the one
 payload on this dashboard that can name a contractor, which is worth keeping
 where it can be read in one place.
+
+``/sites`` and ``/sites/export`` are the drill-through: the list of sites
+behind any figure above, and the same list as a spreadsheet. They are a third
+endpoint rather than parameters on ``/work-items`` because that screen's
+stage filter and this dashboard's buckets are not the same definition — see
+the module docstring of ``services/dt_site_list.py``, which has the numbers.
 """
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.api.work_items import MAX_EXPORT_ROWS
 from app.core import jalali
 from app.core.database import get_db
 from app.core.deps import get_current_user
@@ -31,6 +38,8 @@ from app.schemas import (
     ContractorScorecardRow,
     DriveTestKpis,
     DriveTestOverview,
+    DriveTestSiteList,
+    DriveTestSiteRow,
     DriveTestTrend,
     KpiWithDelta,
     MonthFlows,
@@ -42,12 +51,16 @@ from app.schemas import (
     ProvinceProgressPoint,
     TrendPoint,
 )
-from app.services import dt_trends, monthly_plan as plans
+from app.services import dt_site_export, dt_site_list, dt_trends, monthly_plan as plans
 from app.services.drive_test_analytics import DriveTestAnalytics
 from app.services.snapshots import get_month_over_month
 from app.services.visibility import visible_province_ids
 
 router = APIRouter(prefix="/drive-test", tags=["drive-test"])
+
+_XLSX_MEDIA_TYPE = (
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+)
 
 
 def _resolve_province(user: User, province_id: int | None) -> int | None:
@@ -259,6 +272,134 @@ def plan_delivery(
     )
 
 
+#: The query parameters both site endpoints take, declared once.
+#:
+#: Two routes with one set of filters written twice is two routes that will
+#: one day disagree about what a filter means, and the file a reader downloads
+#: would then hold a different list from the screen they downloaded it off.
+def _site_params(
+    bucket: str | None = Query(
+        None,
+        description=(
+            "Which dashboard figure: "
+            + ", ".join(dt_site_list.BUCKETS)
+            + f". Defaults to {dt_site_list.DEFAULT_BUCKET}."
+        ),
+    ),
+    category: str | None = Query(
+        None, description="Problem category, or Uncategorized. Problematic only."
+    ),
+    age_band: str | None = Query(
+        None, description="An age-band key, or no_launch_date. Ongoing only."
+    ),
+    stage: str | None = Query(None, description="An ongoing stage. Ongoing only."),
+    contractor_id: str | None = Query(
+        None, description="A contractor id, or 'none' for unattributed sites"
+    ),
+    province_id: int | None = Query(None, description="Narrow to one province"),
+    year: int | None = Query(None, description="Shamsi year; delivered only"),
+    month: int | None = Query(None, description="Shamsi month; delivered only"),
+    overdue: str | None = Query(
+        None, description="true for sites with an open fix past its due date"
+    ),
+    owner_role_id: int | None = Query(
+        None, description="Sites with an open fix owned by this role"
+    ),
+    sort: str | None = Query(
+        None, description="A sortable column, '-' prefixed for descending"
+    ),
+) -> dict:
+    return {
+        "bucket": bucket,
+        "category": category,
+        "age_band": age_band,
+        "stage": stage,
+        "contractor_id": contractor_id,
+        "province_id": province_id,
+        "year": year,
+        "month": month,
+        "overdue": overdue,
+        "owner_role_id": owner_role_id,
+        "sort": sort,
+    }
+
+
+def _filters(db: Session, user: User, params: dict) -> dt_site_list.Filters:
+    """Validate the query string, or answer 422 with a plain message.
+
+    422 rather than a quietly ignored parameter, for every one of them. A
+    filter that is dropped in silence produces a list that looks right and is
+    not, and this whole screen exists so that a count can be trusted.
+    """
+    try:
+        return dt_site_list.parse_filters(db, user, **params)
+    except dt_site_list.SiteListError as exc:
+        raise HTTPException(422, str(exc)) from None
+
+
+@router.get("/sites", response_model=DriveTestSiteList)
+def drive_test_sites(
+    params: dict = Depends(_site_params),
+    limit: int = Query(100, ge=1, le=500, description="Rows per page, at most 500"),
+    offset: int = Query(0, ge=0),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> DriveTestSiteList:
+    """The sites behind one figure on the Drive Test dashboard.
+
+    ``total`` is the count before pagination, and it is the figure the reader
+    clicked — the endpoint counts through the dashboard's own predicates, over
+    the dashboard's own scoped set, so the two cannot come apart.
+
+    Open to every signed-in role because the answer is already scoped to the
+    caller: ``apply_work_item_scope`` decides which sites exist for them,
+    ``province_id`` can only narrow that, and a contractor account is forced
+    to its own company whatever the URL says.
+    """
+    filters = _filters(db, user, params)
+    rows = dt_site_list.build_rows(db, user, filters)
+    page = rows[offset : offset + limit]
+    return DriveTestSiteList(
+        total=len(rows),
+        rows=[DriveTestSiteRow(**row) for row in page],
+        filters_applied=filters.applied,
+        generated_at=datetime.now(timezone.utc),
+    )
+
+
+@router.get("/sites/export")
+def export_drive_test_sites(
+    params: dict = Depends(_site_params),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> Response:
+    """The same list as an Excel file: same filters, same scope, same rows.
+
+    The same function builds both, so the file cannot hold a row the screen
+    would not have shown. It is not paginated, and beyond ``MAX_EXPORT_ROWS``
+    it refuses rather than truncating: a file silently missing its tail is
+    read as the whole answer, which is the one outcome worse than no file.
+    """
+    filters = _filters(db, user, params)
+    rows = dt_site_list.build_rows(db, user, filters)
+    if len(rows) > MAX_EXPORT_ROWS:
+        raise HTTPException(
+            400,
+            f"That is {len(rows)} rows, more than the {MAX_EXPORT_ROWS} this "
+            "export holds. Narrow the filters and try again.",
+        )
+    content = dt_site_export.build_site_list_export(rows, filters.applied)
+    return Response(
+        content=content,
+        media_type=_XLSX_MEDIA_TYPE,
+        headers={
+            "Content-Disposition": (
+                f'attachment; filename="{dt_site_export.filename(filters.applied)}"'
+            )
+        },
+    )
+
+
 def _previous_totals(db: Session, user: User, province_id: int | None = None) -> dict:
     """Pick the right prior-month snapshot for this user's scope.
 
@@ -316,4 +457,12 @@ def _problematic_breakdown(data: dict) -> ProblematicBreakdown:
 
 
 def _points(rows: list[dict]) -> list[ChartPoint]:
-    return [ChartPoint(name=r["name"], value=r["value"]) for r in rows]
+    """Chart points, carrying the drill-through key where the figure has one.
+
+    ``key`` is what a link to this point's site list travels with. Points that
+    have no stable key — a contractor or province row, both of which link by
+    id — simply do not carry one.
+    """
+    return [
+        ChartPoint(name=r["name"], value=r["value"], key=r.get("key")) for r in rows
+    ]

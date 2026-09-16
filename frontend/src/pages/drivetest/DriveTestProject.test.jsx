@@ -88,20 +88,22 @@ const overview = {
       { name: 'Kerman', value: 30 },
       { name: 'Yazd', value: 20 },
     ],
+    // `key` is what a drill-through link travels with; the backend fills it
+    // for age bands, stages and categories. See ChartPoint.
     by_age: [
-      { name: 'Up to 1 week', value: 20 },
-      { name: '1–2 weeks', value: 15 },
-      { name: '2–3 weeks', value: 8 },
-      { name: '3 weeks – 1 month', value: 4 },
-      { name: 'More than 1 month', value: 1 },
+      { name: 'Up to 1 week', value: 20, key: 'lte_1w' },
+      { name: '1–2 weeks', value: 15, key: 'w1_2' },
+      { name: '2–3 weeks', value: 8, key: 'w2_3' },
+      { name: '3 weeks – 1 month', value: 4, key: 'w3_1m' },
+      { name: 'More than 1 month', value: 1, key: 'gt_1m' },
     ],
     without_assignment_date: 2,
   },
   problematic_breakdown: {
     total: 10,
     by_category: [
-      { name: 'Power', value: 6 },
-      { name: 'Access', value: 4 },
+      { name: 'Power', value: 6, key: 'Power' },
+      { name: 'Access', value: 4, key: 'Access' },
     ],
     by_province: [
       { name: 'Kerman', value: 7 },
@@ -809,19 +811,108 @@ describe('the order of the page', () => {
 })
 
 describe('drill-through', () => {
-  it('links each KPI that has sites behind it into the work queue', async () => {
+  // Table-driven, and the table mirrors the backend's parity test: every
+  // figure the dashboard makes clickable appears here with the URL it must
+  // produce. The two lists are the same list — one asserts that the count is
+  // right, this one that the link asks for the right count.
+  //
+  // These used to point at `/work-items`, whose stage filter is not what this
+  // dashboard counts: a CPM-flagged problematic site keeps its own stage and
+  // was missing from the queue the number linked to, and the queue has no
+  // on-air filter so an ongoing link opened sites the dashboard never
+  // counted. Every figure now opens `/drive-test/sites`.
+  const CASES = [
+    {
+      name: 'the on-air total in the ring',
+      open: async () => await screen.findByLabelText('Programme totals'),
+      // By its accessible name: the label sits beside the figure and only the
+      // figure is the link.
+      label: 'Total on-air: 100 sites',
+      href: '/drive-test/sites?bucket=onair',
+    },
+    {
+      name: 'the done tile',
+      open: async () => await screen.findByLabelText('Programme totals'),
+      text: 'Drive tests done',
+      href: '/drive-test/sites?bucket=done',
+    },
+    {
+      name: 'the ongoing tile',
+      open: async () => await screen.findByLabelText('Programme totals'),
+      text: 'Ongoing',
+      href: '/drive-test/sites?bucket=ongoing',
+    },
+    {
+      name: 'the problematic tile',
+      open: async () => await screen.findByLabelText('Programme totals'),
+      text: 'Problematic',
+      href: '/drive-test/sites?bucket=problematic',
+    },
+    {
+      name: 'the remaining line',
+      open: async () => await screen.findByLabelText('Programme totals'),
+      label: 'Remaining: 60 sites',
+      href: '/drive-test/sites?bucket=remaining',
+    },
+    {
+      name: 'a problematic category',
+      open: () => section('Problematic breakdown'),
+      text: 'Power',
+      href: '/drive-test/sites?bucket=problematic&category=Power',
+    },
+    {
+      name: 'a problematic province',
+      open: async () => {
+        const card = await section('Problematic breakdown')
+        await userEvent.click(within(card).getByRole('tab', { name: 'Province' }))
+        return card
+      },
+      text: 'Kerman',
+      href: '/drive-test/sites?bucket=problematic&province_id=7',
+    },
+    {
+      name: 'an ongoing contractor',
+      open: () => section('Ongoing breakdown'),
+      text: 'Alfa Drive Tests',
+      href: '/drive-test/sites?bucket=ongoing&contractor_id=1',
+    },
+    {
+      name: 'an ongoing province',
+      open: async () => {
+        const card = await section('Ongoing breakdown')
+        await userEvent.click(within(card).getByRole('tab', { name: 'Province' }))
+        return card
+      },
+      text: 'Yazd',
+      href: '/drive-test/sites?bucket=ongoing&province_id=9',
+    },
+    {
+      name: 'an age band, by its key rather than its label',
+      open: async () => {
+        const card = await section('Ongoing breakdown')
+        await userEvent.click(within(card).getByRole('tab', { name: 'How long' }))
+        return card
+      },
+      text: '2–3 weeks',
+      href: '/drive-test/sites?bucket=ongoing&age_band=w2_3',
+    },
+    {
+      name: "a contractor's delivered count",
+      open: () => section('Plan and delivery'),
+      text: '2 of 2',
+      href: '/drive-test/sites?bucket=delivered&contractor_id=2&year=1405&month=6',
+    },
+  ]
+
+  it.each(CASES)('links $name to the sites behind it', async ({ open, text, label, href }) => {
     serve()
     draw()
 
-    const hero = await screen.findByLabelText('Programme totals')
-    expect(within(hero).getByText('Drive tests done').closest('a')).toHaveAttribute(
-      'href',
-      '/work-items?stage=DT+Done',
-    )
-    expect(within(hero).getByText('Problematic').closest('a')).toHaveAttribute(
-      'href',
-      '/work-items?stage=Problematic',
-    )
+    const scope = await open()
+    const link = label
+      ? within(scope).getByRole('link', { name: label })
+      : within(scope).getByText(text).closest('a')
+    expect(link).toHaveAttribute('href', href)
   })
 
   it('carries the province filter into the links it builds', async () => {
@@ -831,37 +922,118 @@ describe('drill-through', () => {
     const hero = await screen.findByLabelText('Programme totals')
     expect(within(hero).getByText('Problematic').closest('a')).toHaveAttribute(
       'href',
-      '/work-items?stage=Problematic&province_id=7',
+      '/drive-test/sites?bucket=problematic&province_id=7',
     )
   })
 
-  it('links a contractor row to that contractor’s sites', async () => {
+  it('links every cell of a contractor row, the denominator included', async () => {
     serve()
     draw()
 
     const card = await section('Contractor scorecard')
     const row = within(card).getByText('Alfa Drive Tests').closest('tr')
-    expect(within(row).getByText('15').closest('a')).toHaveAttribute(
-      'href',
-      '/work-items?contractor_id=1',
-    )
-    expect(within(row).getByText('40').closest('a')).toHaveAttribute(
-      'href',
-      '/work-items?stage=DT+Done&contractor_id=1',
-    )
-    expect(within(row).getByText('5').closest('a')).toHaveAttribute(
-      'href',
-      '/work-items?stage=Problematic&contractor_id=1',
-    )
+    for (const [value, href] of [
+      // The assignment is what the rate divides by, so it is the figure a
+      // contractor will want to check.
+      ['55', '/drive-test/sites?bucket=assigned&contractor_id=1'],
+      ['40', '/drive-test/sites?bucket=done&contractor_id=1'],
+      ['15', '/drive-test/sites?bucket=ongoing&contractor_id=1'],
+      ['5', '/drive-test/sites?bucket=problematic&contractor_id=1'],
+    ]) {
+      expect(within(row).getByText(value).closest('a')).toHaveAttribute('href', href)
+    }
   })
 
-  it('gives the unattributed row no contractor link, because there is no contractor', async () => {
+  it('links the unattributed row through contractor_id=none', async () => {
+    // There is no contractor to name, and there is still a list: the sites
+    // nobody holds are the ones most worth reading.
     serve()
     draw()
 
     const card = await section('Contractor scorecard')
     const row = within(card).getByText('Unattributed').closest('tr')
-    expect(within(row).queryByRole('link')).not.toBeInTheDocument()
+    expect(within(row).getByText('6').closest('a')).toHaveAttribute(
+      'href',
+      '/drive-test/sites?bucket=ongoing&contractor_id=none',
+    )
+  })
+
+  it('links every count in a province row', async () => {
+    serve()
+    draw()
+
+    const table = await section('Province breakdown')
+    const row = within(table).getByText('Kerman').closest('tr')
+    for (const [value, href] of [
+      ['60', '/drive-test/sites?bucket=onair&province_id=7'],
+      ['23', '/drive-test/sites?bucket=done&province_id=7'],
+      ['37', '/drive-test/sites?bucket=remaining&province_id=7'],
+      ['30', '/drive-test/sites?bucket=ongoing&province_id=7'],
+      ['7', '/drive-test/sites?bucket=problematic&province_id=7'],
+    ]) {
+      expect(within(row).getByText(value).closest('a')).toHaveAttribute('href', href)
+    }
+  })
+
+  it('links the month’s delivered figure to that month’s drive tests', async () => {
+    serve()
+    draw()
+
+    const card = await section('Plan and delivery')
+    const tile = within(card).getByText('Actual').closest('.dt-figure-tile')
+    expect(within(tile).getByText('6').closest('a')).toHaveAttribute(
+      'href',
+      '/drive-test/sites?bucket=delivered&year=1405&month=6',
+    )
+  })
+
+  it('leaves the trend chart and the flow ledger unlinked', async () => {
+    // Both are built from monthly snapshots. There is no list of sites behind
+    // a snapshot, and a link that opened one would be answering a different
+    // question with the same number.
+    serve()
+    draw()
+
+    const trend = await section('Where this is going')
+    const flow = await section('What moved')
+    expect(within(trend).queryAllByRole('link')).toHaveLength(0)
+    expect(within(flow).queryAllByRole('link')).toHaveLength(0)
+  })
+
+  it('gives a contractor no link out of the "Other contractors" bar', async () => {
+    // That bar is several companies folded into one unnamed aggregate, so a
+    // contractor's own figures still reconcile without naming a competitor.
+    // There is no list behind it they are allowed to open.
+    const contractorView = {
+      ...overview,
+      ongoing_breakdown: {
+        ...overview.ongoing_breakdown,
+        by_contractor: [
+          { name: 'Alfa Drive Tests', value: 12 },
+          { name: 'Other contractors', value: 6 },
+        ],
+      },
+      contractor_scorecard: [
+        {
+          contractor_id: 1,
+          name: 'Alfa Drive Tests',
+          assigned: 55,
+          done: 40,
+          ongoing: 15,
+          problematic: 5,
+          done_percent: 72.7,
+        },
+      ],
+    }
+    serve(planDelivery(), contractorView)
+    draw()
+
+    const card = await section('Ongoing breakdown')
+    expect(within(card).getByText('Alfa Drive Tests').closest('a')).toHaveAttribute(
+      'href',
+      '/drive-test/sites?bucket=ongoing&contractor_id=1',
+    )
+    expect(within(card).getByText('Other contractors').closest('a')).toBeNull()
   })
 })
 

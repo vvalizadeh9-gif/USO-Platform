@@ -1,8 +1,8 @@
 import { motion, useReducedMotion } from 'framer-motion'
 import { Link } from 'react-router-dom'
-import { STATE_COLOR } from './constants'
+import { STATE_COLOR, UNATTRIBUTED } from './constants'
 import { bookScale, count, percent, progressColor } from './format'
-import { doneLink, ongoingLink, problematicLink } from './links'
+import { assignedLink, doneLink, ongoingLink, problematicLink } from './links'
 import BookBar from './charts/BookBar'
 
 /**
@@ -27,7 +27,9 @@ import BookBar from './charts/BookBar'
  *
  * The unattributed row sits last and is styled apart. It is not a company and
  * cannot be beaten or beat anyone; the backend sorts it out of the ranking
- * for the same reason.
+ * for the same reason. Its cells still open their sites, through
+ * `contractor_id=none`: "nobody holds these" is a real list, and the one most
+ * worth reading.
  */
 export default function ContractorScorecard({ rows, provinceId }) {
   const reduced = useReducedMotion()
@@ -36,6 +38,8 @@ export default function ContractorScorecard({ rows, provinceId }) {
   }
 
   const scope = provinceId == null ? {} : { provinceId }
+  /** The id a row's links carry: the company, or the unattributed bucket. */
+  const idFor = (row) => (row.contractor_id == null ? UNATTRIBUTED : row.contractor_id)
   const scale = bookScale(rows.map((r) => r.assigned))
 
   return (
@@ -68,7 +72,7 @@ export default function ContractorScorecard({ rows, provinceId }) {
           <tbody>
             {rows.map((row, i) => {
               const unattributed = row.contractor_id == null
-              const cscope = unattributed ? null : { ...scope, contractorId: row.contractor_id }
+              const cscope = { ...scope, contractorId: idFor(row) }
               return (
                 <motion.tr
                   key={row.contractor_id ?? 'unattributed'}
@@ -81,28 +85,24 @@ export default function ContractorScorecard({ rows, provinceId }) {
                     {row.name}
                   </td>
                   <td className="tnum" style={{ textAlign: 'right', fontWeight: 600 }}>
-                    {count(row.assigned)}
+                    {/* The denominator the rate divides by, so it is the one
+                        figure on this row a contractor will want to check. */}
+                    <Link to={assignedLink(cscope)} className="dt-cell-link">
+                      {count(row.assigned)}
+                    </Link>
                   </td>
                   <td className="tnum" style={{ textAlign: 'right' }}>
-                    {cscope ? (
-                      <Link to={doneLink(cscope)} className="dt-cell-link">
-                        {count(row.done)}
-                      </Link>
-                    ) : (
-                      count(row.done)
-                    )}
+                    <Link to={doneLink(cscope)} className="dt-cell-link">
+                      {count(row.done)}
+                    </Link>
                   </td>
                   <td className="tnum" style={{ textAlign: 'right' }}>
-                    {cscope ? (
-                      <Link to={ongoingLink(cscope)} className="dt-cell-link">
-                        {count(row.ongoing)}
-                      </Link>
-                    ) : (
-                      count(row.ongoing)
-                    )}
+                    <Link to={ongoingLink(cscope)} className="dt-cell-link">
+                      {count(row.ongoing)}
+                    </Link>
                   </td>
                   <td className="tnum" style={{ textAlign: 'right' }}>
-                    {cscope && row.problematic > 0 ? (
+                    {row.problematic > 0 ? (
                       <Link
                         to={problematicLink(cscope)}
                         className="dt-cell-link dt-cell-link-bad"

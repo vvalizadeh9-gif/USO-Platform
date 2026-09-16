@@ -11,7 +11,7 @@ import {
 import { Link } from 'react-router-dom'
 import { KPI_DIRECTION, STATE_COLOR } from './constants'
 import { count, deltaTone, percent, TONE_COLOR } from './format'
-import { doneLink, ongoingLink, problematicLink } from './links'
+import { doneLink, onairLink, ongoingLink, problematicLink, remainingLink } from './links'
 import { AnimatedNumber } from './charts/primitives'
 
 /**
@@ -35,7 +35,9 @@ import { AnimatedNumber } from './charts/primitives'
  * already points. Remaining stops being a bracket and becomes what it is: a
  * line of arithmetic under the tiles it is the sum of.
  *
- * Each tile is a link to the sites inside it. So is each arc.
+ * Each tile is a link to the sites inside it. So are the total in the middle
+ * and the Remaining line under them: every figure in this hero opens the sites
+ * it counted.
  */
 
 const SIZE = 210
@@ -175,9 +177,13 @@ export default function KpiBand({ kpis, monthName, provinceId }) {
         </svg>
 
         <div className="dt-ring-core">
-          <span className="dt-ring-figure">
+          <Link
+            to={onairLink(scope)}
+            className="dt-ring-figure"
+            aria-label={`Total on-air: ${onair} sites`}
+          >
             <AnimatedNumber value={onair} />
-          </span>
+          </Link>
           <span className="dt-ring-label">sites on air</span>
           <DeltaChip delta={kpis.total_onair.delta} direction={KPI_DIRECTION.total_onair} small />
         </div>
@@ -209,9 +215,18 @@ export default function KpiBand({ kpis, monthName, provinceId }) {
               added together, said in a line rather than drawn as a bracket. */}
           <span className="dt-foot-item">
             <span className="dt-foot-label">Remaining</span>
-            <b className="tnum">
-              <AnimatedNumber value={kpis.total_remaining.value} />
-            </b>
+            {/* The <b> stays inside the link: it is what gives this figure its
+                weight, and a bare link in its place would render as body
+                text. */}
+            <Link
+              to={remainingLink(scope)}
+              className="dt-cell-link"
+              aria-label={`Remaining: ${kpis.total_remaining.value} sites`}
+            >
+              <b className="tnum">
+                <AnimatedNumber value={kpis.total_remaining.value} />
+              </b>
+            </Link>
             <span className="dt-foot-sub tnum">{percent(remainingShare)}</span>
             <DeltaChip
               delta={kpis.total_remaining.delta}

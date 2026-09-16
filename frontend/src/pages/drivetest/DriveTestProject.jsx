@@ -125,14 +125,36 @@ export default function DriveTestProject() {
     }
   }
 
+  /** Contractor name -> id, for the ongoing breakdown's bars.
+   *
+   * Those points carry a name and a count and no id, so the id comes from the
+   * scorecard in the same payload — the one place this page already has both.
+   * A name with no row is not linked, which is exactly what should happen to
+   * the unnamed "Other contractors" aggregate a contractor account sees: it
+   * stands for several companies and there is no list behind it they are
+   * allowed to open.
+   */
+  const contractorIdByName = useMemo(() => {
+    const map = new Map()
+    for (const row of data?.contractor_scorecard ?? []) {
+      if (row.contractor_id != null) map.set(row.name, row.contractor_id)
+    }
+    return map
+  }, [data])
+
   const ongoingViews = useMemo(() => {
     const b = data?.ongoing_breakdown
     if (!b) return {}
+    const scope = provinceId == null ? {} : { provinceId }
     return {
       contractor: {
         points: b.by_contractor,
         unit: 'Contractor',
         color: STATE_COLOR.ongoing,
+        hrefFor: (p) => {
+          const id = contractorIdByName.get(p.name)
+          return id == null ? null : ongoingLink({ ...scope, contractorId: id })
+        },
         // Stated rather than left to be inferred from a total that does not
         // match: sites with no contractor are deliberately not a bar here.
         note:
@@ -154,6 +176,10 @@ export default function DriveTestProject() {
       age: {
         points: b.by_age,
         unit: 'Held for',
+        // The band's key, not its label: the labels carry en dashes and are
+        // wordings somebody may improve, and a URL built out of one would
+        // break silently — with an empty list rather than an error.
+        hrefFor: (p) => (p.key ? ongoingLink({ ...scope, ageBand: p.key }) : null),
         // The one ramp on the page: these bands are an ordered scale, so the
         // longer a site has been held the heavier its bar reads.
         color: (_point, i) => AGE_RAMP[Math.min(i, AGE_RAMP.length - 1)],
@@ -167,7 +193,7 @@ export default function DriveTestProject() {
               'company holding it now has held it.',
       },
     }
-  }, [data, provinces])
+  }, [data, provinces, provinceId, contractorIdByName])
 
   const problematicViews = useMemo(() => {
     const b = data?.problematic_breakdown
@@ -177,7 +203,13 @@ export default function DriveTestProject() {
         points: b.by_category,
         unit: 'Category',
         color: STATE_COLOR.problematic,
-        hrefFor: () => problematicLink(provinceId == null ? {} : { provinceId }),
+        // Each bar opens its own category. It used to open every problematic
+        // site whichever bar was clicked, so a reader who clicked 64 landed
+        // on 194.
+        hrefFor: (p) => {
+          const scope = provinceId == null ? {} : { provinceId }
+          return problematicLink(p.key ? { ...scope, category: p.key } : scope)
+        },
       },
       province: {
         points: collapse(b.by_province),

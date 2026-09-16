@@ -1051,8 +1051,21 @@ class DriveTestKpis(BaseModel):
 
 
 class ChartPoint(BaseModel):
+    """One labelled figure on the dashboard.
+
+    ``key`` is the stable identifier the drill-through link travels with,
+    where the point has one: the age-band keys, an ongoing stage, a problem
+    category. ``name`` stays what it always was — display text, which for the
+    age bands carries an en dash and for everything else is a wording somebody
+    may improve. A URL built out of display text breaks the moment the wording
+    changes, and breaks silently: the list comes back empty rather than
+    wrong-looking. Optional and defaulted, so every existing point and every
+    existing reader is unaffected.
+    """
+
     name: str
     value: int
+    key: str | None = None
 
 
 class ProvinceProgressPoint(BaseModel):
@@ -1171,6 +1184,74 @@ class ProvinceBreakdownRow(BaseModel):
     ongoing: int
     problematic: int
     done_percent: float
+
+
+class DriveTestSiteRow(BaseModel):
+    """One site behind a figure on the Drive Test dashboard.
+
+    Built entirely from data that already exists — no column was added to the
+    database for this list, and nothing here is estimated. Where a fact is not
+    recorded the field is ``None`` and the screen shows a dash; see
+    ``oldest_open_fix_days`` in particular.
+    """
+
+    work_item_id: int
+    site_code: str | None = None
+    #: Every village this work item serves, comma-joined. One site usually
+    #: serves several, which is why this is one string rather than a column
+    #: pretending there is one village per site.
+    villages: str | None = None
+    province: str | None = None
+    #: The effective contractor's name, or ``None`` for an unattributed site.
+    contractor: str | None = None
+    #: Done, Ongoing or Problematic — which of the dashboard's three buckets
+    #: this row falls in, by the dashboard's own predicates.
+    bucket: str
+    current_stage: str
+
+    launch_date: str | None = None          # Shamsi
+    days_since_launch: int | None = None
+    #: When the company holding this site took it on, and how long ago. The
+    #: age band runs on this clock, not on the launch date: the dashboard's
+    #: bands ask how long the current holder has held it.
+    assignment_date: str | None = None      # Shamsi
+    days_since_assignment: int | None = None
+    age_band: str | None = None             # display label, or None
+
+    problem_categories: list[str] = []
+    fix_owners: list[str] = []
+
+    #: Days since the oldest still-open fix was opened.
+    #:
+    #: ``None`` for a site flagged Problematic by a CPM import that has no
+    #: in-app fix behind it: there is no opened_at to count from, and a guess
+    #: dressed as a measurement is worse than a blank. Never estimated.
+    oldest_open_fix_days: int | None = None
+    #: The largest number of days any open fix is past its due date, or
+    #: ``None`` when nothing is late.
+    max_days_late: int | None = None
+
+    hc_round: int | None = None
+    dt_execution_date: str | None = None    # Shamsi
+    dt_approved_at: str | None = None       # Shamsi
+    dt_evidence_count: int = 0
+
+
+class DriveTestSiteList(BaseModel):
+    """The sites behind one dashboard figure.
+
+    ``total`` is the count *before* pagination, and it is the number the
+    reader clicked. That equality is the whole feature: a list that can differ
+    from the figure that opened it is worse than no list at all.
+    """
+
+    total: int
+    rows: list[DriveTestSiteRow] = []
+    #: The filters that were actually applied, echoed back so the screen can
+    #: render its pills from the server's reading of the query string rather
+    #: than from its own.
+    filters_applied: dict[str, str] = {}
+    generated_at: datetime
 
 
 class ContractorScorecardRow(BaseModel):
