@@ -51,7 +51,9 @@ COLUMNS: list[tuple[str, str]] = [
     ("Evidence", "dt_evidence_count"),
 ]
 
-_WIDTHS = [16, 28, 16, 22, 14, 22, 14, 17, 14, 12, 14, 26, 24, 20, 12, 10, 18, 14, 10]
+#: Column widths, in the order of :data:`COLUMNS`. Public because the DT
+#: delivery workbook writes the same columns and must size them the same way.
+WIDTHS = [16, 28, 16, 22, 14, 22, 14, 17, 14, 12, 14, 26, 24, 20, 12, 10, 18, 14, 10]
 
 #: How the header block names each filter, in the order it reads them.
 _FILTER_LABELS: list[tuple[str, str]] = [
@@ -111,7 +113,7 @@ def build_site_list_export(
         cell = ws.cell(row=header_row, column=col_idx, value=header)
         cell.fill = _HEADER_FILL
         cell.font = _HEADER_FONT
-        ws.column_dimensions[get_column_letter(col_idx)].width = _WIDTHS[col_idx - 1]
+        ws.column_dimensions[get_column_letter(col_idx)].width = WIDTHS[col_idx - 1]
 
     for offset, row in enumerate(rows, start=header_row + 1):
         for col_idx, (_, key) in enumerate(COLUMNS, start=1):

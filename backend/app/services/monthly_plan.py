@@ -315,6 +315,25 @@ def pace_percent(year: int, month: int, today: date | None = None) -> float:
     return round(min(100.0, ref_day / jalali.days_in_month(year, month) * 100), 1)
 
 
+def trailing_periods(months: int) -> list[tuple[int, int]]:
+    """The last *months* Shamsi periods, oldest first, ending with this one.
+
+    Rolling rather than year-to-date: in فروردین a year-to-date window is one
+    month long, and one month is not a record of anything.
+
+    Here rather than in each caller because three of them wanted the same six
+    lines -- the PIP scorecard, its export, and the contractor's own history --
+    and a fourth (the DT workbook) would have made four. A window that differs
+    between two files is two files that cannot be compared.
+    """
+    year, month = jalali.current_shamsi_period()
+    periods: list[tuple[int, int]] = []
+    for _ in range(max(1, months)):
+        periods.append((year, month))
+        year, month = jalali.previous_period(year, month)
+    return list(reversed(periods))
+
+
 def recent_months(
     db: Session, user: User, contractor_id: int, months: int = MONTHS_ON_SCREEN
 ) -> list[dict]:
@@ -336,12 +355,7 @@ def recent_months(
     from app.services.drive_test_analytics import DriveTestAnalytics
 
     months = max(1, min(months, MAX_HISTORY_MONTHS))
-    year, month = jalali.current_shamsi_period()
-    periods: list[tuple[int, int]] = []
-    for _ in range(months):
-        periods.append((year, month))
-        year, month = jalali.previous_period(year, month)
-    periods.reverse()
+    periods = trailing_periods(months)
 
     data = DriveTestAnalytics(db, user).scorecard(periods)
     out = []
