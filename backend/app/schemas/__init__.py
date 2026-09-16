@@ -1129,19 +1129,17 @@ class OngoingBreakdown(BaseModel):
     without_contractor: int
     by_province: list[ChartPoint]
 
-    #: How long each ongoing site has been waiting, in bands, oldest last.
+    #: How long each ongoing site has been held, in bands, oldest last.
     #:
-    #: The clock is the site's launch date — the day it went on air and became
-    #: something a drive test was owed on. That is a real recorded date, and
-    #: it measures the thing the backlog is actually judged on: how long a
-    #: live site has gone untested. It is deliberately not "time since
-    #: assignment", which restarts every time a site is reassigned and would
-    #: make a site bounced between three contractors look new.
+    #: The clock is the day the site was assigned to a contractor — the day
+    #: somebody took the drive test on. A reassignment restarts it, which is
+    #: correct rather than a flaw: the question the bands answer is how long
+    #: the company holding a site now has held it.
     by_age: list[ChartPoint] = []
-    #: Ongoing sites whose launch date is missing, so no age can be computed.
+    #: Ongoing sites with no live assignment, so no clock has started on them.
     #: Reported for the same reason ``without_contractor`` is: without it the
     #: bands look short by exactly this many and the view stops reconciling.
-    without_launch_date: int = 0
+    without_assignment_date: int = 0
 
 
 class ProblematicBreakdown(BaseModel):
@@ -1192,7 +1190,12 @@ class ContractorScorecardRow(BaseModel):
 
     contractor_id: int | None = None
     name: str
-    onair: int
+    #: The company's book of work: drive tests it has finished plus the sites
+    #: it is still holding. Problematic sites are *not* in it — those have not
+    #: been committed to the contractor — so ``assigned`` is the denominator
+    #: ``done_percent`` divides by, and ``problematic`` sits beside it rather
+    #: than inside it.
+    assigned: int
     done: int
     ongoing: int
     problematic: int

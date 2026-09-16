@@ -67,29 +67,36 @@ export function deltaTone(delta, goodDirection = 'up') {
 }
 
 export const TONE_COLOR = {
-  good: 'var(--green)',
-  bad: 'var(--red)',
+  good: 'var(--dt-done)',
+  bad: 'var(--dt-problem)',
   flat: 'var(--text-dim)',
 }
 
 /** At or above target, close to it, or short of it.
  *
  * Three bands rather than a gradient, because the question a reader asks of
- * an achievement row is which of the three it is in. Unchanged from the
- * dashboard this replaces — the thresholds were right.
+ * an achievement row is which of the three it is in. The thresholds are
+ * unchanged from the dashboard this replaces — they were right.
+ *
+ * The middle band used to be amber, and amber is gone from this page. Bars
+ * in these three bands sit directly above one another in the achievement
+ * chart, and amber against this red is 3.4 ΔE apart for a red-green reader:
+ * "nearly there" and "badly short" were the same bar. In-flight indigo is the
+ * honest reading of 85% anyway — it is work on its way, not a warning.
  */
 export function bandColor(value) {
   if (value == null) return 'var(--text-dim)'
-  if (value >= 100) return 'var(--green)'
-  if (value >= 80) return 'var(--amber)'
-  return 'var(--red)'
+  if (value >= 100) return 'var(--dt-done)'
+  if (value >= 80) return 'var(--dt-ongoing)'
+  return 'var(--dt-problem)'
 }
 
-/** Progress colour for a completion percentage. */
+/** Progress colour for a completion percentage. Same three bands, same
+ * reason — see `bandColor`. */
 export function progressColor(value) {
-  if (value >= 70) return 'var(--green)'
-  if (value >= 30) return 'var(--amber)'
-  return 'var(--red)'
+  if (value >= 70) return 'var(--dt-done)'
+  if (value >= 30) return 'var(--dt-ongoing)'
+  return 'var(--dt-problem)'
 }
 
 /** How stale a payload is, in words.
@@ -125,4 +132,14 @@ export function planScale(rows) {
   const padded = highest * 1.08
   const step = padded > 240 ? 50 : padded > 120 ? 25 : padded > 60 ? 10 : 5
   return Math.ceil(padded / step) * step
+}
+
+/** The widest book on screen, which every book bar is drawn against.
+ *
+ * One scale for the whole table. Per-row scaling would make every bar full
+ * width and throw away the size comparison the bar exists to carry — which is
+ * precisely the failure the book bar replaced. See `charts/BookBar`.
+ */
+export function bookScale(values) {
+  return Math.max(1, ...values)
 }

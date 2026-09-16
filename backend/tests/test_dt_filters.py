@@ -9,9 +9,9 @@ and one is a rule that has to hold for all of them:
   granted must be refused rather than quietly widened back to everything or
   quietly handed an empty answer. The same goes for the drill-through filters
   on the work queue, which arrive from a URL anyone can edit.
-* **Aging bands off the launch date.** They exist here and deliberately do not
-  exist for problematic sites, and the difference is the point: a launch date
-  is recorded, so "how long has this live site gone untested" is a
+* **Aging bands off the assignment date.** They exist here and deliberately do
+  not exist for problematic sites, and the difference is the point: an
+  assignment is dated, so "how long has this company held this site" is a
   measurement. Nothing records when a site *became* problematic.
 * **A scorecard that compares.** Ranking contractors by a raw count mostly
   ranks them by size. Carrying the denominator is what makes two companies of
@@ -98,9 +98,9 @@ def _make_user(
 def world(client):
     """Two provinces, two contractors, and ongoing sites of known ages.
 
-    Launch dates are set relative to today so the bands stay right whenever
-    the suite runs — a fixed date would drift into the next band and start
-    failing on a calendar boundary rather than on a code change.
+    Assignment dates are set relative to today so the bands stay right
+    whenever the suite runs — a fixed date would drift into the next band and
+    start failing on a calendar boundary rather than on a code change.
     """
     from app.models.reference import Contractor, Province
     from app.models.workitem import Assignment, Site, WorkItem
@@ -124,7 +124,15 @@ def world(client):
     db.add_all([k_site, y_site])
     db.flush()
 
-    def item(site, tag, stage, *, dt_status=None, contractor=None, age_days=None):
+    def item(site, tag, stage, *, dt_status=None, contractor=None, age_days=None, assign=True):
+        """One work item, optionally with a live assignment of a known age.
+
+        ``age_days`` dates the *assignment*, which is what the aging bands
+        run on. The launch date is set alongside it so the rest of the
+        fixture still has a plausible on-air date to carry. ``assign=False``
+        leaves the assignment to the caller, for the site whose whole point is
+        the hand-over it was given by hand.
+        """
         wi = WorkItem(
             site_id=site.id,
             site_type=tag,
@@ -138,14 +146,27 @@ def world(client):
         )
         db.add(wi)
         db.flush()
+        if assign and age_days is not None and contractor is not None:
+            db.add(
+                Assignment(
+                    work_item_id=wi.id,
+                    assignment_type="official",
+                    contractor_id=contractor,
+                    assigned_at=datetime.combine(
+                        today - timedelta(days=age_days), datetime.min.time()
+                    ).replace(tzinfo=timezone.utc),
+                    is_active=True,
+                )
+            )
+            db.flush()
         return wi
 
-    # Kerman: one ongoing site in each age band, plus one with no launch date.
-    item(k_site, "age-new", STAGE_NEW, age_days=5, contractor=alfa.id)
-    item(k_site, "age-2mo", STAGE_READY, age_days=60, contractor=alfa.id)
-    item(k_site, "age-4mo", STAGE_ASSIGNED, age_days=120, contractor=alfa.id)
-    item(k_site, "age-8mo", STAGE_READY, age_days=240, contractor=beta.id)
-    item(k_site, "age-2yr", STAGE_READY, age_days=730, contractor=beta.id)
+    # Kerman: one ongoing site in each age band, plus one never assigned.
+    item(k_site, "age-3d", STAGE_ASSIGNED, age_days=3, contractor=alfa.id)
+    item(k_site, "age-10d", STAGE_ASSIGNED, age_days=10, contractor=alfa.id)
+    item(k_site, "age-18d", STAGE_ASSIGNED, age_days=18, contractor=alfa.id)
+    item(k_site, "age-26d", STAGE_ASSIGNED, age_days=26, contractor=beta.id)
+    item(k_site, "age-90d", STAGE_ASSIGNED, age_days=90, contractor=beta.id)
     item(k_site, "age-none", STAGE_READY, age_days=None)
 
     # Kerman done + problematic, so the scorecard has a denominator worth
@@ -161,7 +182,9 @@ def world(client):
 
     # A site Alfa used to hold and Beta holds now, so the drill-through filter
     # has to prefer the live assignment over the CPM-seeded subcontractor.
-    handed = item(y_site, "y-handed", STAGE_ASSIGNED, age_days=30, contractor=alfa.id)
+    handed = item(
+        y_site, "y-handed", STAGE_ASSIGNED, age_days=30, contractor=alfa.id, assign=False
+    )
     db.add_all(
         [
             Assignment(
@@ -255,15 +278,15 @@ def test_the_payload_says_when_it_was_computed(client, world):
 
 
 # ---------------------------------------------------------------- aging bands
-def test_ongoing_sites_land_in_the_band_their_launch_date_puts_them_in(client, world):
+def test_ongoing_sites_land_in_the_band_their_assignment_date_puts_them_in(client, world):
     body = _overview(client, world["admin"], province_id=world["ids"]["kerman"])
     bands = body["ongoing_breakdown"]["by_age"]
 
-    assert _band(bands, "Under a month") == 1  # 5 days
-    assert _band(bands, "1–3 months") == 1  # 60 days
-    assert _band(bands, "3–6 months") == 1  # 120 days
-    assert _band(bands, "6–12 months") == 1  # 240 days
-    assert _band(bands, "Over a year") == 1  # 730 days
+    assert _band(bands, "Up to 1 week") == 1  # 3 days
+    assert _band(bands, "1–2 weeks") == 1  # 10 days
+    assert _band(bands, "2–3 weeks") == 1  # 18 days
+    assert _band(bands, "3 weeks – 1 month") == 1  # 26 days
+    assert _band(bands, "More than 1 month") == 1  # 90 days
 
 
 def test_the_bands_stay_in_age_order_with_empty_ones_kept(client, world):
@@ -273,20 +296,25 @@ def test_the_bands_stay_in_age_order_with_empty_ones_kept(client, world):
     names = [p["name"] for p in body["ongoing_breakdown"]["by_age"]]
 
     assert names == [
-        "Under a month", "1–3 months", "3–6 months", "6–12 months", "Over a year",
+        "Up to 1 week",
+        "1–2 weeks",
+        "2–3 weeks",
+        "3 weeks – 1 month",
+        "More than 1 month",
     ]
 
 
-def test_a_site_with_no_launch_date_is_counted_apart_not_filed_as_new(client, world):
-    """An unknown age is not a young site. Filing it under the newest band
-    would make an untested backlog look fresher than it is."""
+def test_an_unassigned_site_is_counted_apart_not_filed_as_new(client, world):
+    """No assignment is no clock, not a clock reading zero. Filing it under
+    the newest band would make the backlog look fresher than it is and would
+    credit a contractor with a site they were never given."""
     body = _overview(client, world["admin"], province_id=world["ids"]["kerman"])
     ongoing = body["ongoing_breakdown"]
 
-    assert ongoing["without_launch_date"] == 1
-    assert sum(p["value"] for p in ongoing["by_age"]) + ongoing["without_launch_date"] == (
-        ongoing["total"]
-    )
+    assert ongoing["without_assignment_date"] == 1
+    assert sum(p["value"] for p in ongoing["by_age"]) + ongoing[
+        "without_assignment_date"
+    ] == (ongoing["total"])
 
 
 def test_there_are_still_no_problematic_aging_bands(client, world):
@@ -296,20 +324,30 @@ def test_there_are_still_no_problematic_aging_bands(client, world):
 
 
 # ----------------------------------------------------------- the scorecard
-def test_the_scorecard_accounts_for_every_on_air_site(client, world):
+def test_the_scorecard_accounts_for_every_assigned_site(client, world):
     body = _overview(client, world["admin"])
     rows = body["contractor_scorecard"]
 
-    assert sum(r["onair"] for r in rows) == body["kpis"]["total_onair"]["value"]
     assert sum(r["done"] for r in rows) == body["kpis"]["total_dt_done"]["value"]
     assert sum(r["ongoing"] for r in rows) == body["kpis"]["total_ongoing"]["value"]
+    assert sum(r["problematic"] for r in rows) == (
+        body["kpis"]["total_problematic"]["value"]
+    )
+    assert sum(r["assigned"] for r in rows) == (
+        body["kpis"]["total_dt_done"]["value"] + body["kpis"]["total_ongoing"]["value"]
+    )
 
 
-def test_each_row_carries_its_own_denominator(client, world):
+def test_a_problematic_site_is_not_part_of_a_contractors_assignment(client, world):
+    """A site out for a health check, or sitting in a problem category, has
+    not been committed to the contractor. Counting it against them would mark
+    a company down for work the programme never gave them."""
     body = _overview(client, world["admin"])
     for row in body["contractor_scorecard"]:
-        assert row["done"] + row["ongoing"] + row["problematic"] == row["onair"]
-        assert row["done_percent"] == pytest.approx(row["done"] / row["onair"] * 100, abs=0.1)
+        assert row["assigned"] == row["done"] + row["ongoing"]
+        assert row["done_percent"] == pytest.approx(
+            row["done"] / row["assigned"] * 100 if row["assigned"] else 0.0, abs=0.1
+        )
 
 
 def test_the_rows_rank_by_completion_not_by_size(client, world):
@@ -361,7 +399,7 @@ def test_the_queue_filters_by_contractor_the_way_the_dashboard_counts(client, wo
     # Handed on to Beta, so it is Beta's now — not Alfa's, despite the stale
     # CPM column still naming Alfa.
     assert "y-handed" not in tags
-    assert "age-new" in tags
+    assert "age-3d" in tags
 
 
 def test_the_two_queue_filters_combine(client, world):

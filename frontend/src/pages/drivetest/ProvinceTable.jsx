@@ -2,9 +2,10 @@ import { motion, useReducedMotion } from 'framer-motion'
 import { ChevronDown, ChevronUp, Filter } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { PROVINCE_LIMIT } from './constants'
-import { count, percent, progressColor } from './format'
+import { PROVINCE_LIMIT, STATE_COLOR } from './constants'
+import { bookScale, count, percent, progressColor } from './format'
 import { ongoingLink, problematicLink } from './links'
+import BookBar from './charts/BookBar'
 
 /**
  * Every province's full picture, sortable, worst first by default.
@@ -19,6 +20,13 @@ import { ongoingLink, problematicLink } from './links'
  * work is. Sorting is now the reader's to change — the old table fixed the
  * order on the grounds that re-sorting by name would bury the answer, which
  * is true of *that* sort and not of sorting in general.
+ *
+ * THE CHART IN THE LAST COLUMN. It used to be a same-width track filled to
+ * the completion rate, which meant a province with 900 on-air sites and one
+ * with 14 drew bars of identical length. The bar is now sized to the
+ * province's on-air count and split by state, so the column carries where the
+ * work *is* as well as how far along it is — the same encoding the contractor
+ * scorecard uses, so the two read alike. See `charts/BookBar`.
  */
 
 const COLUMNS = [
@@ -57,6 +65,7 @@ export default function ProvinceTable({ rows, provinces, onProvince }) {
   if (!rows || rows.length === 0) return <div className="dt-empty">No provinces to show.</div>
 
   const visible = expanded ? sorted : sorted.slice(0, PROVINCE_LIMIT)
+  const scale = bookScale(rows.map((r) => r.onair))
   const hidden = sorted.length - visible.length
 
   const toggleSort = (key) =>
@@ -68,6 +77,22 @@ export default function ProvinceTable({ rows, provinces, onProvince }) {
 
   return (
     <>
+      <div className="dt-key" aria-hidden="true">
+        <span className="dt-key-item">
+          <i style={{ background: STATE_COLOR.done }} />
+          Done
+        </span>
+        <span className="dt-key-item">
+          <i style={{ background: STATE_COLOR.ongoing }} />
+          Ongoing
+        </span>
+        <span className="dt-key-item">
+          <i style={{ background: STATE_COLOR.problematic }} />
+          Problematic
+        </span>
+        <span className="dt-key-note">bar length is the province&rsquo;s on-air count</span>
+      </div>
+
       <div className="table-wrap scroll-x">
         <table className="dt-province-table">
           <thead>
@@ -100,6 +125,9 @@ export default function ProvinceTable({ rows, provinces, onProvince }) {
                   </button>
                 </th>
               ))}
+              <th scope="col" className="dt-col-book">
+                Where the work is
+              </th>
               <th scope="col" className="dt-col-action">
                 <span className="dt-sr-only">Filter</span>
               </th>
@@ -132,7 +160,7 @@ export default function ProvinceTable({ rows, provinces, onProvince }) {
                   </td>
                   <td
                     className="tnum"
-                    style={{ textAlign: 'right', color: row.problematic > 0 ? 'var(--red)' : undefined }}
+                    style={{ textAlign: 'right', color: row.problematic > 0 ? 'var(--dt-problem)' : undefined }}
                   >
                     {id && row.problematic > 0 ? (
                       <Link to={problematicLink({ provinceId: id })} className="dt-cell-link dt-cell-link-bad">
@@ -142,23 +170,33 @@ export default function ProvinceTable({ rows, provinces, onProvince }) {
                       count(row.problematic)
                     )}
                   </td>
-                  <td>
-                    <span className="dt-progress-cell">
-                      <span className="dt-progress-track" aria-hidden="true">
-                        <motion.span
-                          data-testid="dt-bar"
-                          style={{
-                            width: `${row.done_percent}%`,
-                            background: progressColor(row.done_percent),
-                            transformOrigin: 'left center',
-                          }}
-                          initial={reduced ? false : { scaleX: 0 }}
-                          animate={{ scaleX: 1 }}
-                          transition={{ duration: 0.5, delay: Math.min(i * 0.03, 0.25) }}
-                        />
-                      </span>
-                      <span className="tnum dt-progress-pct">{percent(row.done_percent)}</span>
+                  <td style={{ textAlign: 'right' }}>
+                    <span className="dt-rate" style={{ color: progressColor(row.done_percent) }}>
+                      {percent(row.done_percent)}
                     </span>
+                  </td>
+                  <td className="dt-col-book">
+                    <BookBar
+                      label={row.name}
+                      total={row.onair}
+                      scaleMax={scale}
+                      index={i}
+                      segments={[
+                        { key: 'done', label: 'Done', value: row.done, color: STATE_COLOR.done },
+                        {
+                          key: 'ongoing',
+                          label: 'Ongoing',
+                          value: row.ongoing,
+                          color: STATE_COLOR.ongoing,
+                        },
+                        {
+                          key: 'problematic',
+                          label: 'Problematic',
+                          value: row.problematic,
+                          color: STATE_COLOR.problematic,
+                        },
+                      ]}
+                    />
                   </td>
                   <td className="dt-col-action">
                     {id && (

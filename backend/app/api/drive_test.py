@@ -303,7 +303,7 @@ def _ongoing_breakdown(data: dict) -> OngoingBreakdown:
         without_contractor=data["without_contractor"],
         by_province=_points(data["by_province"]),
         by_age=_points(data["by_age"]),
-        without_launch_date=data["without_launch_date"],
+        without_assignment_date=data["without_assignment_date"],
     )
 
 

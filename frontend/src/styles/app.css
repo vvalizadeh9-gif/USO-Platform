@@ -40,6 +40,44 @@
   --violet: #6d5bd0;          /* assignment */
   --violet-dim: rgba(109, 91, 208, 0.12);
 
+  /* ---- Drive Test dashboard: colour that means a state, and nothing else.
+     Three hues, one per state an on-air site can be in, reserved for that
+     meaning everywhere on that page. Validated as a categorical set against
+     a white surface: worst adjacent pair 22.1 ΔE under deuteranopia and 23.7
+     under normal vision, all three above 3:1 contrast.
+
+     Amber is deliberately absent. It is the obvious pick for "in progress",
+     and against this red it lands 3.4 ΔE apart under deuteranopia — a
+     red-green reader could not tell an ongoing site from a problematic one.
+     The brand teal is absent for a different reason: it is the nav-active
+     and primary-button colour, so a data series wearing it reads as the
+     selected thing. */
+  --dt-done: #17915a;
+  --dt-ongoing: #3b6fd4;
+  --dt-problem: #cf3b3b;
+  --dt-done-wash: rgba(23, 145, 90, 0.12);
+  --dt-ongoing-wash: rgba(59, 111, 212, 0.11);
+  --dt-problem-wash: rgba(207, 59, 59, 0.11);
+
+  /* The one ordinal ramp on that page: the ongoing age bands, which are an
+     ordered scale rather than a set of names. One hue, light to dark,
+     monotone in lightness with every step at least 0.06 apart and the light
+     end clearing the surface at 2.09:1. Nominal categories — contractors,
+     provinces — get a flat colour instead; shading those by size would
+     colour a bar by the length it already has. */
+  --dt-age-1: #9cb3e8;
+  --dt-age-2: #7590dc;
+  --dt-age-3: #5170ce;
+  --dt-age-4: #3b57b4;
+  --dt-age-5: #28408c;
+
+  /* Chart furniture. Everything that is not a state is a step of the neutral
+     ramp: the unfilled part of a track, and the ghost bar a commitment is
+     drawn as. */
+  --dt-track: #e7ecf3;
+  --dt-ghost: rgba(85, 99, 122, 0.17);
+  --dt-gap: 18px;
+
   /* Type */
   --font-display: 'Space Grotesk', 'Vazirmatn', sans-serif;
   --font-body: 'Inter', 'Vazirmatn', sans-serif;
@@ -1228,16 +1266,29 @@ tbody tr:last-child td { border-bottom: none; }
 /* ===================================================================
    Drive Test dashboard.
 
-   The page it replaces gave eight sections one border, one radius and one
-   shadow, which flattened the hierarchy: nothing on screen said which figure
-   mattered. Weight is spent deliberately here — full cards for the programme
-   totals, a quieter subordinate rank for the parts of Remaining, and hairline
-   separation for the sections that are read rather than scanned.
+   ONE COLOUR RULE, AND EVERYTHING ELSE IS INK. Colour on this page means a
+   state and nothing else: green is a drive test that is finished, indigo is
+   work in flight, red is a problem. Those three hues appear nowhere except
+   where they mean that. Everything that is not a state — tracks, gridlines,
+   rules, labels, values — is a step of the neutral ramp.
 
-   Semantic colour (green good / amber watch / red bad) is kept clear of the
-   brand teal. The old dashboard drew the Ongoing series in the same teal as
-   the nav-active state and the primary button, so a neutral series read as
-   "the selected thing".
+   That rule is the whole of the fix. The page this replaces drew ongoing in
+   the brand teal (the same teal as the nav-active state and the primary
+   button, so a neutral series read as "the selected thing"), plan in violet,
+   waiting in amber, and the achievement bands in a fourth scale; five hues
+   competed and none of them was reliably about anything. The teal is now
+   the application's colour and not the data's, and amber is gone: against
+   this red it is 3.4 ΔE apart under deutan, so a red-green reader could not
+   tell an ongoing site from a problematic one.
+
+   ONE CARD PER QUESTION. Sections used to be separated by a hairline rule and
+   whitespace, on the argument that nine identical boxes flatten the
+   hierarchy. True of nine boxes competing to be the headline; false here,
+   because after the hero nothing on this page outranks anything else, and
+   what the reader actually does is arrive for one section. A rule is a weak
+   boundary next to a table with its own borders — the province table read as
+   the province section's roof. So: the hero carries the weight, every other
+   section is the same quiet card, and the tables sit inside them.
    =================================================================== */
 
 /* Visually hidden, but still in the accessibility tree.
@@ -1253,15 +1304,30 @@ tbody tr:last-child td { border-bottom: none; }
 }
 
 .dt-farsi { font-family: var(--font-farsi); }
-.dt-good { color: var(--green); font-weight: 500; }
+.dt-good { color: var(--dt-done); font-weight: 500; }
 .dt-label {
   font-size: 12px; color: var(--text-muted); font-weight: 500;
 }
 
-/* ---------- toolbar ---------- */
+/* ---------- command bar ---------- */
+.dt-command {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  /* Bled to the gutters so the backdrop covers the full width of the content
+     column as cards scroll under it. Without the negative margin the cards
+     show through at the edges, which reads as a rendering fault. */
+  margin: 0 -14px 18px;
+  padding: 10px 14px 0;
+  background: var(--bg);
+  /* Not a hard edge: the bar carries no border of its own, so a card sliding
+     under it fades rather than being clipped against a line. */
+  box-shadow: 0 10px 12px -10px rgba(20, 35, 60, 0.16);
+}
+.dt-command .dt-toolbar { margin-bottom: 10px; }
+
 .dt-toolbar {
   display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
-  margin-bottom: 20px;
 }
 .dt-toolbar-right { display: flex; align-items: center; gap: 8px; margin-left: auto; }
 .dt-filter {
@@ -1283,103 +1349,108 @@ tbody tr:last-child td { border-bottom: none; }
   width: 24px; height: 24px; border: 0; border-radius: 50%;
   background: var(--surface-3); color: var(--text-muted);
 }
-.dt-clear:hover { background: var(--red-dim); color: var(--red); }
+.dt-clear:hover { background: var(--dt-problem-wash); color: var(--dt-problem); }
 .dt-freshness {
   font-size: 12px; color: var(--text-dim); font-variant-numeric: tabular-nums;
 }
 .dt-spin { animation: spin 0.9s linear infinite; }
 
-/* ---------- the band ----------
-   One bar carrying every on-air site, split three ways.
+/* ---------- the bench ---------- */
+.dt-bench { display: grid; gap: var(--dt-gap); min-width: 0; }
 
-   This replaces three equal KPI cards with a full-width Remaining card nested
-   under them — two grammars for figures that are arithmetically related, and
-   the width mismatch was that inconsistency showing. Here the segments sum to
-   the total because they are the total, and Remaining is the bracket under the
-   two segments that compose it rather than a fourth card asserting it. */
-.dt-band {
+/* ---------- the hero ----------
+   Every on-air site as one degree of a ring, with the total in the middle and
+   the three states as tiles beside it.
+
+   The figures are deliberately NOT inside the geometry. They used to be: a
+   split bar with each segment's count set in it, which meant the problematic
+   segment — a few per cent, and the one a reader is scanning for — collapsed
+   to a sliver with its label suppressed. A tile is the same size whatever the
+   share is. */
+.dt-hero {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 30px;
+  align-items: center;
   background: var(--surface-1);
   border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-2);
+  padding: 24px 26px;
+}
+.dt-hero-ring { position: relative; width: 210px; height: 210px; flex-shrink: 0; }
+.dt-ring-svg { display: block; width: 100%; height: 100%; }
+.dt-ring-core {
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 2px; text-align: center; pointer-events: none;
+}
+.dt-ring-figure {
+  font-family: var(--font-display); font-size: 40px; font-weight: 600;
+  letter-spacing: -0.025em; font-variant-numeric: tabular-nums; line-height: 1;
+}
+.dt-ring-label { font-size: 12px; color: var(--text-muted); }
+
+.dt-hero-body { display: grid; gap: 16px; min-width: 0; }
+.dt-state-tiles {
+  list-style: none; margin: 0; padding: 0;
+  display: grid; gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+}
+.dt-state-tile {
+  display: grid; gap: 5px; height: 100%;
+  padding: 12px 14px;
+  background: var(--surface-2);
+  border: 1px solid var(--border-soft);
   border-radius: var(--radius);
+  color: inherit;
+  transition: border-color .14s, box-shadow .14s, transform .14s;
+}
+a.dt-state-tile:hover {
+  border-color: var(--border);
   box-shadow: var(--shadow-1);
-  padding: 20px 22px 18px;
+  transform: translateY(-1px);
 }
-.dt-band-head {
-  display: flex; align-items: flex-end; justify-content: space-between;
-  gap: 20px; flex-wrap: wrap; margin-bottom: 16px;
-}
-.dt-band-total { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
-.dt-band-label { font-size: 12px; color: var(--text-muted); font-weight: 500; }
-.dt-band-figure {
-  font-family: var(--font-display); font-size: 38px; font-weight: 600;
-  letter-spacing: -0.02em; font-variant-numeric: tabular-nums; line-height: 1;
-}
-.dt-band-month {
-  display: flex; align-items: center; gap: 8px;
-  font-size: 12.5px; color: var(--text-muted);
-}
-.dt-band-month b {
-  font-family: var(--font-display); font-size: 19px; color: var(--text);
-  font-variant-numeric: tabular-nums;
-}
-
-.dt-bar { display: flex; gap: 3px; height: 46px; }
-.dt-seg { position: relative; min-width: 8px; flex-basis: 0; }
-.dt-seg-hit {
-  display: block; height: 100%; border-radius: 6px;
-  overflow: hidden; position: relative; color: inherit;
-}
-.dt-seg-fill { position: absolute; inset: 0; border-radius: 6px; transition: filter .15s; }
-a.dt-seg-hit:hover .dt-seg-fill { filter: brightness(1.08); }
-a.dt-seg-hit:focus-visible { outline-offset: 3px; }
-.dt-seg-inline {
-  position: relative; display: flex; align-items: center; gap: 7px;
-  height: 100%; padding: 0 12px; color: #fff; white-space: nowrap;
-}
-.dt-seg-inline b { font-family: var(--font-display); font-size: 17px; font-weight: 600; }
-.dt-seg-inline i { font-style: normal; font-size: 12px; opacity: 0.85; }
-
-/* The Remaining bracket, sized to the two segments it spans. */
-.dt-bracket-row { display: flex; gap: 3px; margin-top: 5px; }
-.dt-bracket-row > span { flex-basis: 0; min-width: 0; }
-.dt-bracket-rule {
-  display: block; height: 8px;
-  border: 1.5px solid var(--text-dim); border-top: 0; border-radius: 0 0 6px 6px;
-  opacity: 0.55;
-}
-.dt-bracket-text {
-  display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap;
-  padding-top: 7px; font-size: 12.5px;
-}
-.dt-bracket-label { color: var(--text-muted); font-weight: 500; }
-.dt-bracket-text b {
-  font-family: var(--font-display); font-size: 20px; font-variant-numeric: tabular-nums;
-}
-.dt-bracket-pct { color: var(--text-dim); }
-
-.dt-legend-rows {
-  list-style: none; margin: 18px 0 0; padding: 14px 0 0; display: grid;
-  gap: 4px 20px; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-  border-top: 1px solid var(--border-soft);
-}
-.dt-legend-row {
-  display: flex; align-items: center; gap: 8px; padding: 7px 9px;
-  border-radius: var(--radius-sm); color: inherit; font-size: 12.5px;
-  transition: background .13s;
-}
-a.dt-legend-row:hover { background: var(--surface-2); }
-.dt-legend-mark {
+.dt-state-head { display: flex; align-items: center; gap: 8px; }
+.dt-state-mark {
   display: grid; place-items: center; width: 20px; height: 20px;
   border-radius: 6px; color: #fff; flex-shrink: 0;
 }
-.dt-legend-name { color: var(--text-muted); }
-.dt-legend-row b {
-  font-family: var(--font-display); font-size: 15px; margin-left: auto;
+.dt-state-name { font-size: 12.5px; color: var(--text-muted); font-weight: 500; }
+.dt-state-figure {
+  font-family: var(--font-display); font-size: 27px; font-weight: 600;
+  line-height: 1.1; letter-spacing: -0.02em;
+}
+.dt-state-foot {
+  display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
+  font-size: 11.5px;
+}
+.dt-state-share { color: var(--text-dim); }
+
+/* Remaining is not a fourth state — it is two of the tiles added together,
+   said in a line rather than drawn as a bracket over them. */
+.dt-hero-foot {
+  display: flex; align-items: center; gap: 26px; flex-wrap: wrap;
+  padding-top: 14px; border-top: 1px solid var(--border-soft);
+  font-size: 12.5px; color: var(--text-muted);
+}
+.dt-foot-item { display: inline-flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.dt-foot-item svg { align-self: center; color: var(--text-dim); }
+.dt-foot-label { font-weight: 500; }
+.dt-foot-item b {
+  font-family: var(--font-display); font-size: 19px; color: var(--text);
   font-variant-numeric: tabular-nums;
 }
-.dt-legend-pct { color: var(--text-dim); min-width: 34px; text-align: right; }
+.dt-foot-sub { color: var(--text-dim); }
 
-.dt-band-skeleton { display: grid; gap: 12px; }
+.dt-hero-skeleton { align-items: stretch; }
+.dt-skeleton-ring {
+  width: 210px; height: 210px; border-radius: 50%;
+  background: linear-gradient(90deg, var(--surface-2), var(--surface-3), var(--surface-2));
+  background-size: 200% 100%;
+  animation: dt-shimmer 1.3s ease-in-out infinite;
+}
+.dt-hero-skeleton .dt-hero-body { align-content: center; gap: 12px; }
 
 .dt-delta {
   display: inline-flex; align-items: center; gap: 4px; font-weight: 500;
@@ -1387,25 +1458,25 @@ a.dt-legend-row:hover { background: var(--surface-2); }
 }
 .dt-delta-none { color: var(--text-dim); font-weight: 400; }
 
-/* ---------- sections ---------- */
-/* Sections are not cards. Nine identical bordered, rounded, shadowed boxes
-   flatten the hierarchy — border, radius and shadow each say "separate
-   object", and spending them uniformly says everything is equally important.
-   Elevation is kept for the band above and for tables, which need real
-   containment; everything else is separated by a rule and by space. */
+/* ---------- sections, as cards ---------- */
 .dt-section {
-  margin-top: 30px;
-  padding-top: 22px;
-  border-top: 1px solid var(--border);
+  background: var(--surface-1);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-1);
+  padding: 20px 22px 22px;
+  min-width: 0;
 }
 .dt-section-head {
   display: flex; align-items: flex-start; gap: 16px;
-  padding: 0;
+  padding-bottom: 14px; border-bottom: 1px solid var(--border-soft);
 }
 .dt-section-title {
   font-size: 15px; font-family: var(--font-display); font-weight: 600;
 }
-.dt-section-sub { font-size: 12.5px; color: var(--text-dim); margin: 3px 0 0; }
+.dt-section-sub {
+  font-size: 12.5px; color: var(--text-dim); margin: 3px 0 0; max-width: 62ch;
+}
 .dt-section-actions { margin-left: auto; }
 .dt-section-body { padding: 16px 0 0; }
 .dt-section-total {
@@ -1418,23 +1489,23 @@ a.dt-legend-row:hover { background: var(--surface-2); }
 .dt-section-total svg { align-self: center; }
 
 .dt-empty {
-  text-align: center; padding: 34px 20px; color: var(--text-dim); font-size: 13px;
+  text-align: center; padding: 30px 20px; color: var(--text-dim); font-size: 13px;
 }
 .dt-note { font-size: 12px; color: var(--text-dim); margin: 14px 0 0; line-height: 1.5; }
 .dt-note-inline { font-size: 12px; color: var(--text-dim); margin-left: 10px; }
 
 .dt-failed {
   display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
-  background: var(--red-dim); color: var(--red);
+  background: var(--dt-problem-wash); color: var(--dt-problem);
   border-radius: var(--radius-sm); padding: 13px 16px; font-size: 13px;
 }
 .dt-failed b { font-weight: 600; }
 .dt-failed span { flex: 1; min-width: 200px; color: var(--text); }
 .dt-page-error {
   display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
-  border-left: 3px solid var(--red);
+  border-left: 3px solid var(--dt-problem);
 }
-.dt-page-error svg { color: var(--red); }
+.dt-page-error svg { color: var(--dt-problem); }
 .dt-page-error p { margin: 3px 0 0; color: var(--text-muted); font-size: 13px; }
 .dt-page-error button { margin-left: auto; }
 
@@ -1450,10 +1521,23 @@ a.dt-legend-row:hover { background: var(--surface-2); }
   100% { background-position: -200% 0; }
 }
 
-/* ---------- bars ---------- */
+/* ---------- a chart's key ----------
+   Two or more marks on screen means a legend, always. It is the dependable
+   identity channel; colour-matching alone is not one. */
+.dt-key {
+  display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+  margin-bottom: 14px; font-size: 11.5px; color: var(--text-muted);
+}
+.dt-key-item { display: inline-flex; align-items: center; gap: 6px; }
+.dt-key-item i { display: inline-block; width: 14px; height: 10px; border-radius: 3px; }
+.dt-key-note { color: var(--text-dim); font-style: italic; }
+.dt-key-plan { background: var(--dt-ghost); }
+.dt-key-done { background: var(--text-muted); }
+.dt-key-scale { color: var(--text-dim); }
+
+/* ---------- ranked bars ---------- */
 .dt-bars {
   list-style: none; margin: 0; padding: 0; display: grid; gap: 2px;
-  max-width: 720px;
 }
 .dt-bar-link {
   display: grid; align-items: center; gap: 12px;
@@ -1470,49 +1554,33 @@ a.dt-bar-link:hover .dt-bar-go { opacity: 1; transform: translateX(2px); }
 .dt-muted .dt-bar-label { color: var(--text-muted); font-style: italic; }
 .dt-bar-value { font-size: 12.5px; font-weight: 500; text-align: right; }
 .dt-bar-share { font-size: 11.5px; color: var(--text-dim); text-align: right; }
-.dt-bar-go { opacity: 0; color: var(--signal-strong); transition: opacity .15s, transform .15s; }
+.dt-bar-go { opacity: 0; color: var(--text-dim); transition: opacity .15s, transform .15s; }
 
 /* The track is a visible object, not a two-per-cent tint. The old bars sat on
    --surface-3 over --surface-1, so the unfilled remainder never read and the
-   bars floated with no scale behind them. */
+   bars floated with no scale behind them. Thin, because the mark is the data
+   and a 20px block of saturated colour is not more information. */
 .dt-track {
-  display: block; position: relative; height: 14px;
-  background: var(--surface-1);
-  box-shadow: inset 0 0 0 1px var(--border);
+  display: block; position: relative; height: 12px;
+  background: var(--dt-track);
   border-radius: 4px; overflow: hidden;
 }
 .dt-track-fill { display: block; height: 100%; border-radius: 4px 3px 3px 4px; }
 
-/* ---------- stage pipeline ---------- */
-.dt-pipeline { list-style: none; margin: 0; padding: 0; }
-.dt-pipe-step { display: grid; grid-template-columns: 18px 1fr; gap: 12px; }
-.dt-pipe-rail { position: relative; display: flex; flex-direction: column; align-items: center; }
-.dt-pipe-dot {
-  width: 9px; height: 9px; border-radius: 50%; margin-top: 15px;
-  background: var(--signal); box-shadow: 0 0 0 3px var(--signal-glow);
+/* ---------- the book bar ----------
+   Length is the size of the book; fill is how it splits. See charts/BookBar
+   for why both, and what went wrong when it was only the second. */
+.dt-book {
+  display: block; width: 100%; min-width: 120px;
+  background: var(--dt-track); border-radius: 4px; overflow: hidden;
 }
-.dt-pipe-line { flex: 1; width: 2px; background: var(--border); margin: 3px 0 -3px; }
-.dt-pipe-empty .dt-pipe-dot { background: var(--border); box-shadow: none; }
-.dt-pipe-empty .dt-pipe-name, .dt-pipe-empty .dt-pipe-value { color: var(--text-dim); }
-.dt-pipe-body {
-  display: grid; align-items: center; gap: 12px;
-  grid-template-columns: 152px minmax(0, 1fr) 44px 40px;
-  padding: 8px 10px; border-radius: var(--radius-sm); color: inherit;
-  transition: background .13s;
+.dt-book-bar {
+  display: flex; height: 12px; gap: 2px;
+  transform-origin: left center;
 }
-.dt-pipe-body:hover { background: var(--surface-2); }
-.dt-pipe-name { font-size: 13px; font-weight: 500; }
-.dt-pipe-bar {
-  display: block; height: 12px; background: var(--surface-1);
-  box-shadow: inset 0 0 0 1px var(--border);
-  border-radius: 4px; overflow: hidden;
-}
-.dt-pipe-bar > span {
-  display: block; height: 100%; border-radius: 4px;
-  background: linear-gradient(90deg, var(--signal), var(--signal-strong));
-}
-.dt-pipe-value { font-size: 12.5px; font-weight: 600; text-align: right; }
-.dt-pipe-share { font-size: 11.5px; color: var(--text-dim); text-align: right; }
+.dt-book-seg { display: block; height: 100%; border-radius: 2px; min-width: 2px; }
+.dt-book-seg:first-child { border-radius: 4px 2px 2px 4px; }
+.dt-book-seg:last-child { border-radius: 2px 4px 4px 2px; }
 
 /* ---------- plan and delivery ---------- */
 .dt-figures {
@@ -1520,19 +1588,23 @@ a.dt-bar-link:hover .dt-bar-go { opacity: 1; transform: translateX(2px); }
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
 }
 .dt-figure-tile {
-  background: var(--surface-1);
+  background: var(--surface-2);
   border: 1px solid var(--border-soft);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius);
   padding: 13px 16px; display: flex; flex-direction: column; gap: 5px;
 }
-.dt-figure-emphasis { border-color: var(--border); box-shadow: var(--shadow-1); }
+.dt-figure-emphasis { background: var(--surface-1); border-color: var(--border); }
 .dt-figure-label {
   display: flex; align-items: center; gap: 6px;
   font-size: 12.5px; font-weight: 500; color: var(--text-muted);
 }
+.dt-figure {
+  font-family: var(--font-display); font-size: 25px; font-weight: 600;
+  letter-spacing: -0.02em; font-variant-numeric: tabular-nums; line-height: 1.1;
+}
 .dt-figure-note { font-size: 11.5px; color: var(--text-dim); }
 
-.dt-achievement { display: grid; gap: 9px; max-width: 780px; }
+.dt-achievement { display: grid; gap: 9px; }
 .dt-achievement-head {
   display: flex; align-items: center; justify-content: space-between;
   gap: 16px; flex-wrap: wrap; margin-bottom: 6px;
@@ -1543,11 +1615,6 @@ a.dt-bar-link:hover .dt-bar-go { opacity: 1; transform: translateX(2px); }
   display: inline-flex; align-items: center; gap: 14px;
   font-size: 11.5px; color: var(--text-dim);
 }
-.dt-key-item { display: inline-flex; align-items: center; gap: 6px; }
-.dt-key-item i { display: inline-block; width: 16px; height: 11px; border-radius: 3px; }
-.dt-key-plan { background: rgba(85, 99, 122, 0.17); }
-.dt-key-done { background: var(--text-muted); }
-.dt-key-scale { color: var(--text-dim); }
 
 /* A bullet chart on a shared count scale: the ghost is the commitment, the
    solid bar is the delivery, and the cap where the ghost ends is the target.
@@ -1563,14 +1630,13 @@ a.dt-bar-link:hover .dt-bar-go { opacity: 1; transform: translateX(2px); }
 }
 .dt-anon .dt-bullet-label { font-style: italic; font-weight: 400; color: var(--text-muted); }
 .dt-bullet-track {
-  position: relative; display: block; height: 16px;
-  background: var(--surface-1);
-  box-shadow: inset 0 0 0 1px var(--border);
+  position: relative; display: block; height: 14px;
+  background: var(--dt-track);
   border-radius: 4px;
 }
 .dt-bullet-plan {
   position: absolute; left: 0; top: 0; bottom: 0;
-  background: rgba(85, 99, 122, 0.17);
+  background: var(--dt-ghost);
   border-radius: 4px 0 0 4px;
 }
 .dt-bullet-fill {
@@ -1594,17 +1660,17 @@ a.dt-bar-link:hover .dt-bar-go { opacity: 1; transform: translateX(2px); }
   display: flex; align-items: center; justify-content: space-between;
   gap: 16px; flex-wrap: wrap; margin-bottom: 16px;
 }
-.dt-tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--border); flex: 1; }
+.dt-tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--border-soft); flex: 1; }
 .dt-tab {
   position: relative; padding: 9px 14px; font-size: 13px; font-weight: 500;
   color: var(--text-muted); background: none; border: 0; margin-bottom: -1px;
   transition: color .15s;
 }
 .dt-tab:hover { color: var(--text); }
-.dt-tab-active { color: var(--signal-strong); }
+.dt-tab-active { color: var(--text); }
 .dt-tab-underline {
   position: absolute; left: 0; right: 0; bottom: 0; height: 2px;
-  background: var(--signal); border-radius: 2px 2px 0 0;
+  background: var(--text); border-radius: 2px 2px 0 0;
 }
 .dt-viewtoggle { display: flex; gap: 4px; }
 
@@ -1632,46 +1698,41 @@ a.dt-bar-link:hover .dt-bar-go { opacity: 1; transform: translateX(2px); }
   color: inherit; text-transform: inherit; letter-spacing: inherit;
 }
 .dt-sort-btn:hover { color: var(--text-muted); }
-.dt-cell-link { color: var(--signal-strong); font-weight: 500; }
-.dt-cell-link:hover { text-decoration: underline; }
+.dt-cell-link { color: var(--text); font-weight: 500; text-decoration: underline;
+  text-decoration-color: var(--border); text-underline-offset: 3px; }
+.dt-cell-link:hover { text-decoration-color: currentColor; }
 /* A drill-through on a column that carries semantic colour keeps the colour:
    "problematic" is red whether or not it is also a link. */
-.dt-cell-link-bad { color: var(--red); }
+.dt-cell-link-bad { color: var(--dt-problem); }
 .dt-col-action { width: 40px; }
-.dt-col-rate { width: 190px; }
+.dt-col-book { width: 190px; min-width: 150px; }
+.dt-rate {
+  font-size: 12.5px; font-weight: 600; font-variant-numeric: tabular-nums;
+}
 .dt-row-filter {
   display: grid; place-items: center; width: 26px; height: 26px;
   border: 0; border-radius: 6px; background: transparent; color: var(--text-dim);
   opacity: 0; transition: opacity .13s, background .13s, color .13s;
 }
 tbody tr:hover .dt-row-filter { opacity: 1; }
-.dt-row-filter:hover { background: var(--signal-glow); color: var(--signal-strong); }
+.dt-row-filter:hover { background: var(--surface-3); color: var(--text); }
 .dt-row-filter:focus-visible { opacity: 1; }
-.dt-progress-cell { display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
-.dt-progress-track {
-  display: block; width: 70px; height: 6px; border-radius: 4px;
-  background: var(--surface-3);
-  box-shadow: inset 0 0 0 1px rgba(20, 35, 60, 0.05);
-  overflow: hidden;
-}
-.dt-progress-wide .dt-progress-track { width: 110px; }
-.dt-progress-track > span { display: block; height: 100%; border-radius: 4px; }
-.dt-progress-pct { font-size: 12.5px; color: var(--text-dim); min-width: 36px; text-align: right; }
 .dt-unattributed td { color: var(--text-muted); font-style: italic; }
 .dt-expand { display: flex; align-items: center; padding-top: 12px; }
 
 /* ---------- trend ---------- */
 .dt-trend { position: relative; }
 .dt-trend-svg { width: 100%; height: auto; display: block; overflow: visible; }
-.dt-gridline { stroke: var(--border); stroke-dasharray: 3 4; }
-.dt-axis-label { fill: var(--text-dim); font-size: 11px; font-variant-numeric: tabular-nums; }
+/* Hairline and solid. Dashed gridlines add noise and read as data. */
+.dt-gridline { stroke: var(--border-soft); stroke-width: 1; }
+.dt-axis-label { fill: var(--text-dim); font-size: 10.5px; font-variant-numeric: tabular-nums; }
 .dt-axis-current { fill: var(--text); font-weight: 600; }
-.dt-hover-rule { stroke: var(--text-dim); stroke-width: 1; stroke-dasharray: 3 3; }
+.dt-hover-rule { stroke: var(--text-dim); stroke-width: 1; }
 .dt-trend-readout {
-  display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
-  margin-top: 12px; padding: 10px 14px;
-  background: var(--surface-1); border: 1px solid var(--border);
-  border-radius: var(--radius-sm); font-size: 12.5px;
+  display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+  margin-top: 10px; padding: 9px 12px;
+  background: var(--surface-2); border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm); font-size: 12px;
 }
 .dt-readout-month { font-weight: 600; }
 .dt-readout-item { display: inline-flex; align-items: center; gap: 6px; color: var(--text-muted); }
@@ -1680,8 +1741,8 @@ tbody tr:hover .dt-row-filter { opacity: 1; }
 .dt-trend-readout em { color: var(--text-dim); font-size: 11.5px; }
 
 .dt-legend {
-  display: flex; align-items: center; gap: 18px; flex-wrap: wrap;
-  margin-top: 14px; font-size: 12px; color: var(--text-muted);
+  display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+  margin-top: 12px; font-size: 11.5px; color: var(--text-muted);
 }
 .dt-legend-item { display: inline-flex; align-items: center; gap: 7px; }
 .dt-legend-item i { width: 14px; height: 3px; border-radius: 2px; }
@@ -1692,171 +1753,87 @@ tbody tr:hover .dt-row-filter { opacity: 1; }
 }
 .dt-legend-note { color: var(--text-dim); }
 
-/* ---------- flow ledger ---------- */
-.dt-flow { display: grid; grid-template-columns: 1.5fr 1fr; gap: 24px; align-items: start; }
-.dt-flow-svg { width: 100%; height: auto; display: block; overflow: visible; }
-.dt-flow-connector { stroke: var(--text-dim); stroke-width: 1; stroke-dasharray: 3 3; }
-.dt-flow-value {
-  fill: var(--text); font-size: 12px; font-weight: 600;
+/* ---------- flow ledger ----------
+   A horizontal waterfall: one row per movement, each starting where the last
+   one finished. It was a column chart with the labels wedged under 66-pixel
+   bars; rows cost one line each and carry their label at full length. */
+.dt-flow { display: grid; gap: 14px; }
+.dt-flow-rows { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.dt-flow-row {
+  display: grid; align-items: center; gap: 12px;
+  grid-template-columns: 132px minmax(0, 1fr) 62px;
+  font-size: 12.5px;
+}
+.dt-flow-name { color: var(--text-muted); }
+.dt-flow-balance .dt-flow-name { color: var(--text); font-weight: 500; }
+.dt-flow-track {
+  position: relative; display: block; height: 14px;
+  background: var(--dt-track); border-radius: 4px;
+}
+.dt-flow-fill { position: absolute; top: 0; bottom: 0; border-radius: 3px; }
+.dt-flow-figure {
+  font-family: var(--font-display); font-size: 15px; text-align: right;
   font-variant-numeric: tabular-nums;
 }
-.dt-flow-label { fill: var(--text-muted); font-size: 11px; }
-.dt-flow-side { display: grid; gap: 10px; }
-.dt-flow-stat {
-  display: flex; align-items: center; gap: 10px;
-  background: var(--surface-1); border: 1px solid var(--border);
-  border-radius: var(--radius-sm); padding: 11px 14px; font-size: 13px;
+.dt-flow-foot {
+  display: flex; align-items: center; gap: 18px; flex-wrap: wrap;
+  padding-top: 12px; border-top: 1px solid var(--border-soft); font-size: 12.5px;
 }
-.dt-flow-stat-label { flex: 1; color: var(--text-muted); }
-.dt-flow-stat b { font-family: var(--font-display); font-size: 17px; }
-.dt-flow-stat-icon { display: grid; place-items: center; width: 24px; height: 24px; border-radius: 6px; }
-.dt-tone-good { background: var(--green-dim); color: var(--green); }
-.dt-tone-bad { background: var(--red-dim); color: var(--red); }
+.dt-flow-stat { display: inline-flex; align-items: center; gap: 8px; }
+.dt-flow-stat-label { color: var(--text-muted); }
+.dt-flow-stat b { font-family: var(--font-display); font-size: 16px; }
+.dt-flow-stat-icon {
+  display: grid; place-items: center; width: 20px; height: 20px;
+  border-radius: 6px; color: #fff;
+}
+/* The ledger's scale is truncated on purpose — see charts/FlowLedger — so it
+   says where the floor is rather than leaving zero to be assumed. */
+.dt-flow-floor { color: var(--text-dim); font-style: italic; font-size: 11.5px; margin-left: auto; }
 .dt-flow-note {
-  font-size: 11.5px; color: var(--text-dim); line-height: 1.55; margin: 2px 0 0;
+  font-size: 11.5px; color: var(--text-dim); line-height: 1.55; margin: 0;
 }
 
 /* Two readings of the same figure, side by side. Also what keeps a five-row
    bar chart from stretching its marks across a 1280px page. */
-/* ---------- the workbench ----------
-   The page is a surface worked at, not a document read once. Every figure on
-   it links into the work queue, so the traffic is arrive → drill → come back →
-   re-filter, and that traffic is what these three rules serve: a command bar
-   that stays reachable, a rail that says where you are among the panels, and
-   a bench that pairs the panels read together.
-
-   Source order is the single source of truth. The rail is built from the same
-   list the panels are, and the grid below places in source order rather than
-   by named tracks, so nothing here can reorder the argument the page makes. */
-
-.dt-command {
-  position: sticky;
-  top: 0;
-  z-index: 20;
-  /* Bled to the gutters so the backdrop covers the full width of the content
-     column as panels scroll under it. Without the negative margin the panels
-     show through at the edges, which reads as a rendering fault. */
-  margin: 0 -14px 20px;
-  padding: 10px 14px 0;
-  background: var(--bg);
-  /* Not a hard edge: the bar carries no border of its own, so a panel sliding
-     under it fades rather than being clipped against a line. */
-  box-shadow: 0 10px 12px -10px rgba(20, 35, 60, 0.16);
+.dt-pair {
+  display: grid; gap: var(--dt-gap); align-items: start; min-width: 0;
+  /* auto-fit, not `1fr 1fr`: when one of the pair is absent — an older
+     backend that does not serve the breakdown, a month with no flow ledger —
+     a fixed two-track grid leaves the survivor at half width beside a hole.
+     This lets it fill the row instead. */
+  grid-template-columns: repeat(auto-fit, minmax(330px, 1fr));
 }
-.dt-command .dt-toolbar { margin-bottom: 10px; }
-
-.dt-workbench {
-  display: grid;
-  grid-template-columns: 186px minmax(0, 1fr);
-  gap: 34px;
-  align-items: start;
-}
-/* minmax(0, 1fr) above, not 1fr: the bench holds a horizontally scrolling
-   table, and a bare 1fr track floors at the table's min-content width, so the
-   whole grid grows wider than the viewport instead of the table scrolling. */
-
-.dt-bench { min-width: 0; }
-/* The first panel on the bench sets its own top rule against the command bar,
-   which already draws one. */
-.dt-bench > .dt-section:first-child { margin-top: 0; border-top: 0; padding-top: 0; }
-
-/* ---------- the bench rail ---------- */
-.dt-rail {
-  position: sticky;
-  /* Clears the command bar, which is sticky at 0 and about 56px tall. */
-  top: 74px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.dt-rail-cap {
-  font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase;
-  color: var(--text-dim); font-weight: 600; padding-left: 11px;
-}
-.dt-rail ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 1px; }
-.dt-rail-link {
-  display: grid;
-  grid-template-columns: 2px 1fr auto;
-  align-items: center;
-  gap: 9px;
-  padding: 7px 9px 7px 0;
-  border-radius: var(--radius-sm);
-  color: var(--text-muted);
-  text-decoration: none;
-  font-size: 12.5px;
-  line-height: 1.3;
-  transition: color .15s, background .15s;
-}
-.dt-rail-link:hover { background: var(--surface-2); color: var(--text); }
-/* The tick is the position indicator: a 2px rule that fills in on the current
-   panel. It occupies its column whether or not it is lit, so nothing shifts
-   sideways as the reader scrolls from one panel to the next. */
-.dt-rail-tick {
-  align-self: stretch;
-  border-radius: 2px;
-  background: var(--border);
-  transition: background .18s;
-}
-.dt-rail-name { min-width: 0; }
-.dt-rail-figure {
-  font-family: var(--font-display); font-size: 12.5px; font-weight: 600;
-  color: var(--text-dim);
-}
-.dt-rail-current { color: var(--text); font-weight: 500; }
-.dt-rail-current .dt-rail-tick { background: var(--signal); }
-
-/* Anchor jumps land under the sticky command bar without this. */
-.dt-section[id] { scroll-margin-top: 84px; }
-
-/* Below the breakpoint the rail stops being a rail: there is no room beside
-   the bench for it, and a horizontal strip of jump links above three screens
-   of content is a second navigation to maintain for very little. The panels
-   are then simply read in order, as they were before. */
-@media (max-width: 1100px) {
-  .dt-workbench { grid-template-columns: minmax(0, 1fr); gap: 0; }
-  .dt-rail { display: none; }
-  .dt-bench > .dt-section:first-child { padding-top: 0; }
-}
-
-@media (max-width: 720px) {
-  /* A sticky bar that wraps to three rows on a phone eats half the viewport;
-     below this width it scrolls away with the page. */
-  .dt-command { position: static; margin: 0 0 20px; padding: 0; box-shadow: none; }
-}
-
-.dt-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; align-items: start; }
-.dt-pair > .dt-section:last-child { border-top-color: transparent; }
-.dt-pair .dt-bars, .dt-pair .dt-achievement { max-width: none; }
+.dt-pair > * { min-width: 0; }
 
 /* ---------- responsive ---------- */
 @media (max-width: 1080px) {
-  .dt-flow { grid-template-columns: 1fr; }
-  .dt-col-rate { width: auto; }
-  .dt-pair { grid-template-columns: 1fr; gap: 0; }
-  .dt-pair > .dt-section:last-child { border-top-color: var(--border); }
+  .dt-pair { grid-template-columns: minmax(0, 1fr); }
+
+  .dt-col-book { width: auto; }
+  .dt-hero { grid-template-columns: minmax(0, 1fr); justify-items: center; gap: 22px; }
+  .dt-hero-body { width: 100%; }
 }
 @media (max-width: 760px) {
-  .dt-seg-inline { padding: 0 8px; gap: 5px; }
-  .dt-seg-inline i { display: none; }
+  .dt-hero { padding: 20px 16px; }
   .dt-bar-link { grid-template-columns: 110px 1fr 42px; }
   .dt-bar-share, .dt-bar-go { display: none; }
-  .dt-pipe-body { grid-template-columns: 120px 1fr 40px; }
-  .dt-pipe-share { display: none; }
   .dt-bullet { grid-template-columns: 104px minmax(0, 1fr) 52px; gap: 10px; }
   .dt-bullet-detail { display: none; }
   .dt-bullet-key { gap: 10px; }
   .dt-key-scale { display: none; }
+  .dt-flow-row { grid-template-columns: 104px minmax(0, 1fr) 54px; gap: 8px; }
   .dt-toolbar-right { margin-left: 0; width: 100%; }
   .dt-row-filter { opacity: 1; }
+  .dt-section { padding: 16px 14px 18px; }
+  /* A sticky bar that wraps to three rows on a phone eats half the viewport;
+     below this width it scrolls away with the page. */
+  .dt-command { position: static; margin: 0 0 18px; padding: 0; box-shadow: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .dt-skeleton-row, .dt-spin { animation: none; }
+  .dt-skeleton-row, .dt-skeleton-ring, .dt-spin { animation: none; }
 }
 
-/* The flow ledger's vertical scale is truncated on purpose — see
-   charts/FlowLedger — so the floor says so on the chart itself. */
-.dt-flow-floor { fill: var(--text-dim); font-size: 10.5px; font-style: italic; }
 
 /* ===================================================================
    Monthly plan (PIP) — the contractor's screen

@@ -99,22 +99,24 @@ UNATTRIBUTED = "Unattributed"
 #: Age bands for ongoing sites, as ``(upper bound in days, label)`` read in
 #: order, with the final ``None`` bound catching everything above the last.
 #:
-#: The clock is the site's launch date \u2014 the day it went on air and a drive
-#: test started being owed on it. That date is recorded, which is the whole
-#: reason these bands can exist where the problematic ones cannot: nothing
-#: records when a site *became* problematic, so bands off any other date would
-#: be a different fact wearing the same label. See :meth:`breakdowns`.
+#: The clock is the day the site was assigned to a contractor — the day
+#: somebody took the drive test on. That is the date the programme is actually
+#: chasing: an on-air site nobody has been given yet is a queue item, not late
+#: work, and aging it from launch would file a brand-new assignment on a
+#: two-year-old site under "over a year" and make the contractor look idle for
+#: a period they did not own it.
 #:
-#: The bounds are a month, a quarter, half a year and a year. They are
-#: deliberately unequal \u2014 the question changes as a site ages, from "is this
-#: moving" to "has this been forgotten" \u2014 and equal buckets would put every
-#: long-overdue site into one indistinguishable tail.
+#: The bounds are weekly for the first three weeks and then monthly, because
+#: that is the cadence the work runs at: a drive test is a matter of days, so
+#: a site in its second week is a normal one and a site past a month is a
+#: question. An ongoing site with no assignment has no clock and is counted
+#: apart — see :meth:`DriveTestAnalytics.breakdowns`.
 AGE_BANDS: tuple[tuple[int | None, str], ...] = (
-    (30, "Under a month"),
-    (90, "1\u20133 months"),
-    (180, "3\u20136 months"),
-    (365, "6\u201312 months"),
-    (None, "Over a year"),
+    (7, "Up to 1 week"),
+    (14, "1–2 weeks"),
+    (21, "2–3 weeks"),
+    (30, "3 weeks – 1 month"),
+    (None, "More than 1 month"),
 )
 
 
@@ -187,6 +189,25 @@ class DriveTestAnalytics:
         if active is not None:
             return active.contractor_id
         return wi.dt_sc_contractor_id
+
+    @staticmethod
+    def _assignment_date(wi: WorkItem) -> date | None:
+        """The day this site's live assignment was made, or ``None``.
+
+        The clock the ongoing aging bands run on. Only the *active* assignment
+        counts: a site handed from one contractor to another starts a new
+        clock, because the question the bands answer is how long the company
+        that holds it now has held it.
+
+        ``None`` where there is no in-app assignment at all. A CPM-seeded
+        ``dt_sc_contractor_id`` is a name with no date behind it, so it cannot
+        start a clock; those sites are counted apart rather than aged from
+        some other date that happens to be present.
+        """
+        active = next((a for a in wi.assignments if a.is_active), None)
+        if active is None or active.assigned_at is None:
+            return None
+        return active.assigned_at.date()
 
     @staticmethod
     def _effective_problem_category(wi: WorkItem) -> str:
@@ -445,20 +466,20 @@ class DriveTestAnalytics:
         fact get onto a dashboard.
 
         There is no problematic *aging* here, and there is ongoing aging. The
-        difference is not an inconsistency, it is the whole rule: an ongoing
-        site has a recorded launch date, so "how long has this live site gone
-        untested" is a real measurement. Nothing records when a site *became*
-        problematic — the CPM-imported signal is a bare status column and the
-        in-app signal is a stage — so the same bands over there would be a
-        different fact wearing the same label. They stay absent rather than
-        approximated. See :data:`AGE_BANDS`.
+        difference is not an inconsistency, it is the whole rule: an assigned
+        ongoing site has a dated assignment, so "how long has somebody been
+        holding this" is a real measurement. Nothing records when a site
+        *became* problematic — the CPM-imported signal is a bare status column
+        and the in-app signal is a stage — so the same bands over there would
+        be a different fact wearing the same label. They stay absent rather
+        than approximated. See :data:`AGE_BANDS`.
         """
         stage_counts: dict[str, int] = defaultdict(int)
         ongoing_by_contractor: dict[int, int] = defaultdict(int)
         ongoing_without_contractor = 0
         ongoing_by_province: dict[int | None, int] = defaultdict(int)
         age_counts: dict[str, int] = defaultdict(int)
-        ongoing_without_launch = 0
+        ongoing_without_assignment = 0
         problem_categories: dict[str, int] = defaultdict(int)
         problem_by_province: dict[int | None, int] = defaultdict(int)
         province_rows: dict[int | None, dict[str, int]] = defaultdict(
@@ -506,9 +527,9 @@ class DriveTestAnalytics:
                 else:
                     ongoing_by_contractor[contractor_id] += 1
 
-                band = self._age_band(w.launch_date_gregorian, today)
+                band = self._age_band(self._assignment_date(w), today)
                 if band is None:
-                    ongoing_without_launch += 1
+                    ongoing_without_assignment += 1
                 else:
                     age_counts[band] += 1
 
@@ -521,7 +542,7 @@ class DriveTestAnalytics:
                 "without_contractor": ongoing_without_contractor,
                 "by_province": _province_points(ongoing_by_province, names),
                 "by_age": self._age_points(age_counts),
-                "without_launch_date": ongoing_without_launch,
+                "without_assignment_date": ongoing_without_assignment,
             },
             "problematic": {
                 "total": problematic_total,
@@ -535,16 +556,18 @@ class DriveTestAnalytics:
         }
 
     @staticmethod
-    def _age_band(launch: date | None, today: date) -> str | None:
-        """Which age band a site falls in, or ``None`` with no launch date.
+    def _age_band(started: date | None, today: date) -> str | None:
+        """Which age band a site falls in, or ``None`` with no start date.
 
-        ``None`` rather than a "0 days" bucket: a missing launch date is an
-        unknown age, not a young site, and quietly filing it under the newest
-        band would make an untested backlog look fresher than it is.
+        ``None`` rather than a "0 days" bucket: a site nobody has been
+        assigned has no clock running on it, not a clock reading zero, and
+        quietly filing it under the newest band would make the backlog look
+        fresher than it is and would credit a contractor with a site they
+        were never given.
         """
-        if launch is None:
+        if started is None:
             return None
-        days = (today - launch).days
+        days = (today - started).days
         for bound, label in AGE_BANDS:
             if bound is None or days <= bound:
                 return label
@@ -564,7 +587,17 @@ class DriveTestAnalytics:
     def _contractor_scorecard(
         self, books: dict[int | None, dict[str, int]]
     ) -> list[dict]:
-        """Each contractor's book of on-air work, ranked by completion.
+        """Each contractor's assignment, ranked by how much of it is done.
+
+        The denominator is the company's *assignment* — the drive tests it has
+        finished plus the sites it is still holding — not every on-air site
+        that carries its name. Problematic sites are excluded deliberately:
+        a site handed over for a health check, or one sitting in a problem
+        category, is not work the contractor has been committed to, and
+        counting it against them would mark a company down for sites the
+        programme has not actually given them. It stays on the row as its own
+        column, because it is worth seeing; it is simply not part of the book
+        being scored.
 
         Ranked by ``done_percent`` rather than by size, which is the point of
         carrying the denominator at all — see
@@ -588,20 +621,22 @@ class DriveTestAnalytics:
         ids = {cid for cid in books if cid is not None}
         names = self._contractor_names(ids, {})
 
-        rows = [
-            {
-                "contractor_id": cid,
-                "name": names.get(cid, NO_LABEL) if cid is not None else UNATTRIBUTED,
-                "onair": book["onair"],
-                "done": book["done"],
-                "ongoing": book["ongoing"],
-                "problematic": book["problematic"],
-                "done_percent": (
-                    round(book["done"] / book["onair"] * 100, 1) if book["onair"] else 0.0
-                ),
-            }
-            for cid, book in books.items()
-        ]
+        rows = []
+        for cid, book in books.items():
+            assigned = book["done"] + book["ongoing"]
+            rows.append(
+                {
+                    "contractor_id": cid,
+                    "name": names.get(cid, NO_LABEL) if cid is not None else UNATTRIBUTED,
+                    "assigned": assigned,
+                    "done": book["done"],
+                    "ongoing": book["ongoing"],
+                    "problematic": book["problematic"],
+                    "done_percent": (
+                        round(book["done"] / assigned * 100, 1) if assigned else 0.0
+                    ),
+                }
+            )
         rows.sort(key=lambda r: (r["contractor_id"] is None, -r["done_percent"]))
         return rows
 

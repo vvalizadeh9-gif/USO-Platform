@@ -1,5 +1,6 @@
 import { motion, useReducedMotion } from 'framer-motion'
 import { useMemo, useState } from 'react'
+import { TREND_SERIES } from '../constants'
 import { count } from '../format'
 import { DrawPath, FadeArea } from './primitives'
 
@@ -30,15 +31,26 @@ import { DrawPath, FadeArea } from './primitives'
  * in progress is drawn dashed with an open endpoint.
  */
 
-const VIEW_W = 760
-const PAD_L = 46
-const PAD_R = 14
-const MAIN_TOP = 14
-const MAIN_H = 168
-const STRIP_TOP = 214
-const STRIP_H = 46
-const AXIS_Y = 286
-const VIEW_H = 300
+/* Geometry. The panel used to be 760x300 in a full-width box, which made a
+   twelve-point series the tallest thing on the page — for a shape a reader
+   takes in at a glance.
+ *
+ * The width matters as much as the height and is the less obvious half. An
+ * SVG viewBox scales its type along with everything else, so a 760-unit box
+ * rendered in a half-width card shrinks 11px axis labels to about 6px. The
+ * box is now sized to roughly what it is rendered at, which keeps the labels
+ * at the size they are set in. The strip keeps its share of the height,
+ * because a problematic series squeezed to a few pixels is a flat line
+ * whatever its numbers do. */
+const VIEW_W = 440
+const PAD_L = 36
+const PAD_R = 10
+const MAIN_TOP = 8
+const MAIN_H = 84
+const STRIP_TOP = 106
+const STRIP_H = 26
+const AXIS_Y = 152
+const VIEW_H = 162
 
 const PLOT_W = VIEW_W - PAD_L - PAD_R
 
@@ -123,13 +135,18 @@ export default function TrendChart({ months, seriesLabel = {} }) {
 
   // Label every month when they fit, otherwise every other one. Twelve labels
   // in Persian across this width overlap; six do not.
-  const labelEvery = months.length > 8 ? 2 : 1
+  const labelEvery = months.length > 6 ? 2 : 1
   const hovered = hover == null ? null : months[hover]
 
+  // Colours come from TREND_SERIES, which is also what the legend under the
+  // chart is built from. They used to be written out again here, and the two
+  // copies had drifted: the legend swatch for Remaining was one hue and the
+  // line it labelled was another.
+  const hue = Object.fromEntries(TREND_SERIES.map((s) => [s.key, s.color]))
   const series = [
-    { key: 'remaining', points: remaining, color: 'var(--amber)', y: mainY, area: true },
-    { key: 'dt_done', points: done, color: 'var(--green)', y: mainY, area: false },
-    { key: 'problematic', points: problematic, color: 'var(--red)', y: stripY, area: true },
+    { key: 'remaining', points: remaining, color: hue.remaining, y: mainY, area: true },
+    { key: 'dt_done', points: done, color: hue.dt_done, y: mainY, area: false },
+    { key: 'problematic', points: problematic, color: hue.problematic, y: stripY, area: true },
   ]
 
   return (
@@ -150,12 +167,12 @@ export default function TrendChart({ months, seriesLabel = {} }) {
       >
         <defs>
           <linearGradient id="dt-fill-remaining" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="var(--amber)" stopOpacity="0.28" />
-            <stop offset="100%" stopColor="var(--amber)" stopOpacity="0.02" />
+            <stop offset="0%" stopColor="var(--dt-ongoing)" stopOpacity="0.14" />
+            <stop offset="100%" stopColor="var(--dt-ongoing)" stopOpacity="0.02" />
           </linearGradient>
           <linearGradient id="dt-fill-problematic" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="var(--red)" stopOpacity="0.3" />
-            <stop offset="100%" stopColor="var(--red)" stopOpacity="0.03" />
+            <stop offset="0%" stopColor="var(--dt-problem)" stopOpacity="0.16" />
+            <stop offset="100%" stopColor="var(--dt-problem)" stopOpacity="0.02" />
           </linearGradient>
         </defs>
 
@@ -176,7 +193,7 @@ export default function TrendChart({ months, seriesLabel = {} }) {
         {/* Problematic strip: its own scale, labelled so nobody reads it
             against the panel above. */}
         <line x1={PAD_L} x2={VIEW_W - PAD_R} y1={stripBase} y2={stripBase} className="dt-gridline" />
-        <text x={PAD_L - 8} y={STRIP_TOP + 10} className="dt-axis-label" textAnchor="end">
+        <text x={PAD_L - 8} y={STRIP_TOP + 9} className="dt-axis-label" textAnchor="end">
           {count(stripMax)}
         </text>
         <text x={PAD_L - 8} y={stripBase + 4} className="dt-axis-label" textAnchor="end">

@@ -6,14 +6,20 @@ import Section from './Section'
 /**
  * What was committed for the month against what was delivered.
  *
+ * The first two tiles carry a neutral icon rather than a hue of their own.
+ * PIP and Assigned used to be violet and brand teal, which put two more
+ * colours on a page whose rule is that a colour means a state — and the teal
+ * one was the primary-button colour, so a figure wore the "act on me" tint.
+ * Actual is green because it is finished work, which is what green means
+ * everywhere else here.
+ *
  * A contractor signed in here receives one row — their own — and an unnamed
  * programme average. That is enforced by the endpoint, not by this component,
  * which renders whatever rows it was given.
  */
-export default function PlanDelivery({ state, onRetry, id }) {
+export default function PlanDelivery({ state, onRetry }) {
   return (
     <Section
-      id={id}
       title="Plan and delivery"
       subtitle={state.data?.month_label}
       state={state}
@@ -29,7 +35,7 @@ export default function PlanDelivery({ state, onRetry, id }) {
                 icon={Target}
                 label="PIP"
                 value={count(data.pip)}
-                color="var(--violet)"
+                color="var(--text-dim)"
                 note={
                   uncommitted > 0
                     ? `${uncommitted} not committed`
@@ -40,13 +46,13 @@ export default function PlanDelivery({ state, onRetry, id }) {
                 icon={ClipboardList}
                 label="Assigned"
                 value={count(data.assigned)}
-                color="var(--signal)"
+                color="var(--text-dim)"
               />
               <Figure
                 icon={CheckCircle2}
                 label="Actual"
                 value={count(data.actual)}
-                color="var(--green)"
+                color="var(--dt-done)"
               />
               <Figure
                 icon={Gauge}
