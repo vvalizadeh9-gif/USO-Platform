@@ -3,7 +3,6 @@ import { useMemo, useState } from 'react'
 import api from '../../api/client'
 import { PageHead } from '../../components/ui'
 import { useToast } from '../../context/ToastContext'
-import BenchRail from './BenchRail'
 import BreakdownCard from './BreakdownCard'
 import ContractorScorecard from './ContractorScorecard'
 import KpiBand from './KpiBand'
@@ -12,10 +11,9 @@ import ProvinceTable from './ProvinceTable'
 import Section from './Section'
 import Toolbar from './Toolbar'
 import FlowLedger from './charts/FlowLedger'
-import StagePipeline from './charts/StagePipeline'
 import TrendChart from './charts/TrendChart'
-import { PROVINCE_LIMIT, TREND_SERIES } from './constants'
-import { achievement, count } from './format'
+import { AGE_RAMP, PROVINCE_LIMIT, STATE_COLOR, TREND_SERIES } from './constants'
+import { count } from './format'
 import { ongoingLink, problematicLink } from './links'
 import { useDashboard } from './useDashboard'
 
@@ -32,29 +30,34 @@ import { useDashboard } from './useDashboard'
  * already visible and can never widen it — see
  * `api/drive_test._resolve_province`.
  *
- * THE WORKBENCH LAYOUT. The four questions are still answered in that order —
- * the order is the argument and it has not changed. What changed is that the
- * page stopped being a document you read once and became a surface you work
- * at, because that is what it is used for: every figure on it is a link to the
- * sites behind it (`/drive-test/sites`), so the reader arrives, drills
- * through, comes back, and re-filters.
+ * TWO THINGS THIS PAGE NO LONGER HAS, and both were removed for the same
+ * reason — they were furniture the reader had to learn before they could read
+ * anything.
  *
- * That use is what the two moves here serve. The command bar sticks, so the
- * province filter and the freshness clock stay reachable from the bottom of a
- * three-screen page instead of being stranded at the top. The bench rail says
- * which panels exist, what each one's headline figure is, and which one you
- * are in. The panels themselves are unchanged, pairing included.
+ * The first was a side rail listing the panels with their headline figures.
+ * It was answering "how far down am I" on a page that is only long because
+ * nothing on it had been made compact, and it duplicated every figure it
+ * listed: a reader was given the ongoing total twice, four hundred pixels
+ * apart, with nothing saying they were the same number. Shrinking the trend
+ * and the ledger took the page to a length a scrollbar handles on its own.
  *
- * Source order is unchanged and is load-bearing: the rail, the panel grid and
- * the reading order are all driven by `panels` below, and the grid places by
- * source order rather than by explicit track assignment. A panel added to
- * `panels` therefore appears in the rail and on the bench in the one place.
+ * The second was "where the ongoing work is stuck", a stage pipeline beside
+ * the ongoing breakdown. Its buckets are workflow stages — a vocabulary that
+ * belongs to the health-check and assignment screens, where acting on them is
+ * possible. Here it was a fourth way of cutting the same ongoing total, and
+ * the one nobody on this page could do anything with.
+ *
+ * EVERY SECTION IS A CARD. Not because cards are decoration, but because this
+ * page is read in pieces: a reader comes for the scorecard or the provinces,
+ * not for a document. The rule is one card, one question, one heading — and
+ * the weight is spent evenly, because after the hero nothing here is more
+ * important than anything else.
  */
 
 const ONGOING_TABS = [
   { key: 'contractor', label: 'Contractor' },
   { key: 'province', label: 'Province' },
-  { key: 'age', label: 'How long waiting' },
+  { key: 'age', label: 'How long' },
 ]
 
 const PROBLEMATIC_TABS = [
@@ -63,20 +66,6 @@ const PROBLEMATIC_TABS = [
 ]
 
 const TREND_LABELS = Object.fromEntries(TREND_SERIES.map((s) => [s.key, s.label]))
-
-/** Anchor ids for the panels, shared by the bench rail and the panels
- * themselves. Named here rather than written twice, because a rail entry whose
- * id has drifted from its panel's is a link that silently goes nowhere. */
-const PANEL = {
-  plan: 'dt-panel-plan',
-  ongoing: 'dt-panel-ongoing',
-  stuck: 'dt-panel-stuck',
-  problematic: 'dt-panel-problematic',
-  contractors: 'dt-panel-contractors',
-  provinces: 'dt-panel-provinces',
-  trend: 'dt-panel-trend',
-  flow: 'dt-panel-flow',
-}
 
 /** Top `limit` points with the tail folded into one line.
  *
@@ -142,7 +131,7 @@ export default function DriveTestProject() {
    * scorecard in the same payload — the one place this page already has both.
    * A name with no row is not linked, which is exactly what should happen to
    * the unnamed "Other contractors" aggregate a contractor account sees: it
-   * stands for several companies and there is no list behind it that they are
+   * stands for several companies and there is no list behind it they are
    * allowed to open.
    */
   const contractorIdByName = useMemo(() => {
@@ -161,7 +150,7 @@ export default function DriveTestProject() {
       contractor: {
         points: b.by_contractor,
         unit: 'Contractor',
-        color: 'var(--signal)',
+        color: STATE_COLOR.ongoing,
         hrefFor: (p) => {
           const id = contractorIdByName.get(p.name)
           return id == null ? null : ongoingLink({ ...scope, contractorId: id })
@@ -178,7 +167,7 @@ export default function DriveTestProject() {
       province: {
         points: collapse(b.by_province),
         unit: 'Province',
-        color: 'var(--signal)',
+        color: STATE_COLOR.ongoing,
         hrefFor: (p) => {
           const id = provinces.find((x) => x.name === p.name)?.id
           return id ? ongoingLink({ provinceId: id }) : null
@@ -186,18 +175,22 @@ export default function DriveTestProject() {
       },
       age: {
         points: b.by_age,
-        unit: 'Waiting',
-        color: 'var(--amber)',
-        // The band's key, not its label: the label carries an en dash and is
-        // a wording somebody may improve, and a URL built out of it would
+        unit: 'Held for',
+        // The band's key, not its label: the labels carry en dashes and are
+        // wordings somebody may improve, and a URL built out of one would
         // break silently — with an empty list rather than an error.
         hrefFor: (p) => (p.key ? ongoingLink({ ...scope, ageBand: p.key }) : null),
+        // The one ramp on the page: these bands are an ordered scale, so the
+        // longer a site has been held the heavier its bar reads.
+        color: (_point, i) => AGE_RAMP[Math.min(i, AGE_RAMP.length - 1)],
         note:
-          b.without_launch_date > 0
-            ? `Measured from each site's launch date. ${count(b.without_launch_date)} ongoing ` +
-              `${b.without_launch_date === 1 ? 'site has' : 'sites have'} no launch date recorded ` +
-              'and cannot be aged.'
-            : "Measured from each site's launch date — how long a live site has gone untested.",
+          b.without_assignment_date > 0
+            ? `Measured from the day each site was assigned to a contractor. ` +
+              `${count(b.without_assignment_date)} ongoing ` +
+              `${b.without_assignment_date === 1 ? 'site is' : 'sites are'} not assigned to ` +
+              'anyone yet, so no clock has started on them and they are not shown above.'
+            : 'Measured from the day each site was assigned to a contractor — how long the ' +
+              'company holding it now has held it.',
       },
     }
   }, [data, provinces, provinceId, contractorIdByName])
@@ -209,7 +202,7 @@ export default function DriveTestProject() {
       category: {
         points: b.by_category,
         unit: 'Category',
-        color: 'var(--red)',
+        color: STATE_COLOR.problematic,
         // Each bar opens its own category. It used to open every problematic
         // site whichever bar was clicked, so a reader who clicked 64 landed
         // on 194.
@@ -221,7 +214,7 @@ export default function DriveTestProject() {
       province: {
         points: collapse(b.by_province),
         unit: 'Province',
-        color: 'var(--red)',
+        color: STATE_COLOR.problematic,
         hrefFor: (p) => {
           const id = provinces.find((x) => x.name === p.name)?.id
           return id ? problematicLink({ provinceId: id }) : null
@@ -229,63 +222,6 @@ export default function DriveTestProject() {
       },
     }
   }, [data, provinces, provinceId])
-
-  /** The rail's entries, and the reading order of the bench.
-   *
-   * Built from the same `has` conditions the panels themselves are rendered
-   * under, so a panel an older backend does not serve is absent from both. It
-   * lists every panel while the payload is still in flight — `has` is true
-   * with no data — which keeps the rail from reshuffling under the pointer as
-   * the sections land.
-   *
-   * Only three entries carry a figure. Every figure in this column has to be
-   * readable against the ones above and below it, and the honest headline for
-   * the scorecard or the province table is a count of contractors or of
-   * provinces — a different unit sitting in the same column as counts of
-   * sites. A column that silently changes unit is worse than a column with
-   * gaps in it, so those entries are named only.
-   */
-  const panels = useMemo(() => {
-    const items = [
-      {
-        id: PANEL.plan,
-        label: 'Plan and delivery',
-        figure: plan.data ? achievement(plan.data.achievement_percent) : null,
-        color: 'var(--violet)',
-      },
-    ]
-    if (has('ongoing_breakdown')) {
-      items.push({
-        id: PANEL.ongoing,
-        label: 'Ongoing breakdown',
-        figure: data ? count(data.ongoing_breakdown.total) : null,
-        color: 'var(--signal-strong)',
-      })
-      items.push({ id: PANEL.stuck, label: 'Where it is stuck' })
-    }
-    if (has('problematic_breakdown')) {
-      items.push({
-        id: PANEL.problematic,
-        label: 'Problematic breakdown',
-        figure: data ? count(data.problematic_breakdown.total) : null,
-        color: 'var(--red)',
-      })
-    }
-    if (has('contractor_scorecard')) {
-      items.push({ id: PANEL.contractors, label: 'Contractor scorecard' })
-    }
-    if (has('province_breakdown')) {
-      items.push({ id: PANEL.provinces, label: 'Province breakdown' })
-    }
-    items.push({ id: PANEL.trend, label: 'Where this is going' })
-    if (trend.data?.latest_flows) {
-      items.push({ id: PANEL.flow, label: 'What moved' })
-    }
-    return items
-    // `has` closes over `data` and is redefined each render; depending on
-    // `data` directly is the same condition without the churn.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data, plan.data, trend.data])
 
   return (
     <>
@@ -300,7 +236,7 @@ export default function DriveTestProject() {
       />
 
       {/* The command bar sticks. Everything in it changes what the page
-          shows, and the page is three screens long; a filter you have to
+          shows, and the page is long enough to scroll; a filter you have to
           scroll back to the top to reach is a filter that gets used once. The
           freshness clock has the same problem in reverse — it is only honest
           while it is on screen. */}
@@ -317,180 +253,154 @@ export default function DriveTestProject() {
         />
       </div>
 
-      <div className="dt-workbench">
-        <BenchRail items={panels} />
-
-        <div className="dt-bench">
-      {overview.error ? (
-        <div className="dt-page-error card card-pad" role="alert">
-          <AlertTriangle size={18} aria-hidden="true" />
-          <div>
-            <b>Could not load the Drive Test figures.</b>
-            <p>Everything on this page comes from that request, so there is nothing to show.</p>
-          </div>
-          <button type="button" className="btn" onClick={refresh}>
-            Try again
-          </button>
-        </div>
-      ) : overview.loading && !data ? (
-        <KpiSkeleton />
-      ) : data ? (
-        <KpiBand kpis={data.kpis} monthName={monthName} provinceId={provinceId} />
-      ) : null}
-
-      <PlanDelivery id={PANEL.plan} state={plan} onRetry={refresh} />
-
-      {has('ongoing_breakdown') && (
-      <div className="dt-pair">
-      <Section
-        id={PANEL.ongoing}
-        title="Ongoing breakdown"
-        state={overview}
-        onRetry={refresh}
-        actions={
-          data && (
-            <SectionTotal
-              icon={CircleDashed}
-              value={data.ongoing_breakdown.total}
-              label="ongoing"
-              color="var(--signal-strong)"
-            />
-          )
-        }
-      >
-        {(d) => (
-          <BreakdownCard
-            tabs={ONGOING_TABS}
-            tab={ongoingTab}
-            onTab={setOngoingTab}
-            views={ongoingViews}
-            total={d.ongoing_breakdown.total}
-          />
-        )}
-      </Section>
-      <Section
-        id={PANEL.stuck}
-        title="Where the ongoing work is stuck"
-        subtitle="In workflow order — who each site is waiting on"
-        state={overview}
-        onRetry={refresh}
-      >
-        {(d) => (
-          <StagePipeline
-            points={d.ongoing_breakdown.by_stage}
-            total={d.ongoing_breakdown.total}
-            provinceId={provinceId}
-          />
-        )}
-      </Section>
-      </div>
-      )}
-
-      {has('problematic_breakdown') && (
-      <Section
-        id={PANEL.problematic}
-        title="Problematic breakdown"
-        state={overview}
-        onRetry={refresh}
-        actions={
-          data && (
-            <SectionTotal
-              icon={AlertTriangle}
-              value={data.problematic_breakdown.total}
-              label="problematic"
-              color="var(--red)"
-            />
-          )
-        }
-      >
-        {(d) => (
-          <BreakdownCard
-            tabs={PROBLEMATIC_TABS}
-            tab={problematicTab}
-            onTab={setProblematicTab}
-            views={problematicViews}
-            total={d.problematic_breakdown.total}
-          />
-        )}
-      </Section>
-      )}
-
-      {has('contractor_scorecard') && (
-      <Section
-        id={PANEL.contractors}
-        title="Contractor scorecard"
-        subtitle="Ranked by how far through its own book of work each company is"
-        state={overview}
-        onRetry={refresh}
-      >
-        {(d) => (
-          <ContractorScorecard rows={d.contractor_scorecard} provinceId={provinceId} />
-        )}
-      </Section>
-      )}
-
-      {has('province_breakdown') && (
-      <Section
-        id={PANEL.provinces}
-        title="Province breakdown"
-        subtitle="Sort any column; filter the whole dashboard from a row"
-        state={overview}
-        onRetry={refresh}
-      >
-        {(d) => (
-          <ProvinceTable
-            rows={d.province_breakdown}
-            provinces={d.provinces}
-            onProvince={setProvince}
-          />
-        )}
-      </Section>
-      )}
-
-      <Section
-        id={PANEL.trend}
-        title="Where this is going"
-        subtitle={
-          trend.data?.months?.length
-            ? `Last ${trend.data.months.length} months, ending this one`
-            : undefined
-        }
-        state={trend}
-        onRetry={refresh}
-        skeletonRows={6}
-        className="dt-section-trend"
-      >
-        {(t) =>
-          t.months?.some((m) => m.captured) ? (
-            <>
-              <TrendChart months={t.months} seriesLabel={TREND_LABELS} />
-              <TrendLegend />
-            </>
-          ) : (
-            <div className="dt-empty">
-              No monthly snapshots have been captured yet. The series fills in as the
-              months are recorded.
+      <div className="dt-bench">
+        {overview.error ? (
+          <div className="dt-page-error card card-pad" role="alert">
+            <AlertTriangle size={18} aria-hidden="true" />
+            <div>
+              <b>Could not load the Drive Test figures.</b>
+              <p>Everything on this page comes from that request, so there is nothing to show.</p>
             </div>
-          )
-        }
-      </Section>
+            <button type="button" className="btn" onClick={refresh}>
+              Try again
+            </button>
+          </div>
+        ) : overview.loading && !data ? (
+          <KpiSkeleton />
+        ) : data ? (
+          <KpiBand kpis={data.kpis} monthName={monthName} provinceId={provinceId} />
+        ) : null}
 
-      {trend.data?.latest_flows && (
-        <Section
-          id={PANEL.flow}
-          title="What moved"
-          subtitle={`${trend.data.latest_flows.label} ${trend.data.latest_flows.shamsi_year}${
-            trend.data.latest_flows.is_open ? ' · still in progress' : ''
-          }`}
-          state={trend}
-          onRetry={refresh}
-          className="dt-section-flow"
-        >
-          {(t) => (
-            <FlowLedger flows={t.latest_flows} monthLabel={t.latest_flows.label} />
+        <PlanDelivery state={plan} onRetry={refresh} />
+
+        <div className="dt-pair">
+          {has('ongoing_breakdown') && (
+            <Section
+              title="Ongoing breakdown"
+              subtitle="Sites in flight, cut three ways"
+              state={overview}
+              onRetry={refresh}
+              actions={
+                data && (
+                  <SectionTotal
+                    icon={CircleDashed}
+                    value={data.ongoing_breakdown.total}
+                    label="ongoing"
+                    color={STATE_COLOR.ongoing}
+                  />
+                )
+              }
+            >
+              {(d) => (
+                <BreakdownCard
+                  tabs={ONGOING_TABS}
+                  tab={ongoingTab}
+                  onTab={setOngoingTab}
+                  views={ongoingViews}
+                  total={d.ongoing_breakdown.total}
+                />
+              )}
+            </Section>
           )}
-        </Section>
-      )}
+
+          {has('problematic_breakdown') && (
+            <Section
+              title="Problematic breakdown"
+              subtitle="Sites the programme is blocked on"
+              state={overview}
+              onRetry={refresh}
+              actions={
+                data && (
+                  <SectionTotal
+                    icon={AlertTriangle}
+                    value={data.problematic_breakdown.total}
+                    label="problematic"
+                    color={STATE_COLOR.problematic}
+                  />
+                )
+              }
+            >
+              {(d) => (
+                <BreakdownCard
+                  tabs={PROBLEMATIC_TABS}
+                  tab={problematicTab}
+                  onTab={setProblematicTab}
+                  views={problematicViews}
+                  total={d.problematic_breakdown.total}
+                />
+              )}
+            </Section>
+          )}
+        </div>
+
+        {has('contractor_scorecard') && (
+          <Section
+            title="Contractor scorecard"
+            subtitle="Assignment is drive tests done plus sites still held — problematic sites are not assigned work"
+            state={overview}
+            onRetry={refresh}
+          >
+            {(d) => <ContractorScorecard rows={d.contractor_scorecard} provinceId={provinceId} />}
+          </Section>
+        )}
+
+        {has('province_breakdown') && (
+          <Section
+            title="Province breakdown"
+            subtitle="Sort any column; filter the whole dashboard from a row"
+            state={overview}
+            onRetry={refresh}
+          >
+            {(d) => (
+              <ProvinceTable
+                rows={d.province_breakdown}
+                provinces={d.provinces}
+                onProvince={setProvince}
+              />
+            )}
+          </Section>
+        )}
+
+        <div className="dt-pair">
+          <Section
+            title="Where this is going"
+            subtitle={
+              trend.data?.months?.length
+                ? `Last ${trend.data.months.length} months, ending this one`
+                : undefined
+            }
+            state={trend}
+            onRetry={refresh}
+            skeletonRows={4}
+          >
+            {(t) =>
+              t.months?.some((m) => m.captured) ? (
+                <>
+                  <TrendChart months={t.months} seriesLabel={TREND_LABELS} />
+                  <TrendLegend />
+                </>
+              ) : (
+                <div className="dt-empty">
+                  No monthly snapshots have been captured yet. The series fills in as the
+                  months are recorded.
+                </div>
+              )
+            }
+          </Section>
+
+          {trend.data?.latest_flows && (
+            <Section
+              title="What moved"
+              subtitle={`${trend.data.latest_flows.label} ${trend.data.latest_flows.shamsi_year}${
+                trend.data.latest_flows.is_open ? ' · still in progress' : ''
+              }`}
+              state={trend}
+              onRetry={refresh}
+              skeletonRows={4}
+            >
+              {(t) => <FlowLedger flows={t.latest_flows} monthLabel={t.latest_flows.label} />}
+            </Section>
+          )}
         </div>
       </div>
     </>
@@ -527,10 +437,12 @@ function TrendLegend() {
 
 function KpiSkeleton() {
   return (
-    <div className="dt-band dt-band-skeleton" aria-hidden="true">
-      <span className="dt-skeleton-row" style={{ width: '40%', height: 30 }} />
-      <span className="dt-skeleton-row" style={{ height: 46, animationDelay: '0.08s' }} />
-      <span className="dt-skeleton-row" style={{ width: '60%', animationDelay: '0.16s' }} />
+    <div className="dt-hero dt-hero-skeleton" aria-hidden="true">
+      <span className="dt-skeleton-ring" />
+      <div className="dt-hero-body">
+        <span className="dt-skeleton-row" style={{ height: 66 }} />
+        <span className="dt-skeleton-row" style={{ width: '60%', animationDelay: '0.16s' }} />
+      </div>
     </div>
   )
 }

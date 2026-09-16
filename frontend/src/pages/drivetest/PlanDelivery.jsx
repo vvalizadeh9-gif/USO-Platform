@@ -8,19 +8,20 @@ import Section from './Section'
 /**
  * What was committed for the month against what was delivered.
  *
+ * The first two tiles carry a neutral icon rather than a hue of their own.
+ * PIP and Assigned used to be violet and brand teal, which put two more
+ * colours on a page whose rule is that a colour means a state — and the teal
+ * one was the primary-button colour, so a figure wore the "act on me" tint.
+ * Actual is green because it is finished work, which is what green means
+ * everywhere else here.
+ *
  * A contractor signed in here receives one row — their own — and an unnamed
  * programme average. That is enforced by the endpoint, not by this component,
  * which renders whatever rows it was given.
- *
- * Delivered is the one figure here with a list behind it: PIP and Assigned are
- * counts of commitments and handovers, not of sites this dashboard can open.
- * So Actual links to the month's drive tests, and each contractor's delivered
- * count to theirs — the same month, the same dating rule, the same figure.
  */
-export default function PlanDelivery({ state, onRetry, id }) {
+export default function PlanDelivery({ state, onRetry }) {
   return (
     <Section
-      id={id}
       title="Plan and delivery"
       subtitle={state.data?.month_label}
       state={state}
@@ -36,7 +37,7 @@ export default function PlanDelivery({ state, onRetry, id }) {
                 icon={Target}
                 label="PIP"
                 value={count(data.pip)}
-                color="var(--violet)"
+                color="var(--text-dim)"
                 note={
                   uncommitted > 0
                     ? `${uncommitted} not committed`
@@ -47,13 +48,16 @@ export default function PlanDelivery({ state, onRetry, id }) {
                 icon={ClipboardList}
                 label="Assigned"
                 value={count(data.assigned)}
-                color="var(--signal)"
+                color="var(--text-dim)"
               />
               <Figure
                 icon={CheckCircle2}
                 label="Actual"
                 value={count(data.actual)}
-                color="var(--green)"
+                color="var(--dt-done)"
+                // Delivered is the one figure here with a list behind it: PIP
+                // and Assigned count commitments and handovers, not sites this
+                // dashboard can open.
                 href={deliveredLink({
                   year: data.shamsi_year,
                   month: data.shamsi_month,
@@ -85,11 +89,6 @@ export default function PlanDelivery({ state, onRetry, id }) {
 }
 
 function Figure({ icon: Icon, label, value, color, note, emphasis, href }) {
-  const figure = (
-    <span className="dt-figure" style={emphasis ? { color } : undefined}>
-      {value}
-    </span>
-  )
   return (
     <div className={`dt-figure-tile${emphasis ? ' dt-figure-emphasis' : ''}`}>
       <span className="dt-figure-label">
@@ -98,10 +97,14 @@ function Figure({ icon: Icon, label, value, color, note, emphasis, href }) {
       </span>
       {href ? (
         <Link to={href} className="dt-cell-link" aria-label={`${label}: ${value}`}>
-          {figure}
+          <span className="dt-figure" style={emphasis ? { color } : undefined}>
+            {value}
+          </span>
         </Link>
       ) : (
-        figure
+        <span className="dt-figure" style={emphasis ? { color } : undefined}>
+          {value}
+        </span>
       )}
       {note && <span className="dt-figure-note">{note}</span>}
     </div>

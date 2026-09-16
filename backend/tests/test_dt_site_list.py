@@ -41,7 +41,10 @@ from sqlalchemy import event  # noqa: E402
 from app.core import jalali  # noqa: E402
 from app.core.database import SessionLocal, engine  # noqa: E402
 from app.services.dt_site_list import UNATTRIBUTED  # noqa: E402
-from app.services.drive_test_analytics import NO_LAUNCH_DATE  # noqa: E402
+from app.services.drive_test_analytics import (  # noqa: E402
+    AGE_BAND_LABEL_BY_KEY,
+    NO_ASSIGNMENT_DATE,
+)
 from app.services.workflow import (  # noqa: E402
     STAGE_ASSIGNED,
     STAGE_DT_SUBMITTED,
@@ -169,15 +172,39 @@ def world(client):
         db.add(Village(work_item_id=wi.id, village_name=f"روستای {tag}"))
         return wi
 
-    # Ongoing: one per stage, and one in each age band so the band drill-downs
-    # have something to find.
+    # Ongoing: one per stage. The two that carry a live assignment are held
+    # for known lengths, because the age bands and the default ongoing sort
+    # both run on the assignment clock, not on the launch date. The rest have
+    # no assignment at all, which is its own bucket and has to be covered too.
     item(kerman_site, "ong-new", STAGE_NEW, launch_days=10)
     item(kerman_site, "ong-hc-prog", STAGE_HC_IN_PROGRESS, launch_days=60)
     item(kerman_site, "ong-hc-review", STAGE_HC_REVIEW, launch_days=120)
     item(kerman_site, "ong-ready", STAGE_READY, launch_days=200)
-    item(yazd_site, "ong-assigned", STAGE_ASSIGNED, contractor=alfa.id, launch_days=400)
-    item(yazd_site, "ong-returned", STAGE_RETURNED, contractor=alfa.id, launch_days=30)
+    held_long = item(
+        yazd_site, "ong-assigned", STAGE_ASSIGNED, contractor=alfa.id, launch_days=400
+    )
+    held_short = item(
+        yazd_site, "ong-returned", STAGE_RETURNED, contractor=alfa.id, launch_days=30
+    )
     item(yazd_site, "ong-submitted", STAGE_DT_SUBMITTED, launch_days=None)
+    db.add_all(
+        [
+            Assignment(
+                work_item_id=held_long.id,
+                assignment_type="official",
+                contractor_id=alfa.id,
+                assigned_at=NOW - timedelta(days=40),
+                is_active=True,
+            ),
+            Assignment(
+                work_item_id=held_short.id,
+                assignment_type="official",
+                contractor_id=alfa.id,
+                assigned_at=NOW - timedelta(days=3),
+                is_active=True,
+            ),
+        ]
+    )
 
     # Problematic by the CPM signal, with a stage that is *not* Problematic --
     # the sites the Work Items stage filter cannot see.
@@ -262,6 +289,8 @@ def world(client):
     )
     db.commit()
     ids = {
+        "held_long": held_long.id,
+        "held_short": held_short.id,
         "alfa": alfa.id,
         "beta": beta.id,
         "kerman": kerman.id,
@@ -351,9 +380,9 @@ def test_every_figure_opens_a_list_of_exactly_that_many_sites(client, world):
         )
     checks.append(
         (
-            "ongoing/age/no launch date",
-            {"bucket": "ongoing", "age_band": NO_LAUNCH_DATE},
-            body["ongoing_breakdown"]["without_launch_date"],
+            "ongoing/age/no assignment",
+            {"bucket": "ongoing", "age_band": NO_ASSIGNMENT_DATE},
+            body["ongoing_breakdown"]["without_assignment_date"],
         )
     )
 
@@ -368,8 +397,15 @@ def test_every_figure_opens_a_list_of_exactly_that_many_sites(client, world):
 
     for row in body["contractor_scorecard"]:
         contractor = UNATTRIBUTED if row["contractor_id"] is None else row["contractor_id"]
-        for bucket, key in (("done", "done"), ("ongoing", "ongoing"),
-                            ("problematic", "problematic")):
+        # ``assigned`` included: it is the denominator the scorecard's rate
+        # divides by, so it is the figure a contractor is most likely to
+        # check, and a list that disagreed with it would be an argument.
+        for bucket, key in (
+            ("assigned", "assigned"),
+            ("done", "done"),
+            ("ongoing", "ongoing"),
+            ("problematic", "problematic"),
+        ):
             checks.append(
                 (
                     f"scorecard/{row['name']}/{bucket}",
@@ -590,6 +626,26 @@ def test_a_site_with_an_open_fix_carries_its_clock_and_its_owner(client, world):
     assert row["hc_round"] == 2
 
 
+def test_the_age_band_runs_on_the_assignment_clock_not_the_launch_date(client, world):
+    """The band a row reports is the band the dashboard counted it in.
+
+    The seeded site went on air 400 days ago and was assigned 40 days ago.
+    Aged from its launch it would read as the oldest band there is; the
+    dashboard asks how long the company holding it has held it, so it is a
+    site that has been held for more than a month and no more than that.
+    """
+    rows = _sites(client, world["admin"], bucket="ongoing")["rows"]
+    row = next(r for r in rows if r["work_item_id"] == world["ids"]["held_long"])
+
+    assert row["days_since_launch"] == 400
+    assert row["days_since_assignment"] == 40
+    assert row["age_band"] == AGE_BAND_LABEL_BY_KEY["gt_1m"]
+
+    # And a site with no assignment has no clock, rather than a clock at zero.
+    unassigned = next(r for r in rows if r["days_since_assignment"] is None)
+    assert unassigned["age_band"] is None
+
+
 def test_rows_carry_the_site_and_its_villages(client, world):
     rows = _sites(client, world["admin"], bucket="onair")["rows"]
 
@@ -609,16 +665,28 @@ def test_overdue_and_owner_filters_narrow_to_the_open_fix(client, world):
 
 
 # -------------------------------------------------------------- 6. the sorting
-def test_the_default_ongoing_sort_is_longest_waiting_first_with_no_date_last(
+def test_the_default_ongoing_sort_is_longest_held_first_with_no_clock_last(
     client, world
 ):
+    """Longest-held first, on the clock the age bands run on.
+
+    A site nobody has been assigned has no clock running on it rather than a
+    clock reading zero, so it sorts last in either direction: floating it to
+    the top of a descending sort would put the least informative rows where
+    the most urgent ones belong.
+    """
     rows = _sites(client, world["admin"], bucket="ongoing")["rows"]
-    days = [r["days_since_launch"] for r in rows]
+    days = [r["days_since_assignment"] for r in rows]
     known = [d for d in days if d is not None]
 
     assert known == sorted(known, reverse=True)
     assert days[len(known):] == [None] * (len(days) - len(known))
-    assert None in days, "the seed must include a site with no launch date"
+    assert None in days, "the seed must include an ongoing site with no assignment"
+
+    # Held for 40 days above held for 3, rather than the other way round or in
+    # launch-date order, where the two are the opposite way up.
+    order = [r["work_item_id"] for r in rows]
+    assert order.index(world["ids"]["held_long"]) < order.index(world["ids"]["held_short"])
 
 
 def test_a_requested_sort_is_applied(client, world):

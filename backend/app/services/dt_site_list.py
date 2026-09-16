@@ -23,7 +23,8 @@ neither definition is wrong for its own purpose:
 screens. This module instead reuses the dashboard's own predicates from
 ``drive_test_analytics`` -- ``is_onair``, ``is_problematic``, ``is_ongoing``,
 ``effective_contractor_id``, ``effective_problem_category``, ``age_band``,
-``dated_into`` -- so there is no second copy of any of them to drift.
+``assignment_date``, ``dated_into`` -- so there is no second copy of any of
+them to drift.
 
 **Scope first, filters after.** The rows come from
 ``DriveTestAnalytics.onair_items()``, which is ``apply_work_item_scope``
@@ -54,11 +55,12 @@ from app.models.reference import Contractor, ProblemCategory, Province, Role
 from app.models.workitem import DriveTest, Village, WorkItem
 from app.services.drive_test_analytics import (
     AGE_BAND_LABEL_BY_KEY,
-    NO_LAUNCH_DATE,
+    NO_ASSIGNMENT_DATE,
     ONGOING_STAGE_ORDER,
     STAGE_OTHER,
     DriveTestAnalytics,
     age_band,
+    assignment_date,
     dated_into,
     effective_contractor_id,
     effective_problem_category,
@@ -69,10 +71,16 @@ from app.services.drive_test_analytics import (
 
 #: Which dashboard figure the list is opening.
 #:
-#: ``remaining`` is ongoing + problematic, which is what the Remaining bracket
-#: on the dashboard brackets. ``delivered`` is the plan-and-delivery figure for
-#: one Shamsi month and is the only bucket that needs a period.
-BUCKETS = ("onair", "done", "ongoing", "problematic", "remaining", "delivered")
+#: ``remaining`` is ongoing + problematic, which is what the Remaining line on
+#: the dashboard adds up. ``assigned`` is done + ongoing, the contractor
+#: scorecard's book of work: problematic sites are deliberately outside it,
+#: because they were never committed to the company (see
+#: ``_contractor_scorecard``), and the scorecard's rate divides by it.
+#: ``delivered`` is the plan-and-delivery figure for one Shamsi month and is
+#: the only bucket that needs a period.
+BUCKETS = (
+    "onair", "done", "ongoing", "problematic", "remaining", "assigned", "delivered",
+)
 DEFAULT_BUCKET = "onair"
 
 #: The categories filter accepts this for sites with no category of any kind,
@@ -104,6 +112,7 @@ SORT_KEYS: tuple[str, ...] = (
     "current_stage",
     "launch_date",
     "days_since_launch",
+    "days_since_assignment",
     "oldest_open_fix_days",
     "max_days_late",
     "hc_round",
@@ -121,8 +130,13 @@ SORT_KEYS: tuple[str, ...] = (
 #: only order a reader can navigate by eye.
 DEFAULT_SORTS: dict[str, tuple[tuple[str, bool], ...]] = {
     "problematic": (("max_days_late", True), ("oldest_open_fix_days", True)),
-    "ongoing": (("days_since_launch", True),),
-    "remaining": (("days_since_launch", True),),
+    # Longest-held first, on the same clock the age bands run on, so the top
+    # of a list opened from "more than 1 month" is the site that band is
+    # really about. A site nobody has been assigned has no clock and sorts
+    # last rather than first.
+    "ongoing": (("days_since_assignment", True),),
+    "remaining": (("days_since_assignment", True),),
+    "assigned": (("days_since_assignment", True),),
     "done": (("dt_execution_date", True),),
     "delivered": (("dt_execution_date", True),),
     "onair": (("site_code", False),),
@@ -212,8 +226,8 @@ def parse_filters(
         if bucket != "ongoing":
             raise SiteListError("age_band applies to the ongoing bucket only")
         band_key = age_band.strip()
-        if band_key not in AGE_BAND_LABEL_BY_KEY and band_key != NO_LAUNCH_DATE:
-            allowed = ", ".join([*AGE_BAND_LABEL_BY_KEY, NO_LAUNCH_DATE])
+        if band_key not in AGE_BAND_LABEL_BY_KEY and band_key != NO_ASSIGNMENT_DATE:
+            allowed = ", ".join([*AGE_BAND_LABEL_BY_KEY, NO_ASSIGNMENT_DATE])
             raise SiteListError(f"age_band must be one of: {allowed}")
         applied["age_band"] = band_key
 
@@ -403,10 +417,11 @@ def _in_bucket(wi: WorkItem, filters: Filters) -> bool:
     """Which dashboard figure this work item is behind.
 
     Every bucket is a subset of on-air, which the loader has already applied.
-    ``remaining`` is spelled as ongoing-or-problematic rather than as
-    "not done", so that it is the sum of the two lists a reader can also open
-    separately -- the Remaining bracket on the dashboard makes exactly that
-    claim about exactly those two segments.
+    ``remaining`` is spelled as ongoing-or-problematic rather than as "not
+    done", so that it is the sum of the two lists a reader can also open
+    separately -- the Remaining line on the dashboard makes exactly that claim
+    about exactly those two states. ``assigned`` is the other pairing, done
+    plus ongoing, for the same reason on the scorecard.
     """
     bucket = filters.bucket
     if bucket == "onair":
@@ -419,6 +434,10 @@ def _in_bucket(wi: WorkItem, filters: Filters) -> bool:
         return is_problematic(wi)
     if bucket == "remaining":
         return is_ongoing(wi) or is_problematic(wi)
+    if bucket == "assigned":
+        # The scorecard's denominator, spelled the same way it is there:
+        # finished plus still held, with problematic sites outside it.
+        return wi.dt_status == "Done" or is_ongoing(wi)
     # delivered
     return wi.dt_status == "Done" and dated_into(wi, filters.year, filters.month)
 
@@ -433,8 +452,14 @@ def _matches_contractor(wi: WorkItem, filters: Filters) -> bool:
 
 
 def _in_age_band(wi: WorkItem, key: str, today: date) -> bool:
-    label = age_band(wi.launch_date_gregorian, today)
-    if key == NO_LAUNCH_DATE:
+    """The band the dashboard would put this site in.
+
+    Through ``assignment_date`` and ``age_band``, which is what the bands
+    themselves are computed with: the clock starts when a contractor took the
+    site on, and a site with no live assignment has no clock at all.
+    """
+    label = age_band(assignment_date(wi), today)
+    if key == NO_ASSIGNMENT_DATE:
         return label is None
     return label == AGE_BAND_LABEL_BY_KEY[key]
 
@@ -586,7 +611,12 @@ def _row(wi: WorkItem, context: dict, today: date) -> dict:
     province_id = wi.site.province_id if wi.site is not None else None
 
     launch = wi.launch_date_gregorian
-    band = age_band(launch, today)
+    # Two clocks, and the row carries both because they answer two questions:
+    # how long the site has been live and untested, and how long the company
+    # holding it now has held it. The band is the second, because that is what
+    # the dashboard's bands are.
+    assigned_on = assignment_date(wi)
+    band = age_band(assigned_on, today)
 
     drive_test = context["drive_tests"].get(wi.id)
     approved_at = None
@@ -614,6 +644,10 @@ def _row(wi: WorkItem, context: dict, today: date) -> dict:
         "current_stage": wi.current_stage,
         "launch_date": jalali.format_shamsi(launch),
         "days_since_launch": (today - launch).days if launch is not None else None,
+        "assignment_date": jalali.format_shamsi(assigned_on),
+        "days_since_assignment": (
+            (today - assigned_on).days if assigned_on is not None else None
+        ),
         "age_band": band,
         "problem_categories": _categories(wi, fixes),
         "fix_owners": sorted({f["owner"] for f in fixes if f["owner"]}),

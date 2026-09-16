@@ -70,16 +70,14 @@ const overview = {
     total: 50,
     // Workflow order, zeros kept — the order and the empty buckets are both
     // part of what the pipeline says, so the fixture carries them.
-    // `key` is what a drill-through link travels with; the backend fills it
-    // for stages, age bands and categories. See ChartPoint.
     by_stage: [
-      { name: 'New', value: 14, key: 'New' },
-      { name: 'HC In Progress', value: 6, key: 'HC In Progress' },
-      { name: 'HC Review', value: 3, key: 'HC Review' },
-      { name: 'Ready for Assignment', value: 9, key: 'Ready for Assignment' },
-      { name: 'Assigned', value: 12, key: 'Assigned' },
-      { name: 'Returned by Contractor', value: 0, key: 'Returned by Contractor' },
-      { name: 'DT Submitted', value: 6, key: 'DT Submitted' },
+      { name: 'New', value: 14 },
+      { name: 'HC In Progress', value: 6 },
+      { name: 'HC Review', value: 3 },
+      { name: 'Ready for Assignment', value: 9 },
+      { name: 'Assigned', value: 12 },
+      { name: 'Returned by Contractor', value: 0 },
+      { name: 'DT Submitted', value: 6 },
     ],
     by_contractor: [
       { name: 'Alfa Drive Tests', value: 12 },
@@ -90,14 +88,16 @@ const overview = {
       { name: 'Kerman', value: 30 },
       { name: 'Yazd', value: 20 },
     ],
+    // `key` is what a drill-through link travels with; the backend fills it
+    // for age bands, stages and categories. See ChartPoint.
     by_age: [
-      { name: 'Under a month', value: 20, key: 'lt_1m' },
-      { name: '1–3 months', value: 15, key: 'm1_3' },
-      { name: '3–6 months', value: 8, key: 'm3_6' },
-      { name: '6–12 months', value: 4, key: 'm6_12' },
-      { name: 'Over a year', value: 1, key: 'gt_12m' },
+      { name: 'Up to 1 week', value: 20, key: 'lte_1w' },
+      { name: '1–2 weeks', value: 15, key: 'w1_2' },
+      { name: '2–3 weeks', value: 8, key: 'w2_3' },
+      { name: '3 weeks – 1 month', value: 4, key: 'w3_1m' },
+      { name: 'More than 1 month', value: 1, key: 'gt_1m' },
     ],
-    without_launch_date: 2,
+    without_assignment_date: 2,
   },
   problematic_breakdown: {
     total: 10,
@@ -114,10 +114,12 @@ const overview = {
     { name: 'Kerman', onair: 60, done: 23, remaining: 37, ongoing: 30, problematic: 7, done_percent: 38.3 },
     { name: 'Yazd', onair: 40, done: 17, remaining: 23, ongoing: 20, problematic: 3, done_percent: 42.5 },
   ],
+  // `assigned` is done + ongoing, and problematic is deliberately outside it
+  // — see ContractorScorecard for why the denominator stops there.
   contractor_scorecard: [
-    { contractor_id: 1, name: 'Alfa Drive Tests', onair: 60, done: 40, ongoing: 15, problematic: 5, done_percent: 66.7 },
-    { contractor_id: 2, name: 'Beta Surveys', onair: 30, done: 9, ongoing: 18, problematic: 3, done_percent: 30.0 },
-    { contractor_id: null, name: 'Unattributed', onair: 10, done: 2, ongoing: 6, problematic: 2, done_percent: 20.0 },
+    { contractor_id: 1, name: 'Alfa Drive Tests', assigned: 55, done: 40, ongoing: 15, problematic: 5, done_percent: 72.7 },
+    { contractor_id: 2, name: 'Beta Surveys', assigned: 27, done: 9, ongoing: 18, problematic: 3, done_percent: 33.3 },
+    { contractor_id: null, name: 'Unattributed', assigned: 8, done: 2, ongoing: 6, problematic: 2, done_percent: 25.0 },
   ],
 }
 
@@ -329,7 +331,9 @@ describe('plan and delivery', () => {
 
   it('colours each bar by band: at target, close to it, short of it', async () => {
     // One contractor in each band, including the middle one — 80-99 is the
-    // band a two-colour "met it or did not" reading would lose.
+    // band a two-colour "met it or did not" reading would lose. The middle
+    // band used to be amber, which against this red is 3.4 ΔE apart for a
+    // red-green reader: "nearly there" and "badly short" were the same bar.
     serve(
       planDelivery({
         rows: [
@@ -345,9 +349,9 @@ describe('plan and delivery', () => {
     const barFor = (name) =>
       within(within(card).getByText(name).closest('.dt-bullet')).getByTestId('achievement-bar')
 
-    expect(barFor('Beta Surveys')).toHaveStyle({ background: 'var(--green)' })
-    expect(barFor('Delta Field')).toHaveStyle({ background: 'var(--amber)' })
-    expect(barFor('Gamma Networks')).toHaveStyle({ background: 'var(--red)' })
+    expect(barFor('Beta Surveys')).toHaveStyle({ background: 'var(--dt-done)' })
+    expect(barFor('Delta Field')).toHaveStyle({ background: 'var(--dt-ongoing)' })
+    expect(barFor('Gamma Networks')).toHaveStyle({ background: 'var(--dt-problem)' })
   })
 
   it('shows a month with no approved plan as no achievement, not as zero', async () => {
@@ -457,8 +461,8 @@ describe('breakdown sections', () => {
     expect(within(ongoing).getByText('Kerman')).toBeInTheDocument()
     expect(within(ongoing).queryByText('Alfa Drive Tests')).not.toBeInTheDocument()
 
-    await userEvent.click(within(ongoing).getByRole('tab', { name: 'How long waiting' }))
-    expect(within(ongoing).getByText('Over a year')).toBeInTheDocument()
+    await userEvent.click(within(ongoing).getByRole('tab', { name: 'How long' }))
+    expect(within(ongoing).getByText('More than 1 month')).toBeInTheDocument()
     expect(within(ongoing).queryByText('Kerman')).not.toBeInTheDocument()
 
     await userEvent.click(within(ongoing).getByRole('tab', { name: 'Contractor' }))
@@ -515,10 +519,32 @@ describe('breakdown sections', () => {
     draw()
 
     const ongoing = await section('Ongoing breakdown')
-    await userEvent.click(within(ongoing).getByRole('tab', { name: 'How long waiting' }))
+    await userEvent.click(within(ongoing).getByRole('tab', { name: 'How long' }))
     expect(
-      within(ongoing).getByText(/2 ongoing sites have no launch date recorded/),
+      within(ongoing).getByText(/2 ongoing sites are not assigned to anyone yet/),
     ).toBeInTheDocument()
+  })
+
+  it('ages the ongoing sites in weeks, from the day they were assigned', async () => {
+    // The clock used to run from the launch date, which measured how long a
+    // site had been on air rather than how long anybody had been holding it:
+    // a brand-new assignment on a two-year-old site read as a year overdue.
+    serve()
+    draw()
+
+    const ongoing = await section('Ongoing breakdown')
+    await userEvent.click(within(ongoing).getByRole('tab', { name: 'How long' }))
+
+    const bands = within(ongoing)
+      .getAllByTestId('dt-bar')
+      .map((bar) => bar.closest('.dt-bar-row').querySelector('.dt-bar-label').textContent)
+    expect(bands).toEqual([
+      'Up to 1 week',
+      '1–2 weeks',
+      '2–3 weeks',
+      '3 weeks – 1 month',
+      'More than 1 month',
+    ])
   })
 
   it('toggles each section to a table and back, in the same card', async () => {
@@ -682,7 +708,7 @@ describe('delta direction', () => {
 
     await screen.findByLabelText('Programme totals')
     const chip = within(band()).getByText(/-12/)
-    expect(chip).toHaveStyle({ color: 'var(--green)' })
+    expect(chip).toHaveStyle({ color: 'var(--dt-done)' })
   })
 
   it('reads rising problems as bad news', async () => {
@@ -691,7 +717,7 @@ describe('delta direction', () => {
 
     await screen.findByLabelText('Programme totals')
     const chip = within(band()).getByText(/\+4/)
-    expect(chip).toHaveStyle({ color: 'var(--red)' })
+    expect(chip).toHaveStyle({ color: 'var(--dt-problem)' })
   })
 
   it('still reads rising completions as good news', async () => {
@@ -700,7 +726,7 @@ describe('delta direction', () => {
 
     await screen.findByLabelText('Programme totals')
     const chip = within(band()).getByText(/\+12/)
-    expect(chip).toHaveStyle({ color: 'var(--green)' })
+    expect(chip).toHaveStyle({ color: 'var(--dt-done)' })
   })
 
   it('says there is no baseline rather than showing a change of zero', async () => {
@@ -712,32 +738,48 @@ describe('delta direction', () => {
   })
 })
 
-describe('the band', () => {
-  it('shows every on-air site in exactly one of three segments', async () => {
+describe('the hero', () => {
+  it('shows every on-air site in exactly one arc of the ring', async () => {
     serve()
     draw()
 
-    const band = await screen.findByLabelText('Programme totals')
-    // 40 done + 50 ongoing + 10 problematic = 100 on-air, and the bar says so
-    // because the segments are the total rather than a picture of it.
-    const bar = within(band).getByRole('img')
-    expect(bar).toHaveAttribute(
+    const hero = await screen.findByLabelText('Programme totals')
+    // 40 done + 50 ongoing + 10 problematic = 100 on-air, and the ring says
+    // so because the arcs are the total rather than a picture of it.
+    const ring = within(hero).getByRole('img')
+    expect(ring).toHaveAttribute(
       'aria-label',
-      'Drive tests done: 40, 40 per cent. Ongoing: 50, 50 per cent. Problematic: 10, 10 per cent',
+      '100 sites on air. Drive tests done: 40, 40 per cent. Ongoing: 50, 50 per cent. ' +
+        'Problematic: 10, 10 per cent',
     )
+    expect(within(hero).getAllByTestId('dt-ring-arc')).toHaveLength(3)
   })
 
-  it('brackets Remaining under the two segments it is made of', async () => {
-    // Remaining is not a fourth figure. The old page asserted the
-    // relationship with a heading and a nesting convention; here it is the
-    // geometry, and the figure is the sum of the two segments above it.
+  it('puts each state in a tile whose size does not depend on its share', async () => {
+    // The point of moving the figures out of the geometry. Problematic is ten
+    // per cent of the programme; in the split bar this replaces its segment
+    // collapsed to a sliver and its figure was suppressed as unfittable —
+    // and it is the one figure a reader scans this band for.
     serve()
     draw()
 
-    const band = await screen.findByLabelText('Programme totals')
-    const bracket = within(band).getByText('Remaining').closest('.dt-bracket-text')
-    expect(within(bracket).getByText('60')).toBeInTheDocument()
-    expect(within(bracket).getByText('60%')).toBeInTheDocument()
+    const hero = await screen.findByLabelText('Programme totals')
+    const tile = within(hero).getByText('Problematic').closest('.dt-state-tile')
+    expect(within(tile).getByText('10')).toBeInTheDocument()
+    expect(within(tile).getByText('10% of on-air')).toBeInTheDocument()
+  })
+
+  it('states Remaining as the sum of the two tiles it is made of', async () => {
+    // Remaining is not a fourth state. It used to be asserted with a drawn
+    // bracket spanning two segments of a bar — chart furniture invented for
+    // this one page — and it is arithmetic, so it is now a line of it.
+    serve()
+    draw()
+
+    const hero = await screen.findByLabelText('Programme totals')
+    const foot = within(hero).getByText('Remaining').closest('.dt-foot-item')
+    expect(within(foot).getByText('60')).toBeInTheDocument()
+    expect(within(foot).getByText('60%')).toBeInTheDocument()
   })
 })
 
@@ -774,50 +816,43 @@ describe('drill-through', () => {
   // produce. The two lists are the same list — one asserts that the count is
   // right, this one that the link asks for the right count.
   //
-  // The destination changed with this feature. These used to point at
-  // `/work-items`, whose stage filter is not what this dashboard counts: a
-  // CPM-flagged problematic site keeps its own stage and was missing from the
-  // queue the number linked to, and the queue has no on-air filter so an
-  // ongoing link opened sites the dashboard never counted. Every figure now
-  // opens `/drive-test/sites`.
+  // These used to point at `/work-items`, whose stage filter is not what this
+  // dashboard counts: a CPM-flagged problematic site keeps its own stage and
+  // was missing from the queue the number linked to, and the queue has no
+  // on-air filter so an ongoing link opened sites the dashboard never
+  // counted. Every figure now opens `/drive-test/sites`.
   const CASES = [
     {
-      name: 'the on-air total',
+      name: 'the on-air total in the ring',
       open: async () => await screen.findByLabelText('Programme totals'),
-      // By its accessible name: the label sits beside the figure and only
-      // the figure is the link.
+      // By its accessible name: the label sits beside the figure and only the
+      // figure is the link.
       label: 'Total on-air: 100 sites',
       href: '/drive-test/sites?bucket=onair',
     },
     {
-      name: 'the done segment',
+      name: 'the done tile',
       open: async () => await screen.findByLabelText('Programme totals'),
       text: 'Drive tests done',
       href: '/drive-test/sites?bucket=done',
     },
     {
-      name: 'the ongoing segment',
+      name: 'the ongoing tile',
       open: async () => await screen.findByLabelText('Programme totals'),
       text: 'Ongoing',
       href: '/drive-test/sites?bucket=ongoing',
     },
     {
-      name: 'the problematic segment',
+      name: 'the problematic tile',
       open: async () => await screen.findByLabelText('Programme totals'),
       text: 'Problematic',
       href: '/drive-test/sites?bucket=problematic',
     },
     {
-      name: 'the remaining bracket',
+      name: 'the remaining line',
       open: async () => await screen.findByLabelText('Programme totals'),
-      text: '60',
+      label: 'Remaining: 60 sites',
       href: '/drive-test/sites?bucket=remaining',
-    },
-    {
-      name: 'a stage in the pipeline',
-      open: () => section('Where the ongoing work is stuck'),
-      text: 'Ready for Assignment',
-      href: '/drive-test/sites?bucket=ongoing&stage=Ready+for+Assignment',
     },
     {
       name: 'a problematic category',
@@ -852,14 +887,14 @@ describe('drill-through', () => {
       href: '/drive-test/sites?bucket=ongoing&province_id=9',
     },
     {
-      name: 'an ongoing age band',
+      name: 'an age band, by its key rather than its label',
       open: async () => {
         const card = await section('Ongoing breakdown')
-        await userEvent.click(within(card).getByRole('tab', { name: 'How long waiting' }))
+        await userEvent.click(within(card).getByRole('tab', { name: 'How long' }))
         return card
       },
-      text: '3–6 months',
-      href: '/drive-test/sites?bucket=ongoing&age_band=m3_6',
+      text: '2–3 weeks',
+      href: '/drive-test/sites?bucket=ongoing&age_band=w2_3',
     },
     {
       name: "a contractor's delivered count",
@@ -884,20 +919,23 @@ describe('drill-through', () => {
     serve()
     draw('/reports/drive-test?province=7')
 
-    const band = await screen.findByLabelText('Programme totals')
-    expect(within(band).getByText('Problematic').closest('a')).toHaveAttribute(
+    const hero = await screen.findByLabelText('Programme totals')
+    expect(within(hero).getByText('Problematic').closest('a')).toHaveAttribute(
       'href',
       '/drive-test/sites?bucket=problematic&province_id=7',
     )
   })
 
-  it('links all three scorecard cells for a contractor', async () => {
+  it('links every cell of a contractor row, the denominator included', async () => {
     serve()
     draw()
 
     const card = await section('Contractor scorecard')
     const row = within(card).getByText('Alfa Drive Tests').closest('tr')
     for (const [value, href] of [
+      // The assignment is what the rate divides by, so it is the figure a
+      // contractor will want to check.
+      ['55', '/drive-test/sites?bucket=assigned&contractor_id=1'],
       ['40', '/drive-test/sites?bucket=done&contractor_id=1'],
       ['15', '/drive-test/sites?bucket=ongoing&contractor_id=1'],
       ['5', '/drive-test/sites?bucket=problematic&contractor_id=1'],
@@ -907,8 +945,8 @@ describe('drill-through', () => {
   })
 
   it('links the unattributed row through contractor_id=none', async () => {
-    // There is no contractor to name, and there is still a list: the on-air
-    // sites nobody holds are the ones most worth reading.
+    // There is no contractor to name, and there is still a list: the sites
+    // nobody holds are the ones most worth reading.
     serve()
     draw()
 
@@ -963,9 +1001,9 @@ describe('drill-through', () => {
   })
 
   it('gives a contractor no link out of the "Other contractors" bar', async () => {
-    // That bar is several companies folded into one unnamed aggregate, so
-    // that a contractor's own figures still reconcile without naming a
-    // competitor. There is no list behind it they are allowed to open.
+    // That bar is several companies folded into one unnamed aggregate, so a
+    // contractor's own figures still reconcile without naming a competitor.
+    // There is no list behind it they are allowed to open.
     const contractorView = {
       ...overview,
       ongoing_breakdown: {
@@ -979,11 +1017,11 @@ describe('drill-through', () => {
         {
           contractor_id: 1,
           name: 'Alfa Drive Tests',
-          onair: 60,
+          assigned: 55,
           done: 40,
           ongoing: 15,
           problematic: 5,
-          done_percent: 66.7,
+          done_percent: 72.7,
         },
       ],
     }
@@ -1172,103 +1210,48 @@ describe('the trend section', () => {
   })
 })
 
-describe('the bench rail', () => {
-  /** The rail, once the page has loaded. */
-  async function rail() {
-    const nav = await screen.findByRole('navigation', { name: 'Dashboard panels' })
-    await screen.findByRole('heading', { name: 'Province breakdown' })
-    return nav
-  }
-
-  it('lists the panels in the order the page presents them', async () => {
+describe('the contractor scorecard', () => {
+  it('scores each contractor against their assignment, not every site they are named on', async () => {
+    // Alfa is named on 60 on-air sites, 5 of them problematic. Problematic
+    // work was never committed to them, so the book is 40 done + 15 ongoing
+    // = 55, and the rate is 40/55, not 40/60.
     serve()
     draw()
 
-    const links = within(await rail()).getAllByRole('link')
-    // The rail's job is to be a true map of the page. Asserting the order
-    // here, and the heading order separately above, is what keeps the two
-    // from drifting apart — a contents list in the wrong order is worse than
-    // none, because it is believed.
-    expect(links.map((a) => a.textContent.replace(/\d+(\.\d+)?%?$/, ''))).toEqual([
-      'Plan and delivery',
-      'Ongoing breakdown',
-      'Where it is stuck',
-      'Problematic breakdown',
-      'Contractor scorecard',
-      'Province breakdown',
-      'Where this is going',
-      'What moved',
-    ])
+    const card = await section('Contractor scorecard')
+    const row = within(card).getByText('Alfa Drive Tests').closest('tr')
+    expect(within(row).getByText('55')).toBeInTheDocument()
+    expect(within(row).getByText('73%')).toBeInTheDocument()
   })
 
-  it('points each entry at the panel it names', async () => {
+  it('draws each row against the widest book, so size is not thrown away', async () => {
+    // The bar used to be a fixed-width track filled to the rate, so 73% of 55
+    // and 33% of 27 drew bars of the same length. Length is now the size of
+    // the book; fill is the rate.
     serve()
     draw()
 
-    const nav = await rail()
-    for (const [name, id] of [
-      ['Plan and delivery', 'dt-panel-plan'],
-      ['Ongoing breakdown', 'dt-panel-ongoing'],
-      ['Province breakdown', 'dt-panel-provinces'],
-    ]) {
-      const link = within(nav).getByRole('link', { name: new RegExp(`^${name}`) })
-      expect(link).toHaveAttribute('href', `#${id}`)
-      // The anchor has to exist, or the link is a jump to nowhere. This is
-      // the assertion that catches an id renamed on one side only.
-      expect(document.getElementById(id)).not.toBeNull()
-    }
+    const card = await section('Contractor scorecard')
+    const widths = ['Alfa Drive Tests', 'Beta Surveys'].map((name) => {
+      const row = within(card).getByText(name).closest('tr')
+      return row.querySelector('.dt-book-bar').style.width
+    })
+
+    expect(widths[0]).toBe('100%')
+    // 27 of 55, to the precision the style attribute carries.
+    expect(parseFloat(widths[1])).toBeCloseTo(49.1, 1)
   })
 
-  it('carries the headline figure for the panels that have one', async () => {
+  it('splits each bar into what is done and what is still held', async () => {
     serve()
     draw()
 
-    const nav = await rail()
-    expect(within(nav).getByRole('link', { name: /^Plan and delivery/ })).toHaveTextContent('37.5%')
-    expect(within(nav).getByRole('link', { name: /^Ongoing breakdown/ })).toHaveTextContent('50')
-    expect(within(nav).getByRole('link', { name: /^Problematic breakdown/ })).toHaveTextContent('10')
-  })
+    const card = await section('Contractor scorecard')
+    const row = within(card).getByText('Alfa Drive Tests').closest('tr')
+    const segments = within(row)
+      .getAllByTestId('dt-bar')
+      .map((seg) => seg.dataset.segment)
 
-  it('names, without a figure, the panels whose headline would change unit', async () => {
-    serve()
-    draw()
-
-    const nav = await rail()
-    // A count of contractors sitting in the same column as counts of sites
-    // reads as a count of sites. These entries are deliberately bare.
-    expect(
-      within(nav).getByRole('link', { name: 'Contractor scorecard' }).textContent,
-    ).toBe('Contractor scorecard')
-    expect(within(nav).getByRole('link', { name: 'Province breakdown' }).textContent).toBe(
-      'Province breakdown',
-    )
-  })
-
-  it('drops the entry for a panel the payload does not carry', async () => {
-    const older = { ...overview }
-    delete older.province_breakdown
-    delete older.contractor_scorecard
-    serve(planDelivery(), older)
-    draw()
-
-    const nav = await screen.findByRole('navigation', { name: 'Dashboard panels' })
-    await waitFor(() =>
-      expect(within(nav).queryByRole('link', { name: 'Province breakdown' })).toBeNull(),
-    )
-    expect(within(nav).queryByRole('link', { name: 'Contractor scorecard' })).toBeNull()
-    // The panels that are still served keep their entries.
-    expect(within(nav).getByRole('link', { name: /^Ongoing breakdown/ })).toBeInTheDocument()
-  })
-
-  it('stays a usable contents list where the browser cannot track position', async () => {
-    // jsdom has no IntersectionObserver, which is the same situation as an old
-    // browser: nothing is marked current, and every entry is still a link.
-    serve()
-    draw()
-
-    const links = within(await rail()).getAllByRole('link')
-    expect(links.length).toBeGreaterThan(0)
-    expect(links.every((a) => a.getAttribute('href')?.startsWith('#'))).toBe(true)
-    expect(links.some((a) => a.getAttribute('aria-current'))).toBe(false)
+    expect(segments).toEqual(['done', 'ongoing'])
   })
 })

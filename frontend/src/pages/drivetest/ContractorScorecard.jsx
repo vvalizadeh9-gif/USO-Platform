@@ -1,30 +1,35 @@
 import { motion, useReducedMotion } from 'framer-motion'
 import { Link } from 'react-router-dom'
-import { count, percent, progressColor } from './format'
-import { UNATTRIBUTED } from './constants'
-import { doneLink, ongoingLink, problematicLink } from './links'
+import { STATE_COLOR, UNATTRIBUTED } from './constants'
+import { bookScale, count, percent, progressColor } from './format'
+import { assignedLink, doneLink, ongoingLink, problematicLink } from './links'
+import BookBar from './charts/BookBar'
 
 /**
- * Each contractor's whole book of work, ranked by how far through it they are.
+ * Each contractor's assignment, and how much of it is finished.
  *
- * This replaces two charts that were measuring the wrong thing. "Drive tests
- * done per contractor (all time)" ranked companies by how long they had been
- * on the programme — a company at 521 all-time might be delivering four a
- * month now — and ongoing-per-contractor ranked them by size, because a firm
- * holding four hundred sites will show more ongoing work than one holding a
- * hundred whatever either of them is doing. Neither was a performance
- * ranking, and both read like one.
+ * WHAT "ASSIGNMENT" MEANS HERE, because it is the whole basis of the ranking:
+ * the drive tests a company has completed, plus the sites it is still
+ * holding. Nothing else. It is deliberately not every on-air site that
+ * carries the company's name — a site sitting in a problem category, or one
+ * sent out for a health check, has not been committed to them, and dividing
+ * by it would mark a company down for work the programme never handed over.
+ * Problematic sites keep a column, because they are worth seeing; they are
+ * simply not part of the book being scored. The backend computes it the same
+ * way — see `_contractor_scorecard`.
  *
- * Carrying the denominator fixes that: `done_percent` is how far through its
- * own book each company is, which is comparable across companies of any size.
- * The raw counts stay on the row, because "62% of 400" and "62% of 12" are
- * the same rate and very different situations.
+ * WHAT CHANGED IN THE CHART. The rate used to be a fixed-width track with a
+ * fill, one per row. Every row was therefore the same width, so a company at
+ * 62% of twelve sites drew the identical bar to one at 62% of four hundred,
+ * and the column ranked two situations that call for opposite decisions as
+ * though they were the same. The bar is now sized to the book as well as
+ * filled by it — see `charts/BookBar`.
  *
  * The unattributed row sits last and is styled apart. It is not a company and
  * cannot be beaten or beat anyone; the backend sorts it out of the ranking
- * for the same reason. Its cells still open their sites — there is a real list
- * behind "nobody holds these", and it is the one worth reading — through
- * `contractor_id=none`, which is what the endpoint calls them.
+ * for the same reason. Its cells still open their sites, through
+ * `contractor_id=none`: "nobody holds these" is a real list, and the one most
+ * worth reading.
  */
 export default function ContractorScorecard({ rows, provinceId }) {
   const reduced = useReducedMotion()
@@ -33,91 +38,119 @@ export default function ContractorScorecard({ rows, provinceId }) {
   }
 
   const scope = provinceId == null ? {} : { provinceId }
-  /** The id this row's links carry: the company, or the unattributed bucket. */
+  /** The id a row's links carry: the company, or the unattributed bucket. */
   const idFor = (row) => (row.contractor_id == null ? UNATTRIBUTED : row.contractor_id)
+  const scale = bookScale(rows.map((r) => r.assigned))
 
   return (
-    <div className="table-wrap scroll-x">
-      <table className="dt-scorecard">
-        <thead>
-          <tr>
-            <th scope="col">Contractor</th>
-            <th scope="col" style={{ textAlign: 'right' }}>On-air</th>
-            <th scope="col" style={{ textAlign: 'right' }}>Done</th>
-            <th scope="col" style={{ textAlign: 'right' }}>Ongoing</th>
-            <th scope="col" style={{ textAlign: 'right' }}>Problematic</th>
-            <th scope="col" className="dt-col-rate">Completion of own book</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row, i) => {
-            const unattributed = row.contractor_id == null
-            return (
-              <motion.tr
-                key={row.contractor_id ?? 'unattributed'}
-                className={unattributed ? 'dt-unattributed' : undefined}
-                initial={reduced ? false : { opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: Math.min(i * 0.03, 0.2), duration: 0.25 }}
-              >
-                <td className="dt-farsi" style={{ fontWeight: unattributed ? 400 : 500 }}>
-                  {row.name}
-                </td>
-                <td className="tnum" style={{ textAlign: 'right' }}>{count(row.onair)}</td>
-                <td className="tnum dt-good" style={{ textAlign: 'right' }}>
-                  <Link
-                    to={doneLink({ ...scope, contractorId: idFor(row) })}
-                    className="dt-cell-link"
-                  >
-                    {count(row.done)}
-                  </Link>
-                </td>
-                <td className="tnum" style={{ textAlign: 'right' }}>
-                  <Link
-                    to={ongoingLink({ ...scope, contractorId: idFor(row) })}
-                    className="dt-cell-link"
-                  >
-                    {count(row.ongoing)}
-                  </Link>
-                </td>
-                <td
-                  className="tnum"
-                  style={{ textAlign: 'right', color: row.problematic > 0 ? 'var(--red)' : undefined }}
+    <>
+      <div className="dt-key" aria-hidden="true">
+        <span className="dt-key-item">
+          <i style={{ background: STATE_COLOR.done }} />
+          DT done
+        </span>
+        <span className="dt-key-item">
+          <i style={{ background: STATE_COLOR.ongoing }} />
+          Ongoing
+        </span>
+        <span className="dt-key-note">bar length is the size of the assignment</span>
+      </div>
+
+      <div className="table-wrap scroll-x">
+        <table className="dt-scorecard">
+          <thead>
+            <tr>
+              <th scope="col">Contractor</th>
+              <th scope="col" style={{ textAlign: 'right' }}>Assignment</th>
+              <th scope="col" style={{ textAlign: 'right' }}>DT done</th>
+              <th scope="col" style={{ textAlign: 'right' }}>Ongoing</th>
+              <th scope="col" style={{ textAlign: 'right' }}>Problematic</th>
+              <th scope="col" style={{ textAlign: 'right' }}>Done</th>
+              <th scope="col" className="dt-col-book">Where the work is</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row, i) => {
+              const unattributed = row.contractor_id == null
+              const cscope = { ...scope, contractorId: idFor(row) }
+              return (
+                <motion.tr
+                  key={row.contractor_id ?? 'unattributed'}
+                  className={unattributed ? 'dt-unattributed' : undefined}
+                  initial={reduced ? false : { opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: Math.min(i * 0.03, 0.2), duration: 0.25 }}
                 >
-                  {row.problematic > 0 ? (
-                    <Link
-                      to={problematicLink({ ...scope, contractorId: idFor(row) })}
-                      className="dt-cell-link dt-cell-link-bad"
-                    >
-                      {count(row.problematic)}
+                  <td className="dt-farsi" style={{ fontWeight: unattributed ? 400 : 500 }}>
+                    {row.name}
+                  </td>
+                  <td className="tnum" style={{ textAlign: 'right', fontWeight: 600 }}>
+                    {/* The denominator the rate divides by, so it is the one
+                        figure on this row a contractor will want to check. */}
+                    <Link to={assignedLink(cscope)} className="dt-cell-link">
+                      {count(row.assigned)}
                     </Link>
-                  ) : (
-                    count(row.problematic)
-                  )}
-                </td>
-                <td>
-                  <span className="dt-progress-cell dt-progress-wide">
-                    <span className="dt-progress-track" aria-hidden="true">
-                      <motion.span
-                        data-testid="dt-bar"
-                        style={{
-                          width: `${row.done_percent}%`,
-                          background: unattributed ? 'var(--text-dim)' : progressColor(row.done_percent),
-                          transformOrigin: 'left center',
-                        }}
-                        initial={reduced ? false : { scaleX: 0 }}
-                        animate={{ scaleX: 1 }}
-                        transition={{ duration: 0.55, delay: 0.1 + Math.min(i * 0.05, 0.3) }}
-                      />
+                  </td>
+                  <td className="tnum" style={{ textAlign: 'right' }}>
+                    <Link to={doneLink(cscope)} className="dt-cell-link">
+                      {count(row.done)}
+                    </Link>
+                  </td>
+                  <td className="tnum" style={{ textAlign: 'right' }}>
+                    <Link to={ongoingLink(cscope)} className="dt-cell-link">
+                      {count(row.ongoing)}
+                    </Link>
+                  </td>
+                  <td className="tnum" style={{ textAlign: 'right' }}>
+                    {row.problematic > 0 ? (
+                      <Link
+                        to={problematicLink(cscope)}
+                        className="dt-cell-link dt-cell-link-bad"
+                      >
+                        {count(row.problematic)}
+                      </Link>
+                    ) : (
+                      count(row.problematic)
+                    )}
+                  </td>
+                  <td style={{ textAlign: 'right' }}>
+                    <span
+                      className="dt-rate"
+                      style={{
+                        color: unattributed ? 'var(--text-dim)' : progressColor(row.done_percent),
+                      }}
+                    >
+                      {percent(row.done_percent)}
                     </span>
-                    <span className="tnum dt-progress-pct">{percent(row.done_percent)}</span>
-                  </span>
-                </td>
-              </motion.tr>
-            )
-          })}
-        </tbody>
-      </table>
-    </div>
+                  </td>
+                  <td className="dt-col-book">
+                    <BookBar
+                      label={row.name}
+                      total={row.assigned}
+                      scaleMax={scale}
+                      index={i}
+                      segments={[
+                        {
+                          key: 'done',
+                          label: 'DT done',
+                          value: row.done,
+                          color: unattributed ? 'var(--text-dim)' : STATE_COLOR.done,
+                        },
+                        {
+                          key: 'ongoing',
+                          label: 'Ongoing',
+                          value: row.ongoing,
+                          color: unattributed ? 'var(--border)' : STATE_COLOR.ongoing,
+                        },
+                      ]}
+                    />
+                  </td>
+                </motion.tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+    </>
   )
 }

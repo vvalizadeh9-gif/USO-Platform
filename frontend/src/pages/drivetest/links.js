@@ -79,8 +79,12 @@ export const doneLink = (extra) => siteListLink({ ...extra, bucket: 'done' })
 /** The sites behind an ongoing figure. */
 export const ongoingLink = (extra) => siteListLink({ ...extra, bucket: 'ongoing' })
 
-/** The sites behind the Remaining bracket: ongoing plus problematic. */
+/** The sites behind the Remaining line: ongoing plus problematic. */
 export const remainingLink = (extra) => siteListLink({ ...extra, bucket: 'remaining' })
+
+/** A contractor's book of work: done plus ongoing, the scorecard's
+ * denominator. Problematic sites are outside it, there and here. */
+export const assignedLink = (extra) => siteListLink({ ...extra, bucket: 'assigned' })
 
 /** The sites behind the on-air total. */
 export const onairLink = (extra) => siteListLink({ ...extra, bucket: 'onair' })

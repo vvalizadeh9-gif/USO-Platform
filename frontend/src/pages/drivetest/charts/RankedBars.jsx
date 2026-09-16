@@ -15,6 +15,13 @@ import { count, share } from '../format'
  * difference, so the unfilled remainder never read and the bars floated with
  * no scale). And a row with a destination is a link: the whole row, not a
  * small chevron, so the target is the size of the thing you are looking at.
+ *
+ * `color` takes a function as well as a string, and the difference between
+ * the two is a rule, not a convenience. Contractors and provinces are nominal
+ * categories: one flat colour for every bar, because shading them by size
+ * would colour a bar by the length it already has. Age bands are an ordered
+ * scale, so they get a function returning the ramp step — the one place on
+ * this page where a bar's colour carries information.
  */
 export default function RankedBars({ points, total, color, hrefFor, emptyLabel = 'No data yet' }) {
   const reduced = useReducedMotion()
@@ -23,6 +30,7 @@ export default function RankedBars({ points, total, color, hrefFor, emptyLabel =
   }
 
   const widest = Math.max(1, ...points.map((p) => p.value))
+  const colorAt = (point, i) => (typeof color === 'function' ? color(point, i) : color)
 
   return (
     <ul className="dt-bars">
@@ -38,7 +46,7 @@ export default function RankedBars({ points, total, color, hrefFor, emptyLabel =
                 data-testid="dt-bar"
                 className="dt-track-fill"
                 style={{
-                  background: color,
+                  background: colorAt(p, i),
                   width: `${(p.value / widest) * 100}%`,
                   opacity: p.muted ? 0.45 : 1,
                   transformOrigin: 'left center',

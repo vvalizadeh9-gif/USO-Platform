@@ -38,7 +38,9 @@ COLUMNS: list[tuple[str, str]] = [
     ("Stage", "current_stage"),
     ("Launch date", "launch_date"),
     ("Days since launch", "days_since_launch"),
-    ("Waiting", "age_band"),
+    ("Assigned", "assignment_date"),
+    ("Days held", "days_since_assignment"),
+    ("How long", "age_band"),
     ("Problem categories", "problem_categories"),
     ("Fix owners", "fix_owners"),
     ("Oldest open fix (days)", "oldest_open_fix_days"),
@@ -49,13 +51,13 @@ COLUMNS: list[tuple[str, str]] = [
     ("Evidence", "dt_evidence_count"),
 ]
 
-_WIDTHS = [16, 28, 16, 22, 14, 22, 14, 17, 14, 26, 24, 20, 12, 10, 18, 14, 10]
+_WIDTHS = [16, 28, 16, 22, 14, 22, 14, 17, 14, 12, 14, 26, 24, 20, 12, 10, 18, 14, 10]
 
 #: How the header block names each filter, in the order it reads them.
 _FILTER_LABELS: list[tuple[str, str]] = [
     ("bucket", "Figure"),
     ("category", "Category"),
-    ("age_band", "Waiting"),
+    ("age_band", "How long"),
     ("stage", "Stage"),
     ("contractor_id", "Contractor"),
     ("province_id", "Province"),
