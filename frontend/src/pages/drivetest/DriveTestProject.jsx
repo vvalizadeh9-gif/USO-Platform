@@ -16,7 +16,7 @@ import TrendChart from './charts/TrendChart'
 import { AGE_RAMP, PROVINCE_LIMIT, STATE_COLOR, TREND_SERIES } from './constants'
 import { count } from './format'
 import { ongoingLink, problematicLink } from './links'
-import { useDashboard } from './useDashboard'
+import { TREND_WINDOWS, useDashboard } from './useDashboard'
 
 /**
  * The Drive Test dashboard.
@@ -84,7 +84,17 @@ function collapse(points, limit = PROVINCE_LIMIT) {
 }
 
 export default function DriveTestProject() {
-  const { overview, plan, trend, provinceId, setProvince, refresh, refreshing } = useDashboard()
+  const {
+    overview,
+    plan,
+    trend,
+    trendMonths,
+    setTrendMonths,
+    provinceId,
+    setProvince,
+    refresh,
+    refreshing,
+  } = useDashboard()
   const [ongoingTab, setOngoingTab] = useState('contractor')
   const [problematicTab, setProblematicTab] = useState('category')
   const [exporting, setExporting] = useState(false)
@@ -411,6 +421,9 @@ export default function DriveTestProject() {
             state={trend}
             onRetry={refresh}
             skeletonRows={4}
+            actions={
+              <WindowPicker value={trendMonths} onChange={setTrendMonths} />
+            }
           >
             {(t) =>
               t.months?.some((m) => m.captured) ? (
@@ -446,6 +459,36 @@ export default function DriveTestProject() {
   )
 }
 
+/** How far back the trend reads.
+ *
+ * Two buttons rather than a select: there are two answers, and a dropdown
+ * that opens to show two options costs a click to say what a pair of buttons
+ * says at rest.
+ *
+ * This is the only control on the page that changes one card and nothing
+ * else, which is why it sits in that card's header rather than in the command
+ * bar — and why it stays in component state rather than in the URL. A
+ * province filter changes every figure on the page and is worth a link; a
+ * window on one chart is not.
+ */
+function WindowPicker({ value, onChange }) {
+  return (
+    <div className="dt-window" role="group" aria-label="How far back to read the trend">
+      {TREND_WINDOWS.map((months) => (
+        <button
+          key={months}
+          type="button"
+          className={`dt-window-btn${months === value ? ' dt-window-on' : ''}`}
+          aria-pressed={months === value}
+          onClick={() => onChange(months)}
+        >
+          {months}m
+        </button>
+      ))}
+    </div>
+  )
+}
+
 function SectionTotal({ icon: Icon, value, label, color }) {
   return (
     <span className="dt-section-total">
@@ -456,14 +499,19 @@ function SectionTotal({ icon: Icon, value, label, color }) {
   )
 }
 
+/** What the chart draws.
+ *
+ * Problematic is deliberately absent. It is no longer a line — it is the
+ * figure in the caption under the chart — and a legend swatch for a series
+ * that is not plotted sends a reader hunting for a line that is not there.
+ */
 function TrendLegend() {
   return (
     <div className="dt-legend">
-      {TREND_SERIES.map((s) => (
+      {TREND_SERIES.filter((s) => s.key !== 'problematic').map((s) => (
         <span key={s.key} className="dt-legend-item">
           <i style={{ background: s.color }} aria-hidden="true" />
           {s.label}
-          {s.key === 'problematic' && <em>own scale</em>}
         </span>
       ))}
       <span className="dt-legend-item dt-legend-note">

@@ -16,12 +16,21 @@ import { DrawPath, FadeArea } from './primitives'
  * off a cliff at the current month. This is the replacement those reasons
  * imply, not a restoration: it stops at the month we are in.
  *
- * TWO PANELS, ONE AXIS. Remaining and completed are comparable magnitudes and
- * share the upper panel. Problematic is an order of magnitude smaller and on
- * that scale would be a flat line along the floor, so it gets its own strip
- * with its own vertical scale, under the same months. The alternative — a
- * second y-axis on the same panel — makes two unrelated scales look like one
- * and is how charts end up lying.
+ * ONE PANEL, ONE SCALE, TWO SERIES. Remaining and completed are comparable
+ * magnitudes and belong on one axis. Problematic does not: it is an order of
+ * magnitude smaller, and every way of putting it here is a bad one. On the
+ * shared scale it is a flat line along the floor. On a second y-axis it makes
+ * two unrelated scales look like one, which is how charts end up lying. In
+ * its own strip underneath — which is what this chart used to do — it was a
+ * second set of gridlines and a second vertical scale that a reader had to
+ * learn before they could read the shape they came for.
+ *
+ * So it is a figure, not a line: the caption under the chart says what it is
+ * now and which way it has moved over the window, and the hover readout
+ * carries it for every month. Nothing is lost except the drawing of it, and
+ * the drawing was the part that cost the most and said the least. A reader
+ * comes to this card to see whether the backlog is bending; that question is
+ * two lines, and now it looks like two lines.
  *
  * WHAT THE DRAWING ADMITS. The series is assembled from monthly snapshots
  * that are written when someone signs in, not on a schedule, so it has three
@@ -46,11 +55,12 @@ const VIEW_W = 440
 const PAD_L = 36
 const PAD_R = 10
 const MAIN_TOP = 8
-const MAIN_H = 84
-const STRIP_TOP = 106
-const STRIP_H = 26
-const AXIS_Y = 152
-const VIEW_H = 162
+// The height the strip used to take is given back to the panel rather than
+// saved: the whole point of dropping the strip is that the shape of the two
+// series is what this card is for, and it now gets the room.
+const MAIN_H = 112
+const AXIS_Y = 138
+const VIEW_H = 148
 
 const PLOT_W = VIEW_W - PAD_L - PAD_R
 
@@ -115,22 +125,27 @@ export default function TrendChart({ months, seriesLabel = {} }) {
     const mainValues = [...remaining, ...done]
       .map((p) => p.value)
       .filter((v) => v != null)
-    const stripValues = problematic.map((p) => p.value).filter((v) => v != null)
 
     const mainMax = niceMax(Math.max(1, ...mainValues))
-    const stripMax = niceMax(Math.max(1, ...stripValues))
-
     const mainY = (v) => MAIN_TOP + MAIN_H - (v / mainMax) * MAIN_H
-    const stripY = (v) => STRIP_TOP + STRIP_H - (v / stripMax) * STRIP_H
 
-    return { x, remaining, done, problematic, mainMax, stripMax, mainY, stripY, n }
+    // Problematic is not drawn, so it needs no scale -- only its ends, for
+    // the caption. First and last *captured* readings: an uncaptured month
+    // was never measured, and taking a direction from one would report a
+    // change that was never observed.
+    const seen = problematic.filter((p) => p.value != null)
+    const problematicNow = seen.length ? seen[seen.length - 1] : null
+    const problematicThen = seen.length > 1 ? seen[0] : null
+
+    return { x, remaining, done, problematicNow, problematicThen, mainMax, mainY, n }
   }, [months])
 
   if (!months.length) return null
 
-  const { x, remaining, done, problematic, mainMax, stripMax, mainY, stripY } = model
+  // `problematic` stays inside the model: the readout reads each month's
+  // figure straight off the month, and the caption needs only the two ends.
+  const { x, remaining, done, problematicNow, problematicThen, mainMax, mainY } = model
   const mainBase = MAIN_TOP + MAIN_H
-  const stripBase = STRIP_TOP + STRIP_H
   const ticks = [0, 0.5, 1]
 
   // Label every month when they fit, otherwise every other one. Twelve labels
@@ -146,8 +161,10 @@ export default function TrendChart({ months, seriesLabel = {} }) {
   const series = [
     { key: 'remaining', points: remaining, color: hue.remaining, y: mainY, area: true },
     { key: 'dt_done', points: done, color: hue.dt_done, y: mainY, area: false },
-    { key: 'problematic', points: problematic, color: hue.problematic, y: stripY, area: true },
   ]
+  // Carried in the hover readout but not drawn -- see the note at the top of
+  // this file for why it is a figure rather than a third line.
+  const readoutSeries = [...series, { key: 'problematic', color: hue.problematic }]
 
   return (
     <div className="dt-trend">
@@ -157,22 +174,24 @@ export default function TrendChart({ months, seriesLabel = {} }) {
         role="img"
         aria-label={
           `Drive test trend over ${months.length} months. ` +
+          // The two drawn series, then the figure in the caption. Built from
+          // `series` rather than `readoutSeries` because only a drawn series
+          // has points to read a latest value off.
           series
             .map((s) => {
               const last = [...s.points].reverse().find((p) => p.value != null)
               return last ? `${seriesLabel[s.key] || s.key} latest ${last.value}.` : ''
             })
-            .join(' ')
+            .join(' ') +
+          (problematicNow
+            ? ` ${seriesLabel.problematic || 'Problematic'} latest ${problematicNow.value}, not plotted.`
+            : '')
         }
       >
         <defs>
           <linearGradient id="dt-fill-remaining" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor="var(--dt-ongoing)" stopOpacity="0.14" />
             <stop offset="100%" stopColor="var(--dt-ongoing)" stopOpacity="0.02" />
-          </linearGradient>
-          <linearGradient id="dt-fill-problematic" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="var(--dt-problem)" stopOpacity="0.16" />
-            <stop offset="100%" stopColor="var(--dt-problem)" stopOpacity="0.02" />
           </linearGradient>
         </defs>
 
@@ -190,23 +209,11 @@ export default function TrendChart({ months, seriesLabel = {} }) {
           )
         })}
 
-        {/* Problematic strip: its own scale, labelled so nobody reads it
-            against the panel above. */}
-        <line x1={PAD_L} x2={VIEW_W - PAD_R} y1={stripBase} y2={stripBase} className="dt-gridline" />
-        <text x={PAD_L - 8} y={STRIP_TOP + 9} className="dt-axis-label" textAnchor="end">
-          {count(stripMax)}
-        </text>
-        <text x={PAD_L - 8} y={stripBase + 4} className="dt-axis-label" textAnchor="end">
-          0
-        </text>
-
         {/* Series */}
         {series.map((s, si) => {
           const runs = segments(s.points, 'value')
-          const baseline = s.key === 'problematic' ? stripBase : mainBase
-          const fill = s.key === 'remaining'
-            ? 'url(#dt-fill-remaining)'
-            : 'url(#dt-fill-problematic)'
+          const baseline = mainBase
+          const fill = 'url(#dt-fill-remaining)'
           return (
             <g key={s.key}>
               {s.area &&
@@ -281,7 +288,7 @@ export default function TrendChart({ months, seriesLabel = {} }) {
             x1={x(hover)}
             x2={x(hover)}
             y1={MAIN_TOP}
-            y2={stripBase}
+            y2={mainBase}
             className="dt-hover-rule"
           />
         )}
@@ -295,13 +302,20 @@ export default function TrendChart({ months, seriesLabel = {} }) {
             x={x(i) - PLOT_W / (model.n - 1) / 2}
             y={MAIN_TOP}
             width={PLOT_W / (model.n - 1)}
-            height={stripBase - MAIN_TOP}
+            height={mainBase - MAIN_TOP}
             fill="transparent"
             onMouseEnter={() => setHover(i)}
             onMouseLeave={() => setHover(null)}
           />
         ))}
       </svg>
+
+      <ProblematicCaption
+        now={problematicNow}
+        then={problematicThen}
+        label={seriesLabel.problematic || 'Problematic'}
+        months={months.length}
+      />
 
       {hovered && (
         <div className="dt-trend-readout" role="status">
@@ -310,7 +324,7 @@ export default function TrendChart({ months, seriesLabel = {} }) {
           </span>
           {hovered.captured ? (
             <>
-              {series.map((s) => (
+              {readoutSeries.map((s) => (
                 <span key={s.key} className="dt-readout-item">
                   <i style={{ background: s.color }} />
                   {seriesLabel[s.key] || s.key}
@@ -326,5 +340,46 @@ export default function TrendChart({ months, seriesLabel = {} }) {
         </div>
       )}
     </div>
+  )
+}
+
+/** Problematic as a figure: where it is now, and which way it has moved.
+ *
+ * The third series used to be a strip under the chart with its own vertical
+ * scale. What a reader took from that strip was, in practice, exactly two
+ * things -- the current level and the direction -- and both of them fit in a
+ * sentence that costs no gridlines, no second axis and no explaining.
+ *
+ * The direction is measured between the first and last *captured* months in
+ * the window. An uncaptured month was never measured, so a change read across
+ * one would be a movement nobody observed. With only one reading there is a
+ * level and no direction, and it says the level.
+ */
+function ProblematicCaption({ now, then, label, months }) {
+  if (!now) return null
+
+  const change = then ? now.value - then.value : null
+  const direction = change == null || change === 0 ? null : change > 0 ? 'up' : 'down'
+
+  return (
+    <p className="dt-trend-caption">
+      <i style={{ background: 'var(--dt-problem)' }} aria-hidden="true" />
+      {label}
+      <b className="tnum">{count(now.value)}</b>
+      {direction ? (
+        <span className={`dt-trend-move dt-trend-${direction}`}>
+          {direction === 'up' ? '\u2191' : '\u2193'}
+          <span className="tnum">{count(Math.abs(change))}</span> over these {months} months
+        </span>
+      ) : (
+        <span className="dt-trend-move">
+          {change === 0 ? `unchanged over these ${months} months` : 'one reading only'}
+        </span>
+      )}
+      {/* Not drawn above, and said so rather than left to be noticed: a
+          reader who sees it in the legend and cannot find the line spends
+          longer looking for it than this sentence takes to read. */}
+      <span className="dt-trend-caption-note">not plotted \u2014 hover a month for its figure</span>
+    </p>
   )
 }

@@ -1330,6 +1330,80 @@ describe('the trend section', () => {
     expect(within(card).getByText('Remaining')).toBeInTheDocument()
   })
 
+  it('reports problematic as a figure rather than drawing it', async () => {
+    // It used to be a third line in a strip of its own, with its own vertical
+    // scale under the panel -- a second set of gridlines a reader had to
+    // learn before they could read the shape they came for. It is an order of
+    // magnitude smaller than the other two, so there is no honest way to draw
+    // it beside them; what people actually took from the strip was the level
+    // and the direction, and both fit in a sentence.
+    serve(planDelivery(), overview, {
+      ...trend(),
+      months: [
+        month('مرداد', { shamsi_month: 5, problematic: 18 }),
+        month('شهریور', { shamsi_month: 6, problematic: 11, is_open: true }),
+      ],
+    })
+    draw()
+
+    const card = await section('Where this is going')
+    const caption = card.querySelector('.dt-trend-caption')
+    expect(within(caption).getByText('11')).toBeInTheDocument()
+    expect(within(caption).getByText('7')).toBeInTheDocument()
+    expect(within(caption).getByText(/not plotted/)).toBeInTheDocument()
+
+    // A fall in problematic is good news, so it is not painted in the alarm
+    // colour -- the same rule the KPI deltas follow.
+    expect(caption.querySelector('.dt-trend-down')).toBeTruthy()
+    expect(caption.querySelector('.dt-trend-up')).toBeFalsy()
+
+    // And it is gone from the legend: a swatch for a series that is not
+    // drawn sends a reader hunting for a line that is not there.
+    const legend = card.querySelector('.dt-legend')
+    expect(within(legend).queryByText('Problematic')).not.toBeInTheDocument()
+    expect(within(legend).getByText('Remaining')).toBeInTheDocument()
+  })
+
+  it('reads the trend over six months or twelve, without reloading the page', async () => {
+    serve()
+    draw()
+
+    const card = await section('Where this is going')
+    await waitFor(() =>
+      expect(api.get).toHaveBeenCalledWith('/drive-test/trend', {
+        params: { months: 12 },
+      }),
+    )
+    const overviewCalls = api.get.mock.calls.filter((c) => c[0] === '/drive-test/overview').length
+
+    await userEvent.click(within(card).getByRole('button', { name: '6m' }))
+
+    await waitFor(() =>
+      expect(api.get).toHaveBeenCalledWith('/drive-test/trend', {
+        params: { months: 6 },
+      }),
+    )
+    // The window changes one card. Re-reading the overview to answer it would
+    // blank every section on the page to redraw one chart.
+    expect(
+      api.get.mock.calls.filter((c) => c[0] === '/drive-test/overview').length,
+    ).toBe(overviewCalls)
+  })
+
+  it('keeps the province scope when the window changes', async () => {
+    serve()
+    draw('/reports/drive-test?province=7')
+
+    const card = await section('Where this is going')
+    await userEvent.click(within(card).getByRole('button', { name: '6m' }))
+
+    await waitFor(() =>
+      expect(api.get).toHaveBeenCalledWith('/drive-test/trend', {
+        params: { months: 6, province_id: 7 },
+      }),
+    )
+  })
+
   it('says the series is empty rather than drawing an empty chart', async () => {
     serve(planDelivery(), overview, {
       months: [month('مرداد', { captured: false, onair: null, remaining: null })],
