@@ -67,6 +67,7 @@ from app.services.drive_test_analytics import (
     AGE_BAND_KEYS,
     AGE_BAND_LABEL_BY_KEY,
     NO_ASSIGNMENT_DATE,
+    NO_PROBLEM_DATE,
     ONGOING_STAGE_ORDER,
     STAGE_OTHER,
     DriveTestAnalytics,
@@ -308,7 +309,14 @@ def _site_params(
         None, description="Problem category, or Uncategorized. Problematic only."
     ),
     age_band: str | None = Query(
-        None, description="An age-band key, or no_launch_date. Ongoing only."
+        None,
+        description=(
+            "An age-band key. Ongoing and problematic only, and each on its "
+            "own clock: ongoing ages from the assignment date, problematic "
+            "from the day the site last became problematic. Also accepts "
+            f"{NO_ASSIGNMENT_DATE} (ongoing) or {NO_PROBLEM_DATE} "
+            "(problematic) for the sites each clock cannot speak for."
+        ),
     ),
     stage: str | None = Query(None, description="An ongoing stage. Ongoing only."),
     contractor_id: str | None = Query(
