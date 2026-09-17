@@ -51,6 +51,30 @@ const workLink = (params) =>
   )}`
 
 /**
+ * The list behind one figure on this page.
+ *
+ * Every number here counts *verdicts* — where a village stands — so the list
+ * is asked for by verdict too. The queue's status vocabulary is a different
+ * question ("whose move is it"), and a village ICT refused and the contractor
+ * has already re-filed is Rejected as a verdict and Pending as a status. This
+ * page used to link its Rejected figure at status=Rejected and so opened a
+ * list missing exactly the villages someone had already acted on.
+ *
+ * `province` is the name, carried only so the filter chip on the other screen
+ * can say which province without a second request.
+ */
+const listLink = ({ ict, cra, province, bucket } = {}) =>
+  workLink({
+    ict_verdict: ict,
+    cra_verdict: cra,
+    province_id: province?.province_id,
+    province: province?.name,
+    // Every bucket, not this role's usual landing one: a figure counted
+    // across the whole universe must not open a third of it.
+    bucket: bucket || 'all',
+  })
+
+/**
  * Reports → Acceptance Dashboard: where ICT/CRA status is *read*.
  *
  * This is the reporting half of what used to be one Acceptance page with tabs.
@@ -125,7 +149,7 @@ export default function AcceptanceDashboard() {
 /* ------------------------------------------------------------ shared pieces */
 
 /** One figure in a divided row. Given `to`, it opens the list it counted. */
-function Cell({ icon: Icon, label, value, color, sub, to }) {
+function Cell({ icon: Icon, label, value, color, sub, to, spoken }) {
   const navigate = useNavigate()
   const body = (
     <>
@@ -140,7 +164,7 @@ function Cell({ icon: Icon, label, value, color, sub, to }) {
         <button
           className="drill"
           onClick={() => navigate(to)}
-          aria-label={`${label}: ${value} villages — open the list`}
+          aria-label={`${spoken || label}: ${value} villages — open the list`}
           style={{ textAlign: 'left', width: '100%' }}
         >
           {body}
@@ -245,11 +269,24 @@ function OverviewTab({ data }) {
 
       <div className="acc-section"><Clock size={13} /> Approved by one authority, not the other</div>
       <div className="card">
+        {/* The village figures open their list — both verdicts at once is
+            what the cross tab is. The site figures do not, for the reason
+            above: they count sites, and every list on this page is villages. */}
         <div className="stat-row" style={{ gridTemplateColumns: 'repeat(4, 1fr)', borderTop: 'none' }}>
           <Cell label="Sites ICT ✓ / CRA ✗" value={analysis.sites_ict_not_cra} color={ICT} />
           <Cell label="Sites CRA ✓ / ICT ✗" value={analysis.sites_cra_not_ict} color={CRA} />
-          <Cell label="Villages ICT ✓ / CRA ✗" value={analysis.villages_ict_not_cra} color={ICT} />
-          <Cell label="Villages CRA ✓ / ICT ✗" value={analysis.villages_cra_not_ict} color={CRA} />
+          <Cell
+            label="Villages ICT ✓ / CRA ✗"
+            value={analysis.villages_ict_not_cra}
+            color={ICT}
+            to={listLink({ ict: 'Approved', cra: 'NotApproved' })}
+          />
+          <Cell
+            label="Villages CRA ✓ / ICT ✗"
+            value={analysis.villages_cra_not_ict}
+            color={CRA}
+            to={listLink({ cra: 'Approved', ict: 'NotApproved' })}
+          />
         </div>
       </div>
     </>
@@ -347,12 +384,14 @@ function HeadlineCard({ total, analysis }) {
 }
 
 function AuthorityCard({ authority, total, approved, rejected, pending }) {
-  const { name, where, icon: Icon, color } = authority
+  const navigate = useNavigate()
+  const { key, name, where, icon: Icon, color } = authority
   const pct = total ? Math.round((approved / total) * 100) : 0
+  const to = (verdict) => listLink({ [key]: verdict })
   const parts = [
-    { label: 'Approved', value: approved, color, icon: CheckCircle2, status: 'Approved' },
-    { label: 'Rejected', value: rejected, color: REJECTED, icon: XCircle, status: 'Rejected' },
-    { label: 'Pending', value: pending, color: PENDING, icon: Hourglass, status: 'Pending' },
+    { label: 'Approved', value: approved, color, icon: CheckCircle2, verdict: 'Approved' },
+    { label: 'Rejected', value: rejected, color: REJECTED, icon: XCircle, verdict: 'Rejected' },
+    { label: 'Pending', value: pending, color: PENDING, icon: Hourglass, verdict: 'Pending' },
   ]
   return (
     <motion.div className="card" variants={fadeUp} initial="hidden" animate="show" style={{ borderTop: `3px solid ${color}` }}>
@@ -365,9 +404,16 @@ function AuthorityCard({ authority, total, approved, rejected, pending }) {
         </div>
 
         <div className="row" style={{ alignItems: 'baseline', gap: 10, marginTop: 10 }}>
-          <span className="tnum" style={{ fontFamily: 'var(--font-display)', fontSize: 32, fontWeight: 600, letterSpacing: '-0.02em' }}>
+          {/* The headline figure opens the same list as the Approved cell
+              below it. They are the same number, so they behave the same. */}
+          <button
+            className="drill tnum"
+            onClick={() => navigate(to('Approved'))}
+            aria-label={`${name} approved: ${approved} villages — open the list`}
+            style={{ fontFamily: 'var(--font-display)', fontSize: 32, fontWeight: 600, letterSpacing: '-0.02em' }}
+          >
             {approved}
-          </span>
+          </button>
           <span className="dim" style={{ fontSize: 12.5 }}>approved · {pct}% of {total}</span>
         </div>
 
@@ -384,7 +430,8 @@ function AuthorityCard({ authority, total, approved, rejected, pending }) {
             label={p.label}
             value={p.value}
             color={p.color}
-            to={workLink({ authority: name, status: p.status })}
+            spoken={`${name} ${p.label.toLowerCase()}`}
+            to={to(p.verdict)}
           />
         ))}
       </div>
@@ -435,6 +482,7 @@ function NeedsAttention({ provinces }) {
     const pairs = (provinces || []).flatMap((p) =>
       AUTHORITIES.map((a) => ({
         province: p.name,
+        province_id: p.province_id,
         authority: a,
         total: p.total,
         remained: p[`${a.key}_remained`] ?? 0,
@@ -499,7 +547,13 @@ function NeedsAttention({ provinces }) {
         </thead>
         <tbody>
           {rows.map((r) => {
-            const to = workLink({ authority: r.authority.name, status: 'Pending' })
+            // The row's own number, in the row's own province — not every
+            // province's pending letters for that authority, which is what
+            // this opened before and is a different figure entirely.
+            const to = listLink({
+              [r.authority.key]: 'NotApproved',
+              province: { province_id: r.province_id, name: r.province },
+            })
             return (
               <tr key={r.province + r.authority.key}>
                 <td className="text-data" style={{ fontWeight: 500, whiteSpace: 'nowrap' }}>{r.province}</td>
@@ -520,7 +574,7 @@ function NeedsAttention({ provinces }) {
                   <button
                     className="btn btn-sm"
                     onClick={() => navigate(to)}
-                    aria-label={`Open ${r.province}, awaiting ${r.authority.name}, in My Work`}
+                    aria-label={`Open ${r.province}, outstanding with ${r.authority.name}, in My Work`}
                   >
                     Open <ArrowUpRight size={13} />
                   </button>
@@ -533,7 +587,7 @@ function NeedsAttention({ provinces }) {
 
       <div className="row" style={{ justifyContent: 'space-between', padding: '11px 20px', borderTop: '1px solid var(--border-soft)', gap: 12, flexWrap: 'wrap' }}>
         <AgeLegend />
-        <span className="dim" style={{ fontSize: 11.5 }}>Open lists what is with that authority now.</span>
+        <span className="dim" style={{ fontSize: 11.5 }}>Open lists that province's outstanding villages.</span>
       </div>
     </motion.div>
   )
@@ -554,7 +608,9 @@ function ProvinceTab({ provinces }) {
       <div className="dim mt-8" style={{ fontSize: 12.5, marginBottom: 10, maxWidth: 880 }}>
         Worst first — ordered by what is still outstanding across both authorities, not by how many
         villages a province holds. Each row carries both authorities, so a province where one is far
-        ahead of the other reads without comparing two tables.
+        ahead of the other reads without comparing two tables. Under each authority's counts, the
+        same villages by age: refused and unanswered separately, because they are different
+        conversations. Every figure opens the villages behind it.
       </div>
       <motion.div className="card" initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35 }}>
         <div className="row" style={{ justifyContent: 'space-between', padding: '16px 20px 12px', gap: 12, flexWrap: 'wrap' }}>
@@ -569,6 +625,7 @@ function ProvinceTab({ provinces }) {
               <tr>
                 <th rowSpan={2} style={{ verticalAlign: 'bottom' }}>Province</th>
                 <th rowSpan={2} style={{ textAlign: 'right', verticalAlign: 'bottom' }}>Villages</th>
+                <th rowSpan={2} style={{ textAlign: 'right', verticalAlign: 'bottom' }}>DT done</th>
                 {AUTHORITIES.map((a, i) => (
                   <th
                     key={a.key}
@@ -585,47 +642,129 @@ function ProvinceTab({ provinces }) {
               <tr>
                 {AUTHORITIES.map((a, i) => [
                   <th key={`${a.key}-a`} className={i ? 'grp-start' : ''} style={{ textAlign: 'right' }}>Approved</th>,
-                  <th key={`${a.key}-o`} style={{ textAlign: 'right' }}>Outstanding</th>,
-                  <th key={`${a.key}-g`}>Aging</th>,
+                  <th key={`${a.key}-r`} style={{ textAlign: 'right' }}>Rejected</th>,
+                  <th key={`${a.key}-p`} style={{ textAlign: 'right' }}>Pending</th>,
                 ])}
               </tr>
             </thead>
             <tbody>
               {provinces.map((p, i) => (
-                <tr key={p.name + i}>
-                  <td className="text-data" style={{ fontWeight: 500, whiteSpace: 'nowrap' }}>{p.name}</td>
-                  <td className="tnum dim" style={{ textAlign: 'right' }}>{p.total}</td>
-                  {AUTHORITIES.map((a, j) => {
-                    const remained = p[`${a.key}_remained`]
-                    return [
-                      <td
-                        key={`${a.key}-a`}
-                        className={`tnum ${j ? 'grp-start' : ''}`}
-                        style={{ textAlign: 'right', color: a.color, fontWeight: 500 }}
-                      >
-                        {p[`${a.key}_approved`]}
-                      </td>,
-                      <td
-                        key={`${a.key}-o`}
-                        className="tnum"
-                        style={{ textAlign: 'right', color: remained ? PENDING : IDLE }}
-                      >
-                        {remained}
-                      </td>,
-                      <td key={`${a.key}-g`}>
-                        <span className="row" style={{ gap: 7 }}>
-                          <AgeBar buckets={p[`${a.key}_age_buckets`]} width={72} />
-                          <Age days={p[`${a.key}_oldest_age_days`]} />
-                        </span>
-                      </td>,
-                    ]
-                  })}
-                </tr>
+                <ProvinceRows key={p.name + i} province={p} />
               ))}
             </tbody>
           </table>
         </div>
       </motion.div>
     </>
+  )
+}
+
+/**
+ * One province: its counts, and underneath them the same counts aged.
+ *
+ * Two lines rather than four more columns. The table already scrolls
+ * sideways at eight columns, and an age bar squeezed into a shared cell is
+ * not a reading of anything — given the authority group's full width it is.
+ *
+ * The two bars are Rejected and Pending, which are disjoint and sum to what
+ * is outstanding. Aging *rejected* against *remained* would have shown the
+ * refused villages twice, once inside each bar, with nothing on screen
+ * saying so.
+ */
+function ProvinceRows({ province: p }) {
+  const scope = { province_id: p.province_id, name: p.name }
+  return (
+    <>
+      <tr className="prov-counts">
+        <td rowSpan={2} className="text-data" style={{ fontWeight: 500, whiteSpace: 'nowrap' }}>
+          {p.name}
+        </td>
+        <td rowSpan={2} className="tnum dim" style={{ textAlign: 'right' }}>
+          {p.total_villages ?? p.total}
+        </td>
+        <td rowSpan={2} className="tnum" style={{ textAlign: 'right' }}>{p.total}</td>
+        {AUTHORITIES.map((a, j) => [
+          <td key={`${a.key}-a`} className={`tnum ${j ? 'grp-start' : ''}`} style={{ textAlign: 'right' }}>
+            <Figure
+              value={p[`${a.key}_approved`]}
+              color={a.color}
+              weight={500}
+              to={listLink({ [a.key]: 'Approved', province: scope })}
+              label={`${p.name}, ${a.name} approved`}
+            />
+          </td>,
+          <td key={`${a.key}-r`} className="tnum" style={{ textAlign: 'right' }}>
+            <Figure
+              value={p[`${a.key}_rejected`] ?? 0}
+              color={p[`${a.key}_rejected`] ? REJECTED : IDLE}
+              to={listLink({ [a.key]: 'Rejected', province: scope })}
+              label={`${p.name}, ${a.name} rejected`}
+            />
+          </td>,
+          <td key={`${a.key}-p`} className="tnum" style={{ textAlign: 'right' }}>
+            <Figure
+              value={p[`${a.key}_pending`] ?? 0}
+              color={p[`${a.key}_pending`] ? PENDING : IDLE}
+              to={listLink({ [a.key]: 'Pending', province: scope })}
+              label={`${p.name}, ${a.name} pending`}
+            />
+          </td>,
+        ])}
+      </tr>
+      <tr className="prov-aging">
+        {AUTHORITIES.map((a, j) => (
+          <td key={a.key} colSpan={3} className={j ? 'grp-start' : ''}>
+            <div className="age-split">
+              <AgeOf
+                caption="Rejected"
+                buckets={p[`${a.key}_rejected_age_buckets`]}
+                days={p[`${a.key}_rejected_oldest_age_days`]}
+                to={listLink({ [a.key]: 'Rejected', province: scope })}
+                label={`${p.name}, ${a.name} rejected — by age`}
+              />
+              <AgeOf
+                caption="Pending"
+                buckets={p[`${a.key}_pending_age_buckets`]}
+                days={p[`${a.key}_pending_oldest_age_days`]}
+                to={listLink({ [a.key]: 'Pending', province: scope })}
+                label={`${p.name}, ${a.name} pending — by age`}
+              />
+            </div>
+          </td>
+        ))}
+      </tr>
+    </>
+  )
+}
+
+/** A figure in a table cell that opens the list it counted. */
+function Figure({ value, color, weight, to, label }) {
+  const navigate = useNavigate()
+  if (!value) return <span style={{ color: IDLE }}>0</span>
+  return (
+    <button
+      className="drill"
+      style={{ color, fontWeight: weight }}
+      onClick={() => navigate(to)}
+      aria-label={`${label}: ${value} villages — open the list`}
+    >
+      {value}
+    </button>
+  )
+}
+
+/** One half of outstanding, aged: a caption, its bar and its oldest village. */
+function AgeOf({ caption, buckets, days, to, label }) {
+  const navigate = useNavigate()
+  const total = bandTotal(buckets)
+  if (!total) return null
+  return (
+    <button className="drill age-one" onClick={() => navigate(to)} aria-label={label}>
+      <span className="cap">{caption}</span>
+      <span className="row" style={{ gap: 6 }}>
+        <AgeBar buckets={buckets} width={64} />
+        <Age days={days} />
+      </span>
+    </button>
   )
 }

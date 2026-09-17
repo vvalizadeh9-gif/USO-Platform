@@ -2156,6 +2156,30 @@ table.grouped thead tr:first-child th.grp {
 }
 table.grouped .grp-start { border-left: 1px solid var(--border); }
 
+/* A province reads as one row on two lines: counts, and the same counts
+   aged underneath them. Four more columns would have been the alternative,
+   in a table that already scrolls sideways at eight -- and an age bar in a
+   shared cell is not a reading of anything. Given the authority group's
+   whole width, it is. */
+table.grouped .prov-counts td { border-bottom: none; padding-bottom: 4px; }
+table.grouped .prov-aging td { padding-top: 0; vertical-align: top; }
+
+.age-split { display: flex; gap: 16px; flex-wrap: wrap; }
+.age-split .age-one {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  text-align: left;
+}
+.age-split .cap {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: .09em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
 /* A figure that opens the list it counted. It has to look selectable without
    becoming a wall of blue: the underline appears on hover, the number itself
    keeps the colour that carries its meaning. */

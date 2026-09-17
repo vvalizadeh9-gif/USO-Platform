@@ -487,3 +487,93 @@ def test_dt_age_bucket_keeps_undated_apart_from_fresh():
     assert flow.dt_age_bucket(flow.AGE_WARN_DAYS) == flow.AGE_WARN
     assert flow.dt_age_bucket(flow.AGE_CRITICAL_DAYS) == flow.AGE_CRITICAL
     assert flow.dt_age_bucket(None) == flow.AGE_UNKNOWN
+
+
+def test_province_splits_outstanding_into_refused_and_unanswered(client):
+    """The two halves of outstanding are reported apart, and still sum to it.
+
+    Prov3 holds one village rejected by both authorities and one nobody has
+    answered. They are different conversations — a refusal is the programme's
+    to resolve, a wait is the office's to finish — and the province row now
+    carries each, without losing the combined figure the "Needs attention"
+    ranking reads.
+    """
+    from app.services.acceptance_analytics import AcceptanceAnalytics
+    from app.services.snapshots import _SystemScope
+
+    db = SessionLocal()
+    rows = {r["name"]: r for r in AcceptanceAnalytics(db, _SystemScope()).compute_provinces()}
+    db.close()
+
+    prov3 = rows["Prov3"]
+    for authority in ("ict", "cra"):
+        assert prov3[f"{authority}_rejected"] == 1      # V6
+        assert prov3[f"{authority}_pending"] == 1       # V7
+        assert (
+            prov3[f"{authority}_rejected"] + prov3[f"{authority}_pending"]
+            == prov3[f"{authority}_remained"]
+        )
+
+
+def test_split_age_buckets_sum_to_the_combined_one(client):
+    """Each outstanding village is aged once, under one half of outstanding.
+
+    This is what makes the two bars readable as a whole. Aging *rejected*
+    against *remained* would not: rejected is a subset of remained, so a
+    refused village would be counted in both bars with nothing on screen
+    saying so.
+    """
+    from app.services import acceptance_workflow as flow
+    from app.services.acceptance_analytics import AcceptanceAnalytics
+    from app.services.snapshots import _SystemScope
+
+    db = SessionLocal()
+    rows = AcceptanceAnalytics(db, _SystemScope()).compute_provinces()
+    db.close()
+
+    for row in rows:
+        for authority in ("ict", "cra"):
+            rejected = row[f"{authority}_rejected_age_buckets"]
+            pending = row[f"{authority}_pending_age_buckets"]
+            combined = row[f"{authority}_age_buckets"]
+            assert set(rejected) == set(pending) == set(flow.AGE_BUCKETS)
+            for band in flow.AGE_BUCKETS:
+                assert rejected[band] + pending[band] == combined[band]
+            assert sum(rejected.values()) == row[f"{authority}_rejected"]
+            assert sum(pending.values()) == row[f"{authority}_pending"]
+
+
+def test_province_counts_villages_the_drive_test_has_not_reached(client):
+    """``total_villages`` is the funnel; ``total`` is the part acceptance sees.
+
+    Prov1 holds a هدف village on a work item that is not DT-Done (V4). It has
+    no acceptance status — nothing can be filed for it — but leaving it out of
+    the province row entirely made the province look smaller than it is.
+    """
+    from app.services.acceptance_analytics import AcceptanceAnalytics
+    from app.services.snapshots import _SystemScope
+
+    db = SessionLocal()
+    rows = {r["name"]: r for r in AcceptanceAnalytics(db, _SystemScope()).compute_provinces()}
+    db.close()
+
+    prov1 = rows["Prov1"]
+    assert prov1["total"] == 3            # V1, V3, V1d — drive test done
+    assert prov1["total_villages"] == 4   # and V4, which it has not reached
+    # The verbal sub-flag village is not هدف and is in neither number.
+    assert prov1["total_villages"] == prov1["total"] + 1
+    for row in rows.values():
+        assert row["total_villages"] >= row["total"]
+
+
+def test_province_rows_carry_their_id_for_the_drill_through(client):
+    """Every row can open the villages it counted, scoped to that province."""
+    from app.services.acceptance_analytics import AcceptanceAnalytics
+    from app.services.snapshots import _SystemScope
+
+    db = SessionLocal()
+    rows = AcceptanceAnalytics(db, _SystemScope()).compute_provinces()
+    db.close()
+
+    assert all(row["province_id"] is not None for row in rows)
+    assert len({row["province_id"] for row in rows}) == len(rows)

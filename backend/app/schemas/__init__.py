@@ -1475,7 +1475,15 @@ class ProvinceAcceptanceRow(BaseModel):
     """Per-province ICT & CRA approval status."""
 
     name: str
+    # So a figure in this row can open the villages it counted, scoped to this
+    # province. Null only for a site with no province on it.
+    province_id: int | None = None
+    # ``total`` is the DT-Done هدف universe — the villages acceptance can act
+    # on, and the denominator of every percentage here. ``total_villages`` is
+    # every هدف village in the province, drive-tested or not: the two together
+    # say how much of the province is even eligible yet.
     total: int
+    total_villages: int = 0
     ict_approved: int
     ict_remained: int
     ict_approved_pct: float
@@ -1498,6 +1506,22 @@ class ProvinceAcceptanceRow(BaseModel):
     cra_oldest_age_days: int | None = None
     ict_age_buckets: dict[str, int] = Field(default_factory=dict)
     cra_age_buckets: dict[str, int] = Field(default_factory=dict)
+    # Outstanding split into its two disjoint halves, each aged on the same
+    # clock. Refused and unanswered are different conversations, and the pair
+    # sums back to the combined map above — which rejected-versus-remained
+    # could not, one being a subset of the other.
+    ict_rejected: int = 0
+    ict_pending: int = 0
+    cra_rejected: int = 0
+    cra_pending: int = 0
+    ict_rejected_oldest_age_days: int | None = None
+    ict_pending_oldest_age_days: int | None = None
+    cra_rejected_oldest_age_days: int | None = None
+    cra_pending_oldest_age_days: int | None = None
+    ict_rejected_age_buckets: dict[str, int] = Field(default_factory=dict)
+    ict_pending_age_buckets: dict[str, int] = Field(default_factory=dict)
+    cra_rejected_age_buckets: dict[str, int] = Field(default_factory=dict)
+    cra_pending_age_buckets: dict[str, int] = Field(default_factory=dict)
 
 
 class AcceptanceOverview(BaseModel):

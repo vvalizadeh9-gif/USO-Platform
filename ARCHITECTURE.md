@@ -386,6 +386,18 @@ A village rolls up from its two authorities the same way a site rolls up from
 its villages: **Closed** when both are approved, **Partial** when one is, **Open**
 when neither is.
 
+#### Every number opens the list it counted
+
+The Acceptance Dashboard counts verdicts, so its figures link into the queue by
+verdict — `/my-work?ict_verdict=Rejected`, served by `ict_verdict` /
+`cra_verdict` on `GET /acceptance/villages`. They were linked at the queue's
+`status` before, which is the other question above, and so opened a list with
+every already-re-filed refusal missing. The two parameters are independent, so
+the ICT-versus-CRA cross tab is `ict_verdict=Approved&cra_verdict=NotApproved`
+rather than an endpoint of its own. A figure counted across the whole universe
+carries `bucket=all`, because landing on a role's usual bucket shows a fraction
+of the number that was clicked.
+
 #### The three rules that look wrong and are not
 
 1. **Only the technologies CPM requested may be answered.** A 3G/4G site never

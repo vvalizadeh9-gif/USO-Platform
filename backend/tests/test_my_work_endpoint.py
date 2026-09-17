@@ -783,3 +783,88 @@ def test_the_four_buckets_still_partition_after_the_rule_moved(client, buckets):
                 assert flow.queue_bucket(village.ict_status, village.cra_status) == name
     finally:
         db.close()
+
+
+# ---------------------------------------------------------------------------
+# Verdict filters — what the Acceptance dashboard's figures link into
+# ---------------------------------------------------------------------------
+def _village_ids(client, token, **params):
+    r = client.get(
+        "/api/v1/acceptance/villages", headers=_auth(token), params=params
+    )
+    assert r.status_code == 200, r.text
+    return {row["village_id"] for row in r.json()["rows"]}
+
+
+def test_verdict_finds_a_refusal_the_status_filter_loses(client):
+    """A rejected village that has been re-filed is still rejected.
+
+    This is the whole reason ``ict_verdict`` exists. The queue status answers
+    "whose move is it" and moves to Pending the moment a corrected round is
+    sent; the verdict answers "where does this stand" and stays Rejected until
+    someone validates it otherwise. The dashboard counts verdicts, so linking
+    its Rejected figure at ``status=Rejected`` opened a list that had quietly
+    dropped every village anyone had already acted on.
+    """
+    pm = _user_token(client, "PM", "mw_pm")
+    coordinator = _user_token(client, "Coordinator", "mw_coord")
+    _wi, (village_id,), _co = _seed("VERDICT", technologies="2G", villages=1)
+
+    created = _submit(
+        client, pm, village_id, "ICT",
+        [{"technology": "2G", "claimed_status": "Rejected", "comment": "no mast"}],
+    )
+    assert _review(client, coordinator, created.json()["id"]).status_code == 200
+
+    # Refused, and nobody has re-filed yet: both vocabularies agree.
+    assert village_id in _village_ids(client, pm, ict_verdict="Rejected")
+    assert village_id in _village_ids(client, pm, authority="ICT", status="Rejected")
+
+    # Re-filed. The status moves; the verdict does not.
+    assert _submit(
+        client, pm, village_id, "ICT", _approve_all(["2G"]), letter="L-2"
+    ).status_code == 201
+    assert village_id in _village_ids(client, pm, ict_verdict="Rejected")
+    assert village_id not in _village_ids(client, pm, authority="ICT", status="Rejected")
+
+
+def test_verdicts_partition_the_list(client, buckets):
+    """Approved, Rejected and Pending are exclusive and exhaustive.
+
+    The three figures on an authority card sum to the villages it counts, so
+    the three lists behind them must too — no village in two of them, none in
+    none of them.
+    """
+    pm = buckets["pm"]
+    scope = {"site_id": buckets["site_id"]}
+    everything = _village_ids(client, pm, **scope)
+    seen = []
+    for verdict in ("Approved", "Rejected", "Pending"):
+        seen.append(_village_ids(client, pm, ict_verdict=verdict, **scope))
+
+    assert set().union(*seen) == everything
+    assert sum(len(s) for s in seen) == len(everything)
+    # NotApproved is the other two together — the half of a cross tab.
+    assert _village_ids(client, pm, ict_verdict="NotApproved", **scope) == seen[1] | seen[2]
+
+
+def test_both_verdicts_together_are_the_cross_tab(client, buckets):
+    """ict_verdict=Approved&cra_verdict=NotApproved is "ICT ✓ / CRA ✗"."""
+    pm = buckets["pm"]
+    scope = {"site_id": buckets["site_id"]}
+    rows = _village_ids(client, pm, ict_verdict="Approved", cra_verdict="NotApproved", **scope)
+    assert rows == (
+        _village_ids(client, pm, ict_verdict="Approved", **scope)
+        & _village_ids(client, pm, cra_verdict="NotApproved", **scope)
+    )
+    # The village validated on both sides is in neither half of the cross tab.
+    assert buckets["closed"] not in rows
+
+
+def test_an_unknown_verdict_is_refused(client, buckets):
+    r = client.get(
+        "/api/v1/acceptance/villages",
+        headers=_auth(buckets["pm"]),
+        params={"ict_verdict": "Returned"},
+    )
+    assert r.status_code == 400
