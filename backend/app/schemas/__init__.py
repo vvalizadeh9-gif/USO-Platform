@@ -777,6 +777,10 @@ class ActionCounter(BaseModel):
     label: str
     count: int
     url: str
+    # How long the oldest item in this queue has been waiting, when the queue
+    # has an age to report. "12 waiting, oldest 31d" is a different sentence
+    # from "12 waiting", and it is the one that decides what gets chased.
+    oldest_days: int | None = None
 
 
 class ActionCenterOut(BaseModel):
@@ -1432,9 +1436,16 @@ class AcceptanceKpis(BaseModel):
 
     total_dt_done_villages: int
     total_ict_approval: int
+    # "Remained" is rejected + pending, kept as-is for the consumers that read
+    # it; the two fields under it split the same number into a refusal the
+    # programme has to answer and a wait it has to chase.
     total_ict_remained: int
+    total_ict_rejected: int = 0
+    total_ict_pending: int = 0
     total_cra_approval: int
     total_cra_remained: int
+    total_cra_rejected: int = 0
+    total_cra_pending: int = 0
 
 
 class AcceptanceAnalysis(BaseModel):
@@ -1447,6 +1458,8 @@ class AcceptanceAnalysis(BaseModel):
     sites_cra_not_ict: int
     villages_ict_not_cra: int
     villages_cra_not_ict: int
+    # Villages finished with both authorities — the "fully accepted" headline.
+    villages_both_approved: int = 0
 
 
 class ProvinceAcceptanceRow(BaseModel):
@@ -1462,6 +1475,10 @@ class ProvinceAcceptanceRow(BaseModel):
     cra_remained: int
     cra_approved_pct: float
     cra_remained_pct: float
+    # The oldest wait among this province's villages still sitting with each
+    # authority. None when nothing is pending there — which is not zero days.
+    ict_oldest_days: int | None = None
+    cra_oldest_days: int | None = None
 
 
 class AcceptanceOverview(BaseModel):

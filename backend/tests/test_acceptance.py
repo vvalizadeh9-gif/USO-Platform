@@ -238,3 +238,151 @@ def test_overview_endpoint(client):
     assert body["kpis"]["total_dt_done_villages"] == 4
     assert "analysis" in body
     assert len(body["provinces"]) == 2
+
+
+# ---------------------------------------------------------------------------
+# The reviewed Overview changes: Rejected split out from Remained, a
+# fully-accepted count, and a province table ordered worst-first with an aging
+# column.
+#
+# These run last on purpose: they widen the seeded universe (a third province,
+# two more villages, one filed submission), and every assertion above is
+# written against the original four rows.
+# ---------------------------------------------------------------------------
+def _seed_rejections(db):
+    """A third province: one rejected village and one still pending.
+
+    Small (2 rows against Prov1's 3) but with everything outstanding, so it is
+    only at the top of the province table if the table is sorted by what is
+    left to do rather than by size.
+    """
+    from app.models.reference import Province
+    from app.models.workitem import Site, Village, WorkItem
+
+    p3 = Province(name="Prov3")
+    db.add(p3)
+    db.flush()
+    s3 = Site(site_code="S3", province_id=p3.id)
+    db.add(s3)
+    db.flush()
+    wi_f = WorkItem(site_id=s3.id, site_type="F", dt_status="Done",
+                    requested_technology="2G/3G", current_stage="New")
+    db.add(wi_f)
+    db.flush()
+
+    # V6: 3G rejected by both → the whole village is rejected by both. One
+    # rejected technology rejects the village (acceptance_workflow's rule).
+    v6 = Village(work_item_id=wi_f.id, village_code="V6",
+                 target_classification="هدف",
+                 ict_status="Rejected", cra_status="Rejected")
+    v6.acceptances = [_acc("2G", "Approved", "Approved"),
+                      _acc("3G", "Rejected", "Rejected")]
+    # V7: filed, nobody has answered yet — pending with both authorities.
+    v7 = Village(work_item_id=wi_f.id, village_code="V7",
+                 target_classification="هدف",
+                 ict_status="Pending", cra_status="Pending")
+    v7.acceptances = [_acc("2G", "Pending", "Pending"),
+                      _acc("3G", "Pending", "Pending")]
+    db.add_all([v6, v7])
+    db.commit()
+    return v7.id
+
+
+def test_kpis_split_rejected_from_pending(client):
+    """Rejected and Pending are reported apart; Remained still holds both."""
+    from app.services.acceptance_analytics import AcceptanceAnalytics
+    from app.services.snapshots import _SystemScope
+
+    db = SessionLocal()
+    _seed_rejections(db)
+    kpis = AcceptanceAnalytics(db, _SystemScope()).compute_kpis()
+    db.close()
+
+    assert kpis["total_dt_done_villages"] == 6           # V1, V3, V1d, V5, V6, V7
+    assert kpis["total_ict_approval"] == 3               # V1, V3, V1d
+    assert kpis["total_ict_rejected"] == 1               # V6
+    assert kpis["total_ict_pending"] == 2                # V5, V7
+    assert kpis["total_cra_approval"] == 3               # V3, V1d, V5
+    assert kpis["total_cra_rejected"] == 1               # V6
+    assert kpis["total_cra_pending"] == 2                # V1, V7
+
+    # The contract the old consumers rely on: remained is the two put together.
+    for authority in ("ict", "cra"):
+        assert (
+            kpis[f"total_{authority}_remained"]
+            == kpis[f"total_{authority}_rejected"] + kpis[f"total_{authority}_pending"]
+        )
+
+
+def test_analysis_counts_fully_accepted_villages(client):
+    from app.services.acceptance_analytics import AcceptanceAnalytics
+    from app.services.snapshots import _SystemScope
+
+    db = SessionLocal()
+    analysis = AcceptanceAnalytics(db, _SystemScope()).compute_analysis()
+    db.close()
+
+    # Only V3 and V1d are finished with both authorities.
+    assert analysis["villages_both_approved"] == 2
+
+
+def test_provinces_sort_worst_first(client):
+    """The table leads with the province that has the most left outstanding.
+
+    Prov3 is the smallest province seeded and the last one added; it belongs at
+    the top because all four of its authority slots are outstanding, which is
+    the opposite of what sorting by total size produced.
+    """
+    from app.services.acceptance_analytics import AcceptanceAnalytics
+    from app.services.snapshots import _SystemScope
+
+    db = SessionLocal()
+    rows = AcceptanceAnalytics(db, _SystemScope()).compute_provinces()
+    db.close()
+
+    assert [r["name"] for r in rows] == ["Prov3", "Prov1", "Prov2"]
+    assert rows[0]["total"] == 2          # smaller than Prov1's 3 — not the sort key
+    assert rows[0]["ict_remained"] == 2   # V6 rejected, V7 pending
+    assert rows[0]["cra_remained"] == 2
+    # Descending by outstanding work, with size only breaking the tie below.
+    remained = [r["ict_remained"] + r["cra_remained"] for r in rows]
+    assert remained == sorted(remained, reverse=True)
+
+
+def test_province_aging_reads_the_my_work_clock(client):
+    """The aging column is the oldest wait among Pending villages, or nothing.
+
+    It is measured with acceptance_workflow's own aging helpers — the same days
+    a My Work row prints — so a province and a village can never disagree about
+    how long something has been sitting.
+    """
+    from datetime import datetime, timedelta, timezone
+
+    from app.models.acceptance_workflow import AcceptanceSubmission
+    from app.models.workitem import Village
+    from app.services.acceptance_analytics import AcceptanceAnalytics
+    from app.services.snapshots import _SystemScope
+
+    db = SessionLocal()
+    village_id = db.query(Village.id).filter_by(village_code="V7").scalar()
+
+    # Nothing has been filed anywhere yet, so no province has an age to report.
+    rows = {r["name"]: r for r in AcceptanceAnalytics(db, _SystemScope()).compute_provinces()}
+    assert rows["Prov3"]["ict_oldest_days"] is None
+    assert rows["Prov3"]["cra_oldest_days"] is None
+
+    db.add(AcceptanceSubmission(
+        village_id=village_id, authority="ICT", round_no=1,
+        letter_number="L-AGE-1", source="Coordinator", review_status="Pending",
+        submitted_at=datetime.now(timezone.utc) - timedelta(days=12),
+    ))
+    db.commit()
+
+    rows = {r["name"]: r for r in AcceptanceAnalytics(db, _SystemScope()).compute_provinces()}
+    db.close()
+    # V7 is Prov3's only Pending village on either side, and the only one with
+    # any submission history — so both columns read its wait. Aging is a
+    # property of the village's last movement, not of one authority's letter,
+    # which is exactly how My Work computes waiting_days.
+    assert rows["Prov3"]["ict_oldest_days"] == 12
+    assert rows["Prov3"]["cra_oldest_days"] == 12

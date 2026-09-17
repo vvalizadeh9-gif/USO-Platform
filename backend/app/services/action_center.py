@@ -25,8 +25,9 @@ from app.core.deps import ADMIN, COORDINATOR, CONTRACTOR, PM
 from app.models.acceptance import CpmChangeRequest, Notification
 from app.models.health_check import HcAssignment, HcRemediation, HcTask
 from app.models.reference import User
-from app.models.workitem import Assignment, Site, WorkItem
+from app.models.workitem import Assignment, Site, Village, WorkItem
 from app.schemas import ActionCounter, ActionItem
+from app.services import acceptance_workflow as flow
 from app.services.visibility import apply_work_item_scope, visible_work_item_ids
 from app.services.workflow import STAGE_ASSIGNED, STAGE_READY, STAGE_RETURNED
 
@@ -361,6 +362,33 @@ def counters(db: Session, user: User) -> list[ActionCounter]:
                 out.append(ActionCounter(
                     key=key, label=label, count=count,
                     url=f"/work-items?stage={quote(stage)}",
+                ))
+
+    if role in (PM, COORDINATOR):
+        # Filed and waiting on the authority. Everything else on this page is
+        # work this user does; these two are work this user *chases* — and
+        # without them a coordinator whose whole province is sitting with ICT
+        # sees an empty Action Center and concludes there is nothing to do.
+        for authority, key, label, column in (
+            ("ICT", "awaiting_ict", "Awaiting ICT", Village.ict_status),
+            ("CRA", "awaiting_cra", "Awaiting CRA", Village.cra_status),
+        ):
+            village_ids = (
+                db.execute(
+                    select(Village.id).where(
+                        Village.deleted_at.is_(None),
+                        column == flow.STATUS_PENDING,
+                        Village.work_item_id.in_(visible_work_item_ids(user, db)),
+                    )
+                )
+                .scalars()
+                .all()
+            )
+            if village_ids:
+                out.append(ActionCounter(
+                    key=key, label=label, count=len(village_ids),
+                    url=f"/my-work?awaiting={quote(authority)}",
+                    oldest_days=flow.oldest_waiting_days(db, village_ids),
                 ))
 
     if user.contractor_id is not None:

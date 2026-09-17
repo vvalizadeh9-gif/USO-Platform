@@ -2033,3 +2033,53 @@ tbody tr:hover .dt-row-filter { opacity: 1; }
 @media (max-width: 720px) {
   .pip-mini { display: none; }
 }
+
+/* ---------- Acceptance dashboard ----------
+   The Overview tab used to be small bordered cards inside bordered cards
+   inside a grid — three frames around every number, and the reader had to
+   decide which of the three mattered. What replaced them: one card per idea,
+   and the numbers inside it divided by a hairline rather than boxed. The
+   hierarchy is then carried by type size, which is what it is for. */
+
+/* A row of figures sharing one card, separated by a rule instead of a box. */
+.stat-row {
+  display: grid;
+  border-top: 1px solid var(--border-soft);
+}
+.stat-row > * + * { border-left: 1px solid var(--border-soft); }
+.stat-row .cell { padding: 14px 18px; }
+.stat-row .cell .k {
+  font-size: 11.5px; color: var(--text-muted);
+  display: flex; align-items: center; gap: 6px;
+  text-transform: uppercase; letter-spacing: 0.05em;
+}
+.stat-row .cell .v {
+  font-family: var(--font-display); font-weight: 600;
+  font-size: 22px; margin-top: 3px; letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+}
+.stat-row .cell .s { font-size: 11.5px; color: var(--text-dim); margin-top: 1px; }
+
+/* Approved / rejected / pending as one bar, so the shape of a province's
+   problem is readable before any number is. */
+.split-bar {
+  display: flex; height: 9px; border-radius: 5px; overflow: hidden;
+  background: var(--surface-3); gap: 1px;
+}
+.split-bar > span { display: block; }
+
+/* A section heading inside the tab — the tab's own structure, not a card. */
+.acc-section {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 12px; font-weight: 600; color: var(--text-muted);
+  text-transform: uppercase; letter-spacing: 0.06em;
+  margin: 26px 0 10px;
+}
+
+/* The aging cell in the province table: a number that has to be glanceable
+   as "fine / slipping / bad" before it is read as a quantity. */
+.age { font-variant-numeric: tabular-nums; font-size: 12.5px; }
+.age.is-none { color: var(--text-dim); }
+.age.is-ok { color: var(--text-muted); }
+.age.is-slipping { color: var(--amber); font-weight: 500; }
+.age.is-bad { color: var(--red); font-weight: 600; }

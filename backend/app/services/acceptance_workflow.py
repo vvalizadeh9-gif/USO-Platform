@@ -24,7 +24,7 @@ from __future__ import annotations
 
 from datetime import date, datetime, timezone
 
-from sqlalchemy import Select, select
+from sqlalchemy import Select, func, select
 from sqlalchemy.orm import Session
 
 from app.models.acceptance import Acceptance
@@ -121,6 +121,61 @@ def visible_villages(user: User, db: Session) -> Select:
 def may_see_village(db: Session, user: User, village_id: int) -> bool:
     stmt = visible_villages(user, db).where(Village.id == village_id)
     return db.execute(stmt.with_only_columns(Village.id)).first() is not None
+
+
+# --------------------------------------------------------------------------
+# Aging
+#
+# One definition of "how long has this been sitting", used by My Work's village
+# rows, the province table in Reports and the Action Center counters. There is
+# exactly one of these on purpose: three screens quoting three different
+# numbers of days for the same village is how a report stops being trusted.
+# --------------------------------------------------------------------------
+def last_activity(db: Session, village_ids) -> dict[int, datetime]:
+    """Per village, when its acceptance last moved.
+
+    The most recent of any submission's review or submission time — so a
+    village that bounced four times reads "waiting 6 days" against its current
+    round, not three hundred days against its first.
+    """
+    village_ids = list(village_ids)
+    if not village_ids:
+        return {}
+    rows = db.execute(
+        select(
+            AcceptanceSubmission.village_id,
+            func.max(
+                func.coalesce(
+                    AcceptanceSubmission.reviewed_at, AcceptanceSubmission.submitted_at
+                )
+            ),
+        )
+        .where(AcceptanceSubmission.village_id.in_(village_ids))
+        .group_by(AcceptanceSubmission.village_id)
+    ).all()
+    return {village_id: moment for village_id, moment in rows if moment}
+
+
+def days_since(moment) -> int | None:
+    """Whole days between ``moment`` and now. None when nothing has happened."""
+    if moment is None:
+        return None
+    # SQLite hands back naive datetimes; treat those as UTC rather than
+    # letting the subtraction raise.
+    if moment.tzinfo is None:
+        moment = moment.replace(tzinfo=timezone.utc)
+    return max((datetime.now(timezone.utc) - moment).days, 0)
+
+
+def oldest_waiting_days(db: Session, village_ids) -> int | None:
+    """The largest :func:`days_since` across a set of villages.
+
+    None when none of them has ever had a submission — an untouched village is
+    not "waiting a long time", it is simply unstarted.
+    """
+    ages = [days_since(m) for m in last_activity(db, village_ids).values()]
+    ages = [a for a in ages if a is not None]
+    return max(ages) if ages else None
 
 
 # --------------------------------------------------------------------------

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useMatch, useNavigate } from 'react-router-dom'
-import { FileStack, PanelLeftOpen } from 'lucide-react'
+import { useMatch, useNavigate, useSearchParams } from 'react-router-dom'
+import { FileStack, PanelLeftOpen, X } from 'lucide-react'
 import api from '../../api/client'
 import { useAuth } from '../../context/AuthContext'
 import { useToast } from '../../context/ToastContext'
@@ -30,11 +30,26 @@ export default function MyWork() {
   const toast = useToast()
   const navigate = useNavigate()
   const onVillage = useMatch('/my-work/v/:villageId')
+  const [params, setParams] = useSearchParams()
+
+  // ?awaiting=ICT|CRA narrows the whole queue to what is sitting with one
+  // authority. It is how the Action Center's "Awaiting ICT" counter opens this
+  // screen: clicking a number has to land on exactly the villages it counted,
+  // or the number was a claim the page then made the reader re-derive.
+  const awaiting = ['ICT', 'CRA'].includes(
+    (params.get('awaiting') || '').toUpperCase()
+  )
+    ? params.get('awaiting').toUpperCase()
+    : null
 
   const canReview = REVIEW_ROLES.includes(user?.role?.name)
   const buckets = useMemo(() => bucketsFor(user?.role?.name), [user])
 
-  const [bucket, setBucket] = useState(buckets[0].key)
+  // Arriving filtered to one authority means arriving at what is with that
+  // authority, whatever this role's first bucket would otherwise be.
+  const [bucket, setBucket] = useState(
+    awaiting ? 'awaiting_review' : buckets[0].key
+  )
   // Until someone picks a chip themselves, the page is allowed to open on
   // whichever bucket actually has work in it. Landing on an empty "Needs
   // attention" tells a contractor with forty letters to file that there is
@@ -57,27 +72,40 @@ export default function MyWork() {
     return () => clearTimeout(id)
   }, [search])
 
+  // The filter lives in the query string, so moving down the queue has to
+  // carry it — otherwise selecting the second village silently unfilters.
+  const suffix = params.toString() ? `?${params}` : ''
   const select = useCallback(
-    (id) => navigate(id ? `/my-work/v/${id}` : '/my-work', { replace: !id }),
-    [navigate]
+    (id) =>
+      navigate(id ? `/my-work/v/${id}${suffix}` : `/my-work${suffix}`, {
+        replace: !id,
+      }),
+    [navigate, suffix]
   )
 
   const fetchList = useCallback(
     async (which = bucket, text = query) => {
       const { data } = await api.get('/acceptance/villages', {
-        params: { bucket: which, search: text || undefined, limit: PAGE_SIZE },
+        params: {
+          bucket: which,
+          search: text || undefined,
+          awaiting: awaiting || undefined,
+          limit: PAGE_SIZE,
+        },
       })
       setList(data)
       return data
     },
-    [bucket, query]
+    [bucket, query, awaiting]
   )
 
   const fetchCounts = useCallback(async () => {
-    const { data } = await api.get('/acceptance/villages/bucket-counts')
+    const { data } = await api.get('/acceptance/villages/bucket-counts', {
+      params: { awaiting: awaiting || undefined },
+    })
     setCounts(data)
     return data
-  }, [])
+  }, [awaiting])
 
   // Bucket or search changed: reload the queue. The current village is kept
   // if it survived the change, so switching filters does not throw away what
@@ -98,7 +126,7 @@ export default function MyWork() {
     // `selected` is deliberately absent: this runs when the *queue* changes,
     // not when the reader moves down it.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bucket, query])
+  }, [bucket, query, awaiting])
 
   useEffect(() => {
     fetchCounts()
@@ -164,13 +192,29 @@ export default function MyWork() {
         }
       />
 
-      <button
-        className="btn btn-sm queue-toggle mb-16"
-        onClick={() => setQueueOpen((open) => !open)}
-        aria-expanded={queueOpen}
-      >
-        <PanelLeftOpen size={14} /> Queue{list ? ` (${list.total})` : ''}
-      </button>
+      <div className="row mb-16" style={{ gap: 8 }}>
+        <button
+          className="btn btn-sm queue-toggle"
+          onClick={() => setQueueOpen((open) => !open)}
+          aria-expanded={queueOpen}
+        >
+          <PanelLeftOpen size={14} /> Queue{list ? ` (${list.total})` : ''}
+        </button>
+
+        {awaiting && (
+          <button
+            className="btn btn-sm"
+            title="Show every village again"
+            onClick={() => {
+              const next = new URLSearchParams(params)
+              next.delete('awaiting')
+              setParams(next, { replace: true })
+            }}
+          >
+            Awaiting {awaiting} only <X size={13} />
+          </button>
+        )}
+      </div>
 
       <div className="mywork">
         <QueuePane

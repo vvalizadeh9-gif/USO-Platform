@@ -674,3 +674,52 @@ def test_bulk_admin_is_refused(client):
     _wi, ids, _co = _seed("BULKADMIN", villages=2)
     response = _bulk(client, _login(client), ids)
     assert response.status_code == 403
+
+
+# ---------------------------------------------------------------------------
+# ?awaiting=ICT|CRA — what the Action Center's counters link into.
+#
+# A counter that says "Awaiting CRA 12" and opens a queue of something else is
+# a number the reader then has to re-derive by hand, which is worse than not
+# having offered it.
+# ---------------------------------------------------------------------------
+def test_awaiting_narrows_the_queue_to_one_authority(client, buckets):
+    """The village filed with CRA appears under CRA and not under ICT.
+
+    Scoped to the fixture's own site: later tests in this module file their own
+    letters, and this is a claim about the filter, not about the database.
+    """
+    token = buckets["pm"]
+    site = buckets["site_id"]
+
+    cra = _bucket(client, token, "awaiting_review", awaiting="CRA", site_id=site)
+    assert [r["village_id"] for r in cra["rows"]] == [buckets["awaiting_review"]]
+
+    # Nothing on this site is sitting with ICT — its only ICT submission was
+    # returned, which is the contractor's move, not the authority's.
+    ict = _bucket(client, token, "awaiting_review", awaiting="ICT", site_id=site)
+    assert ict["rows"] == []
+
+
+def test_awaiting_is_case_insensitive_and_validated(client, buckets):
+    token = buckets["pm"]
+    assert _bucket(
+        client, token, "awaiting_review", awaiting="cra", site_id=buckets["site_id"]
+    )["total"] == 1
+
+    r = client.get(
+        "/api/v1/acceptance/villages",
+        headers=_auth(token),
+        params={"awaiting": "MoC"},
+    )
+    assert r.status_code == 400
+
+
+def test_awaiting_narrows_the_bucket_counts_too(client, buckets):
+    """The chips have to agree with the list they label, filter and all."""
+    counts = _counts(client, buckets["pm"], awaiting="CRA", site_id=buckets["site_id"])
+    assert counts["awaiting_review"] == 1
+    assert counts["total"] == 1
+    assert counts["needs_attention"] == 0
+    assert counts["ready"] == 0
+    assert counts["closed"] == 0
