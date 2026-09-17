@@ -1,6 +1,7 @@
 import { AlertTriangle, CircleDashed } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import api from '../../api/client'
+import { describeBlobError, filenameFrom, saveBlob } from '../../lib/download'
 import { PageHead } from '../../components/ui'
 import { useToast } from '../../context/ToastContext'
 import BreakdownCard from './BreakdownCard'
@@ -15,7 +16,7 @@ import TrendChart from './charts/TrendChart'
 import { AGE_RAMP, PROVINCE_LIMIT, STATE_COLOR, TREND_SERIES } from './constants'
 import { count } from './format'
 import { ongoingLink, problematicLink } from './links'
-import { useDashboard } from './useDashboard'
+import { TREND_WINDOWS, useDashboard } from './useDashboard'
 
 /**
  * The Drive Test dashboard.
@@ -62,6 +63,7 @@ const ONGOING_TABS = [
 
 const PROBLEMATIC_TABS = [
   { key: 'category', label: 'Category' },
+  { key: 'age', label: 'How long' },
   { key: 'province', label: 'Province' },
 ]
 
@@ -82,7 +84,17 @@ function collapse(points, limit = PROVINCE_LIMIT) {
 }
 
 export default function DriveTestProject() {
-  const { overview, plan, trend, provinceId, setProvince, refresh, refreshing } = useDashboard()
+  const {
+    overview,
+    plan,
+    trend,
+    trendMonths,
+    setTrendMonths,
+    provinceId,
+    setProvince,
+    refresh,
+    refreshing,
+  } = useDashboard()
   const [ongoingTab, setOngoingTab] = useState('contractor')
   const [problematicTab, setProblematicTab] = useState('category')
   const [exporting, setExporting] = useState(false)
@@ -117,6 +129,9 @@ export default function DriveTestProject() {
    * The saved filename comes from the server where it sends one: the backend
    * already builds a dated, scope-named, ASCII-safe name, and inventing a
    * second one here is how the two come to disagree.
+   *
+   * Saving and failing are both `lib/download`'s job, because the site list
+   * does exactly this and had exactly the same two bugs.
    */
   async function exportWorkbook() {
     setExporting(true)
@@ -125,14 +140,18 @@ export default function DriveTestProject() {
         params: provinceId == null ? {} : { province_id: provinceId },
         responseType: 'blob',
       })
-      const url = URL.createObjectURL(res.data)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = filenameFrom(res.headers, provinceName)
-      a.click()
-      URL.revokeObjectURL(url)
-    } catch {
-      toast.error('Export failed', 'Could not generate the file. Please try again.')
+      saveBlob(
+        res.data,
+        filenameFrom(
+          res.headers,
+          provinceName ? `dt-delivery-${provinceName}.xlsx` : 'dt-delivery.xlsx',
+        ),
+      )
+    } catch (err) {
+      // What actually went wrong, not "try again". The body of a failed
+      // request made with `responseType: 'blob'` is a Blob, so the reason the
+      // server gave has to be read back out of it -- see `lib/download`.
+      toast.error('Export failed', await describeBlobError(err))
     } finally {
       setExporting(false)
     }
@@ -211,6 +230,7 @@ export default function DriveTestProject() {
   const problematicViews = useMemo(() => {
     const b = data?.problematic_breakdown
     if (!b) return {}
+    const scope = provinceId == null ? {} : { provinceId }
     return {
       category: {
         points: b.by_category,
@@ -219,10 +239,27 @@ export default function DriveTestProject() {
         // Each bar opens its own category. It used to open every problematic
         // site whichever bar was clicked, so a reader who clicked 64 landed
         // on 194.
-        hrefFor: (p) => {
-          const scope = provinceId == null ? {} : { provinceId }
-          return problematicLink(p.key ? { ...scope, category: p.key } : scope)
-        },
+        hrefFor: (p) => problematicLink(p.key ? { ...scope, category: p.key } : scope),
+      },
+      // How long each of these has been a problem. The category split says
+      // what is wrong and cannot say whether it is this week's news or last
+      // year's, and only the second is somebody's to answer for. Same bands
+      // as the ongoing card, on a different clock: the day each site last
+      // entered the state.
+      age: {
+        points: b.by_age,
+        unit: 'Stuck for',
+        hrefFor: (p) => (p.key ? problematicLink({ ...scope, ageBand: p.key }) : null),
+        color: (_point, i) => AGE_RAMP[Math.min(i, AGE_RAMP.length - 1)],
+        note:
+          b.without_problem_date > 0
+            ? `Measured from the day each site last became problematic. ` +
+              `${count(b.without_problem_date)} ` +
+              `${b.without_problem_date === 1 ? 'site was' : 'sites were'} flagged by a ` +
+              'CPM import, which records no date, so no clock has started on them and they ' +
+              'are not shown above.'
+            : 'Measured from the day each site last became problematic \u2014 a site ' +
+              'flagged, fixed and flagged again is aged from the latest flag.',
       },
       province: {
         points: collapse(b.by_province),
@@ -248,16 +285,16 @@ export default function DriveTestProject() {
         }
       />
 
-      {/* The command bar sticks. Everything in it changes what the page
-          shows, and the page is long enough to scroll; a filter you have to
-          scroll back to the top to reach is a filter that gets used once. The
-          freshness clock has the same problem in reverse — it is only honest
-          while it is on screen. */}
+      {/* The command bar sticks. It carries the scope the page is showing and
+          the way out of it, and the page is long enough to scroll; a way out
+          you have to scroll back to the top to reach is one people give up
+          on and reload the page instead. The freshness clock has the same
+          problem in reverse — it is only honest while it is on screen. */}
       <div className="dt-command">
         <Toolbar
-          provinces={provinces}
           provinceId={provinceId}
-          onProvince={setProvince}
+          provinceName={provinceName}
+          onClearProvince={() => setProvince(null)}
           onRefresh={refresh}
           refreshing={refreshing}
           generatedAt={data?.generated_at}
@@ -284,7 +321,12 @@ export default function DriveTestProject() {
           <KpiBand kpis={data.kpis} monthName={monthName} provinceId={provinceId} />
         ) : null}
 
-        <PlanDelivery state={plan} onRetry={refresh} />
+        <PlanDelivery
+          state={plan}
+          onRetry={refresh}
+          scoped={provinceId != null}
+          provinceName={provinceName}
+        />
 
         <div className="dt-pair">
           {has('ongoing_breakdown') && (
@@ -319,7 +361,7 @@ export default function DriveTestProject() {
           {has('problematic_breakdown') && (
             <Section
               title="Problematic breakdown"
-              subtitle="Sites the programme is blocked on"
+              subtitle="Sites the programme is blocked on, and how long each has been"
               state={overview}
               onRetry={refresh}
               actions={
@@ -385,6 +427,9 @@ export default function DriveTestProject() {
             state={trend}
             onRetry={refresh}
             skeletonRows={4}
+            actions={
+              <WindowPicker value={trendMonths} onChange={setTrendMonths} />
+            }
           >
             {(t) =>
               t.months?.some((m) => m.captured) ? (
@@ -420,6 +465,36 @@ export default function DriveTestProject() {
   )
 }
 
+/** How far back the trend reads.
+ *
+ * Two buttons rather than a select: there are two answers, and a dropdown
+ * that opens to show two options costs a click to say what a pair of buttons
+ * says at rest.
+ *
+ * This is the only control on the page that changes one card and nothing
+ * else, which is why it sits in that card's header rather than in the command
+ * bar — and why it stays in component state rather than in the URL. A
+ * province filter changes every figure on the page and is worth a link; a
+ * window on one chart is not.
+ */
+function WindowPicker({ value, onChange }) {
+  return (
+    <div className="dt-window" role="group" aria-label="How far back to read the trend">
+      {TREND_WINDOWS.map((months) => (
+        <button
+          key={months}
+          type="button"
+          className={`dt-window-btn${months === value ? ' dt-window-on' : ''}`}
+          aria-pressed={months === value}
+          onClick={() => onChange(months)}
+        >
+          {months}m
+        </button>
+      ))}
+    </div>
+  )
+}
+
 function SectionTotal({ icon: Icon, value, label, color }) {
   return (
     <span className="dt-section-total">
@@ -430,14 +505,19 @@ function SectionTotal({ icon: Icon, value, label, color }) {
   )
 }
 
+/** What the chart draws.
+ *
+ * Problematic is deliberately absent. It is no longer a line — it is the
+ * figure in the caption under the chart — and a legend swatch for a series
+ * that is not plotted sends a reader hunting for a line that is not there.
+ */
 function TrendLegend() {
   return (
     <div className="dt-legend">
-      {TREND_SERIES.map((s) => (
+      {TREND_SERIES.filter((s) => s.key !== 'problematic').map((s) => (
         <span key={s.key} className="dt-legend-item">
           <i style={{ background: s.color }} aria-hidden="true" />
           {s.label}
-          {s.key === 'problematic' && <em>own scale</em>}
         </span>
       ))}
       <span className="dt-legend-item dt-legend-note">
@@ -458,17 +538,4 @@ function KpiSkeleton() {
       </div>
     </div>
   )
-}
-
-/** The filename the server named the file, or a readable fallback.
- *
- * `content-disposition` is not always readable — a proxy can strip it, and a
- * cross-origin response without `Access-Control-Expose-Headers` hides it — so
- * this never depends on it being there.
- */
-function filenameFrom(headers, provinceName) {
-  const disposition = headers?.['content-disposition'] ?? ''
-  const match = /filename="([^"]+)"/.exec(disposition)
-  if (match) return match[1]
-  return provinceName ? `dt-delivery-${provinceName}.xlsx` : 'dt-delivery.xlsx'
 }

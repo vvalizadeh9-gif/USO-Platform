@@ -44,6 +44,7 @@ from app.services.dt_site_list import UNATTRIBUTED  # noqa: E402
 from app.services.drive_test_analytics import (  # noqa: E402
     AGE_BAND_LABEL_BY_KEY,
     NO_ASSIGNMENT_DATE,
+    NO_PROBLEM_DATE,
 )
 from app.services.workflow import (  # noqa: E402
     STAGE_ASSIGNED,
@@ -386,6 +387,22 @@ def test_every_figure_opens_a_list_of_exactly_that_many_sites(client, world):
         )
     )
 
+    for point in body["problematic_breakdown"]["by_age"]:
+        checks.append(
+            (
+                f"problematic/age/{point['name']}",
+                {"bucket": "problematic", "age_band": point["key"]},
+                point["value"],
+            )
+        )
+    checks.append(
+        (
+            "problematic/age/no date",
+            {"bucket": "problematic", "age_band": NO_PROBLEM_DATE},
+            body["problematic_breakdown"]["without_problem_date"],
+        )
+    )
+
     for point in body["ongoing_breakdown"]["by_stage"]:
         checks.append(
             (
@@ -632,18 +649,90 @@ def test_the_age_band_runs_on_the_assignment_clock_not_the_launch_date(client, w
     The seeded site went on air 400 days ago and was assigned 40 days ago.
     Aged from its launch it would read as the oldest band there is; the
     dashboard asks how long the company holding it has held it, so it is a
-    site that has been held for more than a month and no more than that.
+    site held between one and two months and no more than that.
     """
     rows = _sites(client, world["admin"], bucket="ongoing")["rows"]
     row = next(r for r in rows if r["work_item_id"] == world["ids"]["held_long"])
 
     assert row["days_since_launch"] == 400
     assert row["days_since_assignment"] == 40
-    assert row["age_band"] == AGE_BAND_LABEL_BY_KEY["gt_1m"]
+    assert row["age_band"] == AGE_BAND_LABEL_BY_KEY["m1_2"]
 
     # And a site with no assignment has no clock, rather than a clock at zero.
     unassigned = next(r for r in rows if r["days_since_assignment"] is None)
     assert unassigned["age_band"] is None
+
+
+def test_a_retired_age_band_key_still_opens_the_sites_it_used_to_mean(client, world):
+    """A drill-through URL outlives the band it names.
+
+    ``gt_1m`` was everything held for more than a month. That is now two
+    bands, so a link someone pasted into a message last week has to resolve
+    to both of them -- answering with one would be a list that looks right
+    and is short, which is the failure this whole screen exists to prevent.
+    """
+    legacy = _sites(client, world["admin"], bucket="ongoing", age_band="gt_1m")
+    m1_2 = _sites(client, world["admin"], bucket="ongoing", age_band="m1_2")
+    gt_2m = _sites(client, world["admin"], bucket="ongoing", age_band="gt_2m")
+
+    assert legacy["total"] == m1_2["total"] + gt_2m["total"]
+    assert legacy["total"] > 0, "the fixture holds a site past a month"
+
+    ids = {r["work_item_id"] for r in legacy["rows"]}
+    assert ids == {r["work_item_id"] for r in [*m1_2["rows"], *gt_2m["rows"]]}
+
+    # The pill reads back what was clicked, not what it resolved to: there is
+    # no single band label spanning the two.
+    assert legacy["filters_applied"]["age_band"] == "gt_1m"
+
+
+def test_every_served_filter_option_is_one_the_endpoint_accepts(client, world):
+    """The whole point of serving the vocabulary, asserted rather than claimed.
+
+    The screen builds its band and stage controls from these lists. If one
+    carries a value the same endpoint refuses, the control offers an option
+    that answers 422 -- which is the failure serving them was meant to make
+    impossible, not merely to fix once.
+
+    The two buckets that age have different "no clock" keys and each refuses
+    the other's, so this has to be checked per bucket rather than once.
+    """
+    for bucket in ("ongoing", "problematic"):
+        body = _sites(client, world["admin"], bucket=bucket)
+        assert body["age_bands"], f"{bucket} ages, so it offers bands"
+
+        for option in body["age_bands"]:
+            got = client.get(
+                SITES,
+                headers=world["admin"],
+                params={"bucket": bucket, "age_band": option["key"]},
+            )
+            assert got.status_code == 200, (
+                f"{bucket} offers age_band={option['key']} and then refuses it: {got.text}"
+            )
+
+    # A bucket that does not age offers nothing rather than something unusable.
+    for bucket in ("done", "onair"):
+        assert _sites(client, world["admin"], bucket=bucket)["age_bands"] == []
+
+
+def test_the_problematic_no_clock_option_reaches_the_sites_it_counts(client, world):
+    """The undated sites are the ones a reader most wants to open.
+
+    They are the gap in the ageing chart -- the sites it cannot speak for --
+    and a figure with no way through to the rows behind it is the one thing
+    this whole screen exists to prevent.
+    """
+    overview = client.get(
+        "/api/v1/drive-test/overview", headers=world["admin"]
+    ).json()
+    undated = overview["problematic_breakdown"]["without_problem_date"]
+
+    offered = {o["key"] for o in _sites(client, world["admin"], bucket="problematic")["age_bands"]}
+    assert NO_PROBLEM_DATE in offered
+
+    body = _sites(client, world["admin"], bucket="problematic", age_band=NO_PROBLEM_DATE)
+    assert body["total"] == undated
 
 
 def test_rows_carry_the_site_and_its_villages(client, world):

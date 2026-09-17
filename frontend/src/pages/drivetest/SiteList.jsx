@@ -2,11 +2,12 @@ import { Download, ExternalLink, X } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import api from '../../api/client'
+import { describeBlobError, filenameFrom, saveBlob } from '../../lib/download'
 import SiteHistoryDrawer, { SiteCodeButton } from '../../components/SiteHistoryDrawer'
 import { EmptyState, Loading, PageHead } from '../../components/ui'
 import { useAuth } from '../../context/AuthContext'
 import { useToast } from '../../context/ToastContext'
-import { AGE_BANDS, BUCKET_LABEL, ONGOING_STAGES, PAGE_SIZE, UNATTRIBUTED } from './constants'
+import { BUCKET_LABEL, PAGE_SIZE, UNATTRIBUTED } from './constants'
 import { count } from './format'
 
 /**
@@ -27,15 +28,20 @@ import { count } from './format'
 /** Which filters make sense for which figure.
  *
  * Only these are offered, and the endpoint refuses the rest with a 422 rather
- * than ignoring them: an age band on a problematic list would answer a
- * question that figure never asked (nothing records when a site *became*
- * problematic — see `DriveTestAnalytics.breakdowns`).
+ * than ignoring them: an age band on a Done list would ask how long a
+ * finished thing has been unfinished.
+ *
+ * Two figures age, on two different clocks. An ongoing site is aged from the
+ * day a contractor was given it; a problematic one from the day it last
+ * entered the state. They share one parameter and one set of bands, and the
+ * endpoint picks the clock from the bucket — see `_age_clock` in
+ * `services/dt_site_list.py`.
  */
 const FILTERS_FOR_BUCKET = {
   onair: ['province_id', 'contractor_id'],
   done: ['province_id', 'contractor_id'],
   ongoing: ['province_id', 'contractor_id', 'age_band', 'stage'],
-  problematic: ['province_id', 'contractor_id', 'category', 'overdue'],
+  problematic: ['province_id', 'contractor_id', 'category', 'age_band', 'overdue'],
   remaining: ['province_id', 'contractor_id'],
   delivered: ['province_id', 'contractor_id'],
 }
@@ -76,6 +82,16 @@ const COLUMNS = [
   { key: 'launch_date', label: 'Launch date', sort: 'launch_date', numeric: true },
   { key: 'days_since_launch', label: 'Days since launch', sort: 'days_since_launch', numeric: true },
   { key: 'age_band', label: 'Waiting' },
+  // The question this screen exists to answer for a problematic site, and the
+  // one somebody gets asked about by name. Sortable, because the reader's
+  // first move is to put the worst offenders at the top.
+  {
+    key: 'days_problematic',
+    label: 'Problem for (days)',
+    sort: 'days_problematic',
+    numeric: true,
+  },
+  { key: 'problematic_since', label: 'Problem since', numeric: true },
   { key: 'problem_categories', label: 'Problem categories' },
   { key: 'fix_owners', label: 'Fix owners' },
   {
@@ -224,14 +240,11 @@ export default function SiteList() {
         params: query,
         responseType: 'blob',
       })
-      const url = URL.createObjectURL(res.data)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `drive-test-${bucket}.xlsx`
-      a.click()
-      URL.revokeObjectURL(url)
-    } catch {
-      toast.error('Export failed', 'Could not generate the file. Please try again.')
+      saveBlob(res.data, filenameFrom(res.headers, `drive-test-${bucket}.xlsx`))
+    } catch (err) {
+      // The reason the server gave, read back out of the blob the failure
+      // arrived as -- see `lib/download`.
+      toast.error('Export failed', await describeBlobError(err))
     } finally {
       setExporting(false)
     }
@@ -244,13 +257,22 @@ export default function SiteList() {
   const total = data?.total ?? 0
   const rows = data?.rows ?? []
 
+  /* The band and stage vocabularies come from the response, not from a copy
+     kept here. This screen used to hold its own transcription of them, and it
+     went stale the first time the bands were re-cut: the dropdown offered
+     keys the endpoint no longer accepted, so every option in it answered 422.
+     A control built from what the request itself returned cannot drift from
+     what the next request will accept. */
+  const ageBands = useMemo(() => data?.age_bands ?? [], [data])
+  const ongoingStages = useMemo(() => data?.ongoing_stages ?? [], [data])
+
   const names = useMemo(
     () => ({
       province: Object.fromEntries((provinces || []).map((p) => [String(p.id), p.name])),
       contractor: Object.fromEntries((contractors || []).map((c) => [String(c.id), c.name])),
-      ageBand: Object.fromEntries(AGE_BANDS.map((b) => [b.key, b.label])),
+      ageBand: Object.fromEntries(ageBands.map((b) => [b.key, b.label])),
     }),
-    [provinces, contractors],
+    [provinces, contractors, ageBands],
   )
 
   const describe = useCallback(
@@ -353,11 +375,15 @@ export default function SiteList() {
         )}
         {options.has('age_band') && (
           <Select
-            label="Waiting"
+            /* One parameter, two clocks, so the control is named after the
+               one it is measuring here: an ongoing site is waiting to be
+               driven, a problematic one is stuck. Calling both "Waiting"
+               would say a blocked site is queued. */
+            label={bucket === 'problematic' ? 'Stuck for' : 'Waiting'}
             value={searchParams.get('age_band') || ''}
             onChange={(v) => setFilter('age_band', v)}
             placeholder="Any age"
-            options={AGE_BANDS.map((b) => ({ value: b.key, label: b.label }))}
+            options={ageBands.map((b) => ({ value: b.key, label: b.label }))}
           />
         )}
         {options.has('stage') && (
@@ -366,7 +392,7 @@ export default function SiteList() {
             value={searchParams.get('stage') || ''}
             onChange={(v) => setFilter('stage', v)}
             placeholder="Any stage"
-            options={ONGOING_STAGES.map((s) => ({ value: s, label: s }))}
+            options={ongoingStages.map((o) => ({ value: o.key, label: o.label }))}
           />
         )}
         {options.has('overdue') && (

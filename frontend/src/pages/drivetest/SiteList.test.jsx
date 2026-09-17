@@ -59,11 +59,30 @@ const row = (over = {}) => ({
   ...over,
 })
 
+// The band and stage vocabularies ride on the response, because that is
+// where the screen now reads them from -- see the note beside `ageBands` in
+// SiteList. A fixture that left them out would be testing a payload the
+// endpoint never sends.
+const AGE_BANDS = [
+  { key: 'lte_1w', label: 'Up to 1 week' },
+  { key: 'w1_2', label: '1\u20132 weeks' },
+  { key: 'w2_3', label: '2\u20133 weeks' },
+  { key: 'w3_1m', label: '3 weeks \u2013 1 month' },
+  { key: 'm1_2', label: '1\u20132 months' },
+  { key: 'gt_2m', label: 'More than 2 months' },
+  { key: 'no_assignment_date', label: 'Not assigned yet' },
+]
+
 const payload = (over = {}) => ({
   total: 2,
   rows: [row(), row({ work_item_id: 12, site_code: 'K-0002', oldest_open_fix_days: null })],
   filters_applied: { bucket: 'problematic' },
   generated_at: new Date().toISOString(),
+  age_bands: AGE_BANDS,
+  ongoing_stages: [
+    { key: 'Assigned', label: 'Assigned' },
+    { key: 'Other', label: 'Other' },
+  ],
   ...over,
 })
 
@@ -72,16 +91,36 @@ function lastCall(url) {
   return [...api.get.mock.calls].reverse().find((call) => call[0] === url)
 }
 
-function serve(body = payload()) {
+/** The endpoints this screen reads.
+ *
+ * `exportFails` replaces the export's answer with a rejection, so a test can
+ * exercise the failure path without also having to restate every reference
+ * list the filter bar needs to render.
+ */
+function serve(body = payload(), { exportFails = null } = {}) {
   api.get.mockImplementation((url) => {
     if (url === '/drive-test/sites') return Promise.resolve({ data: body })
     if (url === '/reference/provinces') return Promise.resolve({ data: PROVINCES })
     if (url === '/reference/contractors') return Promise.resolve({ data: CONTRACTORS })
     if (url === '/reference/problem-categories') return Promise.resolve({ data: CATEGORIES })
-    if (url === '/drive-test/sites/export') return Promise.resolve({ data: new Blob(['x']) })
+    if (url === '/drive-test/sites/export') {
+      return exportFails
+        ? Promise.reject(exportFails)
+        : Promise.resolve({ data: new Blob(['x']) })
+    }
     return Promise.reject(new Error(`unexpected ${url}`))
   })
 }
+
+/** A failed export, shaped the way axios delivers one for a blob request. */
+const exportRejection = (status, detail) => ({
+  response: {
+    status,
+    data: new Blob([detail == null ? '' : JSON.stringify({ detail })], {
+      type: 'application/json',
+    }),
+  },
+})
 
 const STAFF = { id: 1, username: 'pm', role: { name: 'PM' } }
 const CONTRACTOR = { id: 2, username: 'alfa', role: { name: 'Contractor' }, contractor_id: 1 }
@@ -124,13 +163,13 @@ describe('what the page is a list of', () => {
   it('reads every filter out of the URL and asks the endpoint for exactly that', async () => {
     serve()
     draw(
-      '/drive-test/sites?bucket=ongoing&age_band=m3_6&province_id=7&contractor_id=1&sort=-days_since_launch',
+      '/drive-test/sites?bucket=ongoing&age_band=m1_2&province_id=7&contractor_id=1&sort=-days_since_launch',
     )
 
     await screen.findByText('K-0001')
     expect(lastCall('/drive-test/sites')[1].params).toEqual({
       bucket: 'ongoing',
-      age_band: 'm3_6',
+      age_band: 'm1_2',
       province_id: '7',
       contractor_id: '1',
       sort: '-days_since_launch',
@@ -144,17 +183,17 @@ describe('what the page is a list of', () => {
       payload({
         filters_applied: {
           bucket: 'ongoing',
-          age_band: 'm3_6',
+          age_band: 'm1_2',
           province_id: '7',
           contractor_id: '1',
         },
       }),
     )
-    draw('/drive-test/sites?bucket=ongoing&age_band=m3_6&province_id=7&contractor_id=1')
+    draw('/drive-test/sites?bucket=ongoing&age_band=m1_2&province_id=7&contractor_id=1')
 
     const pills = await screen.findByLabelText('Active filters')
     // The names come from the reference lists, not from the raw ids.
-    expect(within(pills).getByText(/3–6 months/)).toBeInTheDocument()
+    expect(within(pills).getByText(/1–2 months/)).toBeInTheDocument()
     expect(within(pills).getByText(/Kerman/)).toBeInTheDocument()
     expect(within(pills).getByText(/Alfa Drive Tests/)).toBeInTheDocument()
     // The figure itself is not a pill: it is what the page is, not a filter
@@ -200,6 +239,10 @@ describe('the filter bar', () => {
 
     await screen.findByText('K-0001')
     expect(screen.getByLabelText('Category')).toBeInTheDocument()
+    // The age filter is offered here too, on the problematic clock -- and it
+    // is named for that clock rather than borrowing the ongoing one's word,
+    // because a blocked site is not a queued one.
+    expect(screen.getByLabelText('Stuck for')).toBeInTheDocument()
     expect(screen.queryByLabelText('Waiting')).not.toBeInTheDocument()
     expect(screen.queryByLabelText('Stage')).not.toBeInTheDocument()
   })
@@ -310,6 +353,39 @@ describe('the export', () => {
     })
     expect(config.responseType).toBe('blob')
   })
+
+  it('tells the reader why the export failed, not just that it did', async () => {
+    // `responseType: 'blob'` applies to the failure too, so the reason the
+    // server gave arrives as a Blob and every `data.detail` reads undefined.
+    // This used to render one sentence -- "Could not generate the file.
+    // Please try again." -- for a row-cap refusal, a timeout and a server
+    // fault alike, which tells the reader nothing and tells whoever they
+    // report it to even less.
+    serve(payload(), {
+      exportFails: exportRejection(400, 'The Sites sheet would hold 40000 rows'),
+    })
+    draw('/drive-test/sites?bucket=problematic')
+
+    await screen.findByText('K-0001')
+    await userEvent.click(screen.getByRole('button', { name: /Export this list/ }))
+
+    expect(await screen.findByText(/would hold 40000 rows/)).toBeInTheDocument()
+    expect(screen.getByText(/400/)).toBeInTheDocument()
+  })
+
+  it('names a missing endpoint rather than blaming the reader', async () => {
+    // The usual cause of a 404 here is a backend older than this page, which
+    // is nobody's fault and not fixed by trying again.
+    serve(payload(), { exportFails: exportRejection(404) })
+    draw('/drive-test/sites?bucket=problematic')
+
+    await screen.findByText('K-0001')
+    await userEvent.click(screen.getByRole('button', { name: /Export this list/ }))
+
+    expect(
+      await screen.findByText(/not available on the server this page is talking to/),
+    ).toBeInTheDocument()
+  })
 })
 
 describe('when there is nothing to show', () => {
@@ -329,7 +405,7 @@ describe('when there is nothing to show', () => {
       }
       return Promise.resolve({ data: [] })
     })
-    draw('/drive-test/sites?bucket=problematic&age_band=m3_6')
+    draw('/drive-test/sites?bucket=problematic&age_band=m1_2')
 
     expect(
       await screen.findByText('age_band applies to the ongoing bucket only'),

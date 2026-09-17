@@ -95,7 +95,8 @@ const overview = {
       { name: '1–2 weeks', value: 15, key: 'w1_2' },
       { name: '2–3 weeks', value: 8, key: 'w2_3' },
       { name: '3 weeks – 1 month', value: 4, key: 'w3_1m' },
-      { name: 'More than 1 month', value: 1, key: 'gt_1m' },
+      { name: '1–2 months', value: 3, key: 'm1_2' },
+      { name: 'More than 2 months', value: 1, key: 'gt_2m' },
     ],
     without_assignment_date: 2,
   },
@@ -109,6 +110,15 @@ const overview = {
       { name: 'Kerman', value: 7 },
       { name: 'Yazd', value: 3 },
     ],
+    by_age: [
+      { name: 'Up to 1 week', value: 2, key: 'lte_1w' },
+      { name: '1–2 weeks', value: 1, key: 'w1_2' },
+      { name: '2–3 weeks', value: 0, key: 'w2_3' },
+      { name: '3 weeks – 1 month', value: 0, key: 'w3_1m' },
+      { name: '1–2 months', value: 1, key: 'm1_2' },
+      { name: 'More than 2 months', value: 2, key: 'gt_2m' },
+    ],
+    without_problem_date: 4,
   },
   province_breakdown: [
     { name: 'Kerman', onair: 60, done: 23, remaining: 37, ongoing: 30, problematic: 7, done_percent: 38.3 },
@@ -202,19 +212,6 @@ function serve(plan = planDelivery(), body = overview, series = trend()) {
   })
 }
 
-/** The province select, once its options have arrived.
- *
- * Same trap as `section` below: the toolbar renders the select immediately,
- * carrying only "All provinces", and the rest of the options arrive with the
- * payload. Finding the element is not finding its options.
- */
-async function provinceSelect() {
-  const select = await screen.findByLabelText('Narrow to one province')
-  await waitFor(() =>
-    expect(within(select).getAllByRole('option').length).toBeGreaterThan(1),
-  )
-  return select
-}
 
 /** A section by its heading, once the page has loaded. */
 async function section(title) {
@@ -248,7 +245,12 @@ describe('plan and delivery', () => {
       ['Actual', '6'],
       ['Achievement', '37.5%'],
     ]) {
-      const tile = within(card).getByText(label).closest('.dt-figure-tile')
+      // Scoped to the tiles: "PIP" is also the word the bullet key below uses,
+      // deliberately, because it is the same figure.
+      const tile = within(card)
+        .getAllByText(label)
+        .map((node) => node.closest('.dt-figure-tile'))
+        .find(Boolean)
       expect(within(tile).getByText(value)).toBeInTheDocument()
     }
   })
@@ -290,8 +292,12 @@ describe('plan and delivery', () => {
     draw()
 
     const card = await section('Plan and delivery')
-    expect(within(card).getByText('plan')).toBeInTheDocument()
-    expect(within(card).getByText('delivered')).toBeInTheDocument()
+    // PIP, not "plan": the tile above these bars says PIP and it is the same
+    // commitment. Two words forty pixels apart make a reader go looking for
+    // the difference between them.
+    const key = card.querySelector('.dt-bullet-key')
+    expect(within(key).getByText('PIP')).toBeInTheDocument()
+    expect(within(key).getByText('delivered')).toBeInTheDocument()
     // PIP tops out at 10 in the fixture, so the scale rounds to a readable 15.
     expect(within(card).getByText(/drive tests$/)).toBeInTheDocument()
   })
@@ -370,9 +376,9 @@ describe('plan and delivery', () => {
     draw()
 
     const card = await section('Plan and delivery')
-    expect(within(card).getByText('no approved plan')).toBeInTheDocument()
+    expect(within(card).getByText('no approved PIP')).toBeInTheDocument()
     expect(within(card).queryByText('0%')).not.toBeInTheDocument()
-    expect(within(card).getByText('no plan')).toBeInTheDocument()
+    expect(within(card).getByText('no PIP')).toBeInTheDocument()
   })
 
   it('renders an empty month without breaking the page', async () => {
@@ -390,7 +396,7 @@ describe('plan and delivery', () => {
     draw()
 
     const card = await section('Plan and delivery')
-    expect(within(card).getByText('No contractor plans for this month.')).toBeInTheDocument()
+    expect(within(card).getByText('No contractor PIP for this month.')).toBeInTheDocument()
     // The rest of the dashboard is still there.
     expect(screen.getByText('Drive Test Overview')).toBeInTheDocument()
   })
@@ -462,7 +468,7 @@ describe('breakdown sections', () => {
     expect(within(ongoing).queryByText('Alfa Drive Tests')).not.toBeInTheDocument()
 
     await userEvent.click(within(ongoing).getByRole('tab', { name: 'How long' }))
-    expect(within(ongoing).getByText('More than 1 month')).toBeInTheDocument()
+    expect(within(ongoing).getByText('More than 2 months')).toBeInTheDocument()
     expect(within(ongoing).queryByText('Kerman')).not.toBeInTheDocument()
 
     await userEvent.click(within(ongoing).getByRole('tab', { name: 'Contractor' }))
@@ -543,8 +549,62 @@ describe('breakdown sections', () => {
       '1–2 weeks',
       '2–3 weeks',
       '3 weeks – 1 month',
-      'More than 1 month',
+      '1–2 months',
+      'More than 2 months',
     ])
+  })
+
+  it('ages the problematic sites too, on their own clock', async () => {
+    // The card used to say what was wrong and could not say for how long, so
+    // a bar reading 64 sites on temporary power could be this week's news or
+    // last year's -- and only one of those is somebody's to answer for.
+    serve()
+    draw()
+
+    const problematic = await section('Problematic breakdown')
+    await userEvent.click(within(problematic).getByRole('tab', { name: 'How long' }))
+
+    const bands = within(problematic)
+      .getAllByTestId('dt-bar')
+      .map((bar) => bar.closest('.dt-bar-row').querySelector('.dt-bar-label').textContent)
+    expect(bands).toEqual([
+      'Up to 1 week',
+      '1–2 weeks',
+      '2–3 weeks',
+      '3 weeks – 1 month',
+      '1–2 months',
+      'More than 2 months',
+    ])
+  })
+
+  it('names the problematic sites it cannot age, rather than hiding them', async () => {
+    // Four of the ten carry no date, so the bars sum to six. A reader who is
+    // not told that reads the bars as the whole picture -- and the direction
+    // of the error is the dangerous one: the backlog looks fresher than it is.
+    serve()
+    draw()
+
+    const problematic = await section('Problematic breakdown')
+    await userEvent.click(within(problematic).getByRole('tab', { name: 'How long' }))
+
+    expect(within(problematic).getByText(/4 sites were flagged by a CPM import/)).
+      toBeInTheDocument()
+  })
+
+  it('opens each problematic age band on the sites in that band', async () => {
+    serve()
+    draw()
+
+    const problematic = await section('Problematic breakdown')
+    await userEvent.click(within(problematic).getByRole('tab', { name: 'How long' }))
+
+    const link = within(problematic)
+      .getAllByRole('link')
+      .find((a) => a.getAttribute('href')?.includes('age_band=gt_2m'))
+    expect(link).toHaveAttribute(
+      'href',
+      '/drive-test/sites?bucket=problematic&age_band=gt_2m',
+    )
   })
 
   it('toggles each section to a table and back, in the same card', async () => {
@@ -1190,28 +1250,114 @@ describe('the province filter', () => {
     ).toBeInTheDocument()
   })
 
-  it('offers every province in the caller’s scope, and no others', async () => {
+  it('narrows from a province row, which is where a reader knows which one', async () => {
+    // The dropdown this replaces asked for a province before the reader had
+    // seen anything to pick one by. This is the same scope, entered from the
+    // row they just read.
     serve()
     draw()
 
-    const select = await provinceSelect()
-    expect(within(select).getByRole('option', { name: 'Kerman' })).toBeInTheDocument()
-    expect(within(select).getByRole('option', { name: 'All provinces' })).toBeInTheDocument()
-    expect(within(select).getAllByRole('option')).toHaveLength(3)
-  })
-
-  it('re-fetches when the filter changes', async () => {
-    serve()
-    draw()
-
-    const select = await provinceSelect()
-    await userEvent.selectOptions(select, '9')
+    const card = await section('Province breakdown')
+    await userEvent.click(
+      within(card).getByRole('button', { name: /Narrow the whole dashboard to Kerman/ }),
+    )
 
     await waitFor(() =>
       expect(api.get).toHaveBeenCalledWith('/drive-test/overview', {
-        params: { province_id: 9 },
+        params: { province_id: 7 },
       }),
     )
+  })
+
+  it('says which province it is showing, and offers a way out of it', async () => {
+    // Load-bearing. Without the chip a reader who narrowed from a table row
+    // would be in a scoped dashboard with no control anywhere on the page to
+    // leave it -- a filter you can enter and not exit.
+    serve()
+    draw('/reports/drive-test?province=7')
+
+    const chip = await screen.findByRole('button', {
+      name: /Show every province again, not just Kerman/,
+    })
+    await userEvent.click(chip)
+
+    await waitFor(() =>
+      expect(api.get).toHaveBeenCalledWith('/drive-test/overview', { params: {} }),
+    )
+  })
+
+  it('keeps the way out when the province list never arrives', async () => {
+    // The chip is keyed on the scope, not on the province's name. The name is
+    // looked up in the overview payload; if that request fails, the list is
+    // empty and the name is undefined while the URL is still narrowed. Hiding
+    // the chip then strands the reader in a scoped dashboard whose every retry
+    // stays scoped — the exact trap the chip exists to close.
+    api.get.mockImplementation((url) => {
+      if (url === '/drive-test/overview') return Promise.reject(new Error('down'))
+      if (url === '/drive-test/plan-delivery') return Promise.resolve({ data: planDelivery() })
+      if (url === '/drive-test/trend') return Promise.resolve({ data: trend() })
+      return Promise.reject(new Error(`unexpected ${url}`))
+    })
+    draw('/reports/drive-test?province=7')
+
+    const out = await screen.findByRole('button', { name: /Show every province again/ })
+    // Named by id, since the name is exactly what could not be fetched.
+    expect(screen.getByText('Province 7')).toBeInTheDocument()
+
+    await userEvent.click(out)
+    await waitFor(() =>
+      expect(api.get).toHaveBeenCalledWith('/drive-test/overview', { params: {} }),
+    )
+  })
+
+  it('warns that the PIP card is unnarrowed even when the province is unnamed', async () => {
+    // The warning matters most when things are going wrong, so it cannot
+    // depend on the same payload that is failing.
+    api.get.mockImplementation((url) => {
+      if (url === '/drive-test/overview') return Promise.reject(new Error('down'))
+      if (url === '/drive-test/plan-delivery') return Promise.resolve({ data: planDelivery() })
+      if (url === '/drive-test/trend') return Promise.resolve({ data: trend() })
+      return Promise.reject(new Error(`unexpected ${url}`))
+    })
+    draw('/reports/drive-test?province=7')
+
+    const card = await section('Plan and delivery')
+    expect(
+      within(card).getByText(/committed per contractor for the whole programme/),
+    ).toBeInTheDocument()
+  })
+
+  it('shows no scope chip when nothing is narrowed', async () => {
+    serve()
+    draw()
+
+    expect(await screen.findByText('All provinces')).toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: /Show every province again/ }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('says the PIP card is not narrowed, because it cannot be', async () => {
+    // A PIP is a commitment a contractor makes for a month and carries no
+    // province, so scoping the delivery half alone would divide one
+    // province's actual by the whole programme's commitment.
+    serve()
+    draw('/reports/drive-test?province=7')
+
+    const card = await section('Plan and delivery')
+    expect(
+      within(card).getByText(/committed per contractor for the whole programme/),
+    ).toBeInTheDocument()
+  })
+
+  it('does not carry that warning when the whole programme is on screen', async () => {
+    serve()
+    draw()
+
+    const card = await section('Plan and delivery')
+    expect(
+      within(card).queryByText(/committed per contractor for the whole programme/),
+    ).not.toBeInTheDocument()
   })
 })
 
@@ -1223,6 +1369,83 @@ describe('the trend section', () => {
     const card = await section('Where this is going')
     expect(within(card).getByRole('img', { name: /Drive test trend/ })).toBeInTheDocument()
     expect(within(card).getByText('Remaining')).toBeInTheDocument()
+  })
+
+  it('reports problematic as a figure rather than drawing it', async () => {
+    // It used to be a third line in a strip of its own, with its own vertical
+    // scale under the panel -- a second set of gridlines a reader had to
+    // learn before they could read the shape they came for. It is an order of
+    // magnitude smaller than the other two, so there is no honest way to draw
+    // it beside them; what people actually took from the strip was the level
+    // and the direction, and both fit in a sentence.
+    serve(planDelivery(), overview, {
+      ...trend(),
+      months: [
+        month('مرداد', { shamsi_month: 5, problematic: 18 }),
+        month('شهریور', { shamsi_month: 6, problematic: 11, is_open: true }),
+      ],
+    })
+    draw()
+
+    const card = await section('Where this is going')
+    const caption = card.querySelector('.dt-trend-caption')
+    expect(within(caption).getByText('11')).toBeInTheDocument()
+    expect(within(caption).getByText('7')).toBeInTheDocument()
+    // A real em dash. `\u2014` written in JSX text is six literal characters,
+    // not an escape — the mistake renders as "not plotted \u2014 hover".
+    expect(within(caption).getByText(/not plotted — hover a month/)).toBeInTheDocument()
+    expect(caption.textContent).not.toMatch(/\\u[0-9a-fA-F]{4}/)
+
+    // A fall in problematic is good news, so it is not painted in the alarm
+    // colour -- the same rule the KPI deltas follow.
+    expect(caption.querySelector('.dt-trend-down')).toBeTruthy()
+    expect(caption.querySelector('.dt-trend-up')).toBeFalsy()
+
+    // And it is gone from the legend: a swatch for a series that is not
+    // drawn sends a reader hunting for a line that is not there.
+    const legend = card.querySelector('.dt-legend')
+    expect(within(legend).queryByText('Problematic')).not.toBeInTheDocument()
+    expect(within(legend).getByText('Remaining')).toBeInTheDocument()
+  })
+
+  it('reads the trend over six months or twelve, without reloading the page', async () => {
+    serve()
+    draw()
+
+    const card = await section('Where this is going')
+    await waitFor(() =>
+      expect(api.get).toHaveBeenCalledWith('/drive-test/trend', {
+        params: { months: 12 },
+      }),
+    )
+    const overviewCalls = api.get.mock.calls.filter((c) => c[0] === '/drive-test/overview').length
+
+    await userEvent.click(within(card).getByRole('button', { name: '6m' }))
+
+    await waitFor(() =>
+      expect(api.get).toHaveBeenCalledWith('/drive-test/trend', {
+        params: { months: 6 },
+      }),
+    )
+    // The window changes one card. Re-reading the overview to answer it would
+    // blank every section on the page to redraw one chart.
+    expect(
+      api.get.mock.calls.filter((c) => c[0] === '/drive-test/overview').length,
+    ).toBe(overviewCalls)
+  })
+
+  it('keeps the province scope when the window changes', async () => {
+    serve()
+    draw('/reports/drive-test?province=7')
+
+    const card = await section('Where this is going')
+    await userEvent.click(within(card).getByRole('button', { name: '6m' }))
+
+    await waitFor(() =>
+      expect(api.get).toHaveBeenCalledWith('/drive-test/trend', {
+        params: { months: 6, province_id: 7 },
+      }),
+    )
   })
 
   it('says the series is empty rather than drawing an empty chart', async () => {
@@ -1310,5 +1533,71 @@ describe('the contractor scorecard', () => {
       .map((seg) => seg.dataset.segment)
 
     expect(segments).toEqual(['done', 'ongoing'])
+  })
+
+  it('still shows the assignment when the payload does not carry it', async () => {
+    // Assignment is DT done plus ongoing -- that is its definition, and the
+    // backend computes that very sum. Deriving it here means a payload
+    // without the field renders the figure instead of a dash, and a dash is
+    // the worst failure this column has: it is the denominator every rate on
+    // the row divides by, so losing it costs the reader the whole row.
+    serve({
+      ...overview,
+      contractor_scorecard: overview.contractor_scorecard.map(
+        ({ assigned: _assigned, ...rest }) => rest,
+      ),
+    })
+    draw()
+
+    const card = await section('Contractor scorecard')
+    const row = within(card).getByText('Alfa Drive Tests').closest('tr')
+    expect(within(row).getByText('55')).toBeInTheDocument()
+    expect(within(row).queryByText('\u2014')).not.toBeInTheDocument()
+  })
+
+  it('sorts on any column, and keeps the unattributed bucket out of the ranking', async () => {
+    // "Who is holding the most" and "who has the most problems" are the next
+    // two questions asked of this table and both are a column already on it.
+    // The unattributed row is not a company, so it cannot out-rank one or be
+    // out-ranked by one, whichever column is chosen.
+    serve()
+    draw()
+
+    const card = await section('Contractor scorecard')
+    const names = () =>
+      within(card)
+        .getAllByRole('row')
+        .slice(1)
+        .map((row) => row.querySelector('td').textContent)
+
+    expect(names()).toEqual(['Alfa Drive Tests', 'Beta Surveys', 'Unattributed'])
+
+    // Ongoing ascending: Alfa holds 15, Beta 18. Unattributed holds 6 and
+    // would sort first on the figures alone; it stays last.
+    await userEvent.click(within(card).getByRole('button', { name: /Ongoing/ }))
+    await userEvent.click(within(card).getByRole('button', { name: /Ongoing/ }))
+    expect(names()).toEqual(['Alfa Drive Tests', 'Beta Surveys', 'Unattributed'])
+
+    await userEvent.click(within(card).getByRole('button', { name: /Problematic/ }))
+    expect(names()).toEqual(['Alfa Drive Tests', 'Beta Surveys', 'Unattributed'])
+
+    // Assignment ascending puts the smaller book first, and still not the
+    // unattributed one.
+    await userEvent.click(within(card).getByRole('button', { name: /Assignment/ }))
+    await userEvent.click(within(card).getByRole('button', { name: /Assignment/ }))
+    expect(names()).toEqual(['Beta Surveys', 'Alfa Drive Tests', 'Unattributed'])
+  })
+
+  it('tells a screen reader which column the table is sorted on', async () => {
+    serve()
+    draw()
+
+    const card = await section('Contractor scorecard')
+    const header = () =>
+      within(card).getByRole('button', { name: /Ongoing/ }).closest('th')
+
+    expect(header()).toHaveAttribute('aria-sort', 'none')
+    await userEvent.click(within(card).getByRole('button', { name: /Ongoing/ }))
+    expect(header()).toHaveAttribute('aria-sort', 'descending')
   })
 })

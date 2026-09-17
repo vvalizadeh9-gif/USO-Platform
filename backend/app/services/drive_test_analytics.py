@@ -111,12 +111,21 @@ UNATTRIBUTED = "Unattributed"
 #: a site in its second week is a normal one and a site past a month is a
 #: question. An ongoing site with no assignment has no clock and is counted
 #: apart — see :meth:`DriveTestAnalytics.breakdowns`.
+#:
+#: The tail is two bands rather than one. A single "more than a month"
+#: bucket was the coarsest thing on the page and it hid the only distinction
+#: that matters at that end: a site that slipped by a fortnight and a site
+#: nobody has touched since last quarter arrived in the same bar, so the bar
+#: could not be acted on. Splitting at 60 days separates "late" from
+#: "abandoned", which are two different conversations with two different
+#: people.
 AGE_BANDS: tuple[tuple[int | None, str], ...] = (
     (7, "Up to 1 week"),
     (14, "1–2 weeks"),
     (21, "2–3 weeks"),
     (30, "3 weeks – 1 month"),
-    (None, "More than 1 month"),
+    (60, "1–2 months"),
+    (None, "More than 2 months"),
 )
 
 #: A stable key per age band, in the same order as :data:`AGE_BANDS`.
@@ -127,7 +136,7 @@ AGE_BANDS: tuple[tuple[int | None, str], ...] = (
 #: link travels with, so re-wording a band cannot silently break every saved
 #: link to it. Positional rather than a dict literal so that a band added to
 #: AGE_BANDS without a key here fails loudly at import.
-AGE_BAND_KEYS: tuple[str, ...] = ("lte_1w", "w1_2", "w2_3", "w3_1m", "gt_1m")
+AGE_BAND_KEYS: tuple[str, ...] = ("lte_1w", "w1_2", "w2_3", "w3_1m", "m1_2", "gt_2m")
 
 assert len(AGE_BAND_KEYS) == len(AGE_BANDS), "every age band needs a key"
 
@@ -144,6 +153,35 @@ AGE_BAND_LABEL_BY_KEY: dict[str, str] = {
 #: reports those sites beside the bands, so a drill-through needs a way to
 #: name them.
 NO_ASSIGNMENT_DATE = "no_assignment_date"
+
+#: The key for a problematic site whose spell carries no date, so no clock
+#: has started on it. The counterpart of :data:`NO_ASSIGNMENT_DATE` on the
+#: other breakdown, and it exists for the same reason: the breakdown reports
+#: those sites beside the bands, and a reader needs to be able to open them.
+NO_PROBLEM_DATE = "no_problem_date"
+
+#: Band keys that no longer exist, mapped to the bands that replaced them.
+#:
+#: A drill-through URL is something people paste into a message and open
+#: again next week, so re-cutting the bands must not turn yesterday's link
+#: into an error page. ``gt_1m`` was everything past a month, which is now
+#: two bands, so it resolves to both rather than to whichever one happens to
+#: be nearer: the union is what that link actually meant, and answering with
+#: half of it would be a quietly wrong list rather than a loud failure.
+LEGACY_AGE_BANDS: dict[str, tuple[str, ...]] = {
+    "gt_1m": ("m1_2", "gt_2m"),
+}
+
+
+def resolve_age_band(key: str) -> tuple[str, ...]:
+    """The concrete band keys a requested key stands for.
+
+    One key for a live band, several for a retired one, and an empty tuple
+    for a key that names nothing -- which is the caller's cue to reject it.
+    """
+    if key in AGE_BAND_LABEL_BY_KEY or key in (NO_ASSIGNMENT_DATE, NO_PROBLEM_DATE):
+        return (key,)
+    return LEGACY_AGE_BANDS.get(key, ())
 
 
 # ---------- the predicates, shared ----------
@@ -246,6 +284,71 @@ def age_band(started: date | None, today: date) -> str | None:
         if bound is None or days <= bound:
             return label
     return AGE_BANDS[-1][1]
+
+
+def problem_events(wi: WorkItem) -> list[tuple[date, int, bool]]:
+    """This site's dated Problematic-state changes, oldest first.
+
+    Each entry is ``(date, tie-break, is_problematic_after)``. The
+    tie-break orders events that share a date in the order the workflow
+    would apply them: a legacy health check first, the HC workflow's
+    verdict over it, and an approved drive test last, because approval is
+    terminal.
+
+    The three sources mirror :func:`app.services.workflow.derive_stage`
+    exactly, so a replay ends in the state that function would report:
+
+    * ``hc_tasks`` -- a Not-Ready result only reads as Problematic once a
+      Coordinator or PM has validated it, so ``reviewed_at`` (not
+      ``completed_at``) is when the state actually changed.
+    * ``health_checks`` -- the superseded single-flag table, still
+      replayed so pre-migration history is not silently dropped.
+    * an approved drive test, which writes ``dt_status = 'Done'`` and ends
+      any Problematic state. Dated by ``dt_date_gregorian``, the same
+      column every other DT date in this module is read from.
+    """
+    events: list[tuple[date, int, bool]] = []
+    for hc in wi.health_checks:
+        if hc.checked_at is not None:
+            events.append((hc.checked_at.date(), 0, hc.status == "Problematic"))
+    for task in wi.hc_tasks:
+        if task.completed_at is not None and task.reviewed_at is not None:
+            events.append(
+                (task.reviewed_at.date(), 1, task.overall_result == "NotReady")
+            )
+    if wi.dt_status == "Done" and wi.dt_date_gregorian is not None:
+        events.append((wi.dt_date_gregorian, 2, False))
+    events.sort(key=lambda e: (e[0], e[1]))
+    return events
+
+
+def problematic_since(wi: WorkItem) -> date | None:
+    """The day this site last *became* Problematic, or ``None``.
+
+    Replayed from the dated transitions above, so the clock measures the
+    spell the site is in now rather than the first one it was ever in. A site
+    flagged in spring, fixed, and flagged again a fortnight ago has been a
+    problem for a fortnight; ageing it from the spring flag would put a team
+    on the hook for something they already solved, and it is the sort of
+    figure that gets quoted in a meeting before anybody checks it.
+
+    ``None`` where nothing dated put the site in the state it is in. A
+    Problematic status that arrived in a CPM workbook is a bare column --
+    the import overwrites ``dt_status`` and records no date -- so there is no
+    honest clock to start. Those sites are counted apart rather than aged
+    from whatever other date happens to be on the row, which is exactly the
+    rule :func:`age_band` applies to an ongoing site nobody has been given.
+    """
+    since: date | None = None
+    problematic = False
+    for event_date, _, now_problematic in problem_events(wi):
+        if now_problematic == problematic:
+            continue
+        problematic = now_problematic
+        # Cleared on the way out, so a later flag starts its own clock and a
+        # site that is not problematic now carries no start date at all.
+        since = event_date if now_problematic else None
+    return since if problematic else None
 
 
 def dated_into(wi: WorkItem, year: int, month: int) -> bool:
@@ -421,41 +524,7 @@ class DriveTestAnalytics:
                         resolved += 1
         return flagged, resolved
 
-    @staticmethod
-    def _problem_events(wi: WorkItem) -> list[tuple[date, int, bool]]:
-        """This site's dated Problematic-state changes, oldest first.
-
-        Each entry is ``(date, tie-break, is_problematic_after)``. The
-        tie-break orders events that share a date in the order the workflow
-        would apply them: a legacy health check first, the HC workflow's
-        verdict over it, and an approved drive test last, because approval is
-        terminal.
-
-        The three sources mirror :func:`app.services.workflow.derive_stage`
-        exactly, so a replay ends in the state that function would report:
-
-        * ``hc_tasks`` -- a Not-Ready result only reads as Problematic once a
-          Coordinator or PM has validated it, so ``reviewed_at`` (not
-          ``completed_at``) is when the state actually changed.
-        * ``health_checks`` -- the superseded single-flag table, still
-          replayed so pre-migration history is not silently dropped.
-        * an approved drive test, which writes ``dt_status = 'Done'`` and ends
-          any Problematic state. Dated by ``dt_date_gregorian``, the same
-          column every other DT date in this module is read from.
-        """
-        events: list[tuple[date, int, bool]] = []
-        for hc in wi.health_checks:
-            if hc.checked_at is not None:
-                events.append((hc.checked_at.date(), 0, hc.status == "Problematic"))
-        for task in wi.hc_tasks:
-            if task.completed_at is not None and task.reviewed_at is not None:
-                events.append(
-                    (task.reviewed_at.date(), 1, task.overall_result == "NotReady")
-                )
-        if wi.dt_status == "Done" and wi.dt_date_gregorian is not None:
-            events.append((wi.dt_date_gregorian, 2, False))
-        events.sort(key=lambda e: (e[0], e[1]))
-        return events
+    _problem_events = staticmethod(problem_events)
 
     # ---------- charts ----------
     def chart_ongoing_by_contractor(self) -> list[dict]:
@@ -563,14 +632,20 @@ class DriveTestAnalytics:
         pass with its own copy of those predicates is how two numbers for one
         fact get onto a dashboard.
 
-        There is no problematic *aging* here, and there is ongoing aging. The
-        difference is not an inconsistency, it is the whole rule: an assigned
-        ongoing site has a dated assignment, so "how long has somebody been
-        holding this" is a real measurement. Nothing records when a site
-        *became* problematic — the CPM-imported signal is a bare status column
-        and the in-app signal is a stage — so the same bands over there would
-        be a different fact wearing the same label. They stay absent rather
-        than approximated. See :data:`AGE_BANDS`.
+        BOTH BREAKDOWNS AGE, and each names the sites it cannot age. An
+        ongoing site's clock starts when a contractor was given it; a
+        problematic site's starts when it last entered the state, replayed
+        from the dated transitions the platform records (see
+        :func:`problematic_since`). Neither clock is invented where the date
+        is missing: a site nobody has been assigned, and a site whose
+        Problematic status arrived in a CPM workbook as a bare column, are
+        counted apart under their own key rather than filed into the newest
+        band. Filing them would make the backlog look fresher than it is,
+        which is the one direction an aging chart must never be wrong in.
+
+        The two breakdowns share :data:`AGE_BANDS` on purpose. They measure
+        different clocks, but a reader moving between the two cards should
+        not have to learn a second set of buckets to compare them.
         """
         stage_counts: dict[str, int] = defaultdict(int)
         ongoing_by_contractor: dict[int, int] = defaultdict(int)
@@ -580,6 +655,8 @@ class DriveTestAnalytics:
         ongoing_without_assignment = 0
         problem_categories: dict[str, int] = defaultdict(int)
         problem_by_province: dict[int | None, int] = defaultdict(int)
+        problem_age_counts: dict[str, int] = defaultdict(int)
+        problem_without_date = 0
         province_rows: dict[int | None, dict[str, int]] = defaultdict(
             lambda: {"onair": 0, "done": 0, "ongoing": 0, "problematic": 0}
         )
@@ -611,6 +688,12 @@ class DriveTestAnalytics:
                 book["problematic"] += 1
                 problem_categories[self._effective_problem_category(w)] += 1
                 problem_by_province[province_id] += 1
+
+                problem_band = self._age_band(self._problematic_since(w), today)
+                if problem_band is None:
+                    problem_without_date += 1
+                else:
+                    problem_age_counts[problem_band] += 1
 
             if self._is_ongoing(w):
                 ongoing_total += 1
@@ -653,12 +736,15 @@ class DriveTestAnalytics:
                     for k, v in _sorted_desc(problem_categories)
                 ],
                 "by_province": _province_points(problem_by_province, names),
+                "by_age": self._age_points(problem_age_counts),
+                "without_problem_date": problem_without_date,
             },
             "provinces": _province_table(province_rows, names),
             "contractors": self._contractor_scorecard(contractor_rows),
         }
 
     _age_band = staticmethod(age_band)
+    _problematic_since = staticmethod(problematic_since)
 
     @staticmethod
     def _age_points(counts: dict[str, int]) -> list[dict]:

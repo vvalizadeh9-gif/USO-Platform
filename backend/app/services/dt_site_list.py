@@ -56,10 +56,13 @@ from app.models.workitem import DriveTest, Village, WorkItem
 from app.services.drive_test_analytics import (
     AGE_BAND_LABEL_BY_KEY,
     NO_ASSIGNMENT_DATE,
+    NO_PROBLEM_DATE,
     ONGOING_STAGE_ORDER,
     STAGE_OTHER,
     DriveTestAnalytics,
     age_band,
+    problematic_since,
+    resolve_age_band,
     assignment_date,
     dated_into,
     effective_contractor_id,
@@ -113,6 +116,7 @@ SORT_KEYS: tuple[str, ...] = (
     "launch_date",
     "days_since_launch",
     "days_since_assignment",
+    "days_problematic",
     "oldest_open_fix_days",
     "max_days_late",
     "hc_round",
@@ -129,9 +133,19 @@ SORT_KEYS: tuple[str, ...] = (
 #: row -- it is the whole programme -- so it sorts by site code, which is the
 #: only order a reader can navigate by eye.
 DEFAULT_SORTS: dict[str, tuple[tuple[str, bool], ...]] = {
-    "problematic": (("max_days_late", True), ("oldest_open_fix_days", True)),
+    # Longest-stuck first. This list is opened to find out who to ask about
+    # what, and the site that has been a problem for four months is the one
+    # that question is about -- it used to sort under whichever fix happened
+    # to be furthest past its due date, which ranks the paperwork rather than
+    # the problem. The fix clocks stay as tie-breaks, for the CPM-flagged
+    # sites that carry no problematic clock at all.
+    "problematic": (
+        ("days_problematic", True),
+        ("max_days_late", True),
+        ("oldest_open_fix_days", True),
+    ),
     # Longest-held first, on the same clock the age bands run on, so the top
-    # of a list opened from "more than 1 month" is the site that band is
+    # of a list opened from "more than 2 months" is the site that band is
     # really about. A site nobody has been assigned has no clock and sorts
     # last rather than first.
     "ongoing": (("days_since_assignment", True),),
@@ -159,7 +173,9 @@ class Filters:
 
     bucket: str = DEFAULT_BUCKET
     category: str | None = None
-    age_band_key: str | None = None
+    #: The concrete bands to match, already resolved -- a retired key can
+    #: stand for more than one, so this is a tuple rather than a key.
+    age_band_keys: tuple[str, ...] = ()
     stage: str | None = None
     contractor_id: int | None = None
     #: True when ``contractor_id=none`` was asked for: the unattributed sites.
@@ -221,15 +237,30 @@ def parse_filters(
             raise SiteListError(f"unknown category: {category}")
         applied["category"] = category
 
-    band_key = None
+    band_keys: tuple[str, ...] = ()
     if age_band is not None:
-        if bucket != "ongoing":
-            raise SiteListError("age_band applies to the ongoing bucket only")
-        band_key = age_band.strip()
-        if band_key not in AGE_BAND_LABEL_BY_KEY and band_key != NO_ASSIGNMENT_DATE:
-            allowed = ", ".join([*AGE_BAND_LABEL_BY_KEY, NO_ASSIGNMENT_DATE])
+        # Two buckets age, on two different clocks -- see ``_age_clock``. The
+        # rest do not: a band on a Done list would be asking how long a
+        # finished thing has been unfinished.
+        if bucket not in AGEING_BUCKETS:
+            raise SiteListError(
+                "age_band applies to the "
+                f"{' and '.join(AGEING_BUCKETS)} buckets only"
+            )
+        requested = age_band.strip()
+        band_keys = resolve_age_band(requested)
+        # The two "no clock" keys are not interchangeable: they name different
+        # absences, and accepting either on either bucket would return an
+        # empty list that looks like a real answer.
+        unclocked = NO_ASSIGNMENT_DATE if bucket == "ongoing" else NO_PROBLEM_DATE
+        wrong_bucket = {NO_ASSIGNMENT_DATE, NO_PROBLEM_DATE} - {unclocked}
+        if not band_keys or requested in wrong_bucket:
+            allowed = ", ".join([*AGE_BAND_LABEL_BY_KEY, unclocked])
             raise SiteListError(f"age_band must be one of: {allowed}")
-        applied["age_band"] = band_key
+        # The key as asked for, not as resolved: the pill should read back
+        # what the reader clicked, and a retired key resolves to two bands
+        # that have no single label between them.
+        applied["age_band"] = requested
 
     if stage is not None:
         if bucket != "ongoing":
@@ -283,7 +314,7 @@ def parse_filters(
     return Filters(
         bucket=bucket,
         category=category,
-        age_band_key=band_key,
+        age_band_keys=band_keys,
         stage=stage,
         contractor_id=resolved_contractor,
         unattributed=unattributed,
@@ -392,8 +423,13 @@ def build_rows(db: Session, user, filters: Filters) -> list[dict]:
         ]
 
     today = date.today()
-    if filters.age_band_key is not None:
-        items = [w for w in items if _in_age_band(w, filters.age_band_key, today)]
+    if filters.age_band_keys:
+        clock = _age_clock(filters.bucket)
+        items = [
+            w
+            for w in items
+            if _in_age_band(w, filters.age_band_keys, today, clock)
+        ]
     if filters.stage is not None:
         items = [w for w in items if _in_stage(w, filters.stage)]
 
@@ -451,17 +487,43 @@ def _matches_contractor(wi: WorkItem, filters: Filters) -> bool:
     return cid == filters.contractor_id
 
 
-def _in_age_band(wi: WorkItem, key: str, today: date) -> bool:
-    """The band the dashboard would put this site in.
+#: The two buckets that carry an age, and the clock each one runs on.
+#:
+#: They are different measurements sharing one set of bands: an ongoing site
+#: is aged from the day a contractor was given it, a problematic one from the
+#: day it last entered the state. Both return ``None`` where the platform
+#: never dated the thing being measured, which is what the "no clock" keys
+#: below are for.
+AGE_CLOCKS = {
+    "ongoing": assignment_date,
+    "problematic": problematic_since,
+}
+AGEING_BUCKETS = tuple(AGE_CLOCKS)
 
-    Through ``assignment_date`` and ``age_band``, which is what the bands
-    themselves are computed with: the clock starts when a contractor took the
-    site on, and a site with no live assignment has no clock at all.
+
+def _age_clock(bucket: str):
+    """Which date this bucket's bands are measured from."""
+    return AGE_CLOCKS[bucket]
+
+
+def _in_age_band(wi: WorkItem, keys: tuple[str, ...], today: date, clock) -> bool:
+    """Whether this site falls in any of the bands asked for.
+
+    Through ``age_band`` and the bucket's own clock, which is what the bands
+    themselves are computed with -- so a list opened from a bar holds exactly
+    the sites that bar counted.
+
+    Several keys rather than one because a retired band resolves to the bands
+    that replaced it -- see ``resolve_age_band``.
     """
-    label = age_band(assignment_date(wi), today)
-    if key == NO_ASSIGNMENT_DATE:
-        return label is None
-    return label == AGE_BAND_LABEL_BY_KEY[key]
+    label = age_band(clock(wi), today)
+    for key in keys:
+        if key in (NO_ASSIGNMENT_DATE, NO_PROBLEM_DATE):
+            if label is None:
+                return True
+        elif label == AGE_BAND_LABEL_BY_KEY[key]:
+            return True
+    return False
 
 
 def _in_stage(wi: WorkItem, stage: str) -> bool:
@@ -618,6 +680,12 @@ def _row(wi: WorkItem, context: dict, today: date) -> dict:
     assigned_on = assignment_date(wi)
     band = age_band(assigned_on, today)
 
+    # The third clock, and the one a site gets named in a meeting over: how
+    # long this site has been a problem. Null on a site that is not one, and
+    # on a CPM-flagged site whose status carries no date -- see
+    # ``problematic_since``.
+    problem_since = problematic_since(wi)
+
     drive_test = context["drive_tests"].get(wi.id)
     approved_at = None
     if drive_test is not None and drive_test.status == "Approved":
@@ -649,6 +717,11 @@ def _row(wi: WorkItem, context: dict, today: date) -> dict:
             (today - assigned_on).days if assigned_on is not None else None
         ),
         "age_band": band,
+        "problematic_since": jalali.format_shamsi(problem_since),
+        "days_problematic": (
+            (today - problem_since).days if problem_since is not None else None
+        ),
+        "problem_age_band": age_band(problem_since, today),
         "problem_categories": _categories(wi, fixes),
         "fix_owners": sorted({f["owner"] for f in fixes if f["owner"]}),
         # Null, never estimated: a site flagged by a CPM import has no in-app

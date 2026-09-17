@@ -66,10 +66,11 @@
      provinces — get a flat colour instead; shading those by size would
      colour a bar by the length it already has. */
   --dt-age-1: #9cb3e8;
-  --dt-age-2: #7590dc;
-  --dt-age-3: #5170ce;
-  --dt-age-4: #3b57b4;
-  --dt-age-5: #28408c;
+  --dt-age-2: #859cd6;
+  --dt-age-3: #6e85c3;
+  --dt-age-4: #566eb1;
+  --dt-age-5: #3f579e;
+  --dt-age-6: #28408c;
 
   /* Chart furniture. Everything that is not a state is a step of the neutral
      ramp: the unfilled part of a track, and the ghost bar a commitment is
@@ -1330,19 +1331,25 @@ tbody tr:last-child td { border-bottom: none; }
   display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
 }
 .dt-toolbar-right { display: flex; align-items: center; gap: 8px; margin-left: auto; }
-.dt-filter {
+/* The scope the page is showing. A chip when it is narrowed, a word when it
+   is not -- so the row keeps its height either way and the toolbar does not
+   jump when a filter is applied or cleared. */
+.dt-scope { display: flex; align-items: center; min-height: 32px; }
+.dt-scope-all { font-size: 13px; color: var(--text-dim); }
+.dt-scope-chip {
   display: flex; align-items: center; gap: 8px;
   background: var(--surface-1);
   border: 1px solid var(--border);
   border-radius: 999px;
-  padding: 4px 6px 4px 13px;
-  color: var(--text-dim);
+  padding: 3px 5px 3px 13px;
+  font-size: 13.5px;
+  color: var(--text);
   box-shadow: var(--shadow-1);
 }
-.dt-select {
-  border: 0; background: transparent; font: inherit; font-size: 13.5px;
-  color: var(--text); padding: 4px 2px; outline: none; max-width: 190px;
-  font-family: var(--font-farsi);
+.dt-scope-chip svg { color: var(--text-dim); flex: none; }
+/* Why this card's figures did not narrow with the rest of the page. */
+.dt-scope-note {
+  margin: 0 0 14px; font-size: 12.5px; line-height: 1.5; color: var(--text-dim);
 }
 .dt-clear {
   display: grid; place-items: center;
@@ -1728,6 +1735,44 @@ tbody tr:hover .dt-row-filter { opacity: 1; }
 .dt-axis-label { fill: var(--text-dim); font-size: 10.5px; font-variant-numeric: tabular-nums; }
 .dt-axis-current { fill: var(--text); font-weight: 600; }
 .dt-hover-rule { stroke: var(--text-dim); stroke-width: 1; }
+/* The trend window. A segmented pair in the card header -- small, quiet, and
+   legible at rest, because it has to sit beside a heading without competing
+   with it. */
+.dt-window {
+  display: inline-flex; padding: 2px;
+  background: var(--surface-2); border: 1px solid var(--border-soft);
+  border-radius: 999px;
+}
+.dt-window-btn {
+  border: 0; background: transparent; cursor: pointer;
+  padding: 3px 11px; border-radius: 999px;
+  font: inherit; font-size: 11.5px; font-variant-numeric: tabular-nums;
+  color: var(--text-dim);
+}
+.dt-window-btn:hover { color: var(--text); }
+.dt-window-on, .dt-window-on:hover {
+  background: var(--surface-1); color: var(--text); font-weight: 600;
+  box-shadow: var(--shadow-1);
+}
+
+/* Problematic, as a figure rather than a line. Sits directly under the plot
+   because it is a reading off the same window, not a note about the card. */
+.dt-trend-caption {
+  display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap;
+  margin: 10px 0 0; font-size: 12.5px; color: var(--text-muted);
+}
+.dt-trend-caption i {
+  width: 9px; height: 9px; border-radius: 3px; align-self: center; flex: none;
+}
+.dt-trend-caption b { color: var(--text); font-size: 14px; }
+.dt-trend-move { display: inline-flex; align-items: baseline; gap: 4px; color: var(--text-dim); }
+/* Problematic is work you want to see fall, so a rise is the bad news. Same
+   rule as the KPI deltas -- see `format.deltaTone`, which exists because the
+   dashboard this replaces painted every rise green. */
+.dt-trend-up { color: var(--dt-problem); }
+.dt-trend-down { color: var(--dt-done); }
+.dt-trend-caption-note { color: var(--text-dim); font-size: 11.5px; }
+
 .dt-trend-readout {
   display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
   margin-top: 10px; padding: 9px 12px;

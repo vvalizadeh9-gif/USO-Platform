@@ -95,19 +95,25 @@ export default function BulletBar({
         )}
       </span>
       <span className="dt-bullet-pct tnum" style={{ color: noPlan ? 'var(--text-dim)' : color }}>
-        {noPlan ? 'no plan' : achievement(percent)}
+        {noPlan ? 'no PIP' : achievement(percent)}
       </span>
     </div>
   )
 }
 
-/** The header key: what the ghost bar and the solid bar mean. */
+/** The header key: what the ghost bar and the solid bar mean.
+ *
+ * It says PIP, because the tile above it says PIP and they are the same
+ * figure. The two used to disagree forty pixels apart -- one word for the
+ * commitment in the summary and another for the identical commitment in the
+ * bars under it -- which makes a reader look for the difference between them.
+ */
 export function BulletKey({ scaleMax }) {
   return (
     <span className="dt-bullet-key">
       <span className="dt-key-item">
         <i className="dt-key-plan" aria-hidden="true" />
-        plan
+        PIP
       </span>
       <span className="dt-key-item">
         <i className="dt-key-done" aria-hidden="true" />

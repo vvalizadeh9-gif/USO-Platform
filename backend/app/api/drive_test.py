@@ -45,6 +45,7 @@ from app.schemas import (
     DriveTestSiteList,
     DriveTestSiteRow,
     DriveTestTrend,
+    FilterOption,
     KpiWithDelta,
     MonthFlows,
     OngoingBreakdown,
@@ -62,7 +63,15 @@ from app.services import (
     dt_workbook,
     monthly_plan as plans,
 )
-from app.services.drive_test_analytics import DriveTestAnalytics
+from app.services.drive_test_analytics import (
+    AGE_BAND_KEYS,
+    AGE_BAND_LABEL_BY_KEY,
+    NO_ASSIGNMENT_DATE,
+    NO_PROBLEM_DATE,
+    ONGOING_STAGE_ORDER,
+    STAGE_OTHER,
+    DriveTestAnalytics,
+)
 from app.services.snapshots import get_month_over_month
 from app.services.visibility import visible_province_ids
 
@@ -300,7 +309,14 @@ def _site_params(
         None, description="Problem category, or Uncategorized. Problematic only."
     ),
     age_band: str | None = Query(
-        None, description="An age-band key, or no_launch_date. Ongoing only."
+        None,
+        description=(
+            "An age-band key. Ongoing and problematic only, and each on its "
+            "own clock: ongoing ages from the assignment date, problematic "
+            "from the day the site last became problematic. Also accepts "
+            f"{NO_ASSIGNMENT_DATE} (ongoing) or {NO_PROBLEM_DATE} "
+            "(problematic) for the sites each clock cannot speak for."
+        ),
     ),
     stage: str | None = Query(None, description="An ongoing stage. Ongoing only."),
     contractor_id: str | None = Query(
@@ -374,7 +390,60 @@ def drive_test_sites(
         rows=[DriveTestSiteRow(**row) for row in page],
         filters_applied=filters.applied,
         generated_at=datetime.now(timezone.utc),
+        age_bands=_age_band_options(filters.bucket),
+        ongoing_stages=_ongoing_stage_options(),
     )
+
+
+#: The "no clock" option each ageing bucket offers, and how it reads.
+#:
+#: The bands are shared; this is the one place the two clocks differ, so it is
+#: the one place the vocabulary has to be asked for by bucket. Serving the
+#: wrong one is not cosmetic: ``parse_filters`` refuses each key on the other
+#: bucket, so the control would offer a value the next request answers 422 to
+#: -- which is the exact drift serving the vocabulary exists to prevent.
+_NO_CLOCK_OPTION: dict[str, tuple[str, str]] = {
+    "ongoing": (NO_ASSIGNMENT_DATE, "Not assigned yet"),
+    "problematic": (NO_PROBLEM_DATE, "No date recorded"),
+}
+
+
+def _age_band_options(bucket: str) -> list[FilterOption]:
+    """The age bands this bucket accepts, in age order, plus its no-clock key.
+
+    Straight off the service that validates them, so the control the screen
+    builds from this cannot offer a band the next request would reject.
+
+    Empty for a bucket that does not age: a band on a Done list would ask how
+    long a finished thing has been unfinished, and ``parse_filters`` says so
+    with a 422. An empty list is the honest answer to "what may I filter by
+    here", and the screen already hides the control.
+
+    The no-clock key is last because it is not a band — it is the sites the
+    bands cannot speak for — and putting it inside the ordered scale would
+    read as an age.
+    """
+    no_clock = _NO_CLOCK_OPTION.get(bucket)
+    if no_clock is None:
+        return []
+    key, label = no_clock
+    return [
+        FilterOption(key=band, label=AGE_BAND_LABEL_BY_KEY[band])
+        for band in AGE_BAND_KEYS
+    ] + [FilterOption(key=key, label=label)]
+
+
+def _ongoing_stage_options() -> list[FilterOption]:
+    """The stages an ongoing site can sit in, in workflow order.
+
+    The stage is its own label here: these strings are the vocabulary the
+    workflow uses in the screens people act in, and renaming them on the way
+    to this one filter would make the two impossible to talk about together.
+    """
+    return [
+        FilterOption(key=stage, label=stage)
+        for stage in (*ONGOING_STAGE_ORDER, STAGE_OTHER)
+    ]
 
 
 @router.get("/sites/export")
@@ -524,6 +593,8 @@ def _problematic_breakdown(data: dict) -> ProblematicBreakdown:
         total=data["total"],
         by_category=_points(data["by_category"]),
         by_province=_points(data["by_province"]),
+        by_age=_points(data["by_age"]),
+        without_problem_date=data["without_problem_date"],
     )
 
 

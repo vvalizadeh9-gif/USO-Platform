@@ -9,10 +9,13 @@ and one is a rule that has to hold for all of them:
   granted must be refused rather than quietly widened back to everything or
   quietly handed an empty answer. The same goes for the drill-through filters
   on the work queue, which arrive from a URL anyone can edit.
-* **Aging bands off the assignment date.** They exist here and deliberately do
-  not exist for problematic sites, and the difference is the point: an
-  assignment is dated, so "how long has this company held this site" is a
-  measurement. Nothing records when a site *became* problematic.
+* **Two aging clocks, neither of them invented.** An ongoing site ages from
+  its assignment date; a problematic site ages from the day it last entered
+  the state, replayed from the platform's dated transitions. Where neither
+  date exists -- a site nobody was given, a Problematic status imported as a
+  bare CPM column -- the site is counted apart under its own key rather than
+  filed into the newest band, which would make the backlog look fresher than
+  it is.
 * **A scorecard that compares.** Ranking contractors by a raw count mostly
   ranks them by size. Carrying the denominator is what makes two companies of
   different sizes readable against each other, and the rows still have to
@@ -42,6 +45,7 @@ from app.core.database import SessionLocal  # noqa: E402
 from app.services.drive_test_analytics import UNATTRIBUTED  # noqa: E402
 from app.services.workflow import (  # noqa: E402
     STAGE_ASSIGNED,
+    STAGE_HEALTH_PROBLEM,
     STAGE_NEW,
     STAGE_READY,
 )
@@ -103,7 +107,7 @@ def world(client):
     start failing on a calendar boundary rather than on a code change.
     """
     from app.models.reference import Contractor, Province
-    from app.models.workitem import Assignment, Site, WorkItem
+    from app.models.workitem import Assignment, HealthCheck, Site, WorkItem
 
     admin_h = _login(client)
     today = date.today()
@@ -175,6 +179,35 @@ def world(client):
     item(k_site, "k-done-2", STAGE_NEW, dt_status="Done", age_days=300, contractor=alfa.id)
     item(k_site, "k-prob", STAGE_READY, dt_status="Problematic", age_days=90, contractor=beta.id)
 
+    # Two problematic sites the platform *dated*, so the problematic clock has
+    # something to measure. The CPM-flagged site above deliberately stays
+    # undated -- it is what `without_problem_date` counts.
+    def flag(site, tag, *, events):
+        """A site sitting in the in-app Problematic stage, with its history.
+
+        ``events`` is ``[(days_ago, is_problematic)]``, oldest first, written
+        as health checks because that is the dated signal the replay reads.
+        """
+        wi = item(site, tag, STAGE_HEALTH_PROBLEM, age_days=200, contractor=beta.id)
+        for days_ago, problematic in events:
+            db.add(
+                HealthCheck(
+                    work_item_id=wi.id,
+                    status="Problematic" if problematic else "Ready",
+                    checked_at=datetime.combine(
+                        today - timedelta(days=days_ago), datetime.min.time()
+                    ).replace(tzinfo=timezone.utc),
+                )
+            )
+        db.flush()
+        return wi
+
+    # Flagged 5 days ago and still flagged: one clean spell.
+    flag(k_site, "k-prob-fresh", events=[(5, True)])
+    # Flagged a year ago, fixed, flagged again 40 days ago. The clock is the
+    # spell it is in now, not the first one it was ever in.
+    reflagged = flag(y_site, "y-prob-reflagged", events=[(365, True), (200, False), (40, True)])
+
     # Yazd: a smaller book, so the two provinces differ and a filter is
     # visibly doing something.
     item(y_site, "y-ong", STAGE_READY, age_days=45, contractor=beta.id)
@@ -204,7 +237,13 @@ def world(client):
         ]
     )
     db.commit()
-    ids = {"alfa": alfa.id, "beta": beta.id, "kerman": kerman.id, "yazd": yazd.id}
+    ids = {
+        "alfa": alfa.id,
+        "beta": beta.id,
+        "kerman": kerman.id,
+        "yazd": yazd.id,
+        "reflagged": reflagged.id,
+    }
     db.close()
 
     return {
@@ -286,7 +325,10 @@ def test_ongoing_sites_land_in_the_band_their_assignment_date_puts_them_in(clien
     assert _band(bands, "1–2 weeks") == 1  # 10 days
     assert _band(bands, "2–3 weeks") == 1  # 18 days
     assert _band(bands, "3 weeks – 1 month") == 1  # 26 days
-    assert _band(bands, "More than 1 month") == 1  # 90 days
+    assert _band(bands, "More than 2 months") == 1  # 90 days
+    # The tail is two bands now, and 90 days is past both of them, so the
+    # nearer one is empty rather than absorbing it.
+    assert _band(bands, "1–2 months") == 0
 
 
 def test_the_bands_stay_in_age_order_with_empty_ones_kept(client, world):
@@ -300,7 +342,8 @@ def test_the_bands_stay_in_age_order_with_empty_ones_kept(client, world):
         "1–2 weeks",
         "2–3 weeks",
         "3 weeks – 1 month",
-        "More than 1 month",
+        "1–2 months",
+        "More than 2 months",
     ]
 
 
@@ -317,10 +360,47 @@ def test_an_unassigned_site_is_counted_apart_not_filed_as_new(client, world):
     ] == (ongoing["total"])
 
 
-def test_there_are_still_no_problematic_aging_bands(client, world):
-    """Absent by design: nothing records when a site became problematic."""
+# ------------------------------------------------- how long a site is stuck
+def test_a_problematic_site_ages_from_the_day_it_last_became_problematic(client, world):
+    """The spell it is in now, not the first one it was ever in.
+
+    The Yazd site was flagged a year ago, fixed, and flagged again 40 days
+    ago. Aged from the first flag it would read as the oldest band there is
+    and would put a team on the hook for a problem they already solved.
+    """
+    bands = _overview(client, world["admin"])["problematic_breakdown"]["by_age"]
+
+    assert _band(bands, "Up to 1 week") == 1  # flagged 5 days ago
+    assert _band(bands, "1–2 months") == 1  # re-flagged 40 days ago
+    assert _band(bands, "More than 2 months") == 0, "the year-old spell was closed"
+
+
+def test_a_problematic_site_with_no_dated_flag_is_counted_apart(client, world):
+    """A CPM-imported status is a bare column: no date, so no clock.
+
+    Filing it under the newest band would make the backlog look fresher than
+    it is, which is the one direction this chart must never be wrong in. The
+    bands plus the undated sites still account for the whole total.
+    """
+    problematic = _overview(client, world["admin"])["problematic_breakdown"]
+
+    assert problematic["without_problem_date"] == 1
+    assert sum(p["value"] for p in problematic["by_age"]) + problematic[
+        "without_problem_date"
+    ] == problematic["total"]
+
+
+def test_the_problematic_bands_are_the_ongoing_bands(client, world):
+    """One vocabulary across both cards.
+
+    They measure different clocks, but a reader moving between them should
+    not have to learn a second set of buckets to compare the two.
+    """
     body = _overview(client, world["admin"])
-    assert set(body["problematic_breakdown"]) == {"total", "by_category", "by_province"}
+    ongoing = [p["key"] for p in body["ongoing_breakdown"]["by_age"]]
+    problematic = [p["key"] for p in body["problematic_breakdown"]["by_age"]]
+
+    assert ongoing == problematic
 
 
 # ----------------------------------------------------------- the scorecard
