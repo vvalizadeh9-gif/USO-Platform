@@ -38,18 +38,63 @@ export default function MyWork() {
   // answer. `awaiting=ICT` is the older, narrower spelling of
   // `authority=ICT&status=Pending`; both are honoured.
   const drill = useMemo(() => {
-    const raw = (params.get('awaiting') || '').toUpperCase()
-    if (['ICT', 'CRA'].includes(raw)) return { authority: raw, status: 'Pending' }
+    const filters = {}
 
-    const authority = (params.get('authority') || '').toUpperCase()
-    const status = params.get('status')
-    if (['ICT', 'CRA'].includes(authority) && status) return { authority, status }
-    return null
+    const province = Number(params.get('province_id'))
+    if (province) filters.province_id = province
+
+    // What the Acceptance dashboard's figures carry: a verdict per authority,
+    // which is where a village *stands*. The queue's own vocabulary below is
+    // a different question — whose move is it — and the two part company the
+    // moment a refused village is re-filed.
+    for (const authority of ['ict', 'cra']) {
+      const verdict = params.get(`${authority}_verdict`)
+      if (verdict) filters[`${authority}_verdict`] = verdict
+    }
+
+    const raw = (params.get('awaiting') || '').toUpperCase()
+    if (['ICT', 'CRA'].includes(raw)) {
+      Object.assign(filters, { authority: raw, status: 'Pending' })
+    } else {
+      const authority = (params.get('authority') || '').toUpperCase()
+      const status = params.get('status')
+      if (['ICT', 'CRA'].includes(authority) && status) {
+        Object.assign(filters, { authority, status })
+      }
+    }
+    return Object.keys(filters).length ? filters : null
   }, [params])
+
+  // What that filter is called on screen. Not part of `drill`, which is sent
+  // to the server as it stands: the province *name* is here to be read, and
+  // the server was given the id.
+  const drillLabel = useMemo(() => {
+    if (!drill) return null
+    const parts = []
+    if (drill.province_id) parts.push(params.get('province') || 'One province')
+    for (const authority of ['ict', 'cra']) {
+      const verdict = drill[`${authority}_verdict`]
+      if (verdict) {
+        parts.push(
+          `${authority.toUpperCase()} ${
+            verdict === 'NotApproved' ? 'not approved' : verdict.toLowerCase()
+          }`
+        )
+      }
+    }
+    if (drill.authority) {
+      parts.push(`${drill.authority} · ${AUTHORITY_LABEL[drill.status] || drill.status}`)
+    }
+    return parts.join(' · ')
+  }, [drill, params])
 
   // A bucket named in the URL wins over this role's usual landing bucket —
   // that is the whole point of the headline card's four figures being links.
-  const urlBucket = params.get('bucket')
+  // `bucket=all` is how a figure counted across every bucket opens every
+  // bucket. Without it the queue lands on this role's usual one and shows a
+  // fraction of the number that was clicked.
+  const rawBucket = params.get('bucket')
+  const urlBucket = rawBucket === 'all' ? null : rawBucket
 
   const canReview = REVIEW_ROLES.includes(user?.role?.name)
   const buckets = useMemo(() => bucketsFor(user?.role?.name), [user])
@@ -59,7 +104,7 @@ export default function MyWork() {
   // landing on this role's usual bucket would show an empty list. Otherwise:
   // the role's first bucket, as before.
   const [bucket, setBucket] = useState(
-    urlBucket || (drill ? null : buckets[0].key)
+    urlBucket || (drill || rawBucket === 'all' ? null : buckets[0].key)
   )
   // Until someone picks a chip themselves, the page is allowed to open on
   // whichever bucket actually has work in it. Landing on an empty "Needs
@@ -221,12 +266,15 @@ export default function MyWork() {
             title="Show every village again"
             onClick={() => {
               const next = new URLSearchParams(params)
-              for (const key of ['awaiting', 'authority', 'status']) next.delete(key)
+              for (const key of [
+                'awaiting', 'authority', 'status',
+                'ict_verdict', 'cra_verdict', 'province_id', 'province', 'bucket',
+              ]) next.delete(key)
               setParams(next, { replace: true })
               setBucket(buckets[0].key)
             }}
           >
-            {drill.authority} · {AUTHORITY_LABEL[drill.status] || drill.status}
+            {drillLabel}
             <X size={13} />
           </button>
         )}

@@ -48,7 +48,7 @@ def acceptance_overview(
 from datetime import datetime, timedelta, timezone  # noqa: E402
 
 from fastapi import File, Form, HTTPException, Query, Response, UploadFile  # noqa: E402
-from sqlalchemy import and_, func, or_, select  # noqa: E402
+from sqlalchemy import and_, exists, func, or_, select  # noqa: E402
 from sqlalchemy.orm import selectinload  # noqa: E402
 
 from app.core.deps import CONTRACTOR, COORDINATOR, PM, require_roles  # noqa: E402
@@ -64,6 +64,7 @@ from app.models.acceptance_workflow import (  # noqa: E402
     AcceptanceSubmission,
 )
 from app.models.reference import User as UserModel  # noqa: E402
+from app.models.acceptance import Acceptance  # noqa: E402
 from app.models.workitem import Site, Village, WorkItem  # noqa: E402
 from app.schemas import (  # noqa: E402
     AcceptanceBucketCounts,
@@ -372,6 +373,65 @@ def _authority_status_clause(authority: str | None, status: str | None):
     return column == status
 
 
+VERDICTS = (flow.APPROVED, flow.REJECTED, flow.PENDING, "NotApproved")
+
+
+def _verdict_clause(authority: str, verdict: str):
+    """`this authority's verdict on the village is that` — as SQL.
+
+    A *verdict* is not a queue *status*, and the Acceptance dashboard counts
+    verdicts. The difference is what is in flight: a village ICT refused and
+    the contractor has already re-filed has verdict Rejected and status
+    Pending, because the queue answers "whose move is it" and the dashboard
+    answers "where does this stand". Linking the dashboard's Rejected figure
+    to ``status=Rejected`` therefore opened a list that was missing exactly
+    the villages someone had already acted on — a number that could not be
+    examined, which is the one thing this page promises.
+
+    Expressed against the same two facts ``acceptance_workflow`` derives from:
+
+    * Approved — the cached status, which is Approved for one reason only,
+      that every requested technology is approved;
+    * Rejected — any requested technology refused, which is the rule
+      ``authority_verdict`` applies and the reason one refusal refuses the
+      village;
+    * Pending — neither of the above; nobody has finished deciding.
+
+    ``NotApproved`` is Rejected or Pending together — the "not the other one"
+    half of the ICT-versus-CRA cross tabs.
+    """
+    authority = authority.upper().strip()
+    if authority not in AUTHORITIES:
+        raise HTTPException(400, f"authority must be {' or '.join(AUTHORITIES)}")
+    verdict = verdict.strip()
+    verdict = "NotApproved" if verdict.lower() == "notapproved" else verdict.title()
+    if verdict not in VERDICTS:
+        raise HTTPException(400, f"verdict must be one of {', '.join(VERDICTS)}")
+
+    status_column = Village.ict_status if authority == "ICT" else Village.cra_status
+    tech_column = (
+        Acceptance.ict_status if authority == "ICT" else Acceptance.cra_status
+    )
+    approved = status_column == flow.STATUS_APPROVED
+    # A technology is only "requested" if the work item asked for it; an
+    # acceptance row for anything else is not the village's verdict. The names
+    # are 2G/3G/4G, none a substring of another, so containment is exact.
+    refused = exists().where(
+        and_(
+            Acceptance.village_id == Village.id,
+            tech_column == flow.REJECTED,
+            WorkItem.requested_technology.icontains(Acceptance.technology),
+        )
+    )
+    if verdict == flow.APPROVED:
+        return approved
+    if verdict == flow.REJECTED:
+        return refused
+    if verdict == "NotApproved":
+        return ~approved
+    return and_(~approved, ~refused)
+
+
 def _queue_query(
     user: UserModel,
     db: Session,
@@ -382,6 +442,8 @@ def _queue_query(
     awaiting: str | None = None,
     authority: str | None = None,
     status: str | None = None,
+    ict_verdict: str | None = None,
+    cra_verdict: str | None = None,
 ):
     """Villages this user may see that acceptance applies to, before bucketing.
 
@@ -398,6 +460,10 @@ def _queue_query(
     authority=ICT&status=Rejected is the 103 the ICT card shows. Passing
     ``authority`` alone is not a filter — an authority is not a subset of
     villages — so it is refused rather than silently ignored.
+
+    ``ict_verdict`` / ``cra_verdict`` filter on the *verdict* instead, which
+    is what the Acceptance dashboard counts. See :func:`_verdict_clause` for
+    why the two vocabularies are not interchangeable.
     """
     stmt = (
         _village_query(user, db)
@@ -416,6 +482,13 @@ def _queue_query(
         authority, status = awaiting, flow.STATUS_PENDING
     if authority is not None or status is not None:
         stmt = stmt.where(_authority_status_clause(authority, status))
+    # The dashboard's own vocabulary. Independent of each other, so
+    # ict_verdict=Approved&cra_verdict=NotApproved is the cross tab "approved
+    # by one authority, not the other" without a second endpoint.
+    if ict_verdict is not None:
+        stmt = stmt.where(_verdict_clause("ICT", ict_verdict))
+    if cra_verdict is not None:
+        stmt = stmt.where(_verdict_clause("CRA", cra_verdict))
     if search:
         pattern = f"%{search.strip()}%"
         stmt = stmt.where(
@@ -461,6 +534,8 @@ def bucket_counts(
     awaiting: str | None = Query(None, description="ICT|CRA"),
     authority: str | None = Query(None, description="ICT|CRA, with status"),
     status: str | None = Query(None, description="Approved|Rejected|Pending|Returned|NotFiled"),
+    ict_verdict: str | None = Query(None, description="Approved|Rejected|Pending|NotApproved"),
+    cra_verdict: str | None = Query(None, description="Approved|Rejected|Pending|NotApproved"),
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> AcceptanceBucketCounts:
@@ -472,6 +547,7 @@ def bucket_counts(
     base = _queue_query(
         user, db, province_id=province_id, site_id=site_id, search=search,
         awaiting=awaiting, authority=authority, status=status,
+        ict_verdict=ict_verdict, cra_verdict=cra_verdict,
     ).with_only_columns(Village.id)
 
     counts = {
@@ -505,6 +581,8 @@ def list_villages(
     awaiting: str | None = Query(None, description="ICT|CRA"),
     authority: str | None = Query(None, description="ICT|CRA, with status"),
     status: str | None = Query(None, description="Approved|Rejected|Pending|Returned|NotFiled"),
+    ict_verdict: str | None = Query(None, description="Approved|Rejected|Pending|NotApproved"),
+    cra_verdict: str | None = Query(None, description="Approved|Rejected|Pending|NotApproved"),
     limit: int = Query(50, le=500),
     offset: int = 0,
     db: Session = Depends(get_db),
@@ -514,6 +592,7 @@ def list_villages(
     stmt = _queue_query(
         user, db, province_id=province_id, site_id=site_id, search=search,
         awaiting=awaiting, authority=authority, status=status,
+        ict_verdict=ict_verdict, cra_verdict=cra_verdict,
     )
 
     if bucket:

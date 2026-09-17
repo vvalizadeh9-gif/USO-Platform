@@ -109,6 +109,7 @@ class AcceptanceAnalytics:
         self._db = db
         self._user = user
         self._units: list[_Unit] | None = None
+        self._village_totals: dict[int | None, int] = {}
 
     # ---------- data loading ----------
     def _load_units(self) -> list[_Unit]:
@@ -130,17 +131,23 @@ class AcceptanceAnalytics:
         work_items = self._db.execute(stmt).scalars().all()
 
         units: list[_Unit] = []
+        # Every هدف village, drive-tested or not. Acceptance cannot start until
+        # the drive test is done, so this is the larger number the DT-Done
+        # universe is a share of — the funnel the province table now shows.
+        village_totals: dict[int | None, int] = defaultdict(int)
         for wi in work_items:
-            if wi.dt_status != _DT_DONE:
-                continue  # acceptance only applies once the drive test is done
             site_id = wi.site.id if wi.site else None
             province_id = wi.site.province_id if wi.site else None
-            dt_age = flow.dt_age_days(wi)
+            dt_done = wi.dt_status == _DT_DONE
+            dt_age = flow.dt_age_days(wi) if dt_done else None
             for village in wi.villages:
                 if village.deleted_at is not None:
                     continue
                 if not C.is_pure_target(village.target_classification):
                     continue
+                village_totals[province_id] += 1
+                if not dt_done:
+                    continue  # acceptance only applies once the drive test is done
                 units.append(
                     _Unit(
                         village.id,
@@ -155,6 +162,7 @@ class AcceptanceAnalytics:
                 )
 
         self._units = units
+        self._village_totals = dict(village_totals)
         return units
 
     # ---------- KPI cards ----------
@@ -245,11 +253,28 @@ class AcceptanceAnalytics:
         instead — the queue's clock — left a village nobody had ever filed
         with no age at all, rendered as a dash, which read as "nothing pending
         here" on the one row that most needed chasing.
+
+        Outstanding is aged twice more, split into its two disjoint halves —
+        refused, and nobody has answered. They are different conversations:
+        a refusal is the programme's to resolve, a wait is the office's to
+        finish. The two split bucket maps sum to the combined one, which is
+        kept because "Needs attention" ranks on it. Rejected is NOT aged
+        against remained as a second bar: it is a subset of it, and two bars
+        where one contains the other cannot be read as a whole.
+
+        ``total_villages`` is every هدف village in the province, drive-tested
+        or not, so the row shows the funnel rather than only its tail. No
+        province appears on the strength of it alone: a province with villages
+        but nothing drive-tested has no acceptance status to report, and a row
+        of zeroes and dashes would only push the provinces with work down the
+        table.
         """
         units = self._load_units()
         totals: dict[int | None, dict[str, int]] = defaultdict(
-            lambda: {"total": 0, "ict": 0, "cra": 0}
+            lambda: {"total": 0, "ict": 0, "cra": 0, "ict_rej": 0, "cra_rej": 0}
         )
+        # Keyed by (province, authority, group) where group is "rejected" or
+        # "pending" — the two halves of outstanding.
         ages: dict[tuple, dict[str, int]] = defaultdict(
             lambda: dict.fromkeys(flow.AGE_BUCKETS, 0)
         )
@@ -271,8 +296,12 @@ class AcceptanceAnalytics:
                 if verdict == APPROVED:
                     bucket[authority] += 1
                     continue
-                # Outstanding with this authority: age it.
-                key = (v.province_id, authority)
+                # Outstanding with this authority: age it, under the half of
+                # outstanding it belongs to.
+                group = "rejected" if verdict == REJECTED else "pending"
+                if group == "rejected":
+                    bucket[f"{authority}_rej"] += 1
+                key = (v.province_id, authority, group)
                 ages[key][flow.dt_age_bucket(v.dt_age)] += 1
                 if v.dt_age is not None:
                     current = oldest.get(key)
@@ -286,25 +315,46 @@ class AcceptanceAnalytics:
         for province_id, b in totals.items():
             total = b["total"]
             row = {
+                "province_id": province_id,
                 "name": names.get(province_id, "—"),
                 "total": total,
+                "total_villages": self._village_totals.get(province_id, total),
             }
             for authority in ("ict", "cra"):
                 ok = b[authority]
-                key = (province_id, authority)
+                rejected = b[f"{authority}_rej"]
+                by_group = {
+                    group: ages.get(
+                        (province_id, authority, group),
+                        dict.fromkeys(flow.AGE_BUCKETS, 0),
+                    )
+                    for group in ("rejected", "pending")
+                }
                 row.update({
                     f"{authority}_approved": ok,
+                    f"{authority}_rejected": rejected,
+                    f"{authority}_pending": total - ok - rejected,
                     f"{authority}_remained": total - ok,
                     f"{authority}_approved_pct": _pct(ok, total),
                     f"{authority}_remained_pct": _pct(total - ok, total),
-                    # The programme clock, and the distribution behind it.
-                    f"{authority}_oldest_age_days": oldest.get(key),
-                    f"{authority}_age_buckets": dict(
-                        ages.get(key, dict.fromkeys(flow.AGE_BUCKETS, 0))
+                    # The programme clock, and the distribution behind it —
+                    # over all of outstanding, and over each half of it.
+                    f"{authority}_oldest_age_days": _older(
+                        oldest.get((province_id, authority, "rejected")),
+                        oldest.get((province_id, authority, "pending")),
                     ),
+                    f"{authority}_age_buckets": _merge_buckets(by_group.values()),
+                    f"{authority}_rejected_oldest_age_days": oldest.get(
+                        (province_id, authority, "rejected")
+                    ),
+                    f"{authority}_rejected_age_buckets": dict(by_group["rejected"]),
+                    f"{authority}_pending_oldest_age_days": oldest.get(
+                        (province_id, authority, "pending")
+                    ),
+                    f"{authority}_pending_age_buckets": dict(by_group["pending"]),
                     # The authority clock, unchanged — still the oldest wait
                     # among villages actually sitting with that office.
-                    f"{authority}_oldest_days": waits.get(key),
+                    f"{authority}_oldest_days": waits.get((province_id, authority)),
                 })
             rows.append(row)
 
@@ -395,3 +445,18 @@ def _verdict_counts(verdicts) -> dict[str, int]:
 
 def _pct(part: int, whole: int) -> float:
     return round(part / whole * 100, 1) if whole else 0.0
+
+
+def _older(*ages: int | None) -> int | None:
+    """The oldest of several ages, ignoring the ones nothing reported."""
+    known = [a for a in ages if a is not None]
+    return max(known) if known else None
+
+
+def _merge_buckets(maps) -> dict[str, int]:
+    """One bucket map from several, band by band."""
+    merged = dict.fromkeys(flow.AGE_BUCKETS, 0)
+    for one in maps:
+        for band, n in one.items():
+            merged[band] += n
+    return merged
