@@ -723,3 +723,63 @@ def test_awaiting_narrows_the_bucket_counts_too(client, buckets):
     assert counts["needs_attention"] == 0
     assert counts["ready"] == 0
     assert counts["closed"] == 0
+
+
+# ---------------------------------------------------------------------------
+# authority + status — what every figure on the Acceptance dashboard's
+# authority cards links to. A number that opens a list of something else is
+# worse than a number that does not open at all.
+# ---------------------------------------------------------------------------
+def test_authority_and_status_select_one_dashboard_figure(client, buckets):
+    token, site = buckets["pm"], buckets["site_id"]
+
+    # The CRA submission that nobody has reviewed.
+    rows = _bucket(client, token, None, authority="CRA", status="Pending", site_id=site)
+    assert [r["village_id"] for r in rows["rows"]] == [buckets["awaiting_review"]]
+
+    # Both authorities validated on the closed village.
+    for name in ("ICT", "CRA"):
+        rows = _bucket(client, token, None, authority=name, status="Approved", site_id=site)
+        assert [r["village_id"] for r in rows["rows"]] == [buckets["closed"]]
+
+    # Returned to the submitter is its own status, not folded into Rejected.
+    rows = _bucket(client, token, None, authority="ICT", status="Returned", site_id=site)
+    assert [r["village_id"] for r in rows["rows"]] == [buckets["needs_attention"]]
+
+
+def test_status_without_an_authority_is_refused(client, buckets):
+    """"Pending with either authority" would double count, so it is not offered."""
+    for params in ({"status": "Pending"}, {"authority": "ICT"}):
+        r = client.get(
+            "/api/v1/acceptance/villages", headers=_auth(buckets["pm"]), params=params
+        )
+        assert r.status_code == 400, params
+
+    r = client.get(
+        "/api/v1/acceptance/villages",
+        headers=_auth(buckets["pm"]),
+        params={"authority": "MoC", "status": "Pending"},
+    )
+    assert r.status_code == 400
+
+
+def test_the_four_buckets_still_partition_after_the_rule_moved(client, buckets):
+    """queue_bucket() now lives in acceptance_workflow; both callers agree.
+
+    The SQL clause and the Python row body are separate implementations of one
+    paragraph, and the dashboard counts the same four groups off the Python
+    one. If they drift, a KPI and the list it links to disagree.
+    """
+    from app.models.workitem import Village
+    from app.services import acceptance_workflow as flow
+
+    db = SessionLocal()
+    try:
+        for name in flow.QUEUE_BUCKETS:
+            listed = _bucket(client, buckets["pm"], name, site_id=buckets["site_id"])
+            for row in listed["rows"]:
+                village = db.get(Village, row["village_id"])
+                assert row["bucket"] == name
+                assert flow.queue_bucket(village.ict_status, village.cra_status) == name
+    finally:
+        db.close()

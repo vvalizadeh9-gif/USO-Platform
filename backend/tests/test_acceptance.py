@@ -386,3 +386,104 @@ def test_province_aging_reads_the_my_work_clock(client):
     # which is exactly how My Work computes waiting_days.
     assert rows["Prov3"]["ict_oldest_days"] == 12
     assert rows["Prov3"]["cra_oldest_days"] == 12
+
+
+# ---------------------------------------------------------------------------
+# The village-level partition, and aging measured from the drive test.
+# ---------------------------------------------------------------------------
+def test_villages_partition_into_four_states(client):
+    """The four village states sum to the universe, with none counted twice.
+
+    This is the arithmetic the headline card depends on. "Approved vs
+    remained" could not be read as one bar because remained was a residual;
+    these four are acceptance_workflow's own queue buckets, so the dashboard
+    and My Work's chips count the same groups.
+    """
+    from app.services.acceptance_analytics import AcceptanceAnalytics
+    from app.services.snapshots import _SystemScope
+
+    db = SessionLocal()
+    scope = AcceptanceAnalytics(db, _SystemScope())
+    analysis = scope.compute_analysis()
+    universe = scope.compute_kpis()["total_dt_done_villages"]
+    db.close()
+
+    parts = (
+        analysis["villages_accepted"],
+        analysis["villages_needs_attention"],
+        analysis["villages_in_review"],
+        analysis["villages_not_filed"],
+    )
+    assert sum(parts) == universe
+    # V6 was rejected by both authorities and V7 is sitting with them; the
+    # other four rows have never been filed. No village is approved by both,
+    # so "accepted" is empty — and the four still sum to the universe.
+    assert analysis["villages_accepted"] == 0
+    assert analysis["villages_needs_attention"] == 1     # V6
+    assert analysis["villages_in_review"] == 1           # V7
+    assert analysis["villages_not_filed"] == universe - 2
+
+
+def test_dt_age_is_a_different_clock_from_the_waiting_one(client):
+    """Aging from the drive test sees the village nobody ever filed.
+
+    The authority clock is undefined for a village with no submissions, and
+    the province table renders that as an em dash — which reads as "nothing
+    pending here" on precisely the row that most needs chasing.
+    """
+    from datetime import date, timedelta
+
+    from app.models.workitem import Village, WorkItem
+    from app.services import acceptance_workflow as flow
+    from app.services.acceptance_analytics import AcceptanceAnalytics
+    from app.services.snapshots import _SystemScope
+
+    db = SessionLocal()
+    # V6/V7's work item, drive-tested 200 days ago and never submitted.
+    village = db.query(Village).filter_by(village_code="V6").one()
+    work_item = db.get(WorkItem, village.work_item_id)
+    work_item.dt_date_gregorian = date.today() - timedelta(days=200)
+    db.commit()
+
+    rows = {r["name"]: r for r in AcceptanceAnalytics(db, _SystemScope()).compute_provinces()}
+    db.close()
+
+    prov3 = rows["Prov3"]
+    # The authority clock still says nothing: no submission was ever made for
+    # V6, so it has no wait to report.
+    assert prov3["ict_oldest_days"] != 200
+    # The programme clock does, and puts it in the critical band.
+    assert prov3["ict_oldest_age_days"] == 200
+    assert prov3["ict_age_buckets"][flow.AGE_CRITICAL] >= 1
+
+
+def test_age_buckets_sum_to_what_is_outstanding(client):
+    """Every outstanding village lands in exactly one age band.
+
+    Including the undated ones: a village whose DT date never made it through
+    the import is unmeasured, not new, so it gets its own band rather than
+    being quietly counted as fresh.
+    """
+    from app.services import acceptance_workflow as flow
+    from app.services.acceptance_analytics import AcceptanceAnalytics
+    from app.services.snapshots import _SystemScope
+
+    db = SessionLocal()
+    rows = AcceptanceAnalytics(db, _SystemScope()).compute_provinces()
+    db.close()
+
+    for row in rows:
+        for authority in ("ict", "cra"):
+            buckets = row[f"{authority}_age_buckets"]
+            assert set(buckets) == set(flow.AGE_BUCKETS)
+            assert sum(buckets.values()) == row[f"{authority}_remained"]
+
+
+def test_dt_age_bucket_keeps_undated_apart_from_fresh():
+    from app.services import acceptance_workflow as flow
+
+    assert flow.dt_age_bucket(0) == flow.AGE_FRESH
+    assert flow.dt_age_bucket(flow.AGE_WARN_DAYS - 1) == flow.AGE_FRESH
+    assert flow.dt_age_bucket(flow.AGE_WARN_DAYS) == flow.AGE_WARN
+    assert flow.dt_age_bucket(flow.AGE_CRITICAL_DAYS) == flow.AGE_CRITICAL
+    assert flow.dt_age_bucket(None) == flow.AGE_UNKNOWN

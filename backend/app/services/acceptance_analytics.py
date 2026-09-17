@@ -59,6 +59,13 @@ class _Unit:
     village row — a wider vocabulary that also knows about returned rounds.
     They are what the aging column is measured over, because a village is only
     "waiting on the authority" when its status is Pending.
+
+    ``dt_age`` is how long the village has been *eligible* for acceptance —
+    days since its drive test — which is the clock the programme is judged on
+    and the only one defined for a village nobody has ever filed.
+
+    ``bucket`` is where My Work would file it, so the dashboard's headline and
+    the queue's chips count the same four groups.
     """
 
     __slots__ = (
@@ -69,6 +76,8 @@ class _Unit:
         "cra",
         "ict_status",
         "cra_status",
+        "dt_age",
+        "bucket",
     )
 
     def __init__(
@@ -80,6 +89,7 @@ class _Unit:
         cra: str,
         ict_status: str | None,
         cra_status: str | None,
+        dt_age: int | None,
     ) -> None:
         self.village_id = village_id
         self.site_id = site_id
@@ -88,6 +98,8 @@ class _Unit:
         self.cra = cra
         self.ict_status = ict_status
         self.cra_status = cra_status
+        self.dt_age = dt_age
+        self.bucket = flow.queue_bucket(ict_status, cra_status)
 
 
 class AcceptanceAnalytics:
@@ -123,6 +135,7 @@ class AcceptanceAnalytics:
                 continue  # acceptance only applies once the drive test is done
             site_id = wi.site.id if wi.site else None
             province_id = wi.site.province_id if wi.site else None
+            dt_age = flow.dt_age_days(wi)
             for village in wi.villages:
                 if village.deleted_at is not None:
                     continue
@@ -137,6 +150,7 @@ class AcceptanceAnalytics:
                         flow.authority_verdict(village, "CRA"),
                         village.ict_status,
                         village.cra_status,
+                        dt_age,
                     )
                 )
 
@@ -213,61 +227,87 @@ class AcceptanceAnalytics:
             "villages_ict_not_cra": villages_ict_not_cra,
             "villages_cra_not_ict": villages_cra_not_ict,
             "villages_both_approved": villages_both_approved,
+            **_village_partition(units),
         }
 
     # ---------- province status ----------
     def compute_provinces(self) -> list[dict]:
-        """Per-province status, worst first.
+        """Per-province status, worst first, with each authority's backlog aged.
 
         The sort is deliberate: the table is read to decide which province
         office to call this week, and ordering by size answered a different
         question — it put the biggest province on top whether or not anything
-        was outstanding there. Ordering by what is still outstanding (ICT plus
-        CRA remained) puts the week's work at the top of the screen.
+        was outstanding there.
+
+        Aging is measured from the drive test, over every *outstanding*
+        village, so each authority's age bars sum to its outstanding count and
+        the two can be read together. Measuring it from the last letter
+        instead — the queue's clock — left a village nobody had ever filed
+        with no age at all, rendered as a dash, which read as "nothing pending
+        here" on the one row that most needed chasing.
         """
         units = self._load_units()
         totals: dict[int | None, dict[str, int]] = defaultdict(
             lambda: {"total": 0, "ict": 0, "cra": 0}
         )
-        # Villages still sitting with each authority, per province — the only
-        # ones the aging column is measured over.
+        ages: dict[tuple, dict[str, int]] = defaultdict(
+            lambda: dict.fromkeys(flow.AGE_BUCKETS, 0)
+        )
+        oldest: dict[tuple, int | None] = {}
+        # Villages still sitting with each authority — the queue's own clock,
+        # kept beside the new one because it is what a person quotes to the
+        # office they are telephoning.
         waiting: dict[int | None, dict[str, list[int]]] = defaultdict(
             lambda: {"ict": [], "cra": []}
         )
+
         for v in units:
             bucket = totals[v.province_id]
             bucket["total"] += 1
-            if v.ict == APPROVED:
-                bucket["ict"] += 1
-            if v.cra == APPROVED:
-                bucket["cra"] += 1
-            if v.ict_status == flow.STATUS_PENDING:
-                waiting[v.province_id]["ict"].append(v.village_id)
-            if v.cra_status == flow.STATUS_PENDING:
-                waiting[v.province_id]["cra"].append(v.village_id)
+            for authority, verdict, status in (
+                ("ict", v.ict, v.ict_status),
+                ("cra", v.cra, v.cra_status),
+            ):
+                if verdict == APPROVED:
+                    bucket[authority] += 1
+                    continue
+                # Outstanding with this authority: age it.
+                key = (v.province_id, authority)
+                ages[key][flow.dt_age_bucket(v.dt_age)] += 1
+                if v.dt_age is not None:
+                    current = oldest.get(key)
+                    oldest[key] = v.dt_age if current is None else max(current, v.dt_age)
+                if status == flow.STATUS_PENDING:
+                    waiting[v.province_id][authority].append(v.village_id)
 
-        ages = self._oldest_waiting_days(waiting)
+        waits = self._oldest_waiting_days(waiting)
         names = self._province_names(list(totals.keys()))
         rows = []
         for province_id, b in totals.items():
             total = b["total"]
-            ict_ok, cra_ok = b["ict"], b["cra"]
-            rows.append(
-                {
-                    "name": names.get(province_id, "—"),
-                    "total": total,
-                    "ict_approved": ict_ok,
-                    "ict_remained": total - ict_ok,
-                    "ict_approved_pct": _pct(ict_ok, total),
-                    "ict_remained_pct": _pct(total - ict_ok, total),
-                    "ict_oldest_days": ages.get((province_id, "ict")),
-                    "cra_approved": cra_ok,
-                    "cra_remained": total - cra_ok,
-                    "cra_approved_pct": _pct(cra_ok, total),
-                    "cra_remained_pct": _pct(total - cra_ok, total),
-                    "cra_oldest_days": ages.get((province_id, "cra")),
-                }
-            )
+            row = {
+                "name": names.get(province_id, "—"),
+                "total": total,
+            }
+            for authority in ("ict", "cra"):
+                ok = b[authority]
+                key = (province_id, authority)
+                row.update({
+                    f"{authority}_approved": ok,
+                    f"{authority}_remained": total - ok,
+                    f"{authority}_approved_pct": _pct(ok, total),
+                    f"{authority}_remained_pct": _pct(total - ok, total),
+                    # The programme clock, and the distribution behind it.
+                    f"{authority}_oldest_age_days": oldest.get(key),
+                    f"{authority}_age_buckets": dict(
+                        ages.get(key, dict.fromkeys(flow.AGE_BUCKETS, 0))
+                    ),
+                    # The authority clock, unchanged — still the oldest wait
+                    # among villages actually sitting with that office.
+                    f"{authority}_oldest_days": waits.get(key),
+                })
+            rows.append(row)
+
         rows.sort(
             key=lambda r: (r["ict_remained"] + r["cra_remained"], r["total"]),
             reverse=True,
@@ -315,6 +355,34 @@ class AcceptanceAnalytics:
             "analysis": self.compute_analysis(),
             "provinces": self.compute_provinces(),
         }
+
+
+def _village_partition(units) -> dict[str, int]:
+    """The four states a village can be in, counted so they sum to the whole.
+
+    The card this feeds used to read "fully accepted N · still open M", and
+    "still open" was a residual rather than a state: it merged villages an
+    authority has refused, villages sitting with an authority, and villages
+    nobody has ever filed. Those need three different responses from the
+    programme, and nothing else on the dashboard could separate them — the two
+    authority pending counts overlap (a village waiting on both is in both),
+    so they cannot be added back into a village figure.
+
+    The groups are ``queue_bucket``'s, not ``village_verdict``'s, for two
+    reasons. They are exactly what My Work filters by, so every number here
+    can link to the list it counted. And they distinguish a rejection nobody
+    has answered from one already re-filed, which a verdict cannot: both are
+    Rejected as a verdict, but only the first is work.
+    """
+    counts = dict.fromkeys(flow.QUEUE_BUCKETS, 0)
+    for unit in units:
+        counts[unit.bucket] += 1
+    return {
+        "villages_accepted": counts[flow.BUCKET_CLOSED],
+        "villages_needs_attention": counts[flow.BUCKET_NEEDS_ATTENTION],
+        "villages_in_review": counts[flow.BUCKET_AWAITING_REVIEW],
+        "villages_not_filed": counts[flow.BUCKET_READY],
+    }
 
 
 def _verdict_counts(verdicts) -> dict[str, int]:

@@ -54,6 +54,7 @@ from sqlalchemy.orm import selectinload  # noqa: E402
 from app.core.deps import CONTRACTOR, COORDINATOR, PM, require_roles  # noqa: E402
 from app.core.jalali import format_shamsi, parse_shamsi  # noqa: E402
 from app.models.acceptance_workflow import (  # noqa: E402
+    AUTHORITIES,
     REVIEW_PENDING,
     REVIEW_RETURNED,
     REVIEW_VALIDATED,
@@ -143,19 +144,12 @@ def _submission_states(db: Session, village_ids: list[int]) -> dict:
 def _row_bucket(village: Village) -> str:
     """Which queue bucket this village falls in.
 
-    The Python twin of :func:`_bucket_clause`, so a row can say which group it
-    belongs to without the browser re-deriving the rule. The two are asserted
-    to agree in tests/test_my_work_endpoint.py — if you change one, change
-    both.
+    The Python twin of :func:`_bucket_clause`. The rule itself lives in
+    ``acceptance_workflow.queue_bucket`` because the Acceptance dashboard
+    counts the same four groups; the two implementations here are asserted to
+    agree in tests/test_my_work_endpoint.py.
     """
-    ict, cra = village.ict_status, village.cra_status
-    if ict == flow.STATUS_APPROVED and cra == flow.STATUS_APPROVED:
-        return BUCKET_CLOSED
-    if ict in _NEEDS_ATTENTION or cra in _NEEDS_ATTENTION:
-        return BUCKET_NEEDS_ATTENTION
-    if flow.STATUS_PENDING in (ict, cra):
-        return BUCKET_AWAITING_REVIEW
-    return BUCKET_READY
+    return flow.queue_bucket(village.ict_status, village.cra_status)
 
 
 def _row(village: Village, states: dict, activity: dict | None = None) -> AcceptanceVillageRow:
@@ -277,21 +271,16 @@ def upload_limits(user: User = Depends(get_current_user)) -> AcceptanceUploadLim
 # sorting and counting four hundred villages do not require loading four
 # hundred acceptance graphs first.
 # ---------------------------------------------------------------------------
-BUCKET_NEEDS_ATTENTION = "needs_attention"
-BUCKET_READY = "ready"
-BUCKET_AWAITING_REVIEW = "awaiting_review"
-BUCKET_CLOSED = "closed"
+BUCKET_NEEDS_ATTENTION = flow.BUCKET_NEEDS_ATTENTION
+BUCKET_READY = flow.BUCKET_READY
+BUCKET_AWAITING_REVIEW = flow.BUCKET_AWAITING_REVIEW
+BUCKET_CLOSED = flow.BUCKET_CLOSED
 BUCKET_RECENTLY_VALIDATED = "recently_validated"
 
 # The four that partition the list. Order matters: a village is placed in the
 # first one it matches, so a village whose ICT was returned while CRA is
 # awaiting review is the contractor's move, not the reviewer's.
-_PARTITION = (
-    BUCKET_CLOSED,
-    BUCKET_NEEDS_ATTENTION,
-    BUCKET_AWAITING_REVIEW,
-    BUCKET_READY,
-)
+_PARTITION = flow.QUEUE_BUCKETS
 BUCKETS = _PARTITION + (BUCKET_RECENTLY_VALIDATED,)
 
 # How recent "recently validated" is, for the reviewer's third bucket.
@@ -299,7 +288,7 @@ _RECENT_DAYS = 30
 
 SORTS = ("oldest_first", "newest_first", "village_name", "site_code")
 
-_NEEDS_ATTENTION = (flow.STATUS_RETURNED, flow.STATUS_REJECTED)
+_NEEDS_ATTENTION = flow.NEEDS_ATTENTION_STATUSES
 
 
 def _last_activity_column():
@@ -361,6 +350,28 @@ def _bucket_clause(bucket: str):
     raise HTTPException(400, f"bucket must be one of {', '.join(BUCKETS)}")
 
 
+def _authority_status_clause(authority: str | None, status: str | None):
+    """`this authority has that status` — one Acceptance dashboard figure.
+
+    Both halves are required: a status with no authority would have to mean
+    "either authority", which double counts a village that holds the status on
+    both sides, and that is exactly the arithmetic the dashboard exists to
+    stop people doing by hand.
+    """
+    if authority is None or status is None:
+        raise HTTPException(400, "authority and status must be given together")
+    authority = authority.upper().strip()
+    if authority not in AUTHORITIES:
+        raise HTTPException(400, f"authority must be {' or '.join(AUTHORITIES)}")
+    status = status.strip().title() if status.strip().lower() != "notfiled" else "NotFiled"
+    if status not in flow.AUTHORITY_STATUSES:
+        raise HTTPException(
+            400, f"status must be one of {', '.join(flow.AUTHORITY_STATUSES)}"
+        )
+    column = Village.ict_status if authority == "ICT" else Village.cra_status
+    return column == status
+
+
 def _queue_query(
     user: UserModel,
     db: Session,
@@ -369,6 +380,8 @@ def _queue_query(
     site_id: int | None = None,
     search: str | None = None,
     awaiting: str | None = None,
+    authority: str | None = None,
+    status: str | None = None,
 ):
     """Villages this user may see that acceptance applies to, before bucketing.
 
@@ -379,6 +392,12 @@ def _queue_query(
     Action Center's "Awaiting ICT" and "Awaiting CRA" counters link into, so
     that clicking a number lands on exactly the villages it counted rather
     than on a queue the reader has to re-filter by hand.
+
+    ``authority`` + ``status`` is the general form of the same idea, and is
+    what every figure on the Acceptance dashboard's authority cards links to:
+    authority=ICT&status=Rejected is the 103 the ICT card shows. Passing
+    ``authority`` alone is not a filter — an authority is not a subset of
+    villages — so it is refused rather than silently ignored.
     """
     stmt = (
         _village_query(user, db)
@@ -390,12 +409,13 @@ def _queue_query(
         stmt = stmt.where(Site.province_id == province_id)
     if site_id is not None:
         stmt = stmt.where(Site.id == site_id)
+    # `awaiting=ICT` is the older, narrower spelling of
+    # `authority=ICT&status=Pending`. Kept because the Action Center counters
+    # are already built on it.
     if awaiting is not None:
-        authority = awaiting.upper().strip()
-        if authority not in ("ICT", "CRA"):
-            raise HTTPException(400, "awaiting must be ICT or CRA")
-        column = Village.ict_status if authority == "ICT" else Village.cra_status
-        stmt = stmt.where(column == flow.STATUS_PENDING)
+        authority, status = awaiting, flow.STATUS_PENDING
+    if authority is not None or status is not None:
+        stmt = stmt.where(_authority_status_clause(authority, status))
     if search:
         pattern = f"%{search.strip()}%"
         stmt = stmt.where(
@@ -439,6 +459,8 @@ def bucket_counts(
     site_id: int | None = None,
     search: str | None = None,
     awaiting: str | None = Query(None, description="ICT|CRA"),
+    authority: str | None = Query(None, description="ICT|CRA, with status"),
+    status: str | None = Query(None, description="Approved|Rejected|Pending|Returned|NotFiled"),
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> AcceptanceBucketCounts:
@@ -449,7 +471,7 @@ def bucket_counts(
     """
     base = _queue_query(
         user, db, province_id=province_id, site_id=site_id, search=search,
-        awaiting=awaiting,
+        awaiting=awaiting, authority=authority, status=status,
     ).with_only_columns(Village.id)
 
     counts = {
@@ -481,6 +503,8 @@ def list_villages(
     site_id: int | None = None,
     search: str | None = None,
     awaiting: str | None = Query(None, description="ICT|CRA"),
+    authority: str | None = Query(None, description="ICT|CRA, with status"),
+    status: str | None = Query(None, description="Approved|Rejected|Pending|Returned|NotFiled"),
     limit: int = Query(50, le=500),
     offset: int = 0,
     db: Session = Depends(get_db),
@@ -489,7 +513,7 @@ def list_villages(
     """The village-by-village acceptance list, scoped to this user."""
     stmt = _queue_query(
         user, db, province_id=province_id, site_id=site_id, search=search,
-        awaiting=awaiting,
+        awaiting=awaiting, authority=authority, status=status,
     )
 
     if bucket:

@@ -2083,3 +2083,59 @@ tbody tr:hover .dt-row-filter { opacity: 1; }
 .age.is-ok { color: var(--text-muted); }
 .age.is-slipping { color: var(--amber); font-weight: 500; }
 .age.is-bad { color: var(--red); font-weight: 600; }
+
+/* ---------- Acceptance: aging bars, segmented control, grouped table ----------
+   The dashboard shows how old a backlog is, not just how big. A bar of age
+   bands says the shape of a province's problem — a long critical tail versus
+   a young queue of the same size — before any number is read. */
+
+/* Age bands. A severity ramp, validated against the palette checks: three
+   steps clear the CVD and normal-vision floors at the width a table cell
+   gives; a fourth put the two worst bands at a separation a full-colour
+   reader cannot resolve. "Unknown" is grey on purpose — an undated village is
+   unmeasured, not fine, and the legend names it rather than relying on hue. */
+.agebar {
+  display: inline-flex; height: 9px; border-radius: 3px;
+  overflow: hidden; gap: 2px; background: var(--surface-3);
+}
+.agebar > span { display: block; min-width: 2px; }
+
+/* Rank-by: one list re-sorted, which is why it is a segmented control and not
+   a tab strip. Tabs would imply switching between two different answers. */
+.seg {
+  display: inline-flex; align-items: center; gap: 2px;
+  background: var(--surface-2); border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm); padding: 3px;
+}
+.seg-label {
+  font-size: 11px; color: var(--text-dim);
+  padding: 0 8px 0 6px; text-transform: uppercase; letter-spacing: 0.05em;
+}
+.seg-btn {
+  border: 0; background: transparent; font: inherit; font-size: 12.5px;
+  color: var(--text-muted); padding: 5px 12px; border-radius: 6px; cursor: pointer;
+}
+.seg-btn:hover { color: var(--text); }
+.seg-btn.active {
+  background: var(--surface-1); color: var(--text);
+  box-shadow: var(--shadow-1); font-weight: 500;
+}
+
+/* One province per row, ICT and CRA as column groups. */
+table.grouped thead tr:first-child th.grp {
+  border-bottom: 1px solid var(--border-soft);
+  padding-bottom: 8px; font-size: 12px; letter-spacing: 0.04em;
+}
+table.grouped .grp-start { border-left: 1px solid var(--border); }
+
+/* A figure that opens the list it counted. It has to look selectable without
+   becoming a wall of blue: the underline appears on hover, the number itself
+   keeps the colour that carries its meaning. */
+.drill {
+  background: none; border: 0; padding: 0; font: inherit; color: inherit;
+  cursor: pointer; border-bottom: 1px solid transparent;
+}
+.drill:hover, .drill:focus-visible { border-bottom-color: currentColor; }
+.drill:focus-visible { outline: 2px solid var(--signal); outline-offset: 3px; }
+.cell .drill .v { transition: opacity 0.12s; }
+.cell .drill:hover .v { opacity: 0.75; }

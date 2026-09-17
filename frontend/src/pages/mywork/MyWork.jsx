@@ -8,7 +8,7 @@ import { EmptyState, Loading, PageHead } from '../../components/ui'
 import BulkLetterModal from './BulkLetterModal'
 import QueuePane from './QueuePane'
 import VillagePane from './VillagePane'
-import { GROUP_LABEL, REVIEW_ROLES, bucketsFor, errorText } from './status'
+import { AUTHORITY_LABEL, GROUP_LABEL, REVIEW_ROLES, bucketsFor, errorText } from './status'
 
 const PAGE_SIZE = 50
 
@@ -32,23 +32,34 @@ export default function MyWork() {
   const onVillage = useMatch('/my-work/v/:villageId')
   const [params, setParams] = useSearchParams()
 
-  // ?awaiting=ICT|CRA narrows the whole queue to what is sitting with one
-  // authority. It is how the Action Center's "Awaiting ICT" counter opens this
-  // screen: clicking a number has to land on exactly the villages it counted,
-  // or the number was a claim the page then made the reader re-derive.
-  const awaiting = ['ICT', 'CRA'].includes(
-    (params.get('awaiting') || '').toUpperCase()
-  )
-    ? params.get('awaiting').toUpperCase()
-    : null
+  // Where a number on another screen lands. The Acceptance dashboard and the
+  // Action Center both open this one filtered to exactly what they counted —
+  // a figure the reader then has to re-derive by hand was never really an
+  // answer. `awaiting=ICT` is the older, narrower spelling of
+  // `authority=ICT&status=Pending`; both are honoured.
+  const drill = useMemo(() => {
+    const raw = (params.get('awaiting') || '').toUpperCase()
+    if (['ICT', 'CRA'].includes(raw)) return { authority: raw, status: 'Pending' }
+
+    const authority = (params.get('authority') || '').toUpperCase()
+    const status = params.get('status')
+    if (['ICT', 'CRA'].includes(authority) && status) return { authority, status }
+    return null
+  }, [params])
+
+  // A bucket named in the URL wins over this role's usual landing bucket —
+  // that is the whole point of the headline card's four figures being links.
+  const urlBucket = params.get('bucket')
 
   const canReview = REVIEW_ROLES.includes(user?.role?.name)
   const buckets = useMemo(() => bucketsFor(user?.role?.name), [user])
 
-  // Arriving filtered to one authority means arriving at what is with that
-  // authority, whatever this role's first bucket would otherwise be.
+  // Three ways to open this screen. Named bucket: show it. Authority filter:
+  // show no bucket, because "ICT approved" cuts across all of them and
+  // landing on this role's usual bucket would show an empty list. Otherwise:
+  // the role's first bucket, as before.
   const [bucket, setBucket] = useState(
-    awaiting ? 'awaiting_review' : buckets[0].key
+    urlBucket || (drill ? null : buckets[0].key)
   )
   // Until someone picks a chip themselves, the page is allowed to open on
   // whichever bucket actually has work in it. Landing on an empty "Needs
@@ -87,25 +98,27 @@ export default function MyWork() {
     async (which = bucket, text = query) => {
       const { data } = await api.get('/acceptance/villages', {
         params: {
-          bucket: which,
+          bucket: which || undefined,
           search: text || undefined,
-          awaiting: awaiting || undefined,
+          ...(drill || {}),
           limit: PAGE_SIZE,
         },
       })
       setList(data)
       return data
     },
-    [bucket, query, awaiting]
+    [bucket, query, drill]
   )
 
   const fetchCounts = useCallback(async () => {
+    // Counted under the same filter, so the chips describe the list the
+    // reader is actually looking at rather than the whole scope.
     const { data } = await api.get('/acceptance/villages/bucket-counts', {
-      params: { awaiting: awaiting || undefined },
+      params: { ...(drill || {}) },
     })
     setCounts(data)
     return data
-  }, [awaiting])
+  }, [drill])
 
   // Bucket or search changed: reload the queue. The current village is kept
   // if it survived the change, so switching filters does not throw away what
@@ -126,20 +139,21 @@ export default function MyWork() {
     // `selected` is deliberately absent: this runs when the *queue* changes,
     // not when the reader moves down it.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bucket, query, awaiting])
+  }, [bucket, query, drill])
 
   useEffect(() => {
     fetchCounts()
       .then((data) => {
-        if (bucketPicked || (data[bucket] ?? 0) > 0) return
+        if (bucketPicked || !bucket || (data[bucket] ?? 0) > 0) return
         const first = buckets.find((b) => (data[b.key] ?? 0) > 0)
         if (first) setBucket(first.key)
       })
       .catch(() => setCounts(null))
-    // Runs once: after the reader has seen the page, moving it under them
-    // would be worse than an empty bucket.
+    // Re-runs when the drill-down filter changes, because the chip counts are
+    // counted under it. The bucket is never moved once a filter is in play:
+    // the reader arrived from a number and expects to see that number's rows.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [drill])
 
   /**
    * Something was filed or decided: refresh both panes and move on.
@@ -201,17 +215,19 @@ export default function MyWork() {
           <PanelLeftOpen size={14} /> Queue{list ? ` (${list.total})` : ''}
         </button>
 
-        {awaiting && (
+        {drill && (
           <button
             className="btn btn-sm"
             title="Show every village again"
             onClick={() => {
               const next = new URLSearchParams(params)
-              next.delete('awaiting')
+              for (const key of ['awaiting', 'authority', 'status']) next.delete(key)
               setParams(next, { replace: true })
+              setBucket(buckets[0].key)
             }}
           >
-            Awaiting {awaiting} only <X size={13} />
+            {drill.authority} · {AUTHORITY_LABEL[drill.status] || drill.status}
+            <X size={13} />
           </button>
         )}
       </div>
