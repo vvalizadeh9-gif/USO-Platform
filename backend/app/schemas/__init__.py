@@ -1460,6 +1460,15 @@ class AcceptanceAnalysis(BaseModel):
     villages_cra_not_ict: int
     # Villages finished with both authorities — the "fully accepted" headline.
     villages_both_approved: int = 0
+    # The four states one village can be in, from acceptance_workflow's own
+    # queue buckets. Exclusive and exhaustive, so they sum to
+    # AcceptanceKpis.total_dt_done_villages and can be read as one bar — which
+    # "approved vs remained" could not, because remained was a residual that
+    # merged a refusal, a wait and a village nobody had ever filed.
+    villages_accepted: int = 0
+    villages_needs_attention: int = 0
+    villages_in_review: int = 0
+    villages_not_filed: int = 0
 
 
 class ProvinceAcceptanceRow(BaseModel):
@@ -1477,8 +1486,18 @@ class ProvinceAcceptanceRow(BaseModel):
     cra_remained_pct: float
     # The oldest wait among this province's villages still sitting with each
     # authority. None when nothing is pending there — which is not zero days.
+    # The *authority* clock: what you quote to the office you are calling.
     ict_oldest_days: int | None = None
     cra_oldest_days: int | None = None
+    # The *programme* clock: the oldest outstanding village measured from its
+    # drive test, and the distribution behind it. Unlike the pair above, these
+    # are defined for a village nobody has ever filed — which is the case the
+    # authority clock could not see. Each bucket map counts every village
+    # outstanding with that authority, so it sums to ``*_remained``.
+    ict_oldest_age_days: int | None = None
+    cra_oldest_age_days: int | None = None
+    ict_age_buckets: dict[str, int] = Field(default_factory=dict)
+    cra_age_buckets: dict[str, int] = Field(default_factory=dict)
 
 
 class AcceptanceOverview(BaseModel):

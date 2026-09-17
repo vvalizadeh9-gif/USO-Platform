@@ -167,6 +167,59 @@ def days_since(moment) -> int | None:
     return max((datetime.now(timezone.utc) - moment).days, 0)
 
 
+# How old an eligible village is allowed to get before it reads as a problem.
+# Measured from the drive test, not from the last letter — see dt_age_days.
+# PLACEHOLDER VALUES: the programme has not set these yet. They colour the
+# aging column and bucket the bars; no count is computed from them, so moving
+# one changes what reads as urgent and never a total.
+AGE_WARN_DAYS = 90
+AGE_CRITICAL_DAYS = 180
+
+AGE_FRESH = "lt_warn"
+AGE_WARN = "warn"
+AGE_CRITICAL = "critical"
+AGE_UNKNOWN = "unknown"
+AGE_BUCKETS = (AGE_FRESH, AGE_WARN, AGE_CRITICAL, AGE_UNKNOWN)
+
+
+def dt_age_days(work_item: WorkItem | None) -> int | None:
+    """Days since this work item's drive test was done. None when undated.
+
+    The *programme* clock, as against :func:`days_since`'s authority clock.
+    They answer different questions and both are needed: this one measures how
+    long a village has been eligible for acceptance and not finished, which is
+    the number a programme manager is accountable for; days_since measures how
+    long the current round has sat with an office, which is the number you
+    quote when you telephone them.
+
+    Critically, this one is defined for a village nobody has ever filed. That
+    village has no submissions, so the authority clock reads None, which the
+    province table renders as an em dash — and a dash there reads as "nothing
+    pending", i.e. as good news. A village drive-tested two years ago that
+    nobody has submitted is the worst case in the programme, not the best.
+    """
+    if work_item is None or work_item.dt_date_gregorian is None:
+        return None
+    return max((date.today() - work_item.dt_date_gregorian).days, 0)
+
+
+def dt_age_bucket(days: int | None) -> str:
+    """Which severity band an age falls in. Undated is its own band.
+
+    Undated is never folded into the youngest band: a village whose DT date
+    never made it through the import is unmeasured, not new, and silently
+    counting it as fresh would rebuild the blind spot this clock exists to
+    remove.
+    """
+    if days is None:
+        return AGE_UNKNOWN
+    if days >= AGE_CRITICAL_DAYS:
+        return AGE_CRITICAL
+    if days >= AGE_WARN_DAYS:
+        return AGE_WARN
+    return AGE_FRESH
+
+
 def oldest_waiting_days(db: Session, village_ids) -> int | None:
     """The largest :func:`days_since` across a set of villages.
 
@@ -333,6 +386,44 @@ def recompute_authority_statuses(db: Session, villages) -> None:
                 ),
             )
             setattr(village, f"{authority.lower()}_status", status)
+
+
+# The four queue buckets, in the order a village is tested against them. This
+# is the Python twin of api/acceptance.py's _bucket_clause; the two are
+# asserted to agree in tests/test_my_work_endpoint.py. It lives here rather
+# than in the API module because the Acceptance dashboard counts the same four
+# groups, and two copies of this rule would let the report and the queue
+# disagree about what a village is.
+BUCKET_CLOSED = "closed"
+BUCKET_NEEDS_ATTENTION = "needs_attention"
+BUCKET_AWAITING_REVIEW = "awaiting_review"
+BUCKET_READY = "ready"
+QUEUE_BUCKETS = (
+    BUCKET_CLOSED,
+    BUCKET_NEEDS_ATTENTION,
+    BUCKET_AWAITING_REVIEW,
+    BUCKET_READY,
+)
+
+# What "needs someone on our side to act" means: an authority refused it, or a
+# reviewer sent it back to the submitter.
+NEEDS_ATTENTION_STATUSES = (STATUS_RETURNED, STATUS_REJECTED)
+
+
+def queue_bucket(ict_status: str, cra_status: str) -> str:
+    """Which of the four groups a village belongs to, from its cached statuses.
+
+    Exclusive and exhaustive: every village is in exactly one, so the four
+    counts sum to the universe. That is what lets the dashboard show them as
+    one bar and the queue show them as chips over one list.
+    """
+    if ict_status == STATUS_APPROVED and cra_status == STATUS_APPROVED:
+        return BUCKET_CLOSED
+    if ict_status in NEEDS_ATTENTION_STATUSES or cra_status in NEEDS_ATTENTION_STATUSES:
+        return BUCKET_NEEDS_ATTENTION
+    if STATUS_PENDING in (ict_status, cra_status):
+        return BUCKET_AWAITING_REVIEW
+    return BUCKET_READY
 
 
 def village_status(ict_status: str, cra_status: str) -> str:
