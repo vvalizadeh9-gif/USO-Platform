@@ -8,6 +8,15 @@ import LetterRef from '../../components/LetterRef'
 import ShamsiDate from '../../components/ShamsiDate'
 import { AUTHORITY_WHERE } from './status'
 
+/**
+ * The two halves of an acceptance round, and the pieces they share.
+ *
+ * `SubmitBody` files a letter; `ReviewBody` reads the same letter back and
+ * approves it or returns it with a reason. They are the same object seen from
+ * two sides, and a coordinator does both jobs in the same afternoon, so they
+ * live together and render inside the same block (see AuthorityBlock).
+ */
+
 // The reasons a submission actually comes back, from the coordinators who send
 // them back. Free text stays available underneath — these are a shortcut, not
 // a closed list, and the reason is what the contractor has to act on.
@@ -184,120 +193,9 @@ export function useUploadLimits() {
   return limits
 }
 
-/* -------------------------------------------------------------- the form */
-
-/**
- * The one form on this screen. Which of its two shapes it takes depends on
- * what the person is here to do, not on which page they opened:
- *
- * * a submitter fills a letter in and sends it for validation;
- * * a reviewer reads the same letter back, and approves it or returns it with
- *   a reason.
- *
- * They are the same component because they are the same object seen from two
- * sides, and because a coordinator does both jobs in the same afternoon.
- */
-export default function SubmissionForm({
-  village, submissions, authority, choices, onAuthority,
-  mode, onHistory, onDone, onSkip, onError, onRefresh,
-}) {
-  const rounds = useMemo(
-    () => submissions.filter((s) => s.authority === authority),
-    [submissions, authority]
-  )
-  const live = rounds.find((s) => s.review_status === 'Pending')
-  const decided = rounds.filter((s) => s.review_status !== 'Pending')
-  const previous = decided[0]
-
-  if (!authority) {
-    return (
-      <section className="card card-pad">
-        <div className="empty" style={{ padding: '34px 20px' }}>
-          {mode === 'review'
-            ? 'Nothing here is waiting for your validation.'
-            : 'Nothing to file for this village. It is either approved or already with a reviewer.'}
-          <div className="row" style={{ justifyContent: 'center', gap: 8, marginTop: 14 }}>
-            {submissions.length > 0 && (
-              <button className="btn btn-sm btn-ghost" onClick={onHistory}>
-                View {submissions.length} past round{submissions.length > 1 ? 's' : ''}
-              </button>
-            )}
-            <button className="btn btn-sm" onClick={onSkip}>Next village</button>
-          </div>
-        </div>
-      </section>
-    )
-  }
-
-  return (
-    <section className="card">
-      <div className="form-head">
-        <h3>
-          {mode === 'review'
-            ? `Validating ${authority}`
-            : previous
-              ? `Resubmitting ${authority}`
-              : `Filing ${authority}`}
-          {' · '}
-          <span className="muted" style={{ fontWeight: 400 }}>
-            Round {mode === 'review' ? live?.round_no : (previous?.round_no || 0) + 1}
-          </span>
-        </h3>
-        <span className="spacer" />
-
-        {/* Both authorities open at once is normal, not an edge case: one
-            letter arrives from the province and another from the region. */}
-        {choices.length > 1 && (
-          <div className="queue-filters" style={{ margin: 0, width: 'auto' }}>
-            {choices.map((name) => (
-              <button
-                key={name}
-                className="queue-filter"
-                style={{ flex: '0 0 auto', padding: '5px 12px' }}
-                aria-pressed={name === authority}
-                onClick={() => onAuthority(name)}
-              >
-                {name}
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {mode === 'review' ? (
-        <ReviewBody
-          submission={live}
-          authority={authority}
-          onDone={onDone}
-          onError={onError}
-        />
-      ) : (
-        <SubmitBody
-          village={village}
-          authority={authority}
-          previous={previous}
-          onDone={onDone}
-          onError={onError}
-          onRefresh={onRefresh}
-        />
-      )}
-
-      <div className="form-foot">
-        <button className="btn btn-sm btn-ghost" onClick={onHistory} disabled={submissions.length === 0}>
-          {submissions.length === 0
-            ? 'No past rounds'
-            : `View ${submissions.length} past round${submissions.length === 1 ? '' : 's'}`}
-        </button>
-        <span className="spacer" />
-        <button className="btn btn-sm" onClick={onSkip}>Skip</button>
-      </div>
-    </section>
-  )
-}
-
 /* ------------------------------------------------------------ submitting */
 
-function SubmitBody({ village, authority, previous, onDone, onError, onRefresh }) {
+export function SubmitBody({ village, authority, previous, onDone, onError, onRefresh }) {
   const limits = useUploadLimits()
   const storageKey = draftKey(village.village_id, authority)
 
@@ -436,7 +334,7 @@ function SubmitBody({ village, authority, previous, onDone, onError, onRefresh }
           Save draft
         </button>
         <button className="btn btn-primary" type="submit" disabled={busy}>
-          {busy ? 'Sending…' : 'Submit for validation'}
+          {busy ? 'Sending…' : `Submit ${authority}`}
         </button>
       </div>
     </form>
@@ -445,7 +343,7 @@ function SubmitBody({ village, authority, previous, onDone, onError, onRefresh }
 
 /* ------------------------------------------------------------- reviewing */
 
-function ReviewBody({ submission, authority, onDone, onError }) {
+export function ReviewBody({ submission, authority, onDone, onError }) {
   const [busy, setBusy] = useState(false)
   const [returning, setReturning] = useState(false)
   const [reason, setReason] = useState(RETURN_REASONS[0])

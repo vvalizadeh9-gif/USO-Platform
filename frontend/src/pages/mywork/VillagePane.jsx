@@ -1,41 +1,29 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Landmark, MapPin, ShieldCheck } from 'lucide-react'
+import { MapPin } from 'lucide-react'
 import api from '../../api/client'
-import LetterRef from '../../components/LetterRef'
 import { Loading } from '../../components/ui'
+import AuthorityBlock from './AuthorityBlock'
 import HistoryDrawer from './HistoryDrawer'
-import SubmissionForm from './SubmissionForm'
-import {
-  AUTHORITY_LABEL,
-  AUTHORITY_PILL,
-  AUTHORITY_TONE,
-  AUTHORITY_WHERE,
-  ROLLUP_PILL,
-} from './status'
+import { ROLLUP_PILL } from './status'
 
 const AUTHORITIES = ['ICT', 'CRA']
-const ICONS = { ICT: ShieldCheck, CRA: Landmark }
-
-function shortDate(value) {
-  if (!value) return ''
-  const d = new Date(value)
-  return Number.isNaN(d.getTime())
-    ? ''
-    : d.toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' })
-}
 
 /**
  * The right pane: one village, and the one thing to do about it.
  *
- * ICT and CRA are shown side by side because that is the question — where does
- * this village stand — and only one of them is ever being acted on at a time,
- * so the form below names which.
+ * ICT and CRA are stacked, one block each, because they are two separate
+ * letters from two separate offices and each is filed on its own. The block
+ * that needs attention is on top and open; the other is closed but can be
+ * opened to read what was accepted. Nothing has to be chosen first — the
+ * person fills in the block they have a letter for.
  */
 export default function VillagePane({ villageId, canReview, onDone, onSkip, onError }) {
   const [detail, setDetail] = useState(null)
   const [failed, setFailed] = useState(false)
-  const [authority, setAuthority] = useState(null)
   const [historyOpen, setHistoryOpen] = useState(false)
+  // Only the blocks the reader has opened or closed by hand. Everything else
+  // follows what is actionable, which changes as rounds are filed and decided.
+  const [toggled, setToggled] = useState({})
 
   const load = useCallback(() => {
     setFailed(false)
@@ -50,14 +38,15 @@ export default function VillagePane({ villageId, canReview, onDone, onSkip, onEr
 
   useEffect(() => {
     setDetail(null)
+    setToggled({})
     load()
   }, [load])
 
   const village = detail?.village
-  const submissions = detail?.submissions || []
+  const submissions = useMemo(() => detail?.submissions || [], [detail])
 
-  // Which authority this person is here to act on. A returned or rejected one
-  // outranks an unfiled one, because it is the one someone is waiting for.
+  // Which authority this person is here to act on. A reviewer acts on a round
+  // that is waiting; a submitter on an authority still open to a letter.
   const actionable = useMemo(() => {
     if (!village) return []
     if (canReview) {
@@ -65,13 +54,16 @@ export default function VillagePane({ villageId, canReview, onDone, onSkip, onEr
         submissions.some((s) => s.authority === a && s.review_status === 'Pending')
       )
     }
-    const open = AUTHORITIES.filter((a) => village.can_submit.includes(a))
-    return open.sort((a, b) => rank(village, b) - rank(village, a))
+    return AUTHORITIES.filter((a) => village.can_submit.includes(a))
   }, [village, submissions, canReview])
 
-  const active = authority && actionable.includes(authority) ? authority : actionable[0]
-
-  useEffect(() => setAuthority(null), [villageId])
+  // Attention first: a returned or rejected authority outranks an unfiled one,
+  // because someone is waiting on it. Ties keep ICT before CRA — sort is
+  // stable, so equal ranks stay in the order above.
+  const ordered = useMemo(() => {
+    if (!village) return []
+    return [...AUTHORITIES].sort((a, b) => rank(village, b) - rank(village, a))
+  }, [village])
 
   if (failed) {
     return (
@@ -87,6 +79,8 @@ export default function VillagePane({ villageId, canReview, onDone, onSkip, onEr
       </div>
     )
   }
+
+  const rounds = submissions.length
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16, minWidth: 0 }}>
@@ -118,35 +112,46 @@ export default function VillagePane({ villageId, canReview, onDone, onSkip, onEr
             </div>
           </div>
         </div>
-
-        <div
-          className="grid authority-grid mt-16"
-          style={{ gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 12 }}
-        >
-          {AUTHORITIES.map((name) => (
-            <AuthorityCard
-              key={name}
-              authority={name}
-              status={name === 'ICT' ? village.ict_status : village.cra_status}
-              rounds={submissions.filter((s) => s.authority === name)}
-            />
-          ))}
-        </div>
       </section>
 
-      <SubmissionForm
-        village={village}
-        submissions={submissions}
-        authority={active}
-        choices={actionable}
-        onAuthority={setAuthority}
-        mode={canReview ? 'review' : 'submit'}
-        onHistory={() => setHistoryOpen(true)}
-        onDone={onDone}
-        onSkip={onSkip}
-        onError={onError}
-        onRefresh={load}
-      />
+      <section className="card">
+        {ordered.map((name) => (
+          <AuthorityBlock
+            key={name}
+            village={village}
+            authority={name}
+            status={name === 'ICT' ? village.ict_status : village.cra_status}
+            rounds={submissions.filter((s) => s.authority === name)}
+            mode={canReview ? 'review' : 'submit'}
+            expanded={toggled[name] ?? actionable.includes(name)}
+            onToggle={() =>
+              setToggled((cur) => ({
+                ...cur,
+                [name]: !(cur[name] ?? actionable.includes(name)),
+              }))
+            }
+            onDone={onDone}
+            onError={onError}
+            onRefresh={load}
+          />
+        ))}
+
+        {actionable.length === 0 && (
+          <div className="empty" style={{ padding: '26px 20px' }}>
+            {canReview
+              ? 'Nothing here is waiting for your validation.'
+              : 'Nothing to file for this village. It is either approved or already with a reviewer.'}
+          </div>
+        )}
+
+        <div className="form-foot">
+          <button className="btn btn-sm btn-ghost" onClick={() => setHistoryOpen(true)} disabled={rounds === 0}>
+            {rounds === 0 ? 'No past rounds' : `View ${rounds} past round${rounds === 1 ? '' : 's'}`}
+          </button>
+          <span className="spacer" />
+          <button className="btn btn-sm" onClick={onSkip}>Next village</button>
+        </div>
+      </section>
 
       {historyOpen && (
         <HistoryDrawer
@@ -163,52 +168,4 @@ export default function VillagePane({ villageId, canReview, onDone, onSkip, onEr
 function rank(village, authority) {
   const status = authority === 'ICT' ? village.ict_status : village.cra_status
   return { Returned: 3, Rejected: 2, NotFiled: 1 }[status] || 0
-}
-
-function AuthorityCard({ authority, status, rounds }) {
-  const Icon = ICONS[authority]
-  const latest = rounds[0]
-  const returned = latest?.review_status === 'Returned' ? latest : null
-
-  return (
-    <div className={`surface-soft auth-card ${AUTHORITY_TONE[status] || 'is-idle'}`}>
-      <div className="who">
-        <Icon size={15} />
-        <div style={{ minWidth: 0 }}>
-          <div className="role">{authority}</div>
-          <div className="where">{AUTHORITY_WHERE[authority]}</div>
-        </div>
-        <span className="spacer" />
-        <span className={`pill ${AUTHORITY_PILL[status] || 'pill-dim'}`}>
-          {AUTHORITY_LABEL[status] || status}
-        </span>
-      </div>
-
-      <div className="letter">
-        {latest ? (
-          <>
-            Letter <LetterRef value={latest.letter_number} />
-            {latest.letter_date_shamsi ? (
-              <>
-                {' · '}
-                <LetterRef value={latest.letter_date_shamsi} />
-              </>
-            ) : null}
-            {' · round '}
-            {latest.round_no}
-          </>
-        ) : (
-          <span className="dim">No {authority} letter filed yet.</span>
-        )}
-      </div>
-
-      {returned && (
-        <div className="reason" style={{ marginTop: 10 }}>
-          <strong>Returned by {returned.reviewed_by_name || 'a reviewer'}</strong>
-          {returned.reviewed_at ? ` on ${shortDate(returned.reviewed_at)}` : ''}.{' '}
-          {returned.review_comment}
-        </div>
-      )}
-    </div>
-  )
 }
