@@ -283,3 +283,64 @@ def test_these_counters_belong_to_the_pm_alone(client):
     coord = _headers(client, "coord")
     assert _counter(client, coord, "ready_to_assign") is None
     assert _counter(client, coord, "returned") is None
+
+
+# ---------------------------------------------------------------------------
+# "Awaiting ICT" / "Awaiting CRA": what the user chases rather than does.
+#
+# These are the first counters that count villages rather than work items, so
+# the province scope has to be inherited through the village's work item. A
+# coordinator granted one province must not be told how many villages are
+# sitting with an authority in a province they cannot open.
+# ---------------------------------------------------------------------------
+def _seed_awaiting_villages() -> None:
+    """One village filed and awaiting ICT in each province, one of them aged."""
+    from datetime import datetime, timedelta, timezone
+
+    from app.models.acceptance_workflow import AcceptanceSubmission
+    from app.models.workitem import Village
+
+    db = SessionLocal()
+    try:
+        for site_code, code, age_days in ((HERE, "AW-HERE", 9), (ELSEWHERE, "AW-AWAY", 40)):
+            village = Village(
+                work_item_id=_work_item_id(site_code),
+                village_code=code,
+                target_classification="هدف",
+                ict_status="Pending",
+                cra_status="NotFiled",
+            )
+            db.add(village)
+            db.flush()
+            db.add(AcceptanceSubmission(
+                village_id=village.id, authority="ICT", round_no=1,
+                letter_number=f"L-{code}", source="Coordinator",
+                review_status="Pending",
+                submitted_at=datetime.now(timezone.utc) - timedelta(days=age_days),
+            ))
+        db.commit()
+    finally:
+        db.close()
+
+
+def test_awaiting_counters_are_province_scoped(client):
+    _seed_awaiting_villages()
+
+    pm = _counter(client, _headers(client, "pm"), "awaiting_ict")
+    assert pm is not None, "a PM must be told what is sitting with ICT"
+    assert pm["count"] == 2                 # both provinces
+    assert pm["oldest_days"] == 40          # the older of the two
+    assert pm["url"] == "/my-work?awaiting=ICT"
+
+    coord = _counter(client, _headers(client, "coord"), "awaiting_ict")
+    assert coord is not None
+    # Only the village in the province this coordinator was granted — and with
+    # it, only that village's age. Reporting 40 days here would name work in a
+    # province they cannot open.
+    assert coord["count"] == 1
+    assert coord["oldest_days"] == 9
+
+
+def test_a_counter_with_nothing_awaiting_is_not_shown(client):
+    """Nothing has been filed with CRA, so the card does not exist."""
+    assert _counter(client, _headers(client, "pm"), "awaiting_cra") is None

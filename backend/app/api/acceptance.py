@@ -140,40 +140,6 @@ def _submission_states(db: Session, village_ids: list[int]) -> dict:
     return states
 
 
-def _last_activity(db: Session, village_ids: list[int]) -> dict:
-    """Per village, when its acceptance last moved.
-
-    The most recent of any submission's review or submission time — so a
-    village that bounced four times reads "waiting 6 days" against its current
-    round, not three hundred days against its first.
-    """
-    if not village_ids:
-        return {}
-    rows = db.execute(
-        select(
-            AcceptanceSubmission.village_id,
-            func.max(
-                func.coalesce(
-                    AcceptanceSubmission.reviewed_at, AcceptanceSubmission.submitted_at
-                )
-            ),
-        )
-        .where(AcceptanceSubmission.village_id.in_(village_ids))
-        .group_by(AcceptanceSubmission.village_id)
-    ).all()
-    return {village_id: moment for village_id, moment in rows if moment}
-
-
-def _days_since(moment) -> int | None:
-    if moment is None:
-        return None
-    # SQLite hands back naive datetimes; treat those as UTC rather than
-    # letting the subtraction raise.
-    if moment.tzinfo is None:
-        moment = moment.replace(tzinfo=timezone.utc)
-    return max((datetime.now(timezone.utc) - moment).days, 0)
-
-
 def _row_bucket(village: Village) -> str:
     """Which queue bucket this village falls in.
 
@@ -228,7 +194,7 @@ def _row(village: Village, states: dict, activity: dict | None = None) -> Accept
         village_status=flow.village_status(village.ict_status, village.cra_status),
         bucket=_row_bucket(village),
         site_status=flow.site_status(work_item) if work_item else flow.SITE_OPEN,
-        waiting_days=_days_since((activity or {}).get(village.id)),
+        waiting_days=flow.days_since((activity or {}).get(village.id)),
         pending_authorities=pending,
         returned_authorities=sorted(state.get("returned", ())),
         can_submit=can_submit,
@@ -402,11 +368,17 @@ def _queue_query(
     province_id: int | None = None,
     site_id: int | None = None,
     search: str | None = None,
+    awaiting: str | None = None,
 ):
     """Villages this user may see that acceptance applies to, before bucketing.
 
     Acceptance is the approval of finished drive-test work, so only DT-Done
     sites appear here at all.
+
+    ``awaiting`` narrows to one authority's outstanding reviews — what the
+    Action Center's "Awaiting ICT" and "Awaiting CRA" counters link into, so
+    that clicking a number lands on exactly the villages it counted rather
+    than on a queue the reader has to re-filter by hand.
     """
     stmt = (
         _village_query(user, db)
@@ -418,6 +390,12 @@ def _queue_query(
         stmt = stmt.where(Site.province_id == province_id)
     if site_id is not None:
         stmt = stmt.where(Site.id == site_id)
+    if awaiting is not None:
+        authority = awaiting.upper().strip()
+        if authority not in ("ICT", "CRA"):
+            raise HTTPException(400, "awaiting must be ICT or CRA")
+        column = Village.ict_status if authority == "ICT" else Village.cra_status
+        stmt = stmt.where(column == flow.STATUS_PENDING)
     if search:
         pattern = f"%{search.strip()}%"
         stmt = stmt.where(
@@ -460,6 +438,7 @@ def bucket_counts(
     province_id: int | None = None,
     site_id: int | None = None,
     search: str | None = None,
+    awaiting: str | None = Query(None, description="ICT|CRA"),
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> AcceptanceBucketCounts:
@@ -469,7 +448,8 @@ def bucket_counts(
     four buckets partition the list, so they sum to the total.
     """
     base = _queue_query(
-        user, db, province_id=province_id, site_id=site_id, search=search
+        user, db, province_id=province_id, site_id=site_id, search=search,
+        awaiting=awaiting,
     ).with_only_columns(Village.id)
 
     counts = {
@@ -500,6 +480,7 @@ def list_villages(
     province_id: int | None = None,
     site_id: int | None = None,
     search: str | None = None,
+    awaiting: str | None = Query(None, description="ICT|CRA"),
     limit: int = Query(50, le=500),
     offset: int = 0,
     db: Session = Depends(get_db),
@@ -507,7 +488,8 @@ def list_villages(
 ) -> AcceptanceVillageList:
     """The village-by-village acceptance list, scoped to this user."""
     stmt = _queue_query(
-        user, db, province_id=province_id, site_id=site_id, search=search
+        user, db, province_id=province_id, site_id=site_id, search=search,
+        awaiting=awaiting,
     )
 
     if bucket:
@@ -527,7 +509,7 @@ def list_villages(
     )
     village_ids = [v.id for v in villages]
     states = _submission_states(db, village_ids)
-    activity = _last_activity(db, village_ids)
+    activity = flow.last_activity(db, village_ids)
     return AcceptanceVillageList(
         total=total, rows=[_row(v, states, activity) for v in villages]
     )
@@ -561,7 +543,7 @@ def village_detail(
     )
     states = _submission_states(db, [village_id])
     return AcceptanceVillageDetail(
-        village=_row(village, states, _last_activity(db, [village_id])),
+        village=_row(village, states, flow.last_activity(db, [village_id])),
         dt_status=village.work_item.dt_status if village.work_item else None,
         submissions=[_submission_out(s, names, village) for s in submissions],
     )

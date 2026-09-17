@@ -15,9 +15,16 @@ Business rules (agreed with the product owner):
   whose work item is DT-Done qualify. The import now applies that same gate, so
   the filter here only ever excludes rows left by an earlier, laxer import
   (اقماری, "هدف (Verbally)" and the other sub-flags).
-* ICT approved   : a village row is ICT-approved when *every requested
-  technology* (from the work item's ``requested_technology``) has
-  ``ict_status == 'Approved'``. CRA is the mirror rule.
+* ICT verdict    : Approved when *every requested technology* (from the work
+  item's ``requested_technology``) is Approved, Rejected as soon as **any** of
+  them is rejected, Pending otherwise. CRA is the mirror rule. The rule itself
+  lives in ``acceptance_workflow.authority_verdict`` — this module reads it
+  rather than re-deriving it, so the dashboard and My Work can never disagree
+  about a village.
+* Rejected vs Pending : "remained" is kept as the sum of the two, because a
+  province that has been told no needs a different conversation than one still
+  waiting for an answer, but the old combined number is still what several
+  consumers read.
 * Site rollup    : "work-item fully approved" is measured per *site* — a site is
   fully approved when all of its qualifying village rows are approved (the
   analysis area talks about "all villages related to one site").
@@ -31,26 +38,56 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.models.reference import Province
 from app.models.workitem import Village, WorkItem
+from app.services import acceptance_workflow as flow
 from app.services import cpm_columns as C
 from app.services.visibility import apply_work_item_scope
 
-_TECHS = ("2G", "3G", "4G")
 _DT_DONE = "Done"
-_APPROVED = "Approved"
+APPROVED = flow.APPROVED
+REJECTED = flow.REJECTED
+PENDING = flow.PENDING
 
 
 class _Unit:
-    """One (site, village) row and its ICT/CRA verdict — never deduplicated."""
+    """One (site, village) row and its ICT/CRA verdict — never deduplicated.
 
-    __slots__ = ("site_id", "province_id", "ict", "cra")
+    ``ict`` / ``cra`` hold a verdict word (Approved / Rejected / Pending), not a
+    flag: splitting a refusal out from a wait is the whole point of the cards
+    above this, and a boolean cannot carry it.
+
+    ``ict_status`` / ``cra_status`` are the *queue* statuses cached on the
+    village row — a wider vocabulary that also knows about returned rounds.
+    They are what the aging column is measured over, because a village is only
+    "waiting on the authority" when its status is Pending.
+    """
+
+    __slots__ = (
+        "village_id",
+        "site_id",
+        "province_id",
+        "ict",
+        "cra",
+        "ict_status",
+        "cra_status",
+    )
 
     def __init__(
-        self, site_id: int | None, province_id: int | None, ict: bool, cra: bool
+        self,
+        village_id: int,
+        site_id: int | None,
+        province_id: int | None,
+        ict: str,
+        cra: str,
+        ict_status: str | None,
+        cra_status: str | None,
     ) -> None:
+        self.village_id = village_id
         self.site_id = site_id
         self.province_id = province_id
         self.ict = ict
         self.cra = cra
+        self.ict_status = ict_status
+        self.cra_status = cra_status
 
 
 class AcceptanceAnalytics:
@@ -84,7 +121,6 @@ class AcceptanceAnalytics:
         for wi in work_items:
             if wi.dt_status != _DT_DONE:
                 continue  # acceptance only applies once the drive test is done
-            techs = self._requested_techs(wi)
             site_id = wi.site.id if wi.site else None
             province_id = wi.site.province_id if wi.site else None
             for village in wi.villages:
@@ -94,57 +130,41 @@ class AcceptanceAnalytics:
                     continue
                 units.append(
                     _Unit(
+                        village.id,
                         site_id,
                         province_id,
-                        self._instance_approved(village, techs, "ict"),
-                        self._instance_approved(village, techs, "cra"),
+                        flow.authority_verdict(village, "ICT"),
+                        flow.authority_verdict(village, "CRA"),
+                        village.ict_status,
+                        village.cra_status,
                     )
                 )
 
         self._units = units
         return units
 
-    @staticmethod
-    def _requested_techs(wi: WorkItem) -> set[str]:
-        """Parse the work item's requested technologies into a {2G,3G,4G} set."""
-        text = (wi.requested_technology or "").upper()
-        return {t for t in _TECHS if t in text}
-
-    @staticmethod
-    def _instance_approved(
-        village: Village, requested: set[str], authority: str
-    ) -> bool:
-        """Is this village row approved by ``authority`` (ict|cra)?
-
-        Approved iff every requested technology has an Approved acceptance row.
-        When the work item lists no recognisable requested tech, fall back to
-        the technologies that actually have acceptance rows so the village
-        isn't stuck un-approvable. A village with nothing to approve against is
-        treated as not approved.
-        """
-        by_tech = {a.technology: a for a in village.acceptances}
-        techs = requested or set(by_tech)
-        if not techs:
-            return False
-        attr = f"{authority}_status"
-        for tech in techs:
-            acc = by_tech.get(tech)
-            if acc is None or getattr(acc, attr) != _APPROVED:
-                return False
-        return True
-
     # ---------- KPI cards ----------
     def compute_kpis(self) -> dict:
+        """The headline counts, per authority, split three ways.
+
+        ``*_remained`` stays exactly what it always was — rejected plus pending
+        — because other consumers read it. The two new numbers split it, they
+        do not replace it.
+        """
         units = self._load_units()
         total = len(units)
-        ict_ok = sum(1 for v in units if v.ict)
-        cra_ok = sum(1 for v in units if v.cra)
+        ict = _verdict_counts(v.ict for v in units)
+        cra = _verdict_counts(v.cra for v in units)
         return {
             "total_dt_done_villages": total,
-            "total_ict_approval": ict_ok,
-            "total_ict_remained": total - ict_ok,
-            "total_cra_approval": cra_ok,
-            "total_cra_remained": total - cra_ok,
+            "total_ict_approval": ict[APPROVED],
+            "total_ict_remained": total - ict[APPROVED],
+            "total_ict_rejected": ict[REJECTED],
+            "total_ict_pending": ict[PENDING],
+            "total_cra_approval": cra[APPROVED],
+            "total_cra_remained": total - cra[APPROVED],
+            "total_cra_rejected": cra[REJECTED],
+            "total_cra_pending": cra[PENDING],
         }
 
     # ---------- analysis area ----------
@@ -152,8 +172,17 @@ class AcceptanceAnalytics:
         units = self._load_units()
 
         # Village-level cross tabs (every row counts).
-        villages_ict_not_cra = sum(1 for v in units if v.ict and not v.cra)
-        villages_cra_not_ict = sum(1 for v in units if v.cra and not v.ict)
+        villages_ict_not_cra = sum(
+            1 for v in units if v.ict == APPROVED and v.cra != APPROVED
+        )
+        villages_cra_not_ict = sum(
+            1 for v in units if v.cra == APPROVED and v.ict != APPROVED
+        )
+        # The number a programme manager is actually asked for: villages that
+        # are finished with both authorities and need nothing further.
+        villages_both_approved = sum(
+            1 for v in units if v.ict == APPROVED and v.cra == APPROVED
+        )
 
         # Site-level rollup: a site is fully approved when every one of its
         # qualifying village rows is approved.
@@ -163,8 +192,8 @@ class AcceptanceAnalytics:
         for v in units:
             s = sites[v.site_id]
             s["has"] = True
-            s["ict"] = s["ict"] and v.ict
-            s["cra"] = s["cra"] and v.cra
+            s["ict"] = s["ict"] and v.ict == APPROVED
+            s["cra"] = s["cra"] and v.cra == APPROVED
 
         site_vals = [s for s in sites.values() if s["has"]]
         sites_ict_full = sum(1 for s in site_vals if s["ict"])
@@ -183,22 +212,41 @@ class AcceptanceAnalytics:
             ),
             "villages_ict_not_cra": villages_ict_not_cra,
             "villages_cra_not_ict": villages_cra_not_ict,
+            "villages_both_approved": villages_both_approved,
         }
 
     # ---------- province status ----------
     def compute_provinces(self) -> list[dict]:
+        """Per-province status, worst first.
+
+        The sort is deliberate: the table is read to decide which province
+        office to call this week, and ordering by size answered a different
+        question — it put the biggest province on top whether or not anything
+        was outstanding there. Ordering by what is still outstanding (ICT plus
+        CRA remained) puts the week's work at the top of the screen.
+        """
         units = self._load_units()
         totals: dict[int | None, dict[str, int]] = defaultdict(
             lambda: {"total": 0, "ict": 0, "cra": 0}
         )
+        # Villages still sitting with each authority, per province — the only
+        # ones the aging column is measured over.
+        waiting: dict[int | None, dict[str, list[int]]] = defaultdict(
+            lambda: {"ict": [], "cra": []}
+        )
         for v in units:
             bucket = totals[v.province_id]
             bucket["total"] += 1
-            if v.ict:
+            if v.ict == APPROVED:
                 bucket["ict"] += 1
-            if v.cra:
+            if v.cra == APPROVED:
                 bucket["cra"] += 1
+            if v.ict_status == flow.STATUS_PENDING:
+                waiting[v.province_id]["ict"].append(v.village_id)
+            if v.cra_status == flow.STATUS_PENDING:
+                waiting[v.province_id]["cra"].append(v.village_id)
 
+        ages = self._oldest_waiting_days(waiting)
         names = self._province_names(list(totals.keys()))
         rows = []
         for province_id, b in totals.items():
@@ -212,14 +260,46 @@ class AcceptanceAnalytics:
                     "ict_remained": total - ict_ok,
                     "ict_approved_pct": _pct(ict_ok, total),
                     "ict_remained_pct": _pct(total - ict_ok, total),
+                    "ict_oldest_days": ages.get((province_id, "ict")),
                     "cra_approved": cra_ok,
                     "cra_remained": total - cra_ok,
                     "cra_approved_pct": _pct(cra_ok, total),
                     "cra_remained_pct": _pct(total - cra_ok, total),
+                    "cra_oldest_days": ages.get((province_id, "cra")),
                 }
             )
-        rows.sort(key=lambda r: r["total"], reverse=True)
+        rows.sort(
+            key=lambda r: (r["ict_remained"] + r["cra_remained"], r["total"]),
+            reverse=True,
+        )
         return rows
+
+    def _oldest_waiting_days(self, waiting: dict) -> dict[tuple, int | None]:
+        """The oldest wait per (province, authority), in one round trip.
+
+        Reuses ``acceptance_workflow``'s aging — the same days My Work prints
+        on a village row — rather than measuring time a second way here.
+        """
+        every_id = {
+            village_id
+            for by_authority in waiting.values()
+            for ids in by_authority.values()
+            for village_id in ids
+        }
+        if not every_id:
+            return {}
+        activity = flow.last_activity(self._db, every_id)
+
+        out: dict[tuple, int | None] = {}
+        for province_id, by_authority in waiting.items():
+            for authority, ids in by_authority.items():
+                days = [
+                    d
+                    for d in (flow.days_since(activity.get(i)) for i in ids)
+                    if d is not None
+                ]
+                out[(province_id, authority)] = max(days) if days else None
+        return out
 
     def _province_names(self, ids: list[int | None]) -> dict[int, str]:
         clean_ids = [i for i in ids if i is not None]
@@ -235,6 +315,14 @@ class AcceptanceAnalytics:
             "analysis": self.compute_analysis(),
             "provinces": self.compute_provinces(),
         }
+
+
+def _verdict_counts(verdicts) -> dict[str, int]:
+    """Tally a stream of verdict words into the three buckets."""
+    counts = {APPROVED: 0, REJECTED: 0, PENDING: 0}
+    for verdict in verdicts:
+        counts[verdict] = counts.get(verdict, 0) + 1
+    return counts
 
 
 def _pct(part: int, whole: int) -> float:
