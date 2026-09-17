@@ -379,7 +379,9 @@ function ProblematicCaption({ now, then, label, months }) {
       {/* Not drawn above, and said so rather than left to be noticed: a
           reader who sees it in the legend and cannot find the line spends
           longer looking for it than this sentence takes to read. */}
-      <span className="dt-trend-caption-note">not plotted \u2014 hover a month for its figure</span>
+      <span className="dt-trend-caption-note">
+        not plotted — hover a month for its figure
+      </span>
     </p>
   )
 }

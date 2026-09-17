@@ -390,24 +390,47 @@ def drive_test_sites(
         rows=[DriveTestSiteRow(**row) for row in page],
         filters_applied=filters.applied,
         generated_at=datetime.now(timezone.utc),
-        age_bands=_age_band_options(),
+        age_bands=_age_band_options(filters.bucket),
         ongoing_stages=_ongoing_stage_options(),
     )
 
 
-def _age_band_options() -> list[FilterOption]:
-    """The ongoing age bands, in age order, plus the sites with no clock.
+#: The "no clock" option each ageing bucket offers, and how it reads.
+#:
+#: The bands are shared; this is the one place the two clocks differ, so it is
+#: the one place the vocabulary has to be asked for by bucket. Serving the
+#: wrong one is not cosmetic: ``parse_filters`` refuses each key on the other
+#: bucket, so the control would offer a value the next request answers 422 to
+#: -- which is the exact drift serving the vocabulary exists to prevent.
+_NO_CLOCK_OPTION: dict[str, tuple[str, str]] = {
+    "ongoing": (NO_ASSIGNMENT_DATE, "Not assigned yet"),
+    "problematic": (NO_PROBLEM_DATE, "No date recorded"),
+}
+
+
+def _age_band_options(bucket: str) -> list[FilterOption]:
+    """The age bands this bucket accepts, in age order, plus its no-clock key.
 
     Straight off the service that validates them, so the control the screen
-    builds from this cannot offer a band the next request would reject. The
-    unassigned bucket is last because it is not a band — it is the sites the
+    builds from this cannot offer a band the next request would reject.
+
+    Empty for a bucket that does not age: a band on a Done list would ask how
+    long a finished thing has been unfinished, and ``parse_filters`` says so
+    with a 422. An empty list is the honest answer to "what may I filter by
+    here", and the screen already hides the control.
+
+    The no-clock key is last because it is not a band — it is the sites the
     bands cannot speak for — and putting it inside the ordered scale would
     read as an age.
     """
+    no_clock = _NO_CLOCK_OPTION.get(bucket)
+    if no_clock is None:
+        return []
+    key, label = no_clock
     return [
-        FilterOption(key=key, label=AGE_BAND_LABEL_BY_KEY[key])
-        for key in AGE_BAND_KEYS
-    ] + [FilterOption(key=NO_ASSIGNMENT_DATE, label="Not assigned yet")]
+        FilterOption(key=band, label=AGE_BAND_LABEL_BY_KEY[band])
+        for band in AGE_BAND_KEYS
+    ] + [FilterOption(key=key, label=label)]
 
 
 def _ongoing_stage_options() -> list[FilterOption]:

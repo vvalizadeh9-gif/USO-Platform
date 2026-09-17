@@ -292,6 +292,7 @@ export default function DriveTestProject() {
           problem in reverse — it is only honest while it is on screen. */}
       <div className="dt-command">
         <Toolbar
+          provinceId={provinceId}
           provinceName={provinceName}
           onClearProvince={() => setProvince(null)}
           onRefresh={refresh}
@@ -320,7 +321,12 @@ export default function DriveTestProject() {
           <KpiBand kpis={data.kpis} monthName={monthName} provinceId={provinceId} />
         ) : null}
 
-        <PlanDelivery state={plan} onRetry={refresh} provinceName={provinceName} />
+        <PlanDelivery
+          state={plan}
+          onRetry={refresh}
+          scoped={provinceId != null}
+          provinceName={provinceName}
+        />
 
         <div className="dt-pair">
           {has('ongoing_breakdown') && (

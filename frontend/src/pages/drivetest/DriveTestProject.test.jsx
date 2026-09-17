@@ -1286,6 +1286,47 @@ describe('the province filter', () => {
     )
   })
 
+  it('keeps the way out when the province list never arrives', async () => {
+    // The chip is keyed on the scope, not on the province's name. The name is
+    // looked up in the overview payload; if that request fails, the list is
+    // empty and the name is undefined while the URL is still narrowed. Hiding
+    // the chip then strands the reader in a scoped dashboard whose every retry
+    // stays scoped — the exact trap the chip exists to close.
+    api.get.mockImplementation((url) => {
+      if (url === '/drive-test/overview') return Promise.reject(new Error('down'))
+      if (url === '/drive-test/plan-delivery') return Promise.resolve({ data: planDelivery() })
+      if (url === '/drive-test/trend') return Promise.resolve({ data: trend() })
+      return Promise.reject(new Error(`unexpected ${url}`))
+    })
+    draw('/reports/drive-test?province=7')
+
+    const out = await screen.findByRole('button', { name: /Show every province again/ })
+    // Named by id, since the name is exactly what could not be fetched.
+    expect(screen.getByText('Province 7')).toBeInTheDocument()
+
+    await userEvent.click(out)
+    await waitFor(() =>
+      expect(api.get).toHaveBeenCalledWith('/drive-test/overview', { params: {} }),
+    )
+  })
+
+  it('warns that the PIP card is unnarrowed even when the province is unnamed', async () => {
+    // The warning matters most when things are going wrong, so it cannot
+    // depend on the same payload that is failing.
+    api.get.mockImplementation((url) => {
+      if (url === '/drive-test/overview') return Promise.reject(new Error('down'))
+      if (url === '/drive-test/plan-delivery') return Promise.resolve({ data: planDelivery() })
+      if (url === '/drive-test/trend') return Promise.resolve({ data: trend() })
+      return Promise.reject(new Error(`unexpected ${url}`))
+    })
+    draw('/reports/drive-test?province=7')
+
+    const card = await section('Plan and delivery')
+    expect(
+      within(card).getByText(/committed per contractor for the whole programme/),
+    ).toBeInTheDocument()
+  })
+
   it('shows no scope chip when nothing is narrowed', async () => {
     serve()
     draw()
@@ -1350,7 +1391,10 @@ describe('the trend section', () => {
     const caption = card.querySelector('.dt-trend-caption')
     expect(within(caption).getByText('11')).toBeInTheDocument()
     expect(within(caption).getByText('7')).toBeInTheDocument()
-    expect(within(caption).getByText(/not plotted/)).toBeInTheDocument()
+    // A real em dash. `\u2014` written in JSX text is six literal characters,
+    // not an escape — the mistake renders as "not plotted \u2014 hover".
+    expect(within(caption).getByText(/not plotted — hover a month/)).toBeInTheDocument()
+    expect(caption.textContent).not.toMatch(/\\u[0-9a-fA-F]{4}/)
 
     // A fall in problematic is good news, so it is not painted in the alarm
     // colour -- the same rule the KPI deltas follow.

@@ -686,6 +686,55 @@ def test_a_retired_age_band_key_still_opens_the_sites_it_used_to_mean(client, wo
     assert legacy["filters_applied"]["age_band"] == "gt_1m"
 
 
+def test_every_served_filter_option_is_one_the_endpoint_accepts(client, world):
+    """The whole point of serving the vocabulary, asserted rather than claimed.
+
+    The screen builds its band and stage controls from these lists. If one
+    carries a value the same endpoint refuses, the control offers an option
+    that answers 422 -- which is the failure serving them was meant to make
+    impossible, not merely to fix once.
+
+    The two buckets that age have different "no clock" keys and each refuses
+    the other's, so this has to be checked per bucket rather than once.
+    """
+    for bucket in ("ongoing", "problematic"):
+        body = _sites(client, world["admin"], bucket=bucket)
+        assert body["age_bands"], f"{bucket} ages, so it offers bands"
+
+        for option in body["age_bands"]:
+            got = client.get(
+                SITES,
+                headers=world["admin"],
+                params={"bucket": bucket, "age_band": option["key"]},
+            )
+            assert got.status_code == 200, (
+                f"{bucket} offers age_band={option['key']} and then refuses it: {got.text}"
+            )
+
+    # A bucket that does not age offers nothing rather than something unusable.
+    for bucket in ("done", "onair"):
+        assert _sites(client, world["admin"], bucket=bucket)["age_bands"] == []
+
+
+def test_the_problematic_no_clock_option_reaches_the_sites_it_counts(client, world):
+    """The undated sites are the ones a reader most wants to open.
+
+    They are the gap in the ageing chart -- the sites it cannot speak for --
+    and a figure with no way through to the rows behind it is the one thing
+    this whole screen exists to prevent.
+    """
+    overview = client.get(
+        "/api/v1/drive-test/overview", headers=world["admin"]
+    ).json()
+    undated = overview["problematic_breakdown"]["without_problem_date"]
+
+    offered = {o["key"] for o in _sites(client, world["admin"], bucket="problematic")["age_bands"]}
+    assert NO_PROBLEM_DATE in offered
+
+    body = _sites(client, world["admin"], bucket="problematic", age_band=NO_PROBLEM_DATE)
+    assert body["total"] == undated
+
+
 def test_rows_carry_the_site_and_its_villages(client, world):
     rows = _sites(client, world["admin"], bucket="onair")["rows"]
 

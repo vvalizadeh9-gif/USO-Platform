@@ -26,6 +26,7 @@ import { freshness } from './format'
  * the claim goes or the clock does; the clock is more useful.
  */
 export default function Toolbar({
+  provinceId,
   provinceName,
   onClearProvince,
   onRefresh,
@@ -35,19 +36,38 @@ export default function Toolbar({
   exporting,
 }) {
   const age = useTicking(generatedAt)
+  // Keyed on the scope, not on the name. The name is looked up in a payload
+  // that may not have arrived and may never arrive -- if the overview request
+  // fails, the province list is empty and the name is undefined while the URL
+  // is still narrowed. Hiding the chip then would strand the reader in a
+  // scoped dashboard whose every retry stays scoped, with nothing on screen
+  // saying so: the exact trap this chip exists to close, sprung by the one
+  // condition nobody tests by hand.
+  const scoped = provinceId != null
 
   return (
     <div className="dt-toolbar">
       <div className="dt-scope">
-        {provinceName ? (
+        {scoped ? (
           <span className="dt-scope-chip">
             <MapPin size={13} strokeWidth={2} aria-hidden="true" />
-            <span className="dt-farsi">{provinceName}</span>
+            {/* The name where it is known, the id where it is not. `dt-farsi`
+                only on a real name -- a fallback reading "Province 7" is
+                Latin text and should not be set in the Persian face. */}
+            {provinceName ? (
+              <span className="dt-farsi">{provinceName}</span>
+            ) : (
+              <span>Province {provinceId}</span>
+            )}
             <button
               type="button"
               className="dt-clear"
               onClick={onClearProvince}
-              aria-label={`Show every province again, not just ${provinceName}`}
+              aria-label={
+                provinceName
+                  ? `Show every province again, not just ${provinceName}`
+                  : 'Show every province again'
+              }
             >
               <X size={13} aria-hidden="true" />
             </button>

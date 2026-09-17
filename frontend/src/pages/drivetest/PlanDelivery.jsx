@@ -27,7 +27,7 @@ import Section from './Section'
  * thirty-one — a figure that looks like a measurement and is arithmetic
  * nonsense. Saying so costs one line and is the only honest option.
  */
-export default function PlanDelivery({ state, onRetry, provinceName }) {
+export default function PlanDelivery({ state, onRetry, scoped, provinceName }) {
   return (
     <Section
       title="Plan and delivery"
@@ -49,11 +49,21 @@ export default function PlanDelivery({ state, onRetry, provinceName }) {
                 divide one province's actual by the whole programme's
                 commitment and call the result achievement, which is worse
                 than not narrowing at all. */}
-            {provinceName && (
+            {scoped && (
               <p className="dt-scope-note">
                 PIP is committed per contractor for the whole programme, not per
-                province, so these figures cover every province — not just{' '}
-                <span className="dt-farsi">{provinceName}</span>.
+                province, so these figures cover every province
+                {/* Named where the name is known. Shown on `scoped` rather
+                    than on the name, because the name comes from a payload
+                    that can fail to arrive while the page stays narrowed --
+                    and the warning matters most when things are going wrong. */}
+                {provinceName ? (
+                  <>
+                    {' '}— not just <span className="dt-farsi">{provinceName}</span>.
+                  </>
+                ) : (
+                  ', not only the one this page is narrowed to.'
+                )}
               </p>
             )}
             <div className="dt-figures">
