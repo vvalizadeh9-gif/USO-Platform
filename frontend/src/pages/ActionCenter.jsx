@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion'
-import { Radio, ClipboardCheck, GitCompare, ClipboardList, Bell, MapPin, Wrench, ListChecks, Undo2 } from 'lucide-react'
+import { Radio, ClipboardCheck, GitCompare, ClipboardList, Bell, MapPin, Wrench, ListChecks, Undo2, ShieldCheck, Landmark } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import api from '../api/client'
@@ -22,6 +22,11 @@ const COUNTER_META = {
   ready_to_assign: { icon: ListChecks, color: 'var(--signal)' },
   returned: { icon: Undo2, color: 'var(--amber)' },
   cpm: { icon: GitCompare, color: 'var(--amber)' },
+  // Filed and sitting with the authority. These two are the only counters on
+  // the page that are not this user's own move — they are what they chase, so
+  // the age matters more than the count and the card says both.
+  awaiting_ict: { icon: ShieldCheck, color: 'var(--signal)' },
+  awaiting_cra: { icon: Landmark, color: 'var(--violet)' },
 }
 
 // The counters are the page.
@@ -83,6 +88,9 @@ function QueueCounter({ counter, onOpen }) {
         <Icon size={15} strokeWidth={2} style={{ color: meta.color }} /> {counter.label}
       </div>
       <div className="value tnum">{counter.count}</div>
+      {counter.oldest_days != null && (
+        <div className="sub">oldest {counter.oldest_days}d</div>
+      )}
     </motion.div>
   )
 }
