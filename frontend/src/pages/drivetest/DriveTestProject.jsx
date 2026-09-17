@@ -106,8 +106,6 @@ export default function DriveTestProject() {
   const provinces = useMemo(() => data?.provinces ?? [], [data])
   const provinceName = provinces.find((p) => p.id === provinceId)?.name
 
-  const monthName = data?.current_month_label?.split(' ')[0] ?? ''
-
   /** Whether a section that depends on one payload field should be on screen.
    *
    * Present while the request is in flight or has failed, so the section can
@@ -318,7 +316,7 @@ export default function DriveTestProject() {
         ) : overview.loading && !data ? (
           <KpiSkeleton />
         ) : data ? (
-          <KpiBand kpis={data.kpis} monthName={monthName} provinceId={provinceId} />
+          <KpiBand kpis={data.kpis} provinceId={provinceId} />
         ) : null}
 
         <PlanDelivery
@@ -531,11 +529,9 @@ function TrendLegend() {
 function KpiSkeleton() {
   return (
     <div className="dt-hero dt-hero-skeleton" aria-hidden="true">
-      <span className="dt-skeleton-ring" />
-      <div className="dt-hero-body">
-        <span className="dt-skeleton-row" style={{ height: 66 }} />
-        <span className="dt-skeleton-row" style={{ width: '60%', animationDelay: '0.16s' }} />
-      </div>
+      <span className="dt-skeleton-row" style={{ height: 72, width: '52%' }} />
+      <span className="dt-skeleton-row" style={{ height: 14, animationDelay: '0.1s' }} />
+      <span className="dt-skeleton-row" style={{ height: 78, animationDelay: '0.16s' }} />
     </div>
   )
 }

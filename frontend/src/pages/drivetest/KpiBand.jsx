@@ -1,7 +1,6 @@
 import { motion, useReducedMotion } from 'framer-motion'
 import {
   AlertTriangle,
-  CalendarCheck,
   CheckCircle2,
   CircleDashed,
   Minus,
@@ -10,49 +9,40 @@ import {
 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { KPI_DIRECTION, STATE_COLOR } from './constants'
-import { count, deltaTone, percent, TONE_COLOR } from './format'
+import { achievement, count, deltaTone, percent, TONE_COLOR } from './format'
 import { doneLink, onairLink, ongoingLink, problematicLink, remainingLink } from './links'
 import { AnimatedNumber } from './charts/primitives'
 
 /**
- * The programme in one ring.
+ * The programme in one line of progress.
  *
- * WHAT THIS REPLACES, AND WHY. A single horizontal bar split three ways, with
- * a drawn bracket underneath spanning two of the segments to assert that they
- * add up to Remaining. Two things were wrong with it. The segments were sized
- * by share, so the smallest — problematic, usually a few per cent — collapsed
- * to a sliver with its label suppressed and its figure unreadable, which is
- * the one segment somebody scanning this page is looking for. And the bracket
- * was a piece of chart furniture invented for this page alone: a hand-drawn
- * rule with a caption hanging off it, in a layout that reflowed whenever the
- * shares moved.
+ * WHAT THIS REPLACES, AND WHY. A ring split three ways. The ring fixed the
+ * split bar it replaced — figures moved out of the geometry and into tiles —
+ * but it kept the geometry's own failure: at the completion rate this
+ * programme actually runs at, around ninety-five per cent, the done arc is
+ * the ring and the two arcs a reader is scanning for are slivers a couple of
+ * degrees wide. A part-to-whole chart that cannot show its small parts is
+ * decoration.
  *
- * A ring solves the first problem and deletes the second. Every on-air site
- * is one degree of arc, so the three states still sum to the total by
- * construction, but the figures no longer live inside the geometry — they sit
- * in tiles beside it at a size that does not depend on how big the slice is.
- * The total goes in the middle of the ring, where a part-to-whole chart
- * already points. Remaining stops being a bracket and becomes what it is: a
- * line of arithmetic under the tiles it is the sum of.
+ * So the shape of the answer leads instead of the picture of it. The
+ * completion rate is the hero figure, because it is the one number anybody
+ * opening this page came for; the counts it is made of sit under it as
+ * arithmetic — 625 of 661 — and the backlog, the thing that is actually
+ * managed, is an accent badge rather than grey footer text. The bar under
+ * them is a plain segmented track: it still sums to the on-air total by
+ * construction, but nothing has to be legible *inside* a segment for the
+ * band to be readable, so a two-per-cent segment costing nothing is fine.
  *
- * Each tile is a link to the sites inside it. So are the total in the middle
- * and the Remaining line under them: every figure in this hero opens the sites
- * it counted.
+ * Each tile is a link to the sites inside it. So are the hero figures and the
+ * backlog badge: every number in this band opens the sites it counted.
  */
 
-const SIZE = 210
-const STROKE = 22
-const R = (SIZE - STROKE) / 2 - 6
-const C = 2 * Math.PI * R
-/** Surface-coloured gap between arcs, in arc length. Marks touching fills
- * apart with white rather than with a stroke, which would add ink that is not
- * data. Two pixels at this radius. */
-const GAP = 2
-
 function DeltaChip({ delta, direction = 'up', small }) {
-  if (delta == null) {
-    return <span className="dt-delta dt-delta-none">no baseline yet</span>
-  }
+  // No baseline, no chip. The placeholder this used to render said "no
+  // baseline yet" on every tile and every footer line at once — five copies
+  // of one fact, repeated on the band a reader looks at most often, which
+  // taught them to read past that row entirely.
+  if (delta == null) return null
   const tone = deltaTone(delta, direction)
   const color = tone ? TONE_COLOR[tone] : TONE_COLOR.flat
   const Icon = delta === 0 ? Minus : delta > 0 ? TrendingUp : TrendingDown
@@ -61,6 +51,8 @@ function DeltaChip({ delta, direction = 'up', small }) {
       <Icon size={small ? 12 : 14} strokeWidth={2.2} aria-hidden="true" />
       {delta > 0 ? '+' : ''}
       {count(delta)}
+      {/* The period is named once, on the badge that leads the band, rather
+          than three more times across the tiles under it. */}
       {!small && ' vs last month'}
     </span>
   )
@@ -68,18 +60,21 @@ function DeltaChip({ delta, direction = 'up', small }) {
 
 export { DeltaChip }
 
-export default function KpiBand({ kpis, monthName, provinceId }) {
+export default function KpiBand({ kpis, provinceId }) {
   const reduced = useReducedMotion()
   const scope = provinceId == null ? undefined : { provinceId }
 
   const onair = kpis.total_onair.value
+  const done = kpis.total_dt_done.value
+  const remaining = kpis.total_remaining.value
   const pct = (v) => (onair ? (v / onair) * 100 : 0)
+  const donePct = pct(done)
 
   const states = [
     {
       key: 'done',
       label: 'Drive tests done',
-      value: kpis.total_dt_done.value,
+      value: done,
       color: STATE_COLOR.done,
       href: doneLink(scope),
       icon: CheckCircle2,
@@ -105,149 +100,113 @@ export default function KpiBand({ kpis, monthName, provinceId }) {
       icon: AlertTriangle,
       kpi: kpis.total_problematic,
       direction: KPI_DIRECTION.total_problematic,
+      tone: 'problem',
     },
   ]
 
-  // Arc geometry. Each state gets its share of the circumference; the running
-  // offset is what makes the three of them a single closed ring rather than
-  // three charts drawn on top of each other.
-  let running = 0
-  const arcs = states.map((s) => {
-    const share = pct(s.value)
-    const length = (share / 100) * C
-    const arc = { ...s, share, length, offset: running }
-    running += length
-    return arc
-  })
+  const tiles = states.map((s) => ({ ...s, share: pct(s.value) }))
 
-  const remainingShare = pct(kpis.total_remaining.value)
+  // The bar reads done, problematic, ongoing: the blocked work sits against
+  // the finished work rather than being buried at the far end, which is the
+  // adjacency somebody managing this programme wants to see.
+  const ORDER = ['done', 'problematic', 'ongoing']
+  const segments = ORDER.map((key) => tiles.find((t) => t.key === key)).filter(Boolean)
+
+  const breakdown = segments
+    .map((s) => `${s.label}: ${count(s.value)}, ${percent(s.share)}`)
+    .join('. ')
 
   return (
     <section className="dt-hero" aria-label="Programme totals">
-      <div className="dt-hero-ring">
-        <svg
-          viewBox={`0 0 ${SIZE} ${SIZE}`}
-          className="dt-ring-svg"
-          role="img"
-          aria-label={
-            `${onair} sites on air. ` +
-            arcs
-              .map((a) => `${a.label}: ${a.value}, ${Math.round(a.share)} per cent`)
-              .join('. ')
-          }
-        >
-          <g transform={`rotate(-90 ${SIZE / 2} ${SIZE / 2})`}>
-            {/* The track. Visible on its own so a programme that is barely
-                started still reads as a ring with very little in it, rather
-                than as three stray marks. */}
-            <circle
-              cx={SIZE / 2}
-              cy={SIZE / 2}
-              r={R}
-              fill="none"
-              stroke="var(--dt-track)"
-              strokeWidth={STROKE}
-            />
-            {arcs.map((arc, i) => {
-              if (arc.length <= 0) return null
-              const drawn = Math.max(arc.length - GAP, 0.5)
-              return (
-                <motion.circle
-                  key={arc.key}
-                  data-testid="dt-ring-arc"
-                  data-state={arc.key}
-                  cx={SIZE / 2}
-                  cy={SIZE / 2}
-                  r={R}
-                  fill="none"
-                  stroke={arc.color}
-                  strokeWidth={STROKE}
-                  strokeDasharray={`${drawn} ${C - drawn}`}
-                  initial={reduced ? false : { strokeDashoffset: -arc.offset - arc.length }}
-                  animate={{ strokeDashoffset: -arc.offset }}
-                  transition={{
-                    duration: 0.7,
-                    delay: 0.05 + i * 0.12,
-                    ease: [0.16, 1, 0.3, 1],
-                  }}
-                />
-              )
-            })}
-          </g>
-        </svg>
-
-        <div className="dt-ring-core">
+      <header className="dt-hero-head">
+        <div className="dt-hero-primary">
           <Link
-            to={onairLink(scope)}
-            className="dt-ring-figure"
-            aria-label={`Total on-air: ${onair} sites`}
+            to={doneLink(scope)}
+            className="dt-hero-figure tnum"
+            aria-label={`Overall progress: ${achievement(donePct)}`}
           >
-            <AnimatedNumber value={onair} />
+            {achievement(donePct)}
           </Link>
-          <span className="dt-ring-label">sites on air</span>
-          <DeltaChip delta={kpis.total_onair.delta} direction={KPI_DIRECTION.total_onair} small />
-        </div>
-      </div>
-
-      <div className="dt-hero-body">
-        <ul className="dt-state-tiles">
-          {arcs.map((s) => (
-            <li key={s.key}>
-              <Link to={s.href} className="dt-state-tile">
-                <span className="dt-state-head">
-                  <span className="dt-state-mark" style={{ background: s.color }} aria-hidden="true">
-                    <s.icon size={12} strokeWidth={2.4} />
-                  </span>
-                  <span className="dt-state-name">{s.label}</span>
-                </span>
-                <span className="dt-state-figure tnum">{count(s.value)}</span>
-                <span className="dt-state-foot">
-                  <span className="dt-state-share tnum">{percent(s.share)} of on-air</span>
-                  <DeltaChip delta={s.kpi.delta} direction={s.direction} small />
-                </span>
-              </Link>
-            </li>
-          ))}
-        </ul>
-
-        <div className="dt-hero-foot">
-          {/* Remaining is not a fourth state — it is the two tiles above it
-              added together, said in a line rather than drawn as a bracket. */}
-          <span className="dt-foot-item">
-            <span className="dt-foot-label">Remaining</span>
-            {/* The <b> stays inside the link: it is what gives this figure its
-                weight, and a bare link in its place would render as body
-                text. */}
+          <span className="dt-hero-label">Overall Progress</span>
+          <span className="dt-hero-denominator tnum">
             <Link
-              to={remainingLink(scope)}
+              to={doneLink(scope)}
               className="dt-cell-link"
-              aria-label={`Remaining: ${kpis.total_remaining.value} sites`}
+              aria-label={`Drive tests done: ${done} sites`}
             >
-              <b className="tnum">
-                <AnimatedNumber value={kpis.total_remaining.value} />
-              </b>
+              <AnimatedNumber value={done} />
             </Link>
-            <span className="dt-foot-sub tnum">{percent(remainingShare)}</span>
-            <DeltaChip
-              delta={kpis.total_remaining.delta}
-              direction={KPI_DIRECTION.total_remaining}
-              small
-            />
-          </span>
-          <span className="dt-foot-item">
-            <CalendarCheck size={14} strokeWidth={2} aria-hidden="true" />
-            <span className="dt-foot-label">Done this month ({monthName})</span>
-            <b className="tnum">
-              <AnimatedNumber value={kpis.current_month_dt_done.value} />
-            </b>
-            <DeltaChip
-              delta={kpis.current_month_dt_done.delta}
-              direction={KPI_DIRECTION.current_month_dt_done}
-              small
-            />
+            {' of '}
+            <Link
+              to={onairLink(scope)}
+              className="dt-cell-link"
+              aria-label={`Total on-air: ${onair} sites`}
+            >
+              {count(onair)}
+            </Link>
+            {' sites done'}
           </span>
         </div>
+
+        <div className="dt-hero-aside">
+          <Link
+            to={remainingLink(scope)}
+            className="dt-backlog"
+            aria-label={`Remaining to target: ${remaining} sites`}
+          >
+            <b className="tnum">
+              <AnimatedNumber value={remaining} />
+            </b>
+            <span>Remaining to Target</span>
+          </Link>
+          <DeltaChip delta={kpis.total_remaining.delta} direction={KPI_DIRECTION.total_remaining} />
+        </div>
+      </header>
+
+      <div
+        className="dt-hero-bar"
+        role="img"
+        aria-label={`${count(onair)} sites on air. ${breakdown}`}
+      >
+        {segments.map((s, i) =>
+          s.share <= 0 ? null : (
+            <motion.span
+              key={s.key}
+              data-testid="dt-hero-segment"
+              data-state={s.key}
+              className="dt-hero-segment"
+              style={{ background: s.color }}
+              title={`${s.label}: ${count(s.value)} (${percent(s.share)} of on-air)`}
+              initial={reduced ? false : { width: 0 }}
+              animate={{ width: `${s.share}%` }}
+              transition={{ duration: 0.7, delay: 0.05 + i * 0.1, ease: [0.16, 1, 0.3, 1] }}
+            />
+          ),
+        )}
       </div>
+
+      <ul className="dt-state-tiles">
+        {tiles.map((s) => (
+          <li key={s.key}>
+            <Link
+              to={s.href}
+              className={`dt-state-tile${s.tone ? ` dt-state-tile-${s.tone}` : ''}`}
+            >
+              <span className="dt-state-head">
+                <span className="dt-state-mark" style={{ background: s.color }} aria-hidden="true">
+                  <s.icon size={12} strokeWidth={2.4} />
+                </span>
+                <span className="dt-state-name">{s.label}</span>
+              </span>
+              <span className="dt-state-figure tnum">{count(s.value)}</span>
+              <span className="dt-state-foot">
+                <span className="dt-state-share tnum">{percent(s.share)} of on-air</span>
+                <DeltaChip delta={s.kpi.delta} direction={s.direction} small />
+              </span>
+            </Link>
+          </li>
+        ))}
+      </ul>
     </section>
   )
 }

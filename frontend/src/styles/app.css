@@ -1366,39 +1366,67 @@ tbody tr:last-child td { border-bottom: none; }
 .dt-bench { display: grid; gap: var(--dt-gap); min-width: 0; }
 
 /* ---------- the hero ----------
-   Every on-air site as one degree of a ring, with the total in the middle and
-   the three states as tiles beside it.
+   Completion rate first, the counts it is made of underneath, the backlog as
+   an accent badge, and a segmented track for the split.
 
-   The figures are deliberately NOT inside the geometry. They used to be: a
-   split bar with each segment's count set in it, which meant the problematic
-   segment — a few per cent, and the one a reader is scanning for — collapsed
-   to a sliver with its label suppressed. A tile is the same size whatever the
-   share is. */
+   The band used to lead with geometry — a split bar, then a ring — and both
+   failed the same way at the rate this programme actually runs at: with ~95%
+   done, the other two states are slivers a couple of pixels (or degrees)
+   wide, and they are what a reader came to look at. Nothing here depends on a
+   small segment being legible. Every figure is text at a size that does not
+   move with its share; the track only carries the shape of the split.
+
+   Written in logical properties throughout so the band mirrors cleanly when a
+   Persian label puts a run of it in RTL. */
 .dt-hero {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: 30px;
-  align-items: center;
+  gap: 18px;
   background: var(--surface-1);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-2);
   padding: 24px 26px;
 }
-.dt-hero-ring { position: relative; width: 210px; height: 210px; flex-shrink: 0; }
-.dt-ring-svg { display: block; width: 100%; height: 100%; }
-.dt-ring-core {
-  position: absolute; inset: 0;
-  display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: 2px; text-align: center; pointer-events: none;
+.dt-hero-head {
+  display: flex; align-items: flex-end; justify-content: space-between;
+  gap: 16px 26px; flex-wrap: wrap;
 }
-.dt-ring-figure {
-  font-family: var(--font-display); font-size: 40px; font-weight: 600;
-  letter-spacing: -0.025em; font-variant-numeric: tabular-nums; line-height: 1;
+.dt-hero-primary { display: grid; gap: 2px; min-width: 0; }
+.dt-hero-figure {
+  font-family: var(--font-display); font-size: 52px; font-weight: 600;
+  letter-spacing: -0.03em; line-height: 1; color: var(--text);
+  justify-self: start;
 }
-.dt-ring-label { font-size: 12px; color: var(--text-muted); }
+a.dt-hero-figure:hover { color: var(--dt-done); }
+.dt-hero-label { font-size: 12.5px; font-weight: 500; color: var(--text-muted); }
+.dt-hero-denominator { margin-block-start: 5px; font-size: 13px; color: var(--text-dim); }
 
-.dt-hero-body { display: grid; gap: 16px; min-width: 0; }
+/* The backlog is what the programme is managed against, so it takes the one
+   accent in the band rather than a grey clause in a footer. */
+.dt-hero-aside { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.dt-backlog {
+  display: inline-flex; align-items: baseline; gap: 8px;
+  padding: 7px 14px; border-radius: 999px;
+  background: var(--dt-problem-wash);
+  border: 1px solid rgba(207, 59, 59, 0.3);
+  color: var(--dt-problem); font-size: 12.5px; font-weight: 500;
+  transition: box-shadow .14s, transform .14s;
+}
+a.dt-backlog:hover { box-shadow: var(--shadow-1); transform: translateY(-1px); }
+.dt-backlog b {
+  font-family: var(--font-display); font-size: 20px; font-weight: 600;
+  line-height: 1;
+}
+
+.dt-hero-bar {
+  display: flex; width: 100%; height: 14px; overflow: hidden;
+  border-radius: 999px; background: var(--dt-track);
+}
+/* A hairline of surface between fills marks them apart without adding a
+   stroke, which would be ink that is not data. */
+.dt-hero-segment { display: block; height: 100%; }
+.dt-hero-segment + .dt-hero-segment { box-shadow: -1.5px 0 0 0 var(--surface-1); }
+
 .dt-state-tiles {
   list-style: none; margin: 0; padding: 0;
   display: grid; gap: 10px;
@@ -1418,6 +1446,16 @@ a.dt-state-tile:hover {
   box-shadow: var(--shadow-1);
   transform: translateY(-1px);
 }
+/* Problematic is the operational blocker on this page, and the only tile
+   allowed to carry its state as a background. */
+.dt-state-tile-problem {
+  background: var(--dt-problem-wash);
+  border-color: rgba(207, 59, 59, 0.26);
+  color: var(--dt-problem);
+}
+.dt-state-tile-problem .dt-state-name,
+.dt-state-tile-problem .dt-state-share { color: var(--dt-problem); opacity: 0.86; }
+a.dt-state-tile-problem:hover { border-color: rgba(207, 59, 59, 0.5); }
 .dt-state-head { display: flex; align-items: center; gap: 8px; }
 .dt-state-mark {
   display: grid; place-items: center; width: 20px; height: 20px;
@@ -1434,36 +1472,13 @@ a.dt-state-tile:hover {
 }
 .dt-state-share { color: var(--text-dim); }
 
-/* Remaining is not a fourth state — it is two of the tiles added together,
-   said in a line rather than drawn as a bracket over them. */
-.dt-hero-foot {
-  display: flex; align-items: center; gap: 26px; flex-wrap: wrap;
-  padding-top: 14px; border-top: 1px solid var(--border-soft);
-  font-size: 12.5px; color: var(--text-muted);
-}
-.dt-foot-item { display: inline-flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
-.dt-foot-item svg { align-self: center; color: var(--text-dim); }
-.dt-foot-label { font-weight: 500; }
-.dt-foot-item b {
-  font-family: var(--font-display); font-size: 19px; color: var(--text);
-  font-variant-numeric: tabular-nums;
-}
-.dt-foot-sub { color: var(--text-dim); }
-
-.dt-hero-skeleton { align-items: stretch; }
-.dt-skeleton-ring {
-  width: 210px; height: 210px; border-radius: 50%;
-  background: linear-gradient(90deg, var(--surface-2), var(--surface-3), var(--surface-2));
-  background-size: 200% 100%;
-  animation: dt-shimmer 1.3s ease-in-out infinite;
-}
-.dt-hero-skeleton .dt-hero-body { align-content: center; gap: 12px; }
+.dt-hero-skeleton { gap: 16px; }
+.dt-hero-skeleton .dt-skeleton-row { display: block; }
 
 .dt-delta {
   display: inline-flex; align-items: center; gap: 4px; font-weight: 500;
   font-variant-numeric: tabular-nums; font-size: 12.5px;
 }
-.dt-delta-none { color: var(--text-dim); font-weight: 400; }
 
 /* ---------- sections, as cards ---------- */
 .dt-section {
@@ -1855,11 +1870,14 @@ tbody tr:hover .dt-row-filter { opacity: 1; }
   .dt-pair { grid-template-columns: minmax(0, 1fr); }
 
   .dt-col-book { width: auto; }
-  .dt-hero { grid-template-columns: minmax(0, 1fr); justify-items: center; gap: 22px; }
-  .dt-hero-body { width: 100%; }
 }
 @media (max-width: 760px) {
-  .dt-hero { padding: 20px 16px; }
+  .dt-hero { padding: 20px 16px; gap: 16px; }
+  /* Stacked rather than shrunk: the hero figure keeps its weight and the
+     backlog badge keeps its accent, which is the whole point of both. */
+  .dt-hero-head { align-items: flex-start; }
+  .dt-hero-figure { font-size: 44px; }
+  .dt-state-tiles { grid-template-columns: minmax(0, 1fr); }
   .dt-bar-link { grid-template-columns: 110px 1fr 42px; }
   .dt-bar-share, .dt-bar-go { display: none; }
   .dt-bullet { grid-template-columns: 104px minmax(0, 1fr) 52px; gap: 10px; }

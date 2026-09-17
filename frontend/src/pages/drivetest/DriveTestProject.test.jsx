@@ -789,37 +789,61 @@ describe('delta direction', () => {
     expect(chip).toHaveStyle({ color: 'var(--dt-done)' })
   })
 
-  it('says there is no baseline rather than showing a change of zero', async () => {
+  it('says nothing at all when there is no baseline to compare against', async () => {
+    // It used to say "no baseline yet", once per tile and twice more in the
+    // footer: five copies of one fact on the band a reader looks at most
+    // often, which is how you teach somebody to skip a row. A month with no
+    // snapshot behind it now simply has no delta on it.
     serve()
     draw()
 
-    await screen.findByLabelText('Programme totals')
-    expect(screen.getAllByText('no baseline yet').length).toBeGreaterThan(0)
+    const band = await screen.findByLabelText('Programme totals')
+    expect(screen.queryByText(/no baseline/i)).not.toBeInTheDocument()
+    expect(band.querySelectorAll('.dt-delta')).toHaveLength(0)
   })
 })
 
 describe('the hero', () => {
-  it('shows every on-air site in exactly one arc of the ring', async () => {
+  it('leads with the completion rate and the counts it is made of', async () => {
     serve()
     draw()
 
     const hero = await screen.findByLabelText('Programme totals')
-    // 40 done + 50 ongoing + 10 problematic = 100 on-air, and the ring says
-    // so because the arcs are the total rather than a picture of it.
-    const ring = within(hero).getByRole('img')
-    expect(ring).toHaveAttribute(
+    // 40 of 100 on air. The rate is the figure somebody opens this page for,
+    // so it is the figure the band opens with.
+    expect(within(hero).getByText('40%')).toBeInTheDocument()
+    expect(within(hero).getByText('Overall Progress')).toBeInTheDocument()
+    expect(hero.querySelector('.dt-hero-denominator')).toHaveTextContent('40 of 100 sites done')
+  })
+
+  it('shows every on-air site in exactly one segment of the bar', async () => {
+    serve()
+    draw()
+
+    const hero = await screen.findByLabelText('Programme totals')
+    // 40 done + 50 ongoing + 10 problematic = 100 on-air, and the bar says so
+    // because the segments are the total rather than a picture of it.
+    const bar = within(hero).getByRole('img')
+    expect(bar).toHaveAttribute(
       'aria-label',
-      '100 sites on air. Drive tests done: 40, 40 per cent. Ongoing: 50, 50 per cent. ' +
-        'Problematic: 10, 10 per cent',
+      '100 sites on air. Drive tests done: 40, 40%. Problematic: 10, 10%. Ongoing: 50, 50%',
     )
-    expect(within(hero).getAllByTestId('dt-ring-arc')).toHaveLength(3)
+    const segments = within(hero).getAllByTestId('dt-hero-segment')
+    expect(segments).toHaveLength(3)
+    // Each segment names its own figure on hover, which is what makes a
+    // two-per-cent segment cost nothing: it never has to be read inside.
+    expect(segments.map((s) => s.getAttribute('title'))).toEqual([
+      'Drive tests done: 40 (40% of on-air)',
+      'Problematic: 10 (10% of on-air)',
+      'Ongoing: 50 (50% of on-air)',
+    ])
   })
 
   it('puts each state in a tile whose size does not depend on its share', async () => {
-    // The point of moving the figures out of the geometry. Problematic is ten
-    // per cent of the programme; in the split bar this replaces its segment
-    // collapsed to a sliver and its figure was suppressed as unfittable —
-    // and it is the one figure a reader scans this band for.
+    // The point of keeping the figures out of the geometry. Problematic is
+    // ten per cent of the programme, and at the rate this programme really
+    // runs at it is nearer three — a segment too thin to label, and the one
+    // figure a reader scans this band for.
     serve()
     draw()
 
@@ -827,19 +851,30 @@ describe('the hero', () => {
     const tile = within(hero).getByText('Problematic').closest('.dt-state-tile')
     expect(within(tile).getByText('10')).toBeInTheDocument()
     expect(within(tile).getByText('10% of on-air')).toBeInTheDocument()
+    // And it is the one tile that carries its state as a background: it is
+    // the operational blocker on this page.
+    expect(tile).toHaveClass('dt-state-tile-problem')
   })
 
-  it('states Remaining as the sum of the two tiles it is made of', async () => {
-    // Remaining is not a fourth state. It used to be asserted with a drawn
-    // bracket spanning two segments of a bar — chart furniture invented for
-    // this one page — and it is arithmetic, so it is now a line of it.
+  it('states the backlog as an accent badge rather than footer text', async () => {
+    // Remaining is not a fourth state — it is the two tiles that are not done
+    // added together — but it is the figure the programme is managed against,
+    // so it stops being a grey clause under a chart.
     serve()
     draw()
 
     const hero = await screen.findByLabelText('Programme totals')
-    const foot = within(hero).getByText('Remaining').closest('.dt-foot-item')
-    expect(within(foot).getByText('60')).toBeInTheDocument()
-    expect(within(foot).getByText('60%')).toBeInTheDocument()
+    const badge = within(hero).getByLabelText('Remaining to target: 60 sites')
+    expect(badge).toHaveTextContent('60')
+    expect(badge).toHaveTextContent('Remaining to Target')
+  })
+
+  it('no longer repeats the monthly figure the plan section already carries', async () => {
+    serve()
+    draw()
+
+    const hero = await screen.findByLabelText('Programme totals')
+    expect(within(hero).queryByText(/Done this month/i)).not.toBeInTheDocument()
   })
 })
 
@@ -883,7 +918,7 @@ describe('drill-through', () => {
   // counted. Every figure now opens `/drive-test/sites`.
   const CASES = [
     {
-      name: 'the on-air total in the ring',
+      name: 'the on-air denominator',
       open: async () => await screen.findByLabelText('Programme totals'),
       // By its accessible name: the label sits beside the figure and only the
       // figure is the link.
@@ -909,9 +944,9 @@ describe('drill-through', () => {
       href: '/drive-test/sites?bucket=problematic',
     },
     {
-      name: 'the remaining line',
+      name: 'the backlog badge',
       open: async () => await screen.findByLabelText('Programme totals'),
-      label: 'Remaining: 60 sites',
+      label: 'Remaining to target: 60 sites',
       href: '/drive-test/sites?bucket=remaining',
     },
     {
