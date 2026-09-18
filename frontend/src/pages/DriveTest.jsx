@@ -1,8 +1,9 @@
 import { AnimatePresence, motion } from 'framer-motion'
-import { Eye, Radio } from 'lucide-react'
+import { ChevronRight, Eye, Radio } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import api from '../api/client'
+import LifecycleStrip from '../components/LifecycleStrip'
 import { PageHead } from '../components/ui'
 import { useAuth } from '../context/AuthContext'
 import { canReview } from '../lib/roles'
@@ -57,20 +58,24 @@ export default function DriveTest() {
         subtitle="Sites confirmed Ready: assign them, follow the contractor’s progress, and review each submission. An approved drive test is final."
       />
 
-      <div className="tabs" style={{ flexWrap: 'wrap' }}>
-        {TABS.map((t) => {
+      <LifecycleStrip current="dt" />
+
+      <div className="tabs tabs-steps" style={{ flexWrap: 'wrap' }}>
+        {TABS.map((t, i) => {
           const count = t.count ? counts[t.count] : undefined
           return (
-            <button
-              key={t.key}
-              className={`tab ${tab === t.key ? 'active' : ''}`}
-              onClick={() => setTab(t.key)}
-            >
-              <span className="row" style={{ gap: 8 }}>
-                <t.icon size={15} /> {t.label}
-                {count > 0 && <span className="badge tnum">{count}</span>}
-              </span>
-            </button>
+            <div className="tab-step" key={t.key}>
+              {i > 0 && <ChevronRight size={14} className="tab-sep" aria-hidden="true" />}
+              <button
+                className={`tab ${tab === t.key ? 'active' : ''}`}
+                onClick={() => setTab(t.key)}
+              >
+                <span className="row" style={{ gap: 8 }}>
+                  <t.icon size={15} /> {t.label}
+                  {count > 0 && <span className="badge tnum">{count}</span>}
+                </span>
+              </button>
+            </div>
           )
         })}
       </div>

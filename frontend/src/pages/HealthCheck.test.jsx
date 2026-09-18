@@ -28,6 +28,10 @@ vi.mock('../context/AuthContext', () => ({
   useAuth: () => ({ user: { role: { name: 'Coordinator' } } }),
 }))
 
+vi.mock('../components/LifecycleStrip', () => ({
+  default: () => <nav data-testid="strip" />,
+}))
+
 const HealthCheck = (await import('./HealthCheck')).default
 
 /** Stands in for the Drive Test page, reporting the URL it was reached at. */
@@ -80,5 +84,29 @@ describe('tab keys that only got renamed', () => {
   it('defaults to the pool when no tab is named', async () => {
     await landOn('/health-check')
     expect(screen.getByTestId('tab')).toHaveTextContent('pool')
+  })
+})
+
+describe('the tab row reads as an order', () => {
+  it('puts the fix loop in one group and History at the far end', async () => {
+    await landOn('/health-check')
+
+    const group = document.querySelector('.tab-group')
+    expect([...group.querySelectorAll('button')].map((b) => b.textContent.trim())).toEqual([
+      'Remediation',
+      'Re-routes',
+    ])
+    // No chevron inside the group: neither queue follows the other.
+    expect(group.querySelector('.tab-sep')).toBeNull()
+
+    const end = document.querySelector('.tab-end')
+    expect(end.textContent.trim()).toBe('History')
+  })
+
+  it('separates the steps before the group with a chevron each', async () => {
+    await landOn('/health-check')
+    // Three steps: the first has no separator, so two chevrons between them,
+    // plus one before the fix loop.
+    expect(document.querySelectorAll('.tabs-steps > .tab-step > .tab-sep')).toHaveLength(3)
   })
 })
