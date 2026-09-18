@@ -123,6 +123,34 @@ class RegionOut(ORMModel):
     name: str
 
 
+class UserOptionOut(ORMModel):
+    """A person, reduced to what a filter dropdown needs to offer them."""
+
+    id: int
+    full_name: str
+
+
+class ProvinceAssignmentOut(ORMModel):
+    """A province and who Admin has assigned to own it, for the Province
+    Assignments screen and for resolving a coordinator/RM filter elsewhere."""
+
+    id: int
+    name: str
+    coordinator_user_id: int | None = None
+    coordinator_name: str | None = None
+    regional_manager_user_id: int | None = None
+    regional_manager_name: str | None = None
+
+
+class ProvinceAssignmentUpdate(BaseModel):
+    """Set (or clear, with null) this province's coordinator and regional
+    manager. Both fields are always sent — this replaces the assignment
+    rather than patching one side of it."""
+
+    coordinator_user_id: int | None = None
+    regional_manager_user_id: int | None = None
+
+
 class ContractorOut(ORMModel):
     id: int
     name: str

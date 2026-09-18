@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from 'framer-motion'
-import { LayoutDashboard, UploadCloud, History, GitCompare, Users, ScrollText, Wrench } from 'lucide-react'
+import { LayoutDashboard, UploadCloud, History, GitCompare, Users, ScrollText, Wrench, MapPin } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import api from '../api/client'
@@ -12,6 +12,7 @@ import UsersTab from './admin/UsersTab'
 import ValidateCpmTab from './admin/ValidateCpmTab'
 import AuditLogTab from './admin/AuditLogTab'
 import ProblemCategoriesTab from './admin/ProblemCategoriesTab'
+import ProvinceAssignmentsTab from './admin/ProvinceAssignmentsTab'
 
 // Every tab besides Validate CPM hits Admin-only endpoints (see backend
 // app/api/admin.py) — PM only ever sees Validate CPM, which the backend
@@ -23,6 +24,7 @@ const TABS = [
   { key: 'validate', label: 'Validate CPM', icon: GitCompare },
   { key: 'users', label: 'Users & Permissions', icon: Users, adminOnly: true },
   { key: 'categories', label: 'Problem Categories', icon: Wrench, adminOnly: true },
+  { key: 'provinces', label: 'Province Assignments', icon: MapPin, adminOnly: true },
   { key: 'audit', label: 'Audit Log', icon: ScrollText, adminOnly: true },
 ]
 
@@ -97,6 +99,7 @@ export default function Admin() {
           {tab === 'validate' && <ValidateCpmTab onDecided={refreshPending} highlightId={highlightId} />}
           {tab === 'users' && isAdmin && <UsersTab />}
           {tab === 'categories' && isAdmin && <ProblemCategoriesTab />}
+          {tab === 'provinces' && isAdmin && <ProvinceAssignmentsTab />}
           {tab === 'audit' && isAdmin && <AuditLogTab />}
         </motion.div>
       </AnimatePresence>

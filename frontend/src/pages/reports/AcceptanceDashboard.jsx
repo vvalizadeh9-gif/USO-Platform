@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import {
   AlertTriangle,
   ArrowUpRight,
-  BadgeCheck,
+  BarChart3,
   CheckCircle2,
   Clock,
   FileQuestion,
@@ -12,9 +12,9 @@ import {
   Hourglass,
   Landmark,
   LayoutDashboard,
-  Layers,
   MapPin,
   ShieldCheck,
+  Target,
   XCircle,
 } from 'lucide-react'
 import api from '../../api/client'
@@ -31,6 +31,18 @@ const APPROVED = 'var(--green)'
 const REJECTED = 'var(--red)'
 const PENDING = 'var(--amber)'
 const IDLE = 'var(--text-dim)'
+
+// The washed-out background each accent gets behind an icon chip — the
+// tokens the design system already defines for exactly this, rather than
+// computing a tint ad hoc per use site.
+const WASH = {
+  [ICT]: 'var(--signal-glow)',
+  [CRA]: 'var(--violet-dim)',
+  [APPROVED]: 'var(--green-dim)',
+  [REJECTED]: 'var(--red-dim)',
+  [PENDING]: 'var(--amber-dim)',
+  [IDLE]: 'var(--surface-3)',
+}
 
 const TABS = [
   { key: 'overview', label: 'Overview', icon: LayoutDashboard },
@@ -99,17 +111,27 @@ const listLink = ({ ict, cra, province, bucket } = {}) =>
  * Counts are of every (site, village) row in the DT-Done هدف universe,
  * duplicates kept — see acceptance_analytics.py. Nothing here writes.
  */
+// Empty string, not undefined: these back <select> values directly, and a
+// controlled select needs a defined value from its first render.
+const EMPTY_FILTERS = { regional_manager_id: '', coordinator_id: '', contractor_id: '' }
+
 export default function AcceptanceDashboard() {
   const [data, setData] = useState(null)
   const [error, setError] = useState(false)
   const [tab, setTab] = useState('overview')
+  const [filters, setFilters] = useState(EMPTY_FILTERS)
+  const [appliedFilters, setAppliedFilters] = useState(EMPTY_FILTERS)
 
   useEffect(() => {
+    setError(false)
+    const params = Object.fromEntries(
+      Object.entries(appliedFilters).filter(([, v]) => v !== '')
+    )
     api
-      .get('/acceptance/overview')
+      .get('/acceptance/overview', { params })
       .then((r) => setData(r.data))
       .catch(() => setError(true))
-  }, [])
+  }, [appliedFilters])
 
   if (error) return <div className="card"><div className="empty">Could not load acceptance data.</div></div>
   if (!data) return <Loading label="Loading acceptance data" />
@@ -121,6 +143,8 @@ export default function AcceptanceDashboard() {
         title="Acceptance Dashboard"
         subtitle="ICT and CRA approval across your provinces, village by village."
       />
+
+      <FilterBar value={filters} onChange={setFilters} onApply={() => setAppliedFilters(filters)} />
 
       <div className="tabs">
         {TABS.map((t) => (
@@ -143,6 +167,63 @@ export default function AcceptanceDashboard() {
         </motion.div>
       </AnimatePresence>
     </>
+  )
+}
+
+/**
+ * Regional Manager, Coordinator and Contractor, in one compact bar.
+ *
+ * The first two resolve server-side to the provinces Admin assigned that
+ * person in Province Assignments — neither role carries a village-level
+ * attribution of its own, unlike a contractor. Picking one narrows every
+ * number on both tabs to their provinces; picking a contractor narrows to
+ * their work items directly. Nothing filters until Apply, so choosing all
+ * three does not fire three separate loads.
+ */
+function FilterBar({ value, onChange, onApply }) {
+  const [regionalManagers, setRegionalManagers] = useState([])
+  const [coordinators, setCoordinators] = useState([])
+  const [contractors, setContractors] = useState([])
+
+  useEffect(() => {
+    api.get('/reference/regional-managers').then((r) => setRegionalManagers(r.data)).catch(() => {})
+    api.get('/reference/coordinators').then((r) => setCoordinators(r.data)).catch(() => {})
+    api.get('/reference/contractors').then((r) => setContractors(r.data)).catch(() => {})
+  }, [])
+
+  const set = (key) => (e) => onChange({ ...value, [key]: e.target.value })
+
+  return (
+    <div className="card card-pad row wrap" style={{ gap: 12, alignItems: 'flex-end', marginBottom: 16 }}>
+      <div className="field" style={{ flex: '1 1 200px', margin: 0 }}>
+        <label>Regional manager</label>
+        <select className="input" value={value.regional_manager_id} onChange={set('regional_manager_id')}>
+          <option value="">All regional managers</option>
+          {regionalManagers.map((u) => (
+            <option key={u.id} value={u.id}>{u.full_name}</option>
+          ))}
+        </select>
+      </div>
+      <div className="field" style={{ flex: '1 1 200px', margin: 0 }}>
+        <label>Coordinator</label>
+        <select className="input" value={value.coordinator_id} onChange={set('coordinator_id')}>
+          <option value="">All coordinators</option>
+          {coordinators.map((u) => (
+            <option key={u.id} value={u.id}>{u.full_name}</option>
+          ))}
+        </select>
+      </div>
+      <div className="field" style={{ flex: '1 1 200px', margin: 0 }}>
+        <label>Contractor</label>
+        <select className="input" value={value.contractor_id} onChange={set('contractor_id')}>
+          <option value="">All contractors</option>
+          {contractors.map((c) => (
+            <option key={c.id} value={c.id}>{c.name}</option>
+          ))}
+        </select>
+      </div>
+      <button className="btn btn-primary btn-sm" onClick={onApply}>Apply</button>
+    </div>
   )
 }
 
@@ -229,14 +310,69 @@ function AgeLegend() {
 /* ---------------------------------------------------------------- Overview */
 
 function OverviewTab({ data }) {
+  const navigate = useNavigate()
   const { kpis, analysis, provinces } = data
   const total = kpis.total_dt_done_villages
+  const accepted = analysis.villages_accepted ?? analysis.villages_both_approved ?? 0
+  const remaining = total - accepted
+  const acceptedPct = total ? Math.round((accepted / total) * 100) : 0
+  const remainingPct = total ? Math.round((remaining / total) * 100) : 0
 
   return (
     <>
-      <HeadlineCard total={total} analysis={analysis} />
+      <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))' }}>
+        <KpiCard icon={Target} iconColor={ICT} label="Total villages" sub="Drive-test done">
+          <div className="tnum" style={{ fontFamily: 'var(--font-display)', fontSize: 32, fontWeight: 600, marginTop: 14 }}>
+            {total}
+          </div>
+        </KpiCard>
 
-      <div className="acc-section"><GitCompareArrows size={13} /> By authority</div>
+        <KpiCard icon={CheckCircle2} iconColor={APPROVED} label="Fully approved" sub="Both ICT + CRA">
+          <button
+            className="drill tnum"
+            onClick={() => navigate(workLink({ bucket: 'closed' }))}
+            aria-label={`Fully approved: ${accepted} villages — open the list`}
+            style={{ fontFamily: 'var(--font-display)', fontSize: 32, fontWeight: 600, marginTop: 14, color: APPROVED, display: 'block' }}
+          >
+            {accepted}
+          </button>
+          <div className="dim" style={{ fontSize: 11.5, marginTop: 2 }}>{acceptedPct}% of {total}</div>
+          <ProportionBar pct={acceptedPct} color={APPROVED} />
+        </KpiCard>
+
+        <motion.div className="card" variants={fadeUp} initial="hidden" animate="show">
+          <div style={{ padding: '18px 20px 0' }}>
+            <div className="row" style={{ justifyContent: 'space-between' }}>
+              <KpiHeader icon={Clock} iconColor={REJECTED} label="Remaining" sub="Not fully approved" />
+              <span className="pill pill-red pill-xs" style={{ flexShrink: 0 }}>Needs attention</span>
+            </div>
+            <div className="tnum" style={{ fontFamily: 'var(--font-display)', fontSize: 32, fontWeight: 600, marginTop: 14, color: REJECTED }}>
+              {remaining}
+            </div>
+            <div className="dim" style={{ fontSize: 11.5, marginTop: 2 }}>{remainingPct}% of {total}</div>
+            <ProportionBar pct={remainingPct} color={REJECTED} />
+          </div>
+          <div className="stat-row" style={{ gridTemplateColumns: 'repeat(3, 1fr)', marginTop: 14 }}>
+            <Cell
+              icon={XCircle} label="Needs an answer" color={REJECTED}
+              value={analysis.villages_needs_attention ?? 0}
+              to={workLink({ bucket: 'needs_attention' })}
+            />
+            <Cell
+              icon={Hourglass} label="With an authority" color={PENDING}
+              value={analysis.villages_in_review ?? 0}
+              to={workLink({ bucket: 'awaiting_review' })}
+            />
+            <Cell
+              icon={FileQuestion} label="Never filed" color={IDLE}
+              value={analysis.villages_not_filed ?? 0}
+              to={workLink({ bucket: 'ready' })}
+            />
+          </div>
+        </motion.div>
+      </div>
+
+      <div className="acc-section"><BarChart3 size={13} /> Authority performance</div>
       <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))' }}>
         {AUTHORITIES.map((a) => (
           <AuthorityCard
@@ -250,142 +386,66 @@ function OverviewTab({ data }) {
         ))}
       </div>
 
-      {/* Its own block, not a third authority card: the gap is the grid's own
-          gutter, so the eye reads a new idea rather than a continuation. */}
-      <div className="mt-16"><NeedsAttention provinces={provinces} /></div>
+      <div className="acc-section"><GitCompareArrows size={13} /> Approval gap</div>
+      <ApprovalGap analysis={analysis} />
 
-      <div className="acc-section"><Layers size={13} /> Work items fully approved (all villages of a site)</div>
-      <div className="card">
-        {/* Not clickable, deliberately: these count sites, and the queue
-            behind every other number on this page is a list of villages.
-            A link that lands on something subtly different from the number
-            clicked is worse than no link. */}
-        <div className="stat-row" style={{ gridTemplateColumns: 'repeat(3, 1fr)', borderTop: 'none' }}>
-          <Cell icon={ShieldCheck} label="ICT" value={analysis.sites_ict_full} color={ICT} />
-          <Cell icon={Landmark} label="CRA" value={analysis.sites_cra_full} color={CRA} />
-          <Cell icon={CheckCircle2} label="ICT & CRA" value={analysis.sites_ict_and_cra_full} color={APPROVED} />
-        </div>
-      </div>
-
-      <div className="acc-section"><Clock size={13} /> Approved by one authority, not the other</div>
-      <div className="card">
-        {/* The village figures open their list — both verdicts at once is
-            what the cross tab is. The site figures do not, for the reason
-            above: they count sites, and every list on this page is villages. */}
-        <div className="stat-row" style={{ gridTemplateColumns: 'repeat(4, 1fr)', borderTop: 'none' }}>
-          <Cell label="Sites ICT ✓ / CRA ✗" value={analysis.sites_ict_not_cra} color={ICT} />
-          <Cell label="Sites CRA ✓ / ICT ✗" value={analysis.sites_cra_not_ict} color={CRA} />
-          <Cell
-            label="Villages ICT ✓ / CRA ✗"
-            value={analysis.villages_ict_not_cra}
-            color={ICT}
-            to={listLink({ ict: 'Approved', cra: 'NotApproved' })}
-          />
-          <Cell
-            label="Villages CRA ✓ / ICT ✗"
-            value={analysis.villages_cra_not_ict}
-            color={CRA}
-            to={listLink({ cra: 'Approved', ict: 'NotApproved' })}
-          />
-        </div>
-      </div>
+      <div className="mt-16"><TopOutstandingProvinces provinces={provinces} /></div>
     </>
   )
 }
 
-/**
- * Where every village stands, in four states that sum to the universe.
- *
- * This card used to read "fully accepted N · still open M". "Still open" was a
- * residual rather than a state: it merged a village an authority has refused,
- * one sitting with an authority, and one nobody has ever filed — three
- * different jobs. Nothing else on the page could split them, because the two
- * authority pending counts overlap and so cannot be added.
- */
-function HeadlineCard({ total, analysis }) {
-  const states = [
-    {
-      key: 'closed', label: 'Accepted', icon: CheckCircle2, color: APPROVED,
-      value: analysis.villages_accepted ?? analysis.villages_both_approved ?? 0,
-      sub: 'finished — nothing further needed',
-    },
-    {
-      key: 'needs_attention', label: 'Needs an answer', icon: XCircle, color: REJECTED,
-      value: analysis.villages_needs_attention ?? 0,
-      sub: 'refused, or sent back to the submitter',
-    },
-    {
-      key: 'awaiting_review', label: 'With an authority', icon: Hourglass, color: PENDING,
-      value: analysis.villages_in_review ?? 0,
-      sub: 'filed, awaiting a verdict',
-    },
-    {
-      key: 'ready', label: 'Never filed', icon: FileQuestion, color: IDLE,
-      value: analysis.villages_not_filed ?? 0,
-      sub: 'drive test done, no letter sent yet',
-    },
-  ]
-  const accepted = states[0].value
-  const pct = total ? Math.round((accepted / total) * 100) : 0
-
+/** A KPI card's icon + label + sub, factored out since two of the three
+ * cards need it above content that differs (a plain number vs. a button). */
+function KpiHeader({ icon: Icon, iconColor, label, sub }) {
   return (
-    <motion.div className="card mt-8" variants={fadeUp} initial="hidden" animate="show">
-      <div style={{ padding: '20px 20px 18px' }}>
-        <div className="row" style={{ justifyContent: 'space-between', alignItems: 'flex-start', gap: 16 }}>
-          <div>
-            <div className="label" style={{ display: 'flex', alignItems: 'center', gap: 7, color: 'var(--text-muted)', fontSize: 12 }}>
-              <BadgeCheck size={15} strokeWidth={2} /> Where every village stands
-            </div>
-            <div className="row" style={{ alignItems: 'baseline', gap: 12, marginTop: 8 }}>
-              <span className="tnum" style={{ fontFamily: 'var(--font-display)', fontSize: 40, fontWeight: 600, letterSpacing: '-0.02em' }}>
-                {accepted}
-              </span>
-              <span className="dim" style={{ fontSize: 13 }}>
-                accepted by ICT <em style={{ fontStyle: 'normal', color: 'var(--text-muted)' }}>and</em> CRA · {pct}% of {total}
-              </span>
-            </div>
-          </div>
-          <div style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
-            <div className="dim" style={{ fontSize: 11.5 }}>
-              DT-Done <span style={{ fontFamily: 'var(--font-farsi)' }}>هدف</span> villages
-            </div>
-            <div className="tnum" style={{ fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 600, marginTop: 2 }}>
-              {total}
-            </div>
-          </div>
-        </div>
-
-        {/* Four segments summing to the universe — no village counted twice,
-            none left out, so the bar can be read as a whole. */}
-        <div className="split-bar" style={{ marginTop: 16, height: 11 }}>
-          {states.map((s) =>
-            s.value ? (
-              <span key={s.key} style={{ flex: s.value, background: s.color }} title={`${s.label}: ${s.value}`} />
-            ) : null
-          )}
-        </div>
+    <div className="row" style={{ gap: 9 }}>
+      <span
+        style={{
+          width: 30, height: 30, borderRadius: 8, flexShrink: 0,
+          background: WASH[iconColor] || 'var(--surface-3)',
+          color: iconColor, display: 'grid', placeItems: 'center',
+        }}
+      >
+        <Icon size={15} />
+      </span>
+      <div style={{ minWidth: 0 }}>
+        <div style={{ fontWeight: 600, fontSize: 13.5, whiteSpace: 'nowrap' }}>{label}</div>
+        <div className="dim" style={{ fontSize: 11, whiteSpace: 'nowrap' }}>{sub}</div>
       </div>
+    </div>
+  )
+}
 
-      <div className="stat-row" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>
-        {states.map((s) => (
-          <Cell
-            key={s.key}
-            icon={s.icon}
-            label={s.label}
-            value={s.value}
-            color={s.color}
-            sub={`${total ? Math.round((s.value / total) * 100) : 0}% · ${s.sub}`}
-            to={workLink({ bucket: s.key })}
-          />
-        ))}
-      </div>
+function KpiCard({ icon, iconColor, label, sub, children }) {
+  return (
+    <motion.div className="card card-pad" variants={fadeUp} initial="hidden" animate="show">
+      <KpiHeader icon={icon} iconColor={iconColor} label={label} sub={sub} />
+      {children}
     </motion.div>
   )
 }
 
+/** A thin two-tone bar: `pct` in the KPI's own colour, the rest neutral. */
+function ProportionBar({ pct, color }) {
+  return (
+    <div className="split-bar" style={{ marginTop: 10, height: 6 }}>
+      <span style={{ flex: Math.max(pct, 0.001), background: color }} />
+      {pct < 100 && <span style={{ flex: 100 - pct, background: 'var(--border-soft)' }} />}
+    </div>
+  )
+}
+
+/**
+ * One authority's approval ring, big number, segmented bar and breakdown.
+ *
+ * The ring shows *approved* against the remainder only — not a three-way
+ * split — because the number inside it is the approved percentage, and a
+ * ring that answered a different question than its own centre would read as
+ * a mistake. Rejected vs. pending is what the bar underneath is for.
+ */
 function AuthorityCard({ authority, total, approved, rejected, pending }) {
   const navigate = useNavigate()
-  const { key, name, where, icon: Icon, color } = authority
+  const { key, name, icon: Icon, color } = authority
   const pct = total ? Math.round((approved / total) * 100) : 0
   const to = (verdict) => listLink({ [key]: verdict })
   const parts = [
@@ -394,30 +454,41 @@ function AuthorityCard({ authority, total, approved, rejected, pending }) {
     { label: 'Pending', value: pending, color: PENDING, icon: Hourglass, verdict: 'Pending' },
   ]
   return (
-    <motion.div className="card" variants={fadeUp} initial="hidden" animate="show" style={{ borderTop: `3px solid ${color}` }}>
-      <div style={{ padding: '18px 20px 16px' }}>
-        <div className="row" style={{ justifyContent: 'space-between' }}>
-          <div className="label" style={{ display: 'flex', alignItems: 'center', gap: 7, color, fontSize: 13, fontWeight: 600 }}>
-            <Icon size={15} strokeWidth={2} /> {name}
-          </div>
-          <span className="dim" style={{ fontSize: 11.5 }}>{where}</span>
+    <motion.div className="card" variants={fadeUp} initial="hidden" animate="show">
+      <div style={{ padding: '20px 20px 16px' }}>
+        <div className="row" style={{ gap: 7, color, fontSize: 15, fontWeight: 700, marginBottom: 14 }}>
+          <Icon size={16} strokeWidth={2} /> {name}
         </div>
-
-        <div className="row" style={{ alignItems: 'baseline', gap: 10, marginTop: 10 }}>
-          {/* The headline figure opens the same list as the Approved cell
-              below it. They are the same number, so they behave the same. */}
-          <button
-            className="drill tnum"
-            onClick={() => navigate(to('Approved'))}
-            aria-label={`${name} approved: ${approved} villages — open the list`}
-            style={{ fontFamily: 'var(--font-display)', fontSize: 32, fontWeight: 600, letterSpacing: '-0.02em' }}
+        <div className="row" style={{ gap: 20 }}>
+          <div
+            style={{
+              width: 104, height: 104, borderRadius: '50%', flexShrink: 0, padding: 10,
+              background: `conic-gradient(${color} 0 ${pct}%, var(--border-soft) ${pct}% 100%)`,
+              display: 'grid', placeItems: 'center',
+            }}
           >
-            {approved}
-          </button>
-          <span className="dim" style={{ fontSize: 12.5 }}>approved · {pct}% of {total}</span>
+            <div style={{ width: '100%', height: '100%', borderRadius: '50%', background: 'var(--surface-1)', display: 'grid', placeItems: 'center', textAlign: 'center' }}>
+              <div>
+                <div className="tnum" style={{ fontSize: 20, fontWeight: 700, color }}>{pct}%</div>
+                <div className="dim" style={{ fontSize: 9.5, textTransform: 'uppercase', letterSpacing: '0.04em' }}>approved</div>
+              </div>
+            </div>
+          </div>
+          <div>
+            {/* The same figure as the Approved cell below — opens the same
+                list, so both paths to it agree. */}
+            <button
+              className="drill tnum"
+              onClick={() => navigate(to('Approved'))}
+              aria-label={`${name} approved: ${approved} villages — open the list`}
+              style={{ fontFamily: 'var(--font-display)', fontSize: 30, fontWeight: 600, display: 'block' }}
+            >
+              {approved}
+            </button>
+            <div className="dim" style={{ fontSize: 12.5 }}>approved of {total}</div>
+          </div>
         </div>
-
-        <div className="split-bar" style={{ marginTop: 12 }}>
+        <div className="split-bar" style={{ marginTop: 18, height: 10 }}>
           {parts.map((p) => (p.value ? <span key={p.label} style={{ flex: p.value, background: p.color }} /> : null))}
         </div>
       </div>
@@ -439,45 +510,83 @@ function AuthorityCard({ authority, total, approved, rejected, pending }) {
   )
 }
 
-/* -------------------------------------------------------- Needs attention */
-
-// A province too small for a rate to mean anything. Without this floor, four
-// villages and one approval outranks a province with a hundred outstanding.
-const MIN_VOLUME = 20
-
-// Three ways to read the same five rows — not three different lists. This is a
-// segmented control rather than tabs for exactly that reason: tabs would say
-// the answer changes depending on which you pick, when what changes is the
-// order. Every row carries all three numbers whichever is chosen, so nothing
-// has to be held in memory to compare them.
-const RANKS = {
-  outstanding: {
-    label: 'Outstanding',
-    note: 'villages still outstanding',
-    of: (r) => r.remained,
-  },
-  rate: {
-    label: 'Rate',
-    note: `share outstanding · provinces under ${MIN_VOLUME} villages excluded`,
-    of: (r) => (r.total >= MIN_VOLUME ? r.rate : -1),
-  },
-  aging: {
-    label: 'Aging',
-    note: 'oldest outstanding village, measured from its drive test',
-    of: (r) => r.oldest ?? -1,
-  },
+/**
+ * Villages approved by exactly one authority, split by which one — the
+ * cross-tab a PM actually chases, once the site-level rollup (kept in
+ * `analysis.sites_*` for other consumers) turned out to only ever raise "so
+ * which villages, specifically", which this answers directly.
+ */
+function ApprovalGap({ analysis }) {
+  const a = analysis.villages_ict_not_cra ?? 0
+  const b = analysis.villages_cra_not_ict ?? 0
+  const denom = a + b || 1
+  const cards = [
+    {
+      key: 'ict', title: 'ICT approved — CRA not', icon: ShieldCheck, color: ICT,
+      value: a, pct: Math.round((a / denom) * 100),
+      note: 'Cleared by ICT, still waiting on CRA',
+      to: listLink({ ict: 'Approved', cra: 'NotApproved' }),
+    },
+    {
+      key: 'cra', title: 'CRA approved — ICT not', icon: Landmark, color: CRA,
+      value: b, pct: Math.round((b / denom) * 100),
+      note: 'Cleared by CRA, still waiting on ICT',
+      to: listLink({ cra: 'Approved', ict: 'NotApproved' }),
+    },
+  ]
+  const navigate = useNavigate()
+  return (
+    <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))' }}>
+      {cards.map((c) => (
+        <motion.button
+          key={c.key}
+          className="card drill"
+          variants={fadeUp} initial="hidden" animate="show"
+          onClick={() => navigate(c.to)}
+          aria-label={`${c.title}: ${c.value} villages — open the list`}
+          style={{ padding: 18, textAlign: 'left', display: 'block', width: '100%' }}
+        >
+          <div className="row" style={{ gap: 8, marginBottom: 14 }}>
+            <span
+              style={{
+                width: 24, height: 24, borderRadius: 6, flexShrink: 0,
+                background: WASH[c.color] || 'var(--surface-3)', color: c.color,
+                display: 'grid', placeItems: 'center',
+              }}
+            >
+              <c.icon size={13} />
+            </span>
+            <div className="dim" style={{ fontSize: 12.5, fontWeight: 600 }}>{c.title}</div>
+          </div>
+          <div className="tnum" style={{ fontSize: 40, fontWeight: 700, letterSpacing: '-0.02em', color: c.color }}>{c.value}</div>
+          <div className="dim" style={{ fontSize: 11.5, marginTop: 2 }}>villages</div>
+          <ProportionBar pct={c.pct} color={c.color} />
+          <div className="dim" style={{ fontSize: 11.5, marginTop: 10 }}>{c.note}</div>
+        </motion.button>
+      ))}
+    </div>
+  )
 }
+
+/* --------------------------------------------------- Top outstanding table */
 
 const TOP_N = 5
 
-function NeedsAttention({ provinces }) {
-  const navigate = useNavigate()
-  const [rank, setRank] = useState('outstanding')
-  const rule = RANKS[rank]
+/** The status a province–authority pair's backlog rate earns. Two real
+ * meanings the platform already has a colour for — refused-heavy (red) and
+ * still-waiting (amber) — rather than a third hue invented for this table. */
+function backlogStatus(rate) {
+  if (rate >= 60) return { label: 'High backlog', pill: 'pill-red' }
+  if (rate >= 45) return { label: 'Pending letter', pill: 'pill-amber' }
+  return { label: 'Low approval rate', pill: 'pill-dim' }
+}
 
-  // One row per province–authority pair, because that pair is the unit of
-  // action: a person telephones one office about one province. Two separate
-  // top-fives would also hide which authority owns the worse problem.
+function TopOutstandingProvinces({ provinces }) {
+  const navigate = useNavigate()
+
+  // One row per province–authority pair, worst first by what's outstanding —
+  // no age, no rank toggle: this table answers "who to call this week",
+  // and the Province Status tab is where the full aged breakdown lives.
   const rows = useMemo(() => {
     const pairs = (provinces || []).flatMap((p) =>
       AUTHORITIES.map((a) => ({
@@ -487,108 +596,75 @@ function NeedsAttention({ provinces }) {
         total: p.total,
         remained: p[`${a.key}_remained`] ?? 0,
         rate: p[`${a.key}_remained_pct`] ?? 0,
-        oldest: p[`${a.key}_oldest_age_days`] ?? null,
-        buckets: p[`${a.key}_age_buckets`] ?? {},
       }))
     )
     return pairs
-      .filter((r) => rule.of(r) > 0)
-      .sort((a, b) => rule.of(b) - rule.of(a) || b.remained - a.remained)
+      .filter((r) => r.remained > 0)
+      .sort((a, b) => b.remained - a.remained)
       .slice(0, TOP_N)
-  }, [provinces, rule])
-
-  if (rows.length === 0) {
-    return (
-      <div className="card card-pad">
-        <div className="empty" style={{ padding: 18 }}>
-          Nothing outstanding with either authority.
-        </div>
-      </div>
-    )
-  }
+      .map((r, i) => ({ ...r, rank: i + 1, status: backlogStatus(r.rate) }))
+  }, [provinces])
 
   return (
     <motion.div className="card" variants={fadeUp} initial="hidden" animate="show">
-      <div className="row" style={{ justifyContent: 'space-between', padding: '18px 20px 14px', alignItems: 'flex-start', gap: 16, flexWrap: 'wrap' }}>
+      <div className="row" style={{ gap: 8, padding: '16px 20px 12px' }}>
+        <AlertTriangle size={15} style={{ color: 'var(--amber)' }} />
         <div>
-          <h3 style={{ fontSize: 15, display: 'flex', alignItems: 'center', gap: 7 }}>
-            <AlertTriangle size={15} style={{ color: PENDING }} /> Needs attention
-          </h3>
-          <div className="dim" style={{ fontSize: 12, marginTop: 4 }}>
-            Top {TOP_N} province–authority pairs by {rule.note}.
-          </div>
-        </div>
-        <div className="seg" role="group" aria-label="Rank the list by">
-          <span className="seg-label">Rank by</span>
-          {Object.entries(RANKS).map(([key, r]) => (
-            <button
-              key={key}
-              className={`seg-btn ${rank === key ? 'active' : ''}`}
-              aria-pressed={rank === key}
-              onClick={() => setRank(key)}
-            >
-              {r.label}
-            </button>
-          ))}
+          <h3 style={{ fontSize: 14 }}>Top outstanding provinces</h3>
+          <div className="dim" style={{ fontSize: 11.5 }}>Highest backlog and lowest approval rate</div>
         </div>
       </div>
 
-      <table>
-        <thead>
-          <tr>
-            <th>Province</th>
-            <th>Authority</th>
-            <th style={{ textAlign: 'right' }}>Outstanding</th>
-            <th style={{ textAlign: 'right' }}>Rate</th>
-            <th>By age</th>
-            <th style={{ textAlign: 'right' }}>Oldest</th>
-            <th />
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((r) => {
-            // The row's own number, in the row's own province — not every
-            // province's pending letters for that authority, which is what
-            // this opened before and is a different figure entirely.
-            const to = listLink({
-              [r.authority.key]: 'NotApproved',
-              province: { province_id: r.province_id, name: r.province },
-            })
-            return (
-              <tr key={r.province + r.authority.key}>
-                <td className="text-data" style={{ fontWeight: 500, whiteSpace: 'nowrap' }}>{r.province}</td>
-                <td>
-                  <span className={`pill pill-xs ${r.authority.key === 'ict' ? 'pill-cyan' : 'pill-violet'}`}>
-                    {r.authority.name}
-                  </span>
-                </td>
-                {/* Both figures on every row, so no re-sort is needed to
-                    compare them and the denominator is never hidden. */}
-                <td className="tnum" style={{ textAlign: 'right', fontWeight: 600 }}>
-                  {r.remained}<span className="dim" style={{ fontWeight: 400 }}> / {r.total}</span>
-                </td>
-                <td className="tnum" style={{ textAlign: 'right', color: PENDING }}>{r.rate}%</td>
-                <td><AgeBar buckets={r.buckets} /></td>
-                <td style={{ textAlign: 'right' }}><Age days={r.oldest} /></td>
-                <td style={{ textAlign: 'right' }}>
-                  <button
-                    className="btn btn-sm"
-                    onClick={() => navigate(to)}
-                    aria-label={`Open ${r.province}, outstanding with ${r.authority.name}, in My Work`}
-                  >
-                    Open <ArrowUpRight size={13} />
-                  </button>
-                </td>
-              </tr>
-            )
-          })}
-        </tbody>
-      </table>
-
-      <div className="row" style={{ justifyContent: 'space-between', padding: '11px 20px', borderTop: '1px solid var(--border-soft)', gap: 12, flexWrap: 'wrap' }}>
-        <AgeLegend />
-        <span className="dim" style={{ fontSize: 11.5 }}>Open lists that province's outstanding villages.</span>
-      </div>
+      {rows.length === 0 ? (
+        <div className="empty" style={{ padding: 18 }}>Nothing outstanding with either authority.</div>
+      ) : (
+        <table>
+          <thead>
+            <tr>
+              <th style={{ width: 28 }}>#</th>
+              <th>Province</th>
+              <th>Authority</th>
+              <th style={{ textAlign: 'right' }}>Outstanding</th>
+              <th style={{ textAlign: 'right' }}>Rate</th>
+              <th>Status</th>
+              <th />
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => {
+              const to = listLink({
+                [r.authority.key]: 'NotApproved',
+                province: { province_id: r.province_id, name: r.province },
+              })
+              return (
+                <tr key={r.province + r.authority.key}>
+                  <td className="tnum dim">{r.rank}</td>
+                  <td className="text-data" style={{ fontWeight: 500, whiteSpace: 'nowrap' }}>{r.province}</td>
+                  <td>
+                    <span className={`pill pill-xs ${r.authority.key === 'ict' ? 'pill-cyan' : 'pill-violet'}`}>
+                      {r.authority.name}
+                    </span>
+                  </td>
+                  <td className="tnum" style={{ textAlign: 'right', fontWeight: 600 }}>
+                    {r.remained}<span className="dim" style={{ fontWeight: 400 }}> / {r.total}</span>
+                  </td>
+                  <td className="tnum" style={{ textAlign: 'right', fontWeight: 600 }}>{r.rate}%</td>
+                  <td><span className={`pill pill-xs ${r.status.pill}`}>{r.status.label}</span></td>
+                  <td style={{ textAlign: 'right' }}>
+                    <button
+                      className="btn btn-sm"
+                      onClick={() => navigate(to)}
+                      aria-label={`Open ${r.province}, outstanding with ${r.authority.name}, in My Work`}
+                    >
+                      Open <ArrowUpRight size={13} />
+                    </button>
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      )}
     </motion.div>
   )
 }

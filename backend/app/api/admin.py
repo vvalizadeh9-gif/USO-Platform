@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from app.core import audit_actions, user_status
 from app.core.config import get_settings
 from app.core.database import get_db
-from app.core.deps import ADMIN, COORDINATOR, PM, require_roles
+from app.core.deps import ADMIN, COORDINATOR, PM, REGIONAL, require_roles
 from app.core.passwords import PasswordError, validate_password
 from app.core.security import generate_temporary_password, hash_password
 from app.models.acceptance import AuditLog, CpmChangeRequest, CpmImportBatch
@@ -42,6 +42,8 @@ from app.schemas import (
     PasswordResetRequestOut,
     ProblemCategoryAdminOut,
     ProblemCategoryWrite,
+    ProvinceAssignmentOut,
+    ProvinceAssignmentUpdate,
     SystemHealthOut,
     UserCreate,
     UserOut,
@@ -1075,6 +1077,96 @@ def update_problem_category(
     db.commit()
     db.refresh(category)
     return _category_row(category, _fix_counts(db))
+
+
+def _province_assignment_row(province: Province) -> dict:
+    return {
+        "id": province.id,
+        "name": province.name,
+        "coordinator_user_id": province.coordinator_user_id,
+        "coordinator_name": province.coordinator.full_name if province.coordinator else None,
+        "regional_manager_user_id": province.regional_manager_user_id,
+        "regional_manager_name": (
+            province.regional_manager.full_name if province.regional_manager else None
+        ),
+    }
+
+
+@router.get("/provinces", response_model=list[ProvinceAssignmentOut])
+def list_province_assignments(
+    db: Session = Depends(get_db),
+    _: User = Depends(require_roles(ADMIN)),
+):
+    """Every canonical province, with its current coordinator/RM assignment.
+
+    Backs the Province Assignments screen — the one place these are set, and
+    the fact every coordinator/regional-manager filter elsewhere in the
+    platform reads back.
+    """
+    from app.services.cpm_columns import CANONICAL_PROVINCE_BY_NORM, normalize_persian
+
+    provinces = db.query(Province).order_by(Province.name).all()
+    return [
+        _province_assignment_row(p)
+        for p in provinces
+        if normalize_persian(p.name) in CANONICAL_PROVINCE_BY_NORM
+    ]
+
+
+@router.put(
+    "/provinces/{province_id}/assignment", response_model=ProvinceAssignmentOut
+)
+def set_province_assignment(
+    province_id: int,
+    payload: ProvinceAssignmentUpdate,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_roles(ADMIN)),
+):
+    """Assign (or clear) this province's coordinator and regional manager.
+
+    Every filter that reads ``Province.coordinator_user_id`` /
+    ``regional_manager_user_id`` elsewhere trusts that whoever is named here
+    actually holds that role — so a mismatched pick is refused here, once,
+    rather than silently producing an empty result on some report far from
+    where the mistake was made.
+    """
+    province = db.get(Province, province_id)
+    if province is None:
+        raise HTTPException(404, "No such province")
+
+    before = {
+        "coordinator_user_id": province.coordinator_user_id,
+        "regional_manager_user_id": province.regional_manager_user_id,
+    }
+
+    def _resolve(user_id: int | None, role_name: str, label: str) -> int | None:
+        if user_id is None:
+            return None
+        candidate = db.get(User, user_id)
+        if candidate is None or candidate.role.name != role_name:
+            raise HTTPException(422, f"That user is not a {label}")
+        return user_id
+
+    province.coordinator_user_id = _resolve(
+        payload.coordinator_user_id, COORDINATOR, "Coordinator"
+    )
+    province.regional_manager_user_id = _resolve(
+        payload.regional_manager_user_id, REGIONAL, "Regional Manager"
+    )
+
+    db.flush()
+    record_audit(
+        db, user_id=user.id, action=audit_actions.UPDATED,
+        module="Reference", entity_type="ProvinceAssignment",
+        entity_id=province.id, old_value=before,
+        new_value={
+            "coordinator_user_id": province.coordinator_user_id,
+            "regional_manager_user_id": province.regional_manager_user_id,
+        },
+    )
+    db.commit()
+    db.refresh(province)
+    return _province_assignment_row(province)
 
 
 @router.get("/stats", response_model=AdminStatsOut)

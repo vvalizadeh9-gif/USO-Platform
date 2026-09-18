@@ -102,7 +102,7 @@ const went = () => {
 
 /** Opens the tab and hands back its table, once the overview has gone. */
 const openProvinceTab = async (user) => {
-  await screen.findByText('Where every village stands')
+  await screen.findByText('Total villages')
   await user.click(screen.getByRole('button', { name: /Province Status/ }))
   await screen.findByText('Province status')
   return waitFor(() => {
@@ -114,14 +114,19 @@ const openProvinceTab = async (user) => {
 
 beforeEach(() => {
   vi.clearAllMocks()
-  api.get.mockResolvedValue({ data: overview() })
+  // The filter bar's three reference lookups share this mock with
+  // /acceptance/overview — give them an empty list each rather than the
+  // overview payload, which is not an array and would break their .map().
+  api.get.mockImplementation((url) =>
+    Promise.resolve({ data: url === '/acceptance/overview' ? overview() : [] })
+  )
 })
 
 describe('an authority figure', () => {
   it('opens the villages with that verdict, not that queue status', async () => {
     const user = userEvent.setup()
     page()
-    await screen.findByText('Where every village stands')
+    await screen.findByText('Total villages')
 
     await user.click(screen.getByRole('button', { name: /ICT rejected: 9 villages/i }))
 
@@ -136,7 +141,7 @@ describe('an authority figure', () => {
   it('sends the headline approved figure to the same list as its cell', async () => {
     const user = userEvent.setup()
     page()
-    await screen.findByText('Where every village stands')
+    await screen.findByText('Total villages')
 
     // Two of them, deliberately: the 32px headline and the Approved cell are
     // the same figure, so they say the same thing and go the same place.
@@ -151,10 +156,10 @@ describe('the cross tab', () => {
   it('asks for both verdicts at once', async () => {
     const user = userEvent.setup()
     page()
-    await screen.findByText('Where every village stands')
+    await screen.findByText('Total villages')
 
     await user.click(
-      screen.getByRole('button', { name: /Villages ICT ✓ \/ CRA ✗: 18 villages/i })
+      screen.getByRole('button', { name: /ICT approved — CRA not: 18 villages/i })
     )
     const params = went()
     expect(params.get('ict_verdict')).toBe('Approved')
@@ -163,7 +168,7 @@ describe('the cross tab', () => {
 
   it('leaves the site figures alone, because every list here is villages', async () => {
     page()
-    await screen.findByText('Where every village stands')
+    await screen.findByText('Total villages')
 
     expect(screen.queryByRole('button', { name: /Sites ICT ✓/i })).toBeNull()
   })
@@ -173,7 +178,7 @@ describe('needs attention', () => {
   it('opens one province, not every province with that authority', async () => {
     const user = userEvent.setup()
     page()
-    await screen.findByText('Needs attention')
+    await screen.findByText('Top outstanding provinces')
 
     await user.click(
       screen.getByRole('button', { name: /Open Kerman, outstanding with ICT/ })
@@ -246,11 +251,12 @@ describe('the province table', () => {
 
   it('does not offer a list behind a zero', async () => {
     const user = userEvent.setup()
-    api.get.mockResolvedValue({
-      data: overview({
-        provinces: [province({ ict_rejected: 0, ict_rejected_age_buckets: bands() })],
-      }),
+    const customOverview = overview({
+      provinces: [province({ ict_rejected: 0, ict_rejected_age_buckets: bands() })],
     })
+    api.get.mockImplementation((url) =>
+      Promise.resolve({ data: url === '/acceptance/overview' ? customOverview : [] })
+    )
     page()
     const table = await openProvinceTab(user)
 
