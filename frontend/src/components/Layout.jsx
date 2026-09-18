@@ -1,49 +1,10 @@
 import { motion } from 'framer-motion'
-import {
-  ListChecks,
-  Radio,
-  Activity,
-  BadgeCheck,
-  Settings,
-  LogOut,
-  Menu,
-  KeyRound,
-  ClipboardList,
-  ClipboardCheck,
-  Wrench,
-  CalendarRange,
-} from 'lucide-react'
+import { KeyRound, LogOut, Menu, Settings } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { CATEGORY_OWNER_ROLES, MONTHLY_PLAN_ROLES } from '../lib/roles'
+import { DRIVE_TEST_PROJECT, NAV, REPORTS, navItemVisible } from '../lib/nav'
 import api from '../api/client'
-
-// hideRoles hides an item for the given roles, on top of any `roles`
-// inclusion list — used here to keep these four operational screens out of
-// Admin's sidebar (Admin manages the platform from the Admin Console, not
-// the day-to-day work queues) while everyone else keeps seeing them.
-const NAV = [
-  { to: '/work-items', label: 'Work Items', icon: ListChecks, end: true, hideRoles: ['Admin'] },
-  { to: '/health-check', label: 'Health Check', icon: ClipboardList, roles: ['PM', 'Coordinator'] },
-  { to: '/my-health-check', label: 'My Health Check', icon: ClipboardCheck, roles: ['Contractor'] },
-  // Category owners get exactly one screen: the sites waiting on their team.
-  { to: '/my-fix-queue', label: 'My Fix Queue', icon: Wrench, roles: CATEGORY_OWNER_ROLES },
-  { to: '/action-center', label: 'Action Center', icon: Radio, key: 'action' },
-  { to: '/my-work', label: 'My Work', icon: BadgeCheck, hideRoles: ['Admin'] },
-  // Two shapes behind one item: the contractor's own form, and the month's
-  // queue for everyone with an oversight interest in it. Admin is absent from
-  // MONTHLY_PLAN_ROLES, which is what keeps it out of their sidebar.
-  { to: '/monthly-plan', label: 'Monthly Plan', icon: CalendarRange, roles: MONTHLY_PLAN_ROLES },
-]
-
-// Reporting is separated from the work itself, because they are read at
-// different times by different people. Everything under here is read-only:
-// nothing in Reports changes a record.
-const REPORTS = [
-  { to: '/reports/drive-test', label: 'DT Dashboard', icon: Activity },
-  { to: '/reports/acceptance', label: 'Acceptance Dashboard', icon: BadgeCheck },
-]
 
 /**
  * Which page a URL belongs to, for the transition animation.
@@ -58,18 +19,21 @@ function pageKey(pathname) {
   return section === 'reports' ? `reports/${sub}` : section
 }
 
-// The navigation itself. Lifted out of the sidebar's JSX so that hiding it
-// wholesale is one conditional rather than a fragment wrapped around eighty
-// lines at the wrong indentation.
-function SidebarNav({ user, isAdmin, actionCount }) {
+/**
+ * One labelled group of nav items.
+ *
+ * Renders nothing at all — heading included — when this user can see none of
+ * them. A heading over an empty space is a claim that something is there, and
+ * Admin and the category owners see most of these groups empty.
+ */
+function NavSection({ label, items, roleName, actionCount }) {
+  const visible = items.filter((item) => navItemVisible(item, roleName))
+  if (visible.length === 0) return null
+
   return (
     <>
-      <div className="nav-section-label">Operations</div>
-      {NAV.filter((item) => {
-        if (item.roles && !item.roles.includes(user?.role?.name)) return false
-        if (item.hideRoles && item.hideRoles.includes(user?.role?.name)) return false
-        return true
-      }).map((item) => (
+      <div className="nav-section-label">{label}</div>
+      {visible.map((item) => (
         <NavLink
           key={item.to}
           to={item.to}
@@ -83,18 +47,26 @@ function SidebarNav({ user, isAdmin, actionCount }) {
           )}
         </NavLink>
       ))}
+    </>
+  )
+}
 
-      <div className="nav-section-label">Reports</div>
-      {REPORTS.map((item) => (
-        <NavLink
-          key={item.to}
-          to={item.to}
-          className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
-        >
-          <item.icon size={17} strokeWidth={2} />
-          <span>{item.label}</span>
-        </NavLink>
-      ))}
+// The navigation itself. Lifted out of the sidebar's JSX so that hiding it
+// wholesale is one conditional rather than a fragment wrapped around eighty
+// lines at the wrong indentation.
+function SidebarNav({ user, isAdmin, actionCount }) {
+  const roleName = user?.role?.name
+
+  return (
+    <>
+      <NavSection
+        label="Operations"
+        items={NAV}
+        roleName={roleName}
+        actionCount={actionCount}
+      />
+      <NavSection label="Drive Test Project" items={DRIVE_TEST_PROJECT} roleName={roleName} />
+      <NavSection label="Reports" items={REPORTS} roleName={roleName} />
 
       {isAdmin && (
         <>

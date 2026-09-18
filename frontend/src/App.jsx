@@ -11,6 +11,7 @@ import Login from './pages/Login'
 // demand, making first paint and navigation noticeably faster.
 const DriveTestProject = lazy(() => import('./pages/drivetest/DriveTestProject'))
 const DriveTestSiteList = lazy(() => import('./pages/drivetest/SiteList'))
+const DriveTest = lazy(() => import('./pages/DriveTest'))
 const HealthCheck = lazy(() => import('./pages/HealthCheck'))
 const MyHealthCheck = lazy(() => import('./pages/MyHealthCheck'))
 const MyFixQueue = lazy(() => import('./pages/MyFixQueue'))
@@ -79,12 +80,17 @@ export default function App() {
           <Route path="/" element={<Navigate to={homeFor(isAdmin)} replace />} />
           <Route path="/reports/drive-test" element={<DriveTestProject />} />
           <Route path="/reports/acceptance" element={<AcceptanceDashboard />} />
-          {/* Both dashboards moved under Reports when the Acceptance page was
-              split into a read surface and a work surface. The old paths still
-              answer, because they are in people's bookmarks. */}
-          <Route path="/drive-test" element={<Navigate to="/reports/drive-test" replace />} />
-          {/* The drill-through: the sites behind any figure on the dashboard.
-              Declared after /drive-test, which is an exact path and does not
+          {/* The Acceptance dashboard moved under Reports when that page was
+              split into a read surface and a work surface; /acceptance below
+              still answers, because it is in people's bookmarks.
+
+              /drive-test is NOT a bookmark alias any more. It used to redirect
+              to the dashboard; it is now the drive test work screen, which is
+              what a person typing it is looking for. The dashboard keeps its
+              own path under Reports and its sidebar item. */}
+          <Route path="/drive-test" element={<DriveTest />} />
+          {/* The dashboard's drill-through: the sites behind any figure on it.
+              A deeper path than /drive-test, which is exact and does not
               swallow it. */}
           <Route path="/drive-test/sites" element={<DriveTestSiteList />} />
           <Route path="/health-check" element={<HealthCheck />} />

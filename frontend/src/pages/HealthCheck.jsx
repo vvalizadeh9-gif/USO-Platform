@@ -1,16 +1,18 @@
 import { AnimatePresence, motion } from 'framer-motion'
 import {
+  ChevronRight,
   ClipboardList,
   History,
   ListChecks,
-  Radio,
+  RotateCcw,
   Shuffle,
   Timer,
   Wrench,
 } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { Navigate, useSearchParams } from 'react-router-dom'
 import api from '../api/client'
+import LifecycleStrip from '../components/LifecycleStrip'
 import { PageHead } from '../components/ui'
 import { useAuth } from '../context/AuthContext'
 import { canReview } from '../lib/roles'
@@ -20,8 +22,6 @@ import HcResultsTab from './healthcheck/HcResultsTab'
 import HcHistoryTab from './healthcheck/HcHistoryTab'
 import RemediationTab from './healthcheck/RemediationTab'
 import ReroutesTab from './healthcheck/ReroutesTab'
-import DtAssignmentTab from './healthcheck/DtAssignmentTab'
-import DtReviewTab from './healthcheck/DtReviewTab'
 
 // The tabs are the lifecycle, in order, and each one is a queue. The badge is
 // the count of things that need a decision, so a tab with no badge is finished
@@ -30,21 +30,37 @@ import DtReviewTab from './healthcheck/DtReviewTab'
 //
 // `count` names the key in /hc/queues/counts. History has none: it is the
 // archive, and a number on it would be a number that never goes down.
-const TABS = [
+//
+// Split into three because the row is an order, not a set of filters, and the
+// three parts are ordered differently. The steps run left to right with a
+// chevron between them; the fix loop is one thing with two queues; History is
+// the archive and sits at the far end.
+const STEPS = [
   { key: 'pool', label: 'HC Pool', icon: ClipboardList, count: 'pool' },
   { key: 'running', label: 'In Progress', icon: Timer, count: 'in_progress' },
   { key: 'review', label: 'HC Review', icon: ListChecks, count: 'hc_review' },
+]
+
+// A fix is opened against a category, the owning team closes it, and the site
+// returns to the pool by itself at the next round. Neither queue follows the
+// other, so there is no chevron between them -- they are one loop.
+const FIX_LOOP = [
   { key: 'remediation', label: 'Remediation', icon: Wrench, count: 'remediation' },
   { key: 'reroutes', label: 'Re-routes', icon: Shuffle, count: 'reroutes' },
-  { key: 'dt-assign', label: 'DT Assignment', icon: Radio, count: 'dt_assignment' },
-  { key: 'dt-review', label: 'DT Review', icon: History, count: 'dt_review' },
-  { key: 'history', label: 'History', icon: History },
 ]
+
+const ARCHIVE = { key: 'history', label: 'History', icon: History }
 
 // Superseded tab keys, kept so links people already hold keep working.
 // ?tab=results was the combined queue-and-archive table; the queue half of it
 // is now Review.
 const LEGACY_TABS = { basket: 'pool', results: 'review' }
+
+// Tabs that are no longer on this page at all: the drive test is its own
+// screen now. These are not renames, so they cannot be handled by the map
+// above -- the answer is a different URL, and people (and the Action Center
+// URLs the server builds) hold links to the old one.
+const MOVED_TO_DRIVE_TEST = { 'dt-assign': 'assignment', 'dt-review': 'review' }
 
 export default function HealthCheck() {
   const { user } = useAuth()
@@ -52,6 +68,7 @@ export default function HealthCheck() {
   const [searchParams] = useSearchParams()
 
   const requested = searchParams.get('tab')
+  const movedTo = MOVED_TO_DRIVE_TEST[requested]
   const [tab, setTab] = useState(LEGACY_TABS[requested] || requested || 'pool')
   const highlightTaskId = searchParams.get('task')
   const [counts, setCounts] = useState({})
@@ -75,30 +92,51 @@ export default function HealthCheck() {
     [],
   )
 
+  // After every hook, so the hook order is the same on the render that
+  // redirects as on the one that does not. `replace` because the old URL is
+  // not somewhere Back should return to.
+  if (movedTo) {
+    const params = new URLSearchParams(searchParams)
+    params.set('tab', movedTo)
+    return <Navigate replace to={`/drive-test?${params.toString()}`} />
+  }
+
   return (
     <>
       <PageHead
-        eyebrow="Health Check"
+        eyebrow="Drive Test Project"
         title="Health Check"
-        subtitle="On-air sites from the pool through remediation to a completed drive test. Each tab holds only what still needs a decision."
+        subtitle="Everything about the health check: assign it, follow it, confirm Ready sites, route problems to the right team, and look back in History."
       />
 
-      <div className="tabs" style={{ flexWrap: 'wrap' }}>
-        {TABS.map((t) => {
-          const count = t.count ? counts[t.count] : undefined
-          return (
-            <button
-              key={t.key}
-              className={`tab ${tab === t.key ? 'active' : ''}`}
-              onClick={() => setTab(t.key)}
+      <LifecycleStrip current="hc" />
+
+      <div className="tabs tabs-steps" style={{ flexWrap: 'wrap' }}>
+        {STEPS.map((t, i) => (
+          <div className="tab-step" key={t.key}>
+            {i > 0 && <ChevronRight size={14} className="tab-sep" aria-hidden="true" />}
+            <TabButton t={t} counts={counts} tab={tab} setTab={setTab} />
+          </div>
+        ))}
+
+        <div className="tab-step">
+          <ChevronRight size={14} className="tab-sep" aria-hidden="true" />
+          <div className="tab-group">
+            <span
+              className="tab-group-label"
+              title="Fixed sites return to the HC Pool automatically"
             >
-              <span className="row" style={{ gap: 8 }}>
-                <t.icon size={15} /> {t.label}
-                {count > 0 && <span className="badge tnum">{count}</span>}
-              </span>
-            </button>
-          )
-        })}
+              <RotateCcw size={12} /> Fix loop
+            </span>
+            {FIX_LOOP.map((t) => (
+              <TabButton key={t.key} t={t} counts={counts} tab={tab} setTab={setTab} />
+            ))}
+          </div>
+        </div>
+
+        <div className="tab-end">
+          <TabButton t={ARCHIVE} counts={counts} tab={tab} setTab={setTab} />
+        </div>
       </div>
 
       <AnimatePresence mode="wait">
@@ -119,11 +157,25 @@ export default function HealthCheck() {
           )}
           {tab === 'remediation' && <RemediationTab onCountChange={setCount('remediation')} />}
           {tab === 'reroutes' && <ReroutesTab onCountChange={setCount('reroutes')} />}
-          {tab === 'dt-assign' && <DtAssignmentTab onCountChange={setCount('dt_assignment')} />}
-          {tab === 'dt-review' && <DtReviewTab onCountChange={setCount('dt_review')} />}
           {tab === 'history' && <HcHistoryTab />}
         </motion.div>
       </AnimatePresence>
     </>
+  )
+}
+
+/** One tab. Unchanged markup: the row around it is what became ordered. */
+function TabButton({ t, counts, tab, setTab }) {
+  const count = t.count ? counts[t.count] : undefined
+  return (
+    <button
+      className={`tab ${tab === t.key ? 'active' : ''}`}
+      onClick={() => setTab(t.key)}
+    >
+      <span className="row" style={{ gap: 8 }}>
+        <t.icon size={15} /> {t.label}
+        {count > 0 && <span className="badge tnum">{count}</span>}
+      </span>
+    </button>
   )
 }

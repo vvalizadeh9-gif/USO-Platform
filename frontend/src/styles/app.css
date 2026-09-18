@@ -2191,3 +2191,101 @@ table.grouped .prov-aging td { padding-top: 0; vertical-align: top; }
 .drill:focus-visible { outline: 2px solid var(--signal); outline-offset: 3px; }
 .cell .drill .v { transition: opacity 0.12s; }
 .cell .drill:hover .v { opacity: 0.75; }
+
+/* ---------------------------------------------------------------------------
+   The lifecycle strip, and the tab row read as ordered steps.
+
+   Both exist because the drive test became its own page. The strip says the
+   two pages are one process; the chevrons in the tab row say the tabs within
+   a page are an order rather than a set of filters.
+   --------------------------------------------------------------------------- */
+
+.lifecycle {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: 2px;
+  margin: -8px 0 22px;
+}
+.lifecycle-cell { display: flex; align-items: center; gap: 2px; }
+.lifecycle-sep { color: var(--text-dim); flex: none; }
+
+.lifecycle-step {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 7px 13px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  text-decoration: none;
+  color: inherit;
+}
+.lifecycle-label {
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+.lifecycle-hint { font-size: 11.5px; color: var(--text-dim); }
+
+a.lifecycle-step:hover { background: var(--surface-2); }
+a.lifecycle-step:hover .lifecycle-label { color: var(--text); }
+a.lifecycle-step:focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; }
+
+.lifecycle-step.is-current {
+  background: var(--signal-glow);
+  border-color: var(--signal);
+}
+.lifecycle-step.is-current .lifecycle-label { color: var(--signal-strong); }
+
+/* A step this person cannot open. Still shown -- the process has three parts
+   whoever is reading -- but plainly not somewhere to click. */
+.lifecycle-step.is-muted { cursor: default; }
+.lifecycle-step.is-muted .lifecycle-label { color: var(--text-dim); }
+
+/* The tab row as steps. The chevron rides with the tab that follows it, so a
+   wrapped row never leaves a separator dangling at the end of a line. */
+.tabs-steps { align-items: stretch; }
+.tab-step { display: flex; align-items: center; }
+.tab-sep { color: var(--text-dim); flex: none; align-self: center; }
+
+/* Remediation and Re-routes are one thing with two queues: a fix is opened,
+   the owning team closes it, and the site returns to the pool by itself. The
+   wash says they belong together; there is no chevron inside it, because
+   neither one follows the other. */
+.tab-group {
+  display: flex;
+  align-items: center;
+  background: var(--surface-2);
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  padding-left: 10px;
+}
+.tab-group-label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  padding-right: 2px;
+  cursor: help;
+}
+
+/* History is the archive, not a step: pushed to the far end, behind a rule. */
+.tab-end { margin-left: auto; display: flex; align-items: center; }
+.tab-end::before {
+  content: '';
+  width: 1px;
+  align-self: stretch;
+  margin: 8px 10px 8px 0;
+  background: var(--border);
+}
+
+@media (max-width: 640px) {
+  /* The row still wraps; History simply stops being pushed away, because
+     there is nothing left to push it away from. */
+  .tab-end { margin-left: 0; }
+  .tab-end::before { display: none; }
+}
