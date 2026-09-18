@@ -103,11 +103,30 @@ class _Unit:
 
 
 class AcceptanceAnalytics:
-    """Encapsulates all Acceptance dashboard computations for one user."""
+    """Encapsulates all Acceptance dashboard computations for one user.
 
-    def __init__(self, db: Session, user) -> None:
+    ``province_ids`` and ``contractor_id`` narrow the universe *on top of*
+    the user's own row-level scope — they never widen it. ``province_ids``
+    is the resolved result of a coordinator/regional-manager filter (see
+    ``api/acceptance.py``): neither role has a village-level attribution of
+    its own, so the caller turns "this coordinator" into "the provinces
+    Admin assigned them" before it ever reaches here. ``contractor_id``
+    filters directly on ``WorkItem.dt_sc_contractor_id``, the same
+    attribution the Drive Test site list already filters on.
+    """
+
+    def __init__(
+        self,
+        db: Session,
+        user,
+        *,
+        province_ids: set[int] | None = None,
+        contractor_id: int | None = None,
+    ) -> None:
         self._db = db
         self._user = user
+        self._province_ids = province_ids
+        self._contractor_id = contractor_id
         self._units: list[_Unit] | None = None
         self._village_totals: dict[int | None, int] = {}
 
@@ -138,6 +157,13 @@ class AcceptanceAnalytics:
         for wi in work_items:
             site_id = wi.site.id if wi.site else None
             province_id = wi.site.province_id if wi.site else None
+            if self._province_ids is not None and province_id not in self._province_ids:
+                continue
+            if (
+                self._contractor_id is not None
+                and wi.dt_sc_contractor_id != self._contractor_id
+            ):
+                continue
             dt_done = wi.dt_status == _DT_DONE
             dt_age = flow.dt_age_days(wi) if dt_done else None
             for village in wi.villages:

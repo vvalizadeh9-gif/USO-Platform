@@ -17,6 +17,25 @@ class Province(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
 
+    # Which Coordinator and Regional Manager own this province, so a report
+    # can offer "filter by coordinator/RM" without needing a village-level
+    # attribution neither role actually carries (unlike a contractor, who is
+    # attached to a work item directly). Set once, in Admin's Province
+    # Assignments screen; read everywhere such a filter appears. Nullable:
+    # a province can go unassigned, and a report filtering on it then simply
+    # finds nothing there yet, rather than being blocked from loading.
+    coordinator_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )
+    regional_manager_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )
+
+    coordinator: Mapped[User | None] = relationship(foreign_keys=[coordinator_user_id])
+    regional_manager: Mapped[User | None] = relationship(
+        foreign_keys=[regional_manager_user_id]
+    )
+
 
 class Region(Base):
     __tablename__ = "regions"

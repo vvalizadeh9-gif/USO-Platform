@@ -11,13 +11,13 @@ its buckets, and the submit / correct / review / evidence endpoints. All of it
 goes through services/acceptance_workflow.py — this module resolves and
 authorises, and holds no rules of its own.
 """
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.core import audit_actions
 from app.core.database import get_db
 from app.core.deps import get_current_user
-from app.models.reference import User
+from app.models.reference import Province, User
 from app.schemas import (
     AcceptanceAnalysis,
     AcceptanceKpis,
@@ -29,12 +29,54 @@ from app.services.acceptance_analytics import AcceptanceAnalytics
 router = APIRouter(prefix="/acceptance", tags=["acceptance"])
 
 
+def _resolve_province_filter(
+    db: Session, coordinator_id: int | None, regional_manager_id: int | None
+) -> set[int] | None:
+    """Turn a coordinator/regional-manager pick into the provinces Admin
+    assigned them, intersecting when both are given.
+
+    Returns ``None`` — no province narrowing — when neither filter is set,
+    so an unfiltered dashboard never pays for this resolution.
+    """
+    province_ids: set[int] | None = None
+    if coordinator_id is not None:
+        matched = {
+            p.id
+            for p in db.query(Province.id).filter(
+                Province.coordinator_user_id == coordinator_id
+            )
+        }
+        province_ids = matched
+    if regional_manager_id is not None:
+        matched = {
+            p.id
+            for p in db.query(Province.id).filter(
+                Province.regional_manager_user_id == regional_manager_id
+            )
+        }
+        province_ids = matched if province_ids is None else province_ids & matched
+    return province_ids
+
+
 @router.get("/overview", response_model=AcceptanceOverview)
 def acceptance_overview(
-    db: Session = Depends(get_db), user: User = Depends(get_current_user)
+    coordinator_id: int | None = Query(default=None),
+    regional_manager_id: int | None = Query(default=None),
+    contractor_id: int | None = Query(default=None),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
 ) -> AcceptanceOverview:
-    """Return the full Acceptance dashboard payload for this user's scope."""
-    data = AcceptanceAnalytics(db, user).build()
+    """Return the Acceptance dashboard payload for this user's scope.
+
+    The three filters narrow that scope further; they never widen it. See
+    ``_resolve_province_filter`` and ``AcceptanceAnalytics`` for how a
+    coordinator/RM pick becomes a set of provinces and how contractor scopes
+    directly on the work item, respectively.
+    """
+    province_ids = _resolve_province_filter(db, coordinator_id, regional_manager_id)
+    data = AcceptanceAnalytics(
+        db, user, province_ids=province_ids, contractor_id=contractor_id
+    ).build()
     return AcceptanceOverview(
         kpis=AcceptanceKpis(**data["kpis"]),
         analysis=AcceptanceAnalysis(**data["analysis"]),

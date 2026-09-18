@@ -1,5 +1,6 @@
 """Action Center and reference data endpoints."""
 from fastapi import APIRouter, Depends
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
@@ -19,6 +20,7 @@ from app.schemas import (
     ProblemCategoryOut,
     ProvinceOut,
     RoleOut,
+    UserOptionOut,
 )
 from app.services import action_center as action_center_service
 
@@ -102,3 +104,24 @@ def list_problem_categories(
     db: Session = Depends(get_db), _: User = Depends(get_current_user)
 ):
     return db.query(ProblemCategory).filter(ProblemCategory.active.is_(True)).all()
+
+
+@router.get("/reference/coordinators", response_model=list[UserOptionOut])
+def list_coordinators(db: Session = Depends(get_db), _: User = Depends(get_current_user)):
+    """Coordinators currently assigned to at least one province in Admin's
+    Province Assignments screen — the options for a Coordinator filter."""
+    assigned = select(Province.coordinator_user_id).where(
+        Province.coordinator_user_id.is_not(None)
+    )
+    return db.query(User).filter(User.id.in_(assigned)).order_by(User.full_name).all()
+
+
+@router.get("/reference/regional-managers", response_model=list[UserOptionOut])
+def list_regional_managers(
+    db: Session = Depends(get_db), _: User = Depends(get_current_user)
+):
+    """Regional Managers currently assigned to at least one province."""
+    assigned = select(Province.regional_manager_user_id).where(
+        Province.regional_manager_user_id.is_not(None)
+    )
+    return db.query(User).filter(User.id.in_(assigned)).order_by(User.full_name).all()
