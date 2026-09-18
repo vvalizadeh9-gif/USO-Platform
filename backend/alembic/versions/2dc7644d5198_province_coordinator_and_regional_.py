@@ -38,7 +38,18 @@ def _columns() -> set[str]:
 
 
 def _fk_name(column: str) -> str:
-    return f"fk_{PROVINCES}_{column}_users"
+    """The name PostgreSQL itself would give this constraint.
+
+    It has to be exactly that, not a prettier invented one. A database built by
+    ``Base.metadata.create_all`` gets these constraints from the model's
+    unnamed ``ForeignKey``, which PostgreSQL names ``<table>_<column>_fkey``;
+    a database built by the migrations gets them from here. If the two names
+    differ, the guard below does not recognise the constraint create_all
+    already made, adds a second one beside it, and the two build paths diverge
+    -- which tests/test_migrations.py exists to catch. 5348276120bb pins
+    ``users_deactivated_by_fkey`` for the same reason.
+    """
+    return f"{PROVINCES}_{column}_fkey"
 
 
 def upgrade() -> None:
