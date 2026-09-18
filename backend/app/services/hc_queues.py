@@ -12,6 +12,7 @@ Each function answers one question about live state:
 ``remediations``             open fixes, across every category
 ``reroutes``                 fixes whose owner disputes the category
 ``dt_assignment``            confirmed-Ready sites awaiting an official DT
+``dt_in_progress``           assigned sites the contractor still owes a DT for
 ``dt_review``                drive tests awaiting approval
 ===========================  ==================================================
 
@@ -276,6 +277,79 @@ def dt_assignment(
     return out
 
 
+def dt_in_progress(
+    db: Session, user: User, work_items: list[WorkItem] | None = None
+) -> list[dict]:
+    """Assigned sites the contractor still owes a drive test for.
+
+    The blind spot between Assignment and Review. A site handed to a drive-test
+    contractor left the assignment queue and reached the review queue only once
+    something was submitted, so for however long that took it appeared on no
+    screen: "who is late" was unanswerable, and a drive test sent back to its
+    contractor was invisible to the person who sent it.
+
+    The condition is exactly ``derive_stage(wi) == STAGE_ASSIGNED``, written the
+    same way ``workflow.derive_stage`` writes it -- latest *active* assignment
+    present and not handed back, and the latest *active* drive test neither
+    ``Submitted`` (it is with the reviewer) nor ``Approved`` (it is done). Both
+    "latest" are by id, as they are there, so the two can never disagree about
+    a site. ``assignment_type`` is deliberately not consulted, for the same
+    reason: the stage does not consult it either.
+
+    The two states this answers for are the whole point of the queue:
+
+    * **with_contractor** -- assigned, nothing come back yet.
+    * **sent_back** -- a reviewer rejected or returned the drive test, so the
+      site is stage ``Assigned`` again and the contractor owes a resubmission.
+      The reviewer's comment and date travel with the row, because "what did I
+      send back, and when" is the other question this queue exists to answer.
+
+    Read-only for the reviewer: every row here is waiting on somebody else.
+    """
+    if work_items is None:
+        work_items = scoped_work_items(db, user)
+
+    latest_dt = _active_drive_test_by_work_item(db, user)
+    contractors = _contractor_names(db)
+
+    out = []
+    for wi in work_items:
+        assignment = _latest_active(wi.assignments)
+        if assignment is None or assignment.returned_at is not None:
+            continue
+        dt = latest_dt.get(wi.id)
+        if dt is not None and dt.status in ("Submitted", "Approved"):
+            continue
+
+        sent_back = dt is not None and dt.status in ("Rejected", "Returned")
+        site_code, province = _site_of(wi)
+        out.append(
+            {
+                "work_item_id": wi.id,
+                "site_code": site_code,
+                "site_type": wi.site_type,
+                "province": province,
+                "requested_technologies": parse_technologies(
+                    wi.requested_technology
+                ),
+                "contractor_name": contractors.get(assignment.contractor_id),
+                "assigned_at": _aware(assignment.assigned_at),
+                "days_since_assigned": _days_since(assignment.assigned_at) or 0,
+                "status": "sent_back" if sent_back else "with_contractor",
+                "sent_back_comment": (
+                    dt.coordinator_comment if sent_back else None
+                ),
+                "sent_back_at": (
+                    _aware(dt.coordinator_reviewed_at) if sent_back else None
+                ),
+            }
+        )
+    # Sent back first -- those are the ones a reviewer has already spent a
+    # decision on -- then longest assigned first within each group.
+    out.sort(key=lambda r: (r["status"] != "sent_back", -r["days_since_assigned"]))
+    return out
+
+
 def dt_review(db: Session, user: User) -> list[dict]:
     """Drive tests submitted and awaiting approval.
 
@@ -362,6 +436,7 @@ def counts(db: Session, user: User) -> dict[str, int]:
         "remediation": len(remediations(db, user)),
         "reroutes": len(reroutes(db, user)),
         "dt_assignment": len(dt_assignment(db, user, work_items)),
+        "dt_in_progress": len(dt_in_progress(db, user, work_items)),
         "dt_review": len(dt_review(db, user)),
     }
 
@@ -403,6 +478,47 @@ def _user_names(db: Session, ids: list[int | None]) -> dict[int, str]:
         return {}
     rows = db.execute(select(User).where(User.id.in_(real))).scalars().all()
     return {u.id: u.full_name for u in rows}
+
+
+def _latest_active(rows):
+    """The newest active row, by id.
+
+    ``workflow.derive_stage`` picks both the assignment and the drive test this
+    way. Anything that has to agree with the stage has to pick the same one --
+    ``next(... if is_active)`` reads the collection in load order, which is not
+    the same choice if two rows are ever active at once.
+    """
+    active = [r for r in rows if r.is_active]
+    return max(active, key=lambda r: r.id) if active else None
+
+
+def _active_drive_test_by_work_item(db: Session, user: User) -> dict[int, object]:
+    """The latest active drive test per in-scope site, as bare columns.
+
+    Columns rather than entities on purpose: ``DriveTest.evidence`` is
+    ``lazy="selectin"``, so loading these as ORM objects would pull every
+    attached report file's metadata for the whole country to answer a question
+    that is only about ``status``.
+    """
+    rows = db.execute(
+        select(
+            DriveTest.id,
+            DriveTest.work_item_id,
+            DriveTest.status,
+            DriveTest.coordinator_comment,
+            DriveTest.coordinator_reviewed_at,
+        ).where(
+            DriveTest.is_active.is_(True),
+            DriveTest.work_item_id.in_(visible_work_item_ids(user, db)),
+        )
+    ).all()
+
+    latest: dict[int, object] = {}
+    for row in rows:
+        seen = latest.get(row.work_item_id)
+        if seen is None or row.id > seen.id:
+            latest[row.work_item_id] = row
+    return latest
 
 
 def _contractor_names(db: Session) -> dict[int, str]:

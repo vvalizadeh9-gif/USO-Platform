@@ -28,6 +28,7 @@ from fastapi.testclient import TestClient  # noqa: E402
 from app.core import user_status  # noqa: E402
 from app.core.database import SessionLocal  # noqa: E402
 from app.core.deps import (  # noqa: E402
+    ADMIN,
     CONTRACTOR,
     COORDINATOR,
     CPG_POWER,
@@ -64,11 +65,13 @@ def _seed() -> None:
             contractor = Contractor(name="Ariana Telecom", type="drive_test")
             db.add(contractor)
             db.flush()
-        province = db.query(Province).first()
+        provinces = db.query(Province).order_by(Province.id).limit(2).all()
+        assert len(provinces) == 2, "seeding provides the 31 provinces"
+        province, away_province = provinces
 
         for role_name, username in (
             (PM_ROLE, "pm"), (COORDINATOR, "coord"),
-            (CONTRACTOR, "sc"), (CPG_POWER, "power"),
+            (CONTRACTOR, "sc"), (CPG_POWER, "power"), (ADMIN, "admin_user"),
         ):
             role = db.query(Role).filter(Role.name == role_name).one()
             if db.query(User).filter(User.username == username).first() is None:
@@ -83,18 +86,34 @@ def _seed() -> None:
                     status=user_status.ACTIVE,
                 ))
 
-        for n in range(20):
-            code = f"QUEUE-{n:04d}"
-            if db.query(Site).filter(Site.site_code == code).first():
-                continue
-            site = Site(site_code=code, province_id=province.id if province else None)
-            db.add(site)
-            db.flush()
-            db.add(WorkItem(
-                site_id=site.id, site_type="Greenfield",
-                requested_technology="2G", last_stage=C.STAGE_PERM_ONAIR,
-                dt_status=None,
-            ))
+        # A Coordinator granted one province only, for the scope test. Every
+        # other user in this module sees the whole country, which is exactly
+        # what makes a scope regression invisible to them.
+        if db.query(User).filter(User.username == "coord_home").first() is None:
+            role = db.query(Role).filter(Role.name == COORDINATOR).one()
+            scoped = User(
+                username="coord_home",
+                password_hash=hash_password("Owner@12345"),
+                first_name=COORDINATOR, family_name="Home",
+                role_id=role.id, sees_all_provinces=False,
+                status=user_status.ACTIVE,
+            )
+            scoped.provinces = [province]
+            db.add(scoped)
+
+        for prefix, prov in (("QUEUE", province), ("AWAY", away_province)):
+            for n in range(30 if prefix == "QUEUE" else 5):
+                code = f"{prefix}-{n:04d}"
+                if db.query(Site).filter(Site.site_code == code).first():
+                    continue
+                site = Site(site_code=code, province_id=prov.id)
+                db.add(site)
+                db.flush()
+                db.add(WorkItem(
+                    site_id=site.id, site_type="Greenfield",
+                    requested_technology="2G", last_stage=C.STAGE_PERM_ONAIR,
+                    dt_status=None,
+                ))
         db.commit()
     finally:
         db.close()
@@ -121,7 +140,7 @@ def _contractor_id():
 _taken: set[str] = set()
 
 
-def _fresh_site():
+def _fresh_site(prefix="QUEUE"):
     from app.models.workitem import Site, WorkItem
 
     db = SessionLocal()
@@ -129,7 +148,7 @@ def _fresh_site():
         rows = (
             db.query(WorkItem, Site)
             .join(Site, WorkItem.site_id == Site.id)
-            .filter(Site.site_code.like("QUEUE-%"))
+            .filter(Site.site_code.like(f"{prefix}-%"))
             .order_by(Site.site_code)
             .all()
         )
@@ -139,7 +158,7 @@ def _fresh_site():
                 return wi.id, site.site_code
     finally:
         db.close()
-    raise AssertionError("seed more QUEUE- sites")
+    raise AssertionError(f"seed more {prefix}- sites")
 
 
 def _queue(client, name, headers=None):
@@ -364,6 +383,209 @@ def test_dt_review_holds_a_submission_until_it_is_decided(client):
     assert code not in _codes(_queue(client, "dt-review"))
 
 
+# ---------------- drive test: in progress ----------------
+#
+# The step between Assignment and Review. A site handed to a drive-test
+# contractor used to appear on no screen at all until something was submitted,
+# so "who is late" and "what did I send back" were both unanswerable.
+#
+# The queue's condition is exactly ``derive_stage(wi) == STAGE_ASSIGNED``, and
+# the parity test below asserts that rather than trusting it.
+def _confirm_ready(client, wi_id):
+    """Take a fresh site all the way to confirmed-Ready, so it is assignable."""
+    task_id = _assign_hc(client, wi_id)
+    _submit(client, task_id, ok=True)
+    _review(client, task_id, [])
+
+
+def _assign_dt(client, wi_id):
+    r = client.post(
+        "/api/v1/work-items/assign", headers=_h(client),
+        json={
+            "work_item_ids": [wi_id], "contractor_id": _contractor_id(),
+            "assignment_type": "official",
+        },
+    )
+    assert r.status_code == 200, r.text
+
+
+def _submit_dt(client, wi_id):
+    r = client.post(
+        f"/api/v1/work-items/{wi_id}/drive-test", headers=_h(client, "sc"),
+        json={"execution_date": date.today().isoformat()},
+    )
+    assert r.status_code == 200, r.text
+    return r.json()["drive_test_id"]
+
+
+def _decide_dt(client, dt_id, decision, comment=None):
+    r = client.post(
+        f"/api/v1/drive-tests/{dt_id}/coordinator-review",
+        headers=_h(client, "coord"),
+        json={"decision": decision, "comment": comment},
+    )
+    assert r.status_code == 200, r.text
+
+
+def _row(rows, code):
+    return next((r for r in rows if r["site_code"] == code), None)
+
+
+def test_in_progress_follows_one_site_through_the_whole_drive_test(client):
+    """Assign -> submit -> send back -> resubmit -> approve, one site.
+
+    Each step moves the site between exactly two of the three queues, and the
+    walk is the clearest statement of what In Progress is for: it holds a site
+    for precisely as long as the contractor owes something.
+    """
+    wi_id, code = _fresh_site()
+    _confirm_ready(client, wi_id)
+    assert code in _codes(_queue(client, "dt-assignment"))
+
+    # Assigned: it leaves Assignment and appears here, with the contractor.
+    _assign_dt(client, wi_id)
+    assert code not in _codes(_queue(client, "dt-assignment"))
+    row = _row(_queue(client, "dt-in-progress"), code)
+    assert row is not None
+    assert row["status"] == "with_contractor"
+    assert row["contractor_name"]
+    assert row["sent_back_comment"] is None
+    assert row["sent_back_at"] is None
+    assert row["assigned_at"]
+
+    # Submitted: it is the reviewer's problem now, not the contractor's.
+    dt_id = _submit_dt(client, wi_id)
+    assert code not in _codes(_queue(client, "dt-in-progress"))
+    assert code in _codes(_queue(client, "dt-review"))
+
+    # Sent back: the site is Assigned again, so it returns here -- flagged,
+    # and carrying the words the reviewer actually wrote.
+    _decide_dt(client, dt_id, "Rejected", comment="Route coverage incomplete")
+    assert code not in _codes(_queue(client, "dt-review"))
+    row = _row(_queue(client, "dt-in-progress"), code)
+    assert row is not None
+    assert row["status"] == "sent_back"
+    assert row["sent_back_comment"] == "Route coverage incomplete"
+    assert row["sent_back_at"]
+
+    # Resubmitted: back to the reviewer.
+    dt_id = _submit_dt(client, wi_id)
+    assert code not in _codes(_queue(client, "dt-in-progress"))
+    assert code in _codes(_queue(client, "dt-review"))
+
+    # Approved is terminal: the site is in none of the three.
+    _decide_dt(client, dt_id, "Approved")
+    for queue in ("dt-assignment", "dt-in-progress", "dt-review"):
+        assert code not in _codes(_queue(client, queue)), queue
+
+
+def test_a_contractor_returned_site_is_in_assignment_not_in_progress(client):
+    """"Can't proceed" is a re-assignment, not a delay.
+
+    A returned site is back in the PM's hands with its reason, which is why
+    ``dt_assignment`` keeps it. In Progress is what is waiting on a contractor,
+    and this is not -- showing it in both would say the opposite twice.
+    """
+    wi_id, code = _fresh_site()
+    _confirm_ready(client, wi_id)
+    _assign_dt(client, wi_id)
+    assert code in _codes(_queue(client, "dt-in-progress"))
+
+    r = client.post(
+        f"/api/v1/work-items/{wi_id}/return-to-coordinator",
+        headers=_h(client, "sc"), json={"reason": "Access road is closed"},
+    )
+    assert r.status_code == 200, r.text
+
+    assert code not in _codes(_queue(client, "dt-in-progress"))
+    row = _row(_queue(client, "dt-assignment"), code)
+    assert row is not None
+    assert row["returned_reason"] == "Access road is closed"
+
+
+def test_the_three_drive_test_queues_partition_their_sites(client):
+    """No site is in two of them at once, whatever state it is in.
+
+    The three tabs read as one process left to right, so a site appearing in
+    two of them would be saying two contradictory things about whose move it
+    is. Run across every scoped site, not a hand-picked one.
+    """
+    seen = {}
+    for queue in ("dt-assignment", "dt-in-progress", "dt-review"):
+        for code in _codes(_queue(client, queue)):
+            assert code not in seen, (
+                f"{code} is in both {seen[code]} and {queue}"
+            )
+            seen[code] = queue
+
+
+def test_in_progress_is_exactly_the_sites_whose_stage_is_assigned(client):
+    """The queue and ``derive_stage`` must never disagree about a site.
+
+    In Progress is not a second opinion about the lifecycle -- it is the
+    ``Assigned`` stage, listed. Asserted against ``derive_stage`` itself
+    rather than against the stored ``current_stage`` column, so a stale cache
+    cannot make this pass.
+    """
+    from app.models.workitem import Site, WorkItem
+    from app.services.workflow import STAGE_ASSIGNED, derive_stage
+
+    db = SessionLocal()
+    try:
+        rows = (
+            db.query(WorkItem, Site)
+            .join(Site, WorkItem.site_id == Site.id)
+            .filter(WorkItem.deleted_at.is_(None))
+            .all()
+        )
+        assigned = {
+            site.site_code for wi, site in rows
+            if derive_stage(wi) == STAGE_ASSIGNED
+        }
+    finally:
+        db.close()
+
+    # The PM in this module sees every province, so "scoped" is every site.
+    assert _codes(_queue(client, "dt-in-progress")) == assigned
+
+
+def test_in_progress_is_province_scoped(client):
+    """A Coordinator granted one province sees that province and no other."""
+    home_id, home_code = _fresh_site()
+    away_id, away_code = _fresh_site("AWAY")
+    for wi_id in (home_id, away_id):
+        _confirm_ready(client, wi_id)
+        _assign_dt(client, wi_id)
+
+    everything = _codes(_queue(client, "dt-in-progress"))
+    assert {home_code, away_code} <= everything
+
+    scoped = _codes(_queue(client, "dt-in-progress", _h(client, "coord_home")))
+    assert home_code in scoped
+    assert away_code not in scoped
+    assert not any(c.startswith("AWAY-") for c in scoped)
+
+
+def test_in_progress_is_read_by_the_reviewers_and_nobody_else(client):
+    """The same gate as its sibling queues: the two peers, and only them.
+
+    Admin is refused deliberately -- it is a systems role, and the operational
+    lifecycle is not its to read. A contractor is refused because this is the
+    queue *about* them.
+    """
+    for username in ("pm", "coord"):
+        r = client.get(
+            "/api/v1/hc/queues/dt-in-progress", headers=_h(client, username)
+        )
+        assert r.status_code == 200, f"{username}: {r.text}"
+
+    for username in ("sc", "admin_user"):
+        r = client.get(
+            "/api/v1/hc/queues/dt-in-progress", headers=_h(client, username)
+        )
+        assert r.status_code == 403, f"{username}: {r.text}"
+
+
 # ---------------- counts ----------------
 def test_counts_match_the_lists_behind_them(client):
     """A badge that disagrees with its list teaches people to ignore badges."""
@@ -371,6 +593,7 @@ def test_counts_match_the_lists_behind_them(client):
     assert counts["remediation"] == len(_queue(client, "remediations"))
     assert counts["reroutes"] == len(_queue(client, "reroutes"))
     assert counts["dt_assignment"] == len(_queue(client, "dt-assignment"))
+    assert counts["dt_in_progress"] == len(_queue(client, "dt-in-progress"))
     assert counts["dt_review"] == len(_queue(client, "dt-review"))
     assert counts["in_progress"] == sum(
         r["sites_pending"] for r in _queue(client, "in-progress")

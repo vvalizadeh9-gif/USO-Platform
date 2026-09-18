@@ -335,6 +335,13 @@ def counters(db: Session, user: User) -> list[ActionCounter]:
         for key, count in hc_queues.counts(db, user).items():
             if not count:
                 continue
+            # Not every queue earns a counter. ``dt_in_progress`` deliberately
+            # has no entry above: those sites are waiting on the contractor,
+            # not on the person reading this page, and a number here means
+            # "you owe this". A queue with no label is skipped rather than
+            # made up, so adding one later is a line in _QUEUE_LABELS.
+            if key not in _QUEUE_LABELS:
+                continue
             label, url = _QUEUE_LABELS[key]
             out.append(
                 ActionCounter(key=key, label=label, count=count, url=url)

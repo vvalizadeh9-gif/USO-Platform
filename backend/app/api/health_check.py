@@ -32,6 +32,7 @@ from app.models.reference import Contractor, User
 from app.models.workitem import Site, WorkItem
 from app.schemas import (
     DtAssignmentRow,
+    DtInProgressRow,
     DtReviewRow,
     HcAssignmentCreate,
     HcAssignmentListItem,
@@ -375,6 +376,19 @@ def queue_dt_assignment(
 ):
     """Confirmed-Ready sites awaiting an official drive-test assignment."""
     return hc_queues.dt_assignment(db, user)
+
+
+@router.get("/queues/dt-in-progress", response_model=list[DtInProgressRow])
+def queue_dt_in_progress(
+    db: Session = Depends(get_db),
+    user: User = Depends(require_review_authority),
+):
+    """Assigned sites the contractor still owes a drive test for.
+
+    The step between Assignment and Review, and read-only: every row is
+    waiting on the contractor, not on the person reading it.
+    """
+    return hc_queues.dt_in_progress(db, user)
 
 
 @router.get("/queues/dt-review", response_model=list[DtReviewRow])

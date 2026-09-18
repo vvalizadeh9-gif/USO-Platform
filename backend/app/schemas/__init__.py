@@ -932,6 +932,7 @@ class HcQueueCounts(BaseModel):
     remediation: int = 0
     reroutes: int = 0
     dt_assignment: int = 0
+    dt_in_progress: int = 0
     dt_review: int = 0
 
 
@@ -989,6 +990,31 @@ class DtAssignmentRow(BaseModel):
     # Set when the site is back from a contractor who could not proceed.
     # Re-assigning is the same action, so it belongs in the same queue.
     returned_reason: str | None = None
+
+
+class DtInProgressRow(BaseModel):
+    """One site out with a drive-test contractor, waiting on them.
+
+    Read-only: there is no action a reviewer takes from this row, so it carries
+    what answers "who is late" and "what did I send back" and nothing else. In
+    particular no reviewer identity -- the comment is the decision, and who
+    wrote it is the site history's business, not a queue column's.
+    """
+
+    work_item_id: int
+    site_code: str | None = None
+    site_type: str | None = None
+    province: str | None = None
+    requested_technologies: list[str] = []
+    contractor_name: str | None = None
+    assigned_at: datetime | None = None
+    days_since_assigned: int = 0
+    # "sent_back" | "with_contractor"
+    status: str = "with_contractor"
+    # Both set only when the status is sent back: the reviewer's own words and
+    # the day they said them.
+    sent_back_comment: str | None = None
+    sent_back_at: datetime | None = None
 
 
 class DtReviewRow(BaseModel):

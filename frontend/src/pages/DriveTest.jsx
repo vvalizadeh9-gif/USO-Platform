@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from 'framer-motion'
-import { ChevronRight, Eye, Radio } from 'lucide-react'
+import { ChevronRight, Eye, Radio, Timer } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import api from '../api/client'
@@ -8,6 +8,7 @@ import { PageHead } from '../components/ui'
 import { useAuth } from '../context/AuthContext'
 import { canReview } from '../lib/roles'
 import DtAssignmentTab from './drivetest/DtAssignmentTab'
+import DtInProgressTab from './drivetest/DtInProgressTab'
 import DtReviewTab from './drivetest/DtReviewTab'
 
 // The drive test half of the lifecycle, which used to live as two tabs at the
@@ -21,6 +22,7 @@ import DtReviewTab from './drivetest/DtReviewTab'
 // move, so the numbers here are the numbers the old DT tabs showed.
 const TABS = [
   { key: 'assignment', label: 'Assignment', icon: Radio, count: 'dt_assignment' },
+  { key: 'in-progress', label: 'In Progress', icon: Timer, count: 'dt_in_progress' },
   { key: 'review', label: 'Review', icon: Eye, count: 'dt_review' },
 ]
 
@@ -89,6 +91,7 @@ export default function DriveTest() {
           transition={{ duration: 0.2 }}
         >
           {tab === 'assignment' && <DtAssignmentTab onCountChange={setCount('dt_assignment')} />}
+          {tab === 'in-progress' && <DtInProgressTab onCountChange={setCount('dt_in_progress')} />}
           {tab === 'review' && <DtReviewTab onCountChange={setCount('dt_review')} />}
         </motion.div>
       </AnimatePresence>
