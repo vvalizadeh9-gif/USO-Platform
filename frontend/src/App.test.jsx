@@ -19,7 +19,8 @@ vi.mock('./components/Layout', () => ({
 
 const page = (name) => ({ default: () => <p data-testid="page">{name}</p> })
 vi.mock('./pages/Login', () => page('login'))
-vi.mock('./pages/drivetest/DriveTestProject', () => page('drive-test'))
+vi.mock('./pages/drivetest/DriveTestProject', () => page('dt-dashboard'))
+vi.mock('./pages/DriveTest', () => page('drive-test'))
 vi.mock('./pages/HealthCheck', () => page('health-check'))
 vi.mock('./pages/MyHealthCheck', () => page('my-health-check'))
 vi.mock('./pages/MyFixQueue', () => page('my-fix-queue'))
@@ -134,9 +135,22 @@ describe('guarded routes', () => {
   })
 })
 
-describe('old paths people have bookmarked', () => {
+// The drive test used to be two tabs at the end of the Health Check row, and
+// /drive-test used to be a bookmark alias for the dashboard. The work screen
+// now owns the plain path; the dashboard keeps its own under Reports, with the
+// drill-through a segment deeper.
+describe('the drive test paths', () => {
   it.each([
     ['/drive-test', 'drive-test'],
+    ['/reports/drive-test', 'dt-dashboard'],
+  ])('%s opens the right screen', async (path, expected) => {
+    signedInAs('Coordinator')
+    expect(await landOn(path)).toBe(expected)
+  })
+})
+
+describe('old paths people have bookmarked', () => {
+  it.each([
     ['/acceptance', 'my-work'],
     ['/my-acceptance', 'my-work'],
     ['/notifications', 'action-center'],
