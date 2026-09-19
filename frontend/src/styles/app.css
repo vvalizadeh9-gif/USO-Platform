@@ -1207,6 +1207,30 @@ tbody tr:last-child td { border-bottom: none; }
 .rail-row .k { font-size: 12.5px; color: var(--text-muted); }
 .rail-row .v { font-weight: 500; font-size: 13.5px; text-align: right; }
 
+/* ---------- My Drive Tests: table beside its own fill-in panel ----------
+   Same idea as .detail-grid -- a fixed-width side column rather than a second
+   equal one -- but the panel is optional, not the fixed part of every row, so
+   it needs its own class rather than reusing that one. Below the breakpoint
+   there is no room to show both, and stacking the panel under a long table
+   would bury it below a full scroll; a fixed overlay keeps it one tap away
+   from wherever the table is scrolled to. */
+.mydt-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  gap: 20px;
+  align-items: start;
+}
+@media (max-width: 900px) {
+  .mydt-grid { grid-template-columns: minmax(0, 1fr); }
+  .mydt-panel {
+    position: fixed;
+    inset: 72px 12px 12px;
+    z-index: 150;
+    overflow-y: auto;
+    box-shadow: var(--shadow-2);
+  }
+}
+
 /* An action card's secondary escape hatch, below a hairline rather than in
    a competing box of its own. */
 .card-foot { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--border-soft); }

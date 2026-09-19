@@ -55,6 +55,9 @@ export const DRIVE_TEST_PROJECT = [
   // Same two roles as Health Check: assigning a drive test and approving one
   // are the same authority as reviewing a health check.
   { to: '/drive-test', label: 'Drive Test', icon: Radio, roles: ['PM', 'Coordinator'] },
+  // One place for a contractor to work instead of knowing which sites to
+  // open on Work Items -- the same reason My Health Check exists above it.
+  { to: '/my-drive-tests', label: 'My Drive Tests', icon: Radio, roles: ['Contractor'] },
 ]
 
 // Reporting is separated from the work itself, because they are read at

@@ -14,6 +14,7 @@ const DriveTestSiteList = lazy(() => import('./pages/drivetest/SiteList'))
 const DriveTest = lazy(() => import('./pages/DriveTest'))
 const HealthCheck = lazy(() => import('./pages/HealthCheck'))
 const MyHealthCheck = lazy(() => import('./pages/MyHealthCheck'))
+const MyDriveTests = lazy(() => import('./pages/MyDriveTests'))
 const MyFixQueue = lazy(() => import('./pages/MyFixQueue'))
 const WorkItems = lazy(() => import('./pages/WorkItems'))
 const WorkItemDetail = lazy(() => import('./pages/WorkItemDetail'))
@@ -95,6 +96,7 @@ export default function App() {
           <Route path="/drive-test/sites" element={<DriveTestSiteList />} />
           <Route path="/health-check" element={<HealthCheck />} />
           <Route path="/my-health-check" element={<MyHealthCheck />} />
+          <Route path="/my-drive-tests" element={<MyDriveTests />} />
           <Route
             path="/my-fix-queue"
             element={

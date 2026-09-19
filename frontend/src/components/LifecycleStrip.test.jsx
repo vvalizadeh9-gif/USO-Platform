@@ -16,11 +16,11 @@ vi.mock('../context/AuthContext', () => ({
 
 const LifecycleStrip = (await import('./LifecycleStrip')).default
 
-function stripAs(roleName, current = 'hc') {
+function stripAs(roleName, current = 'hc', variant) {
   mockAuth.current = { user: { role: { name: roleName } } }
   render(
     <MemoryRouter>
-      <LifecycleStrip current={current} />
+      <LifecycleStrip current={current} variant={variant} />
     </MemoryRouter>,
   )
 }
@@ -59,6 +59,35 @@ describe('steps this person cannot open', () => {
     stripAs('CpgPower', 'hc')
     expect(linkFor('Monthly Plan')).toBeNull()
     expect(linkFor('Drive Test')).toBeNull()
+  })
+})
+
+describe('the contractor variant', () => {
+  it("gives a contractor their own three screens as links, not the staff ones", () => {
+    stripAs('Contractor', 'plan', 'contractor')
+    expect(linkFor('My Health Check')).toHaveAttribute('href', '/my-health-check')
+    expect(linkFor('My Drive Tests')).toHaveAttribute('href', '/my-drive-tests')
+    // The staff labels are not on this variant at all.
+    expect(screen.queryByText('Health Check')).toBeNull()
+    expect(screen.queryByText('Drive Test')).toBeNull()
+  })
+
+  it('marks My Drive Tests as current rather than linking it', () => {
+    stripAs('Contractor', 'dt', 'contractor')
+    expect(screen.getByText('My Drive Tests').closest('[aria-current]')).not.toBeNull()
+    expect(linkFor('My Drive Tests')).toBeNull()
+  })
+
+  it('does not offer a staff role the contractor screens as links', () => {
+    stripAs('PM', 'plan', 'contractor')
+    expect(linkFor('My Health Check')).toBeNull()
+    expect(linkFor('My Drive Tests')).toBeNull()
+  })
+
+  it('defaults to the staff variant when none is given', () => {
+    stripAs('PM', 'dt')
+    expect(screen.getByText('Drive Test')).toBeInTheDocument()
+    expect(screen.queryByText('My Drive Tests')).toBeNull()
   })
 })
 

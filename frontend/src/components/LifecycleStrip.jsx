@@ -18,16 +18,28 @@ import { NAV_BY_PATH, navItemVisible } from '../lib/nav'
  * visible as plain text: the process has three parts whoever is reading it,
  * and dropping one would make the strip say different things to different
  * people about what the work is.
+ *
+ * Two variants, not one strip reused with different labels: a contractor's
+ * three steps are three different screens (My Health Check, My Drive Tests),
+ * not the staff ones with a contractor-friendly hint, so the ``to`` targets
+ * differ and not just the wording.
  */
-const STEPS = [
+const STAFF_STEPS = [
   { key: 'plan', label: 'Monthly Plan', hint: 'Target for the month', to: '/monthly-plan' },
   { key: 'hc', label: 'Health Check', hint: 'Check · confirm · route fixes', to: '/health-check' },
   { key: 'dt', label: 'Drive Test', hint: 'Assign · progress · review', to: '/drive-test' },
 ]
 
-export default function LifecycleStrip({ current }) {
+const CONTRACTOR_STEPS = [
+  { key: 'plan', label: 'Monthly Plan', hint: 'Your count for the month', to: '/monthly-plan' },
+  { key: 'hc', label: 'My Health Check', hint: 'Sites to check', to: '/my-health-check' },
+  { key: 'dt', label: 'My Drive Tests', hint: 'Sites to drive-test', to: '/my-drive-tests' },
+]
+
+export default function LifecycleStrip({ current, variant = 'staff' }) {
   const { user } = useAuth()
   const roleName = user?.role?.name
+  const STEPS = variant === 'contractor' ? CONTRACTOR_STEPS : STAFF_STEPS
 
   return (
     <nav className="lifecycle" aria-label="Where this page sits in the project">
