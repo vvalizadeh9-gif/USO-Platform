@@ -22,7 +22,12 @@ from app.models.acceptance import (
     SnapshotContractorCompletion,
     letter_villages,
 )
-from app.models.health_check import HcAssignment, HcTask, HcTaskTechnology
+from app.models.acceptance_workflow import (
+    AcceptanceEvidence,
+    AcceptanceSubmission,
+    AcceptanceSubmissionTech,
+)
+from app.models.health_check import HcAssignment, HcRemediation, HcTask, HcTaskTechnology
 from app.models.workitem import Assignment, DriveTest, HealthCheck, Site, Village, WorkItem
 
 # The exact confirmation phrase the caller must supply. Enforced both here
@@ -44,8 +49,27 @@ def wipe_cpm_data(db: Session) -> dict[str, int]:
 
     counts["letters"] = db.query(Letter).delete(synchronize_session=False)
     counts["acceptances"] = db.query(Acceptance).delete(synchronize_session=False)
+    # Acceptance submission workflow (children before the village-owning
+    # parent). These are what a contractor/coordinator actually files, so
+    # any village with acceptance history has them -- skipping this step
+    # left the village delete below failing its FK check in real usage.
+    counts["acceptance_evidence"] = db.query(AcceptanceEvidence).delete(
+        synchronize_session=False
+    )
+    counts["acceptance_submission_techs"] = db.query(AcceptanceSubmissionTech).delete(
+        synchronize_session=False
+    )
+    counts["acceptance_submissions"] = db.query(AcceptanceSubmission).delete(
+        synchronize_session=False
+    )
     # New health-check workflow tables (children before parents).
     counts["hc_task_technologies"] = db.query(HcTaskTechnology).delete(
+        synchronize_session=False
+    )
+    # hc_remediations references hc_tasks (and work_items) with no DB-level
+    # cascade, so it has to go before hc_tasks or a NotReady site that ever
+    # had a remediation opened blocks the whole wipe with an FK violation.
+    counts["hc_remediations"] = db.query(HcRemediation).delete(
         synchronize_session=False
     )
     counts["hc_tasks"] = db.query(HcTask).delete(synchronize_session=False)
