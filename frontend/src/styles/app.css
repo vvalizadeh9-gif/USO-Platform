@@ -500,6 +500,25 @@ tbody tr:last-child td { border-bottom: none; }
 .tab:hover { color: var(--text); }
 .tab.active { color: var(--signal-strong); border-bottom-color: var(--signal); }
 
+/* The shared bottom bar on a bulk-assign screen (HC Pool, DT Assignment).
+   Sits as the last element of a height-bounded table card, so it is on
+   screen the moment the tab has rows -- no scrolling back up to reach it. */
+.bulk-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+  padding: 14px 20px;
+  border-top: 1px solid var(--border);
+  background: var(--surface-1);
+}
+.bulk-bar-count {
+  display: flex; align-items: center; gap: 10px;
+  font-size: 13px; font-weight: 500; color: var(--text-muted);
+  white-space: nowrap;
+}
+.bulk-bar-chips { flex: 1; min-width: 200px; }
+
 .empty {
   text-align: center; padding: 54px 20px; color: var(--text-dim);
 }

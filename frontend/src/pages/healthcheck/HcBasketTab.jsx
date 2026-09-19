@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react'
 import api from '../../api/client'
 import { useToast } from '../../context/ToastContext'
 import { EmptyState, Loading } from '../../components/ui'
+import BulkActionBar from '../../components/BulkActionBar'
 
 function BasketBadge({ count }) {
   // iOS-style pill badge: a red rounded count that shows how many sites are
@@ -81,6 +82,17 @@ export default function HcBasketTab({ onCountChange } = {}) {
       return next
     })
   }
+
+  // A filter can hide a row that is still selected. Selection only ever
+  // covers what's on screen, so a hidden row drops out rather than being
+  // assigned invisibly.
+  useEffect(() => {
+    setSelected((prev) => {
+      const visible = new Set(filtered.map((b) => b.work_item_id))
+      const next = new Set([...prev].filter((id) => visible.has(id)))
+      return next.size === prev.size ? prev : next
+    })
+  }, [filtered])
 
   function toggle(id) {
     setSelected((s) => {
@@ -193,47 +205,6 @@ export default function HcBasketTab({ onCountChange } = {}) {
             )}
           </div>
         </div>
-
-        {/* Subcontractor is a small, fixed set — clickable chips are quicker
-            for the PM than opening a dropdown. */}
-        <div className="row between wrap" style={{ gap: 12, marginTop: 12, alignItems: 'flex-end' }}>
-          <div style={{ flex: 1, minWidth: 240 }}>
-            <label className="dim" style={{ fontSize: 11.5, textTransform: 'uppercase', letterSpacing: 0.3, display: 'block', marginBottom: 6 }}>
-              Assign to subcontractor
-            </label>
-            <div className="row wrap" style={{ gap: 8 }}>
-              {contractors.length === 0 ? (
-                <span className="dim" style={{ fontSize: 12.5 }}>No subcontractors available</span>
-              ) : (
-                contractors.map((c) => {
-                  const active = String(contractorId) === String(c.id)
-                  return (
-                    <button
-                      key={c.id}
-                      type="button"
-                      className="btn btn-sm"
-                      onClick={() => setContractorId(active ? '' : String(c.id))}
-                      style={{
-                        background: active ? 'var(--signal)' : 'var(--surface-2)',
-                        color: active ? '#fff' : 'var(--text-muted)',
-                        border: active ? 'none' : '1px solid var(--border)',
-                      }}
-                    >
-                      {c.name}
-                    </button>
-                  )
-                })
-              )}
-            </div>
-          </div>
-          <button
-            className="btn btn-primary"
-            disabled={!contractorId || selected.size === 0 || busy}
-            onClick={assign}
-          >
-            {busy ? <div className="spinner" /> : <><ClipboardCheck size={15} /> Assign ({selected.size})</>}
-          </button>
-        </div>
       </div>
 
       {filtered.length === 0 ? (
@@ -307,6 +278,20 @@ export default function HcBasketTab({ onCountChange } = {}) {
             </tbody>
           </table>
         </div>
+      )}
+
+      {basket.length > 0 && (
+        <BulkActionBar
+          selectedCount={selected.size}
+          onClear={() => setSelected(new Set())}
+          contractors={contractors}
+          contractorId={contractorId}
+          onSelectContractor={setContractorId}
+          onAssign={assign}
+          busy={busy}
+          primaryLabel={`Assign health check (${selected.size})`}
+          primaryIcon={ClipboardCheck}
+        />
       )}
     </div>
   )
