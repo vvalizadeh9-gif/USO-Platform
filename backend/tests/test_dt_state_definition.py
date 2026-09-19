@@ -51,6 +51,10 @@ SEED = {
     "ongoing": (ONAIR, "Ongoing", STAGE_NEW, "total_ongoing"),
     "ongoing-padded": (ONAIR, " Ongoing ", STAGE_NEW, "total_ongoing"),
     "problematic-cpm": (ONAIR, "Problematic", STAGE_NEW, "total_problematic"),
+    # The June CPM (column AW) spells this "Problematical" on 24 rows and
+    # never "Problematic". Owner's decision: read it the same way.
+    "problematical-cpm": (ONAIR, "Problematical", STAGE_NEW, "total_problematic"),
+    "problematical-cpm-padded": (ONAIR, " problematical ", STAGE_NEW, "total_problematic"),
     # Flagged inside the app over a DT status the next import will overwrite.
     # Problematic wins, so the states stay a partition rather than counting
     # this site twice.
@@ -175,3 +179,15 @@ def test_the_status_column_is_read_through_the_normaliser(client):
         assert is_not_started(by_tag["not-started-blank"])
     finally:
         db.close()
+
+
+def test_normalize_dt_status_reads_the_misspelling_as_problematic():
+    """"Problematical" (and padded/cased variants) canonicalise the same way
+    as "Problematic". Anything else unrecognised is kept as-is, and a blank
+    cell is None -- unknown values are not silently dropped."""
+    assert C.normalize_dt_status("Problematical") == C.DT_STATUS_PROBLEMATIC
+    assert C.normalize_dt_status(" problematical ") == C.DT_STATUS_PROBLEMATIC
+    assert C.normalize_dt_status("Problematic") == C.DT_STATUS_PROBLEMATIC
+    assert C.normalize_dt_status("Foo") == "Foo"
+    assert C.normalize_dt_status("   ") is None
+    assert C.normalize_dt_status(None) is None
