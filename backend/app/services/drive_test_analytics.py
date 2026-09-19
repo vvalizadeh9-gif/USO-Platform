@@ -12,8 +12,13 @@ Definitions (agreed with the business):
                Problematic (``current_stage == 'Problematic'``). A site can
                become problematic entirely inside the app, before the next
                CPM import ever sees it — this KPI must reflect that.
-* Ongoing    : on-air, not DT-Done, and not Problematic by either signal.
-* Remaining  : on-air minus DT done  ( == ongoing + problematic + others ).
+* Ongoing    : on-air work item with ``dt_status == 'Ongoing'`` — a drive
+               test actually under way — and not Problematic by either
+               signal. A blank DT status is *not* ongoing; it is Not started.
+* Not started: on-air, and none of the three above — in practice a blank DT
+               status, a site nobody has begun a drive test on.
+* Remaining  : on-air minus DT done  ( == ongoing + problematic + not
+               started, which is what the cards under it now add up to ).
 * PIP        : the approved current-version monthly plans for a Shamsi month.
 * Assigned   : work items handed to a contractor during that month.
 * Actual     : DT-done work dated into that month by the rule the dashboard
@@ -216,17 +221,62 @@ def is_onair(wi: WorkItem) -> bool:
     return C.normalize_stage(wi.last_stage) in C.ONAIR_STAGES
 
 
+def dt_status(wi: WorkItem) -> str | None:
+    """The site's drive-test status, canonicalised.
+
+    Every figure on this dashboard reads the column through here rather than
+    comparing it to a literal. The import normalises what it writes
+    (``cpm_import``), but seeded and hand-edited rows do not go through it,
+    and ``"done"`` counted as not-done is the kind of wrong a dashboard never
+    announces.
+    """
+    return C.normalize_dt_status(wi.dt_status)
+
+
+def is_dt_done(wi: WorkItem) -> bool:
+    """The drive test is finished: DT status Done."""
+    return dt_status(wi) == C.DT_STATUS_DONE
+
+
 def is_problematic(wi: WorkItem) -> bool:
     """CPM-imported Problematic status OR an in-app HC Problematic flag."""
-    return wi.dt_status == "Problematic" or wi.current_stage == STAGE_HEALTH_PROBLEM
+    return (
+        dt_status(wi) == C.DT_STATUS_PROBLEMATIC
+        or wi.current_stage == STAGE_HEALTH_PROBLEM
+    )
 
 
 def is_ongoing(wi: WorkItem) -> bool:
-    """Not DT-Done, and not Problematic by either signal.
+    """The drive test is under way: DT status Ongoing.
 
     Read together with :func:`is_onair`, which every caller applies first.
+
+    This used to be "not Done and not Problematic", which is a different
+    claim: it swept in every on-air site whose DT status was *blank*, and a
+    blank column is a drive test nobody has started, not one in flight.
+    Nothing in the platform ever writes ``Ongoing`` -- it arrives only from
+    CPM column AW -- so the negation counted the whole untouched backlog as
+    work in progress, on the KPI card, in the contractor scorecard and in
+    every ongoing breakdown under it.
+
+    Problematic still wins where both are true: a site flagged Problematic by
+    the in-app health check carries a stale ``Ongoing`` in a column the next
+    import will overwrite, and the two cards stay mutually exclusive so the
+    states remain a partition of on-air.
     """
-    return wi.dt_status != "Done" and not is_problematic(wi)
+    return dt_status(wi) == C.DT_STATUS_ONGOING and not is_problematic(wi)
+
+
+def is_not_started(wi: WorkItem) -> bool:
+    """On-air, and no drive test has begun: Done, Ongoing and Problematic all
+    false -- in practice a blank DT status.
+
+    The fourth state, and the one the dashboard never had. It is what the
+    old ``is_ongoing`` was quietly adding to Ongoing; naming it keeps the
+    four states a partition of on-air, so Remaining still equals the cards
+    under it.
+    """
+    return not (is_dt_done(wi) or is_ongoing(wi) or is_problematic(wi))
 
 
 def effective_contractor_id(wi: WorkItem) -> int | None:
@@ -316,7 +366,7 @@ def problem_events(wi: WorkItem) -> list[tuple[date, int, bool]]:
             events.append(
                 (task.reviewed_at.date(), 1, task.overall_result == "NotReady")
             )
-    if wi.dt_status == "Done" and wi.dt_date_gregorian is not None:
+    if is_dt_done(wi) and wi.dt_date_gregorian is not None:
         events.append((wi.dt_date_gregorian, 2, False))
     events.sort(key=lambda e: (e[0], e[1]))
     return events
@@ -419,6 +469,7 @@ class DriveTestAnalytics:
     _is_onair = staticmethod(is_onair)
     _is_problematic = staticmethod(is_problematic)
     _is_ongoing = staticmethod(is_ongoing)
+    _is_not_started = staticmethod(is_not_started)
     _effective_contractor_id = staticmethod(effective_contractor_id)
     _effective_problem_category = staticmethod(effective_problem_category)
     _assignment_date = staticmethod(assignment_date)
@@ -437,11 +488,18 @@ class DriveTestAnalytics:
         return self._onair_items()
 
     def compute_kpis(self) -> dict:
-        """Return the KPI counts for the user's scope."""
+        """Return the KPI counts for the user's scope.
+
+        Four states, one visit each, and they partition on-air: Done,
+        Ongoing, Problematic and Not started. Remaining stays what it has
+        always been -- on-air minus done -- and is now the sum of the other
+        three rather than of two of them.
+        """
         onair = self._onair_items()
-        done = [w for w in onair if w.dt_status == "Done"]
+        done = [w for w in onair if is_dt_done(w)]
         problematic = [w for w in onair if self._is_problematic(w)]
         ongoing = [w for w in onair if self._is_ongoing(w)]
+        not_started = [w for w in onair if self._is_not_started(w)]
         total_onair = len(onair)
         total_done = len(done)
         return {
@@ -450,6 +508,7 @@ class DriveTestAnalytics:
             "total_remaining": total_onair - total_done,
             "total_ongoing": len(ongoing),
             "total_problematic": len(problematic),
+            "total_not_started": len(not_started),
             "current_month_dt_done": self._current_month_done_count(done),
         }
 
@@ -473,7 +532,7 @@ class DriveTestAnalytics:
         return sum(
             1
             for w in self._onair_items()
-            if w.dt_status == "Done" and self._dated_into(w, year, month)
+            if is_dt_done(w) and self._dated_into(w, year, month)
         )
 
     def month_dt_completed_by_contractor(
@@ -490,7 +549,7 @@ class DriveTestAnalytics:
         """
         counts: dict[int | None, int] = defaultdict(int)
         for w in self._onair_items():
-            if w.dt_status == "Done" and self._dated_into(w, year, month):
+            if is_dt_done(w) and self._dated_into(w, year, month):
                 counts[self._effective_contractor_id(w)] += 1
         return dict(counts)
 
@@ -556,7 +615,7 @@ class DriveTestAnalytics:
     def chart_dt_done_by_contractor(self) -> list[dict]:
         counts: dict[int, int] = defaultdict(int)
         for w in self._onair_items():
-            if w.dt_status == "Done":
+            if is_dt_done(w):
                 cid = self._effective_contractor_id(w)
                 if cid is not None:
                     counts[cid] += 1
@@ -566,7 +625,7 @@ class DriveTestAnalytics:
         """DT Done grouped by Shamsi year (from dt_date_gregorian)."""
         counts: dict[int, int] = defaultdict(int)
         for w in self._onair_items():
-            if w.dt_status == "Done" and w.dt_date_gregorian:
+            if is_dt_done(w) and w.dt_date_gregorian:
                 year, _ = jalali.to_shamsi(w.dt_date_gregorian)
                 counts[year] += 1
         return [{"name": str(y), "value": counts[y]} for y in sorted(counts)]
@@ -579,7 +638,7 @@ class DriveTestAnalytics:
         """
         counts: dict[int, int] = defaultdict(int)
         for w in self._onair_items():
-            if w.dt_status == "Done" and w.dt_date_gregorian:
+            if is_dt_done(w) and w.dt_date_gregorian:
                 year, month = jalali.to_shamsi(w.dt_date_gregorian)
                 if shamsi_year is None or year == shamsi_year:
                     counts[month] += 1
@@ -595,7 +654,7 @@ class DriveTestAnalytics:
         for w in self._onair_items():
             prov_id = w.site.province_id if w.site else None
             onair_by_prov[prov_id] += 1
-            if w.dt_status == "Done":
+            if is_dt_done(w):
                 done_by_prov[prov_id] += 1
 
         names = self._province_names(list(onair_by_prov.keys()))
@@ -628,9 +687,10 @@ class DriveTestAnalytics:
         figure, the category rows sum to the problematic card, and the
         province rows sum to the programme totals, because all of them are
         incremented from one visit to one work item under the very predicates
-        (:meth:`_is_problematic`, :meth:`_is_ongoing`) the cards use. A second
-        pass with its own copy of those predicates is how two numbers for one
-        fact get onto a dashboard.
+        (:meth:`_is_problematic`, :meth:`_is_ongoing`,
+        :meth:`_is_not_started`) the cards use. A second pass with its own
+        copy of those predicates is how two numbers for one fact get onto a
+        dashboard.
 
         BOTH BREAKDOWNS AGE, and each names the sites it cannot age. An
         ongoing site's clock starts when a contractor was given it; a
@@ -658,13 +718,20 @@ class DriveTestAnalytics:
         problem_age_counts: dict[str, int] = defaultdict(int)
         problem_without_date = 0
         province_rows: dict[int | None, dict[str, int]] = defaultdict(
-            lambda: {"onair": 0, "done": 0, "ongoing": 0, "problematic": 0}
+            lambda: {
+                "onair": 0, "done": 0, "ongoing": 0,
+                "problematic": 0, "not_started": 0,
+            }
         )
         contractor_rows: dict[int | None, dict[str, int]] = defaultdict(
-            lambda: {"onair": 0, "done": 0, "ongoing": 0, "problematic": 0}
+            lambda: {
+                "onair": 0, "done": 0, "ongoing": 0,
+                "problematic": 0, "not_started": 0,
+            }
         )
         ongoing_total = 0
         problematic_total = 0
+        not_started_total = 0
         today = date.today()
 
         for w in self._onair_items():
@@ -678,7 +745,7 @@ class DriveTestAnalytics:
             book = contractor_rows[self._effective_contractor_id(w)]
             book["onair"] += 1
 
-            if w.dt_status == "Done":
+            if is_dt_done(w):
                 row["done"] += 1
                 book["done"] += 1
 
@@ -714,6 +781,14 @@ class DriveTestAnalytics:
                 else:
                     age_counts[band] += 1
 
+            # The fourth state, counted in the same visit as the other three
+            # so the province table and the scorecard still add up to on-air
+            # now that Ongoing no longer absorbs every blank DT status.
+            if self._is_not_started(w):
+                not_started_total += 1
+                row["not_started"] += 1
+                book["not_started"] += 1
+
         names = self._province_names(list(province_rows))
         return {
             "ongoing": {
@@ -739,6 +814,7 @@ class DriveTestAnalytics:
                 "by_age": self._age_points(problem_age_counts),
                 "without_problem_date": problem_without_date,
             },
+            "not_started": {"total": not_started_total},
             "provinces": _province_table(province_rows, names),
             "contractors": self._contractor_scorecard(contractor_rows),
         }
@@ -771,7 +847,9 @@ class DriveTestAnalytics:
 
         The denominator is the company's *assignment* — the drive tests it has
         finished plus the sites it is still holding — not every on-air site
-        that carries its name. Problematic sites are excluded deliberately:
+        that carries its name. Sites whose drive test has not started are
+        outside it for the plainest reason: nothing has been committed on
+        them yet. Problematic sites are excluded deliberately:
         a site handed over for a health check, or one sitting in a problem
         category, is not work the contractor has been committed to, and
         counting it against them would mark a company down for sites the
@@ -812,6 +890,7 @@ class DriveTestAnalytics:
                     "done": book["done"],
                     "ongoing": book["ongoing"],
                     "problematic": book["problematic"],
+                    "not_started": book["not_started"],
                     "done_percent": (
                         round(book["done"] / assigned * 100, 1) if assigned else 0.0
                     ),
@@ -1021,7 +1100,7 @@ class DriveTestAnalytics:
         assigned_pairs: set[tuple[int, int]] = set()
 
         for w in items:
-            if self._is_onair(w) and w.dt_status == "Done" and self._dated_into(w, year, month):
+            if self._is_onair(w) and is_dt_done(w) and self._dated_into(w, year, month):
                 actual_total += 1
                 cid = self._effective_contractor_id(w)
                 if cid is not None:
@@ -1179,7 +1258,7 @@ class DriveTestAnalytics:
             (a for a in wi.assignments if a.assigned_at is not None),
             key=lambda a: a.assigned_at,
         )
-        done_on = wi.dt_date_gregorian if wi.dt_status == "Done" else None
+        done_on = wi.dt_date_gregorian if is_dt_done(wi) else None
 
         spans: list[tuple[int, date, date | None]] = []
         for i, a in enumerate(ordered):
@@ -1244,7 +1323,7 @@ class DriveTestAnalytics:
                     ):
                         released[(i, cid)] += 1
 
-            if w.dt_status == "Done":
+            if is_dt_done(w):
                 cid = self._effective_contractor_id(w)
                 if cid is None or (own is not None and cid != own):
                     continue
@@ -1380,6 +1459,7 @@ def _province_table(
                 "remaining": onair - done,
                 "ongoing": row["ongoing"],
                 "problematic": row["problematic"],
+                "not_started": row["not_started"],
                 "done_percent": round(done / onair * 100, 1) if onair else 0.0,
             }
         )

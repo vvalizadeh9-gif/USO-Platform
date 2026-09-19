@@ -10,7 +10,12 @@ import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 
 const HC_QUEUE_COUNTS = {
-  pool: 3, in_progress: 5, hc_review: 2, remediation: 4,
+  // pool is every on-air site whose drive test is not Done — a programme
+  // quantity. pool_assignable is the slice a PM can raise a check for now,
+  // and it is deliberately smaller here so the badge cannot pass by reading
+  // the wrong one.
+  pool: 3, pool_assignable: 2,
+  in_progress: 5, hc_review: 2, remediation: 4,
   reroutes: 1, dt_assignment: 6, dt_in_progress: 7, dt_review: 2,
 }
 const MY_DT_COUNTS = { todo: 4, submitted: 2 }
@@ -133,10 +138,14 @@ describe('sidebar badges sum the tab counts they cover (D2-D4)', () => {
     return link.querySelector('.badge')?.textContent
   }
 
-  it('shows a PM Health Check = pool + hc_review + reroutes (In Progress and Remediation excluded)', async () => {
+  it('shows a PM Health Check = assignable pool + hc_review + reroutes (In Progress and Remediation excluded)', async () => {
     await sidebarAs('PM')
     expect(badgeNear('Health Check')).toBe(
-      String(HC_QUEUE_COUNTS.pool + HC_QUEUE_COUNTS.hc_review + HC_QUEUE_COUNTS.reroutes),
+      String(
+        HC_QUEUE_COUNTS.pool_assignable +
+          HC_QUEUE_COUNTS.hc_review +
+          HC_QUEUE_COUNTS.reroutes,
+      ),
     )
   })
 

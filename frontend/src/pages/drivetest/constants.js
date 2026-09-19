@@ -8,7 +8,7 @@
 export const STAGE_PROBLEMATIC = 'Problematic'
 export const STAGE_DT_DONE = 'DT Done'
 
-/** The three states an on-air site can be in, and the one colour each gets.
+/** The four states an on-air site can be in, and the one colour each gets.
  *
  * THE WHOLE COLOUR RULE OF THIS PAGE IS HERE. Colour on this dashboard means
  * a state and nothing else: green is a finished drive test, indigo is work in
@@ -22,11 +22,18 @@ export const STAGE_DT_DONE = 'DT Done'
  * progress", and it fails: against this red it is 3.4 ΔE apart under deutan
  * and 12 under normal vision, which is to say a red-green reader cannot tell
  * an ongoing site from a problematic one. Indigo clears both at 20+.
+ *
+ * The fourth state takes the neutral rather than a fourth hue. A site nobody
+ * has started a drive test on is the absence of activity, and grey says that
+ * beside three saturated states without adding a colour to learn.
  */
 export const STATE_COLOR = {
   done: 'var(--dt-done)',
   ongoing: 'var(--dt-ongoing)',
   problematic: 'var(--dt-problem)',
+  // The neutral, not a fourth hue: nothing has happened to these sites, and
+  // grey beside three saturated states reads as absence. See app.css.
+  not_started: 'var(--dt-notstarted)',
 }
 
 /** The ordinal ramp for the ongoing age bands.
@@ -58,6 +65,9 @@ export const KPI_DIRECTION = {
   total_remaining: 'down',
   total_ongoing: 'down',
   total_problematic: 'down',
+  // A drive test that has not started is work not yet begun, so a rising
+  // count is a growing backlog.
+  total_not_started: 'down',
 }
 
 /** How many rows a collapsed province view shows before folding the rest. */
@@ -87,6 +97,7 @@ export const BUCKET_LABEL = {
   done: 'sites with their drive test done',
   ongoing: 'ongoing sites',
   problematic: 'problematic sites',
+  not_started: 'sites with no drive test started',
   remaining: 'remaining sites',
   delivered: 'drive tests delivered',
 }

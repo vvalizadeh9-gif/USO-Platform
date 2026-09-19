@@ -100,7 +100,11 @@ export default function Layout() {
   const location = useLocation()
   const [open, setOpen] = useState(false)
   const [actionCount, setActionCount] = useState(0)
-  // hc: HC Pool + HC Review + Re-routes (D2) -- these wait on a PM/Coordinator.
+  // hc: assignable HC Pool + HC Review + Re-routes (D2) -- these wait on a
+  //     PM/Coordinator. The pool's own figure is every on-air site whose
+  //     drive test is not Done, which is a programme quantity rather than a
+  //     to-do list; the sidebar asks "how much is waiting on me", so it takes
+  //     the slice that can actually be assigned right now.
   // dt: DT Assignment + DT Review (D3) -- In Progress waits on the contractor.
   // mydt: a contractor's own To do count (D4). My Health Check has no count
   // endpoint of its own today, so it carries no badge (see D4).
@@ -122,7 +126,7 @@ export default function Layout() {
           const c = r.data
           setBadges((b) => ({
             ...b,
-            hc: c.pool + c.hc_review + c.reroutes,
+            hc: (c.pool_assignable ?? c.pool) + c.hc_review + c.reroutes,
             dt: c.dt_assignment + c.dt_review,
           }))
         })

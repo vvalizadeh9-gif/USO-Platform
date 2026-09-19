@@ -54,6 +54,10 @@ const overview = {
     total_remaining: kpi(60),
     total_ongoing: kpi(50),
     total_problematic: kpi(10),
+    // The four states partition on-air: 40 + 50 + 10 = 100, so nothing is
+    // left over here. A fixture with a non-zero not-started figure lives in
+    // the backend tests, where the predicate that decides it is.
+    total_not_started: kpi(0),
     current_month_dt_done: kpi(6),
   },
   ongoing_by_contractor: [],
@@ -121,15 +125,15 @@ const overview = {
     without_problem_date: 4,
   },
   province_breakdown: [
-    { name: 'Kerman', onair: 60, done: 23, remaining: 37, ongoing: 30, problematic: 7, done_percent: 38.3 },
-    { name: 'Yazd', onair: 40, done: 17, remaining: 23, ongoing: 20, problematic: 3, done_percent: 42.5 },
+    { name: 'Kerman', onair: 60, done: 23, remaining: 37, ongoing: 30, problematic: 7, not_started: 0, done_percent: 38.3 },
+    { name: 'Yazd', onair: 40, done: 17, remaining: 23, ongoing: 20, problematic: 3, not_started: 0, done_percent: 42.5 },
   ],
   // `assigned` is done + ongoing, and problematic is deliberately outside it
   // — see ContractorScorecard for why the denominator stops there.
   contractor_scorecard: [
-    { contractor_id: 1, name: 'Alfa Drive Tests', assigned: 55, done: 40, ongoing: 15, problematic: 5, done_percent: 72.7 },
-    { contractor_id: 2, name: 'Beta Surveys', assigned: 27, done: 9, ongoing: 18, problematic: 3, done_percent: 33.3 },
-    { contractor_id: null, name: 'Unattributed', assigned: 8, done: 2, ongoing: 6, problematic: 2, done_percent: 25.0 },
+    { contractor_id: 1, name: 'Alfa Drive Tests', assigned: 55, done: 40, ongoing: 15, problematic: 5, not_started: 0, done_percent: 72.7 },
+    { contractor_id: 2, name: 'Beta Surveys', assigned: 27, done: 9, ongoing: 18, problematic: 3, not_started: 0, done_percent: 33.3 },
+    { contractor_id: null, name: 'Unattributed', assigned: 8, done: 2, ongoing: 6, problematic: 2, not_started: 0, done_percent: 25.0 },
   ],
 }
 
@@ -144,6 +148,7 @@ const overviewWithProvinces = (n) => ({
     remaining: 100 - i,
     ongoing: 100 - i,
     problematic: 0,
+    not_started: 0,
     done_percent: i,
   })),
 })
@@ -753,6 +758,7 @@ describe('delta direction', () => {
       total_remaining: kpi(60, -12, 60),
       total_ongoing: kpi(50, -16, 50),
       total_problematic: kpi(10, 4, 10),
+      total_not_started: kpi(0, 0, 0),
       current_month_dt_done: kpi(6, 2),
     },
   }
@@ -829,6 +835,9 @@ describe('the hero', () => {
       '100 sites on air. Drive tests done: 40, 40%. Problematic: 10, 10%. Ongoing: 50, 50%',
     )
     const segments = within(hero).getAllByTestId('dt-hero-segment')
+    // Three, not four: this fixture has no not-started sites, and an empty
+    // state is left out of the bar and out of its description rather than
+    // drawn as a zero-width segment nobody can see or hear.
     expect(segments).toHaveLength(3)
     // Each segment names its own figure on hover, which is what makes a
     // two-per-cent segment cost nothing: it never has to be read inside.
@@ -837,6 +846,40 @@ describe('the hero', () => {
       'Problematic: 10 (10% of on-air)',
       'Ongoing: 50 (50% of on-air)',
     ])
+  })
+
+  it('draws not-started as its own segment rather than folding it into ongoing', async () => {
+    // The regression this band is most exposed to. Ongoing used to mean "not
+    // done and not problematic", so every on-air site with a blank DT status
+    // was drawn as work in flight. Here twelve of them are not.
+    serve(planDelivery(), {
+      ...overview,
+      kpis: {
+        ...overview.kpis,
+        total_ongoing: kpi(38),
+        total_not_started: kpi(12),
+      },
+    })
+    draw()
+
+    const hero = await screen.findByLabelText('Programme totals')
+    const segments = within(hero).getAllByTestId('dt-hero-segment')
+    expect(segments.map((s) => s.getAttribute('data-state'))).toEqual([
+      'done',
+      'problematic',
+      'ongoing',
+      'not_started',
+    ])
+    // Still the whole programme: the four states partition on-air.
+    const shares = segments.map((s) => Number(s.getAttribute('title').match(/\((\d+)%/)[1]))
+    expect(shares.reduce((a, b) => a + b, 0)).toBe(100)
+
+    const tile = within(hero).getByText('Not started').closest('.dt-state-tile')
+    expect(within(tile).getByText('12')).toBeInTheDocument()
+    expect(tile.closest('a')).toHaveAttribute(
+      'href',
+      '/drive-test/sites?bucket=not_started',
+    )
   })
 
   it('puts each state in a tile whose size does not depend on its share', async () => {
@@ -1116,6 +1159,7 @@ describe('drill-through', () => {
           done: 40,
           ongoing: 15,
           problematic: 5,
+          not_started: 0,
           done_percent: 72.7,
         },
       ],

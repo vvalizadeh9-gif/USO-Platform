@@ -16,8 +16,9 @@ neither definition is wrong for its own purpose:
   a CPM import keeps whatever stage its own workflow gives it, so on the
   repository's sample data every one of the dashboard's problematic sites is
   missing from that queue.
-* **Ongoing.** Ongoing is on-air only. The queue has no on-air filter, so it
-  answers with sites the dashboard never counted.
+* **Ongoing.** Ongoing is on-air only, and is the DT status column reading
+  ``Ongoing``. The queue has no on-air filter, so it answers with sites the
+  dashboard never counted.
 
 ``/work-items`` is left exactly as it is: its stage semantics serve other
 screens. This module instead reuses the dashboard's own predicates from
@@ -67,6 +68,8 @@ from app.services.drive_test_analytics import (
     dated_into,
     effective_contractor_id,
     effective_problem_category,
+    is_dt_done,
+    is_not_started,
     is_ongoing,
     is_problematic,
     own_contractor_id,
@@ -74,15 +77,18 @@ from app.services.drive_test_analytics import (
 
 #: Which dashboard figure the list is opening.
 #:
-#: ``remaining`` is ongoing + problematic, which is what the Remaining line on
-#: the dashboard adds up. ``assigned`` is done + ongoing, the contractor
-#: scorecard's book of work: problematic sites are deliberately outside it,
-#: because they were never committed to the company (see
-#: ``_contractor_scorecard``), and the scorecard's rate divides by it.
+#: ``remaining`` is everything on-air whose drive test is not Done — ongoing
+#: plus problematic plus not-started, which is what the Remaining line on the
+#: dashboard adds up now that Ongoing means ``dt_status == 'Ongoing'`` rather
+#: than "not done and not problematic". ``assigned`` is done + ongoing, the
+#: contractor scorecard's book of work: problematic and not-started sites are
+#: deliberately outside it, because they were never committed to the company
+#: (see ``_contractor_scorecard``), and the scorecard's rate divides by it.
 #: ``delivered`` is the plan-and-delivery figure for one Shamsi month and is
 #: the only bucket that needs a period.
 BUCKETS = (
-    "onair", "done", "ongoing", "problematic", "remaining", "assigned", "delivered",
+    "onair", "done", "ongoing", "problematic", "not_started",
+    "remaining", "assigned", "delivered",
 )
 DEFAULT_BUCKET = "onair"
 
@@ -100,6 +106,7 @@ UNATTRIBUTED = "none"
 BUCKET_DONE = "Done"
 BUCKET_ONGOING = "Ongoing"
 BUCKET_PROBLEMATIC = "Problematic"
+BUCKET_NOT_STARTED = "Not started"
 
 #: The columns that may be sorted on, mapped to the row key they read.
 #:
@@ -153,6 +160,11 @@ DEFAULT_SORTS: dict[str, tuple[tuple[str, bool], ...]] = {
     "assigned": (("days_since_assignment", True),),
     "done": (("dt_execution_date", True),),
     "delivered": (("dt_execution_date", True),),
+    # Longest on-air first. Nothing has been assigned on these sites, so the
+    # assignment clock the ongoing lists sort on does not exist for them; how
+    # long the site has been live and untested is the fact that makes one of
+    # them more urgent than another.
+    "not_started": (("days_since_launch", True),),
     "onair": (("site_code", False),),
 }
 
@@ -453,29 +465,32 @@ def _in_bucket(wi: WorkItem, filters: Filters) -> bool:
     """Which dashboard figure this work item is behind.
 
     Every bucket is a subset of on-air, which the loader has already applied.
-    ``remaining`` is spelled as ongoing-or-problematic rather than as "not
-    done", so that it is the sum of the two lists a reader can also open
+    ``remaining`` is spelled as the three non-done states rather than as "not
+    done", so that it is the sum of the three lists a reader can also open
     separately -- the Remaining line on the dashboard makes exactly that claim
-    about exactly those two states. ``assigned`` is the other pairing, done
-    plus ongoing, for the same reason on the scorecard.
+    about exactly those states. ``assigned`` is the other pairing, done plus
+    ongoing, for the same reason on the scorecard.
     """
     bucket = filters.bucket
     if bucket == "onair":
         return True
     if bucket == "done":
-        return wi.dt_status == "Done"
+        return is_dt_done(wi)
     if bucket == "ongoing":
         return is_ongoing(wi)
     if bucket == "problematic":
         return is_problematic(wi)
+    if bucket == "not_started":
+        return is_not_started(wi)
     if bucket == "remaining":
-        return is_ongoing(wi) or is_problematic(wi)
+        return is_ongoing(wi) or is_problematic(wi) or is_not_started(wi)
     if bucket == "assigned":
         # The scorecard's denominator, spelled the same way it is there:
-        # finished plus still held, with problematic sites outside it.
-        return wi.dt_status == "Done" or is_ongoing(wi)
+        # finished plus still held, with problematic and not-started sites
+        # outside it.
+        return is_dt_done(wi) or is_ongoing(wi)
     # delivered
-    return wi.dt_status == "Done" and dated_into(wi, filters.year, filters.month)
+    return is_dt_done(wi) and dated_into(wi, filters.year, filters.month)
 
 
 def _matches_contractor(wi: WorkItem, filters: Filters) -> bool:
@@ -736,17 +751,21 @@ def _row(wi: WorkItem, context: dict, today: date) -> dict:
 
 
 def _row_bucket(wi: WorkItem) -> str:
-    """Done, Ongoing or Problematic, by the dashboard's own order.
+    """Which of the four states this site is in, in the dashboard's own order.
 
-    Problematic is read before Done for the same reason the KPI cards do:
-    the three are a partition of on-air, and ``is_ongoing`` is defined as
-    neither of the other two.
+    Problematic is read before Done for the same reason the KPI cards do: the
+    four are a partition of on-air, and Problematic is the one state that can
+    be true alongside a stale value in the DT status column. Ongoing is that
+    column reading ``Ongoing``; anything left is a drive test that has not
+    started, which this row used to report as Ongoing.
     """
     if is_problematic(wi):
         return BUCKET_PROBLEMATIC
-    if wi.dt_status == "Done":
+    if is_dt_done(wi):
         return BUCKET_DONE
-    return BUCKET_ONGOING
+    if is_ongoing(wi):
+        return BUCKET_ONGOING
+    return BUCKET_NOT_STARTED
 
 
 def _categories(wi: WorkItem, fixes: list[dict]) -> list[str]:

@@ -119,11 +119,29 @@ def _contractor_id():
         db.close()
 
 
+def _assign(client, h, work_item_id):
+    """Raise a health check for one named site; return its task."""
+    r = client.post(
+        "/api/v1/hc/assignments",
+        headers=h,
+        json={"contractor_id": _contractor_id(), "work_item_ids": [work_item_id]},
+    )
+    assert r.status_code == 201, r.text
+    return r.json()["tasks"][0]
+
+
 def _take_site(client, h):
-    """Assign the first basket site for health check; return (site, task)."""
+    """Assign a fresh pool site for health check; return (site, task).
+
+    "Fresh" is ``hc_state == "New"``: never health-checked. The pool holds
+    every on-air site whose drive test is not Done, including the ones these
+    tests have already worked, so taking ``basket[0]`` would hand every test
+    the same site and the fix queues would pile up on it.
+    """
     basket = client.get("/api/v1/hc/basket", headers=h).json()
-    assert basket, "expected at least one eligible site"
-    site = basket[0]
+    fresh = [b for b in basket if b["hc_state"] == "New" and b["assignable"]]
+    assert fresh, "expected at least one site that has never been checked"
+    site = fresh[0]
     r = client.post(
         "/api/v1/hc/assignments",
         headers=h,
@@ -165,6 +183,19 @@ def _pass(client, h, task, techs):
 def _in_basket(client, h, work_item_id):
     basket = client.get("/api/v1/hc/basket", headers=h).json()
     return next((b for b in basket if b["work_item_id"] == work_item_id), None)
+
+
+def _pool_state(client, h, work_item_id):
+    """Where the pool says this site is in the health-check loop.
+
+    A site never leaves the pool until its drive test is Done -- the pool is
+    the quantity of on-air sites that still owe a health check, not the list
+    of what can be assigned this minute. What used to be tested as "is it in
+    the basket" is therefore tested as "what does the basket say about it".
+    """
+    row = _in_basket(client, h, work_item_id)
+    assert row is not None, "an on-air site with no drive test is always in the pool"
+    return row["hc_state"]
 
 
 # ---------------------------------------------------------------- triage ----
@@ -291,7 +322,7 @@ def test_site_returns_only_after_every_fix_closes(client):
     )
 
     # Being worked on: out of the basket entirely.
-    assert _in_basket(client, h, wid) is None
+    assert _pool_state(client, h, wid) == "Fix in progress"
 
     power_h = _headers(client, "cpgpower", "Owner@12345")
     nwg_h = _headers(client, "nwgplanning", "Owner@12345")
@@ -308,7 +339,9 @@ def test_site_returns_only_after_every_fix_closes(client):
     assert r.status_code == 200, r.text
     # One owner done is not enough — the other still holds it.
     assert r.json()["returned_to_basket"] is False
-    assert _in_basket(client, h, wid) is None
+    assert _pool_state(client, h, wid) == "Fix in progress", (
+        "one of two fixes closed is not the site coming back"
+    )
 
     nwg_fix = [
         f for f in client.get("/api/v1/hc/my/fixes", headers=nwg_h).json()
@@ -325,23 +358,29 @@ def test_site_returns_only_after_every_fix_closes(client):
     # Back in the basket by itself, flagged as round 2 with a reason.
     row = _in_basket(client, h, wid)
     assert row is not None
+    assert row["hc_state"] == "Ready for re-check"
+    assert row["assignable"] is True
     assert row["round_no"] == 2
     assert row["returning_reason"]
 
     # Re-check passes → it leaves the loop for good.
-    _, task2 = _take_site(client, h)
+    task2 = _assign(client, h, wid)
     assert task2["work_item_id"] == wid
     assert task2["round_no"] == 2
     _pass(client, h, task2, site["requested_technologies"])
-    assert _in_basket(client, h, wid) is None
+    assert _pool_state(client, h, wid) == "Health check passed"
 
 
-def test_untriaged_failure_stays_out_of_the_basket(client):
-    """A failed-but-untriaged site waits on the PM, not in the basket."""
+def test_untriaged_failure_reads_as_awaiting_triage(client):
+    """A failed-but-untriaged site waits on the PM, and says so.
+
+    It stays in the pool -- it is on-air and its drive test is not Done --
+    but nobody should read it as work waiting to be assigned.
+    """
     h = _headers(client)
     site, task = _take_site(client, h)
     _fail(client, h, task, site["requested_technologies"])
-    assert _in_basket(client, h, site["work_item_id"]) is None
+    assert _pool_state(client, h, site["work_item_id"]) == "Awaiting triage"
 
 
 # --------------------------------------------------------------- reroute ----
@@ -435,10 +474,23 @@ def test_site_history_covers_every_round(client):
 
 
 def test_history_is_visible_to_a_category_owner(client):
-    """History is explicitly readable by every role, not just PM."""
+    """History is readable by a category owner, not only by a PM.
+
+    The routing is the premise, not decoration: a category owner sees a site
+    because a fix is routed to their role (``apply_work_item_scope``), so the
+    triage below is what puts this site in their scope at all. It used to be
+    left implicit and passed on whichever site the previous test happened to
+    leave at the head of the queue.
+    """
     h = _headers(client)
     site, task = _take_site(client, h)
     _fail(client, h, task, site["requested_technologies"])
+    r = client.post(
+        f"/api/v1/hc/tasks/{task['id']}/review",
+        headers=h,
+        json={"problem_categories": [POWER]},
+    )
+    assert r.status_code == 200, r.text
 
     r = client.get(
         f"/api/v1/hc/sites/{site['work_item_id']}/history",

@@ -243,32 +243,48 @@ turns the queue into a hot potato and destroys the SLA record.
 
 ### The loop closes itself
 
-Nobody re-adds a site to the basket by hand. A site is withheld from the basket
-while:
+Nobody re-adds a site to the pool by hand, and nobody removes one either. A
+site's place in the loop is reported on its row (`hc_state`) rather than
+deciding whether the row exists:
 
-- it is inside an open health-check task, **or**
-- its last check was `NotReady` and no PM has triaged it yet — the PM owes a
-  decision, and it is visible in HC Results, **or**
-- any resulting fix is still open — an owner owes the work, and it is visible in
-  their Fix Queue.
+| `hc_state` | What it means | Assignable |
+|---|---|---|
+| `New` | Never health-checked | yes |
+| `In health check` | Inside an open task, out with a subcontractor | **no** |
+| `Awaiting triage` | Failed, and no PM has categorised it yet | yes |
+| `Fix in progress` | At least one resulting fix is still open | yes |
+| `Ready for re-check` | Every fix closed; back for the next round | yes |
+| `Health check passed` | Passed, and waiting on its drive test | yes |
 
-When the last fix closes, the site reappears in the basket at the next round
-number, carrying a summary of why it came back. A site that passes leaves the
-loop permanently.
+Only an open check blocks a new assignment, because that is the one case
+`create_assignment` refuses (409). The rest are judgements a Coordinator is
+allowed to make, so the screen states them and lets them decide.
+
+When the last fix closes, the site reads `Ready for re-check` at the next round
+number, carrying a summary of why it came back. A site that passes stays in the
+pool — it is still on-air and still owes a drive test — but reads
+`Health check passed`.
 
 **Round 3 and beyond is treated as an exception** and surfaced to the PM — a site
 failing three times means something is wrong that the loop is not fixing.
 
-### What is eligible for the basket
+### What is in the pool
 
-A site enters the basket when it is **on-air** and its drive test is not already
-done or in progress:
+The pool is **every on-air site whose drive test is not `Done`**. That is the
+whole definition, and the pool quantity is the length of that list:
 
 - On-air means the last completed stage is `راه_اندازی_موقت` (temporary launch)
   or `راه_اندازی_دائم` (permanent launch). Anything else — `طراحی` (design), for
   instance — is not.
-- Drive-test status `Done` or `Ongoing` excludes the site. Only sites still
-  awaiting a drive test (blank or `Problematic`) are eligible.
+- A drive-test status of `Done` excludes the site, and nothing else does.
+  `Ongoing`, `Problematic` and blank all stay.
+
+`Ongoing` used to exclude a site too, on the reading that a site already with a
+drive-test contractor was somebody else's problem. That made the figure smaller
+than the thing it is labelled with by however many sites the last import marked
+`Ongoing`. The nav badge and the Action Center counter use `pool_assignable`
+instead — what a PM can act on now — because those two ask "what needs me",
+not "how much is there".
 
 ---
 
@@ -284,6 +300,37 @@ Work-item stages through this flow: `New` → `Ready for Assignment` → `Assign
 → `DT Submitted` → `Coordinator Approved`, with `Returned by Contractor` and
 `Problematic` as branches. The current stage is **computed** from the underlying
 records rather than stored as a field that could drift out of step with them.
+
+### The four states on the Drive Test dashboard
+
+Every on-air site is in exactly one of these, and each one is read off the DT
+status column through the same normaliser (`services/drive_test_analytics.py`,
+which the drill-through site list imports rather than re-implementing):
+
+| State | Definition |
+|---|---|
+| **DT Done** | `dt_status == 'Done'` |
+| **Ongoing** | `dt_status == 'Ongoing'` — a drive test under way |
+| **Problematic** | `dt_status == 'Problematic'`, **or** the in-app health check flagged it (`current_stage == 'Problematic'`); wins where both apply |
+| **Not started** | none of the above — in practice a blank DT status |
+
+**Remaining** stays on-air minus done, and is the sum of the other three.
+
+The one case where a site lands in two of them is a CPM `Done` status sitting
+over an in-app Not-Ready health check. That predates this split and is what
+`MonthlySnapshot.flow_ongoing_adjustment` exists to keep visible rather than
+absorb.
+
+Ongoing used to be defined by negation — "not Done and not Problematic" —
+which swept every on-air site with a *blank* DT status into it. A blank column
+is a drive test nobody has started, not one in flight, so the card, the
+contractor scorecard and every ongoing breakdown reported the untouched
+backlog as work in progress. `Not started` is that population, named.
+
+One consequence worth knowing: nothing in the platform writes `Ongoing`. The
+column is seeded by the CPM import and only ever written to `Done` again, by
+drive-test approval. So a site assigned to a contractor **inside the app**
+stays `Not started` until an import says otherwise.
 
 ### Acceptance
 

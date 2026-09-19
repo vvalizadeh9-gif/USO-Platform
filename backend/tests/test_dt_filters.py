@@ -128,7 +128,10 @@ def world(client):
     db.add_all([k_site, y_site])
     db.flush()
 
-    def item(site, tag, stage, *, dt_status=None, contractor=None, age_days=None, assign=True):
+    def item(
+        site, tag, stage, *, dt_status="Ongoing", contractor=None,
+        age_days=None, assign=True,
+    ):
         """One work item, optionally with a live assignment of a known age.
 
         ``age_days`` dates the *assignment*, which is what the aging bands
@@ -136,6 +139,10 @@ def world(client):
         fixture still has a plausible on-air date to carry. ``assign=False``
         leaves the assignment to the caller, for the site whose whole point is
         the hand-over it was given by hand.
+
+        ``dt_status`` defaults to ``Ongoing`` because most of this fixture is
+        ongoing sites and that column is what Ongoing means. Pass ``None`` for
+        a site whose drive test has not started.
         """
         wi = WorkItem(
             site_id=site.id,
@@ -172,6 +179,10 @@ def world(client):
     item(k_site, "age-26d", STAGE_ASSIGNED, age_days=26, contractor=beta.id)
     item(k_site, "age-90d", STAGE_ASSIGNED, age_days=90, contractor=beta.id)
     item(k_site, "age-none", STAGE_READY, age_days=None)
+
+    # One site nobody has begun a drive test on, so the reconciliation below
+    # has a not-started figure to account for rather than a zero.
+    item(k_site, "k-not-started", STAGE_NEW, dt_status=None, age_days=120)
 
     # Kerman done + problematic, so the scorecard has a denominator worth
     # dividing by and the province rows have something to reconcile.
@@ -282,8 +293,14 @@ def test_the_filtered_page_still_reconciles(client, world):
     body = _overview(client, world["admin"], province_id=world["ids"]["kerman"])
     kpis = body["kpis"]
 
-    assert kpis["total_ongoing"]["value"] + kpis["total_problematic"]["value"] == (
-        kpis["total_remaining"]["value"]
+    assert kpis["total_not_started"]["value"] > 0, (
+        "a zero here would let the sum below pass without proving anything"
+    )
+    assert (
+        kpis["total_ongoing"]["value"]
+        + kpis["total_problematic"]["value"]
+        + kpis["total_not_started"]["value"]
+        == kpis["total_remaining"]["value"]
     )
     ongoing = body["ongoing_breakdown"]
     assert sum(p["value"] for p in ongoing["by_stage"]) == ongoing["total"]

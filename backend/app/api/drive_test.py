@@ -175,6 +175,15 @@ def drive_test_overview(
             delta=delta("total_problematic"),
             percent_of_onair=pct(kpis["total_problematic"]),
         ),
+        # No delta: the monthly snapshot has no column for it, and one
+        # derived from the other four would be a month-over-month comparison
+        # against figures taken under the old Ongoing definition. A missing
+        # delta renders as nothing at all (see KpiBand's DeltaChip), which is
+        # the honest answer until this figure has a baseline of its own.
+        total_not_started=KpiWithDelta(
+            value=kpis["total_not_started"],
+            percent_of_onair=pct(kpis["total_not_started"]),
+        ),
         current_month_dt_done=KpiWithDelta(
             value=kpis["current_month_dt_done"],
             delta=delta("current_month_dt_done"),

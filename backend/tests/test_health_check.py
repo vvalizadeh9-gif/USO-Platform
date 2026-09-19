@@ -199,7 +199,10 @@ def test_wrong_technology_rejected(client):
     db.close()
 
     # Find a site that does NOT request 5G (none do) and try to submit 5G.
-    site = basket[0]
+    # The pool holds every on-air site whose drive test is not Done,
+    # including ones already inside an open check, so pick one that can
+    # actually be assigned.
+    site = next(b for b in basket if b["assignable"])
     r = client.post(
         "/api/v1/hc/assignments",
         headers=h,
@@ -214,7 +217,14 @@ def test_wrong_technology_rejected(client):
     assert r.status_code == 400
 
 
-def test_assigned_site_leaves_basket(client):
+def test_assigned_site_stays_in_the_pool_but_cannot_be_assigned_again(client):
+    """The pool is the quantity, not the to-do list.
+
+    Assigning a health check used to remove the site from the pool, which
+    made the pool figure answer "how many can I assign right now" rather
+    than "how many on-air sites still owe a health check". The site stays,
+    says where it is, and refuses a second assignment.
+    """
     _login(client)
     h = _pm(client)
     before = client.get("/api/v1/hc/basket", headers=h).json()
@@ -225,15 +235,26 @@ def test_assigned_site_leaves_basket(client):
     contractor_id = db.query(Contractor).first().id
     db.close()
 
-    ids = [before[0]["work_item_id"]]
+    ids = [next(b["work_item_id"] for b in before if b["assignable"])]
     client.post(
         "/api/v1/hc/assignments",
         headers=h,
         json={"contractor_id": contractor_id, "work_item_ids": ids},
     )
     after = client.get("/api/v1/hc/basket", headers=h).json()
-    after_ids = {b["work_item_id"] for b in after}
-    assert ids[0] not in after_ids
+    assigned = next(b for b in after if b["work_item_id"] == ids[0])
+
+    assert len(after) == len(before), "the pool quantity does not move on assignment"
+    assert assigned["hc_state"] == "In health check"
+    assert assigned["assignable"] is False
+
+    # And the write refuses it, so a stale page cannot double-assign a site.
+    r = client.post(
+        "/api/v1/hc/assignments",
+        headers=h,
+        json={"contractor_id": contractor_id, "work_item_ids": ids},
+    )
+    assert r.status_code == 409
 
 
 def test_bulk_template_download_and_upload(client):
@@ -251,7 +272,7 @@ def test_bulk_template_download_and_upload(client):
     contractor_id = db.query(Contractor).first().id
     db.close()
 
-    ids = [b["work_item_id"] for b in basket[:2]]
+    ids = [b["work_item_id"] for b in basket if b["assignable"]][:2]
     r = client.post(
         "/api/v1/hc/assignments",
         headers=h,

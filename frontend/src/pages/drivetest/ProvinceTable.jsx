@@ -4,7 +4,14 @@ import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { PROVINCE_LIMIT, STATE_COLOR } from './constants'
 import { bookScale, count, percent, progressColor } from './format'
-import { doneLink, onairLink, ongoingLink, problematicLink, remainingLink } from './links'
+import {
+  doneLink,
+  notStartedLink,
+  onairLink,
+  ongoingLink,
+  problematicLink,
+  remainingLink,
+} from './links'
 import BookBar from './charts/BookBar'
 
 /**
@@ -40,6 +47,10 @@ const COLUMNS = [
   { key: 'remaining', label: 'Remaining', align: 'right', numeric: true },
   { key: 'ongoing', label: 'Ongoing', align: 'right', numeric: true },
   { key: 'problematic', label: 'Problematic', align: 'right', numeric: true },
+  // Ongoing, Problematic and Not started are the three parts of Remaining.
+  // Ongoing used to be all three at once — "not done and not problematic" —
+  // so the row read as though every untested site had work under way on it.
+  { key: 'not_started', label: 'Not started', align: 'right', numeric: true },
   { key: 'done_percent', label: 'Progress', align: 'right', numeric: true },
 ]
 
@@ -93,6 +104,10 @@ export default function ProvinceTable({ rows, provinces, onProvince }) {
         <span className="dt-key-item">
           <i style={{ background: STATE_COLOR.problematic }} />
           Problematic
+        </span>
+        <span className="dt-key-item">
+          <i style={{ background: STATE_COLOR.not_started }} />
+          Not started
         </span>
         <span className="dt-key-note">bar length is the province&rsquo;s on-air count</span>
       </div>
@@ -172,6 +187,9 @@ export default function ProvinceTable({ rows, provinces, onProvince }) {
                       count(row.problematic)
                     )}
                   </td>
+                  <td className="tnum dim" style={{ textAlign: 'right' }}>
+                    <Cell id={id} href={notStartedLink} value={row.not_started} />
+                  </td>
                   <td style={{ textAlign: 'right' }}>
                     <span className="dt-rate" style={{ color: progressColor(row.done_percent) }}>
                       {percent(row.done_percent)}
@@ -196,6 +214,12 @@ export default function ProvinceTable({ rows, provinces, onProvince }) {
                           label: 'Problematic',
                           value: row.problematic,
                           color: STATE_COLOR.problematic,
+                        },
+                        {
+                          key: 'not_started',
+                          label: 'Not started',
+                          value: row.not_started,
+                          color: STATE_COLOR.not_started,
                         },
                       ]}
                     />
