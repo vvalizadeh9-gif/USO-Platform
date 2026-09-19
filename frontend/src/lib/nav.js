@@ -50,14 +50,16 @@ export const NAV = [
 // MONTHLY_PLAN_ROLES, which is what keeps it out of their sidebar.
 export const DRIVE_TEST_PROJECT = [
   { to: '/monthly-plan', label: 'Monthly Plan', icon: CalendarRange, roles: MONTHLY_PLAN_ROLES },
-  { to: '/health-check', label: 'Health Check', icon: ClipboardList, roles: ['PM', 'Coordinator'] },
+  // key: 'hc' / 'dt' / 'mydt' name the badge counts Layout computes from
+  // /hc/queues/counts and /drive-tests/my/counts -- see D2-D4.
+  { to: '/health-check', label: 'Health Check', icon: ClipboardList, roles: ['PM', 'Coordinator'], key: 'hc' },
   { to: '/my-health-check', label: 'My Health Check', icon: ClipboardCheck, roles: ['Contractor'] },
   // Same two roles as Health Check: assigning a drive test and approving one
   // are the same authority as reviewing a health check.
-  { to: '/drive-test', label: 'Drive Test', icon: Radio, roles: ['PM', 'Coordinator'] },
+  { to: '/drive-test', label: 'Drive Test', icon: Radio, roles: ['PM', 'Coordinator'], key: 'dt' },
   // One place for a contractor to work instead of knowing which sites to
   // open on Work Items -- the same reason My Health Check exists above it.
-  { to: '/my-drive-tests', label: 'My Drive Tests', icon: Radio, roles: ['Contractor'] },
+  { to: '/my-drive-tests', label: 'My Drive Tests', icon: Radio, roles: ['Contractor'], key: 'mydt' },
 ]
 
 // Reporting is separated from the work itself, because they are read at
