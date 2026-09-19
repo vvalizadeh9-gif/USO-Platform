@@ -1,7 +1,10 @@
 import { Radio, Search } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import api from '../../api/client'
+import BulkActionBar from '../../components/BulkActionBar'
+import ProvinceFilter from '../../components/ProvinceFilter'
 import SiteHistoryDrawer, { SiteCodeButton } from '../../components/SiteHistoryDrawer'
+import WaitingPill from '../../components/WaitingPill'
 import { EmptyState, Loading } from '../../components/ui'
 import { useToast } from '../../context/ToastContext'
 
@@ -24,6 +27,7 @@ export default function DtAssignmentTab({ onCountChange }) {
   const [selected, setSelected] = useState(() => new Set())
   const [contractorId, setContractorId] = useState('')
   const [query, setQuery] = useState('')
+  const [provinceSel, setProvinceSel] = useState(() => new Set())
   const [busy, setBusy] = useState(false)
   const [history, setHistory] = useState({ id: null, code: null })
 
@@ -43,12 +47,39 @@ export default function DtAssignmentTab({ onCountChange }) {
     api.get('/reference/contractors').then((r) => setContractors(r.data)).catch(() => {})
   }, [])
 
+  const provinceOptions = useMemo(() => {
+    if (!rows) return []
+    return [...new Set(rows.map((r) => r.province).filter(Boolean))].sort()
+  }, [rows])
+
   const filtered = useMemo(() => {
     if (!rows) return []
     const q = query.trim().toLowerCase()
-    if (!q) return rows
-    return rows.filter((r) => (r.site_code || '').toLowerCase().includes(q))
-  }, [rows, query])
+    return rows.filter((r) => {
+      if (provinceSel.size && !provinceSel.has(r.province)) return false
+      if (!q) return true
+      return (r.site_code || '').toLowerCase().includes(q)
+    })
+  }, [rows, query, provinceSel])
+
+  function toggleProvince(p) {
+    setProvinceSel((s) => {
+      const next = new Set(s)
+      next.has(p) ? next.delete(p) : next.add(p)
+      return next
+    })
+  }
+
+  // A filter can hide a row that is still selected. Selection only ever
+  // covers what's on screen, so a hidden row drops out rather than being
+  // assigned invisibly.
+  useEffect(() => {
+    setSelected((prev) => {
+      const visible = new Set(filtered.map((r) => r.work_item_id))
+      const next = new Set([...prev].filter((id) => visible.has(id)))
+      return next.size === prev.size ? prev : next
+    })
+  }, [filtered])
 
   const toggle = (id) =>
     setSelected((prev) => {
@@ -97,54 +128,36 @@ export default function DtAssignmentTab({ onCountChange }) {
   return (
     <div className="card" style={{ overflow: 'hidden' }}>
       <div className="card-pad" style={{ paddingBottom: 12 }}>
-        <div style={{ position: 'relative', marginBottom: 12 }}>
-          <Search size={15} style={{ position: 'absolute', left: 10, top: 11, color: 'var(--text-dim)' }} />
-          <input
-            className="input"
-            style={{ paddingLeft: 32 }}
-            placeholder="Search site ID…"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
+        <div className="row between wrap" style={{ gap: 12 }}>
+          <div style={{ position: 'relative', flex: 1, minWidth: 200 }}>
+            <Search size={15} style={{ position: 'absolute', left: 10, top: 11, color: 'var(--text-dim)' }} />
+            <input
+              className="input"
+              style={{ paddingLeft: 32 }}
+              placeholder="Search site ID…"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+            />
+          </div>
+          <ProvinceFilter
+            options={provinceOptions}
+            selected={provinceSel}
+            onToggle={toggleProvince}
+            onClear={() => setProvinceSel(new Set())}
           />
         </div>
-
-        <div className="row between wrap" style={{ gap: 12, alignItems: 'flex-end' }}>
-          <div style={{ flex: 1, minWidth: 240 }}>
-            <label className="dim" style={{ fontSize: 11.5, textTransform: 'uppercase', letterSpacing: 0.3, display: 'block', marginBottom: 6 }}>
-              Drive test contractor
-            </label>
-            <div className="row wrap" style={{ gap: 8 }}>
-              {contractors.map((c) => {
-                const active = String(contractorId) === String(c.id)
-                return (
-                  <button
-                    key={c.id}
-                    type="button"
-                    className="btn btn-sm"
-                    onClick={() => setContractorId(active ? '' : String(c.id))}
-                    style={{
-                      background: active ? 'var(--signal)' : 'var(--surface-2)',
-                      color: active ? '#fff' : 'var(--text-muted)',
-                      border: active ? 'none' : '1px solid var(--border)',
-                    }}
-                  >
-                    {c.name}
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-          <button
-            className="btn btn-primary"
-            disabled={!contractorId || selected.size === 0 || busy}
-            onClick={assign}
-          >
-            {busy ? <div className="spinner" /> : <><Radio size={15} /> Assign DT ({selected.size})</>}
-          </button>
+        <div className="row between" style={{ marginTop: 8 }}>
+          <span className="dim" style={{ fontSize: 11.5 }}>Sorted: waiting longest first</span>
+          {(query.trim() || provinceSel.size > 0) && (
+            <span className="dim" style={{ fontSize: 11.5 }}>
+              {filtered.length} of {rows.length}
+            </span>
+          )}
         </div>
       </div>
 
-      <table>
+      <div style={{ maxHeight: 520, overflowY: 'auto' }}>
+        <table>
         <thead>
           <tr>
             <th style={{ width: 40 }}>
@@ -211,7 +224,7 @@ export default function DtAssignmentTab({ onCountChange }) {
               </td>
               <td className="text-data dim">{r.hc_contractor || '—'}</td>
               <td>
-                <span className="tnum">{r.days_waiting}d</span>
+                <WaitingPill days={r.days_waiting} />
                 {r.returned_reason && (
                   <span
                     className="pill pill-amber"
@@ -225,7 +238,20 @@ export default function DtAssignmentTab({ onCountChange }) {
             </tr>
           ))}
         </tbody>
-      </table>
+        </table>
+      </div>
+
+      <BulkActionBar
+        selectedCount={selected.size}
+        onClear={() => setSelected(new Set())}
+        contractors={contractors}
+        contractorId={contractorId}
+        onSelectContractor={setContractorId}
+        onAssign={assign}
+        busy={busy}
+        primaryLabel={`Assign drive test (${selected.size})`}
+        primaryIcon={Radio}
+      />
 
       <SiteHistoryDrawer
         workItemId={history.id}

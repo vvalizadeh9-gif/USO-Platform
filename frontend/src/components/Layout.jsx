@@ -1,6 +1,6 @@
 import { motion } from 'framer-motion'
 import { KeyRound, LogOut, Menu, Settings } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { DRIVE_TEST_PROJECT, NAV, REPORTS, navItemVisible } from '../lib/nav'
@@ -26,27 +26,28 @@ function pageKey(pathname) {
  * them. A heading over an empty space is a claim that something is there, and
  * Admin and the category owners see most of these groups empty.
  */
-function NavSection({ label, items, roleName, actionCount }) {
+function NavSection({ label, items, roleName, badges }) {
   const visible = items.filter((item) => navItemVisible(item, roleName))
   if (visible.length === 0) return null
 
   return (
     <>
       <div className="nav-section-label">{label}</div>
-      {visible.map((item) => (
-        <NavLink
-          key={item.to}
-          to={item.to}
-          end={item.end}
-          className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
-        >
-          <item.icon size={17} strokeWidth={2} />
-          <span>{item.label}</span>
-          {item.key === 'action' && actionCount > 0 && (
-            <span className="badge">{actionCount}</span>
-          )}
-        </NavLink>
-      ))}
+      {visible.map((item) => {
+        const count = item.key ? badges[item.key] : undefined
+        return (
+          <NavLink
+            key={item.to}
+            to={item.to}
+            end={item.end}
+            className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
+          >
+            <item.icon size={17} strokeWidth={2} />
+            <span>{item.label}</span>
+            {count > 0 && <span className="badge">{count}</span>}
+          </NavLink>
+        )
+      })}
     </>
   )
 }
@@ -54,7 +55,7 @@ function NavSection({ label, items, roleName, actionCount }) {
 // The navigation itself. Lifted out of the sidebar's JSX so that hiding it
 // wholesale is one conditional rather than a fragment wrapped around eighty
 // lines at the wrong indentation.
-function SidebarNav({ user, isAdmin, actionCount }) {
+function SidebarNav({ user, isAdmin, badges }) {
   const roleName = user?.role?.name
 
   return (
@@ -63,10 +64,10 @@ function SidebarNav({ user, isAdmin, actionCount }) {
         label="Operations"
         items={NAV}
         roleName={roleName}
-        actionCount={actionCount}
+        badges={badges}
       />
-      <NavSection label="Drive Test Project" items={DRIVE_TEST_PROJECT} roleName={roleName} />
-      <NavSection label="Reports" items={REPORTS} roleName={roleName} />
+      <NavSection label="Drive Test Project" items={DRIVE_TEST_PROJECT} roleName={roleName} badges={badges} />
+      <NavSection label="Reports" items={REPORTS} roleName={roleName} badges={badges} />
 
       {isAdmin && (
         <>
@@ -99,14 +100,54 @@ export default function Layout() {
   const location = useLocation()
   const [open, setOpen] = useState(false)
   const [actionCount, setActionCount] = useState(0)
+  // hc: HC Pool + HC Review + Re-routes (D2) -- these wait on a PM/Coordinator.
+  // dt: DT Assignment + DT Review (D3) -- In Progress waits on the contractor.
+  // mydt: a contractor's own To do count (D4). My Health Check has no count
+  // endpoint of its own today, so it carries no badge (see D4).
+  const [badges, setBadges] = useState({ action: 0, hc: 0, dt: 0, mydt: 0 })
+  const roleName = user?.role?.name
 
   useEffect(() => {
     setOpen(false)
   }, [location.pathname])
 
+  // The HC/DT/contractor counts are read straight from the same endpoints
+  // their own tab badges use (see D2-D4), so a sidebar number can never
+  // disagree with the tabs it summarises.
+  const loadQueueBadges = useCallback(() => {
+    if (roleName === 'PM' || roleName === 'Coordinator') {
+      api
+        .get('/hc/queues/counts')
+        .then((r) => {
+          const c = r.data
+          setBadges((b) => ({
+            ...b,
+            hc: c.pool + c.hc_review + c.reroutes,
+            dt: c.dt_assignment + c.dt_review,
+          }))
+        })
+        .catch(() => {})
+    } else if (roleName === 'Contractor') {
+      api
+        .get('/drive-tests/my/counts')
+        .then((r) => setBadges((b) => ({ ...b, mydt: r.data.todo })))
+        .catch(() => {})
+    }
+  }, [roleName])
+
+  // On route change: the queue counts move whenever an action does (assign,
+  // review, approve), and the next screen someone opens should already show
+  // it caught up.
+  useEffect(() => {
+    if (mustChangePassword) return
+    loadQueueBadges()
+  }, [location.pathname, mustChangePassword, loadQueueBadges])
+
   // Load the pending-action count once on mount and refresh it on a light
   // interval — NOT on every navigation. Re-fetching on each route change
-  // added a network round-trip to every click and made pages feel slow.
+  // added a network round-trip to every click and made pages feel slow. The
+  // HC/DT/contractor counts ride this same interval rather than a timer of
+  // their own.
   useEffect(() => {
     // An account that must change its password is refused by every endpoint
     // but three, this one included. Polling it would produce a 403 every
@@ -114,7 +155,7 @@ export default function Layout() {
     if (mustChangePassword) return undefined
 
     let active = true
-    const load = () =>
+    const load = () => {
       api
         .get('/action-center/summary')
         .then((r) => {
@@ -129,13 +170,15 @@ export default function Layout() {
           setActionCount(counters.reduce((n, c) => n + c.count, 0))
         })
         .catch(() => {})
+      loadQueueBadges()
+    }
     load()
     const id = setInterval(load, 60000)
     return () => {
       active = false
       clearInterval(id)
     }
-  }, [mustChangePassword])
+  }, [mustChangePassword, loadQueueBadges])
 
   const initials = (user?.full_name || 'U')
     .split(' ')
@@ -159,7 +202,7 @@ export default function Layout() {
             one of these leads somewhere the server will refuse, so offering
             them is offering a way out of the one screen that works. */}
         {!mustChangePassword && (
-          <SidebarNav user={user} isAdmin={isAdmin} actionCount={actionCount} />
+          <SidebarNav user={user} isAdmin={isAdmin} badges={{ ...badges, action: actionCount }} />
         )}
 
         <div className="sidebar-footer">

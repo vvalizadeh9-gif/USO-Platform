@@ -16,6 +16,7 @@ from sqlalchemy import Select, false, func, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.core.deps import CONTRACTOR
+from app.core.jalali import parse_shamsi
 from app.models.health_check import (
     HcAssignment,
     HcRemediation,
@@ -124,6 +125,11 @@ def _as_aware(dt: datetime | None) -> datetime | None:
     if dt.tzinfo is None:
         return dt.replace(tzinfo=timezone.utc)
     return dt
+
+
+def _days_since(dt: datetime | None) -> int | None:
+    dt = _as_aware(dt)
+    return max((_now() - dt).days, 0) if dt else None
 
 
 def build_assignment_stats(assignment: HcAssignment) -> dict:
@@ -324,6 +330,39 @@ def _returning_summary(task: HcTask) -> str | None:
     return f"{len(names)} fixes closed"
 
 
+def _pool_waiting_since(wi: WorkItem, task: HcTask | None) -> datetime | None:
+    """When this basket site became eligible for the round it is in now.
+
+    A returning site (round 2+, ``task`` present) waits from the moment its
+    last fix closed -- ``HcRemediation.closed_at``, already recorded by the
+    fix loop. A round-1 site (``task`` is None -- never health-checked) waits
+    from when it went on-air, which the work item carries nowhere as a real
+    date: ``launch_date_gregorian`` is defined but never populated by the CPM
+    import, so the only candidate is ``launch_date_shamsi``, the raw text CPM
+    column 22 actually writes on every import.
+
+    That text is hand-entered and not always present or well-formed, so a
+    blank or unparseable value produces no waiting_since at all -- never a
+    substitute like ``created_at`` or the import date, which would silently
+    misreport how long the site has actually been on-air.
+    """
+    if task is not None:
+        closed = [
+            _as_aware(r.closed_at) for r in task.remediations if r.closed_at is not None
+        ]
+        return max(closed) if closed else None
+
+    if not wi.launch_date_shamsi:
+        return None
+    try:
+        launch = parse_shamsi(wi.launch_date_shamsi)
+    except ValueError:
+        return None
+    if launch is None:
+        return None
+    return datetime(launch.year, launch.month, launch.day, tzinfo=timezone.utc)
+
+
 def scoped_work_items(db: Session, user) -> list[WorkItem]:
     """Every live work item this user may see, with the graph the queues need.
 
@@ -389,6 +428,7 @@ def get_basket(db: Session, user, work_items: list[WorkItem] | None = None) -> l
             round_no = task.round_no + 1
             returning = _returning_summary(task)
 
+        waiting_since = _pool_waiting_since(wi, task)
         basket.append(
             {
                 "work_item_id": wi.id,
@@ -398,8 +438,14 @@ def get_basket(db: Session, user, work_items: list[WorkItem] | None = None) -> l
                 "requested_technologies": parse_technologies(wi.requested_technology),
                 "round_no": round_no,
                 "returning_reason": returning,
+                "waiting_since": waiting_since,
+                "days_waiting": _days_since(waiting_since),
             }
         )
+    # Oldest first, same as every other queue. A site with no known
+    # waiting_since (see _pool_waiting_since) sorts last rather than being
+    # guessed into first place.
+    basket.sort(key=lambda b: (b["days_waiting"] is None, -(b["days_waiting"] or 0)))
     return basket
 
 

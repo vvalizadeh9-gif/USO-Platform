@@ -1,8 +1,11 @@
-import { ClipboardCheck, Search, ChevronDown } from 'lucide-react'
+import { ClipboardCheck, Search } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import api from '../../api/client'
 import { useToast } from '../../context/ToastContext'
 import { EmptyState, Loading } from '../../components/ui'
+import BulkActionBar from '../../components/BulkActionBar'
+import ProvinceFilter from '../../components/ProvinceFilter'
+import WaitingPill from '../../components/WaitingPill'
 
 function BasketBadge({ count }) {
   // iOS-style pill badge: a red rounded count that shows how many sites are
@@ -38,7 +41,6 @@ export default function HcBasketTab({ onCountChange } = {}) {
   const [contractorId, setContractorId] = useState('')
   const [query, setQuery] = useState('')
   const [provinceSel, setProvinceSel] = useState(new Set())
-  const [provMenu, setProvMenu] = useState(false)
   const [busy, setBusy] = useState(false)
 
   function load() {
@@ -81,6 +83,17 @@ export default function HcBasketTab({ onCountChange } = {}) {
       return next
     })
   }
+
+  // A filter can hide a row that is still selected. Selection only ever
+  // covers what's on screen, so a hidden row drops out rather than being
+  // assigned invisibly.
+  useEffect(() => {
+    setSelected((prev) => {
+      const visible = new Set(filtered.map((b) => b.work_item_id))
+      const next = new Set([...prev].filter((id) => visible.has(id)))
+      return next.size === prev.size ? prev : next
+    })
+  }, [filtered])
 
   function toggle(id) {
     setSelected((s) => {
@@ -135,104 +148,20 @@ export default function HcBasketTab({ onCountChange } = {}) {
               onChange={(e) => setQuery(e.target.value)}
             />
           </div>
-          <div style={{ position: 'relative' }}>
-            <button
-              type="button"
-              className="input text-data row between"
-              style={{ minWidth: 180, gap: 8, cursor: 'pointer' }}
-              onClick={() => setProvMenu((o) => !o)}
-            >
-              <span>
-                {provinceSel.size === 0
-                  ? 'All provinces'
-                  : `${provinceSel.size} province${provinceSel.size > 1 ? 's' : ''}`}
-              </span>
-              <ChevronDown size={15} style={{ color: 'var(--text-dim)' }} />
-            </button>
-            {provMenu && (
-              <>
-                <div
-                  style={{ position: 'fixed', inset: 0, zIndex: 40 }}
-                  onClick={() => setProvMenu(false)}
-                />
-                <div
-                  className="card"
-                  style={{
-                    position: 'absolute', top: 'calc(100% + 4px)', left: 0, zIndex: 50,
-                    width: 240, maxHeight: 300, overflowY: 'auto', padding: 6,
-                    boxShadow: 'var(--shadow-lg, 0 10px 30px rgba(0,0,0,0.15))',
-                  }}
-                >
-                  <div className="row between" style={{ padding: '4px 8px 6px' }}>
-                    <span className="dim" style={{ fontSize: 12 }}>{provinceSel.size} selected</span>
-                    {provinceSel.size > 0 && (
-                      <button className="btn btn-ghost btn-sm" style={{ fontSize: 11.5 }} onClick={() => setProvinceSel(new Set())}>
-                        Clear
-                      </button>
-                    )}
-                  </div>
-                  {provinceOptions.length === 0 && (
-                    <div className="dim" style={{ padding: '6px 8px', fontSize: 12.5 }}>No provinces</div>
-                  )}
-                  {provinceOptions.map((p) => (
-                    <label
-                      key={p}
-                      className="row"
-                      style={{ gap: 8, padding: '6px 8px', borderRadius: 6, cursor: 'pointer', fontSize: 13 }}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={provinceSel.has(p)}
-                        onChange={() => toggleProvince(p)}
-                      />
-                      <span className="text-data">{p}</span>
-                    </label>
-                  ))}
-                </div>
-              </>
-            )}
-          </div>
+          <ProvinceFilter
+            options={provinceOptions}
+            selected={provinceSel}
+            onToggle={toggleProvince}
+            onClear={() => setProvinceSel(new Set())}
+          />
         </div>
-
-        {/* Subcontractor is a small, fixed set — clickable chips are quicker
-            for the PM than opening a dropdown. */}
-        <div className="row between wrap" style={{ gap: 12, marginTop: 12, alignItems: 'flex-end' }}>
-          <div style={{ flex: 1, minWidth: 240 }}>
-            <label className="dim" style={{ fontSize: 11.5, textTransform: 'uppercase', letterSpacing: 0.3, display: 'block', marginBottom: 6 }}>
-              Assign to subcontractor
-            </label>
-            <div className="row wrap" style={{ gap: 8 }}>
-              {contractors.length === 0 ? (
-                <span className="dim" style={{ fontSize: 12.5 }}>No subcontractors available</span>
-              ) : (
-                contractors.map((c) => {
-                  const active = String(contractorId) === String(c.id)
-                  return (
-                    <button
-                      key={c.id}
-                      type="button"
-                      className="btn btn-sm"
-                      onClick={() => setContractorId(active ? '' : String(c.id))}
-                      style={{
-                        background: active ? 'var(--signal)' : 'var(--surface-2)',
-                        color: active ? '#fff' : 'var(--text-muted)',
-                        border: active ? 'none' : '1px solid var(--border)',
-                      }}
-                    >
-                      {c.name}
-                    </button>
-                  )
-                })
-              )}
-            </div>
-          </div>
-          <button
-            className="btn btn-primary"
-            disabled={!contractorId || selected.size === 0 || busy}
-            onClick={assign}
-          >
-            {busy ? <div className="spinner" /> : <><ClipboardCheck size={15} /> Assign ({selected.size})</>}
-          </button>
+        <div className="row between" style={{ marginTop: 8 }}>
+          <span className="dim" style={{ fontSize: 11.5 }}>Sorted: waiting longest first</span>
+          {(query.trim() || provinceSel.size > 0) && (
+            <span className="dim" style={{ fontSize: 11.5 }}>
+              {filtered.length} of {basket.length}
+            </span>
+          )}
         </div>
       </div>
 
@@ -256,6 +185,7 @@ export default function HcBasketTab({ onCountChange } = {}) {
                 <th>Type</th>
                 <th>Requested Tech</th>
                 <th>Status</th>
+                <th>Waiting</th>
               </tr>
             </thead>
             <tbody>
@@ -302,11 +232,26 @@ export default function HcBasketTab({ onCountChange } = {}) {
                       <span className="dim" style={{ fontSize: 12.5 }}>New</span>
                     )}
                   </td>
+                  <td><WaitingPill days={b.days_waiting} /></td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
+      )}
+
+      {basket.length > 0 && (
+        <BulkActionBar
+          selectedCount={selected.size}
+          onClear={() => setSelected(new Set())}
+          contractors={contractors}
+          contractorId={contractorId}
+          onSelectContractor={setContractorId}
+          onAssign={assign}
+          busy={busy}
+          primaryLabel={`Assign health check (${selected.size})`}
+          primaryIcon={ClipboardCheck}
+        />
       )}
     </div>
   )

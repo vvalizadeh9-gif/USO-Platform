@@ -1,7 +1,9 @@
-import { CheckCircle2, Paperclip, XCircle } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { CheckCircle2, Paperclip, Search, XCircle } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
 import api from '../../api/client'
+import ProvinceFilter from '../../components/ProvinceFilter'
 import SiteHistoryDrawer, { SiteCodeButton } from '../../components/SiteHistoryDrawer'
+import WaitingPill from '../../components/WaitingPill'
 import { ConfirmDialog, EmptyState, Loading } from '../../components/ui'
 import { useToast } from '../../context/ToastContext'
 
@@ -20,6 +22,9 @@ export default function DtReviewTab({ onCountChange }) {
   const [pending, setPending] = useState(null) // {row, decision} | null
   const [busy, setBusy] = useState(false)
   const [history, setHistory] = useState({ id: null, code: null })
+  const [query, setQuery] = useState('')
+  const [provinceSel, setProvinceSel] = useState(() => new Set())
+  const [contractorFilter, setContractorFilter] = useState('')
 
   function load() {
     api
@@ -71,6 +76,35 @@ export default function DtReviewTab({ onCountChange }) {
     }
   }
 
+  const provinceOptions = useMemo(() => {
+    if (!rows) return []
+    return [...new Set(rows.map((r) => r.province).filter(Boolean))].sort()
+  }, [rows])
+
+  const contractorOptions = useMemo(() => {
+    if (!rows) return []
+    return [...new Set(rows.map((r) => r.contractor_name).filter(Boolean))].sort()
+  }, [rows])
+
+  const filtered = useMemo(() => {
+    if (!rows) return []
+    const q = query.trim().toLowerCase()
+    return rows.filter((r) => {
+      if (provinceSel.size && !provinceSel.has(r.province)) return false
+      if (contractorFilter && r.contractor_name !== contractorFilter) return false
+      if (!q) return true
+      return (r.site_code || '').toLowerCase().includes(q)
+    })
+  }, [rows, query, provinceSel, contractorFilter])
+
+  function toggleProvince(p) {
+    setProvinceSel((s) => {
+      const next = new Set(s)
+      next.has(p) ? next.delete(p) : next.add(p)
+      return next
+    })
+  }
+
   if (!rows) return <Loading label="Loading drive tests awaiting review" />
 
   if (rows.length === 0) {
@@ -86,7 +120,53 @@ export default function DtReviewTab({ onCountChange }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-      {rows.map((r) => (
+      <div className="card card-pad">
+        <div className="row between wrap" style={{ gap: 12 }}>
+          <div style={{ position: 'relative', flex: 1, minWidth: 200 }}>
+            <Search size={15} style={{ position: 'absolute', left: 10, top: 11, color: 'var(--text-dim)' }} />
+            <input
+              className="input"
+              style={{ paddingLeft: 32 }}
+              placeholder="Search site ID…"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+            />
+          </div>
+          <ProvinceFilter
+            options={provinceOptions}
+            selected={provinceSel}
+            onToggle={toggleProvince}
+            onClear={() => setProvinceSel(new Set())}
+          />
+          <select
+            className="input text-data"
+            style={{ minWidth: 160 }}
+            value={contractorFilter}
+            onChange={(e) => setContractorFilter(e.target.value)}
+          >
+            <option value="">All contractors</option>
+            {contractorOptions.map((name) => (
+              <option key={name} value={name}>{name}</option>
+            ))}
+          </select>
+        </div>
+        <div className="row between" style={{ marginTop: 8 }}>
+          <span className="dim" style={{ fontSize: 11.5 }}>Sorted: waiting longest first</span>
+          {(query.trim() || provinceSel.size > 0 || contractorFilter) && (
+            <span className="dim" style={{ fontSize: 11.5 }}>
+              {filtered.length} of {rows.length}
+            </span>
+          )}
+        </div>
+      </div>
+
+      {filtered.length === 0 && (
+        <div className="card card-pad">
+          <EmptyState title="No drive tests match these filters" />
+        </div>
+      )}
+
+      {filtered.map((r) => (
         <div key={r.drive_test_id} className="card card-pad">
           <div className="row between wrap" style={{ gap: 14, alignItems: 'flex-start' }}>
             <div style={{ flex: 1, minWidth: 260 }}>
@@ -103,11 +183,7 @@ export default function DtReviewTab({ onCountChange }) {
               <div className="row wrap" style={{ gap: 18, marginTop: 10, fontSize: 13 }}>
                 <Field label="Carried out" value={r.execution_date || '—'} />
                 <Field label="Submitted" value={fmt(r.submitted_at)} />
-                <Field
-                  label="Waiting"
-                  value={`${r.days_waiting} day${r.days_waiting === 1 ? '' : 's'}`}
-                  alert={r.days_waiting > 7}
-                />
+                <Field label="Waiting" value={<WaitingPill days={r.days_waiting} />} />
                 <Field label="Contractor" value={r.contractor_name || '—'} />
               </div>
 
@@ -192,16 +268,13 @@ export default function DtReviewTab({ onCountChange }) {
   )
 }
 
-function Field({ label, value, alert }) {
+function Field({ label, value }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
       <span className="dim" style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.3 }}>
         {label}
       </span>
-      <span
-        className="tnum"
-        style={{ fontWeight: 500, color: alert ? 'var(--red)' : undefined }}
-      >
+      <span className="tnum" style={{ fontWeight: 500 }}>
         {value}
       </span>
     </div>

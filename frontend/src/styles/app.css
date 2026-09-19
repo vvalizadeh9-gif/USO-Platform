@@ -500,6 +500,44 @@ tbody tr:last-child td { border-bottom: none; }
 .tab:hover { color: var(--text); }
 .tab.active { color: var(--signal-strong); border-bottom-color: var(--signal); }
 
+/* A tab's own count. Grey by default; the active tab's count is a filled
+   pill (white on dark teal) so it reads as "this is the one you're on and
+   here's how many are waiting", not just a number among several. */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 20px;
+  background: var(--surface-3);
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+}
+.badge-active { background: #0b7f73; color: #fff; }
+
+/* The shared bottom bar on a bulk-assign screen (HC Pool, DT Assignment).
+   Sits as the last element of a height-bounded table card, so it is on
+   screen the moment the tab has rows -- no scrolling back up to reach it. */
+.bulk-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+  padding: 14px 20px;
+  border-top: 1px solid var(--border);
+  background: var(--surface-1);
+}
+.bulk-bar-count {
+  display: flex; align-items: center; gap: 10px;
+  font-size: 13px; font-weight: 500; color: var(--text-muted);
+  white-space: nowrap;
+}
+.bulk-bar-chips { flex: 1; min-width: 200px; }
+
 .empty {
   text-align: center; padding: 54px 20px; color: var(--text-dim);
 }
@@ -2243,6 +2281,13 @@ table.grouped .prov-aging td { padding-top: 0; vertical-align: top; }
   border-radius: var(--radius-sm);
   text-decoration: none;
   color: inherit;
+}
+/* A step that is not the current one is a plain white card -- same radius
+   and padding as the active step below, so the three read as one row of
+   equal-weight steps with only colour marking which one you're on. */
+.lifecycle-step:not(.is-current) {
+  background: var(--surface-1);
+  border-color: var(--border);
 }
 .lifecycle-label {
   font-family: var(--font-display);
