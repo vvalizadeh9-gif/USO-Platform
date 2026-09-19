@@ -7,6 +7,7 @@ import DriveTestSubmitForm from '../components/DriveTestSubmitForm'
 import LifecycleStrip from '../components/LifecycleStrip'
 import ReturnToCoordinatorForm from '../components/ReturnToCoordinatorForm'
 import SiteHistoryDrawer, { SiteCodeButton } from '../components/SiteHistoryDrawer'
+import WaitingPill from '../components/WaitingPill'
 import { useToast } from '../context/ToastContext'
 import { EmptyState, Loading, PageHead } from '../components/ui'
 
@@ -162,7 +163,7 @@ function ToDoTable({ rows, openId, onFillIn, onOpenHistory }) {
             <th>Site</th>
             <th>Province</th>
             <th>Status</th>
-            <th>Assigned</th>
+            <th>Waiting</th>
             <th style={{ width: 90 }}></th>
           </tr>
         </thead>
@@ -185,7 +186,7 @@ function ToDoTable({ rows, openId, onFillIn, onOpenHistory }) {
                   </span>
                 </td>
                 <td>
-                  <span className="tnum">{r.days_since_assigned}</span> days
+                  <WaitingPill days={r.days_since_assigned} />
                 </td>
                 <td>
                   <button
@@ -285,7 +286,7 @@ function SubmittedTable({ rows, onOpenHistory }) {
                 {r.submitted_at ? new Date(r.submitted_at).toISOString().slice(0, 10) : '—'}
               </td>
               <td>
-                <span className="tnum">{r.days_waiting}</span> days
+                <WaitingPill days={r.days_waiting} />
               </td>
               <td className="dim" style={{ fontSize: 12.5 }}>
                 {r.evidence_filenames?.length ? r.evidence_filenames.join(', ') : '—'}

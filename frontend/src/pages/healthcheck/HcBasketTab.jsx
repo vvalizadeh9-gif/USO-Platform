@@ -4,6 +4,7 @@ import api from '../../api/client'
 import { useToast } from '../../context/ToastContext'
 import { EmptyState, Loading } from '../../components/ui'
 import BulkActionBar from '../../components/BulkActionBar'
+import WaitingPill from '../../components/WaitingPill'
 
 function BasketBadge({ count }) {
   // iOS-style pill badge: a red rounded count that shows how many sites are
@@ -205,6 +206,7 @@ export default function HcBasketTab({ onCountChange } = {}) {
             )}
           </div>
         </div>
+        <div className="dim" style={{ fontSize: 11.5, marginTop: 8 }}>Sorted: waiting longest first</div>
       </div>
 
       {filtered.length === 0 ? (
@@ -227,6 +229,7 @@ export default function HcBasketTab({ onCountChange } = {}) {
                 <th>Type</th>
                 <th>Requested Tech</th>
                 <th>Status</th>
+                <th>Waiting</th>
               </tr>
             </thead>
             <tbody>
@@ -273,6 +276,7 @@ export default function HcBasketTab({ onCountChange } = {}) {
                       <span className="dim" style={{ fontSize: 12.5 }}>New</span>
                     )}
                   </td>
+                  <td><WaitingPill days={b.days_waiting} /></td>
                 </tr>
               ))}
             </tbody>

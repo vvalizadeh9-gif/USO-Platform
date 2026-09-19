@@ -2,6 +2,7 @@ import { CheckCircle2, Paperclip, XCircle } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import api from '../../api/client'
 import SiteHistoryDrawer, { SiteCodeButton } from '../../components/SiteHistoryDrawer'
+import WaitingPill from '../../components/WaitingPill'
 import { ConfirmDialog, EmptyState, Loading } from '../../components/ui'
 import { useToast } from '../../context/ToastContext'
 
@@ -103,11 +104,7 @@ export default function DtReviewTab({ onCountChange }) {
               <div className="row wrap" style={{ gap: 18, marginTop: 10, fontSize: 13 }}>
                 <Field label="Carried out" value={r.execution_date || '—'} />
                 <Field label="Submitted" value={fmt(r.submitted_at)} />
-                <Field
-                  label="Waiting"
-                  value={`${r.days_waiting} day${r.days_waiting === 1 ? '' : 's'}`}
-                  alert={r.days_waiting > 7}
-                />
+                <Field label="Waiting" value={<WaitingPill days={r.days_waiting} />} />
                 <Field label="Contractor" value={r.contractor_name || '—'} />
               </div>
 
@@ -192,16 +189,13 @@ export default function DtReviewTab({ onCountChange }) {
   )
 }
 
-function Field({ label, value, alert }) {
+function Field({ label, value }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
       <span className="dim" style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.3 }}>
         {label}
       </span>
-      <span
-        className="tnum"
-        style={{ fontWeight: 500, color: alert ? 'var(--red)' : undefined }}
-      >
+      <span className="tnum" style={{ fontWeight: 500 }}>
         {value}
       </span>
     </div>

@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react'
 import api from '../../api/client'
 import BulkActionBar from '../../components/BulkActionBar'
 import SiteHistoryDrawer, { SiteCodeButton } from '../../components/SiteHistoryDrawer'
+import WaitingPill from '../../components/WaitingPill'
 import { EmptyState, Loading } from '../../components/ui'
 import { useToast } from '../../context/ToastContext'
 
@@ -119,7 +120,7 @@ export default function DtAssignmentTab({ onCountChange }) {
             onChange={(e) => setQuery(e.target.value)}
           />
         </div>
-
+        <div className="dim" style={{ fontSize: 11.5 }}>Sorted: waiting longest first</div>
       </div>
 
       <div style={{ maxHeight: 520, overflowY: 'auto' }}>
@@ -190,7 +191,7 @@ export default function DtAssignmentTab({ onCountChange }) {
               </td>
               <td className="text-data dim">{r.hc_contractor || '—'}</td>
               <td>
-                <span className="tnum">{r.days_waiting}d</span>
+                <WaitingPill days={r.days_waiting} />
                 {r.returned_reason && (
                   <span
                     className="pill pill-amber"

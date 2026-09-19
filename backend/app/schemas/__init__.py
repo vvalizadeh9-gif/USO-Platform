@@ -827,6 +827,11 @@ class HcBasketItem(BaseModel):
     # closed. ``returning_reason`` says what was fixed, and is None on round 1.
     round_no: int = 1
     returning_reason: str | None = None
+    # When this round became eligible: a returning site's last fix closing,
+    # or a round-1 site's CPM launch date. None when neither is known (see
+    # health_check._pool_waiting_since) — never a substitute date.
+    waiting_since: datetime | None = None
+    days_waiting: int | None = None
 
 
 class HcAssignmentCreate(BaseModel):

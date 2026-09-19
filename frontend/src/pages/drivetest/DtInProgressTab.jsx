@@ -2,6 +2,7 @@ import { Search } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import api from '../../api/client'
 import SiteHistoryDrawer, { SiteCodeButton } from '../../components/SiteHistoryDrawer'
+import WaitingPill from '../../components/WaitingPill'
 import { EmptyState, Loading } from '../../components/ui'
 
 /**
@@ -67,6 +68,7 @@ export default function DtInProgressTab({ onCountChange }) {
             onChange={(e) => setQuery(e.target.value)}
           />
         </div>
+        <div className="dim" style={{ fontSize: 11.5, marginTop: 8 }}>Sorted: waiting longest first</div>
       </div>
 
       <table>
@@ -76,7 +78,7 @@ export default function DtInProgressTab({ onCountChange }) {
             <th>Province</th>
             <th>Contractor</th>
             <th>Status</th>
-            <th>Since assigned</th>
+            <th>Waiting</th>
           </tr>
         </thead>
         <tbody>
@@ -112,7 +114,7 @@ export default function DtInProgressTab({ onCountChange }) {
                   )}
                 </td>
                 <td>
-                  <span className="tnum">{r.days_since_assigned}</span> days
+                  <WaitingPill days={r.days_since_assigned} />
                 </td>
               </tr>
             )
