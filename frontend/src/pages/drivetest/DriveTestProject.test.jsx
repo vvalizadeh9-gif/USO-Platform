@@ -705,14 +705,14 @@ describe('the province table', () => {
     draw()
 
     const provinces = await section('Province breakdown')
-    await userEvent.click(within(provinces).getByRole('button', { name: /Done/ }))
+    await userEvent.click(within(provinces).getByRole('button', { name: 'DT done' }))
 
     const namesOf = () =>
       within(provinces).getAllByRole('row').slice(1).map((r) => r.firstChild.textContent)
 
     // done ascends with the index, so descending puts the last province first.
     expect(namesOf()[0]).toBe('Province 10')
-    await userEvent.click(within(provinces).getByRole('button', { name: /Done/ }))
+    await userEvent.click(within(provinces).getByRole('button', { name: 'DT done' }))
     expect(namesOf()[0]).toBe('Province 1')
   })
 
@@ -738,6 +738,53 @@ describe('the province table', () => {
 
     const provinces = await section('Province breakdown')
     expect(within(provinces).queryByRole('button', { name: /Show all/ })).not.toBeInTheDocument()
+  })
+
+  it('has exactly seven columns: Province, On air, DT done, Remaining, Ongoing, Problematic, Done %', async () => {
+    serve()
+    draw()
+
+    const provinces = await section('Province breakdown')
+    const headers = within(provinces)
+      .getAllByRole('columnheader')
+      .map((h) => h.textContent.trim())
+    expect(headers).toEqual([
+      'Province',
+      'On air',
+      'DT done',
+      'Remaining',
+      'Ongoing',
+      'Problematic',
+      'Done %',
+      'Where the work is',
+      'Filter',
+    ])
+  })
+
+  it('shows no "Not started" anywhere in the table, its key or its bar', async () => {
+    serve()
+    draw()
+
+    const provinces = await section('Province breakdown')
+    expect(within(provinces).queryByText('Not started')).not.toBeInTheDocument()
+  })
+
+  it('keeps the Remaining label -- it is not renamed to Pending here', async () => {
+    serve()
+    draw()
+
+    const provinces = await section('Province breakdown')
+    expect(within(provinces).getByRole('button', { name: 'Remaining' })).toBeInTheDocument()
+  })
+
+  it('explains under the table that Remaining no longer adds up to Ongoing + Problematic', async () => {
+    serve()
+    draw()
+
+    const provinces = await section('Province breakdown')
+    expect(provinces).toHaveTextContent(
+      'Remaining = On air − DT done. Ongoing + Problematic can be lower than Remaining, because on-air sites with no DT status yet are counted in Remaining only.',
+    )
   })
 })
 
