@@ -1139,7 +1139,6 @@ describe('drill-through', () => {
       ['55', '/drive-test/sites?bucket=assigned&contractor_id=1'],
       ['40', '/drive-test/sites?bucket=done&contractor_id=1'],
       ['15', '/drive-test/sites?bucket=ongoing&contractor_id=1'],
-      ['5', '/drive-test/sites?bucket=problematic&contractor_id=1'],
     ]) {
       expect(within(row).getByText(value).closest('a')).toHaveAttribute('href', href)
     }
@@ -1720,7 +1719,7 @@ describe('the contractor scorecard', () => {
     await userEvent.click(within(card).getByRole('button', { name: /Ongoing/ }))
     expect(names()).toEqual(['Alfa Drive Tests', 'Beta Surveys', 'Unattributed'])
 
-    await userEvent.click(within(card).getByRole('button', { name: /Problematic/ }))
+    await userEvent.click(within(card).getByRole('button', { name: /Achievement/ }))
     expect(names()).toEqual(['Alfa Drive Tests', 'Beta Surveys', 'Unattributed'])
 
     // Assignment ascending puts the smaller book first, and still not the
@@ -1741,5 +1740,70 @@ describe('the contractor scorecard', () => {
     expect(header()).toHaveAttribute('aria-sort', 'none')
     await userEvent.click(within(card).getByRole('button', { name: /Ongoing/ }))
     expect(header()).toHaveAttribute('aria-sort', 'descending')
+  })
+
+  it('has exactly five columns: Contractor, Assignment, DT done, Ongoing, Achievement', async () => {
+    serve()
+    draw()
+
+    const card = await section('Contractor scorecard')
+    const headers = within(card)
+      .getAllByRole('columnheader')
+      .map((h) => h.textContent.trim())
+    expect(headers).toEqual([
+      'Contractor',
+      'Assignment',
+      'DT done',
+      'Ongoing',
+      'Achievement',
+      'Where the work is',
+    ])
+  })
+
+  it('shows no Problematic or Not started header or cell', async () => {
+    serve()
+    draw()
+
+    const card = await section('Contractor scorecard')
+    expect(within(card).queryByText('Problematic')).not.toBeInTheDocument()
+    expect(within(card).queryByText('Not started')).not.toBeInTheDocument()
+  })
+
+  it('rates Achievement as DT done over Assignment, and the Assignment cell as DT done plus Ongoing', async () => {
+    // Alfa: 40 done, 15 ongoing -> assignment 55, achievement 40/55 = 72.7%.
+    serve()
+    draw()
+
+    const card = await section('Contractor scorecard')
+    const row = within(card).getByText('Alfa Drive Tests').closest('tr')
+    expect(within(row).getByText('55')).toBeInTheDocument()
+    expect(within(row).getByText('73%')).toBeInTheDocument()
+  })
+
+  it('names Problematic as outside the assignment in a note under the table', async () => {
+    serve()
+    draw()
+
+    const card = await section('Contractor scorecard')
+    expect(card).toHaveTextContent(
+      'Assignment = DT done + Ongoing. Problematic sites are not part of a contractor’s assignment.',
+    )
+  })
+
+  it('keeps the unattributed row last under every sortable column', async () => {
+    serve()
+    draw()
+
+    const card = await section('Contractor scorecard')
+    const names = () =>
+      within(card)
+        .getAllByRole('row')
+        .slice(1)
+        .map((row) => row.querySelector('td').textContent)
+
+    for (const column of ['Contractor', 'Assignment', 'DT done', 'Ongoing', 'Achievement']) {
+      await userEvent.click(within(card).getByRole('button', { name: column }))
+      expect(names()[names().length - 1]).toBe('Unattributed')
+    }
   })
 })
