@@ -148,7 +148,10 @@ def world(client):
         tag,
         stage,
         *,
-        dt_status=None,
+        # Ongoing by default: most of this fixture is ongoing sites, and that
+        # column is what Ongoing means. Pass None for a drive test that has
+        # not started.
+        dt_status="Ongoing",
         category=None,
         contractor=None,
         launch_days=45,
@@ -231,6 +234,11 @@ def world(client):
     # Not on-air: invisible to every figure on this dashboard, so it must be
     # invisible to every list opened from one.
     item(kerman_site, "offair", STAGE_NEW, last_stage=OFFAIR)
+
+    # Not started: on-air with a blank DT status. It belongs to the list the
+    # Not started figure opens and to no other, which is the claim the
+    # bucket test below makes.
+    item(kerman_site, "not-started-1", STAGE_NEW, dt_status=None, launch_days=75)
 
     # An open fix on the in-app problematic site, overdue, owned by a role.
     power = db.query(ProblemCategory).filter(
@@ -359,6 +367,7 @@ def test_every_figure_opens_a_list_of_exactly_that_many_sites(client, world):
         ("done", {"bucket": "done"}, kpis["total_dt_done"]["value"]),
         ("ongoing", {"bucket": "ongoing"}, kpis["total_ongoing"]["value"]),
         ("problematic", {"bucket": "problematic"}, kpis["total_problematic"]["value"]),
+        ("not started", {"bucket": "not_started"}, kpis["total_not_started"]["value"]),
         ("remaining", {"bucket": "remaining"}, kpis["total_remaining"]["value"]),
     ]
 
@@ -540,6 +549,34 @@ def test_the_export_filename_describes_the_filter(client, world):
 
 
 # --------------------------------------------------------------- 3. the scope
+def test_a_not_started_site_opens_from_that_figure_and_no_other(client, world):
+    """A blank DT status is its own bucket now, and reads as one on the row.
+
+    It used to be indistinguishable from a drive test in flight: the Ongoing
+    figure counted it, the Ongoing list returned it, and its row said
+    "Ongoing". Three places telling a reader that work had started on a site
+    nobody had touched.
+    """
+    # The fixture names each site's village after its tag, and the village is
+    # on the row — the site code is shared across the whole province here.
+    village = "روستای not-started-1"
+
+    def villages(bucket):
+        rows = _sites(client, world["admin"], bucket=bucket)["rows"]
+        return {r["villages"] for r in rows}
+
+    assert village in villages("not_started")
+    assert village not in villages("ongoing")
+    assert village in villages("remaining")
+
+    row = next(
+        r
+        for r in _sites(client, world["admin"], bucket="not_started")["rows"]
+        if r["villages"] == village
+    )
+    assert row["bucket"] == "Not started"
+
+
 def test_a_contractor_sees_only_their_own_sites(client, world):
     alfa_id = world["ids"]["alfa"]
     body = _sites(client, world["alfa"], bucket="onair")

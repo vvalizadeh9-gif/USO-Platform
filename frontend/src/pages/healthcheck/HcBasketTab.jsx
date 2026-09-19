@@ -7,6 +7,36 @@ import BulkActionBar from '../../components/BulkActionBar'
 import ProvinceFilter from '../../components/ProvinceFilter'
 import WaitingPill from '../../components/WaitingPill'
 
+/** How each pool state reads, and whether it is worth shouting about.
+ *
+ * The pool holds every on-air site whose drive test is not Done — that is
+ * the quantity the programme is managed against. Most of those sites are not
+ * waiting to be assigned: they are inside a check, waiting on a PM's triage,
+ * or waiting on somebody's fix. The state used to decide whether the row
+ * existed at all, which made the pool figure answer a different question
+ * from the one it is labelled with; now it decides how the row reads.
+ */
+const STATE_PILL = {
+  New: null, // the ordinary case stays quiet
+  'In health check': { cls: 'pill-dim', title: 'Out with a subcontractor' },
+  'Awaiting triage': {
+    cls: 'pill-amber',
+    title: 'Failed its check — a PM owes a categorisation',
+  },
+  'Fix in progress': { cls: 'pill-amber', title: 'An owner is working on a fix' },
+  'Health check passed': { cls: 'pill-dim', title: 'Passed — waiting on its drive test' },
+}
+
+//: How many rows the table draws before folding the rest behind a button.
+//
+// The pool is a programme quantity now, not a shortlist: on a full CPM import
+// it is every on-air site in the country whose drive test is not Done, which
+// is thousands of rows. Drawing all of them costs a visibly slow page for a
+// list nobody scrolls to the end of — the search box and the province filter
+// are how a Coordinator actually finds a site. The count above the table is
+// always the whole pool, so the cap never changes what the screen claims.
+const RENDER_LIMIT = 200
+
 function BasketBadge({ count }) {
   // iOS-style pill badge: a red rounded count that shows how many sites are
   // currently sitting in the basket awaiting assignment.
@@ -84,18 +114,30 @@ export default function HcBasketTab({ onCountChange } = {}) {
     })
   }
 
-  // A filter can hide a row that is still selected. Selection only ever
-  // covers what's on screen, so a hidden row drops out rather than being
-  // assigned invisibly.
+  const [showAll, setShowAll] = useState(false)
+  const visible = showAll ? filtered : filtered.slice(0, RENDER_LIMIT)
+  const folded = filtered.length - visible.length
+
+  // Only assignable rows can be selected, and only drawn ones: a site inside
+  // an open check is refused by the server (409), and selecting rows that are
+  // folded away would assign sites nobody has looked at. The assignment
+  // endpoint caps a request at 500 ids, which the render limit keeps under.
+  const assignable = useMemo(() => visible.filter((b) => b.assignable), [visible])
+
+  // A filter can hide a row that is still selected, and a reload can turn a
+  // selected row unassignable. Selection only ever covers what is on screen
+  // and can still be acted on, so such a row drops out rather than being
+  // sent to an endpoint that will refuse it.
   useEffect(() => {
     setSelected((prev) => {
-      const visible = new Set(filtered.map((b) => b.work_item_id))
-      const next = new Set([...prev].filter((id) => visible.has(id)))
+      const live = new Set(assignable.map((b) => b.work_item_id))
+      const next = new Set([...prev].filter((id) => live.has(id)))
       return next.size === prev.size ? prev : next
     })
-  }, [filtered])
+  }, [assignable])
 
   function toggle(id) {
+    if (!visible.find((b) => b.work_item_id === id)?.assignable) return
     setSelected((s) => {
       const next = new Set(s)
       next.has(id) ? next.delete(id) : next.add(id)
@@ -103,8 +145,8 @@ export default function HcBasketTab({ onCountChange } = {}) {
     })
   }
   function toggleAll() {
-    if (selected.size === filtered.length) setSelected(new Set())
-    else setSelected(new Set(filtered.map((b) => b.work_item_id)))
+    if (selected.size === assignable.length) setSelected(new Set())
+    else setSelected(new Set(assignable.map((b) => b.work_item_id)))
   }
 
   async function assign() {
@@ -135,7 +177,14 @@ export default function HcBasketTab({ onCountChange } = {}) {
         <div className="row" style={{ gap: 10, alignItems: 'center', marginBottom: 12 }}>
           <h3 style={{ fontSize: 15 }}>Health Check Pool</h3>
           <BasketBadge count={basket.length} />
-          <span className="dim" style={{ fontSize: 12.5 }}>site{basket.length === 1 ? '' : 's'} awaiting assignment</span>
+          {/* What the figure counts, said next to it. It is every on-air site
+              whose drive test is not Done — not the subset that can be
+              assigned this minute, which is the second number. */}
+          <span className="dim" style={{ fontSize: 12.5 }}>
+            on-air site{basket.length === 1 ? '' : 's'} without a completed drive test
+            {' · '}
+            {basket.filter((b) => b.assignable).length} ready to assign
+          </span>
         </div>
         <div className="row between wrap" style={{ gap: 12 }}>
           <div style={{ position: 'relative', flex: 1, minWidth: 200 }}>
@@ -168,8 +217,8 @@ export default function HcBasketTab({ onCountChange } = {}) {
       {filtered.length === 0 ? (
         <div style={{ padding: 20 }}>
           <EmptyState
-            title="No sites awaiting health check"
-            hint="On-air sites appear here once imported, and problematic sites return once every fix is closed."
+            title="No sites in the health check pool"
+            hint="On-air sites appear here once imported, and leave only when their drive test is Done."
           />
         </div>
       ) : (
@@ -178,24 +227,35 @@ export default function HcBasketTab({ onCountChange } = {}) {
             <thead>
               <tr>
                 <th style={{ width: 40 }}>
-                  <input type="checkbox" checked={selected.size === filtered.length && filtered.length > 0} onChange={toggleAll} />
+                  <input
+                    type="checkbox"
+                    checked={selected.size === assignable.length && assignable.length > 0}
+                    onChange={toggleAll}
+                    disabled={assignable.length === 0}
+                    title="Select every site that can be assigned"
+                  />
                 </th>
                 <th>Site ID</th>
                 <th>Province</th>
                 <th>Type</th>
                 <th>Requested Tech</th>
+                <th>DT status</th>
                 <th>Status</th>
                 <th>Waiting</th>
               </tr>
             </thead>
             <tbody>
-              {filtered.map((b) => (
+              {visible.map((b) => (
                 <tr
                   key={b.work_item_id}
                   onClick={() => toggle(b.work_item_id)}
                   className={selected.has(b.work_item_id) ? 'row-selected' : ''}
                   style={{
-                    cursor: 'pointer',
+                    cursor: b.assignable ? 'pointer' : 'default',
+                    // A site that cannot be assigned right now still belongs
+                    // to the pool figure, so it stays on screen — dimmed,
+                    // which is what says "counted, not actionable".
+                    opacity: b.assignable ? 1 : 0.62,
                     // Only set an inline background when selected; leaving it
                     // unset lets the CSS `tbody tr:hover` rule show the hover
                     // highlight on non-selected rows (an inline 'transparent'
@@ -205,7 +265,16 @@ export default function HcBasketTab({ onCountChange } = {}) {
                       : {}),
                   }}
                 >
-                  <td><input type="checkbox" checked={selected.has(b.work_item_id)} onChange={() => toggle(b.work_item_id)} onClick={(e) => e.stopPropagation()} /></td>
+                  <td>
+                    <input
+                      type="checkbox"
+                      checked={selected.has(b.work_item_id)}
+                      disabled={!b.assignable}
+                      title={b.assignable ? undefined : STATE_PILL[b.hc_state]?.title}
+                      onChange={() => toggle(b.work_item_id)}
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                  </td>
                   <td className="text-data" style={{ fontWeight: 500 }}>{b.site_code || '—'}</td>
                   <td className="text-data dim">{b.province || '—'}</td>
                   <td className="text-data">{b.site_type}</td>
@@ -216,11 +285,20 @@ export default function HcBasketTab({ onCountChange } = {}) {
                       ))}
                     </div>
                   </td>
-                  {/* Only returning sites say anything here. A first-ever
-                      check is the normal case and stays quiet, so a re-check
-                      stands out without having to read the whole row. */}
+                  {/* Why this site is in the pool. Ongoing and Problematic
+                      both belong here — only a Done drive test takes a site
+                      out — and a blank column is a drive test not started. */}
                   <td>
-                    {b.round_no > 1 ? (
+                    <span className="dim" style={{ fontSize: 12.5 }}>
+                      {b.dt_status || 'Not started'}
+                    </span>
+                  </td>
+                  {/* Where the site is in the health-check loop. A returning
+                      site names its round and what was fixed; anything that
+                      is not plainly assignable says so, because the pool is
+                      the quantity rather than the queue. */}
+                  <td>
+                    {b.hc_state === 'Ready for re-check' && b.round_no > 1 ? (
                       <span
                         className="pill pill-cyan"
                         style={{ fontSize: 11.5 }}
@@ -228,8 +306,16 @@ export default function HcBasketTab({ onCountChange } = {}) {
                       >
                         {b.returning_reason || `Round ${b.round_no}`}
                       </span>
+                    ) : STATE_PILL[b.hc_state] ? (
+                      <span
+                        className={`pill ${STATE_PILL[b.hc_state].cls}`}
+                        style={{ fontSize: 11.5 }}
+                        title={STATE_PILL[b.hc_state].title}
+                      >
+                        {b.hc_state}
+                      </span>
                     ) : (
-                      <span className="dim" style={{ fontSize: 12.5 }}>New</span>
+                      <span className="dim" style={{ fontSize: 12.5 }}>{b.hc_state}</span>
                     )}
                   </td>
                   <td><WaitingPill days={b.days_waiting} /></td>
@@ -237,6 +323,17 @@ export default function HcBasketTab({ onCountChange } = {}) {
               ))}
             </tbody>
           </table>
+          {folded > 0 && (
+            <div className="row center" style={{ padding: '10px 0 14px' }}>
+              <button
+                type="button"
+                className="btn btn-sm btn-ghost"
+                onClick={() => setShowAll(true)}
+              >
+                Show all {filtered.length} — {folded} more not drawn
+              </button>
+            </div>
+          )}
         </div>
       )}
 

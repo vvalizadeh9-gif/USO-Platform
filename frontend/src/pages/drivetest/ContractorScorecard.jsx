@@ -4,7 +4,13 @@ import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { STATE_COLOR, UNATTRIBUTED } from './constants'
 import { bookScale, count, percent, progressColor } from './format'
-import { assignedLink, doneLink, ongoingLink, problematicLink } from './links'
+import {
+  assignedLink,
+  doneLink,
+  notStartedLink,
+  ongoingLink,
+  problematicLink,
+} from './links'
 import BookBar from './charts/BookBar'
 
 /**
@@ -46,6 +52,11 @@ const COLUMNS = [
   { key: 'done', label: 'DT done', align: 'right', numeric: true },
   { key: 'ongoing', label: 'Ongoing', align: 'right', numeric: true },
   { key: 'problematic', label: 'Problematic', align: 'right', numeric: true },
+  // Outside the assignment, like Problematic: a site nobody has begun a
+  // drive test on is not work the company has been committed to. It is on
+  // the row because "you carry forty sites nobody has started" is the kind
+  // of thing this table exists to make visible.
+  { key: 'not_started', label: 'Not started', align: 'right', numeric: true },
   { key: 'done_percent', label: 'Done', align: 'right', numeric: true },
 ]
 
@@ -197,6 +208,11 @@ export default function ContractorScorecard({ rows, provinceId }) {
                     ) : (
                       count(row.problematic)
                     )}
+                  </td>
+                  <td className="tnum dim" style={{ textAlign: 'right' }}>
+                    <Link to={notStartedLink(cscope)} className="dt-cell-link">
+                      {count(row.not_started ?? 0)}
+                    </Link>
                   </td>
                   <td style={{ textAlign: 'right' }}>
                     <span

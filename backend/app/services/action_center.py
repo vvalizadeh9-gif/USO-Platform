@@ -332,7 +332,15 @@ def counters(db: Session, user: User) -> list[ActionCounter]:
     if role in (PM, COORDINATOR):
         from app.services import hc_queues
 
-        for key, count in hc_queues.counts(db, user).items():
+        queue_counts = hc_queues.counts(db, user)
+        # The HC Pool counter is the slice that can be assigned right now,
+        # not the pool quantity. The pool holds every on-air site whose drive
+        # test is not Done -- including sites out with a subcontractor and
+        # sites waiting on somebody's fix -- and this page says "you owe
+        # this", so it must not count work that is already with someone else.
+        queue_counts["pool"] = queue_counts.pop("pool_assignable", queue_counts["pool"])
+
+        for key, count in queue_counts.items():
             if not count:
                 continue
             # Not every queue earns a counter. ``dt_in_progress`` deliberately

@@ -534,9 +534,16 @@ def counts(db: Session, user: User) -> dict[str, int]:
     # would be worse than no badge, because a queue reading 3 that opens empty
     # teaches people to stop trusting the numbers.
     work_items = scoped_work_items(db, user)
+    basket = get_basket(db, user, work_items)
 
     return {
-        "pool": len(get_basket(db, user, work_items)),
+        # The pool quantity: every on-air site whose drive test is not Done.
+        "pool": len(basket),
+        # The slice of it a Coordinator can raise a check for right now. The
+        # pool figure answers "how much work is there"; the nav's attention
+        # badge asks "how much can I do something about", and since the pool
+        # started carrying sites that are mid-check those are two numbers.
+        "pool_assignable": sum(1 for b in basket if b["assignable"]),
         "in_progress": sum(r["sites_pending"] for r in in_progress(db, user)),
         "hc_review": _hc_review_count(db, user),
         "remediation": len(remediations(db, user)),

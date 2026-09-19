@@ -141,14 +141,24 @@ def _assert_ledgers_close(row):
         == row.closing_problematic
     ), "problematic ledger does not close"
 
+    # The third ledger runs on remaining-minus-problematic, not on the
+    # ``ongoing`` balance. They used to be the same number: ongoing *was*
+    # "not done and not problematic". Ongoing now means the DT status column
+    # reading ``Ongoing``, and the sites it no longer absorbs — on-air with
+    # no drive test started — are still remaining and still not problematic,
+    # so this is the pool the four flows actually move. See
+    # ``snapshots.reconcile``.
+    opening_pool = row.opening_remaining - row.opening_problematic
+    closing_pool = row.closing_remaining - row.closing_problematic
+
     assert (
-        row.opening_ongoing
+        opening_pool
         + row.flow_new_onair
         + row.flow_problematic_resolved
         - row.flow_newly_problematic
         - row.flow_dt_completed
         + row.flow_ongoing_adjustment
-        == row.closing_ongoing
+        == closing_pool
     ), "ongoing ledger does not close"
 
 

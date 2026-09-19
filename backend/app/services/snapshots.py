@@ -171,9 +171,21 @@ def reconcile(opening: dict, closing: dict, measured: dict) -> dict:
     # Ongoing: everything above, in the directions ongoing sees them. The
     # adjustment is whatever is left, which is zero unless a site is DT-Done
     # and Problematic at once — see MonthlySnapshot.flow_ongoing_adjustment.
+    #
+    # The ledger runs on remaining-minus-problematic rather than on the
+    # ``ongoing`` balance itself. The two used to be the same number, because
+    # ongoing *was* "not done and not problematic"; ongoing now means the DT
+    # status column reading ``Ongoing``, and the sites it no longer absorbs —
+    # on-air with no drive test started — are still remaining and still not
+    # problematic. Reading the balance instead would make every month a site
+    # came on-air, or a drive test started on one, report an anomaly, which
+    # is what this figure exists to be free of.
+    def not_problematic_remaining(balance: dict) -> int:
+        return balance["remaining"] - balance["problematic"]
+
     adjustment = (
-        closing["ongoing"]
-        - opening["ongoing"]
+        not_problematic_remaining(closing)
+        - not_problematic_remaining(opening)
         - new_onair
         - resolved
         + flagged

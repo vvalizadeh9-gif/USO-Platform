@@ -2,6 +2,7 @@ import { motion, useReducedMotion } from 'framer-motion'
 import {
   AlertTriangle,
   CheckCircle2,
+  Circle,
   CircleDashed,
   Minus,
   TrendingDown,
@@ -10,7 +11,14 @@ import {
 import { Link } from 'react-router-dom'
 import { KPI_DIRECTION, STATE_COLOR } from './constants'
 import { achievement, count, deltaTone, percent, TONE_COLOR } from './format'
-import { doneLink, onairLink, ongoingLink, problematicLink, remainingLink } from './links'
+import {
+  doneLink,
+  notStartedLink,
+  onairLink,
+  ongoingLink,
+  problematicLink,
+  remainingLink,
+} from './links'
 import { AnimatedNumber } from './charts/primitives'
 
 /**
@@ -102,15 +110,37 @@ export default function KpiBand({ kpis, provinceId }) {
       direction: KPI_DIRECTION.total_problematic,
       tone: 'problem',
     },
+    {
+      key: 'not_started',
+      label: 'Not started',
+      value: kpis.total_not_started.value,
+      color: STATE_COLOR.not_started,
+      href: notStartedLink(scope),
+      icon: Circle,
+      kpi: kpis.total_not_started,
+      direction: KPI_DIRECTION.total_not_started,
+    },
   ]
 
   const tiles = states.map((s) => ({ ...s, share: pct(s.value) }))
 
-  // The bar reads done, problematic, ongoing: the blocked work sits against
-  // the finished work rather than being buried at the far end, which is the
-  // adjacency somebody managing this programme wants to see.
-  const ORDER = ['done', 'problematic', 'ongoing']
-  const segments = ORDER.map((key) => tiles.find((t) => t.key === key)).filter(Boolean)
+  // The bar reads done, problematic, ongoing, not started: the blocked work
+  // sits against the finished work rather than being buried at the far end,
+  // which is the adjacency somebody managing this programme wants to see, and
+  // the work nobody has begun trails the work that is under way.
+  //
+  // Not started is a segment rather than a footnote because it is where the
+  // Ongoing figure's missing sites went. Ongoing used to mean "not done and
+  // not problematic", so every on-air site with a blank DT status was drawn
+  // as work in flight; this segment is that population, told apart.
+  const ORDER = ['done', 'problematic', 'ongoing', 'not_started']
+  // Only the states that actually have sites are drawn, and the bar's
+  // description is built from the same list — a screen reader is told what
+  // the bar shows, not "Not started: 0, 0%" for every state that happens to
+  // be empty this month.
+  const segments = ORDER.map((key) => tiles.find((t) => t.key === key)).filter(
+    (s) => s && s.share > 0,
+  )
 
   const breakdown = segments
     .map((s) => `${s.label}: ${count(s.value)}, ${percent(s.share)}`)
@@ -168,21 +198,19 @@ export default function KpiBand({ kpis, provinceId }) {
         role="img"
         aria-label={`${count(onair)} sites on air. ${breakdown}`}
       >
-        {segments.map((s, i) =>
-          s.share <= 0 ? null : (
-            <motion.span
-              key={s.key}
-              data-testid="dt-hero-segment"
-              data-state={s.key}
-              className="dt-hero-segment"
-              style={{ background: s.color }}
-              title={`${s.label}: ${count(s.value)} (${percent(s.share)} of on-air)`}
-              initial={reduced ? false : { width: 0 }}
-              animate={{ width: `${s.share}%` }}
-              transition={{ duration: 0.7, delay: 0.05 + i * 0.1, ease: [0.16, 1, 0.3, 1] }}
-            />
-          ),
-        )}
+        {segments.map((s, i) => (
+          <motion.span
+            key={s.key}
+            data-testid="dt-hero-segment"
+            data-state={s.key}
+            className="dt-hero-segment"
+            style={{ background: s.color }}
+            title={`${s.label}: ${count(s.value)} (${percent(s.share)} of on-air)`}
+            initial={reduced ? false : { width: 0 }}
+            animate={{ width: `${s.share}%` }}
+            transition={{ duration: 0.7, delay: 0.05 + i * 0.1, ease: [0.16, 1, 0.3, 1] }}
+          />
+        ))}
       </div>
 
       <ul className="dt-state-tiles">

@@ -225,7 +225,9 @@ class MonthlySnapshot(Base):
     flow_newly_problematic: Mapped[int | None] = mapped_column(Integer)
     flow_problematic_resolved: Mapped[int | None] = mapped_column(Integer)
 
-    # Movement in or out of *ongoing* that none of the four flows accounts
+    # Movement in or out of the non-problematic remaining pool (remaining
+    # minus problematic, which is what ``ongoing`` meant when this column was
+    # named) that none of the four flows accounts
     # for. In ordinary operation it is zero, and the ongoing ledger reads as
     # the plain identity. It is non-zero only when a site is DT-Done and
     # Problematic at the same time -- a CPM ``Done`` status sitting over an

@@ -131,7 +131,10 @@ def world(client):
     year, month = jalali.current_shamsi_period()
     this_month = jalali.from_shamsi_date(year, month, 1)
 
-    def item(site, tag, stage, *, dt_status=None, category=None, contractor=None,
+    # dt_status defaults to Ongoing: the sites below tagged "ong-" are
+    # ongoing, and that column is what Ongoing means. A blank status is a
+    # drive test that has not started, which the not-started site adds.
+    def item(site, tag, stage, *, dt_status="Ongoing", category=None, contractor=None,
              dt_date=None, assign_days=None):
         wi = WorkItem(
             site_id=site.id,
@@ -160,6 +163,7 @@ def world(client):
         return wi
 
     item(k_site, "ong-new", STAGE_NEW)
+    item(k_site, "not-started", STAGE_NEW, dt_status=None)
     item(k_site, "ong-assigned", STAGE_ASSIGNED, contractor=alfa.id, assign_days=20)
     item(y_site, "ong-beta", STAGE_ASSIGNED, contractor=beta.id, assign_days=5)
     item(k_site, "done-1", STAGE_NEW, dt_status="Done", dt_date=this_month,
@@ -310,6 +314,7 @@ def test_the_summary_agrees_with_the_dashboard(client, world):
     assert summary["Drive tests done"] == kpis["total_dt_done"]["value"]
     assert summary["Ongoing"] == kpis["total_ongoing"]["value"]
     assert summary["Problematic"] == kpis["total_problematic"]["value"]
+    assert summary["Not started"] == kpis["total_not_started"]["value"]
     assert summary["Remaining"] == kpis["total_remaining"]["value"]
 
     assert summary["Assigned"] == plan["assigned"]
@@ -351,6 +356,7 @@ def test_the_sites_sheet_is_the_on_air_list(client, world):
     assert buckets.count("Done") == kpis["total_dt_done"]["value"]
     assert buckets.count("Ongoing") == kpis["total_ongoing"]["value"]
     assert buckets.count("Problematic") == kpis["total_problematic"]["value"]
+    assert buckets.count("Not started") == kpis["total_not_started"]["value"]
 
 
 def test_the_open_fixes_sheet_matches_the_queue_service(client, world):

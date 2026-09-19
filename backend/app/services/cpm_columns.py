@@ -154,13 +154,20 @@ def is_onair_stage(value: object) -> bool:
 
 # ----- Drive Test status (column AW: DT Status) -----
 # The AW column carries Done / Problematic / Ongoing (or blank). These are
-# seeded once on the first import and then owned by the app. Health-check
-# basket eligibility excludes Done and Ongoing (see health_check service).
+# seeded once on the first import and then owned by the app.
 DT_STATUS_DONE = "Done"
 DT_STATUS_ONGOING = "Ongoing"
 DT_STATUS_PROBLEMATIC = "Problematic"
-# Statuses that mean the site should NOT appear in the health-check basket.
-DT_STATUS_EXCLUDED_FROM_HC = {DT_STATUS_DONE, DT_STATUS_ONGOING}
+# Statuses that mean the site should NOT appear in the health-check pool.
+#
+# Done only. A finished drive test is the one outcome that takes a site out
+# of the pool for good; everything else on-air still needs a health check at
+# some point and so is still counted there. ``Ongoing`` used to be excluded
+# as well, on the reading that a site already with a drive-test contractor
+# was somebody else's problem -- which made the pool quantity smaller than
+# the thing it claims to count, "on-air sites whose drive test is not done",
+# by however many sites the last import marked Ongoing.
+DT_STATUS_EXCLUDED_FROM_HC = {DT_STATUS_DONE}
 
 
 def normalize_dt_status(value: object) -> str | None:

@@ -382,20 +382,78 @@ def scoped_work_items(db: Session, user) -> list[WorkItem]:
     return list(db.execute(stmt).scalars().all())
 
 
+HC_STATE_NEW = "New"
+HC_STATE_IN_PROGRESS = "In health check"
+HC_STATE_AWAITING_TRIAGE = "Awaiting triage"
+HC_STATE_FIXING = "Fix in progress"
+HC_STATE_READY_FOR_RECHECK = "Ready for re-check"
+HC_STATE_PASSED = "Health check passed"
+
+#: The states a pool site can be assigned a fresh health check from.
+#:
+#: Only one state actually blocks the write: a site inside an open HC task
+#: already belongs to a subcontractor, and ``create_assignment`` refuses it
+#: (see ``AlreadyInHealthCheck``). Every other state is a judgement call the
+#: Coordinator is allowed to make -- re-checking a site whose fixes are still
+#: open, or one that passed a round ago, is unusual but not wrong -- so the
+#: screen shows the state and lets them decide rather than hiding the row.
+HC_ASSIGNABLE_STATES = frozenset(
+    {
+        HC_STATE_NEW,
+        HC_STATE_AWAITING_TRIAGE,
+        HC_STATE_FIXING,
+        HC_STATE_READY_FOR_RECHECK,
+        HC_STATE_PASSED,
+    }
+)
+
+
+def _hc_state(wi: WorkItem, task: HcTask | None, busy: set[int]) -> tuple[str, int, str | None]:
+    """Where this on-air site currently stands in the health-check loop.
+
+    Returns ``(state, round_no, returning_reason)``. ``round_no`` is the round
+    the site is in *now* while a check is open or its result is still being
+    worked, and the round it would be assigned next once that round is
+    finished -- which is what the screen has always shown for a returning
+    site.
+    """
+    if wi.id in busy:
+        # Mid-round: the open task carries the round, not the last completed
+        # one, so a site on its second check reads "2" rather than "1".
+        open_round = max(
+            (t.round_no for t in wi.hc_tasks if t.completed_at is None),
+            default=(task.round_no + 1 if task is not None else 1),
+        )
+        return HC_STATE_IN_PROGRESS, open_round, None
+    if task is None:
+        return HC_STATE_NEW, 1, None
+    if task.overall_result != "NotReady":
+        return HC_STATE_PASSED, task.round_no, None
+    if not task.remediations:
+        return HC_STATE_AWAITING_TRIAGE, task.round_no, None
+    if any(r.is_open for r in task.remediations):
+        return HC_STATE_FIXING, task.round_no, None
+    return HC_STATE_READY_FOR_RECHECK, task.round_no + 1, _returning_summary(task)
+
+
 def get_basket(db: Session, user, work_items: list[WorkItem] | None = None) -> list[dict]:
-    """On-air sites that still need a health check, scoped to the user.
+    """Every on-air site whose drive test is not Done, scoped to the user.
 
-    A site is eligible when it is on-air, is not already inside an open HC
-    task, and is not currently *being worked on*. Concretely it appears when:
+    That sentence is the whole definition, and the pool quantity is the
+    length of this list. It used to be narrower in four further ways, each
+    defensible on its own and none of them visible in the number: sites whose
+    CPM drive-test status read ``Ongoing`` were dropped, and so were sites
+    inside an open check, sites whose failed check a PM had not triaged yet,
+    and sites with a fix still open. A Coordinator reading "112 in the pool"
+    was being told how many sites they could assign *this minute*, not how
+    many on-air sites still owe a health check -- and the second is the
+    figure the programme is actually managed against.
 
-    * it has never been health-checked (round 1), or
-    * its last check failed, a PM triaged it, and **every** resulting fix has
-      since been closed — so it is genuinely ready to be re-checked.
-
-    It is deliberately withheld while it is still Not Ready and untriaged (the
-    PM owes a decision, visible in HC Results) or while any fix is still open
-    (an owner owes the work, visible in their Fix Queue). That is what makes
-    the loop close by itself: nobody re-adds a site by hand.
+    So every one of those sites is now in the list, and the state it is in
+    travels on the row (``hc_state``) instead of deciding whether the row
+    exists. ``assignable`` says whether a fresh check can be raised for it
+    right now; only an open check blocks that, which is the one case
+    ``create_assignment`` rejects.
     """
     if work_items is None:
         work_items = scoped_work_items(db, user)
@@ -407,26 +465,13 @@ def get_basket(db: Session, user, work_items: list[WorkItem] | None = None) -> l
     for wi in work_items:
         if C.normalize_stage(wi.last_stage) not in C.ONAIR_STAGES:
             continue
-        # Exclude sites whose drive test is already Done or Ongoing — they do
-        # not belong in the health-check basket (only sites still awaiting DT,
-        # i.e. blank or Problematic DT status, are eligible).
+        # A finished drive test is the one outcome that ends a site's need
+        # for a health check. Ongoing, Problematic and blank all stay.
         if C.normalize_dt_status(wi.dt_status) in C.DT_STATUS_EXCLUDED_FROM_HC:
-            continue
-        if wi.id in busy:
             continue
 
         task = latest.get(wi.id)
-        round_no = 1
-        returning = None
-        if task is not None:
-            if task.overall_result != "NotReady":
-                continue  # passed — it has left the loop for good
-            if not task.remediations:
-                continue  # failed but not triaged yet: the PM owes a decision
-            if any(r.is_open for r in task.remediations):
-                continue  # an owner is still working on it
-            round_no = task.round_no + 1
-            returning = _returning_summary(task)
+        state, round_no, returning = _hc_state(wi, task, busy)
 
         waiting_since = _pool_waiting_since(wi, task)
         basket.append(
@@ -438,6 +483,9 @@ def get_basket(db: Session, user, work_items: list[WorkItem] | None = None) -> l
                 "requested_technologies": parse_technologies(wi.requested_technology),
                 "round_no": round_no,
                 "returning_reason": returning,
+                "hc_state": state,
+                "assignable": state in HC_ASSIGNABLE_STATES,
+                "dt_status": C.normalize_dt_status(wi.dt_status),
                 "waiting_since": waiting_since,
                 "days_waiting": _days_since(waiting_since),
             }

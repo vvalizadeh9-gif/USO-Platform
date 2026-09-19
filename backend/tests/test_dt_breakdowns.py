@@ -10,9 +10,12 @@ grows new stages:
   exactly one bucket. A stage added to the workflow and not to
   ``ONGOING_STAGE_ORDER`` must land in ``Other`` and still be counted, not
   vanish and quietly shrink the section by a number nobody can see.
-* **Ongoing plus problematic equals remaining.** The two sub-cards under
-  Remaining are its parts. If they stop being its parts, the group header on
-  the page is a lie.
+* **Ongoing plus problematic plus not-started equals remaining.** The cards
+  under Remaining are its parts. If they stop being its parts, the group
+  header on the page is a lie. Not started is one of them: a blank DT status
+  is a drive test nobody has begun, and counting it as Ongoing (which is what
+  "not done and not problematic" did) reported the untouched backlog as work
+  in flight.
 * **The contractor rows plus the no-contractor count equal ongoing.** The
   contractor view deliberately drops unattributed sites, so it only
   reconciles with that count beside it — which is why the count is in the
@@ -162,13 +165,26 @@ def world(client):
     # Ongoing, one per stage, spread over both provinces. Alfa holds the two
     # that are with a contractor; the rest are attributed to nobody, which is
     # what the no-contractor count has to account for.
-    item(kerman_site, "ong-new", STAGE_NEW)
-    item(kerman_site, "ong-hc-prog", STAGE_HC_IN_PROGRESS)
-    item(kerman_site, "ong-hc-review", STAGE_HC_REVIEW)
-    item(kerman_site, "ong-ready", STAGE_READY)
-    item(yazd_site, "ong-assigned", STAGE_ASSIGNED, contractor=alfa.id)
-    item(yazd_site, "ong-returned", STAGE_RETURNED, contractor=alfa.id)
-    item(yazd_site, "ong-submitted", STAGE_DT_SUBMITTED)
+    #
+    # Every one of them carries ``dt_status="Ongoing"``, because that column
+    # is what Ongoing *means*: a drive test under way. These used to be
+    # seeded blank and counted as ongoing anyway, which is the thing the
+    # dashboard was getting wrong -- see the not-started sites below.
+    ONG = "Ongoing"
+    item(kerman_site, "ong-new", STAGE_NEW, dt_status=ONG)
+    item(kerman_site, "ong-hc-prog", STAGE_HC_IN_PROGRESS, dt_status=ONG)
+    item(kerman_site, "ong-hc-review", STAGE_HC_REVIEW, dt_status=ONG)
+    item(kerman_site, "ong-ready", STAGE_READY, dt_status=ONG)
+    item(yazd_site, "ong-assigned", STAGE_ASSIGNED, dt_status=ONG, contractor=alfa.id)
+    item(yazd_site, "ong-returned", STAGE_RETURNED, dt_status=ONG, contractor=alfa.id)
+    item(yazd_site, "ong-submitted", STAGE_DT_SUBMITTED, dt_status=ONG)
+
+    # Not started: on-air with a blank DT status, which is a drive test
+    # nobody has begun. They are the fourth state, and they are here so the
+    # reconciliations below cannot pass by ignoring them -- every sum a
+    # reader trusts has to account for them somewhere.
+    item(kerman_site, "not-started-1", STAGE_NEW)
+    item(yazd_site, "not-started-2", STAGE_READY)
 
     # Problematic by both signals — the CPM status column and the in-app
     # stage — because the section has to count sites that became problematic
@@ -184,7 +200,9 @@ def world(client):
 
     # A site Alfa used to hold and Beta holds now. It is in Alfa's visible set
     # for good reasons (their history), and Beta's name must not reach them.
-    handed_on = item(yazd_site, "ong-handed-on", STAGE_ASSIGNED, contractor=alfa.id)
+    handed_on = item(
+        yazd_site, "ong-handed-on", STAGE_ASSIGNED, dt_status=ONG, contractor=alfa.id
+    )
     db.add_all(
         [
             Assignment(
@@ -258,14 +276,31 @@ def test_stage_buckets_stay_in_workflow_order(client, world):
     assert names == [s for s in ONGOING_STAGE_ORDER if s in names]
 
 
-def test_ongoing_plus_problematic_equals_remaining(client, world):
+def test_ongoing_plus_problematic_plus_not_started_equals_remaining(client, world):
     body = _overview(client, world["admin"])
     kpis = body["kpis"]
 
     assert (
-        body["ongoing_breakdown"]["total"] + body["problematic_breakdown"]["total"]
+        body["ongoing_breakdown"]["total"]
+        + body["problematic_breakdown"]["total"]
+        + kpis["total_not_started"]["value"]
         == kpis["total_remaining"]["value"]
     )
+
+
+def test_a_blank_dt_status_is_not_started_rather_than_ongoing(client, world):
+    """The regression this file exists to hold.
+
+    Ongoing was "not done and not problematic", so every on-air site nobody
+    had begun a drive test on was reported as work in flight -- on the card,
+    in the scorecard and in every breakdown under it. Two sites here are
+    blank, and they must land in Not started with the ongoing total counting
+    only the seven that say ``Ongoing``.
+    """
+    body = _overview(client, world["admin"])
+
+    assert body["kpis"]["total_not_started"]["value"] == 2
+    assert body["ongoing_breakdown"]["total"] == 8  # 7 + the handed-on site
 
 
 def test_contractor_rows_plus_the_no_contractor_count_equal_ongoing(client, world):
@@ -316,6 +351,7 @@ def test_province_rows_sum_to_the_programme_totals(client, world):
     assert sum(r["remaining"] for r in rows) == kpis["total_remaining"]["value"]
     assert sum(r["ongoing"] for r in rows) == kpis["total_ongoing"]["value"]
     assert sum(r["problematic"] for r in rows) == kpis["total_problematic"]["value"]
+    assert sum(r["not_started"] for r in rows) == kpis["total_not_started"]["value"]
 
 
 def test_province_rows_are_sorted_by_remaining_descending(client, world):
@@ -331,7 +367,10 @@ def test_province_rows_are_sorted_by_remaining_descending(client, world):
 def test_each_province_row_is_internally_consistent(client, world):
     for row in _overview(client, world["admin"])["province_breakdown"]:
         assert row["remaining"] == row["onair"] - row["done"]
-        assert row["ongoing"] + row["problematic"] == row["remaining"]
+        assert (
+            row["ongoing"] + row["problematic"] + row["not_started"]
+            == row["remaining"]
+        )
 
 
 # ------------------------------------------------------------------- scoping
@@ -369,7 +408,12 @@ def test_a_contractors_breakdowns_still_reconcile(client, world):
     )
     assert _total(ongoing["by_province"]) == ongoing["total"]
     assert _total(problematic["by_category"]) == problematic["total"]
-    assert ongoing["total"] + problematic["total"] == kpis["total_remaining"]["value"]
+    assert (
+        ongoing["total"]
+        + problematic["total"]
+        + kpis["total_not_started"]["value"]
+        == kpis["total_remaining"]["value"]
+    )
 
 
 def test_a_contractor_sees_less_than_the_admin(client, world):

@@ -827,6 +827,18 @@ class HcBasketItem(BaseModel):
     # closed. ``returning_reason`` says what was fixed, and is None on round 1.
     round_no: int = 1
     returning_reason: str | None = None
+    # Where the site stands in the health-check loop right now — New, In
+    # health check, Awaiting triage, Fix in progress, Ready for re-check or
+    # Health check passed (see health_check.HC_STATE_*). The pool holds every
+    # on-air site whose drive test is not Done, so the state is what tells a
+    # Coordinator which of them they can act on rather than which rows exist.
+    hc_state: str = "New"
+    # Whether a fresh health check can be raised for it now. False only while
+    # a check is already open, which is what create_assignment refuses.
+    assignable: bool = True
+    # The site's DT status as the dashboard reads it: Ongoing, Problematic or
+    # None. Never Done — a finished drive test leaves the pool.
+    dt_status: str | None = None
     # When this round became eligible: a returning site's last fix closing,
     # or a round-1 site's CPM launch date. None when neither is known (see
     # health_check._pool_waiting_since) — never a substitute date.
@@ -932,6 +944,10 @@ class HcQueueCounts(BaseModel):
     """How many items wait in each queue. Drives the tab badges."""
 
     pool: int = 0
+    # The slice of the pool that can be assigned right now. ``pool`` is the
+    # quantity (every on-air site whose drive test is not Done); this is what
+    # a Coordinator can act on this minute, and drives the nav badge.
+    pool_assignable: int = 0
     in_progress: int = 0
     hc_review: int = 0
     remediation: int = 0
@@ -1141,6 +1157,10 @@ class DriveTestKpis(BaseModel):
     total_remaining: KpiWithDelta
     total_ongoing: KpiWithDelta
     total_problematic: KpiWithDelta
+    # On-air sites no drive test has begun on. Ongoing used to absorb these,
+    # being defined as "not done and not problematic"; naming them keeps the
+    # four states a partition of on-air and Remaining their sum.
+    total_not_started: KpiWithDelta
     current_month_dt_done: KpiWithDelta
 
 
@@ -1286,6 +1306,7 @@ class ProvinceBreakdownRow(BaseModel):
     remaining: int
     ongoing: int
     problematic: int
+    not_started: int = 0
     done_percent: float
 
 
@@ -1418,6 +1439,10 @@ class ContractorScorecardRow(BaseModel):
     done: int
     ongoing: int
     problematic: int
+    #: On-air sites carrying this contractor's name that no drive test has
+    #: begun on. Outside ``assigned`` for the same reason ``problematic`` is:
+    #: nothing has been committed on them yet.
+    not_started: int = 0
     done_percent: float
 
 

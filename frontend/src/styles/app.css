@@ -41,23 +41,34 @@
   --violet-dim: rgba(109, 91, 208, 0.12);
 
   /* ---- Drive Test dashboard: colour that means a state, and nothing else.
-     Three hues, one per state an on-air site can be in, reserved for that
-     meaning everywhere on that page. Validated as a categorical set against
-     a white surface: worst adjacent pair 22.1 ΔE under deuteranopia and 23.7
-     under normal vision, all three above 3:1 contrast.
+     Three hues, one per state where something is *happening* to an on-air
+     site, reserved for that meaning everywhere on that page. Validated as a
+     categorical set against a white surface: worst adjacent pair 22.1 ΔE
+     under deuteranopia and 23.7 under normal vision, all three above 3:1
+     contrast.
 
      Amber is deliberately absent. It is the obvious pick for "in progress",
      and against this red it lands 3.4 ΔE apart under deuteranopia — a
      red-green reader could not tell an ongoing site from a problematic one.
      The brand teal is absent for a different reason: it is the nav-active
      and primary-button colour, so a data series wearing it reads as the
-     selected thing. */
+     selected thing.
+
+     The fourth state, not-started, takes the neutral rather than a fourth
+     hue. Nothing has happened to those sites, and the three-hue rule is
+     worth more than the distinctness a new hue would buy: a grey segment
+     reads as absence beside three that read as activity, and it keeps the
+     colour vocabulary at three things a reader has to learn. It is the same
+     neutral as the chart furniture, one step darker so it holds its own as a
+     segment rather than reading as an unfilled track. */
   --dt-done: #17915a;
   --dt-ongoing: #3b6fd4;
   --dt-problem: #cf3b3b;
+  --dt-notstarted: #8a95a6;
   --dt-done-wash: rgba(23, 145, 90, 0.12);
   --dt-ongoing-wash: rgba(59, 111, 212, 0.11);
   --dt-problem-wash: rgba(207, 59, 59, 0.11);
+  --dt-notstarted-wash: rgba(138, 149, 166, 0.13);
 
   /* The one ordinal ramp on that page: the ongoing age bands, which are an
      ordered scale rather than a set of names. One hue, light to dark,

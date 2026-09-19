@@ -224,6 +224,7 @@ def _summary_sheet(ws, *, user, province_name, kpis, breakdowns, plan, is_contra
             ("Drive tests done", kpis["total_dt_done"]),
             ("Ongoing", kpis["total_ongoing"]),
             ("Problematic", kpis["total_problematic"]),
+            ("Not started", kpis["total_not_started"]),
             ("Remaining", kpis["total_remaining"]),
         ],
     )

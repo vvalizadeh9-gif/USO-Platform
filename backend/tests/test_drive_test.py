@@ -66,12 +66,12 @@ def _seed_workitems(db):
         dt_status="Problematic", dt_problem_category="Temporary Power",
         current_stage="New",
     )
-    # 3) On-air + no DT + health check Ready  => Ongoing
+    # 3) On-air + DT under way                => Ongoing
     ongoing = WorkItem(
         site_id=site.id, site_type="Ongoing", last_stage="راه_اندازی_دائم",
-        dt_status=None, current_stage="New",
+        dt_status="Ongoing", current_stage="New",
     )
-    # 4) On-air + no DT + NO health check      => Remaining but NOT Ongoing
+    # 4) On-air + blank DT status              => Remaining, and Not started
     notready = WorkItem(
         site_id=site.id, site_type="NotReady", last_stage="راه_اندازی_دائم",
         dt_status=None, current_stage="New",
@@ -94,7 +94,7 @@ def _seed_workitems(db):
 
 
 def test_kpi_math_and_ongoing_definition(client):
-    """On-air excludes design; ongoing = on-air with no DT outcome yet."""
+    """On-air excludes design; ongoing = on-air with the DT status Ongoing."""
     from app.services.drive_test_analytics import DriveTestAnalytics
     from app.services.snapshots import _SystemScope
 
@@ -108,10 +108,20 @@ def test_kpi_math_and_ongoing_definition(client):
     assert kpis["total_dt_done"] == 1
     assert kpis["total_remaining"] == 3  # onair - done
     assert kpis["total_problematic"] == 1
-    # Ongoing = on-air AND dt_status not in (Done, Problematic).
-    # Both 'ongoing' and 'notready' fixtures qualify — Ongoing is no longer
-    # gated by the separate Health Check workflow.
-    assert kpis["total_ongoing"] == 2
+    # Ongoing = on-air AND dt_status == 'Ongoing'. Only the 'ongoing' fixture
+    # qualifies: the blank-status one is a drive test nobody has started, and
+    # counting it here is what made the card report the untouched backlog as
+    # work in flight.
+    assert kpis["total_ongoing"] == 1
+    assert kpis["total_not_started"] == 1
+    # The four states partition on-air, so the cards under Remaining are its
+    # parts rather than two thirds of them.
+    assert (
+        kpis["total_ongoing"]
+        + kpis["total_problematic"]
+        + kpis["total_not_started"]
+        == kpis["total_remaining"]
+    )
 
 
 def test_charts_have_expected_shape(client):

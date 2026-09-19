@@ -79,7 +79,10 @@ export const doneLink = (extra) => siteListLink({ ...extra, bucket: 'done' })
 /** The sites behind an ongoing figure. */
 export const ongoingLink = (extra) => siteListLink({ ...extra, bucket: 'ongoing' })
 
-/** The sites behind the Remaining line: ongoing plus problematic. */
+/** The sites behind the Not started figure: on-air, no drive test begun. */
+export const notStartedLink = (extra) => siteListLink({ ...extra, bucket: 'not_started' })
+
+/** The sites behind the Remaining line: ongoing, problematic and not started. */
 export const remainingLink = (extra) => siteListLink({ ...extra, bucket: 'remaining' })
 
 /** A contractor's book of work: done plus ongoing, the scorecard's
