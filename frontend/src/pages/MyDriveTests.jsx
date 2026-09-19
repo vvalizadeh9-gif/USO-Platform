@@ -118,17 +118,22 @@ export default function MyDriveTests() {
       <LifecycleStrip current="dt" variant="contractor" />
 
       <div className="tabs tabs-steps" style={{ flexWrap: 'wrap' }}>
-        {TABS.map((t, i) => (
-          <div className="tab-step" key={t.key}>
-            {i > 0 && <ChevronRight size={14} className="tab-sep" aria-hidden="true" />}
-            <button className={`tab ${tab === t.key ? 'active' : ''}`} onClick={() => selectTab(t.key)}>
-              <span className="row" style={{ gap: 8 }}>
-                {t.label}
-                {counts[t.count] > 0 && <span className="badge tnum">{counts[t.count]}</span>}
-              </span>
-            </button>
-          </div>
-        ))}
+        {TABS.map((t, i) => {
+          const isActive = tab === t.key
+          return (
+            <div className="tab-step" key={t.key}>
+              {i > 0 && <ChevronRight size={14} className="tab-sep" aria-hidden="true" />}
+              <button className={`tab ${isActive ? 'active' : ''}`} onClick={() => selectTab(t.key)}>
+                <span className="row" style={{ gap: 8 }}>
+                  {t.label}
+                  {counts[t.count] > 0 && (
+                    <span className={`badge tnum ${isActive ? 'badge-active' : ''}`}>{counts[t.count]}</span>
+                  )}
+                </span>
+              </button>
+            </div>
+          )
+        })}
       </div>
 
       {rows === null ? (

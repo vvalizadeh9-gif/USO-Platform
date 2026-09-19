@@ -65,16 +65,19 @@ export default function DriveTest() {
       <div className="tabs tabs-steps" style={{ flexWrap: 'wrap' }}>
         {TABS.map((t, i) => {
           const count = t.count ? counts[t.count] : undefined
+          const isActive = tab === t.key
           return (
             <div className="tab-step" key={t.key}>
               {i > 0 && <ChevronRight size={14} className="tab-sep" aria-hidden="true" />}
               <button
-                className={`tab ${tab === t.key ? 'active' : ''}`}
+                className={`tab ${isActive ? 'active' : ''}`}
                 onClick={() => setTab(t.key)}
               >
                 <span className="row" style={{ gap: 8 }}>
                   <t.icon size={15} /> {t.label}
-                  {count > 0 && <span className="badge tnum">{count}</span>}
+                  {count > 0 && (
+                    <span className={`badge tnum ${isActive ? 'badge-active' : ''}`}>{count}</span>
+                  )}
                 </span>
               </button>
             </div>
