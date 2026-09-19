@@ -2,9 +2,10 @@ import { motion, useReducedMotion } from 'framer-motion'
 import {
   AlertTriangle,
   CheckCircle2,
-  Circle,
   CircleDashed,
+  Hourglass,
   Minus,
+  Radio,
   TrendingDown,
   TrendingUp,
 } from 'lucide-react'
@@ -13,7 +14,6 @@ import { KPI_DIRECTION, STATE_COLOR } from './constants'
 import { achievement, count, deltaTone, percent, TONE_COLOR } from './format'
 import {
   doneLink,
-  notStartedLink,
   onairLink,
   ongoingLink,
   problematicLink,
@@ -68,79 +68,120 @@ function DeltaChip({ delta, direction = 'up', small }) {
 
 export { DeltaChip }
 
+// The bar's four legend swatches, in the order they are named. "Rest of
+// pending" is not-started sites: on-air, no drive-test status yet, part of
+// Pending but drawn as the neutral rest of the track rather than a fourth
+// segment, since nothing is actually happening to them yet.
+const BAR_LEGEND = [
+  { key: 'done', label: 'DT done', color: STATE_COLOR.done },
+  { key: 'ongoing', label: 'Ongoing', color: STATE_COLOR.ongoing },
+  { key: 'problematic', label: 'Problematic', color: STATE_COLOR.problematic },
+  { key: 'rest', label: 'Rest of pending', color: 'var(--dt-track)' },
+]
+
 export default function KpiBand({ kpis, provinceId }) {
   const reduced = useReducedMotion()
   const scope = provinceId == null ? undefined : { provinceId }
 
   const onair = kpis.total_onair.value
   const done = kpis.total_dt_done.value
-  const remaining = kpis.total_remaining.value
-  const pct = (v) => (onair ? (v / onair) * 100 : 0)
-  const donePct = pct(done)
+  const pending = kpis.total_remaining.value
+  const ongoing = kpis.total_ongoing.value
+  const problematic = kpis.total_problematic.value
 
-  const states = [
+  const pctOfOnair = (v) => (onair ? (v / onair) * 100 : 0)
+  // Guarded the same way: a programme with nothing pending has nothing to
+  // take a share of, so it reads 0% rather than dividing by zero.
+  const pctOfPending = (v) => (pending ? (v / pending) * 100 : 0)
+  const donePct = pctOfOnair(done)
+
+  // On air and Pending are totals, not states something is happening to, so
+  // they take the neutral mark rather than one of the three state hues —
+  // see constants.js for why this page reserves those three for done,
+  // ongoing and problematic and nothing else.
+  const NEUTRAL = 'var(--dt-notstarted)'
+
+  const tiles = [
+    {
+      key: 'onair',
+      label: 'On air',
+      value: onair,
+      color: NEUTRAL,
+      icon: Radio,
+      href: onairLink(scope),
+      foot: 'launched sites',
+      kpi: kpis.total_onair,
+      direction: KPI_DIRECTION.total_onair,
+    },
     {
       key: 'done',
-      label: 'Drive tests done',
+      label: 'DT done',
       value: done,
       color: STATE_COLOR.done,
-      href: doneLink(scope),
       icon: CheckCircle2,
+      href: doneLink(scope),
+      foot: `${percent(donePct)} of on air`,
       kpi: kpis.total_dt_done,
       direction: KPI_DIRECTION.total_dt_done,
     },
     {
+      key: 'pending',
+      label: 'Pending',
+      value: pending,
+      color: NEUTRAL,
+      icon: Hourglass,
+      href: remainingLink(scope),
+      foot: 'on air minus DT done',
+      // No delta chip here: Pending's delta already leads the band on the
+      // pill above, and repeating it on the tile is the same number twice
+      // rather than a second fact.
+      kpi: null,
+      tone: 'pending',
+    },
+    {
       key: 'ongoing',
       label: 'Ongoing',
-      value: kpis.total_ongoing.value,
+      value: ongoing,
       color: STATE_COLOR.ongoing,
-      href: ongoingLink(scope),
       icon: CircleDashed,
+      href: ongoingLink(scope),
+      foot: `${percent(pctOfPending(ongoing))} of pending`,
       kpi: kpis.total_ongoing,
       direction: KPI_DIRECTION.total_ongoing,
     },
     {
       key: 'problematic',
       label: 'Problematic',
-      value: kpis.total_problematic.value,
+      value: problematic,
       color: STATE_COLOR.problematic,
-      href: problematicLink(scope),
       icon: AlertTriangle,
+      href: problematicLink(scope),
+      foot: `${percent(pctOfPending(problematic))} of pending`,
       kpi: kpis.total_problematic,
       direction: KPI_DIRECTION.total_problematic,
       tone: 'problem',
     },
-    {
-      key: 'not_started',
-      label: 'Not started',
-      value: kpis.total_not_started.value,
-      color: STATE_COLOR.not_started,
-      href: notStartedLink(scope),
-      icon: Circle,
-      kpi: kpis.total_not_started,
-      direction: KPI_DIRECTION.total_not_started,
-    },
   ]
 
-  const tiles = states.map((s) => ({ ...s, share: pct(s.value) }))
-
-  // The bar reads done, problematic, ongoing, not started: the blocked work
-  // sits against the finished work rather than being buried at the far end,
-  // which is the adjacency somebody managing this programme wants to see, and
-  // the work nobody has begun trails the work that is under way.
-  //
-  // Not started is a segment rather than a footnote because it is where the
-  // Ongoing figure's missing sites went. Ongoing used to mean "not done and
-  // not problematic", so every on-air site with a blank DT status was drawn
-  // as work in flight; this segment is that population, told apart.
-  const ORDER = ['done', 'problematic', 'ongoing', 'not_started']
+  // The bar draws only the three states something is happening to, in that
+  // order: done sits against ongoing and problematic rather than being
+  // buried at the far end. Not started is the untouched backlog inside
+  // Pending and is never a segment — see BAR_LEGEND above.
+  const BAR_ORDER = ['done', 'ongoing', 'problematic']
+  const barValues = { done, ongoing, problematic }
+  const barColor = { done: STATE_COLOR.done, ongoing: STATE_COLOR.ongoing, problematic: STATE_COLOR.problematic }
+  const barLabel = { done: 'DT done', ongoing: 'Ongoing', problematic: 'Problematic' }
   // Only the states that actually have sites are drawn, and the bar's
   // description is built from the same list — a screen reader is told what
-  // the bar shows, not "Not started: 0, 0%" for every state that happens to
-  // be empty this month.
-  const segments = ORDER.map((key) => tiles.find((t) => t.key === key)).filter(
-    (s) => s && s.share > 0,
-  )
+  // the bar shows, not "Problematic: 0, 0%" for a state that is empty this
+  // month, and Not started is never named here at all.
+  const segments = BAR_ORDER.map((key) => ({
+    key,
+    label: barLabel[key],
+    value: barValues[key],
+    color: barColor[key],
+    share: pctOfOnair(barValues[key]),
+  })).filter((s) => s.share > 0)
 
   const breakdown = segments
     .map((s) => `${s.label}: ${count(s.value)}, ${percent(s.share)}`)
@@ -182,35 +223,45 @@ export default function KpiBand({ kpis, provinceId }) {
           <Link
             to={remainingLink(scope)}
             className="dt-backlog"
-            aria-label={`Remaining to target: ${remaining} sites`}
+            aria-label={`Pending: ${pending} sites`}
           >
             <b className="tnum">
-              <AnimatedNumber value={remaining} />
+              <AnimatedNumber value={pending} />
             </b>
-            <span>Remaining to Target</span>
+            <span>Pending</span>
           </Link>
           <DeltaChip delta={kpis.total_remaining.delta} direction={KPI_DIRECTION.total_remaining} />
         </div>
       </header>
 
-      <div
-        className="dt-hero-bar"
-        role="img"
-        aria-label={`${count(onair)} sites on air. ${breakdown}`}
-      >
-        {segments.map((s, i) => (
-          <motion.span
-            key={s.key}
-            data-testid="dt-hero-segment"
-            data-state={s.key}
-            className="dt-hero-segment"
-            style={{ background: s.color }}
-            title={`${s.label}: ${count(s.value)} (${percent(s.share)} of on-air)`}
-            initial={reduced ? false : { width: 0 }}
-            animate={{ width: `${s.share}%` }}
-            transition={{ duration: 0.7, delay: 0.05 + i * 0.1, ease: [0.16, 1, 0.3, 1] }}
-          />
-        ))}
+      <div className="dt-hero-bar-row">
+        <div
+          className="dt-hero-bar"
+          role="img"
+          aria-label={`${count(onair)} sites on air. ${breakdown}`}
+        >
+          {segments.map((s, i) => (
+            <motion.span
+              key={s.key}
+              data-testid="dt-hero-segment"
+              data-state={s.key}
+              className="dt-hero-segment"
+              style={{ background: s.color }}
+              title={`${s.label}: ${count(s.value)} (${percent(s.share)} of on-air)`}
+              initial={reduced ? false : { width: 0 }}
+              animate={{ width: `${s.share}%` }}
+              transition={{ duration: 0.7, delay: 0.05 + i * 0.1, ease: [0.16, 1, 0.3, 1] }}
+            />
+          ))}
+        </div>
+        <div className="dt-legend dt-hero-legend">
+          {BAR_LEGEND.map((l) => (
+            <span key={l.key} className="dt-legend-item">
+              <i style={{ background: l.color }} aria-hidden="true" />
+              {l.label}
+            </span>
+          ))}
+        </div>
       </div>
 
       <ul className="dt-state-tiles">
@@ -228,8 +279,8 @@ export default function KpiBand({ kpis, provinceId }) {
               </span>
               <span className="dt-state-figure tnum">{count(s.value)}</span>
               <span className="dt-state-foot">
-                <span className="dt-state-share tnum">{percent(s.share)} of on-air</span>
-                <DeltaChip delta={s.kpi.delta} direction={s.direction} small />
+                <span className="dt-state-share tnum">{s.foot}</span>
+                {s.kpi && <DeltaChip delta={s.kpi.delta} direction={s.direction} small />}
               </span>
             </Link>
           </li>

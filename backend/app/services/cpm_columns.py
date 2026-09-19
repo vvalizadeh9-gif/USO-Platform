@@ -185,6 +185,12 @@ def normalize_dt_status(value: object) -> str | None:
         return DT_STATUS_ONGOING
     if low == "problematic":
         return DT_STATUS_PROBLEMATIC
+    # "Problematical" is a misspelling that appears in real CPM issues (e.g.
+    # the June sheet, column AW) instead of "Problematic". Owner's decision:
+    # treat it the same, rather than let a typo sweep those sites into
+    # Not started.
+    if low == "problematical":
+        return DT_STATUS_PROBLEMATIC
     return text  # unknown — keep as-is rather than dropping data
 
 

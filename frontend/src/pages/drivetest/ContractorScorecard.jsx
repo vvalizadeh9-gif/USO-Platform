@@ -4,13 +4,7 @@ import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { STATE_COLOR, UNATTRIBUTED } from './constants'
 import { bookScale, count, percent, progressColor } from './format'
-import {
-  assignedLink,
-  doneLink,
-  notStartedLink,
-  ongoingLink,
-  problematicLink,
-} from './links'
+import { assignedLink, doneLink, ongoingLink } from './links'
 import BookBar from './charts/BookBar'
 
 /**
@@ -22,9 +16,9 @@ import BookBar from './charts/BookBar'
  * carries the company's name — a site sitting in a problem category, or one
  * sent out for a health check, has not been committed to them, and dividing
  * by it would mark a company down for work the programme never handed over.
- * Problematic sites keep a column, because they are worth seeing; they are
- * simply not part of the book being scored. The backend computes it the same
- * way — see `_contractor_scorecard`.
+ * Problematic and Not started sites are outside the assignment for the same
+ * reason and are not columns here — see the note under the table. The
+ * backend computes the assignment the same way — see `_contractor_scorecard`.
  *
  * WHAT CHANGED IN THE CHART. The rate used to be a fixed-width track with a
  * fill, one per row. Every row was therefore the same width, so a company at
@@ -51,13 +45,7 @@ const COLUMNS = [
   { key: 'assigned', label: 'Assignment', align: 'right', numeric: true },
   { key: 'done', label: 'DT done', align: 'right', numeric: true },
   { key: 'ongoing', label: 'Ongoing', align: 'right', numeric: true },
-  { key: 'problematic', label: 'Problematic', align: 'right', numeric: true },
-  // Outside the assignment, like Problematic: a site nobody has begun a
-  // drive test on is not work the company has been committed to. It is on
-  // the row because "you carry forty sites nobody has started" is the kind
-  // of thing this table exists to make visible.
-  { key: 'not_started', label: 'Not started', align: 'right', numeric: true },
-  { key: 'done_percent', label: 'Done', align: 'right', numeric: true },
+  { key: 'done_percent', label: 'Achievement', align: 'right', numeric: true },
 ]
 
 /** A contractor's assignment: drive tests finished plus sites still held.
@@ -197,23 +185,6 @@ export default function ContractorScorecard({ rows, provinceId }) {
                       {count(row.ongoing)}
                     </Link>
                   </td>
-                  <td className="tnum" style={{ textAlign: 'right' }}>
-                    {row.problematic > 0 ? (
-                      <Link
-                        to={problematicLink(cscope)}
-                        className="dt-cell-link dt-cell-link-bad"
-                      >
-                        {count(row.problematic)}
-                      </Link>
-                    ) : (
-                      count(row.problematic)
-                    )}
-                  </td>
-                  <td className="tnum dim" style={{ textAlign: 'right' }}>
-                    <Link to={notStartedLink(cscope)} className="dt-cell-link">
-                      {count(row.not_started ?? 0)}
-                    </Link>
-                  </td>
                   <td style={{ textAlign: 'right' }}>
                     <span
                       className="dt-rate"
@@ -252,6 +223,10 @@ export default function ContractorScorecard({ rows, provinceId }) {
           </tbody>
         </table>
       </div>
+      <p className="dt-note">
+        Assignment = DT done + Ongoing. Problematic sites are not part of a
+        contractor&rsquo;s assignment.
+      </p>
     </>
   )
 }

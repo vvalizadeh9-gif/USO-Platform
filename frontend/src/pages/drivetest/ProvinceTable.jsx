@@ -4,14 +4,7 @@ import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { PROVINCE_LIMIT, STATE_COLOR } from './constants'
 import { bookScale, count, percent, progressColor } from './format'
-import {
-  doneLink,
-  notStartedLink,
-  onairLink,
-  ongoingLink,
-  problematicLink,
-  remainingLink,
-} from './links'
+import { doneLink, onairLink, ongoingLink, problematicLink, remainingLink } from './links'
 import BookBar from './charts/BookBar'
 
 /**
@@ -35,6 +28,12 @@ import BookBar from './charts/BookBar'
  * work *is* as well as how far along it is — the same encoding the contractor
  * scorecard uses, so the two read alike. See `charts/BookBar`.
  *
+ * The bar splits Done, Ongoing and Problematic only, the same three states
+ * the table's own Not started column used to make a fourth of. A province
+ * with untouched sites therefore draws those three segments filling the
+ * whole bar rather than leaving a visible gap — see the note under the
+ * table, which is where that population is named instead.
+ *
  * Every count in a row opens that province's sites for that figure. They used
  * to be five numbers of which two were links, which is an odd thing for a row
  * of the same kind of number.
@@ -42,16 +41,12 @@ import BookBar from './charts/BookBar'
 
 const COLUMNS = [
   { key: 'name', label: 'Province', align: 'left', numeric: false },
-  { key: 'onair', label: 'On-air', align: 'right', numeric: true },
-  { key: 'done', label: 'Done', align: 'right', numeric: true },
+  { key: 'onair', label: 'On air', align: 'right', numeric: true },
+  { key: 'done', label: 'DT done', align: 'right', numeric: true },
   { key: 'remaining', label: 'Remaining', align: 'right', numeric: true },
   { key: 'ongoing', label: 'Ongoing', align: 'right', numeric: true },
   { key: 'problematic', label: 'Problematic', align: 'right', numeric: true },
-  // Ongoing, Problematic and Not started are the three parts of Remaining.
-  // Ongoing used to be all three at once — "not done and not problematic" —
-  // so the row read as though every untested site had work under way on it.
-  { key: 'not_started', label: 'Not started', align: 'right', numeric: true },
-  { key: 'done_percent', label: 'Progress', align: 'right', numeric: true },
+  { key: 'done_percent', label: 'Done %', align: 'right', numeric: true },
 ]
 
 export default function ProvinceTable({ rows, provinces, onProvince }) {
@@ -95,7 +90,7 @@ export default function ProvinceTable({ rows, provinces, onProvince }) {
       <div className="dt-key" aria-hidden="true">
         <span className="dt-key-item">
           <i style={{ background: STATE_COLOR.done }} />
-          Done
+          DT done
         </span>
         <span className="dt-key-item">
           <i style={{ background: STATE_COLOR.ongoing }} />
@@ -104,10 +99,6 @@ export default function ProvinceTable({ rows, provinces, onProvince }) {
         <span className="dt-key-item">
           <i style={{ background: STATE_COLOR.problematic }} />
           Problematic
-        </span>
-        <span className="dt-key-item">
-          <i style={{ background: STATE_COLOR.not_started }} />
-          Not started
         </span>
         <span className="dt-key-note">bar length is the province&rsquo;s on-air count</span>
       </div>
@@ -187,9 +178,6 @@ export default function ProvinceTable({ rows, provinces, onProvince }) {
                       count(row.problematic)
                     )}
                   </td>
-                  <td className="tnum dim" style={{ textAlign: 'right' }}>
-                    <Cell id={id} href={notStartedLink} value={row.not_started} />
-                  </td>
                   <td style={{ textAlign: 'right' }}>
                     <span className="dt-rate" style={{ color: progressColor(row.done_percent) }}>
                       {percent(row.done_percent)}
@@ -202,7 +190,7 @@ export default function ProvinceTable({ rows, provinces, onProvince }) {
                       scaleMax={scale}
                       index={i}
                       segments={[
-                        { key: 'done', label: 'Done', value: row.done, color: STATE_COLOR.done },
+                        { key: 'done', label: 'DT done', value: row.done, color: STATE_COLOR.done },
                         {
                           key: 'ongoing',
                           label: 'Ongoing',
@@ -214,12 +202,6 @@ export default function ProvinceTable({ rows, provinces, onProvince }) {
                           label: 'Problematic',
                           value: row.problematic,
                           color: STATE_COLOR.problematic,
-                        },
-                        {
-                          key: 'not_started',
-                          label: 'Not started',
-                          value: row.not_started,
-                          color: STATE_COLOR.not_started,
                         },
                       ]}
                     />
@@ -243,6 +225,11 @@ export default function ProvinceTable({ rows, provinces, onProvince }) {
           </tbody>
         </table>
       </div>
+      <p className="dt-note">
+        Remaining = On air − DT done. Ongoing + Problematic can be lower than
+        Remaining, because on-air sites with no DT status yet are counted in
+        Remaining only.
+      </p>
 
       {sorted.length > PROVINCE_LIMIT && (
         <div className="dt-expand">
