@@ -822,7 +822,7 @@ describe('the hero', () => {
     expect(hero.querySelector('.dt-hero-denominator')).toHaveTextContent('40 of 100 sites done')
   })
 
-  it('shows every on-air site in exactly one segment of the bar', async () => {
+  it('draws exactly three coloured segments, done/ongoing/problematic, summing to at most the whole bar', async () => {
     serve()
     draw()
 
@@ -832,26 +832,32 @@ describe('the hero', () => {
     const bar = within(hero).getByRole('img')
     expect(bar).toHaveAttribute(
       'aria-label',
-      '100 sites on air. Drive tests done: 40, 40%. Problematic: 10, 10%. Ongoing: 50, 50%',
+      '100 sites on air. DT done: 40, 40%. Ongoing: 50, 50%. Problematic: 10, 10%',
     )
     const segments = within(hero).getAllByTestId('dt-hero-segment')
-    // Three, not four: this fixture has no not-started sites, and an empty
-    // state is left out of the bar and out of its description rather than
-    // drawn as a zero-width segment nobody can see or hear.
     expect(segments).toHaveLength(3)
+    expect(segments.map((s) => s.getAttribute('data-state'))).toEqual([
+      'done',
+      'ongoing',
+      'problematic',
+    ])
     // Each segment names its own figure on hover, which is what makes a
     // two-per-cent segment cost nothing: it never has to be read inside.
     expect(segments.map((s) => s.getAttribute('title'))).toEqual([
-      'Drive tests done: 40 (40% of on-air)',
-      'Problematic: 10 (10% of on-air)',
+      'DT done: 40 (40% of on-air)',
       'Ongoing: 50 (50% of on-air)',
+      'Problematic: 10 (10% of on-air)',
     ])
+    const shares = segments.map((s) => Number(s.getAttribute('title').match(/\((\d+)%/)[1]))
+    expect(shares.reduce((a, b) => a + b, 0)).toBeLessThanOrEqual(100)
   })
 
-  it('draws not-started as its own segment rather than folding it into ongoing', async () => {
+  it('never draws or names a Not started segment, even when the fixture has one', async () => {
     // The regression this band is most exposed to. Ongoing used to mean "not
     // done and not problematic", so every on-air site with a blank DT status
-    // was drawn as work in flight. Here twelve of them are not.
+    // was drawn as work in flight. Not started is real here (12 sites) and is
+    // still never a fourth segment: it is the untouched part of Pending, so
+    // the bar leaves it to the neutral track and the legend names it instead.
     serve(planDelivery(), {
       ...overview,
       kpis: {
@@ -866,50 +872,103 @@ describe('the hero', () => {
     const segments = within(hero).getAllByTestId('dt-hero-segment')
     expect(segments.map((s) => s.getAttribute('data-state'))).toEqual([
       'done',
-      'problematic',
       'ongoing',
-      'not_started',
+      'problematic',
     ])
-    // Still the whole programme: the four states partition on-air.
-    const shares = segments.map((s) => Number(s.getAttribute('title').match(/\((\d+)%/)[1]))
-    expect(shares.reduce((a, b) => a + b, 0)).toBe(100)
-
-    const tile = within(hero).getByText('Not started').closest('.dt-state-tile')
-    expect(within(tile).getByText('12')).toBeInTheDocument()
-    expect(tile.closest('a')).toHaveAttribute(
-      'href',
-      '/drive-test/sites?bucket=not_started',
-    )
+    expect(within(hero).getByRole('img').getAttribute('aria-label')).not.toMatch(/not started/i)
+    expect(within(hero).queryByText('Not started')).not.toBeInTheDocument()
   })
 
-  it('puts each state in a tile whose size does not depend on its share', async () => {
-    // The point of keeping the figures out of the geometry. Problematic is
-    // ten per cent of the programme, and at the rate this programme really
-    // runs at it is nearer three — a segment too thin to label, and the one
-    // figure a reader scans this band for.
+  it('shows a small legend beside the bar naming all four segments, including the rest of pending', async () => {
     serve()
     draw()
 
     const hero = await screen.findByLabelText('Programme totals')
-    const tile = within(hero).getByText('Problematic').closest('.dt-state-tile')
-    expect(within(tile).getByText('10')).toBeInTheDocument()
-    expect(within(tile).getByText('10% of on-air')).toBeInTheDocument()
-    // And it is the one tile that carries its state as a background: it is
-    // the operational blocker on this page.
-    expect(tile).toHaveClass('dt-state-tile-problem')
+    const legend = hero.querySelector('.dt-legend')
+    expect(legend).toBeInTheDocument()
+    const items = within(legend).getAllByText(/DT done|Ongoing|Problematic|Rest of pending/)
+    expect(items.map((i) => i.textContent)).toEqual([
+      'DT done',
+      'Ongoing',
+      'Problematic',
+      'Rest of pending',
+    ])
   })
 
-  it('states the backlog as an accent badge rather than footer text', async () => {
-    // Remaining is not a fourth state — it is the two tiles that are not done
-    // added together — but it is the figure the programme is managed against,
-    // so it stops being a grey clause under a chart.
+  it('lists five tiles in order: on air, DT done, pending, ongoing, problematic', async () => {
     serve()
     draw()
 
     const hero = await screen.findByLabelText('Programme totals')
-    const badge = within(hero).getByLabelText('Remaining to target: 60 sites')
+    const names = within(hero)
+      .getAllByText(/^(On air|DT done|Pending|Ongoing|Problematic)$/, { selector: '.dt-state-name' })
+      .map((n) => n.textContent)
+    expect(names).toEqual(['On air', 'DT done', 'Pending', 'Ongoing', 'Problematic'])
+    expect(within(hero).queryByText('Not started')).not.toBeInTheDocument()
+  })
+
+  it.each([
+    ['On air', '100', 'launched sites', '/drive-test/sites?bucket=onair'],
+    ['DT done', '40', '40% of on air', '/drive-test/sites?bucket=done'],
+    ['Pending', '60', 'on air minus DT done', '/drive-test/sites?bucket=remaining'],
+    ['Ongoing', '50', '83% of pending', '/drive-test/sites?bucket=ongoing'],
+    ['Problematic', '10', '17% of pending', '/drive-test/sites?bucket=problematic'],
+  ])('the %s tile shows %s, "%s", and links to %s', async (label, value, foot, href) => {
+    serve()
+    draw()
+
+    const hero = await screen.findByLabelText('Programme totals')
+    const tile = within(hero).getByText(label, { selector: '.dt-state-name' }).closest('.dt-state-tile')
+    expect(within(tile).getByText(value)).toBeInTheDocument()
+    expect(within(tile).getByText(foot)).toBeInTheDocument()
+    expect(tile.closest('a')).toHaveAttribute('href', href)
+  })
+
+  it('shows 0% for ongoing and problematic feet when there is nothing pending', async () => {
+    serve(planDelivery(), {
+      ...overview,
+      kpis: {
+        ...overview.kpis,
+        total_dt_done: kpi(100),
+        total_remaining: kpi(0),
+        total_ongoing: kpi(0),
+        total_problematic: kpi(0),
+      },
+    })
+    draw()
+
+    const hero = await screen.findByLabelText('Programme totals')
+    const ongoingTile = within(hero).getByText('Ongoing', { selector: '.dt-state-name' }).closest('.dt-state-tile')
+    expect(within(ongoingTile).getByText('0% of pending')).toBeInTheDocument()
+    const problematicTile = within(hero).getByText('Problematic', { selector: '.dt-state-name' }).closest('.dt-state-tile')
+    expect(within(problematicTile).getByText('0% of pending')).toBeInTheDocument()
+  })
+
+  it('emphasises the Pending tile and keeps Problematic on its red wash', async () => {
+    serve()
+    draw()
+
+    const hero = await screen.findByLabelText('Programme totals')
+    const pendingTile = within(hero).getByText('Pending', { selector: '.dt-state-name' }).closest('.dt-state-tile')
+    expect(pendingTile).toHaveClass('dt-state-tile-pending')
+    const problematicTile = within(hero).getByText('Problematic', { selector: '.dt-state-name' }).closest('.dt-state-tile')
+    expect(problematicTile).toHaveClass('dt-state-tile-problem')
+  })
+
+  it('states the backlog as a "Pending" accent badge rather than footer text', async () => {
+    // Remaining is not drawn as a fourth state on the bar — it is Ongoing,
+    // Problematic and the untouched rest added together — but it is the
+    // figure the programme is managed against, so it stays the one accent
+    // badge in the band. The URL bucket is still "remaining"; only the words
+    // shown in the hero change.
+    serve()
+    draw()
+
+    const hero = await screen.findByLabelText('Programme totals')
+    const badge = within(hero).getByLabelText('Pending: 60 sites')
     expect(badge).toHaveTextContent('60')
-    expect(badge).toHaveTextContent('Remaining to Target')
+    expect(badge).toHaveTextContent('Pending')
+    expect(badge.closest('a')).toHaveAttribute('href', '/drive-test/sites?bucket=remaining')
   })
 
   it('no longer repeats the monthly figure the plan section already carries', async () => {
@@ -971,25 +1030,30 @@ describe('drill-through', () => {
     {
       name: 'the done tile',
       open: async () => await screen.findByLabelText('Programme totals'),
-      text: 'Drive tests done',
+      text: 'DT done',
+      // The bar's legend names the same segment beside it, so the tile name
+      // is picked out by its own class rather than matched by text alone.
+      selector: '.dt-state-name',
       href: '/drive-test/sites?bucket=done',
     },
     {
       name: 'the ongoing tile',
       open: async () => await screen.findByLabelText('Programme totals'),
       text: 'Ongoing',
+      selector: '.dt-state-name',
       href: '/drive-test/sites?bucket=ongoing',
     },
     {
       name: 'the problematic tile',
       open: async () => await screen.findByLabelText('Programme totals'),
       text: 'Problematic',
+      selector: '.dt-state-name',
       href: '/drive-test/sites?bucket=problematic',
     },
     {
       name: 'the backlog badge',
       open: async () => await screen.findByLabelText('Programme totals'),
-      label: 'Remaining to target: 60 sites',
+      label: 'Pending: 60 sites',
       href: '/drive-test/sites?bucket=remaining',
     },
     {
@@ -1042,14 +1106,14 @@ describe('drill-through', () => {
     },
   ]
 
-  it.each(CASES)('links $name to the sites behind it', async ({ open, text, label, href }) => {
+  it.each(CASES)('links $name to the sites behind it', async ({ open, text, label, href, selector }) => {
     serve()
     draw()
 
     const scope = await open()
     const link = label
       ? within(scope).getByRole('link', { name: label })
-      : within(scope).getByText(text).closest('a')
+      : within(scope).getByText(text, selector ? { selector } : undefined).closest('a')
     expect(link).toHaveAttribute('href', href)
   })
 
@@ -1058,10 +1122,9 @@ describe('drill-through', () => {
     draw('/reports/drive-test?province=7')
 
     const hero = await screen.findByLabelText('Programme totals')
-    expect(within(hero).getByText('Problematic').closest('a')).toHaveAttribute(
-      'href',
-      '/drive-test/sites?bucket=problematic&province_id=7',
-    )
+    expect(
+      within(hero).getByText('Problematic', { selector: '.dt-state-name' }).closest('a'),
+    ).toHaveAttribute('href', '/drive-test/sites?bucket=problematic&province_id=7')
   })
 
   it('links every cell of a contractor row, the denominator included', async () => {

@@ -1519,6 +1519,12 @@ a.dt-backlog:hover { box-shadow: var(--shadow-1); transform: translateY(-1px); }
   line-height: 1;
 }
 
+/* The bar and its legend sit on one line — the legend is what lets a
+   segment two per cent wide still be named without being read inside it. */
+.dt-hero-bar-row { display: flex; align-items: center; gap: 16px; }
+.dt-hero-bar-row .dt-hero-bar { flex: 1 1 auto; width: auto; }
+.dt-hero-bar-row .dt-hero-legend { margin-top: 0; flex-shrink: 0; }
+
 .dt-hero-bar {
   display: flex; width: 100%; height: 14px; overflow: hidden;
   border-radius: 999px; background: var(--dt-track);
@@ -1547,8 +1553,8 @@ a.dt-state-tile:hover {
   box-shadow: var(--shadow-1);
   transform: translateY(-1px);
 }
-/* Problematic is the operational blocker on this page, and the only tile
-   allowed to carry its state as a background. */
+/* Problematic is the operational blocker on this page, and carries its
+   state as a wash background. */
 .dt-state-tile-problem {
   background: var(--dt-problem-wash);
   border-color: rgba(207, 59, 59, 0.26);
@@ -1557,6 +1563,14 @@ a.dt-state-tile:hover {
 .dt-state-tile-problem .dt-state-name,
 .dt-state-tile-problem .dt-state-share { color: var(--dt-problem); opacity: 0.86; }
 a.dt-state-tile-problem:hover { border-color: rgba(207, 59, 59, 0.5); }
+
+/* Pending is what the programme is actually managed against, so it is the
+   one tile emphasised without a state colour — the surface a level up from
+   the others, and a border strong enough to read as singled out. */
+.dt-state-tile-pending {
+  background: var(--surface-1);
+  border-color: var(--border);
+}
 .dt-state-head { display: flex; align-items: center; gap: 8px; }
 .dt-state-mark {
   display: grid; place-items: center; width: 20px; height: 20px;
