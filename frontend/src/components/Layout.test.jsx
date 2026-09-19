@@ -65,9 +65,13 @@ describe('the Drive Test Project section', () => {
     ])
   })
 
-  it('shows a contractor only their own two screens', () => {
+  it('shows a contractor only their own three screens', () => {
     sidebarAs('Contractor')
-    expect(itemsUnder('Drive Test Project')).toEqual(['Monthly Plan', 'My Health Check'])
+    expect(itemsUnder('Drive Test Project')).toEqual([
+      'Monthly Plan',
+      'My Health Check',
+      'My Drive Tests',
+    ])
   })
 
   it('does not offer a contractor the Drive Test work screen', () => {

@@ -14,6 +14,8 @@ Each function answers one question about live state:
 ``dt_assignment``            confirmed-Ready sites awaiting an official DT
 ``dt_in_progress``           assigned sites the contractor still owes a DT for
 ``dt_review``                drive tests awaiting approval
+``contractor_dt_todo``       one contractor's own slice of ``dt_in_progress``
+``contractor_dt_submitted``  one contractor's own drive tests awaiting review
 ===========================  ==================================================
 
 Every one is province-scoped through ``visible_work_item_ids``, the same as
@@ -407,6 +409,110 @@ def dt_review(db: Session, user: User) -> list[dict]:
             }
         )
     return out
+
+
+# --------------------------------------------------------------------------
+# My Drive Tests -- one contractor's own view of dt_in_progress / dt_review
+# --------------------------------------------------------------------------
+def _own_active_assignment(wi: WorkItem, contractor_id: int) -> Assignment | None:
+    """This work item's active assignment, if it is currently this company's.
+
+    ``apply_work_item_scope`` already lets a contractor see every site it has
+    *ever* held, which is right for history and too wide for "what do I still
+    owe" -- a site reassigned away to a different company must not still show
+    up in the original contractor's To Do list. This is the one extra check
+    that narrows a scoped work item down to "and it is still mine right now".
+    """
+    active = _latest_active(wi.assignments)
+    if active is None or active.contractor_id != contractor_id:
+        return None
+    return active
+
+
+def contractor_dt_todo(db: Session, user: User) -> list[dict]:
+    """One contractor's To Do tab: their own rows of ``dt_in_progress``.
+
+    Deliberately built by filtering ``scoped_work_items`` down to this
+    company's own active assignments and handing the result to
+    ``dt_in_progress`` -- the same "still owes a drive test" predicate PM and
+    Coordinator see, reused rather than re-written, so the two can never
+    silently disagree about what belongs in a To Do queue.
+    """
+    if user.contractor_id is None:
+        return []
+
+    work_items = [
+        wi for wi in scoped_work_items(db, user)
+        if _own_active_assignment(wi, user.contractor_id) is not None
+    ]
+    rows = dt_in_progress(db, user, work_items=work_items)
+
+    latest_dt = _active_drive_test_by_work_item(db, user)
+    for row in rows:
+        dt = latest_dt.get(row["work_item_id"])
+        row["active_drive_test_id"] = dt.id if dt else None
+    return rows
+
+
+def contractor_dt_submitted(db: Session, user: User) -> list[dict]:
+    """One contractor's Submitted tab: their own drive tests awaiting review.
+
+    Read-only, like ``dt_review`` -- every row here is waiting on a PM or
+    Coordinator, not on the contractor reading it. Scoped to this company's
+    own active assignments the same way ``contractor_dt_todo`` is, rather
+    than to everything the contractor has ever held.
+    """
+    if user.contractor_id is None:
+        return []
+
+    work_item_ids = [
+        wi.id for wi in scoped_work_items(db, user)
+        if _own_active_assignment(wi, user.contractor_id) is not None
+    ]
+    if not work_item_ids:
+        return []
+
+    rows = (
+        db.execute(
+            select(DriveTest, WorkItem, Site)
+            .join(WorkItem, DriveTest.work_item_id == WorkItem.id)
+            .join(Site, WorkItem.site_id == Site.id)
+            .where(
+                DriveTest.is_active.is_(True),
+                DriveTest.status == "Submitted",
+                DriveTest.work_item_id.in_(work_item_ids),
+            )
+            .options(selectinload(DriveTest.evidence))
+            .order_by(DriveTest.submitted_at.asc(), DriveTest.id.asc())
+        )
+        .all()
+    )
+
+    out = []
+    for dt, wi, site in rows:
+        submitted_at = _aware(dt.submitted_at or dt.created_at)
+        out.append(
+            {
+                "work_item_id": wi.id,
+                "drive_test_id": dt.id,
+                "site_code": site.site_code,
+                "province": site.province.name if site.province else None,
+                "execution_date": dt.execution_date,
+                "submitted_at": submitted_at,
+                "days_waiting": _days_since(submitted_at) or 0,
+                "evidence_filenames": [e.original_filename for e in dt.evidence],
+            }
+        )
+    return out
+
+
+def contractor_dt_counts(db: Session, user: User) -> dict[str, int]:
+    """Counted by running the same two functions the tabs use -- see ``counts``
+    above for why: a badge that disagrees with its list is worse than none."""
+    return {
+        "todo": len(contractor_dt_todo(db, user)),
+        "submitted": len(contractor_dt_submitted(db, user)),
+    }
 
 
 # --------------------------------------------------------------------------

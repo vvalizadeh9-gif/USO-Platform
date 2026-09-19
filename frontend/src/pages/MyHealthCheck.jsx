@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import api from '../api/client'
 import { useToast } from '../context/ToastContext'
+import LifecycleStrip from '../components/LifecycleStrip'
 import { EmptyState, Loading, PageHead } from '../components/ui'
 
 export default function MyHealthCheck() {
@@ -40,6 +41,9 @@ export default function MyHealthCheck() {
         title="My Health Check Assignments"
         subtitle="Submit Ready / Not Ready per technology, in-app or by bulk Excel upload."
       />
+
+      <LifecycleStrip current="hc" variant="contractor" />
+
       {assignments.length === 0 ? (
         <div className="card card-pad"><EmptyState title="No assignments yet" hint="Health check assignments appear here." /></div>
       ) : (

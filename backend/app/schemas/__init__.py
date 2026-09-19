@@ -1017,6 +1017,37 @@ class DtInProgressRow(BaseModel):
     sent_back_at: datetime | None = None
 
 
+class MyDtTodoRow(DtInProgressRow):
+    """A contractor's own To Do row: ``DtInProgressRow`` plus the drive test
+    to attach a submission to, when one is already active (a resubmission
+    after being sent back)."""
+
+    active_drive_test_id: int | None = None
+
+
+class MyDtSubmittedRow(BaseModel):
+    """A contractor's own submitted drive test, awaiting review.
+
+    Carries evidence file names, not the files or reviewer identity -- this
+    is read-only for the contractor, and it is their own submission, not the
+    reviewer's queue.
+    """
+
+    work_item_id: int
+    drive_test_id: int
+    site_code: str | None = None
+    province: str | None = None
+    execution_date: date | None = None
+    submitted_at: datetime | None = None
+    days_waiting: int = 0
+    evidence_filenames: list[str] = []
+
+
+class MyDtCounts(BaseModel):
+    todo: int = 0
+    submitted: int = 0
+
+
 class DtReviewRow(BaseModel):
     drive_test_id: int
     work_item_id: int

@@ -1,14 +1,14 @@
 import { motion } from 'framer-motion'
-import { ArrowLeft, CheckCircle2, ChevronDown, CornerUpLeft, Paperclip, Radio, XCircle } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { ArrowLeft, CheckCircle2, XCircle } from 'lucide-react'
+import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import api from '../api/client'
 import { useAuth } from '../context/AuthContext'
 import { canReview } from '../lib/roles'
 import { useToast } from '../context/ToastContext'
 import { ConfirmDialog, Loading, PageHead, StatusPill } from '../components/ui'
-import DateField from '../components/DateField'
-import { daysBetween, todayIso } from '../lib/dates'
+import DriveTestSubmitForm from '../components/DriveTestSubmitForm'
+import ReturnToCoordinatorForm from '../components/ReturnToCoordinatorForm'
 
 export default function WorkItemDetail() {
   const { id } = useParams()
@@ -84,7 +84,7 @@ export default function WorkItemDetail() {
           )}
 
           {maySubmitDt && (
-            <DriveTestSubmitAction
+            <DriveTestSubmitForm
               onSubmit={(payload) =>
                 action(
                   () => api.post(`/work-items/${id}/drive-test`, payload),
@@ -92,7 +92,7 @@ export default function WorkItemDetail() {
                 )
               }
               footer={mayReturn && (
-                <ReturnToCoordinatorAction onSubmit={(payload) =>
+                <ReturnToCoordinatorForm onSubmit={(payload) =>
                   action(() => api.post(`/work-items/${id}/return-to-coordinator`, payload), 'Site returned to coordinator')
                 } />
               )}
@@ -223,113 +223,6 @@ function AssignAction({ contractors, onSubmit }) {
   )
 }
 
-// Contractor records when the drive test was actually executed and attaches
-// the report. A PM or Coordinator picks it up for approval; approving is what
-// marks the site DT Done on the dashboard.
-//
-// The date field is open. It used to be capped at today with Today/Yesterday
-// chips, which assumed drive tests get logged the day they happen — the
-// backend never had that restriction, so the rule only ever existed in this
-// form. A date far from today gets a note rather than a second hard rule: the
-// contractor is the one who knows when they drove the route.
-function DriveTestSubmitAction({ onSubmit, footer }) {
-  const today = todayIso()
-  const [date, setDate] = useState(today)
-  const [files, setFiles] = useState([])
-  const [busy, setBusy] = useState(false)
-  const fileRef = useRef(null)
-  const toast = useToast()
-
-  const submit = async () => {
-    setBusy(true)
-    try {
-      const created = await onSubmit({ execution_date: date })
-      const driveTestId = created?.drive_test_id
-      if (driveTestId && files.length) {
-        for (const file of files) {
-          const form = new FormData()
-          form.append('file', file)
-          await api.post(`/drive-tests/${driveTestId}/evidence`, form, {
-            headers: { 'Content-Type': 'multipart/form-data' },
-          })
-        }
-      }
-    } catch (err) {
-      toast.error(
-        'Report not attached',
-        err.response?.data?.detail ||
-          'The drive test was submitted, but the file did not upload. Open the site again to retry.',
-      )
-    } finally {
-      setBusy(false)
-      setFiles([])
-    }
-  }
-
-  const dayDelta = daysBetween(today, date)
-  const unusualDate = dayDelta !== null && (dayDelta < 0 || dayDelta > 60)
-
-  return (
-    <div className="card card-pad">
-      <div className="row" style={{ gap: 8, marginBottom: 4, color: 'var(--signal)' }}>
-        <Radio size={17} />
-        <h3 style={{ fontSize: 15 }}>Submit drive test</h3>
-      </div>
-      <p className="muted" style={{ fontSize: 13, marginBottom: 18, maxWidth: '60ch' }}>
-        Record when the drive test was carried out and attach the report. A PM or
-        coordinator approves it — approval is what counts the site as DT Done.
-      </p>
-
-      <div className="field-pair">
-        <div className="field">
-          <label htmlFor="dt-date">Date the drive test was carried out</label>
-          <DateField id="dt-date" value={date} onChange={setDate} />
-          {unusualDate && (
-            <small className="field-warning">
-              {dayDelta < 0
-                ? 'That date is in the future — check it before submitting.'
-                : `That is ${dayDelta} days ago. Fine if the drive test really was that long ago.`}
-            </small>
-          )}
-        </div>
-
-        <div className="field">
-          <label>Report / measurement files</label>
-          <div className="row wrap" style={{ gap: 8 }}>
-            <button className="btn btn-sm" onClick={() => fileRef.current?.click()}>
-              <Paperclip size={14} /> Attach file
-            </button>
-            <input
-              ref={fileRef}
-              type="file"
-              hidden
-              multiple
-              onChange={(e) => setFiles([...e.target.files])}
-            />
-            <span className="dim" style={{ fontSize: 12.5 }}>
-              {files.length > 0 ? files.map((f) => f.name).join(', ') : 'No files yet'}
-            </span>
-          </div>
-          <small className="dim" style={{ fontSize: 12 }}>
-            Optional, but the reviewer approves against this.
-          </small>
-        </div>
-      </div>
-
-      <button
-        className="btn btn-primary"
-        style={{ padding: '11px 22px', marginTop: 4 }}
-        disabled={!date || busy}
-        onClick={submit}
-      >
-        {busy ? 'Submitting…' : 'Submit for review'}
-      </button>
-
-      {footer && <div className="card-foot">{footer}</div>}
-    </div>
-  )
-}
-
 // The coordinator's decision point. Approving is terminal — it moves the site
 // to its final stage AND writes dt_status='Done' through to the work item,
 // which is what makes the Drive Test dashboard's DT Done KPI move. Rejecting
@@ -405,70 +298,3 @@ function CoordinatorReviewAction({ submissionDate, onDecide }) {
   )
 }
 
-// The small fraction of assignments a contractor genuinely can't proceed
-// with (road blocked, site down, access denied...). Hands the site back to
-// the coordinator/PM queue with a required reason, instead of forcing a
-// pointless drive-test submission.
-//
-// Collapsed by default. It is the rare path, and open it took as much of the
-// panel as the drive test itself — the thing the contractor came here to do.
-function ReturnToCoordinatorAction({ onSubmit }) {
-  const [open, setOpen] = useState(false)
-  const [reason, setReason] = useState('')
-  const [confirming, setConfirming] = useState(false)
-  const [busy, setBusy] = useState(false)
-
-  const confirm = async () => {
-    setBusy(true)
-    await onSubmit({ reason })
-    setBusy(false)
-    setConfirming(false)
-    setReason('')
-    setOpen(false)
-  }
-
-  return (
-    <div>
-      <button className="disclosure" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
-        <CornerUpLeft size={15} />
-        Can't proceed with this site?
-        <ChevronDown
-          size={14}
-          style={{ opacity: 0.6, transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.15s' }}
-        />
-      </button>
-
-      {open && (
-        <div style={{ marginTop: 12, maxWidth: 480 }}>
-          <div className="field">
-            <label>Reason (road blocked, site down, access denied…)</label>
-            <textarea
-              className="input"
-              rows={2}
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-              placeholder="Describe why this site can't be drive-tested right now"
-            />
-          </div>
-          <button
-            className="btn"
-            disabled={reason.trim().length < 3}
-            onClick={() => setConfirming(true)}
-          >
-            Return to coordinator
-          </button>
-        </div>
-      )}
-
-      <ConfirmDialog
-        open={confirming}
-        title="Return this site to the coordinator?"
-        message="The coordinator and PM will be notified with your reason, and this site leaves your queue until it's reassigned."
-        confirmLabel="Yes, return it"
-        busy={busy}
-        onConfirm={confirm}
-        onCancel={() => setConfirming(false)}
-      />
-    </div>
-  )
-}

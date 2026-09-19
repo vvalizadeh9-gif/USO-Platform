@@ -37,11 +37,13 @@ from app.schemas import (
     AssignmentCreate,
     BulkAssignmentCreate,
     DriveTestCreate,
+    MyDtCounts,
     ReturnToCoordinatorRequest,
     ReviewRequest,
 )
 from app.services import acceptance_workflow as acceptance_flow
 from app.services import evidence_store
+from app.services import hc_queues
 from app.services import health_check as hc
 from app.services.audit import notify_roles, record_audit
 from app.services.visibility import apply_work_item_scope, visible_work_item_ids
@@ -382,6 +384,39 @@ def review_drive_test(
         )
     db.commit()
     return {"status": "ok", "stage": wi.current_stage}
+
+
+# ---------------- My Drive Tests (contractor) ----------------
+#
+# One place for a contractor to work instead of knowing which sites to open on
+# Work Items. To Do is exactly the PM/Coordinator's dt_in_progress queue,
+# narrowed to this company's own active assignments -- see
+# ``hc_queues.contractor_dt_todo`` for why that reuses the predicate rather
+# than re-writing it. The Work Item page's own submit path is unchanged and
+# stays working; this is a second way to reach the same endpoints, not a
+# replacement for them.
+@router.get("/drive-tests/my/queue")
+def my_dt_queue(
+    tab: str,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_roles(CONTRACTOR)),
+):
+    """A contractor's own queue: sites still owed (``todo``) or already
+    submitted and awaiting review (``submitted``)."""
+    if tab == "todo":
+        return hc_queues.contractor_dt_todo(db, user)
+    if tab == "submitted":
+        return hc_queues.contractor_dt_submitted(db, user)
+    raise HTTPException(400, "tab must be 'todo' or 'submitted'")
+
+
+@router.get("/drive-tests/my/counts", response_model=MyDtCounts)
+def my_dt_counts(
+    db: Session = Depends(get_db),
+    user: User = Depends(require_roles(CONTRACTOR)),
+):
+    """Tab badge counts, computed with the same functions as the lists."""
+    return hc_queues.contractor_dt_counts(db, user)
 
 
 # ---------------- Drive-test evidence ----------------
