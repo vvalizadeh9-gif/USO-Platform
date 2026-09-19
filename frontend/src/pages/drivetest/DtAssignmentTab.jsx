@@ -2,6 +2,7 @@ import { Radio, Search } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import api from '../../api/client'
 import BulkActionBar from '../../components/BulkActionBar'
+import ProvinceFilter from '../../components/ProvinceFilter'
 import SiteHistoryDrawer, { SiteCodeButton } from '../../components/SiteHistoryDrawer'
 import WaitingPill from '../../components/WaitingPill'
 import { EmptyState, Loading } from '../../components/ui'
@@ -26,6 +27,7 @@ export default function DtAssignmentTab({ onCountChange }) {
   const [selected, setSelected] = useState(() => new Set())
   const [contractorId, setContractorId] = useState('')
   const [query, setQuery] = useState('')
+  const [provinceSel, setProvinceSel] = useState(() => new Set())
   const [busy, setBusy] = useState(false)
   const [history, setHistory] = useState({ id: null, code: null })
 
@@ -45,12 +47,28 @@ export default function DtAssignmentTab({ onCountChange }) {
     api.get('/reference/contractors').then((r) => setContractors(r.data)).catch(() => {})
   }, [])
 
+  const provinceOptions = useMemo(() => {
+    if (!rows) return []
+    return [...new Set(rows.map((r) => r.province).filter(Boolean))].sort()
+  }, [rows])
+
   const filtered = useMemo(() => {
     if (!rows) return []
     const q = query.trim().toLowerCase()
-    if (!q) return rows
-    return rows.filter((r) => (r.site_code || '').toLowerCase().includes(q))
-  }, [rows, query])
+    return rows.filter((r) => {
+      if (provinceSel.size && !provinceSel.has(r.province)) return false
+      if (!q) return true
+      return (r.site_code || '').toLowerCase().includes(q)
+    })
+  }, [rows, query, provinceSel])
+
+  function toggleProvince(p) {
+    setProvinceSel((s) => {
+      const next = new Set(s)
+      next.has(p) ? next.delete(p) : next.add(p)
+      return next
+    })
+  }
 
   // A filter can hide a row that is still selected. Selection only ever
   // covers what's on screen, so a hidden row drops out rather than being
@@ -110,17 +128,32 @@ export default function DtAssignmentTab({ onCountChange }) {
   return (
     <div className="card" style={{ overflow: 'hidden' }}>
       <div className="card-pad" style={{ paddingBottom: 12 }}>
-        <div style={{ position: 'relative', marginBottom: 12 }}>
-          <Search size={15} style={{ position: 'absolute', left: 10, top: 11, color: 'var(--text-dim)' }} />
-          <input
-            className="input"
-            style={{ paddingLeft: 32 }}
-            placeholder="Search site ID…"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
+        <div className="row between wrap" style={{ gap: 12 }}>
+          <div style={{ position: 'relative', flex: 1, minWidth: 200 }}>
+            <Search size={15} style={{ position: 'absolute', left: 10, top: 11, color: 'var(--text-dim)' }} />
+            <input
+              className="input"
+              style={{ paddingLeft: 32 }}
+              placeholder="Search site ID…"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+            />
+          </div>
+          <ProvinceFilter
+            options={provinceOptions}
+            selected={provinceSel}
+            onToggle={toggleProvince}
+            onClear={() => setProvinceSel(new Set())}
           />
         </div>
-        <div className="dim" style={{ fontSize: 11.5 }}>Sorted: waiting longest first</div>
+        <div className="row between" style={{ marginTop: 8 }}>
+          <span className="dim" style={{ fontSize: 11.5 }}>Sorted: waiting longest first</span>
+          {(query.trim() || provinceSel.size > 0) && (
+            <span className="dim" style={{ fontSize: 11.5 }}>
+              {filtered.length} of {rows.length}
+            </span>
+          )}
+        </div>
       </div>
 
       <div style={{ maxHeight: 520, overflowY: 'auto' }}>

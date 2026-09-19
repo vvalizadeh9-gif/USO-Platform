@@ -1,10 +1,11 @@
 import { motion } from 'framer-motion'
-import { ChevronRight, X } from 'lucide-react'
-import { useCallback, useEffect, useState } from 'react'
+import { ChevronRight, Search, X } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import api from '../api/client'
 import DriveTestSubmitForm from '../components/DriveTestSubmitForm'
 import LifecycleStrip from '../components/LifecycleStrip'
+import ProvinceFilter from '../components/ProvinceFilter'
 import ReturnToCoordinatorForm from '../components/ReturnToCoordinatorForm'
 import SiteHistoryDrawer, { SiteCodeButton } from '../components/SiteHistoryDrawer'
 import WaitingPill from '../components/WaitingPill'
@@ -31,6 +32,8 @@ export default function MyDriveTests() {
   const [counts, setCounts] = useState({})
   const [openId, setOpenId] = useState(null)
   const [history, setHistory] = useState({ id: null, code: null })
+  const [query, setQuery] = useState('')
+  const [provinceSel, setProvinceSel] = useState(() => new Set())
 
   const loadCounts = useCallback(() => {
     api.get('/drive-tests/my/counts').then((r) => setCounts(r.data)).catch(() => {})
@@ -55,9 +58,34 @@ export default function MyDriveTests() {
     setRows(null)
     setTab(next)
     setOpenId(null)
+    setQuery('')
+    setProvinceSel(new Set())
     const params = new URLSearchParams(searchParams)
     params.set('tab', next)
     setSearchParams(params, { replace: true })
+  }
+
+  const provinceOptions = useMemo(() => {
+    if (!rows) return []
+    return [...new Set(rows.map((r) => r.province).filter(Boolean))].sort()
+  }, [rows])
+
+  const filtered = useMemo(() => {
+    if (!rows) return []
+    const q = query.trim().toLowerCase()
+    return rows.filter((r) => {
+      if (provinceSel.size && !provinceSel.has(r.province)) return false
+      if (!q) return true
+      return (r.site_code || '').toLowerCase().includes(q)
+    })
+  }, [rows, query, provinceSel])
+
+  function toggleProvince(p) {
+    setProvinceSel((s) => {
+      const next = new Set(s)
+      next.has(p) ? next.delete(p) : next.add(p)
+      return next
+    })
   }
 
   // Shared by submit and return: close the panel, reload the lists and
@@ -105,36 +133,70 @@ export default function MyDriveTests() {
 
       {rows === null ? (
         <Loading label="Loading your sites" />
-      ) : tab === 'todo' ? (
-        <div className="mydt-grid">
-          <ToDoTable
-            rows={rows}
-            openId={openId}
-            onFillIn={setOpenId}
-            onOpenHistory={(id, code) => setHistory({ id, code })}
-          />
-          {active && (
-            <ToDoPanel
-              key={active.work_item_id}
-              row={active}
-              onClose={() => setOpenId(null)}
-              onSubmit={(payload) =>
-                action(
-                  () => api.post(`/work-items/${active.work_item_id}/drive-test`, payload),
-                  'Drive test submitted for review',
-                )
-              }
-              onReturn={(payload) =>
-                action(
-                  () => api.post(`/work-items/${active.work_item_id}/return-to-coordinator`, payload),
-                  'Site returned to coordinator',
-                )
-              }
-            />
-          )}
-        </div>
       ) : (
-        <SubmittedTable rows={rows} onOpenHistory={(id, code) => setHistory({ id, code })} />
+        <>
+          {rows.length > 0 && (
+            <div className="card card-pad" style={{ marginBottom: 16 }}>
+              <div className="row between wrap" style={{ gap: 12 }}>
+                <div style={{ position: 'relative', flex: 1, minWidth: 200 }}>
+                  <Search size={15} style={{ position: 'absolute', left: 10, top: 11, color: 'var(--text-dim)' }} />
+                  <input
+                    className="input"
+                    style={{ paddingLeft: 32 }}
+                    placeholder="Search site ID…"
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                  />
+                </div>
+                <ProvinceFilter
+                  options={provinceOptions}
+                  selected={provinceSel}
+                  onToggle={toggleProvince}
+                  onClear={() => setProvinceSel(new Set())}
+                />
+              </div>
+              {(query.trim() || provinceSel.size > 0) && (
+                <div className="row" style={{ marginTop: 8, justifyContent: 'flex-end' }}>
+                  <span className="dim" style={{ fontSize: 11.5 }}>
+                    {filtered.length} of {rows.length}
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
+
+          {tab === 'todo' ? (
+            <div className="mydt-grid">
+              <ToDoTable
+                rows={filtered}
+                openId={openId}
+                onFillIn={setOpenId}
+                onOpenHistory={(id, code) => setHistory({ id, code })}
+              />
+              {active && (
+                <ToDoPanel
+                  key={active.work_item_id}
+                  row={active}
+                  onClose={() => setOpenId(null)}
+                  onSubmit={(payload) =>
+                    action(
+                      () => api.post(`/work-items/${active.work_item_id}/drive-test`, payload),
+                      'Drive test submitted for review',
+                    )
+                  }
+                  onReturn={(payload) =>
+                    action(
+                      () => api.post(`/work-items/${active.work_item_id}/return-to-coordinator`, payload),
+                      'Site returned to coordinator',
+                    )
+                  }
+                />
+              )}
+            </div>
+          ) : (
+            <SubmittedTable rows={filtered} onOpenHistory={(id, code) => setHistory({ id, code })} />
+          )}
+        </>
       )}
 
       <SiteHistoryDrawer

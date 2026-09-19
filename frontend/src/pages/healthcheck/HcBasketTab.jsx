@@ -1,9 +1,10 @@
-import { ClipboardCheck, Search, ChevronDown } from 'lucide-react'
+import { ClipboardCheck, Search } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import api from '../../api/client'
 import { useToast } from '../../context/ToastContext'
 import { EmptyState, Loading } from '../../components/ui'
 import BulkActionBar from '../../components/BulkActionBar'
+import ProvinceFilter from '../../components/ProvinceFilter'
 import WaitingPill from '../../components/WaitingPill'
 
 function BasketBadge({ count }) {
@@ -40,7 +41,6 @@ export default function HcBasketTab({ onCountChange } = {}) {
   const [contractorId, setContractorId] = useState('')
   const [query, setQuery] = useState('')
   const [provinceSel, setProvinceSel] = useState(new Set())
-  const [provMenu, setProvMenu] = useState(false)
   const [busy, setBusy] = useState(false)
 
   function load() {
@@ -148,65 +148,21 @@ export default function HcBasketTab({ onCountChange } = {}) {
               onChange={(e) => setQuery(e.target.value)}
             />
           </div>
-          <div style={{ position: 'relative' }}>
-            <button
-              type="button"
-              className="input text-data row between"
-              style={{ minWidth: 180, gap: 8, cursor: 'pointer' }}
-              onClick={() => setProvMenu((o) => !o)}
-            >
-              <span>
-                {provinceSel.size === 0
-                  ? 'All provinces'
-                  : `${provinceSel.size} province${provinceSel.size > 1 ? 's' : ''}`}
-              </span>
-              <ChevronDown size={15} style={{ color: 'var(--text-dim)' }} />
-            </button>
-            {provMenu && (
-              <>
-                <div
-                  style={{ position: 'fixed', inset: 0, zIndex: 40 }}
-                  onClick={() => setProvMenu(false)}
-                />
-                <div
-                  className="card"
-                  style={{
-                    position: 'absolute', top: 'calc(100% + 4px)', left: 0, zIndex: 50,
-                    width: 240, maxHeight: 300, overflowY: 'auto', padding: 6,
-                    boxShadow: 'var(--shadow-lg, 0 10px 30px rgba(0,0,0,0.15))',
-                  }}
-                >
-                  <div className="row between" style={{ padding: '4px 8px 6px' }}>
-                    <span className="dim" style={{ fontSize: 12 }}>{provinceSel.size} selected</span>
-                    {provinceSel.size > 0 && (
-                      <button className="btn btn-ghost btn-sm" style={{ fontSize: 11.5 }} onClick={() => setProvinceSel(new Set())}>
-                        Clear
-                      </button>
-                    )}
-                  </div>
-                  {provinceOptions.length === 0 && (
-                    <div className="dim" style={{ padding: '6px 8px', fontSize: 12.5 }}>No provinces</div>
-                  )}
-                  {provinceOptions.map((p) => (
-                    <label
-                      key={p}
-                      className="row"
-                      style={{ gap: 8, padding: '6px 8px', borderRadius: 6, cursor: 'pointer', fontSize: 13 }}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={provinceSel.has(p)}
-                        onChange={() => toggleProvince(p)}
-                      />
-                      <span className="text-data">{p}</span>
-                    </label>
-                  ))}
-                </div>
-              </>
-            )}
-          </div>
+          <ProvinceFilter
+            options={provinceOptions}
+            selected={provinceSel}
+            onToggle={toggleProvince}
+            onClear={() => setProvinceSel(new Set())}
+          />
         </div>
-        <div className="dim" style={{ fontSize: 11.5, marginTop: 8 }}>Sorted: waiting longest first</div>
+        <div className="row between" style={{ marginTop: 8 }}>
+          <span className="dim" style={{ fontSize: 11.5 }}>Sorted: waiting longest first</span>
+          {(query.trim() || provinceSel.size > 0) && (
+            <span className="dim" style={{ fontSize: 11.5 }}>
+              {filtered.length} of {basket.length}
+            </span>
+          )}
+        </div>
       </div>
 
       {filtered.length === 0 ? (
