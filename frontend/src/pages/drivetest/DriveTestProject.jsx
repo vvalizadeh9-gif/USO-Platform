@@ -11,12 +11,12 @@ import PlanDelivery from './PlanDelivery'
 import ProvinceTable from './ProvinceTable'
 import Section from './Section'
 import Toolbar from './Toolbar'
+import FlowChart, { flowHasActivity } from './charts/FlowChart'
 import FlowLedger from './charts/FlowLedger'
-import TrendChart from './charts/TrendChart'
-import { AGE_RAMP, PROVINCE_LIMIT, STATE_COLOR, TREND_SERIES } from './constants'
+import { AGE_RAMP, PROVINCE_LIMIT, STATE_COLOR } from './constants'
 import { count } from './format'
 import { ongoingLink, problematicLink } from './links'
-import { TREND_WINDOWS, useDashboard } from './useDashboard'
+import { useDashboard } from './useDashboard'
 
 /**
  * The Drive Test dashboard.
@@ -67,8 +67,6 @@ const PROBLEMATIC_TABS = [
   { key: 'province', label: 'Province' },
 ]
 
-const TREND_LABELS = Object.fromEntries(TREND_SERIES.map((s) => [s.key, s.label]))
-
 /** Top `limit` points with the tail folded into one line.
  *
  * The remainder line is not decoration — it is what keeps a truncated view
@@ -88,8 +86,7 @@ export default function DriveTestProject() {
     overview,
     plan,
     trend,
-    trendMonths,
-    setTrendMonths,
+    flow,
     provinceId,
     setProvince,
     refresh,
@@ -417,28 +414,18 @@ export default function DriveTestProject() {
         <div className="dt-pair">
           <Section
             title="Where this is going"
-            subtitle={
-              trend.data?.months?.length
-                ? `Last ${trend.data.months.length} months, ending this one`
-                : undefined
-            }
-            state={trend}
+            subtitle="Sites on air against drive tests done"
+            state={flow}
             onRetry={refresh}
             skeletonRows={4}
-            actions={
-              <WindowPicker value={trendMonths} onChange={setTrendMonths} />
-            }
           >
-            {(t) =>
-              t.months?.some((m) => m.captured) ? (
-                <>
-                  <TrendChart months={t.months} seriesLabel={TREND_LABELS} />
-                  <TrendLegend />
-                </>
+            {(f) =>
+              flowHasActivity(f) ? (
+                <FlowChart data={f} />
               ) : (
                 <div className="dt-empty">
-                  No monthly snapshots have been captured yet. The series fills in as the
-                  months are recorded.
+                  No on-air or drive-test activity has been recorded yet. The chart fills in
+                  as sites go on air and are drive-tested.
                 </div>
               )
             }
@@ -463,36 +450,6 @@ export default function DriveTestProject() {
   )
 }
 
-/** How far back the trend reads.
- *
- * Two buttons rather than a select: there are two answers, and a dropdown
- * that opens to show two options costs a click to say what a pair of buttons
- * says at rest.
- *
- * This is the only control on the page that changes one card and nothing
- * else, which is why it sits in that card's header rather than in the command
- * bar — and why it stays in component state rather than in the URL. A
- * province filter changes every figure on the page and is worth a link; a
- * window on one chart is not.
- */
-function WindowPicker({ value, onChange }) {
-  return (
-    <div className="dt-window" role="group" aria-label="How far back to read the trend">
-      {TREND_WINDOWS.map((months) => (
-        <button
-          key={months}
-          type="button"
-          className={`dt-window-btn${months === value ? ' dt-window-on' : ''}`}
-          aria-pressed={months === value}
-          onClick={() => onChange(months)}
-        >
-          {months}m
-        </button>
-      ))}
-    </div>
-  )
-}
-
 function SectionTotal({ icon: Icon, value, label, color }) {
   return (
     <span className="dt-section-total">
@@ -500,29 +457,6 @@ function SectionTotal({ icon: Icon, value, label, color }) {
       <b className="tnum">{count(value)}</b>
       <span>{label}</span>
     </span>
-  )
-}
-
-/** What the chart draws.
- *
- * Problematic is deliberately absent. It is no longer a line — it is the
- * figure in the caption under the chart — and a legend swatch for a series
- * that is not plotted sends a reader hunting for a line that is not there.
- */
-function TrendLegend() {
-  return (
-    <div className="dt-legend">
-      {TREND_SERIES.filter((s) => s.key !== 'problematic').map((s) => (
-        <span key={s.key} className="dt-legend-item">
-          <i style={{ background: s.color }} aria-hidden="true" />
-          {s.label}
-        </span>
-      ))}
-      <span className="dt-legend-item dt-legend-note">
-        <i className="dt-legend-hollow" aria-hidden="true" />
-        provisional or estimated reading
-      </span>
-    </div>
   )
 }
 

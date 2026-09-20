@@ -13,16 +13,14 @@ import api from '../../api/client'
  */
 const IDLE = { data: null, error: false, loading: true }
 
-/** Windows the trend card can be read over, and the one it opens on.
+/** How many trailing months `/trend` is asked for.
  *
- * Twelve by default because a year is where a seasonal shape shows up and a
- * good quarter stops looking like a turning point. Six is offered because
- * that is the horizon most decisions on this programme are actually made
- * over, and because a shorter window makes gaps in the capture visible
- * instead of hiding them behind sheer width -- which is honest, even though
- * it makes the card look worse.
+ * Twelve, fixed: the only card that used to let a reader change this window
+ * drew a chart directly from it, and that chart is gone (see FlowChart). What
+ * is left reading `/trend` is "What moved", which always wants the newest
+ * captured month regardless of how far back the series goes, so there is no
+ * reader-facing choice left to expose here.
  */
-export const TREND_WINDOWS = [6, 12]
 export const DEFAULT_TREND_MONTHS = 12
 
 /**
@@ -51,6 +49,7 @@ export function useDashboard() {
   const [plan, setPlan] = useState(IDLE)
   const [trend, setTrend] = useState(IDLE)
   const [trendMonths, setTrendMonths] = useState(DEFAULT_TREND_MONTHS)
+  const [flow, setFlow] = useState(IDLE)
   const [refreshing, setRefreshing] = useState(false)
 
   // Bumped by `refresh()` to re-run the effect without making the province a
@@ -64,6 +63,7 @@ export function useDashboard() {
   // counter would let a trend request invalidate an overview still in flight.
   const latest = useRef(0)
   const latestTrend = useRef(0)
+  const latestFlow = useRef(0)
 
   useEffect(() => {
     const ticket = ++latest.current
@@ -114,6 +114,31 @@ export function useDashboard() {
       })
   }, [provinceId, trendMonths, nonce])
 
+  // On-air vs DT-done activity by Shamsi month, for the "Where this is
+  // going" flow chart. A third independent fetch for the same reason the
+  // trend has its own: this reads live work items rather than the monthly
+  // snapshot table `/trend` reads, so the two have nothing in common to
+  // share an effect over, and a slow one must not blank a card the other
+  // has already answered.
+  useEffect(() => {
+    const ticket = ++latestFlow.current
+    const params = provinceId == null ? {} : { province_id: provinceId }
+
+    setFlow((s) => ({ ...s, loading: true }))
+    api
+      .get('/drive-test/flow', { params })
+      .then((r) => {
+        if (latestFlow.current === ticket) {
+          setFlow({ data: r.data, error: false, loading: false })
+        }
+      })
+      .catch(() => {
+        if (latestFlow.current === ticket) {
+          setFlow({ data: null, error: true, loading: false })
+        }
+      })
+  }, [provinceId, nonce])
+
   const refresh = useCallback(() => {
     setRefreshing(true)
     setNonce((n) => n + 1)
@@ -135,6 +160,7 @@ export function useDashboard() {
     trend,
     trendMonths,
     setTrendMonths,
+    flow,
     provinceId,
     setProvince,
     refresh,
