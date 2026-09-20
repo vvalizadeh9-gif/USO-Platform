@@ -1544,6 +1544,36 @@ class DriveTestTrend(BaseModel):
     province_id: int | None = None
 
 
+class FlowBalance(BaseModel):
+    """On-air and DT-done counts for one bucket of the flow chart."""
+
+    on_air: int
+    dt_done: int
+
+
+class FlowMonth(BaseModel):
+    """One Shamsi month of the flow chart: what went on air and was
+    drive-tested during it, not a running balance."""
+
+    year: int
+    month: int
+    on_aired: int
+    dt_done: int
+    is_open: bool = False
+
+
+class DriveTestFlow(BaseModel):
+    """On-air and DT-done activity by Shamsi month, from Farvardin 1404 to
+    the current month, computed live from work items (see
+    ``DriveTestAnalytics.monthly_flow``) -- unlike ``/trend``, this does not
+    read the monthly snapshot table."""
+
+    opening: FlowBalance
+    months: list[FlowMonth]
+    not_placed: FlowBalance
+    province_id: int | None = None
+
+
 # ----- Acceptance dashboard -----
 class AcceptanceKpis(BaseModel):
     """Overview KPI cards. Counts are of every (site, village) row in the
