@@ -208,11 +208,37 @@ const planDelivery = (over = {}) => ({
   ...over,
 })
 
-function serve(plan = planDelivery(), body = overview, series = trend()) {
+// Shaped from DriveTestFlow (app/schemas): `opening` and `not_placed` are
+// balances, `months` is one entry per Shamsi month from Farvardin 1404 with
+// that month's own on-aired and DT-done counts, not a running total.
+const flowMonth = (year, month, over = {}) => ({
+  year,
+  month,
+  on_aired: 0,
+  dt_done: 0,
+  is_open: false,
+  ...over,
+})
+
+const flow = (over = {}) => ({
+  opening: { on_air: 50, dt_done: 20 },
+  months: [
+    flowMonth(1404, 1, { on_aired: 10, dt_done: 4 }),
+    flowMonth(1404, 2, { on_aired: 8, dt_done: 6 }),
+    flowMonth(1405, 1, { on_aired: 5, dt_done: 3 }),
+    flowMonth(1405, 2, { on_aired: 4, dt_done: 2, is_open: true }),
+  ],
+  not_placed: { on_air: 3, dt_done: 0 },
+  province_id: null,
+  ...over,
+})
+
+function serve(plan = planDelivery(), body = overview, series = trend(), flowData = flow()) {
   api.get.mockImplementation((url) => {
     if (url === '/drive-test/overview') return Promise.resolve({ data: body })
     if (url === '/drive-test/plan-delivery') return Promise.resolve({ data: plan })
     if (url === '/drive-test/trend') return Promise.resolve({ data: series })
+    if (url === '/drive-test/flow') return Promise.resolve({ data: flowData })
     return Promise.reject(new Error(`unexpected ${url}`))
   })
 }
@@ -1234,17 +1260,18 @@ describe('drill-through', () => {
     )
   })
 
-  it('leaves the trend chart and the flow ledger unlinked', async () => {
-    // Both are built from monthly snapshots. There is no list of sites behind
-    // a snapshot, and a link that opened one would be answering a different
-    // question with the same number.
+  it('leaves the flow chart and the flow ledger unlinked', async () => {
+    // Both are aggregate figures over a month or a running total, not a
+    // filtered list. There is no list of sites behind either one, and a link
+    // that opened one would be answering a different question with the same
+    // number.
     serve()
     draw()
 
-    const trend = await section('Where this is going')
-    const flow = await section('What moved')
-    expect(within(trend).queryAllByRole('link')).toHaveLength(0)
-    expect(within(flow).queryAllByRole('link')).toHaveLength(0)
+    const flowCard = await section('Where this is going')
+    const ledgerCard = await section('What moved')
+    expect(within(flowCard).queryAllByRole('link')).toHaveLength(0)
+    expect(within(ledgerCard).queryAllByRole('link')).toHaveLength(0)
   })
 
   it('gives a contractor no link out of the "Other contractors" bar', async () => {
@@ -1365,6 +1392,7 @@ describe('failure and freshness', () => {
     api.get.mockImplementation((url) => {
       if (url === '/drive-test/overview') return Promise.resolve({ data: overview })
       if (url === '/drive-test/trend') return Promise.resolve({ data: trend() })
+      if (url === '/drive-test/flow') return Promise.resolve({ data: flow() })
       attempt += 1
       return attempt === 1
         ? Promise.reject(new Error('boom'))
@@ -1388,6 +1416,7 @@ describe('failure and freshness', () => {
     api.get.mockImplementation((url) => {
       if (url === '/drive-test/overview') return Promise.reject(new Error('boom'))
       if (url === '/drive-test/trend') return Promise.resolve({ data: trend() })
+      if (url === '/drive-test/flow') return Promise.resolve({ data: flow() })
       return Promise.resolve({ data: planDelivery() })
     })
     draw()
@@ -1549,106 +1578,104 @@ describe('the province filter', () => {
   })
 })
 
-describe('the trend section', () => {
-  it('draws the series when months have been captured', async () => {
+/** A stat tile by its label. Both the tile and the chart's own end-of-line
+ * labels carry the series names ("On-aired", "DT done"), so a plain
+ * `getByText` is ambiguous -- same fix as the "Plan and delivery" tiles
+ * above. */
+function tile(card, label) {
+  return within(card)
+    .getAllByText(label)
+    .map((node) => node.closest('.dt-flowtile'))
+    .find(Boolean)
+}
+
+describe('the flow chart', () => {
+  // Replaces the old trailing-month trend chart in "Where this is going",
+  // which used to read `/trend` and carried a 6m/12m window picker. Neither
+  // applies any more: this card now reads its own endpoint, `/drive-test/flow`,
+  // and reads two ways -- cumulative or one year -- rather than over a
+  // sliding window.
+  it('draws the chart and its tiles from the cumulative totals by default', async () => {
     serve()
     draw()
 
     const card = await section('Where this is going')
-    expect(within(card).getByRole('img', { name: /Drive test trend/ })).toBeInTheDocument()
-    expect(within(card).getByText('Remaining')).toBeInTheDocument()
+    // Opening 50/20 plus four months of on-aired/dt_done: 77 on-aired, 35 done.
+    expect(within(tile(card, 'On-aired')).getByText('77')).toBeInTheDocument()
+    expect(within(tile(card, 'DT done')).getByText('35')).toBeInTheDocument()
+    expect(within(tile(card, 'Gap')).getByText('42')).toBeInTheDocument()
+    expect(within(tile(card, 'Coverage')).getByText('45%')).toBeInTheDocument()
+
+    // No window picker, no legend -- both gone with the chart they belonged to.
+    expect(screen.queryByRole('button', { name: '6m' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '12m' })).not.toBeInTheDocument()
+    expect(within(card).queryAllByRole('link')).toHaveLength(0)
   })
 
-  it('reports problematic as a figure rather than drawing it', async () => {
-    // It used to be a third line in a strip of its own, with its own vertical
-    // scale under the panel -- a second set of gridlines a reader had to
-    // learn before they could read the shape they came for. It is an order of
-    // magnitude smaller than the other two, so there is no honest way to draw
-    // it beside them; what people actually took from the strip was the level
-    // and the direction, and both fit in a sentence.
-    serve(planDelivery(), overview, {
-      ...trend(),
-      months: [
-        month('مرداد', { shamsi_month: 5, problematic: 18 }),
-        month('شهریور', { shamsi_month: 6, problematic: 11, is_open: true }),
-      ],
-    })
-    draw()
-
-    const card = await section('Where this is going')
-    const caption = card.querySelector('.dt-trend-caption')
-    expect(within(caption).getByText('11')).toBeInTheDocument()
-    expect(within(caption).getByText('7')).toBeInTheDocument()
-    // A real em dash. `\u2014` written in JSX text is six literal characters,
-    // not an escape — the mistake renders as "not plotted \u2014 hover".
-    expect(within(caption).getByText(/not plotted — hover a month/)).toBeInTheDocument()
-    expect(caption.textContent).not.toMatch(/\\u[0-9a-fA-F]{4}/)
-
-    // A fall in problematic is good news, so it is not painted in the alarm
-    // colour -- the same rule the KPI deltas follow.
-    expect(caption.querySelector('.dt-trend-down')).toBeTruthy()
-    expect(caption.querySelector('.dt-trend-up')).toBeFalsy()
-
-    // And it is gone from the legend: a swatch for a series that is not
-    // drawn sends a reader hunting for a line that is not there.
-    const legend = card.querySelector('.dt-legend')
-    expect(within(legend).queryByText('Problematic')).not.toBeInTheDocument()
-    expect(within(legend).getByText('Remaining')).toBeInTheDocument()
-  })
-
-  it('reads the trend over six months or twelve, without reloading the page', async () => {
+  it('switches to the current year and restarts the running total at zero', async () => {
     serve()
     draw()
 
     const card = await section('Where this is going')
-    await waitFor(() =>
-      expect(api.get).toHaveBeenCalledWith('/drive-test/trend', {
-        params: { months: 12 },
-      }),
-    )
-    const overviewCalls = api.get.mock.calls.filter((c) => c[0] === '/drive-test/overview').length
+    await userEvent.click(within(card).getByRole('tab', { name: 'Current year' }))
 
-    await userEvent.click(within(card).getByRole('button', { name: '6m' }))
+    // 1405 alone: 5+4 on-aired, 3+2 done -- not the 77/35 the cumulative tab
+    // showed a moment ago.
+    expect(within(tile(card, 'On-aired')).getByText('9')).toBeInTheDocument()
+    expect(within(tile(card, 'DT done')).getByText('5')).toBeInTheDocument()
 
-    await waitFor(() =>
-      expect(api.get).toHaveBeenCalledWith('/drive-test/trend', {
-        params: { months: 6 },
-      }),
-    )
-    // The window changes one card. Re-reading the overview to answer it would
-    // blank every section on the page to redraw one chart.
-    expect(
-      api.get.mock.calls.filter((c) => c[0] === '/drive-test/overview').length,
-    ).toBe(overviewCalls)
+    // The year picker only appears on this tab.
+    expect(within(card).getByRole('combobox', { name: 'Year' })).toBeInTheDocument()
   })
 
-  it('keeps the province scope when the window changes', async () => {
+  it('marks the open month as still in progress', async () => {
+    serve()
+    draw()
+
+    const card = await section('Where this is going')
+    // Both series end on the month `flow()` marks `is_open`, so both get the
+    // hollow open-end treatment rather than a solid closed dot.
+    expect(within(card).getAllByTestId('dt-flow-open-dot')).toHaveLength(2)
+  })
+
+  it('asks the backend for the province in scope', async () => {
     serve()
     draw('/reports/drive-test?province=7')
 
-    const card = await section('Where this is going')
-    await userEvent.click(within(card).getByRole('button', { name: '6m' }))
-
     await waitFor(() =>
-      expect(api.get).toHaveBeenCalledWith('/drive-test/trend', {
-        params: { months: 6, province_id: 7 },
+      expect(api.get).toHaveBeenCalledWith('/drive-test/flow', {
+        params: { province_id: 7 },
       }),
     )
   })
 
-  it('says the series is empty rather than drawing an empty chart', async () => {
-    serve(planDelivery(), overview, {
-      months: [month('مرداد', { captured: false, onair: null, remaining: null })],
-      latest_flows: null,
+  it('says there is nothing to show rather than drawing an empty chart', async () => {
+    serve(planDelivery(), overview, trend(), {
+      opening: { on_air: 0, dt_done: 0 },
+      months: [flowMonth(1404, 1)],
+      not_placed: { on_air: 0, dt_done: 0 },
+      province_id: null,
     })
     draw()
 
     const card = await section('Where this is going')
     expect(
-      within(card).getByText(/No monthly snapshots have been captured yet/),
+      within(card).getByText(/No on-air or drive-test activity has been recorded yet/),
     ).toBeInTheDocument()
   })
 
+  it('foots the count of sites with no on-air date', async () => {
+    serve()
+    draw()
+
+    const card = await section('Where this is going')
+    expect(
+      within(card).getByText(/3 sites have no on-air date and are not counted/),
+    ).toBeInTheDocument()
+  })
+})
+
+describe('the trend section', () => {
   it('shows the month ledger, and that it closes', async () => {
     serve()
     draw()

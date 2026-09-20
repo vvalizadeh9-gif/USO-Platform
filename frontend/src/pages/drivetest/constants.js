@@ -73,19 +73,6 @@ export const KPI_DIRECTION = {
 /** How many rows a collapsed province view shows before folding the rest. */
 export const PROVINCE_LIMIT = 6
 
-/** Which series the trend chart can draw, and how each is labelled and drawn.
- *
- * `remaining` leads because it is the figure the programme is actually
- * managing down; `dt_done` is its mirror and rises. Problematic is separated
- * out because it is an order of magnitude smaller and would be a flat line
- * against the other two on a shared axis.
- */
-export const TREND_SERIES = [
-  { key: 'remaining', label: 'Remaining', color: STATE_COLOR.ongoing },
-  { key: 'dt_done', label: 'Drive tests done', color: STATE_COLOR.done },
-  { key: 'problematic', label: 'Problematic', color: STATE_COLOR.problematic },
-]
-
 /** The buckets `GET /drive-test/sites` accepts, and how each reads in words.
  *
  * The words are the page title: "64 problematic sites", not "bucket:
