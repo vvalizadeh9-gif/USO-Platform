@@ -415,6 +415,51 @@ def dated_into(wi: WorkItem, year: int, month: int) -> bool:
     return y == year and m == month
 
 
+#: The first Shamsi month the flow chart reports a month of its own for.
+#: Everything dated before this is folded into the opening balance instead.
+FLOW_START_PERIOD = (1404, 1)
+
+
+def onair_month(wi: WorkItem) -> tuple[int, int] | None:
+    """Which Shamsi (year, month) this work item went on-air in, if placeable.
+
+    ``launch_date_shamsi`` is the CPM text column and is tried first, exactly
+    as :func:`app.services.health_check._pool_waiting_since` already reads it
+    elsewhere: hand-typed, not always present, and not always a well-formed
+    date, so a blank or unparseable value is skipped rather than raising.
+    ``launch_date_gregorian`` is the fallback, converted with :mod:`jalali`.
+
+    In practice the fallback never fires today: ``cpm_columns.COL`` maps a
+    ``launch_date_greg`` column, but ``cpm_import._master_fields`` never
+    reads it, so ``launch_date_gregorian`` is always ``None`` on every real
+    row. It is kept here anyway because it is part of the model and the rule
+    as agreed, and because a future import fix would make it live without
+    this function changing.
+    """
+    if wi.launch_date_shamsi:
+        try:
+            parsed = jalali.parse_shamsi(wi.launch_date_shamsi)
+        except ValueError:
+            parsed = None
+        if parsed is not None:
+            return jalali.to_shamsi(parsed)
+    if wi.launch_date_gregorian is not None:
+        return jalali.to_shamsi(wi.launch_date_gregorian)
+    return None
+
+
+def dt_done_month(wi: WorkItem) -> tuple[int, int] | None:
+    """Which Shamsi (year, month) this work item's drive test was done in.
+
+    Same underlying date :func:`dated_into` compares against
+    (``dt_date_gregorian``), just returned as a period instead of tested
+    against one. A work item with no DT date is not placeable.
+    """
+    if not wi.dt_date_gregorian:
+        return None
+    return jalali.to_shamsi(wi.dt_date_gregorian)
+
+
 class DriveTestAnalytics:
     """Encapsulates all Drive Test dashboard computations for one user."""
 
@@ -584,6 +629,86 @@ class DriveTestAnalytics:
         return flagged, resolved
 
     _problem_events = staticmethod(problem_events)
+
+    _onair_month = staticmethod(onair_month)
+    _dt_done_month = staticmethod(dt_done_month)
+
+    def monthly_flow(self) -> dict:
+        """On-air and DT-done counts by Shamsi month, from Farvardin 1404 to
+        the current month, plus a pre-1404 opening balance and a not-placed
+        bucket for whatever carries no usable date.
+
+        Feeds the flow chart on ``GET /drive-test/flow``. Built from exactly
+        the same scoped on-air set and the same ``is_dt_done``/date rules as
+        :meth:`compute_kpis`, so ``opening + months + not_placed`` always
+        reconciles to ``total_onair`` and ``total_dt_done`` for the same
+        caller -- that reconciliation is asserted in
+        ``tests/test_dt_flow.py``.
+
+        A work item's on-air month and its DT-done month are placed
+        independently: a site on air for months before its drive test lands
+        can have one in an early month and the other much later, or one
+        placed and the other not.
+        """
+        current_period = jalali.current_shamsi_period()
+
+        periods: list[tuple[int, int]] = []
+        year, month = FLOW_START_PERIOD
+        while (year, month) <= current_period:
+            periods.append((year, month))
+            year, month = jalali.next_period(year, month)
+
+        onair_by_period: dict[tuple[int, int], int] = defaultdict(int)
+        done_by_period: dict[tuple[int, int], int] = defaultdict(int)
+        opening_onair = 0
+        opening_done = 0
+        not_placed_onair = 0
+        not_placed_done = 0
+
+        def _place(period: tuple[int, int] | None) -> str:
+            """``"opening"``, ``"not_placed"``, or the period itself."""
+            if period is None or period > current_period:
+                return "not_placed"
+            if period < FLOW_START_PERIOD:
+                return "opening"
+            return "period"
+
+        for wi in self._onair_items():
+            period = self._onair_month(wi)
+            bucket = _place(period)
+            if bucket == "opening":
+                opening_onair += 1
+            elif bucket == "not_placed":
+                not_placed_onair += 1
+            else:
+                onair_by_period[period] += 1
+
+            if is_dt_done(wi):
+                period = self._dt_done_month(wi)
+                bucket = _place(period)
+                if bucket == "opening":
+                    opening_done += 1
+                elif bucket == "not_placed":
+                    not_placed_done += 1
+                else:
+                    done_by_period[period] += 1
+
+        months = [
+            {
+                "year": y,
+                "month": m,
+                "on_aired": onair_by_period[(y, m)],
+                "dt_done": done_by_period[(y, m)],
+                "is_open": (y, m) == current_period,
+            }
+            for (y, m) in periods
+        ]
+
+        return {
+            "opening": {"on_air": opening_onair, "dt_done": opening_done},
+            "months": months,
+            "not_placed": {"on_air": not_placed_onair, "dt_done": not_placed_done},
+        }
 
     # ---------- charts ----------
     def chart_ongoing_by_contractor(self) -> list[dict]:

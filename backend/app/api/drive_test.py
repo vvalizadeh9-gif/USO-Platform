@@ -40,12 +40,15 @@ from app.schemas import (
     ChartPoint,
     ContractorAchievementRow,
     ContractorScorecardRow,
+    DriveTestFlow,
     DriveTestKpis,
     DriveTestOverview,
     DriveTestSiteList,
     DriveTestSiteRow,
     DriveTestTrend,
     FilterOption,
+    FlowBalance,
+    FlowMonth,
     KpiWithDelta,
     MonthFlows,
     OngoingBreakdown,
@@ -253,6 +256,32 @@ def drive_test_trend(
     return DriveTestTrend(
         months=[TrendPoint(**point) for point in _trend_payload(series)],
         latest_flows=MonthFlows(**flows) if flows else None,
+        province_id=province_id,
+    )
+
+
+@router.get("/flow", response_model=DriveTestFlow)
+def drive_test_flow(
+    province_id: int | None = Query(
+        None, description="Narrow every figure to one province inside your scope"
+    ),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> DriveTestFlow:
+    """On-air and DT-done counts by Shamsi month, Farvardin 1404 to now.
+
+    Same auth, role and province scoping as ``/trend`` (``_resolve_province``
+    over ``get_current_user`` -- no widened access), but reads live work
+    items through :class:`DriveTestAnalytics` the way ``/overview`` does,
+    rather than the monthly snapshot table. Read-only: nothing is written.
+    """
+    province_id = _resolve_province(user, province_id)
+    analytics = DriveTestAnalytics(db, user, province_id=province_id)
+    flow = analytics.monthly_flow()
+    return DriveTestFlow(
+        opening=FlowBalance(**flow["opening"]),
+        months=[FlowMonth(**point) for point in flow["months"]],
+        not_placed=FlowBalance(**flow["not_placed"]),
         province_id=province_id,
     )
 
