@@ -30,7 +30,10 @@ so a full monthly file imports in seconds rather than minutes.
 from __future__ import annotations
 
 import json
+import logging
+from datetime import date as _date_cls, datetime as _dt, timedelta
 
+import numpy as np
 import pandas as pd
 from sqlalchemy.orm import Session, selectinload
 
@@ -42,6 +45,8 @@ from app.models.reference import Contractor, Province, Region
 from app.models.workitem import Site, Village, WorkItem
 from app.services import cpm_columns as C
 from app.services.audit import record_audit
+
+logger = logging.getLogger(__name__)
 
 
 class CpmImportService:
@@ -97,6 +102,16 @@ class CpmImportService:
     def import_file(self, path: str, filename: str) -> CpmImportBatch:
         df = pd.read_excel(path, sheet_name=C.SHEET_NAME, header=C.HEADER_ROW)
         rows = df.values.tolist()
+
+        mismatches = C.find_header_mismatches(list(df.columns))
+        if mismatches:
+            logger.warning(
+                "CPM import %r: header layout does not match the expected "
+                "column positions -- data may be landing in the wrong "
+                "fields:\n%s",
+                filename,
+                "\n".join(mismatches),
+            )
 
         is_first_import = self._db.query(WorkItem.id).first() is None
         self._seed_mode = is_first_import
@@ -158,6 +173,9 @@ class CpmImportService:
         )
         self._db.commit()
         self._db.refresh(batch)
+        # Transient -- not a mapped column, so it rides along on this one
+        # response only and is never written to the batch's own row.
+        batch.header_warnings = mismatches
         return batch
 
     # ---- cache loading ----
@@ -678,21 +696,58 @@ class CpmImportService:
 
     @staticmethod
     def _date(value: object):
+        """Coerce one cell of a date column to a ``date``, whatever shape
+        ``pandas.read_excel`` handed back for it.
+
+        A column of real Excel dates does not come back as one consistent
+        Python type: a clean column becomes ``pandas.Timestamp`` (has
+        ``.date()``); a blank cell becomes ``float('nan')`` or ``pandas.NaT``;
+        a column pandas could not infer as all-dates keeps raw
+        ``numpy.datetime64`` scalars (no ``.date()``); and a cell whose Excel
+        number format was never set to a date at all -- the exact bug behind
+        the SOA/on-air chart reading zero -- comes back as a bare
+        ``float``/``int`` day-count with no date-like methods whatsoever.
+        Every one of these has to resolve to the same date or a mistyped
+        cell silently drops out of the import again.
+        """
         if value is None:
             return None
-        if hasattr(value, "date") and not isinstance(value, str):
+        try:
+            if pd.isna(value):
+                return None
+        except (TypeError, ValueError):
+            pass  # not something pandas can call isna on a scalar -- fine
+        if isinstance(value, str):
+            text = C.clean(value)
+            if text is None:
+                return None
+            for fmt in ("%Y-%m-%d", "%Y/%m/%d", "%d-%m-%Y", "%m/%d/%Y"):
+                try:
+                    return _dt.strptime(text[:10], fmt).date()
+                except ValueError:
+                    continue
+            return None
+        if isinstance(value, np.datetime64):
+            # No `.date()` on a bare numpy scalar; pandas already knows how
+            # to convert its unit and how to recognise its own NaT.
+            ts = pd.Timestamp(value)
+            return None if pd.isna(ts) else ts.date()
+        if hasattr(value, "date"):
             try:
                 return value.date()
             except Exception:
                 return None
-        text = C.clean(value)
-        if text is None:
+        if isinstance(value, _date_cls):
+            return value
+        if isinstance(value, (int, float)):
+            # A cell whose Excel number format is "General" rather than a
+            # date: openpyxl/pandas has no way to tell it apart from an
+            # ordinary number, so it comes back as the raw day-count Excel
+            # stores underneath every date. 100000 days past the 1899-12-30
+            # epoch is year ~2173 -- generous enough to admit any real launch
+            # date while still rejecting a village population or similar
+            # count that happened to land in this column.
+            if 1 < value < 100000:
+                return _date_cls(1899, 12, 30) + timedelta(days=int(value))
             return None
-        from datetime import datetime as _dt
-
-        for fmt in ("%Y-%m-%d", "%Y/%m/%d", "%d-%m-%Y", "%m/%d/%Y"):
-            try:
-                return _dt.strptime(text[:10], fmt).date()
-            except ValueError:
-                continue
         return None

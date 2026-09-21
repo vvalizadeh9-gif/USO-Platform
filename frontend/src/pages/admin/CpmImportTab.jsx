@@ -93,6 +93,32 @@ export default function CpmImportTab() {
         </button>
       </div>
 
+      {result?.header_warnings?.length > 0 && (
+        <motion.div
+          className="card card-pad"
+          initial={{ opacity: 0, scale: 0.98 }}
+          animate={{ opacity: 1, scale: 1 }}
+          style={{ borderColor: 'var(--red)', borderWidth: 1.5 }}
+        >
+          <div className="row" style={{ gap: 8, color: 'var(--red)' }}>
+            <AlertTriangle size={16} />
+            <h3 style={{ fontSize: 14.5, color: 'var(--red)' }}>
+              This file&rsquo;s column layout doesn&rsquo;t match what the importer expects
+            </h3>
+          </div>
+          <p className="muted" style={{ fontSize: 12.5, marginTop: 8, marginBottom: 10 }}>
+            One or more columns this importer reads by position have a different header
+            than expected — a column may have been inserted, removed, or reordered
+            upstream of these. Data from this import may be sitting in the wrong fields.
+          </p>
+          <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12.5, lineHeight: 1.7 }}>
+            {result.header_warnings.map((w) => (
+              <li key={w} style={{ color: 'var(--red)' }}>{w}</li>
+            ))}
+          </ul>
+        </motion.div>
+      )}
+
       {result && (
         <motion.div className="card card-pad" initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }}>
           <h3 style={{ fontSize: 15, marginBottom: 14 }}>Import summary</h3>

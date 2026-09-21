@@ -749,6 +749,12 @@ class CpmImportSummary(ORMModel):
     unchanged_count: int
     skipped_satellite: int
     created_at: datetime
+    # Not persisted -- set on the batch object for this one response only, so
+    # a CPM layout drift (a column inserted/removed upstream of one this
+    # importer reads positionally) surfaces immediately in the UI instead of
+    # silently importing data into the wrong fields. See
+    # cpm_columns.find_header_mismatches.
+    header_warnings: list[str] = []
 
 
 class CpmChangeRequestOut(ORMModel):

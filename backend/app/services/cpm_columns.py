@@ -271,3 +271,46 @@ def canonical_province(value: object) -> str | None:
     if norm is None:
         return None
     return CANONICAL_PROVINCE_BY_NORM.get(norm)
+
+
+# ----- Header sanity check -----
+# COL/COL_HISTORY are positional: a CPM file that has drifted from this
+# layout -- a column inserted or removed upstream of one of these -- is
+# imported anyway, silently reading the wrong cell into every field from
+# that point on. That is exactly the shape of bug that made the on-air chart
+# read zero for weeks with no error anywhere: the import "succeeded" every
+# month. This is not exhaustive -- just anchors spread across the columns
+# this bug touched, tolerant-matched so a harmless header reword doesn't
+# start crying wolf.
+HEADER_KEYWORDS = {
+    "site_code": "کد سایت",
+    "site_type": "نوع سایت",
+    "last_stage": "آخرین مرحله",
+    "launch_date_shamsi": "راه اندازی",
+    "launch_date_greg": "میلادی",
+    "project_name": "نام پروژه",
+    "pm_name": "مدیر پروژه",
+}
+
+
+def find_header_mismatches(header_row: list) -> list[str]:
+    """Compare the header cells pandas actually read against the keyword
+    each mapped column is expected to carry.
+
+    Returns one human-readable description per mismatch, or an empty list
+    when everything lines up. Never raises and never blocks an import on its
+    own -- a false positive here must not brick a file that would otherwise
+    import correctly; the caller logs whatever comes back so a real drift is
+    visible instead of silent.
+    """
+    mismatches = []
+    for field, keyword in HEADER_KEYWORDS.items():
+        idx = COL[field]
+        actual = header_row[idx] if idx < len(header_row) else None
+        norm = normalize_persian(clean(actual))
+        if norm is None or keyword not in norm:
+            mismatches.append(
+                f"{field} (expected at column index {idx}): header should contain "
+                f"{keyword!r}, actually reads {actual!r}"
+            )
+    return mismatches
