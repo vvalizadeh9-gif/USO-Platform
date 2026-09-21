@@ -33,25 +33,31 @@ import { DrawPath, FadeArea } from './primitives'
  * area is textured differently from the plot around it.
  */
 
-const VIEW_W = 680
-const VIEW_H = 380
+const VIEW_W = 740
+const VIEW_H = 392
 
-const PAD_L = 44
-const MAIN_TOP = 12
-const MAIN_H = 232
-const MAIN_W = 520
+const PAD_L = 46
+const MAIN_TOP = 16
+const MAIN_H = 228
+const MAIN_W = 518
 const PLOT_RIGHT = PAD_L + MAIN_W
 const MAIN_AXIS_Y = MAIN_TOP + MAIN_H + 20
 
-const STRIP_TOP = 274
-const STRIP_H = 64
+const STRIP_TOP = 312
+const STRIP_H = 62
 
 const BRACKET_X = PLOT_RIGHT + 8
 const BRACKET_W = 5
 const BADGE_X = BRACKET_X + BRACKET_W + 6
-const BADGE_W = 50
-const LABEL_X = BADGE_X + BADGE_W + 8
+const BADGE_MIN_W = 50
 const LABEL_MIN_GAP = 22
+
+/** Badge width from its own text, so "Gap -2,982" never clips against a box
+ * sized for "Gap 42". A rough monospace-ish estimate is plenty here -- the
+ * badge only ever holds tabular digits and a fixed "Gap " prefix. */
+function badgeWidthFor(text) {
+  return Math.max(BADGE_MIN_W, text.length * 6.4 + 16)
+}
 
 /** A rounded ceiling for an axis, so the top gridline is a readable number. */
 function niceMax(value) {
@@ -196,6 +202,10 @@ export default function FlowChart({ data }) {
     }
   }
 
+  const badgeText = `Gap ${count(last.gap)}`
+  const badgeW = badgeWidthFor(badgeText)
+  const labelX = BADGE_X + badgeW + 10
+
   const labelEvery = isCumulative ? 3 : months.length > 8 ? 2 : 1
 
   const handleKey = (e) => {
@@ -257,15 +267,15 @@ export default function FlowChart({ data }) {
       </div>
 
       <ul className="dt-flowtiles">
-        <li className="dt-flowtile">
+        <li className="dt-flowtile dt-flowtile-ongoing">
           <span className="dt-flowtile-label">On-aired</span>
           <span className="dt-flowtile-figure tnum">{count(last.onAir)}</span>
         </li>
-        <li className="dt-flowtile">
+        <li className="dt-flowtile dt-flowtile-done">
           <span className="dt-flowtile-label">DT done</span>
           <span className="dt-flowtile-figure tnum">{count(last.dtDone)}</span>
         </li>
-        <li className="dt-flowtile">
+        <li className="dt-flowtile dt-flowtile-problem">
           <span className="dt-flowtile-label">Gap</span>
           <span className="dt-flowtile-figure tnum">{count(last.gap)}</span>
           <DeltaChip delta={gapDelta} direction="down" />
@@ -273,6 +283,21 @@ export default function FlowChart({ data }) {
         <li className="dt-flowtile">
           <span className="dt-flowtile-label">Coverage</span>
           <span className="dt-flowtile-figure tnum">{share(last.dtDone, last.onAir)}</span>
+        </li>
+      </ul>
+
+      <ul className="dt-flow-legend">
+        <li className="dt-flow-legend-item">
+          <i className="dt-flow-legend-dot" style={{ background: STATE_COLOR.ongoing }} />
+          On-aired
+        </li>
+        <li className="dt-flow-legend-item">
+          <i className="dt-flow-legend-dot" style={{ background: STATE_COLOR.done }} />
+          DT done
+        </li>
+        <li className="dt-flow-legend-item dt-flow-legend-item-muted">
+          <i className="dt-flow-legend-swatch" />
+          Gap between them
         </li>
       </ul>
 
@@ -290,13 +315,15 @@ export default function FlowChart({ data }) {
         <svg viewBox={`0 0 ${VIEW_W} ${VIEW_H}`} className="dt-flowchart-svg">
           <defs>
             <pattern id={`${base}-hatch`} width="6" height="6" patternTransform="rotate(45)" patternUnits="userSpaceOnUse">
-              <rect width="6" height="6" fill="var(--dt-problem)" opacity="0.08" />
-              <line x1="0" y1="0" x2="0" y2="6" stroke="var(--dt-problem)" strokeWidth="1.4" opacity="0.35" />
+              <rect width="6" height="6" fill="var(--dt-problem)" opacity="0.055" />
+              <line x1="0" y1="0" x2="0" y2="6" stroke="var(--dt-problem)" strokeWidth="1.4" opacity="0.28" />
             </pattern>
           </defs>
 
-          {/* Main plot gridlines and scale */}
-          {[0, 0.5, 1].map((t) => {
+          {/* Main plot gridlines and scale -- four bands, not two, so a
+              reader can place a point without eyeballing a quarter-way
+              interpolation between the only two labelled values. */}
+          {[0, 0.25, 0.5, 0.75, 1].map((t) => {
             const value = floor + span * (1 - t)
             const gy = MAIN_TOP + MAIN_H * t
             return (
@@ -334,8 +361,8 @@ export default function FlowChart({ data }) {
             { key: 'dtDone', color: STATE_COLOR.done },
           ].map((s) => (
             <g key={s.key}>
-              <DrawPath d={solidLineFor(s.key)} stroke={s.color} strokeWidth={2.5} />
-              {openTail && <DrawPath d={dashedLineFor(s.key)} stroke={s.color} strokeWidth={2.5} dashed />}
+              <DrawPath d={solidLineFor(s.key)} stroke={s.color} strokeWidth={3} />
+              {openTail && <DrawPath d={dashedLineFor(s.key)} stroke={s.color} strokeWidth={3} dashed />}
               {points.map((p, i) => {
                 const isLastOpen = openTail && i === n - 1
                 return (
@@ -344,7 +371,7 @@ export default function FlowChart({ data }) {
                     data-testid={isLastOpen ? 'dt-flow-open-dot' : undefined}
                     cx={x(i)}
                     cy={y(p[s.key])}
-                    r={isLastOpen ? 3.5 : 2.5}
+                    r={isLastOpen ? 4 : 3}
                     fill={isLastOpen ? 'var(--surface-1)' : s.color}
                     stroke={s.color}
                     strokeWidth={isLastOpen ? 2 : 0}
@@ -364,21 +391,21 @@ export default function FlowChart({ data }) {
             className="dt-flowchart-bracket"
           />
           <g transform={`translate(${BADGE_X}, ${badgeY})`}>
-            <rect x={0} y={-9} width={BADGE_W} height={18} rx={9} className="dt-flowchart-badge" />
-            <text x={BADGE_W / 2} y={4} textAnchor="middle" className="dt-flowchart-badge-text">
-              Gap {count(last.gap)}
+            <rect x={0} y={-10} width={badgeW} height={20} rx={10} className="dt-flowchart-badge" />
+            <text x={badgeW / 2} y={4} textAnchor="middle" className="dt-flowchart-badge-text">
+              {badgeText}
             </text>
           </g>
-          <text x={LABEL_X} y={onAirLabelY - 4} className="dt-flowchart-endlabel">
+          <text x={labelX} y={onAirLabelY - 4} className="dt-flowchart-endlabel">
             On-aired
           </text>
-          <text x={LABEL_X} y={onAirLabelY + 9} className="dt-flowchart-endvalue tnum" style={{ fill: STATE_COLOR.ongoing }}>
+          <text x={labelX} y={onAirLabelY + 10} className="dt-flowchart-endvalue tnum" style={{ fill: STATE_COLOR.ongoing }}>
             {count(last.onAir)}
           </text>
-          <text x={LABEL_X} y={dtDoneLabelY - 4} className="dt-flowchart-endlabel">
+          <text x={labelX} y={dtDoneLabelY - 4} className="dt-flowchart-endlabel">
             DT done
           </text>
-          <text x={LABEL_X} y={dtDoneLabelY + 9} className="dt-flowchart-endvalue tnum" style={{ fill: STATE_COLOR.done }}>
+          <text x={labelX} y={dtDoneLabelY + 10} className="dt-flowchart-endvalue tnum" style={{ fill: STATE_COLOR.done }}>
             {count(last.dtDone)}
           </text>
 
@@ -404,7 +431,12 @@ export default function FlowChart({ data }) {
           )}
 
           {/* Gap strip: one bar per month for that month's on-aired minus
-              DT done, not the running total above. */}
+              DT done, not the running total above. Named on its own line --
+              without a caption the "+150 / 0 / -150" axis reads as a second,
+              unexplained chart bolted under the first. */}
+          <text x={PAD_L} y={STRIP_TOP - 16} className="dt-flowchart-caption">
+            Monthly gap — on-aired minus DT done
+          </text>
           <line x1={PAD_L} x2={PLOT_RIGHT} y1={zeroY} y2={zeroY} className="dt-gridline" />
           {[gapMax, 0, -gapMax].map((v) => (
             <text key={`s-${v}`} x={PAD_L - 8} y={stripY(v) + 4} className="dt-axis-label" textAnchor="end">

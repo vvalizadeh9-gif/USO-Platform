@@ -479,6 +479,7 @@ class CpmImportService:
             "referral_letter_number": C.clean(self._get(raw, C.COL["referral_letter"])),
             "referral_date_shamsi": C.clean(self._get(raw, C.COL["referral_date_shamsi"])),
             "launch_date_shamsi": C.clean(self._get(raw, C.COL["launch_date_shamsi"])),
+            "launch_date_gregorian": self._date(self._get(raw, C.COL["launch_date_greg"])),
         }
 
     _NON_TRACKED_FIELDS = (
@@ -494,6 +495,7 @@ class CpmImportService:
         "referral_letter_number",
         "referral_date_shamsi",
         "launch_date_shamsi",
+        "launch_date_gregorian",
     )
 
     def _apply_non_tracked_fields(self, wi: WorkItem, incoming: dict) -> None:
