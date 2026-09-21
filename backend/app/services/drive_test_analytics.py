@@ -423,19 +423,15 @@ FLOW_START_PERIOD = (1404, 1)
 def onair_month(wi: WorkItem) -> tuple[int, int] | None:
     """Which Shamsi (year, month) this work item went on-air in, if placeable.
 
-    ``launch_date_shamsi`` is the CPM text column and is tried first, exactly
-    as :func:`app.services.health_check._pool_waiting_since` already reads it
-    elsewhere: hand-typed, not always present, and not always a well-formed
-    date, so a blank or unparseable value is skipped rather than raising.
-    ``launch_date_gregorian`` is the fallback, converted with :mod:`jalali`.
-
-    In practice the fallback never fires today: ``cpm_columns.COL`` maps a
-    ``launch_date_greg`` column, but ``cpm_import._master_fields`` never
-    reads it, so ``launch_date_gregorian`` is always ``None`` on every real
-    row. It is kept here anyway because it is part of the model and the rule
-    as agreed, and because a future import fix would make it live without
-    this function changing.
+    ``launch_date_gregorian`` (CPM column "تاریخ راه اندازی (میلادی)") is
+    tried first: it comes from a real date cell, so it is either a well-formed
+    date or blank -- never a typo. ``launch_date_shamsi`` is the fallback, for
+    rows the CPM file only carries a hand-typed Shamsi date for; that text is
+    not always present or well-formed, so a blank or unparseable value is
+    skipped rather than raising.
     """
+    if wi.launch_date_gregorian is not None:
+        return jalali.to_shamsi(wi.launch_date_gregorian)
     if wi.launch_date_shamsi:
         try:
             parsed = jalali.parse_shamsi(wi.launch_date_shamsi)
@@ -443,8 +439,6 @@ def onair_month(wi: WorkItem) -> tuple[int, int] | None:
             parsed = None
         if parsed is not None:
             return jalali.to_shamsi(parsed)
-    if wi.launch_date_gregorian is not None:
-        return jalali.to_shamsi(wi.launch_date_gregorian)
     return None
 
 

@@ -1862,7 +1862,7 @@ tbody tr:hover .dt-row-filter { opacity: 1; }
 .dt-trend-svg { width: 100%; height: auto; display: block; overflow: visible; }
 /* Hairline and solid. Dashed gridlines add noise and read as data. */
 .dt-gridline { stroke: var(--border-soft); stroke-width: 1; }
-.dt-axis-label { fill: var(--text-dim); font-size: 10.5px; font-variant-numeric: tabular-nums; }
+.dt-axis-label { fill: var(--text-muted); font-size: 11.5px; font-variant-numeric: tabular-nums; }
 .dt-axis-current { fill: var(--text); font-weight: 600; }
 .dt-hover-rule { stroke: var(--text-dim); stroke-width: 1; }
 /* The trend window. A segmented pair in the card header -- small, quiet, and
@@ -1984,14 +1984,43 @@ tbody tr:hover .dt-row-filter { opacity: 1; }
 }
 .dt-flowtile {
   display: grid; gap: 4px; align-content: start;
-  padding: 10px 12px;
+  padding: 12px 14px 11px;
   background: var(--surface-2); border: 1px solid var(--border-soft);
+  border-top: 2px solid var(--border-soft);
   border-radius: var(--radius);
 }
+/* A tile that names a series borrows its line colour as a top rule, so the
+   card teaches its own colour key before a reader has found the legend. */
+.dt-flowtile-ongoing { border-top-color: var(--dt-ongoing); }
+.dt-flowtile-done { border-top-color: var(--dt-done); }
+.dt-flowtile-problem { border-top-color: var(--dt-problem); }
 .dt-flowtile-label { font-size: 11.5px; color: var(--text-muted); font-weight: 500; }
 .dt-flowtile-figure {
-  font-family: var(--font-display); font-size: 21px; font-weight: 600;
+  font-family: var(--font-display); font-size: 23px; font-weight: 600;
   letter-spacing: -0.015em; line-height: 1.1;
+}
+
+/* The legend: the series/lane colours the tiles and end labels already carry,
+   named once in one place, so a reader never has to infer identity from hue
+   alone. The hatch swatch is a mini version of the chart's own pattern, not a
+   flat rect, so it reads as "the same texture" rather than a third colour. */
+.dt-flow-legend {
+  list-style: none; margin: 0; padding: 0;
+  display: flex; flex-wrap: wrap; gap: 16px;
+  font-size: 12px; color: var(--text-muted);
+}
+.dt-flow-legend-item { display: inline-flex; align-items: center; gap: 6px; }
+.dt-flow-legend-item-muted { color: var(--text-dim); }
+.dt-flow-legend-dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+.dt-flow-legend-swatch {
+  width: 14px; height: 9px; border-radius: 2px; flex: none;
+  background: var(--dt-problem-wash);
+  background-image: repeating-linear-gradient(
+    45deg,
+    rgba(207, 59, 59, 0.3), rgba(207, 59, 59, 0.3) 1.5px,
+    transparent 1.5px, transparent 4px
+  );
+  border: 1px solid var(--dt-problem);
 }
 
 /* The chart itself. `overflow: visible` lets the end labels in the right
@@ -2006,13 +2035,14 @@ tbody tr:hover .dt-row-filter { opacity: 1; }
   fill: var(--dt-problem-wash); stroke: var(--dt-problem); stroke-width: 1;
 }
 .dt-flowchart-badge-text {
-  fill: var(--dt-problem); font-size: 9.5px; font-weight: 600;
+  fill: var(--dt-problem); font-size: 10.5px; font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
-.dt-flowchart-endlabel { fill: var(--text-dim); font-size: 9.5px; }
+.dt-flowchart-endlabel { fill: var(--text-dim); font-size: 11px; }
 .dt-flowchart-endvalue {
-  font-size: 12px; font-weight: 600; font-family: var(--font-display);
+  font-size: 13px; font-weight: 600; font-family: var(--font-display);
 }
+.dt-flowchart-caption { fill: var(--text-dim); font-size: 11px; font-style: italic; }
 
 /* Two readings of the same figure, side by side. Also what keeps a five-row
    bar chart from stretching its marks across a 1280px page. */
