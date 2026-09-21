@@ -710,52 +710,52 @@ describe('breakdown sections', () => {
   })
 })
 
-describe('the province table', () => {
+describe('the province grid', () => {
+  // The province table became a 3-column card grid, each card its own
+  // scope-the-dashboard control -- see ProvinceTable. Cards replace rows,
+  // and a row of chip buttons above the grid replaces the sortable header.
+  const cardNames = (scope) =>
+    Array.from(scope.querySelectorAll('.dt-province-card')).map(
+      (card) => card.querySelector('.dt-province-name').textContent,
+    )
+
   it('opens sorted by remaining, most first', async () => {
     serve(planDelivery(), overviewWithProvinces(10))
     draw()
 
     const provinces = await section('Province breakdown')
-    const names = within(provinces)
-      .getAllByRole('row')
-      .slice(1)
-      .map((row) => row.firstChild.textContent)
-
-    expect(names).toEqual([
+    expect(cardNames(provinces)).toEqual([
       'Province 1', 'Province 2', 'Province 3', 'Province 4', 'Province 5', 'Province 6',
     ])
   })
 
-  it('re-sorts on a column header, and reverses on a second click', async () => {
+  it('re-sorts on a sort control, and reverses on a second click', async () => {
     serve(planDelivery(), overviewWithProvinces(10))
     draw()
 
     const provinces = await section('Province breakdown')
     await userEvent.click(within(provinces).getByRole('button', { name: 'DT done' }))
-
-    const namesOf = () =>
-      within(provinces).getAllByRole('row').slice(1).map((r) => r.firstChild.textContent)
 
     // done ascends with the index, so descending puts the last province first.
-    expect(namesOf()[0]).toBe('Province 10')
+    expect(cardNames(provinces)[0]).toBe('Province 10')
     await userEvent.click(within(provinces).getByRole('button', { name: 'DT done' }))
-    expect(namesOf()[0]).toBe('Province 1')
+    expect(cardNames(provinces)[0]).toBe('Province 1')
   })
 
-  it('collapses to six rows and expands on Show all', async () => {
+  it('collapses to six cards and expands on Show all', async () => {
     serve(planDelivery(), overviewWithProvinces(10))
     draw()
 
     const provinces = await section('Province breakdown')
-    expect(within(provinces).getAllByRole('row')).toHaveLength(7) // header + 6
+    expect(provinces.querySelectorAll('.dt-province-card')).toHaveLength(6)
     expect(within(provinces).getByText('4 more not shown')).toBeInTheDocument()
 
     await userEvent.click(within(provinces).getByRole('button', { name: /Show all 10 provinces/ }))
-    expect(within(provinces).getAllByRole('row')).toHaveLength(11)
+    expect(provinces.querySelectorAll('.dt-province-card')).toHaveLength(10)
     expect(within(provinces).queryByText('4 more not shown')).not.toBeInTheDocument()
 
     await userEvent.click(within(provinces).getByRole('button', { name: /Show top 6/ }))
-    expect(within(provinces).getAllByRole('row')).toHaveLength(7)
+    expect(provinces.querySelectorAll('.dt-province-card')).toHaveLength(6)
   })
 
   it('offers no Show all control when every province already fits', async () => {
@@ -766,15 +766,17 @@ describe('the province table', () => {
     expect(within(provinces).queryByRole('button', { name: /Show all/ })).not.toBeInTheDocument()
   })
 
-  it('has exactly seven columns: Province, On air, DT done, Remaining, Ongoing, Problematic, Done %', async () => {
+  it('has exactly seven sort controls: Province, On air, DT done, Remaining, Ongoing, Problematic, Done %', async () => {
     serve()
     draw()
 
     const provinces = await section('Province breakdown')
-    const headers = within(provinces)
-      .getAllByRole('columnheader')
-      .map((h) => h.textContent.trim())
-    expect(headers).toEqual([
+    const controls = within(provinces)
+      .getByRole('group', { name: 'Sort provinces by' })
+    const labels = within(controls)
+      .getAllByRole('button')
+      .map((b) => b.textContent.trim())
+    expect(labels).toEqual([
       'Province',
       'On air',
       'DT done',
@@ -782,12 +784,10 @@ describe('the province table', () => {
       'Ongoing',
       'Problematic',
       'Done %',
-      'Where the work is',
-      'Filter',
     ])
   })
 
-  it('shows no "Not started" anywhere in the table, its key or its bar', async () => {
+  it('shows no "Not started" anywhere in the grid, its key or its bars', async () => {
     serve()
     draw()
 
@@ -1200,20 +1200,20 @@ describe('drill-through', () => {
     ).toHaveAttribute('href', '/drive-test/sites?bucket=problematic&province_id=7')
   })
 
-  it('links every cell of a contractor row, the denominator included', async () => {
+  it('links every figure of a contractor row, the denominator included', async () => {
     serve()
     draw()
 
     const card = await section('Contractor scorecard')
-    const row = within(card).getByText('Alfa Drive Tests').closest('tr')
-    for (const [value, href] of [
+    const row = within(card).getByText('Alfa Drive Tests').closest('.dt-contractor-row')
+    for (const [text, href] of [
       // The assignment is what the rate divides by, so it is the figure a
       // contractor will want to check.
       ['55', '/drive-test/sites?bucket=assigned&contractor_id=1'],
-      ['40', '/drive-test/sites?bucket=done&contractor_id=1'],
-      ['15', '/drive-test/sites?bucket=ongoing&contractor_id=1'],
+      ['40 done', '/drive-test/sites?bucket=done&contractor_id=1'],
+      ['15 ongoing', '/drive-test/sites?bucket=ongoing&contractor_id=1'],
     ]) {
-      expect(within(row).getByText(value).closest('a')).toHaveAttribute('href', href)
+      expect(within(row).getByText(text).closest('a')).toHaveAttribute('href', href)
     }
   })
 
@@ -1224,27 +1224,27 @@ describe('drill-through', () => {
     draw()
 
     const card = await section('Contractor scorecard')
-    const row = within(card).getByText('Unattributed').closest('tr')
-    expect(within(row).getByText('6').closest('a')).toHaveAttribute(
+    const row = within(card).getByText('Unattributed').closest('.dt-contractor-row')
+    expect(within(row).getByText('6 ongoing').closest('a')).toHaveAttribute(
       'href',
       '/drive-test/sites?bucket=ongoing&contractor_id=none',
     )
   })
 
-  it('links every count in a province row', async () => {
+  it('links every figure of a province card', async () => {
     serve()
     draw()
 
-    const table = await section('Province breakdown')
-    const row = within(table).getByText('Kerman').closest('tr')
-    for (const [value, href] of [
-      ['60', '/drive-test/sites?bucket=onair&province_id=7'],
-      ['23', '/drive-test/sites?bucket=done&province_id=7'],
-      ['37', '/drive-test/sites?bucket=remaining&province_id=7'],
-      ['30', '/drive-test/sites?bucket=ongoing&province_id=7'],
-      ['7', '/drive-test/sites?bucket=problematic&province_id=7'],
+    const grid = await section('Province breakdown')
+    const card = within(grid).getByText('Kerman').closest('.dt-province-card')
+    for (const [text, href] of [
+      ['60 on air', '/drive-test/sites?bucket=onair&province_id=7'],
+      ['23 done', '/drive-test/sites?bucket=done&province_id=7'],
+      ['37 remaining', '/drive-test/sites?bucket=remaining&province_id=7'],
+      ['30 ongoing', '/drive-test/sites?bucket=ongoing&province_id=7'],
+      ['7 problem', '/drive-test/sites?bucket=problematic&province_id=7'],
     ]) {
-      expect(within(row).getByText(value).closest('a')).toHaveAttribute('href', href)
+      expect(within(card).getByText(text).closest('a')).toHaveAttribute('href', href)
     }
   })
 
@@ -1706,6 +1706,14 @@ describe('the trend section', () => {
 })
 
 describe('the contractor scorecard', () => {
+  // The table became a list of ranked rows -- see ContractorScorecard. Each
+  // row is now `.dt-contractor-row`, sortable through a row of chip buttons
+  // above the list rather than clickable header cells.
+  const rowNames = (card) =>
+    Array.from(card.querySelectorAll('.dt-contractor-row')).map(
+      (row) => row.querySelector('.dt-contractor-name').textContent,
+    )
+
   it('scores each contractor against their assignment, not every site they are named on', async () => {
     // Alfa is named on 60 on-air sites, 5 of them problematic. Problematic
     // work was never committed to them, so the book is 40 done + 15 ongoing
@@ -1714,7 +1722,7 @@ describe('the contractor scorecard', () => {
     draw()
 
     const card = await section('Contractor scorecard')
-    const row = within(card).getByText('Alfa Drive Tests').closest('tr')
+    const row = within(card).getByText('Alfa Drive Tests').closest('.dt-contractor-row')
     expect(within(row).getByText('55')).toBeInTheDocument()
     expect(within(row).getByText('73%')).toBeInTheDocument()
   })
@@ -1728,7 +1736,7 @@ describe('the contractor scorecard', () => {
 
     const card = await section('Contractor scorecard')
     const widths = ['Alfa Drive Tests', 'Beta Surveys'].map((name) => {
-      const row = within(card).getByText(name).closest('tr')
+      const row = within(card).getByText(name).closest('.dt-contractor-row')
       return row.querySelector('.dt-book-bar').style.width
     })
 
@@ -1742,7 +1750,7 @@ describe('the contractor scorecard', () => {
     draw()
 
     const card = await section('Contractor scorecard')
-    const row = within(card).getByText('Alfa Drive Tests').closest('tr')
+    const row = within(card).getByText('Alfa Drive Tests').closest('.dt-contractor-row')
     const segments = within(row)
       .getAllByTestId('dt-bar')
       .map((seg) => seg.dataset.segment)
@@ -1765,7 +1773,7 @@ describe('the contractor scorecard', () => {
     draw()
 
     const card = await section('Contractor scorecard')
-    const row = within(card).getByText('Alfa Drive Tests').closest('tr')
+    const row = within(card).getByText('Alfa Drive Tests').closest('.dt-contractor-row')
     expect(within(row).getByText('55')).toBeInTheDocument()
     expect(within(row).queryByText('\u2014')).not.toBeInTheDocument()
   })
@@ -1779,62 +1787,50 @@ describe('the contractor scorecard', () => {
     draw()
 
     const card = await section('Contractor scorecard')
-    const names = () =>
-      within(card)
-        .getAllByRole('row')
-        .slice(1)
-        .map((row) => row.querySelector('td').textContent)
 
-    expect(names()).toEqual(['Alfa Drive Tests', 'Beta Surveys', 'Unattributed'])
+    expect(rowNames(card)).toEqual(['Alfa Drive Tests', 'Beta Surveys', 'Unattributed'])
 
     // Ongoing ascending: Alfa holds 15, Beta 18. Unattributed holds 6 and
     // would sort first on the figures alone; it stays last.
     await userEvent.click(within(card).getByRole('button', { name: /Ongoing/ }))
     await userEvent.click(within(card).getByRole('button', { name: /Ongoing/ }))
-    expect(names()).toEqual(['Alfa Drive Tests', 'Beta Surveys', 'Unattributed'])
+    expect(rowNames(card)).toEqual(['Alfa Drive Tests', 'Beta Surveys', 'Unattributed'])
 
     await userEvent.click(within(card).getByRole('button', { name: /Achievement/ }))
-    expect(names()).toEqual(['Alfa Drive Tests', 'Beta Surveys', 'Unattributed'])
+    expect(rowNames(card)).toEqual(['Alfa Drive Tests', 'Beta Surveys', 'Unattributed'])
 
     // Assignment ascending puts the smaller book first, and still not the
     // unattributed one.
     await userEvent.click(within(card).getByRole('button', { name: /Assignment/ }))
     await userEvent.click(within(card).getByRole('button', { name: /Assignment/ }))
-    expect(names()).toEqual(['Beta Surveys', 'Alfa Drive Tests', 'Unattributed'])
+    expect(rowNames(card)).toEqual(['Beta Surveys', 'Alfa Drive Tests', 'Unattributed'])
   })
 
-  it('tells a screen reader which column the table is sorted on', async () => {
+  it('tells a screen reader which control the list is sorted on', async () => {
     serve()
     draw()
 
     const card = await section('Contractor scorecard')
-    const header = () =>
-      within(card).getByRole('button', { name: /Ongoing/ }).closest('th')
+    const control = () => within(card).getByRole('button', { name: /Ongoing/ })
 
-    expect(header()).toHaveAttribute('aria-sort', 'none')
-    await userEvent.click(within(card).getByRole('button', { name: /Ongoing/ }))
-    expect(header()).toHaveAttribute('aria-sort', 'descending')
+    expect(control()).toHaveAttribute('aria-pressed', 'false')
+    await userEvent.click(control())
+    expect(control()).toHaveAttribute('aria-pressed', 'true')
   })
 
-  it('has exactly five columns: Contractor, Assignment, DT done, Ongoing, Achievement', async () => {
+  it('has exactly five sort controls: Contractor, Assignment, DT done, Ongoing, Achievement', async () => {
     serve()
     draw()
 
     const card = await section('Contractor scorecard')
-    const headers = within(card)
-      .getAllByRole('columnheader')
-      .map((h) => h.textContent.trim())
-    expect(headers).toEqual([
-      'Contractor',
-      'Assignment',
-      'DT done',
-      'Ongoing',
-      'Achievement',
-      'Where the work is',
-    ])
+    const controls = within(card).getByRole('group', { name: 'Sort contractors by' })
+    const labels = within(controls)
+      .getAllByRole('button')
+      .map((b) => b.textContent.trim())
+    expect(labels).toEqual(['Contractor', 'Assignment', 'DT done', 'Ongoing', 'Achievement'])
   })
 
-  it('shows no Problematic or Not started header or cell', async () => {
+  it('shows no Problematic or Not started figure anywhere in the list', async () => {
     serve()
     draw()
 
@@ -1849,7 +1845,7 @@ describe('the contractor scorecard', () => {
     draw()
 
     const card = await section('Contractor scorecard')
-    const row = within(card).getByText('Alfa Drive Tests').closest('tr')
+    const row = within(card).getByText('Alfa Drive Tests').closest('.dt-contractor-row')
     expect(within(row).getByText('55')).toBeInTheDocument()
     expect(within(row).getByText('73%')).toBeInTheDocument()
   })
@@ -1864,20 +1860,16 @@ describe('the contractor scorecard', () => {
     )
   })
 
-  it('keeps the unattributed row last under every sortable column', async () => {
+  it('keeps the unattributed row last under every sortable control', async () => {
     serve()
     draw()
 
     const card = await section('Contractor scorecard')
-    const names = () =>
-      within(card)
-        .getAllByRole('row')
-        .slice(1)
-        .map((row) => row.querySelector('td').textContent)
 
     for (const column of ['Contractor', 'Assignment', 'DT done', 'Ongoing', 'Achievement']) {
       await userEvent.click(within(card).getByRole('button', { name: column }))
-      expect(names()[names().length - 1]).toBe('Unattributed')
+      const names = rowNames(card)
+      expect(names[names.length - 1]).toBe('Unattributed')
     }
   })
 })

@@ -88,7 +88,7 @@
      drawn as. */
   --dt-track: #e7ecf3;
   --dt-ghost: rgba(85, 99, 122, 0.17);
-  --dt-gap: 18px;
+  --dt-gap: 10px;
 
   /* Type */
   --font-display: 'Space Grotesk', 'Vazirmatn', sans-serif;
@@ -395,6 +395,11 @@ tbody td { padding: 13px 16px; border-bottom: 1px solid var(--border-soft); font
 tbody tr { transition: background 0.13s; }
 tbody tr:hover { background: var(--surface-2); }
 tbody tr:last-child td { border-bottom: none; }
+
+/* The breakdown card's own table-view toggle: a denser row than the
+   platform default, to match the rest of this page's density. */
+.dt-mini-table thead th { padding: 8px 10px; }
+.dt-mini-table tbody td { padding: 6px 10px; font-size: 13px; }
 
 /* ---------- Status pills ---------- */
 .pill {
@@ -1494,7 +1499,7 @@ tbody tr:last-child td { border-bottom: none; }
 }
 .dt-hero-primary { display: grid; gap: 2px; min-width: 0; }
 .dt-hero-figure {
-  font-family: var(--font-display); font-size: 52px; font-weight: 600;
+  font-family: var(--font-display); font-size: 42px; font-weight: 600;
   letter-spacing: -0.03em; line-height: 1; color: var(--text);
   justify-self: start;
 }
@@ -1526,7 +1531,7 @@ a.dt-backlog:hover { box-shadow: var(--shadow-1); transform: translateY(-1px); }
 .dt-hero-bar-row .dt-hero-legend { margin-top: 0; flex-shrink: 0; }
 
 .dt-hero-bar {
-  display: flex; width: 100%; height: 14px; overflow: hidden;
+  display: flex; width: 100%; height: 8px; overflow: hidden;
   border-radius: 999px; background: var(--dt-track);
 }
 /* A hairline of surface between fills marks them apart without adding a
@@ -1535,9 +1540,10 @@ a.dt-backlog:hover { box-shadow: var(--shadow-1); transform: translateY(-1px); }
 .dt-hero-segment + .dt-hero-segment { box-shadow: -1.5px 0 0 0 var(--surface-1); }
 
 .dt-state-tiles {
-  list-style: none; margin: 0; padding: 0;
-  display: grid; gap: 10px;
-  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  list-style: none; margin: 4px 0 0; padding: 0;
+  display: grid; gap: 8px;
+  grid-template-columns: 1.5fr 1fr 1fr 0.95fr;
+  grid-template-rows: auto auto;
 }
 .dt-state-tile {
   display: grid; gap: 5px; height: 100%;
@@ -1553,24 +1559,81 @@ a.dt-state-tile:hover {
   box-shadow: var(--shadow-1);
   transform: translateY(-1px);
 }
+
+/* Hierarchy, not five equal tiles: DT done leads as the one card with
+   weight, Ongoing and Problematic are a step down beside it, and On air /
+   Pending fall out of card chrome entirely -- see the quiet-list rules
+   below. Placed by data-tile rather than DOM order, so the tiles keep
+   reading on air, done, pending, ongoing, problematic (the order a screen
+   reader and the drill-through tests both rely on) while sitting wherever
+   the layout below actually puts them. */
+.dt-state-tiles > li { height: auto; }
+.dt-state-tiles > li[data-tile="done"] { grid-column: 1; grid-row: 1 / span 2; }
+.dt-state-tiles > li[data-tile="ongoing"] { grid-column: 2; grid-row: 1 / span 2; }
+.dt-state-tiles > li[data-tile="problematic"] { grid-column: 3; grid-row: 1 / span 2; }
+.dt-state-tiles > li[data-tile="onair"] { grid-column: 4; grid-row: 1; }
+.dt-state-tiles > li[data-tile="pending"] { grid-column: 4; grid-row: 2; }
+
+/* DT done: the figure this band is actually about, tinted its own colour
+   and set a size above everything beside it. */
+.dt-state-tile[data-tile="done"] {
+  background: #f1f9f4;
+  border-color: #bfe0cd;
+  padding: 14px 16px;
+}
+.dt-state-tile[data-tile="done"] .dt-state-figure { font-size: 28px; }
+
+/* Ongoing and Problematic: medium weight, one step down from Done. */
+.dt-state-tile[data-tile="ongoing"] .dt-state-figure,
+.dt-state-tile[data-tile="problematic"] .dt-state-figure { font-size: 23px; }
+
 /* Problematic is the operational blocker on this page, and carries its
    state as a wash background. */
 .dt-state-tile-problem {
-  background: var(--dt-problem-wash);
-  border-color: rgba(207, 59, 59, 0.26);
+  background: #fdf3f3;
+  border-color: #efc9c9;
   color: var(--dt-problem);
 }
 .dt-state-tile-problem .dt-state-name,
 .dt-state-tile-problem .dt-state-share { color: var(--dt-problem); opacity: 0.86; }
 a.dt-state-tile-problem:hover { border-color: rgba(207, 59, 59, 0.5); }
 
-/* Pending is what the programme is actually managed against, so it is the
-   one tile emphasised without a state colour — the surface a level up from
-   the others, and a border strong enough to read as singled out. */
+/* Pending is what the programme is actually managed against, so it keeps a
+   class of its own -- but On air and Pending both leave card chrome behind
+   below, in favour of a quiet two-line label/value list. */
 .dt-state-tile-pending {
   background: var(--surface-1);
   border-color: var(--border);
 }
+
+/* On air and Pending: not cards. Totals, not states something is
+   happening to -- see KpiBand -- so they read as a compact label/value
+   line each rather than competing on weight with the three that are. */
+.dt-state-tile[data-tile="onair"],
+.dt-state-tile[data-tile="pending"] {
+  display: grid; grid-template-columns: auto 1fr; align-items: baseline;
+  column-gap: 8px; row-gap: 1px;
+  background: none; border-color: transparent; box-shadow: none;
+  padding: 3px 2px;
+}
+.dt-state-tile[data-tile="onair"] .dt-state-mark,
+.dt-state-tile[data-tile="pending"] .dt-state-mark { display: none; }
+.dt-state-tile[data-tile="onair"] .dt-state-head,
+.dt-state-tile[data-tile="pending"] .dt-state-head { grid-column: 1; grid-row: 1; }
+.dt-state-tile[data-tile="onair"] .dt-state-figure,
+.dt-state-tile[data-tile="pending"] .dt-state-figure {
+  grid-column: 2; grid-row: 1; justify-self: end; font-size: 14px;
+}
+.dt-state-tile[data-tile="onair"] .dt-state-foot,
+.dt-state-tile[data-tile="pending"] .dt-state-foot {
+  grid-column: 1 / -1; grid-row: 2; font-size: 10.5px;
+}
+a.dt-state-tile[data-tile="onair"]:hover,
+a.dt-state-tile[data-tile="pending"]:hover {
+  border-color: transparent; box-shadow: none; transform: none;
+  color: var(--dt-done);
+}
+
 .dt-state-head { display: flex; align-items: center; gap: 8px; }
 .dt-state-mark {
   display: grid; place-items: center; width: 20px; height: 20px;
@@ -1599,23 +1662,28 @@ a.dt-state-tile-problem:hover { border-color: rgba(207, 59, 59, 0.5); }
 .dt-section {
   background: var(--surface-1);
   border: 1px solid var(--border-soft);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius);
   box-shadow: var(--shadow-1);
-  padding: 20px 22px 22px;
+  padding: 14px 18px 16px;
   min-width: 0;
 }
 .dt-section-head {
   display: flex; align-items: flex-start; gap: 16px;
-  padding-bottom: 14px; border-bottom: 1px solid var(--border-soft);
+  padding-bottom: 10px; border-bottom: 1px solid var(--border-soft);
+}
+/* Title and subtitle share one line -- the subtitle is a clause on the
+   heading, not a second row, so a card's chrome costs less height. */
+.dt-section-head > div {
+  display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; min-width: 0;
 }
 .dt-section-title {
-  font-size: 15px; font-family: var(--font-display); font-weight: 600;
+  font-size: 13px; font-family: var(--font-display); font-weight: 600;
 }
 .dt-section-sub {
-  font-size: 12.5px; color: var(--text-dim); margin: 3px 0 0; max-width: 62ch;
+  font-size: 11.5px; color: var(--text-dim); margin: 0; max-width: 56ch;
 }
 .dt-section-actions { margin-left: auto; }
-.dt-section-body { padding: 16px 0 0; }
+.dt-section-body { padding: 12px 0 0; }
 .dt-section-total {
   display: inline-flex; align-items: baseline; gap: 7px;
   font-size: 12.5px; color: var(--text-dim);
@@ -1628,8 +1696,8 @@ a.dt-state-tile-problem:hover { border-color: rgba(207, 59, 59, 0.5); }
 .dt-empty {
   text-align: center; padding: 30px 20px; color: var(--text-dim); font-size: 13px;
 }
-.dt-note { font-size: 12px; color: var(--text-dim); margin: 14px 0 0; line-height: 1.5; }
-.dt-note-inline { font-size: 12px; color: var(--text-dim); margin-left: 10px; }
+.dt-note { font-size: 11px; color: var(--text-dim); margin: 10px 0 0; line-height: 1.5; }
+.dt-note-inline { font-size: 11px; color: var(--text-dim); margin-left: 10px; }
 
 .dt-failed {
   display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
@@ -1718,6 +1786,124 @@ a.dt-bar-link:hover .dt-bar-go { opacity: 1; transform: translateX(2px); }
 .dt-book-seg { display: block; height: 100%; border-radius: 2px; min-width: 2px; }
 .dt-book-seg:first-child { border-radius: 4px 2px 2px 4px; }
 .dt-book-seg:last-child { border-radius: 2px 4px 4px 2px; }
+
+/* ---------- sort controls, standalone ----------
+   Same look as a sortable column header, but not one: both the contractor
+   scorecard and the province grid replaced their <table> with rows/cards a
+   header row cannot sit above, so the same control now sits as a row of
+   chips above the list instead. */
+.dt-sort-controls {
+  display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px;
+}
+.dt-sort-chip {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 4px 10px; border-radius: 999px;
+  background: var(--surface-2); border: 1px solid var(--border-soft);
+  color: var(--text-muted); font: inherit; font-size: 11.5px; font-weight: 500;
+  transition: background .13s, color .13s, border-color .13s;
+}
+.dt-sort-chip:hover { color: var(--text); border-color: var(--border); }
+.dt-sort-chip[aria-pressed="true"] {
+  background: var(--surface-1); color: var(--text); border-color: var(--border);
+  box-shadow: var(--shadow-1); font-weight: 600;
+}
+
+/* ---------- contractor scorecard: ranked rows ----------
+   Each row: a rank badge, the book (name + bar + the two counts it splits
+   into), the assignment figure, and achievement as one pill. Replaces a
+   five-column table whose chrome none of these figures needed. */
+.dt-contractor-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.dt-contractor-row {
+  display: grid; align-items: center;
+  grid-template-columns: 22px minmax(0, 1fr) auto auto;
+  gap: 8px 14px;
+  background: #fafbfd; border: 1px solid #e7ecf3; border-radius: 10px;
+  padding: 9px 14px;
+}
+.dt-contractor-row-unattributed {
+  background: none; border-style: dashed; border-color: var(--border);
+}
+.dt-rank-badge {
+  display: grid; place-items: center; width: 22px; height: 22px;
+  border-radius: 50%; flex: none;
+  font-family: var(--font-display); font-size: 11px; font-weight: 700;
+  background: var(--surface-3); color: var(--text-muted);
+}
+.dt-rank-badge-1 { background: var(--dt-done); color: #fff; }
+.dt-rank-badge-empty { background: none; }
+.dt-contractor-main { display: grid; gap: 5px; min-width: 0; }
+.dt-contractor-name {
+  font-size: 13px; font-weight: 600; color: var(--text); text-decoration: none;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+a.dt-contractor-name:hover { text-decoration: underline; text-decoration-color: var(--border); }
+.dt-contractor-row-unattributed .dt-contractor-name { font-weight: 400; font-style: italic; color: var(--text-muted); }
+.dt-contractor-stats {
+  display: flex; align-items: center; gap: 12px;
+  font-size: 11px; color: var(--text-dim);
+}
+.dt-contractor-assign {
+  display: grid; justify-items: end; gap: 0; text-align: right;
+}
+.dt-contractor-assign-figure {
+  font-family: var(--font-display); font-size: 19px; font-weight: 600;
+  letter-spacing: -0.01em; color: var(--text); text-decoration: none; line-height: 1.1;
+}
+a.dt-contractor-assign-figure:hover { color: var(--dt-done); }
+.dt-contractor-assign-caption { font-size: 10px; color: var(--text-dim); }
+
+/* Achievement, as one pill rather than a coloured percentage cell. Amber
+   sits back in this one place on the page: a pill's own shape and label
+   carry the reading, so this reads as a status chip rather than a data
+   series that has to stay colour-blind distinct from Ongoing. */
+.dt-pill {
+  justify-self: end; padding: 3px 11px; border-radius: 999px;
+  font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.dt-pill-good { background: #eaf5ef; color: var(--dt-done); }
+.dt-pill-mid { background: #faf2e3; color: #a3660b; }
+.dt-pill-bad { background: #fdf3f3; color: var(--dt-problem); }
+.dt-pill-dim { background: var(--surface-3); color: var(--text-dim); }
+
+/* ---------- province breakdown: card grid ----------
+   Three to a row, each card its own scope-the-dashboard control -- see
+   ProvinceTable for why a card can be that and a table row could not.
+   Replaces a seven-column table whose Remaining/Ongoing/Problematic figures
+   this grid now carries as a chip line instead. */
+.dt-province-grid {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;
+}
+.dt-province-card {
+  display: grid; gap: 7px; text-align: left;
+  background: var(--surface-1); border: 1px solid var(--border-soft);
+  border-radius: var(--radius); padding: 12px 14px;
+  cursor: pointer;
+  transition: border-color .14s, box-shadow .14s, transform .14s;
+}
+.dt-province-card:hover {
+  border-color: var(--border); box-shadow: var(--shadow-1); transform: translateY(-1px);
+}
+.dt-province-card:focus-visible { outline: 2px solid var(--dt-ongoing); outline-offset: 2px; }
+.dt-province-card-problem {
+  background: #fdf3f3; border-color: #efc9c9;
+}
+.dt-province-head {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
+}
+.dt-province-name { font-size: 13px; font-weight: 600; color: var(--text); }
+.dt-province-rate {
+  font-family: var(--font-display); font-size: 16px; font-weight: 600;
+  letter-spacing: -0.01em; text-align: right; flex: none;
+}
+.dt-province-chips {
+  display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap;
+  font-size: 11.5px; color: var(--text-muted);
+}
+.dt-province-chips-muted { font-size: 11px; color: var(--text-dim); }
+.dt-province-chips .dt-cell-link,
+.dt-province-chips .dt-cell-link-bad { font-weight: 500; }
+.dt-chip-sep { color: var(--text-dim); }
 
 /* ---------- plan and delivery ---------- */
 .dt-figures {
@@ -1842,19 +2028,6 @@ a.dt-bar-link:hover .dt-bar-go { opacity: 1; transform: translateX(2px); }
    "problematic" is red whether or not it is also a link. */
 .dt-cell-link-bad { color: var(--dt-problem); }
 .dt-col-action { width: 40px; }
-.dt-col-book { width: 190px; min-width: 150px; }
-.dt-rate {
-  font-size: 12.5px; font-weight: 600; font-variant-numeric: tabular-nums;
-}
-.dt-row-filter {
-  display: grid; place-items: center; width: 26px; height: 26px;
-  border: 0; border-radius: 6px; background: transparent; color: var(--text-dim);
-  opacity: 0; transition: opacity .13s, background .13s, color .13s;
-}
-tbody tr:hover .dt-row-filter { opacity: 1; }
-.dt-row-filter:hover { background: var(--surface-3); color: var(--text); }
-.dt-row-filter:focus-visible { opacity: 1; }
-.dt-unattributed td { color: var(--text-muted); font-style: italic; }
 .dt-expand { display: flex; align-items: center; padding-top: 12px; }
 
 /* ---------- trend ---------- */
@@ -1977,33 +2150,31 @@ tbody tr:hover .dt-row-filter { opacity: 1; }
   color: var(--text); font: inherit; font-size: 12.5px; font-variant-numeric: tabular-nums;
 }
 
+/* A plain text row, not a card grid: On-aired / DT done / Gap / Coverage
+   were four identical cards competing with the chart underneath them for
+   weight they did not need -- the numbers are the point, not a box around
+   each one. */
 .dt-flowtiles {
   list-style: none; margin: 0; padding: 0;
-  display: grid; gap: 10px;
-  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 22px;
 }
 .dt-flowtile {
-  display: grid; gap: 4px; align-content: start;
-  padding: 12px 14px 11px;
-  background: var(--surface-2); border: 1px solid var(--border-soft);
-  border-top: 2px solid var(--border-soft);
-  border-radius: var(--radius);
+  display: inline-flex; align-items: baseline; gap: 6px;
 }
-/* A tile that names a series borrows its line colour as a top rule, so the
-   card teaches its own colour key before a reader has found the legend. */
-.dt-flowtile-ongoing { border-top-color: var(--dt-ongoing); }
-.dt-flowtile-done { border-top-color: var(--dt-done); }
-.dt-flowtile-problem { border-top-color: var(--dt-problem); }
 .dt-flowtile-label { font-size: 11.5px; color: var(--text-muted); font-weight: 500; }
 .dt-flowtile-figure {
-  font-family: var(--font-display); font-size: 23px; font-weight: 600;
+  font-family: var(--font-display); font-size: 18px; font-weight: 600;
   letter-spacing: -0.015em; line-height: 1.1;
 }
+/* A figure borrows its own series colour, which is what the tile card's top
+   rule used to carry -- a reader still gets the colour key before finding
+   the legend, without the card chrome around it. */
+.dt-flowtile-ongoing .dt-flowtile-figure { color: var(--dt-ongoing); }
+.dt-flowtile-done .dt-flowtile-figure { color: var(--dt-done); }
+.dt-flowtile-problem .dt-flowtile-figure { color: var(--dt-problem); }
 
-/* The legend: the series/lane colours the tiles and end labels already carry,
-   named once in one place, so a reader never has to infer identity from hue
-   alone. The hatch swatch is a mini version of the chart's own pattern, not a
-   flat rect, so it reads as "the same texture" rather than a third colour. */
+/* The legend: the series/lane colours the tiles already carry, named once
+   in one place, so a reader never has to infer identity from hue alone. */
 .dt-flow-legend {
   list-style: none; margin: 0; padding: 0;
   display: flex; flex-wrap: wrap; gap: 16px;
@@ -2014,35 +2185,16 @@ tbody tr:hover .dt-row-filter { opacity: 1; }
 .dt-flow-legend-dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
 .dt-flow-legend-swatch {
   width: 14px; height: 9px; border-radius: 2px; flex: none;
-  background: var(--dt-problem-wash);
-  background-image: repeating-linear-gradient(
-    45deg,
-    rgba(207, 59, 59, 0.3), rgba(207, 59, 59, 0.3) 1.5px,
-    transparent 1.5px, transparent 4px
-  );
-  border: 1px solid var(--dt-problem);
+  background: linear-gradient(180deg, rgba(207, 59, 59, 0.12), rgba(207, 59, 59, 0.03));
+  border: 1px solid rgba(207, 59, 59, 0.3);
 }
 
-/* The chart itself. `overflow: visible` lets the end labels in the right
-   margin run a hair past the viewBox without being clipped -- see
-   charts/FlowChart for why that margin is drawn in fixed lanes. */
+/* The chart itself -- two lines, the soft fill between them, one baseline,
+   month labels. */
 .dt-flowchart { position: relative; }
 .dt-flowchart:focus-visible { outline: 2px solid var(--dt-ongoing); outline-offset: 3px; border-radius: 4px; }
 .dt-flowchart-svg { width: 100%; height: auto; display: block; overflow: visible; }
 .dt-flowchart-yearline { stroke: var(--border); stroke-width: 1; stroke-dasharray: 1.5 3; }
-.dt-flowchart-bracket { fill: none; stroke: var(--text-dim); stroke-width: 1; }
-.dt-flowchart-badge {
-  fill: var(--dt-problem-wash); stroke: var(--dt-problem); stroke-width: 1;
-}
-.dt-flowchart-badge-text {
-  fill: var(--dt-problem); font-size: 10.5px; font-weight: 600;
-  font-variant-numeric: tabular-nums;
-}
-.dt-flowchart-endlabel { fill: var(--text-dim); font-size: 11px; }
-.dt-flowchart-endvalue {
-  font-size: 13px; font-weight: 600; font-family: var(--font-display);
-}
-.dt-flowchart-caption { fill: var(--text-dim); font-size: 11px; font-style: italic; }
 
 /* Two readings of the same figure, side by side. Also what keeps a five-row
    bar chart from stretching its marks across a 1280px page. */
@@ -2060,15 +2212,18 @@ tbody tr:hover .dt-row-filter { opacity: 1; }
 @media (max-width: 1080px) {
   .dt-pair { grid-template-columns: minmax(0, 1fr); }
 
-  .dt-col-book { width: auto; }
+  .dt-province-grid { grid-template-columns: repeat(2, 1fr); }
 }
 @media (max-width: 760px) {
   .dt-hero { padding: 20px 16px; gap: 16px; }
   /* Stacked rather than shrunk: the hero figure keeps its weight and the
      backlog badge keeps its accent, which is the whole point of both. */
   .dt-hero-head { align-items: flex-start; }
-  .dt-hero-figure { font-size: 44px; }
-  .dt-state-tiles { grid-template-columns: minmax(0, 1fr); }
+  .dt-hero-figure { font-size: 36px; }
+  .dt-state-tiles { grid-template-columns: minmax(0, 1fr); grid-template-rows: none; }
+  .dt-state-tiles > li[data-tile] { grid-column: 1; grid-row: auto; }
+  .dt-state-tile[data-tile="onair"],
+  .dt-state-tile[data-tile="pending"] { padding: 8px 2px; }
   .dt-flowtiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .dt-bar-link { grid-template-columns: 110px 1fr 42px; }
   .dt-bar-share, .dt-bar-go { display: none; }
@@ -2078,8 +2233,10 @@ tbody tr:hover .dt-row-filter { opacity: 1; }
   .dt-key-scale { display: none; }
   .dt-flow-row { grid-template-columns: 104px minmax(0, 1fr) 54px; gap: 8px; }
   .dt-toolbar-right { margin-left: 0; width: 100%; }
-  .dt-row-filter { opacity: 1; }
-  .dt-section { padding: 16px 14px 18px; }
+  .dt-province-grid { grid-template-columns: minmax(0, 1fr); }
+  .dt-contractor-row { grid-template-columns: 22px minmax(0, 1fr) auto; }
+  .dt-contractor-assign { display: none; }
+  .dt-section { padding: 12px 14px 14px; }
   /* A sticky bar that wraps to three rows on a phone eats half the viewport;
      below this width it scrolls away with the page. */
   .dt-command { position: static; margin: 0 0 18px; padding: 0; box-shadow: none; }

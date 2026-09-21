@@ -25,41 +25,26 @@ import { DrawPath, FadeArea } from './primitives'
  * questions, which is why both stay one click apart rather than one
  * replacing the other.
  *
- * WHY A HATCH, NOT A COLOUR ALONE. The gap between the lines is the thing a
- * reader is actually here to see the shape of, and shading it in a flat
- * problem-red would make the chart's most important feature legible only to
- * someone who can see that hue as distinct from the two lines either side of
- * it. Diagonal hatching survives that: a colour-blind reader still sees the
- * area is textured differently from the plot around it.
+ * NO GRIDLINES, NO AXIS, NO HATCH. The figures a reader would check a
+ * y-axis against -- On-aired, DT done, Gap, Coverage -- are already named in
+ * the text row above the chart, in numerals rather than a ruler a reader has
+ * to interpolate against. What is left to draw is the shape: two lines and
+ * the gap between them, which a soft gradient reads as a shadow the second
+ * line casts rather than a ribbon that has to be decoded against a legend.
  */
 
 const VIEW_W = 740
-const VIEW_H = 392
+const VIEW_H = 300
 
-const PAD_L = 46
+const PAD_L = 16
 const MAIN_TOP = 16
 const MAIN_H = 228
-const MAIN_W = 518
+const MAIN_W = 700
 const PLOT_RIGHT = PAD_L + MAIN_W
 const MAIN_AXIS_Y = MAIN_TOP + MAIN_H + 20
 
-const STRIP_TOP = 312
-const STRIP_H = 62
-
-const BRACKET_X = PLOT_RIGHT + 8
-const BRACKET_W = 5
-const BADGE_X = BRACKET_X + BRACKET_W + 6
-const BADGE_MIN_W = 50
-const LABEL_MIN_GAP = 22
-
-/** Badge width from its own text, so "Gap -2,982" never clips against a box
- * sized for "Gap 42". A rough monospace-ish estimate is plenty here -- the
- * badge only ever holds tabular digits and a fixed "Gap " prefix. */
-function badgeWidthFor(text) {
-  return Math.max(BADGE_MIN_W, text.length * 6.4 + 16)
-}
-
-/** A rounded ceiling for an axis, so the top gridline is a readable number. */
+/** A rounded ceiling for an axis, so the plot has a readable amount of
+ * headroom above its highest point. */
 function niceMax(value) {
   if (value <= 0) return 10
   const magnitude = 10 ** Math.floor(Math.log10(value))
@@ -157,11 +142,6 @@ export default function FlowChart({ data }) {
   const prev = n > 1 ? points[n - 2] : null
   const gapDelta = prev ? last.gap - prev.gap : null
 
-  const gapValues = months.map((m) => m.on_aired - m.dt_done)
-  const gapMax = niceMax(Math.max(1, ...gapValues.map((v) => Math.abs(v))))
-  const zeroY = STRIP_TOP + STRIP_H / 2
-  const stripY = (v) => zeroY - (v / gapMax) * (STRIP_H / 2)
-
   const openTail = last.isOpen && n > 1
 
   const solidLineFor = (key) => (openTail ? points.slice(0, -1) : points)
@@ -179,32 +159,6 @@ export default function FlowChart({ data }) {
           .reverse()
           .map((p, i) => `L${x(n - 1 - i)},${y(p.dtDone)}`)
           .join(' ')} Z`
-
-  // Bracket, badge and end labels at the right edge -- separate x-lanes so
-  // the badge and the two series labels can never collide however close the
-  // two lines have drawn together.
-  const yOnAir = y(last.onAir)
-  const yDtDone = y(last.dtDone)
-  const yTop = Math.min(yOnAir, yDtDone)
-  const yBottom = Math.max(yOnAir, yDtDone)
-  const badgeY = (yTop + yBottom) / 2
-
-  let onAirLabelY = yOnAir
-  let dtDoneLabelY = yDtDone
-  if (Math.abs(yOnAir - yDtDone) < LABEL_MIN_GAP) {
-    const mid = (yOnAir + yDtDone) / 2
-    if (yOnAir <= yDtDone) {
-      onAirLabelY = mid - LABEL_MIN_GAP / 2
-      dtDoneLabelY = mid + LABEL_MIN_GAP / 2
-    } else {
-      dtDoneLabelY = mid - LABEL_MIN_GAP / 2
-      onAirLabelY = mid + LABEL_MIN_GAP / 2
-    }
-  }
-
-  const badgeText = `Gap ${count(last.gap)}`
-  const badgeW = badgeWidthFor(badgeText)
-  const labelX = BADGE_X + badgeW + 10
 
   const labelEvery = isCumulative ? 3 : months.length > 8 ? 2 : 1
 
@@ -314,30 +268,23 @@ export default function FlowChart({ data }) {
       >
         <svg viewBox={`0 0 ${VIEW_W} ${VIEW_H}`} className="dt-flowchart-svg">
           <defs>
-            <pattern id={`${base}-hatch`} width="6" height="6" patternTransform="rotate(45)" patternUnits="userSpaceOnUse">
-              <rect width="6" height="6" fill="var(--dt-problem)" opacity="0.055" />
-              <line x1="0" y1="0" x2="0" y2="6" stroke="var(--dt-problem)" strokeWidth="1.4" opacity="0.28" />
-            </pattern>
+            {/* A soft shadow rather than a textured ribbon: the two lines and
+                the space between them are the whole chart now, so the gap
+                can read as a shadow one line casts on the other instead of a
+                ribbon that needs decoding against a legend. */}
+            <linearGradient id={`${base}-gap-gradient`} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="var(--dt-problem)" stopOpacity="0.12" />
+              <stop offset="100%" stopColor="var(--dt-problem)" stopOpacity="0.03" />
+            </linearGradient>
           </defs>
 
-          {/* Main plot gridlines and scale -- four bands, not two, so a
-              reader can place a point without eyeballing a quarter-way
-              interpolation between the only two labelled values. */}
-          {[0, 0.25, 0.5, 0.75, 1].map((t) => {
-            const value = floor + span * (1 - t)
-            const gy = MAIN_TOP + MAIN_H * t
-            return (
-              <g key={`g-${t}`}>
-                <line x1={PAD_L} x2={PLOT_RIGHT} y1={gy} y2={gy} className="dt-gridline" />
-                <text x={PAD_L - 8} y={gy + 4} className="dt-axis-label" textAnchor="end">
-                  {count(Math.round(value))}
-                </text>
-              </g>
-            )
-          })}
+          {/* One hairline baseline, at the foot of the plot -- not a ruler,
+              just where the months sit. */}
+          <line x1={PAD_L} x2={PLOT_RIGHT} y1={MAIN_TOP + MAIN_H} y2={MAIN_TOP + MAIN_H} className="dt-gridline" />
 
-          {/* The gap, as a textured ribbon between the two lines. */}
-          {areaPath && <FadeArea d={areaPath} fill={`url(#${base}-hatch)`} />}
+          {/* The gap between the lines, as a soft fill rather than a ribbon
+              that needs its own legend entry. */}
+          {areaPath && <FadeArea d={areaPath} fill={`url(#${base}-gap-gradient)`} />}
 
           {/* Year boundaries, cumulative only. */}
           {isCumulative &&
@@ -361,8 +308,8 @@ export default function FlowChart({ data }) {
             { key: 'dtDone', color: STATE_COLOR.done },
           ].map((s) => (
             <g key={s.key}>
-              <DrawPath d={solidLineFor(s.key)} stroke={s.color} strokeWidth={3} />
-              {openTail && <DrawPath d={dashedLineFor(s.key)} stroke={s.color} strokeWidth={3} dashed />}
+              <DrawPath d={solidLineFor(s.key)} stroke={s.color} strokeWidth={2} />
+              {openTail && <DrawPath d={dashedLineFor(s.key)} stroke={s.color} strokeWidth={2} dashed />}
               {points.map((p, i) => {
                 const isLastOpen = openTail && i === n - 1
                 return (
@@ -383,31 +330,6 @@ export default function FlowChart({ data }) {
               })}
             </g>
           ))}
-
-          {/* Bracket, gap badge and end labels -- fixed lanes, so they never
-              collide however close the two lines end up. */}
-          <path
-            d={`M${BRACKET_X},${yTop} H${BRACKET_X + BRACKET_W} V${yBottom} H${BRACKET_X}`}
-            className="dt-flowchart-bracket"
-          />
-          <g transform={`translate(${BADGE_X}, ${badgeY})`}>
-            <rect x={0} y={-10} width={badgeW} height={20} rx={10} className="dt-flowchart-badge" />
-            <text x={badgeW / 2} y={4} textAnchor="middle" className="dt-flowchart-badge-text">
-              {badgeText}
-            </text>
-          </g>
-          <text x={labelX} y={onAirLabelY - 4} className="dt-flowchart-endlabel">
-            On-aired
-          </text>
-          <text x={labelX} y={onAirLabelY + 10} className="dt-flowchart-endvalue tnum" style={{ fill: STATE_COLOR.ongoing }}>
-            {count(last.onAir)}
-          </text>
-          <text x={labelX} y={dtDoneLabelY - 4} className="dt-flowchart-endlabel">
-            DT done
-          </text>
-          <text x={labelX} y={dtDoneLabelY + 10} className="dt-flowchart-endvalue tnum" style={{ fill: STATE_COLOR.done }}>
-            {count(last.dtDone)}
-          </text>
 
           {/* Month labels */}
           {months.map((m, j) =>
@@ -430,50 +352,13 @@ export default function FlowChart({ data }) {
             ) : null,
           )}
 
-          {/* Gap strip: one bar per month for that month's on-aired minus
-              DT done, not the running total above. Named on its own line --
-              without a caption the "+150 / 0 / -150" axis reads as a second,
-              unexplained chart bolted under the first. */}
-          <text x={PAD_L} y={STRIP_TOP - 16} className="dt-flowchart-caption">
-            Monthly gap — on-aired minus DT done
-          </text>
-          <line x1={PAD_L} x2={PLOT_RIGHT} y1={zeroY} y2={zeroY} className="dt-gridline" />
-          {[gapMax, 0, -gapMax].map((v) => (
-            <text key={`s-${v}`} x={PAD_L - 8} y={stripY(v) + 4} className="dt-axis-label" textAnchor="end">
-              {v > 0 ? '+' : ''}
-              {count(Math.round(v))}
-            </text>
-          ))}
-          {months.map((m, j) => {
-            const v = m.on_aired - m.dt_done
-            const cx = x(j + 1)
-            const colWidth = MAIN_W / Math.max(n - 1, 1)
-            const barW = Math.max(colWidth * 0.55, 3)
-            const barY = Math.min(zeroY, stripY(v))
-            const barH = Math.max(Math.abs(zeroY - stripY(v)), 1)
-            return (
-              <motion.rect
-                key={`b-${j}`}
-                x={cx - barW / 2}
-                y={barY}
-                width={barW}
-                height={barH}
-                fill={v >= 0 ? 'var(--dt-problem)' : 'var(--dt-done)'}
-                initial={reduced ? false : { scaleY: 0 }}
-                animate={{ scaleY: 1 }}
-                style={{ transformOrigin: `${cx}px ${zeroY}px` }}
-                transition={{ delay: 0.1 + j * 0.02, duration: 0.35 }}
-              />
-            )
-          })}
-
-          {/* Hit areas and hover/focus crosshair, spanning both plots. */}
+          {/* Hit areas and hover/focus crosshair, spanning the plot. */}
           {active != null && (
             <line
               x1={x(active + 1)}
               x2={x(active + 1)}
               y1={MAIN_TOP}
-              y2={STRIP_TOP + STRIP_H}
+              y2={MAIN_TOP + MAIN_H}
               className="dt-hover-rule"
             />
           )}
@@ -483,7 +368,7 @@ export default function FlowChart({ data }) {
               x={x(j + 1) - MAIN_W / Math.max(n - 1, 1) / 2}
               y={MAIN_TOP}
               width={MAIN_W / Math.max(n - 1, 1)}
-              height={STRIP_TOP + STRIP_H - MAIN_TOP}
+              height={MAIN_H}
               fill="transparent"
               onMouseEnter={() => setActive(j)}
               onMouseLeave={() => setActive(null)}
