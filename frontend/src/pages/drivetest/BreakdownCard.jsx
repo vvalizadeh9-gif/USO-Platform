@@ -106,7 +106,7 @@ function BreakdownTable({ points, total, unit }) {
 
   return (
     <div className="table-wrap scroll-x">
-      <table>
+      <table className="dt-mini-table">
         <thead>
           <tr>
             <th scope="col">{unit}</th>

@@ -21,7 +21,7 @@ import { count } from '../format'
  * their assignment; a province's is every on-air site in it) and that is the
  * caller's business, not this component's.
  */
-export default function BookBar({ segments, total, scaleMax, index = 0, label }) {
+export default function BookBar({ segments, total, scaleMax, index = 0, label, height }) {
   const reduced = useReducedMotion()
   const shown = segments.filter((s) => s.value > 0)
   const width = scaleMax > 0 ? (total / scaleMax) * 100 : 0
@@ -37,7 +37,7 @@ export default function BookBar({ segments, total, scaleMax, index = 0, label })
     >
       <motion.span
         className="dt-book-bar"
-        style={{ width: `${Math.max(width, 1.5)}%` }}
+        style={{ width: `${Math.max(width, 1.5)}%`, ...(height ? { height } : null) }}
         initial={reduced ? false : { scaleX: 0 }}
         animate={{ scaleX: 1 }}
         transition={{

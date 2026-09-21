@@ -266,9 +266,10 @@ export default function KpiBand({ kpis, provinceId }) {
 
       <ul className="dt-state-tiles">
         {tiles.map((s) => (
-          <li key={s.key}>
+          <li key={s.key} data-tile={s.key}>
             <Link
               to={s.href}
+              data-tile={s.key}
               className={`dt-state-tile${s.tone ? ` dt-state-tile-${s.tone}` : ''}`}
             >
               <span className="dt-state-head">
