@@ -1517,174 +1517,139 @@ tbody tr:last-child td { border-bottom: none; }
 
    Written in logical properties throughout so the band mirrors cleanly when a
    Persian label puts a run of it in RTL. */
-.dt-hero {
+/* ---------- the KPI band: three cards, pending broken into its parts ----------
+   Pending takes two columns because it is the only card carrying a
+   breakdown. On air and DT done are the same card twice; the asymmetry is
+   the point, and it is what stops the band reading as three equal things
+   when one of them is the one being managed. */
+.dt-kpi-band {
   display: grid;
-  gap: 18px;
+  gap: var(--dt-gap);
+  grid-template-columns: 1fr 1fr 2fr;
+  align-items: stretch;
+}
+.dt-kpi-card {
+  display: flex;
   background: var(--surface-1);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-2);
-  padding: 24px 26px;
+  padding: 18px 20px;
+  min-width: 0;
 }
-.dt-hero-head {
-  display: flex; align-items: flex-end; justify-content: space-between;
-  gap: 16px 26px; flex-wrap: wrap;
+/* The figure block, identical in all three cards so the headline numbers
+   sit on one line across the band rather than drifting by a few pixels. */
+.dt-kpi-main {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-areas:
+    'title title'
+    'figure delta'
+    'sub    sub'
+    'spark  spark';
+  align-items: baseline;
+  column-gap: 10px;
+  row-gap: 2px;
+  align-content: start;
+  min-width: 0;
+  flex: 1 1 auto;
 }
-.dt-hero-primary { display: grid; gap: 2px; min-width: 0; }
-.dt-hero-figure {
-  font-family: var(--font-display); font-size: 42px; font-weight: 600;
+.dt-kpi-title {
+  grid-area: title;
+  font-size: 12.5px; font-weight: 500; color: var(--text-muted);
+  margin-block-end: 4px;
+}
+.dt-kpi-figure {
+  grid-area: figure;
+  font-family: var(--font-display); font-size: 34px; font-weight: 600;
   letter-spacing: -0.03em; line-height: 1; color: var(--text);
   justify-self: start;
 }
-a.dt-hero-figure:hover { color: var(--dt-done); }
-.dt-hero-label { font-size: 12.5px; font-weight: 500; color: var(--text-muted); }
-.dt-hero-denominator { margin-block-start: 5px; font-size: 13px; color: var(--text-dim); }
-
-/* The backlog is what the programme is managed against, so it takes the one
-   accent in the band rather than a grey clause in a footer. */
-.dt-hero-aside { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
-.dt-backlog {
-  display: inline-flex; align-items: baseline; gap: 8px;
-  padding: 7px 14px; border-radius: 999px;
-  background: var(--dt-problem-wash);
-  border: 1px solid rgba(176, 90, 90, 0.3);
-  color: var(--dt-problem); font-size: 12.5px; font-weight: 500;
-  transition: box-shadow .14s, transform .14s;
+a.dt-kpi-figure:hover { color: var(--dt-done); }
+.dt-kpi-main > .dt-delta { grid-area: delta; justify-self: start; }
+.dt-kpi-sub {
+  grid-area: sub;
+  margin-block-start: 5px;
+  font-size: 12px; color: var(--text-dim);
 }
-a.dt-backlog:hover { box-shadow: var(--shadow-1); transform: translateY(-1px); }
-.dt-backlog b {
-  font-family: var(--font-display); font-size: 20px; font-weight: 600;
-  line-height: 1;
+/* Reserved whether or not a line is drawn: /drive-test/flow and
+   /drive-test/overview are separate requests and routinely land in that
+   order, and a card that grows when the second arrives moves the two beside
+   it. See SparkSlot. */
+.dt-kpi-sparkslot {
+  grid-area: spark;
+  display: block; min-height: 26px; margin-block-start: 10px;
+}
+.dt-spark { display: block; overflow: visible; }
+
+.dt-kpi-card-wide {
+  gap: 24px;
+  align-items: stretch;
+}
+.dt-kpi-card-wide .dt-kpi-main { flex: 0 0 34%; }
+.dt-kpi-parts {
+  display: flex; flex-direction: column; gap: 10px;
+  flex: 1 1 auto; min-width: 0; justify-content: center;
 }
 
-/* The bar and its legend sit on one line — the legend is what lets a
-   segment two per cent wide still be named without being read inside it. */
-.dt-hero-bar-row { display: flex; align-items: center; gap: 16px; }
-.dt-hero-bar-row .dt-hero-bar { flex: 1 1 auto; width: auto; }
-.dt-hero-bar-row .dt-hero-legend { margin-top: 0; flex-shrink: 0; }
-
-.dt-hero-bar {
+/* Pending split three ways. Unlike the four-state bar this replaces, every
+   segment here has a width a reader can see: the parts of pending run at
+   roughly 60/25/15, where the parts of on-air ran at 95/3/2. */
+.dt-kpi-partbar {
   display: flex; width: 100%; height: 8px; overflow: hidden;
   border-radius: 999px; background: var(--dt-track);
 }
+.dt-kpi-partbar-seg { display: block; height: 100%; }
 /* A hairline of surface between fills marks them apart without adding a
    stroke, which would be ink that is not data. */
-.dt-hero-segment { display: block; height: 100%; }
-.dt-hero-segment + .dt-hero-segment { box-shadow: -1.5px 0 0 0 var(--surface-1); }
+.dt-kpi-partbar-seg + .dt-kpi-partbar-seg { box-shadow: -1.5px 0 0 0 var(--surface-1); }
 
-.dt-state-tiles {
-  list-style: none; margin: 4px 0 0; padding: 0;
-  display: grid; gap: 8px;
-  grid-template-columns: 1.5fr 1fr 1fr 0.95fr;
-  grid-template-rows: auto auto;
-}
-.dt-state-tile {
-  display: grid; gap: 5px; height: 100%;
-  padding: 12px 14px;
-  background: var(--surface-2);
-  border: 1px solid var(--border-soft);
-  border-radius: var(--radius);
+.dt-kpi-partlist { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+/* The whole row is the link, not the figure inside it: the row is what a
+   reader aims at, and a 14-pixel number is not a target. */
+.dt-kpi-part {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: baseline;
+  column-gap: 10px;
+  padding: 6px 8px;
+  border-radius: var(--radius-sm, 6px);
   color: inherit;
-  transition: border-color .14s, box-shadow .14s, transform .14s;
+  transition: background .14s;
 }
-a.dt-state-tile:hover {
-  border-color: var(--border);
-  box-shadow: var(--shadow-1);
-  transform: translateY(-1px);
+a.dt-kpi-part:hover { background: var(--surface-2); }
+.dt-kpi-part-dot {
+  width: 9px; height: 9px; border-radius: 3px; flex: none;
+  align-self: center;
+}
+.dt-kpi-part-name { font-size: 12.5px; color: var(--text-muted); font-weight: 500; }
+.dt-kpi-part-value {
+  font-family: var(--font-display); font-size: 17px; font-weight: 600;
+  line-height: 1.1; letter-spacing: -0.01em;
+  justify-self: end;
+}
+.dt-kpi-part-share {
+  font-size: 11.5px; color: var(--text-dim); justify-self: end;
+  min-width: 10ch; text-align: end;
+}
+.dt-kpi-part .dt-delta { justify-self: end; }
+
+.dt-kpi-skeleton .dt-skeleton-row { display: block; }
+.dt-kpi-skeleton .dt-skeleton-row:last-child { grid-column: span 1; }
+
+/* Under about 1100px the band stops being a row: pending drops to its own
+   full-width card and its breakdown goes under the figure rather than
+   beside it. */
+@media (max-width: 1100px) {
+  .dt-kpi-band { grid-template-columns: 1fr 1fr; }
+  .dt-kpi-card-wide { grid-column: 1 / -1; }
+}
+@media (max-width: 720px) {
+  .dt-kpi-band { grid-template-columns: 1fr; }
+  .dt-kpi-card-wide { flex-direction: column; gap: 16px; }
+  .dt-kpi-card-wide .dt-kpi-main { flex: 0 0 auto; }
 }
 
-/* Hierarchy, not five equal tiles: DT done leads as the one card with
-   weight, Ongoing and Problematic are a step down beside it, and On air /
-   Pending fall out of card chrome entirely -- see the quiet-list rules
-   below. Placed by data-tile rather than DOM order, so the tiles keep
-   reading on air, done, pending, ongoing, problematic (the order a screen
-   reader and the drill-through tests both rely on) while sitting wherever
-   the layout below actually puts them. */
-.dt-state-tiles > li { height: auto; }
-.dt-state-tiles > li[data-tile="done"] { grid-column: 1; grid-row: 1 / span 2; }
-.dt-state-tiles > li[data-tile="ongoing"] { grid-column: 2; grid-row: 1 / span 2; }
-.dt-state-tiles > li[data-tile="problematic"] { grid-column: 3; grid-row: 1 / span 2; }
-.dt-state-tiles > li[data-tile="onair"] { grid-column: 4; grid-row: 1; }
-.dt-state-tiles > li[data-tile="pending"] { grid-column: 4; grid-row: 2; }
-
-/* DT done: the figure this band is actually about, tinted its own colour
-   and set a size above everything beside it. */
-.dt-state-tile[data-tile="done"] {
-  background: #F3F8F5;
-  border-color: #C8DDD1;
-  padding: 14px 16px;
-}
-.dt-state-tile[data-tile="done"] .dt-state-figure { font-size: 28px; }
-
-/* Ongoing and Problematic: medium weight, one step down from Done. */
-.dt-state-tile[data-tile="ongoing"] .dt-state-figure,
-.dt-state-tile[data-tile="problematic"] .dt-state-figure { font-size: 23px; }
-
-/* Problematic is the operational blocker on this page, and carries its
-   state as a wash background. */
-.dt-state-tile-problem {
-  background: #FAF4F4;
-  border-color: #E3CDCC;
-  color: var(--dt-problem);
-}
-.dt-state-tile-problem .dt-state-name,
-.dt-state-tile-problem .dt-state-share { color: var(--dt-problem); opacity: 0.86; }
-a.dt-state-tile-problem:hover { border-color: rgba(176, 90, 90, 0.5); }
-
-/* Pending is what the programme is actually managed against, so it keeps a
-   class of its own -- but On air and Pending both leave card chrome behind
-   below, in favour of a quiet two-line label/value list. */
-.dt-state-tile-pending {
-  background: var(--surface-1);
-  border-color: var(--border);
-}
-
-/* On air and Pending: not cards. Totals, not states something is
-   happening to -- see KpiBand -- so they read as a compact label/value
-   line each rather than competing on weight with the three that are. */
-.dt-state-tile[data-tile="onair"],
-.dt-state-tile[data-tile="pending"] {
-  display: grid; grid-template-columns: auto 1fr; align-items: baseline;
-  column-gap: 8px; row-gap: 1px;
-  background: none; border-color: transparent; box-shadow: none;
-  padding: 3px 2px;
-}
-.dt-state-tile[data-tile="onair"] .dt-state-mark,
-.dt-state-tile[data-tile="pending"] .dt-state-mark { display: none; }
-.dt-state-tile[data-tile="onair"] .dt-state-head,
-.dt-state-tile[data-tile="pending"] .dt-state-head { grid-column: 1; grid-row: 1; }
-.dt-state-tile[data-tile="onair"] .dt-state-figure,
-.dt-state-tile[data-tile="pending"] .dt-state-figure {
-  grid-column: 2; grid-row: 1; justify-self: end; font-size: 14px;
-}
-.dt-state-tile[data-tile="onair"] .dt-state-foot,
-.dt-state-tile[data-tile="pending"] .dt-state-foot {
-  grid-column: 1 / -1; grid-row: 2; font-size: 10.5px;
-}
-a.dt-state-tile[data-tile="onair"]:hover,
-a.dt-state-tile[data-tile="pending"]:hover {
-  border-color: transparent; box-shadow: none; transform: none;
-  color: var(--dt-done);
-}
-
-.dt-state-head { display: flex; align-items: center; gap: 8px; }
-.dt-state-mark {
-  display: grid; place-items: center; width: 20px; height: 20px;
-  border-radius: 6px; color: #fff; flex-shrink: 0;
-}
-.dt-state-name { font-size: 12.5px; color: var(--text-muted); font-weight: 500; }
-.dt-state-figure {
-  font-family: var(--font-display); font-size: 27px; font-weight: 600;
-  line-height: 1.1; letter-spacing: -0.02em;
-}
-.dt-state-foot {
-  display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
-  font-size: 11.5px;
-}
-.dt-state-share { color: var(--text-dim); }
-
-.dt-hero-skeleton { gap: 16px; }
-.dt-hero-skeleton .dt-skeleton-row { display: block; }
 
 .dt-delta {
   display: inline-flex; align-items: center; gap: 4px; font-weight: 500;
@@ -2248,15 +2213,11 @@ a.dt-contractor-assign-figure:hover { color: var(--dt-done); }
   .dt-province-grid { grid-template-columns: repeat(2, 1fr); }
 }
 @media (max-width: 760px) {
-  .dt-hero { padding: 20px 16px; gap: 16px; }
-  /* Stacked rather than shrunk: the hero figure keeps its weight and the
-     backlog badge keeps its accent, which is the whole point of both. */
-  .dt-hero-head { align-items: flex-start; }
-  .dt-hero-figure { font-size: 36px; }
-  .dt-state-tiles { grid-template-columns: minmax(0, 1fr); grid-template-rows: none; }
-  .dt-state-tiles > li[data-tile] { grid-column: 1; grid-row: auto; }
-  .dt-state-tile[data-tile="onair"],
-  .dt-state-tile[data-tile="pending"] { padding: 8px 2px; }
+  /* Stacked rather than shrunk: the three figures keep their weight, which
+     is the whole point of them. The band's own stacking is handled at its
+     two breakpoints above; this only tightens the padding. */
+  .dt-kpi-card { padding: 16px; }
+  .dt-kpi-figure { font-size: 30px; }
   .dt-flowtiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .dt-bar-link { grid-template-columns: 110px 1fr 42px; }
   .dt-bar-share, .dt-bar-go { display: none; }

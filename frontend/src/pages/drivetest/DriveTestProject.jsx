@@ -313,7 +313,7 @@ export default function DriveTestProject() {
         ) : overview.loading && !data ? (
           <KpiSkeleton />
         ) : data ? (
-          <KpiBand kpis={data.kpis} provinceId={provinceId} />
+          <KpiBand kpis={data.kpis} flow={flow.data} provinceId={provinceId} />
         ) : null}
 
         <PlanDelivery
@@ -462,10 +462,10 @@ function SectionTotal({ icon: Icon, value, label, color }) {
 
 function KpiSkeleton() {
   return (
-    <div className="dt-hero dt-hero-skeleton" aria-hidden="true">
-      <span className="dt-skeleton-row" style={{ height: 72, width: '52%' }} />
-      <span className="dt-skeleton-row" style={{ height: 14, animationDelay: '0.1s' }} />
-      <span className="dt-skeleton-row" style={{ height: 78, animationDelay: '0.16s' }} />
+    <div className="dt-kpi-band dt-kpi-skeleton" aria-hidden="true">
+      <span className="dt-skeleton-row" style={{ height: 118 }} />
+      <span className="dt-skeleton-row" style={{ height: 118, animationDelay: '0.08s' }} />
+      <span className="dt-skeleton-row" style={{ height: 118, animationDelay: '0.16s' }} />
     </div>
   )
 }
