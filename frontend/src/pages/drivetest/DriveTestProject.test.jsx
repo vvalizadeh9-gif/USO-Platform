@@ -1976,7 +1976,7 @@ describe('the contractor scorecard', () => {
     await userEvent.click(within(card).getByRole('button', { name: /Ongoing/ }))
     expect(rowNames(card)).toEqual(['Alfa Drive Tests', 'Beta Surveys', 'Unattributed'])
 
-    await userEvent.click(within(card).getByRole('button', { name: /Achievement/ }))
+    await userEvent.click(within(card).getByRole('button', { name: /Completion/ }))
     expect(rowNames(card)).toEqual(['Alfa Drive Tests', 'Beta Surveys', 'Unattributed'])
 
     // Assignment ascending puts the smaller book first, and still not the
@@ -1998,7 +1998,7 @@ describe('the contractor scorecard', () => {
     expect(control()).toHaveAttribute('aria-pressed', 'true')
   })
 
-  it('has exactly five sort controls: Contractor, Assignment, DT done, Ongoing, Achievement', async () => {
+  it('has exactly five sort controls: Contractor, Assignment, DT done, Ongoing, Completion', async () => {
     serve()
     draw()
 
@@ -2007,7 +2007,10 @@ describe('the contractor scorecard', () => {
     const labels = within(controls)
       .getAllByRole('button')
       .map((b) => b.textContent.trim())
-    expect(labels).toEqual(['Contractor', 'Assignment', 'DT done', 'Ongoing', 'Achievement'])
+    // "Completion", not "Achievement": Achievement is the Plan and delivery
+    // card's word for delivered-against-PIP, and this is how far a company is
+    // through its own book. One word, two meanings, one page.
+    expect(labels).toEqual(['Contractor', 'Assignment', 'DT done', 'Ongoing', 'Completion'])
   })
 
   it('shows no Problematic or Not started figure anywhere in the list', async () => {
@@ -2019,8 +2022,8 @@ describe('the contractor scorecard', () => {
     expect(within(card).queryByText('Not started')).not.toBeInTheDocument()
   })
 
-  it('rates Achievement as DT done over Assignment, and the Assignment cell as DT done plus Ongoing', async () => {
-    // Alfa: 40 done, 15 ongoing -> assignment 55, achievement 40/55 = 72.7%.
+  it('rates Completion as DT done over Assignment, and the Assignment cell as DT done plus Ongoing', async () => {
+    // Alfa: 40 done, 15 ongoing -> assignment 55, completion 40/55 = 72.7%.
     serve()
     draw()
 
@@ -2046,7 +2049,7 @@ describe('the contractor scorecard', () => {
 
     const card = await section('Contractor scorecard')
 
-    for (const column of ['Contractor', 'Assignment', 'DT done', 'Ongoing', 'Achievement']) {
+    for (const column of ['Contractor', 'Assignment', 'DT done', 'Ongoing', 'Completion']) {
       await userEvent.click(within(card).getByRole('button', { name: column }))
       const names = rowNames(card)
       expect(names[names.length - 1]).toBe('Unattributed')
