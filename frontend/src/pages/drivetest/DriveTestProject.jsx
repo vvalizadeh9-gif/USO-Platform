@@ -1,20 +1,21 @@
-import { AlertTriangle, CircleDashed } from 'lucide-react'
+import { AlertTriangle } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import api from '../../api/client'
 import { describeBlobError, filenameFrom, saveBlob } from '../../lib/download'
 import { PageHead } from '../../components/ui'
 import { useToast } from '../../context/ToastContext'
-import BreakdownCard from './BreakdownCard'
+import BreakdownCard, { BreakdownTabs } from './BreakdownCard'
+import { DrillProvider } from './DrillPanel'
 import ContractorScorecard from './ContractorScorecard'
 import KpiBand from './KpiBand'
 import PlanDelivery from './PlanDelivery'
-import ProvinceTable from './ProvinceTable'
+import ProvinceList from './ProvinceList'
 import Section from './Section'
 import Toolbar from './Toolbar'
 import FlowChart, { flowHasActivity } from './charts/FlowChart'
-import FlowLedger from './charts/FlowLedger'
+import FlowLedger, { flowNet } from './charts/FlowLedger'
 import { AGE_RAMP, PROVINCE_LIMIT, STATE_COLOR } from './constants'
-import { count } from './format'
+import { count, deltaTone, TONE_COLOR } from './format'
 import { ongoingLink, problematicLink } from './links'
 import { useDashboard } from './useDashboard'
 
@@ -269,7 +270,7 @@ export default function DriveTestProject() {
   }, [data, provinces, provinceId])
 
   return (
-    <>
+    <DrillProvider>
       <PageHead
         eyebrow="Drive Test Project"
         title="Drive Test Overview"
@@ -313,8 +314,33 @@ export default function DriveTestProject() {
         ) : overview.loading && !data ? (
           <KpiSkeleton />
         ) : data ? (
-          <KpiBand kpis={data.kpis} provinceId={provinceId} />
+          <KpiBand kpis={data.kpis} flow={flow.data} provinceId={provinceId} />
         ) : null}
+
+        {/* Full width, and directly under the band. It is the answer to the
+            second question the page asks -- which way is this going -- and it
+            used to sit halfway down sharing a row with the month ledger. Two
+            charts side by side at half width each made the trailing shape of
+            an eighteen-month series about three hundred pixels wide, which is
+            where a line chart stops being readable. */}
+        <Section
+          title="Where this is going"
+          subtitle="Sites on air against drive tests done, and what each month did to the backlog"
+          state={flow}
+          onRetry={refresh}
+          skeletonRows={4}
+        >
+          {(f) =>
+            flowHasActivity(f) ? (
+              <FlowChart data={f} />
+            ) : (
+              <div className="dt-empty">
+                No on-air or drive-test activity has been recorded yet. The chart fills in
+                as sites go on air and are drive-tested.
+              </div>
+            )
+          }
+        </Section>
 
         <PlanDelivery
           state={plan}
@@ -327,25 +353,30 @@ export default function DriveTestProject() {
           {has('ongoing_breakdown') && (
             <Section
               title="Ongoing breakdown"
-              subtitle="Sites in flight, cut three ways"
               state={overview}
               onRetry={refresh}
               actions={
                 data && (
                   <SectionTotal
-                    icon={CircleDashed}
                     value={data.ongoing_breakdown.total}
                     label="ongoing"
                     color={STATE_COLOR.ongoing}
                   />
                 )
               }
-            >
-              {(d) => (
-                <BreakdownCard
+              controls={
+                <BreakdownTabs
+                  idBase="dt-ongoing"
                   tabs={ONGOING_TABS}
                   tab={ongoingTab}
                   onTab={setOngoingTab}
+                />
+              }
+            >
+              {(d) => (
+                <BreakdownCard
+                  idBase="dt-ongoing"
+                  tab={ongoingTab}
                   views={ongoingViews}
                   total={d.ongoing_breakdown.total}
                 />
@@ -356,25 +387,30 @@ export default function DriveTestProject() {
           {has('problematic_breakdown') && (
             <Section
               title="Problematic breakdown"
-              subtitle="Sites the programme is blocked on, and how long each has been"
               state={overview}
               onRetry={refresh}
               actions={
                 data && (
                   <SectionTotal
-                    icon={AlertTriangle}
                     value={data.problematic_breakdown.total}
                     label="problematic"
                     color={STATE_COLOR.problematic}
                   />
                 )
               }
-            >
-              {(d) => (
-                <BreakdownCard
+              controls={
+                <BreakdownTabs
+                  idBase="dt-problematic"
                   tabs={PROBLEMATIC_TABS}
                   tab={problematicTab}
                   onTab={setProblematicTab}
+                />
+              }
+            >
+              {(d) => (
+                <BreakdownCard
+                  idBase="dt-problematic"
+                  tab={problematicTab}
                   views={problematicViews}
                   total={d.problematic_breakdown.total}
                 />
@@ -402,7 +438,7 @@ export default function DriveTestProject() {
             onRetry={refresh}
           >
             {(d) => (
-              <ProvinceTable
+              <ProvinceList
                 rows={d.province_breakdown}
                 provinces={d.provinces}
                 onProvince={setProvince}
@@ -411,50 +447,62 @@ export default function DriveTestProject() {
           </Section>
         )}
 
-        <div className="dt-pair">
+        {trend.data?.latest_flows && (
           <Section
-            title="Where this is going"
-            subtitle="Sites on air against drive tests done"
-            state={flow}
+            title="What moved"
+            subtitle={`${trend.data.latest_flows.label} ${trend.data.latest_flows.shamsi_year}${
+              trend.data.latest_flows.is_open ? ' · still in progress' : ''
+            }`}
+            state={trend}
             onRetry={refresh}
             skeletonRows={4}
+            actions={<NetChange value={flowNet(trend.data.latest_flows)} />}
           >
-            {(f) =>
-              flowHasActivity(f) ? (
-                <FlowChart data={f} />
-              ) : (
-                <div className="dt-empty">
-                  No on-air or drive-test activity has been recorded yet. The chart fills in
-                  as sites go on air and are drive-tested.
-                </div>
-              )
-            }
+            {(t) => <FlowLedger flows={t.latest_flows} monthLabel={t.latest_flows.label} />}
           </Section>
-
-          {trend.data?.latest_flows && (
-            <Section
-              title="What moved"
-              subtitle={`${trend.data.latest_flows.label} ${trend.data.latest_flows.shamsi_year}${
-                trend.data.latest_flows.is_open ? ' · still in progress' : ''
-              }`}
-              state={trend}
-              onRetry={refresh}
-              skeletonRows={4}
-            >
-              {(t) => <FlowLedger flows={t.latest_flows} monthLabel={t.latest_flows.label} />}
-            </Section>
-          )}
-        </div>
+        )}
       </div>
-    </>
+    </DrillProvider>
   )
 }
 
-function SectionTotal({ icon: Icon, value, label, color }) {
+/** The card's own total, on the header line beside its title.
+ *
+ * A dot rather than the state's lucide icon, and the figure in the state
+ * colour rather than in the text colour. The icon was a second thing to read
+ * at a glance — a circle-dashed and a warning triangle, at 15px, doing the
+ * job the colour was already doing. The dot is the same mark the KPI band
+ * uses for the same state, so the two read as the same vocabulary.
+ *
+ * The colour is not carrying the meaning on its own: the word is right
+ * there, and the title says it again. See constants.js for why that rule is
+ * absolute on this page.
+ */
+/** The month's net movement in the backlog, on the ledger's header line.
+ *
+ * Direction-aware like every other delta on this page: the backlog falling
+ * is the good outcome, so a negative number is green. See
+ * `format.deltaTone` for why that is stated per figure rather than assumed.
+ */
+function NetChange({ value }) {
+  if (value == null) return null
+  const tone = deltaTone(value, 'down')
   return (
     <span className="dt-section-total">
-      <Icon size={15} strokeWidth={2} style={{ color }} aria-hidden="true" />
-      <b className="tnum">{count(value)}</b>
+      <b className="tnum" style={{ color: tone ? TONE_COLOR[tone] : TONE_COLOR.flat }}>
+        {value > 0 ? '+' : ''}
+        {count(value)}
+      </b>
+      <span>net this month</span>
+    </span>
+  )
+}
+
+function SectionTotal({ value, label, color }) {
+  return (
+    <span className="dt-section-total">
+      <i className="dt-section-dot" style={{ background: color }} aria-hidden="true" />
+      <b className="tnum" style={{ color }}>{count(value)}</b>
       <span>{label}</span>
     </span>
   )
@@ -462,10 +510,10 @@ function SectionTotal({ icon: Icon, value, label, color }) {
 
 function KpiSkeleton() {
   return (
-    <div className="dt-hero dt-hero-skeleton" aria-hidden="true">
-      <span className="dt-skeleton-row" style={{ height: 72, width: '52%' }} />
-      <span className="dt-skeleton-row" style={{ height: 14, animationDelay: '0.1s' }} />
-      <span className="dt-skeleton-row" style={{ height: 78, animationDelay: '0.16s' }} />
+    <div className="dt-kpi-band dt-kpi-skeleton" aria-hidden="true">
+      <span className="dt-skeleton-row" style={{ height: 118 }} />
+      <span className="dt-skeleton-row" style={{ height: 118, animationDelay: '0.08s' }} />
+      <span className="dt-skeleton-row" style={{ height: 118, animationDelay: '0.16s' }} />
     </div>
   )
 }

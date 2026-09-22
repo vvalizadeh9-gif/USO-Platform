@@ -1,6 +1,6 @@
 import { motion, useReducedMotion } from 'framer-motion'
-import { Link } from 'react-router-dom'
 import { achievement, bandColor, count } from '../format'
+import { DrillLink } from '../DrillPanel'
 
 /**
  * One contractor's month: what they committed, and what they delivered.
@@ -38,6 +38,7 @@ export default function BulletBar({
   pip = 0,
   actual = 0,
   detail,
+  short,
   scaleMax,
   anonymous,
   index = 0,
@@ -85,17 +86,33 @@ export default function BulletBar({
         )}
       </span>
 
+      <span className="dt-bullet-pct tnum" style={{ color: noPlan ? 'var(--text-dim)' : color }}>
+        {noPlan ? 'no PIP' : achievement(percent)}
+      </span>
       <span className="dt-bullet-detail tnum">
         {href ? (
-          <Link to={href} className="dt-cell-link" aria-label={`${label}: ${detail} delivered`}>
+          <DrillLink
+            to={href}
+            className="dt-cell-link"
+            drillLabel={label}
+            aria-label={`${label}: ${detail} delivered`}
+          >
             {detail}
-          </Link>
+          </DrillLink>
         ) : (
           detail
         )}
       </span>
-      <span className="dt-bullet-pct tnum" style={{ color: noPlan ? 'var(--text-dim)' : color }}>
-        {noPlan ? 'no PIP' : achievement(percent)}
+      {/* The number somebody is actually chased about, which the reader was
+          being left to work out from the two figures beside it. Nothing
+          rather than a zero where there is no plan to fall short of, and a
+          plain 0 -- not a dash -- where the commitment was met, because met
+          and unplanned are different facts. */}
+      <span
+        className="dt-bullet-short tnum"
+        style={short ? { color: 'var(--dt-problem)' } : undefined}
+      >
+        {short == null ? '—' : count(short)}
       </span>
     </div>
   )
@@ -119,6 +136,7 @@ export function BulletKey({ scaleMax }) {
         <i className="dt-key-done" aria-hidden="true" />
         delivered
       </span>
+      <span className="dt-key-item">short</span>
       <span className="dt-key-scale tnum">0–{count(scaleMax)} drive tests</span>
     </span>
   )

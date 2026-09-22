@@ -1,11 +1,11 @@
 import { motion, useReducedMotion } from 'framer-motion'
 import { ChevronDown, ChevronUp } from 'lucide-react'
 import { useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
 import { STATE_COLOR, UNATTRIBUTED } from './constants'
 import { bookScale, count, percent } from './format'
 import { assignedLink, doneLink, ongoingLink } from './links'
 import BookBar from './charts/BookBar'
+import { DrillLink } from './DrillPanel'
 
 /**
  * Each contractor's assignment, and how much of it is finished.
@@ -35,6 +35,16 @@ import BookBar from './charts/BookBar'
  * sites, through `contractor_id=none`: "nobody holds these" is a real list,
  * and the one most worth reading.
  *
+ * TWO COLUMNS ARE MISSING AND ARE NOT AN OVERSIGHT: how many of a
+ * contractor's ongoing sites have been held over a month, and the median age
+ * of those they hold. Both are the question this list raises and cannot
+ * answer -- a company 73% through its book looks the same here whether the
+ * remainder is a week old or a year old. Neither is on
+ * `ContractorScorecardRow`, and neither can be derived from what is: the
+ * payload carries counts per contractor and ages per programme, never ages
+ * per contractor. Adding them is a backend change (see the commit that
+ * added this note for what it would take) and deliberately not made here.
+ *
  * SORTING IS THE READER'S. The rows arrive ranked by completion, which is the
  * right default and the wrong thing to be stuck with: "who is holding the
  * most" and "who has the most problems" are the next two questions anybody
@@ -47,7 +57,14 @@ const COLUMNS = [
   { key: 'assigned', label: 'Assignment' },
   { key: 'done', label: 'DT done' },
   { key: 'ongoing', label: 'Ongoing' },
-  { key: 'done_percent', label: 'Achievement' },
+  // "Completion", not "Achievement". Achievement is taken, forty pixels up
+  // the page, by the Plan and delivery card -- where it means delivered
+  // against PIP, a different numerator over a different denominator across a
+  // different period. Two figures on one screen under one word, meaning two
+  // things, is a reader comparing Alfa's 37.5% there with its 73% here and
+  // concluding something about neither. This one is how far a company is
+  // through its own book, which is what `done_percent` is documented as.
+  { key: 'done_percent', label: 'Completion' },
 ]
 
 /** A contractor's assignment: drive tests finished plus sites still held.
@@ -64,9 +81,9 @@ function assignmentOf(row) {
   return (row.done ?? 0) + (row.ongoing ?? 0)
 }
 
-/** Which band an achievement rate falls in, for the pill's colour. Same
+/** Which band a completion rate falls in, for the pill's colour. Same
  * thresholds `format.progressColor` uses elsewhere on this page. */
-function achievementBand(value) {
+function completionBand(value) {
   if (value >= 70) return 'good'
   if (value >= 30) return 'mid'
   return 'bad'
@@ -175,9 +192,9 @@ export default function ContractorScorecard({ rows, provinceId }) {
               )}
 
               <div className="dt-contractor-main">
-                <Link to={assignedLink(cscope)} className="dt-contractor-name dt-farsi">
+                <DrillLink to={assignedLink(cscope)} drillLabel={row.name} className="dt-contractor-name dt-farsi">
                   {row.name}
-                </Link>
+                </DrillLink>
                 <BookBar
                   label={row.name}
                   total={assignmentOf(row)}
@@ -200,24 +217,24 @@ export default function ContractorScorecard({ rows, provinceId }) {
                   ]}
                 />
                 <div className="dt-contractor-stats">
-                  <Link to={doneLink(cscope)} className="dt-cell-link">
+                  <DrillLink to={doneLink(cscope)} drillLabel={row.name} className="dt-cell-link">
                     {count(row.done)} done
-                  </Link>
-                  <Link to={ongoingLink(cscope)} className="dt-cell-link">
+                  </DrillLink>
+                  <DrillLink to={ongoingLink(cscope)} drillLabel={row.name} className="dt-cell-link">
                     {count(row.ongoing)} ongoing
-                  </Link>
+                  </DrillLink>
                 </div>
               </div>
 
               <div className="dt-contractor-assign">
-                <Link to={assignedLink(cscope)} className="dt-contractor-assign-figure tnum">
+                <DrillLink to={assignedLink(cscope)} drillLabel={row.name} className="dt-contractor-assign-figure tnum">
                   {count(assignmentOf(row))}
-                </Link>
+                </DrillLink>
                 <span className="dt-contractor-assign-caption">assignment</span>
               </div>
 
               <span
-                className={`dt-pill dt-pill-${unattributed ? 'dim' : achievementBand(row.done_percent)}`}
+                className={`dt-pill dt-pill-${unattributed ? 'dim' : completionBand(row.done_percent)}`}
               >
                 {percent(row.done_percent)}
               </span>

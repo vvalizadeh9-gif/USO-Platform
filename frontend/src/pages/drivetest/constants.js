@@ -12,16 +12,36 @@ export const STAGE_DT_DONE = 'DT Done'
  *
  * THE WHOLE COLOUR RULE OF THIS PAGE IS HERE. Colour on this dashboard means
  * a state and nothing else: green is a finished drive test, indigo is work in
- * flight, red is a problem. Nothing else on the page is allowed to be any of
- * those three hues, which is why the brand teal — the nav-active colour and
- * the primary button — appears nowhere in a chart. The page it replaces drew
- * ongoing in that same teal, plan in violet and waiting in amber, so five
- * hues competed and none of them meant anything in particular.
+ * flight, brick is a problem. Nothing else on the page is allowed to be any
+ * of those three hues, which is why the brand teal — the nav-active colour
+ * and the primary button — appears nowhere in a chart. The page it replaces
+ * drew ongoing in that same teal, plan in violet and waiting in amber, so
+ * five hues competed and none of them meant anything in particular.
  *
- * Amber is deliberately not among them. It is the obvious pick for "in
- * progress", and it fails: against this red it is 3.4 ΔE apart under deutan
- * and 12 under normal vision, which is to say a red-green reader cannot tell
- * an ongoing site from a problematic one. Indigo clears both at 20+.
+ * THE THREE HUES WERE SOFTENED DELIBERATELY, on the product owner's call:
+ * the saturated trio read as too loud on the 1920x1200 office display this
+ * dashboard is actually read on. The values and the full measurement live in
+ * app.css, where the tokens are defined. Two things a reader of this file
+ * needs to know about that change:
+ *
+ * Indigo against brick still separates clearly for a deuteranope — 14.1
+ * CIEDE2000, down from 21.0, so clear but no longer comfortably so. It is
+ * the pair to re-measure before anyone softens these again.
+ *
+ * Green against brick does not separate and never did — 5.1, up from 2.8,
+ * which is to say indistinguishable in both the old palette and this one.
+ * The original validation did not report it because those two are never
+ * adjacent on the segmented bar. It is still the fact that governs this
+ * page: WHICH IS WHY EVERY CHART HERE KEEPS A LEGEND AND A TEXT LABEL.
+ * Colour is the fast read, never the only one. Dropping a legend leaves a
+ * red-green reader guessing between a finished site and a broken one.
+ *
+ * Amber is deliberately not among the three. It is the obvious pick for "in
+ * progress", and with green and brick already indistinguishable to a
+ * deuteranope, a third warm hue is the one thing this palette cannot afford.
+ * (The 3.4 ΔE figure this note used to give for amber against the old red
+ * does not reproduce — it measures around 19 — so the rejection rests on the
+ * line above rather than on that number.)
  *
  * The fourth state takes the neutral rather than a fourth hue. A site nobody
  * has started a drive test on is the absence of activity, and grey says that
@@ -70,8 +90,20 @@ export const KPI_DIRECTION = {
   total_not_started: 'down',
 }
 
-/** How many rows a collapsed province view shows before folding the rest. */
+/** How many bars a collapsed province *breakdown tab* shows before folding
+ * the rest. Six, because those tabs sit inside a half-width card. */
 export const PROVINCE_LIMIT = 6
+
+/** How many rows the province section shows before folding the rest.
+ *
+ * Twelve rather than the breakdown's six: that section is a two-column list
+ * across the full width of the page, so twelve rows is the same height six
+ * bars are in a half-width card. Two constants rather than one shared
+ * number, because they are answering the same question about two different
+ * amounts of space, and tying them together means one of the two is always
+ * wrong.
+ */
+export const PROVINCE_ROWS = 12
 
 /** The buckets `GET /drive-test/sites` accepts, and how each reads in words.
  *

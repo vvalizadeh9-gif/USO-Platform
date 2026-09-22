@@ -10,7 +10,7 @@
 //
 // The suite runs with reduced motion on (see src/test/setup.js), so animated
 // figures render at their final values and can be asserted directly.
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -220,6 +220,19 @@ const flowMonth = (year, month, over = {}) => ({
   ...over,
 })
 
+/** Eight months of flat 8-on-air / 8-DT-done activity.
+ *
+ * Long enough to clear the band's seven-point sparkline floor, and flat on
+ * purpose: a series whose gap never moves is what proves the pending line is
+ * built from on-air minus DT done rather than from either one alone. A
+ * rising or falling fixture would pass whichever of the three it actually
+ * drew.
+ */
+const longMonths = () =>
+  Array.from({ length: 8 }, (_, i) =>
+    flowMonth(1404, i + 1, { on_aired: 8, dt_done: 8, is_open: i === 7 }),
+  )
+
 const flow = (over = {}) => ({
   opening: { on_air: 50, dt_done: 20 },
   months: [
@@ -233,12 +246,76 @@ const flow = (over = {}) => ({
   ...over,
 })
 
+/** What `/drive-test/sites` answers for each query the dashboard can send.
+ *
+ * Keyed by the exact query the panel is expected to ask, and the totals are
+ * the very figures the overview fixture puts on screen. That is what makes
+ * the parity tests mean something: if the panel sends a query that is not
+ * in this table -- a wrong bucket, a dropped province, a contractor id that
+ * never made it into the request -- the lookup misses and the panel reports
+ * NO_SUCH_QUERY instead of quietly agreeing with whatever it was given.
+ *
+ * The real guarantee is the server's, and it is asserted there: `total` is
+ * counted before pagination through the dashboard's own predicates (see
+ * services/dt_site_list). What this side can prove is the other half --
+ * that the panel asks for exactly the figure that was clicked, and shows
+ * what came back.
+ */
+const SITE_TOTALS = {
+  'bucket=remaining': 60,
+  'bucket=ongoing': 50,
+  'bucket=problematic': 10,
+  'bucket=done': 40,
+  'bucket=onair': 100,
+  'bucket=not_started': 0,
+  // Alfa Drive Tests: 40 done + 15 ongoing = 55 assigned.
+  'bucket=assigned&contractor_id=1': 55,
+  'bucket=ongoing&contractor_id=1': 15,
+  // Kerman, province 7.
+  'bucket=onair&province_id=7': 60,
+  'bucket=remaining&province_id=7': 37,
+  'bucket=problematic&province_id=7': 7,
+}
+
+const NO_SUCH_QUERY = -999
+
+const siteRow = (i, over = {}) => ({
+  work_item_id: i,
+  site_code: `S-${i}`,
+  villages: null,
+  province: 'Kerman',
+  contractor: 'Alfa Drive Tests',
+  bucket: 'Ongoing',
+  current_stage: 'DT In Progress',
+  age_band: '2–3 weeks',
+  problem_age_band: null,
+  ...over,
+})
+
+function siteListFor(config) {
+  const params = { ...(config?.params ?? {}) }
+  delete params.limit
+  const key = Object.entries(params)
+    .map(([k, v]) => `${k}=${v}`)
+    .join('&')
+  const total = key in SITE_TOTALS ? SITE_TOTALS[key] : NO_SUCH_QUERY
+  return {
+    total,
+    rows: Array.from({ length: Math.min(Math.max(total, 0), 3) }, (_, i) => siteRow(i + 1)),
+    filters_applied: params,
+    generated_at: '2026-09-22T10:00:00Z',
+    age_bands: [],
+    ongoing_stages: [],
+  }
+}
+
 function serve(plan = planDelivery(), body = overview, series = trend(), flowData = flow()) {
-  api.get.mockImplementation((url) => {
+  api.get.mockImplementation((url, config) => {
     if (url === '/drive-test/overview') return Promise.resolve({ data: body })
     if (url === '/drive-test/plan-delivery') return Promise.resolve({ data: plan })
     if (url === '/drive-test/trend') return Promise.resolve({ data: series })
     if (url === '/drive-test/flow') return Promise.resolve({ data: flowData })
+    if (url === '/drive-test/sites') return Promise.resolve({ data: siteListFor(config) })
     return Promise.reject(new Error(`unexpected ${url}`))
   })
 }
@@ -263,26 +340,51 @@ beforeEach(() => {
 })
 
 describe('plan and delivery', () => {
-  it('renders the four figures for the month', async () => {
+  it('leads with the rate, then the counts it is made of', async () => {
     serve()
     draw()
 
     const card = await section('Plan and delivery')
     expect(within(card).getByText('شهریور 1405')).toBeInTheDocument()
 
+    // The rate leads: it is the one figure here comparable month to month,
+    // and 6 delivered means nothing without the 16 it was promised against.
+    expect(card.querySelector('.dt-plan-rate')).toHaveTextContent('37.5%')
+
     for (const [label, value] of [
       ['PIP', '16'],
-      ['Assigned', '9'],
-      ['Actual', '6'],
-      ['Achievement', '37.5%'],
+      ['Assignment', '9'],
+      ['Delivered', '6'],
+      // 16 committed against 6 delivered. The figure the card did not carry
+      // and the one somebody is actually chased about -- it was arithmetic
+      // the reader was left to do on two numbers sitting apart.
+      ['Short by', '10'],
     ]) {
-      // Scoped to the tiles: "PIP" is also the word the bullet key below uses,
-      // deliberately, because it is the same figure.
-      const tile = within(card)
+      // Scoped to the figure list: "PIP" is also the word the bullet key
+      // below uses, deliberately, because it is the same figure.
+      const figure = within(card)
         .getAllByText(label)
-        .map((node) => node.closest('.dt-figure-tile'))
+        .map((node) => node.closest('.dt-plan-figure'))
         .find(Boolean)
-      expect(within(tile).getByText(value)).toBeInTheDocument()
+      expect(within(figure).getByText(value)).toBeInTheDocument()
+    }
+  })
+
+  it('says how many each contractor is short, beside what they delivered', async () => {
+    serve()
+    draw()
+
+    const card = await section('Plan and delivery')
+    for (const [name, detail, short] of [
+      ['Beta Surveys', '2 of 2', '0'],
+      ['Alfa Drive Tests', '3 of 4', '1'],
+      ['Gamma Networks', '1 of 10', '9'],
+    ]) {
+      const row = within(card).getByText(name).closest('.dt-bullet')
+      expect(within(row).getByText(detail)).toBeInTheDocument()
+      // A plain 0 where the commitment was met, not a dash: met and
+      // unplanned are different facts and the column has to tell them apart.
+      expect(row.querySelector('.dt-bullet-short')).toHaveTextContent(short)
     }
   })
 
@@ -686,6 +788,45 @@ describe('breakdown sections', () => {
     expect(within(problematic).queryByText('Power')).not.toBeInTheDocument()
   })
 
+  it('adds the named rows plus the remainder up to the card total', async () => {
+    // The property the remainder row exists to give, asserted rather than
+    // trusted. A truncated list that does not sum to its own card reads as a
+    // complete one that has lost sites, which is the single worst thing a
+    // breakdown can do -- and it is exactly what dropping the tail would
+    // produce, silently and only for the provinces that fell off the end.
+    //
+    // Ten provinces summing to 55, which is the card total, so the fold has
+    // to account for every site rather than most of them.
+    serve(planDelivery(), {
+      ...overview,
+      ongoing_breakdown: {
+        ...overview.ongoing_breakdown,
+        total: 55,
+        by_province: Array.from({ length: 10 }, (_, i) => ({
+          name: `Province ${i + 1}`,
+          value: 10 - i,
+        })),
+      },
+    })
+    draw()
+
+    const ongoing = await section('Ongoing breakdown')
+    await userEvent.click(within(ongoing).getByRole('tab', { name: 'Province' }))
+
+    // Read off the rendered rows, the remainder among them, not off the
+    // fixture: the sum has to survive the component, not just the data.
+    const rows = within(ongoing).getAllByRole('listitem')
+    const sum = rows.reduce(
+      (total, row) => total + Number(within(row).getByText(/^\d+$/).textContent),
+      0,
+    )
+    expect(sum).toBe(55)
+
+    // And the header is still claiming that same total, so the two cannot
+    // drift apart without this failing.
+    expect(within(ongoing).getByText('55')).toBeInTheDocument()
+  })
+
   it('folds the province tail of a breakdown tab into one remainder line', async () => {
     serve(planDelivery(), {
       ...overview,
@@ -711,51 +852,122 @@ describe('breakdown sections', () => {
 })
 
 describe('the province grid', () => {
-  // The province table became a 3-column card grid, each card its own
-  // scope-the-dashboard control -- see ProvinceTable. Cards replace rows,
-  // and a row of chip buttons above the grid replaces the sortable header.
+  // The province table became a two-column card list, each card its own
+  // scope-the-dashboard control -- see ProvinceList. Cards replace rows, a
+  // row of chip buttons replaces the sortable header, and the tail past
+  // twelve folds into one row that keeps the list summing.
   const cardNames = (scope) =>
     Array.from(scope.querySelectorAll('.dt-province-card')).map(
       (card) => card.querySelector('.dt-province-name').textContent,
     )
+
+  // Four provinces built so each sort control has a different winner. A
+  // fixture where two sorts agree cannot tell a working control from one
+  // wired to the wrong key.
+  const sortable = {
+    ...overview,
+    province_breakdown: [
+      { name: 'Yazd', onair: 50, done: 45, remaining: 5, ongoing: 5, problematic: 0, not_started: 0, done_percent: 90 },
+      { name: 'Kerman', onair: 400, done: 200, remaining: 200, ongoing: 200, problematic: 0, not_started: 0, done_percent: 50 },
+      { name: 'Bushehr', onair: 300, done: 20, remaining: 280, ongoing: 280, problematic: 0, not_started: 0, done_percent: 7 },
+      { name: 'Ardabil', onair: 10, done: 5, remaining: 5, ongoing: 5, problematic: 0, not_started: 0, done_percent: 50 },
+    ],
+  }
 
   it('opens sorted by remaining, most first', async () => {
     serve(planDelivery(), overviewWithProvinces(10))
     draw()
 
     const provinces = await section('Province breakdown')
+    // Ten fits inside the twelve the list shows, so nothing is folded.
     expect(cardNames(provinces)).toEqual([
-      'Province 1', 'Province 2', 'Province 3', 'Province 4', 'Province 5', 'Province 6',
+      'Province 1', 'Province 2', 'Province 3', 'Province 4', 'Province 5',
+      'Province 6', 'Province 7', 'Province 8', 'Province 9', 'Province 10',
     ])
   })
 
-  it('re-sorts on a sort control, and reverses on a second click', async () => {
-    serve(planDelivery(), overviewWithProvinces(10))
+  it('puts a different province first under each of the four sorts', async () => {
+    serve(planDelivery(), sortable)
     draw()
 
     const provinces = await section('Province breakdown')
-    await userEvent.click(within(provinces).getByRole('button', { name: 'DT done' }))
+    // Remaining is the default and needs no click.
+    expect(cardNames(provinces)[0]).toBe('Bushehr')
 
-    // done ascends with the index, so descending puts the last province first.
-    expect(cardNames(provinces)[0]).toBe('Province 10')
-    await userEvent.click(within(provinces).getByRole('button', { name: 'DT done' }))
-    expect(cardNames(provinces)[0]).toBe('Province 1')
+    for (const [control, first] of [
+      ['Done %', 'Yazd'],
+      ['Size', 'Kerman'],
+      ['A–Z', 'Ardabil'],
+      ['Remaining', 'Bushehr'],
+    ]) {
+      await userEvent.click(within(provinces).getByRole('button', { name: control }))
+      expect(cardNames(provinces)[0]).toBe(first)
+    }
   })
 
-  it('collapses to six cards and expands on Show all', async () => {
-    serve(planDelivery(), overviewWithProvinces(10))
+  it('reverses on a second click of the same control', async () => {
+    serve(planDelivery(), sortable)
     draw()
 
     const provinces = await section('Province breakdown')
-    expect(provinces.querySelectorAll('.dt-province-card')).toHaveLength(6)
-    expect(within(provinces).getByText('4 more not shown')).toBeInTheDocument()
+    await userEvent.click(within(provinces).getByRole('button', { name: 'Size' }))
+    expect(cardNames(provinces)[0]).toBe('Kerman')
+    await userEvent.click(within(provinces).getByRole('button', { name: 'Size' }))
+    expect(cardNames(provinces)[0]).toBe('Ardabil')
+  })
 
-    await userEvent.click(within(provinces).getByRole('button', { name: /Show all 10 provinces/ }))
-    expect(provinces.querySelectorAll('.dt-province-card')).toHaveLength(10)
-    expect(within(provinces).queryByText('4 more not shown')).not.toBeInTheDocument()
+  it('folds everything past twelve into one row and expands on Show all', async () => {
+    serve(planDelivery(), overviewWithProvinces(20))
+    draw()
 
-    await userEvent.click(within(provinces).getByRole('button', { name: /Show top 6/ }))
-    expect(provinces.querySelectorAll('.dt-province-card')).toHaveLength(6)
+    const provinces = await section('Province breakdown')
+    // Twelve provinces and the folded row that stands for the other eight.
+    expect(cardNames(provinces)).toHaveLength(13)
+    expect(within(provinces).getByTestId('dt-province-rest')).toHaveTextContent(
+      '8 more provinces',
+    )
+
+    await userEvent.click(within(provinces).getByRole('button', { name: /Show all 20 provinces/ }))
+    expect(cardNames(provinces)).toHaveLength(20)
+    expect(within(provinces).queryByTestId('dt-province-rest')).not.toBeInTheDocument()
+
+    await userEvent.click(within(provinces).getByRole('button', { name: /Show top 12/ }))
+    expect(cardNames(provinces)).toHaveLength(13)
+  })
+
+  it('adds the twelve rows plus the folded row up to the programme total', async () => {
+    // The property the folded row exists to give, and the difference between
+    // it and the "8 more not shown" line it replaces: that line said how
+    // many rows were missing, this one says how many sites are. A reader
+    // adding the column reaches the programme total instead of falling short
+    // by whatever happened to sit below the fold.
+    //
+    // Twenty provinces, remaining running 100 down to 81, so 1,810 in total.
+    serve(planDelivery(), overviewWithProvinces(20))
+    draw()
+
+    const provinces = await section('Province breakdown')
+    const shown = Array.from(provinces.querySelectorAll('.dt-province-remaining')).reduce(
+      (sum, el) => sum + Number(el.textContent.replace(/[^0-9]/g, '')),
+      0,
+    )
+    expect(shown).toBe(1810)
+  })
+
+  it('draws no bar on the folded row, which is not a province', async () => {
+    // Bar length here is one province's on-air count against the largest
+    // single province. The tail of eight is not a province: drawn on that
+    // scale it would run off the end of the track and read as the biggest
+    // thing on screen.
+    serve(planDelivery(), overviewWithProvinces(20))
+    draw()
+
+    const provinces = await section('Province breakdown')
+    const rest = within(provinces).getByTestId('dt-province-rest')
+    expect(rest.querySelector('.dt-book')).toBeNull()
+    // And it is not a filter control, because there is no one province to
+    // narrow to.
+    expect(rest).not.toHaveAttribute('role', 'button')
   })
 
   it('offers no Show all control when every province already fits', async () => {
@@ -766,7 +978,11 @@ describe('the province grid', () => {
     expect(within(provinces).queryByRole('button', { name: /Show all/ })).not.toBeInTheDocument()
   })
 
-  it('has exactly seven sort controls: Province, On air, DT done, Remaining, Ongoing, Problematic, Done %', async () => {
+  it('has exactly four sort controls: Remaining, Done %, Size, A–Z', async () => {
+    // Four, not seven. One per question anybody asks of this list: where is
+    // the work, who is behind, who is big, and where is a named province.
+    // On air is Size; Ongoing and Problematic ranked the provinces in almost
+    // the same order as Remaining already does.
     serve()
     draw()
 
@@ -776,15 +992,33 @@ describe('the province grid', () => {
     const labels = within(controls)
       .getAllByRole('button')
       .map((b) => b.textContent.trim())
-    expect(labels).toEqual([
-      'Province',
-      'On air',
-      'DT done',
-      'Remaining',
-      'Ongoing',
-      'Problematic',
-      'Done %',
-    ])
+    expect(labels).toEqual(['Remaining', 'Done %', 'Size', 'A–Z'])
+  })
+
+  it('reddens a done % that is below the programme average, not below a fixed band', async () => {
+    // The rule changed and the change is the point. A province at 88% is
+    // doing badly in a programme averaging 95% and well in one averaging
+    // 60%; the fixed 70/30 thresholds said the same thing about both.
+    //
+    // These four come to 270 done of 760 on air, so the average is 35.5%.
+    serve(planDelivery(), sortable)
+    draw()
+
+    const provinces = await section('Province breakdown')
+    const rate = (name) =>
+      within(provinces).getByText(name).closest('.dt-province-card')
+        .querySelector('.dt-province-rate')
+
+    // Below the average, and the only one that is.
+    expect(rate('Bushehr')).toHaveStyle({ color: 'var(--dt-problem)' })
+    // Above it -- including Kerman at 50%, which the old fixed bands would
+    // have drawn in the in-flight colour for being under 70.
+    expect(rate('Kerman')).toHaveStyle({ color: 'var(--text)' })
+    expect(rate('Yazd')).toHaveStyle({ color: 'var(--text)' })
+
+    // And the threshold is stated, because a colour whose rule is not on
+    // screen is one a reader has to guess at.
+    expect(provinces).toHaveTextContent('done % in red is below the 36% programme average')
   })
 
   it('shows no "Not started" anywhere in the grid, its key or its bars', async () => {
@@ -882,122 +1116,131 @@ describe('delta direction', () => {
   })
 })
 
-describe('the hero', () => {
-  it('leads with the completion rate and the counts it is made of', async () => {
+describe('the KPI band', () => {
+  /** A card by its title. */
+  const card = (band, title) =>
+    within(band).getByText(title, { selector: '.dt-kpi-title' }).closest('.dt-kpi-card')
+
+  /** A part row of the pending card by its name. */
+  const part = (band, name) =>
+    within(band).getByText(name, { selector: '.dt-kpi-part-name' }).closest('.dt-kpi-part')
+
+  it('leads with the three totals the programme is run on', async () => {
     serve()
     draw()
 
-    const hero = await screen.findByLabelText('Programme totals')
-    // 40 of 100 on air. The rate is the figure somebody opens this page for,
-    // so it is the figure the band opens with.
-    expect(within(hero).getByText('40%')).toBeInTheDocument()
-    expect(within(hero).getByText('Overall Progress')).toBeInTheDocument()
-    expect(hero.querySelector('.dt-hero-denominator')).toHaveTextContent('40 of 100 sites done')
+    const band = await screen.findByLabelText('Programme totals')
+    expect(within(card(band, 'Total on-air')).getByText('100')).toBeInTheDocument()
+    expect(within(card(band, 'Total DT done')).getByText('40')).toBeInTheDocument()
+    expect(within(card(band, 'Total pending')).getByText('60')).toBeInTheDocument()
+    // DT done states its share of on-air; the band no longer leads with it.
+    expect(within(card(band, 'Total DT done')).getByText('40% of on-air')).toBeInTheDocument()
   })
 
-  it('draws exactly three coloured segments, done/ongoing/problematic, summing to at most the whole bar', async () => {
+  it('no longer leads with the overall progress rate or the four-state on-air bar', async () => {
+    // Both were removed from this band and neither moved elsewhere on the
+    // page. The rate moves a tenth of a point a month at the completion this
+    // programme runs at, and the four-state bar drew three slivers against a
+    // done segment that filled it. If either comes back it should come back
+    // deliberately, not by a merge.
     serve()
     draw()
 
-    const hero = await screen.findByLabelText('Programme totals')
-    // 40 done + 50 ongoing + 10 problematic = 100 on-air, and the bar says so
-    // because the segments are the total rather than a picture of it.
-    const bar = within(hero).getByRole('img')
+    const band = await screen.findByLabelText('Programme totals')
+    expect(within(band).queryByText('Overall Progress')).not.toBeInTheDocument()
+    expect(band.querySelector('.dt-hero-denominator')).toBeNull()
+    expect(within(band).queryAllByTestId('dt-hero-segment')).toHaveLength(0)
+    expect(screen.queryByText('Overall Progress')).not.toBeInTheDocument()
+  })
+
+  it('breaks pending into three parts that sum to it', async () => {
+    // The property this card exists to have. 50 ongoing + 10 problematic +
+    // 0 not started = 60 pending, read back off the rendered rows rather
+    // than off the fixture, so a card that stops reconciling fails here.
+    serve()
+    draw()
+
+    const band = await screen.findByLabelText('Programme totals')
+    const values = ['Ongoing', 'Problematic', 'Not started'].map((name) =>
+      Number(within(part(band, name)).getByText(/^\d+$/).textContent),
+    )
+    expect(values).toEqual([50, 10, 0])
+    expect(values.reduce((a, b) => a + b, 0)).toBe(
+      Number(within(card(band, 'Total pending')).getByText('60').textContent),
+    )
+  })
+
+  it('states each part as a share of pending, not of on-air', async () => {
+    serve()
+    draw()
+
+    const band = await screen.findByLabelText('Programme totals')
+    expect(within(part(band, 'Ongoing')).getByText('83% of pending')).toBeInTheDocument()
+    expect(within(part(band, 'Problematic')).getByText('17% of pending')).toBeInTheDocument()
+    expect(within(part(band, 'Not started')).getByText('0% of pending')).toBeInTheDocument()
+  })
+
+  it('draws one segment per part that has sites, sized against pending', async () => {
+    serve()
+    draw()
+
+    const band = await screen.findByLabelText('Programme totals')
+    const bar = within(band).getByRole('img', { name: /sites pending/ })
     expect(bar).toHaveAttribute(
       'aria-label',
-      '100 sites on air. DT done: 40, 40%. Ongoing: 50, 50%. Problematic: 10, 10%',
+      '60 sites pending. Ongoing: 50, 83%. Problematic: 10, 17%',
     )
-    const segments = within(hero).getAllByTestId('dt-hero-segment')
-    expect(segments).toHaveLength(3)
+    const segments = within(band).getAllByTestId('dt-kpi-segment')
+    // Not started is 0 in the fixture, so it is named in the rows and is not
+    // a segment: a zero-width fill is ink that says nothing.
     expect(segments.map((s) => s.getAttribute('data-state'))).toEqual([
-      'done',
       'ongoing',
       'problematic',
     ])
-    // Each segment names its own figure on hover, which is what makes a
-    // two-per-cent segment cost nothing: it never has to be read inside.
     expect(segments.map((s) => s.getAttribute('title'))).toEqual([
-      'DT done: 40 (40% of on-air)',
-      'Ongoing: 50 (50% of on-air)',
-      'Problematic: 10 (10% of on-air)',
+      'Ongoing: 50 (83% of pending)',
+      'Problematic: 10 (17% of pending)',
     ])
-    const shares = segments.map((s) => Number(s.getAttribute('title').match(/\((\d+)%/)[1]))
-    expect(shares.reduce((a, b) => a + b, 0)).toBeLessThanOrEqual(100)
   })
 
-  it('never draws or names a Not started segment, even when the fixture has one', async () => {
-    // The regression this band is most exposed to. Ongoing used to mean "not
-    // done and not problematic", so every on-air site with a blank DT status
-    // was drawn as work in flight. Not started is real here (12 sites) and is
-    // still never a fourth segment: it is the untouched part of Pending, so
-    // the bar leaves it to the neutral track and the legend names it instead.
+  it('draws Not started as a segment once it has sites', async () => {
+    // The state this dashboard once folded into Ongoing. Unlike the band
+    // this replaces — which left it to the neutral track because it was
+    // splitting on-air — it is a first-class part of pending here, because
+    // pending is exactly what it is part of.
+    serve(planDelivery(), {
+      ...overview,
+      kpis: { ...overview.kpis, total_ongoing: kpi(38), total_not_started: kpi(12) },
+    })
+    draw()
+
+    const band = await screen.findByLabelText('Programme totals')
+    expect(
+      within(band).getAllByTestId('dt-kpi-segment').map((s) => s.getAttribute('data-state')),
+    ).toEqual(['ongoing', 'problematic', 'not_started'])
+    expect(within(part(band, 'Not started')).getByText('12')).toBeInTheDocument()
+  })
+
+  it('gives Not started no delta, because the snapshot has no baseline for it', async () => {
+    // Every other figure in the band carries one. This one must not invent
+    // one: the monthly snapshot has no column for it, and a delta derived
+    // from the other four would compare against the old Ongoing definition.
     serve(planDelivery(), {
       ...overview,
       kpis: {
         ...overview.kpis,
-        total_ongoing: kpi(38),
+        total_ongoing: kpi(38, -4),
         total_not_started: kpi(12),
       },
     })
     draw()
 
-    const hero = await screen.findByLabelText('Programme totals')
-    const segments = within(hero).getAllByTestId('dt-hero-segment')
-    expect(segments.map((s) => s.getAttribute('data-state'))).toEqual([
-      'done',
-      'ongoing',
-      'problematic',
-    ])
-    expect(within(hero).getByRole('img').getAttribute('aria-label')).not.toMatch(/not started/i)
-    expect(within(hero).queryByText('Not started')).not.toBeInTheDocument()
+    const band = await screen.findByLabelText('Programme totals')
+    expect(part(band, 'Ongoing').querySelector('.dt-delta')).toBeInTheDocument()
+    expect(part(band, 'Not started').querySelector('.dt-delta')).toBeNull()
   })
 
-  it('shows a small legend beside the bar naming all four segments, including the rest of pending', async () => {
-    serve()
-    draw()
-
-    const hero = await screen.findByLabelText('Programme totals')
-    const legend = hero.querySelector('.dt-legend')
-    expect(legend).toBeInTheDocument()
-    const items = within(legend).getAllByText(/DT done|Ongoing|Problematic|Rest of pending/)
-    expect(items.map((i) => i.textContent)).toEqual([
-      'DT done',
-      'Ongoing',
-      'Problematic',
-      'Rest of pending',
-    ])
-  })
-
-  it('lists five tiles in order: on air, DT done, pending, ongoing, problematic', async () => {
-    serve()
-    draw()
-
-    const hero = await screen.findByLabelText('Programme totals')
-    const names = within(hero)
-      .getAllByText(/^(On air|DT done|Pending|Ongoing|Problematic)$/, { selector: '.dt-state-name' })
-      .map((n) => n.textContent)
-    expect(names).toEqual(['On air', 'DT done', 'Pending', 'Ongoing', 'Problematic'])
-    expect(within(hero).queryByText('Not started')).not.toBeInTheDocument()
-  })
-
-  it.each([
-    ['On air', '100', 'launched sites', '/drive-test/sites?bucket=onair'],
-    ['DT done', '40', '40% of on air', '/drive-test/sites?bucket=done'],
-    ['Pending', '60', 'on air minus DT done', '/drive-test/sites?bucket=remaining'],
-    ['Ongoing', '50', '83% of pending', '/drive-test/sites?bucket=ongoing'],
-    ['Problematic', '10', '17% of pending', '/drive-test/sites?bucket=problematic'],
-  ])('the %s tile shows %s, "%s", and links to %s', async (label, value, foot, href) => {
-    serve()
-    draw()
-
-    const hero = await screen.findByLabelText('Programme totals')
-    const tile = within(hero).getByText(label, { selector: '.dt-state-name' }).closest('.dt-state-tile')
-    expect(within(tile).getByText(value)).toBeInTheDocument()
-    expect(within(tile).getByText(foot)).toBeInTheDocument()
-    expect(tile.closest('a')).toHaveAttribute('href', href)
-  })
-
-  it('shows 0% for ongoing and problematic feet when there is nothing pending', async () => {
+  it('shows 0% for every part when there is nothing pending', async () => {
     serve(planDelivery(), {
       ...overview,
       kpis: {
@@ -1010,51 +1253,76 @@ describe('the hero', () => {
     })
     draw()
 
-    const hero = await screen.findByLabelText('Programme totals')
-    const ongoingTile = within(hero).getByText('Ongoing', { selector: '.dt-state-name' }).closest('.dt-state-tile')
-    expect(within(ongoingTile).getByText('0% of pending')).toBeInTheDocument()
-    const problematicTile = within(hero).getByText('Problematic', { selector: '.dt-state-name' }).closest('.dt-state-tile')
-    expect(within(problematicTile).getByText('0% of pending')).toBeInTheDocument()
+    const band = await screen.findByLabelText('Programme totals')
+    for (const name of ['Ongoing', 'Problematic', 'Not started']) {
+      expect(within(part(band, name)).getByText('0% of pending')).toBeInTheDocument()
+    }
   })
 
-  it('emphasises the Pending tile and keeps Problematic on its red wash', async () => {
+  it('draws no sparkline when the flow series is shorter than seven months', async () => {
+    // Four months in the default fixture. A line drawn from four points is
+    // mostly the accident of where the series starts, so the card draws
+    // without one rather than drawing a shorter one.
     serve()
     draw()
 
-    const hero = await screen.findByLabelText('Programme totals')
-    const pendingTile = within(hero).getByText('Pending', { selector: '.dt-state-name' }).closest('.dt-state-tile')
-    expect(pendingTile).toHaveClass('dt-state-tile-pending')
-    const problematicTile = within(hero).getByText('Problematic', { selector: '.dt-state-name' }).closest('.dt-state-tile')
-    expect(problematicTile).toHaveClass('dt-state-tile-problem')
+    const band = await screen.findByLabelText('Programme totals')
+    expect(within(band).queryAllByTestId('dt-spark')).toHaveLength(0)
   })
 
-  it('states the backlog as a "Pending" accent badge rather than footer text', async () => {
-    // Remaining is not drawn as a fourth state on the bar — it is Ongoing,
-    // Problematic and the untouched rest added together — but it is the
-    // figure the programme is managed against, so it stays the one accent
-    // badge in the band. The URL bucket is still "remaining"; only the words
-    // shown in the hero change.
-    serve()
+  it('draws one sparkline per card once the series is long enough', async () => {
+    serve(planDelivery(), overview, trend(), flow({ months: longMonths() }))
     draw()
 
-    const hero = await screen.findByLabelText('Programme totals')
-    const badge = within(hero).getByLabelText('Pending: 60 sites')
-    expect(badge).toHaveTextContent('60')
-    expect(badge).toHaveTextContent('Pending')
-    expect(badge.closest('a')).toHaveAttribute('href', '/drive-test/sites?bucket=remaining')
+    const band = await screen.findByLabelText('Programme totals')
+    await waitFor(() => expect(within(band).getAllByTestId('dt-spark')).toHaveLength(3))
+    expect(
+      within(band).getAllByTestId('dt-spark').map((s) => s.getAttribute('aria-label')),
+    ).toEqual([
+      'On-air over the last 7 months',
+      'Drive tests done over the last 7 months',
+      'Pending over the last 7 months',
+    ])
+  })
+
+  it('builds the pending sparkline as on-air minus DT done, cumulatively', async () => {
+    // Derived here from the series the flow chart already draws -- no second
+    // request, no new backend field. The last point is the cumulative gap
+    // over the eight fixture months, which is 50-20 opening plus 8 on-aired
+    // and 8 DT-done per month: still 30.
+    serve(planDelivery(), overview, trend(), flow({ months: longMonths() }))
+    draw()
+
+    const band = await screen.findByLabelText('Programme totals')
+    await waitFor(() => expect(within(band).getAllByTestId('dt-spark')).toHaveLength(3))
+    const spark = within(band).getAllByTestId('dt-spark')[2]
+    const d = spark.querySelector('path').getAttribute('d')
+    // Seven points, and every one of them at the same height: the gap is 30
+    // in all eight fixture months, so the pending line is flat. Were it
+    // drawing on-air or DT done instead, both of which climb by 8 a month,
+    // it would not be.
+    const ys = [...d.matchAll(/[ML]([\d.]+) ([\d.]+)/g)].map((m) => Number(m[2]))
+    expect(ys).toHaveLength(7)
+    expect(new Set(ys).size).toBe(1)
+    // Drawn down the middle rather than divided by a zero span.
+    expect(ys[0]).toBe(13)
   })
 
   it('no longer repeats the monthly figure the plan section already carries', async () => {
     serve()
     draw()
 
-    const hero = await screen.findByLabelText('Programme totals')
-    expect(within(hero).queryByText(/Done this month/i)).not.toBeInTheDocument()
+    const band = await screen.findByLabelText('Programme totals')
+    expect(within(band).queryByText(/Done this month/i)).not.toBeInTheDocument()
   })
 })
 
 describe('the order of the page', () => {
-  it('puts the PIP summary above the ongoing and problematic detail', async () => {
+  it('asks its four questions in order: where, which way, what was promised, what is left', async () => {
+    // The trend moved up to sit directly under the band, which is the second
+    // question the page asks and used to be answered halfway down. The
+    // property this test was written for still holds and is still the point:
+    // the PIP summary stays above the ongoing and problematic detail.
     serve()
     draw()
 
@@ -1072,10 +1340,10 @@ describe('the order of the page', () => {
       )
 
     expect(headings).toEqual([
+      'Where this is going',
       'Plan and delivery',
       'Ongoing breakdown',
       'Problematic breakdown',
-      'Where this is going',
     ])
   })
 })
@@ -1101,33 +1369,39 @@ describe('drill-through', () => {
       href: '/drive-test/sites?bucket=onair',
     },
     {
-      name: 'the done tile',
+      name: 'the DT done card',
       open: async () => await screen.findByLabelText('Programme totals'),
-      text: 'DT done',
-      // The bar's legend names the same segment beside it, so the tile name
-      // is picked out by its own class rather than matched by text alone.
-      selector: '.dt-state-name',
+      label: 'Total DT done: 40 sites',
       href: '/drive-test/sites?bucket=done',
     },
     {
-      name: 'the ongoing tile',
+      name: 'the pending card',
+      open: async () => await screen.findByLabelText('Programme totals'),
+      label: 'Total pending: 60 sites',
+      href: '/drive-test/sites?bucket=remaining',
+    },
+    {
+      name: 'the ongoing part of pending',
       open: async () => await screen.findByLabelText('Programme totals'),
       text: 'Ongoing',
-      selector: '.dt-state-name',
+      // The part rows are the band's other links, so a name is picked out by
+      // its own class rather than matched by text alone.
+      selector: '.dt-kpi-part-name',
       href: '/drive-test/sites?bucket=ongoing',
     },
     {
-      name: 'the problematic tile',
+      name: 'the problematic part of pending',
       open: async () => await screen.findByLabelText('Programme totals'),
       text: 'Problematic',
-      selector: '.dt-state-name',
+      selector: '.dt-kpi-part-name',
       href: '/drive-test/sites?bucket=problematic',
     },
     {
-      name: 'the backlog badge',
+      name: 'the not-started part of pending',
       open: async () => await screen.findByLabelText('Programme totals'),
-      label: 'Pending: 60 sites',
-      href: '/drive-test/sites?bucket=remaining',
+      text: 'Not started',
+      selector: '.dt-kpi-part-name',
+      href: '/drive-test/sites?bucket=not_started',
     },
     {
       name: 'a problematic category',
@@ -1196,7 +1470,7 @@ describe('drill-through', () => {
 
     const hero = await screen.findByLabelText('Programme totals')
     expect(
-      within(hero).getByText('Problematic', { selector: '.dt-state-name' }).closest('a'),
+      within(hero).getByText('Problematic', { selector: '.dt-kpi-part-name' }).closest('a'),
     ).toHaveAttribute('href', '/drive-test/sites?bucket=problematic&province_id=7')
   })
 
@@ -1253,7 +1527,7 @@ describe('drill-through', () => {
     draw()
 
     const card = await section('Plan and delivery')
-    const tile = within(card).getByText('Actual').closest('.dt-figure-tile')
+    const tile = within(card).getByText('Delivered').closest('.dt-plan-figure')
     expect(within(tile).getByText('6').closest('a')).toHaveAttribute(
       'href',
       '/drive-test/sites?bucket=delivered&year=1405&month=6',
@@ -1628,6 +1902,69 @@ describe('the flow chart', () => {
     expect(within(card).getByRole('combobox', { name: 'Year' })).toBeInTheDocument()
   })
 
+  it('foots each month with what it did to the backlog', async () => {
+    serve()
+    draw()
+
+    const card = await section('Where this is going')
+    const pills = within(card).getAllByTestId('dt-flow-net')
+    // One per month drawn, not per point: the opening balance is a starting
+    // position, not a month that moved anything.
+    expect(pills).toHaveLength(4)
+    // 10 on air against 4 done is +6 pending; 8 against 6 is +2; 5 against 3
+    // is +2; 4 against 2 is +2.
+    expect(pills.map((p) => p.querySelector('text').textContent)).toEqual([
+      '+6',
+      '+2',
+      '+2',
+      '+2',
+    ])
+    // Every month here grew the backlog, so every pill is the bad tone.
+    expect(pills.map((p) => p.getAttribute('data-tone'))).toEqual([
+      'bad',
+      'bad',
+      'bad',
+      'bad',
+    ])
+  })
+
+  it('colours a month green when the backlog shrank and red when it grew', async () => {
+    serve(planDelivery(), overview, trend(), flow({
+      months: [
+        flowMonth(1404, 1, { on_aired: 10, dt_done: 4 }),   // +6, grew
+        flowMonth(1404, 2, { on_aired: 3, dt_done: 20 }),   // -17, shrank
+        flowMonth(1404, 3, { on_aired: 5, dt_done: 5 }),    // 0, flat
+      ],
+    }))
+    draw()
+
+    const card = await section('Where this is going')
+    const pills = within(card).getAllByTestId('dt-flow-net')
+    expect(pills.map((p) => p.getAttribute('data-tone'))).toEqual(['bad', 'good', 'flat'])
+    expect(pills.map((p) => p.querySelector('text').textContent)).toEqual(['+6', '-17', '0'])
+  })
+
+  it('adds the strip up to the movement in the gap, which is the point of it', async () => {
+    // The parity that makes the strip trustworthy, in the same style as the
+    // ledger's: read the rendered pills, sum them, and check the total
+    // against the gap the chart itself reports. A strip that stops summing
+    // to its own chart is worse than no strip -- it is a second, quieter
+    // answer to a question the lines above already answered.
+    serve()
+    draw()
+
+    const card = await section('Where this is going')
+    const sum = within(card)
+      .getAllByTestId('dt-flow-net')
+      .reduce((total, p) => total + Number(p.querySelector('text').textContent), 0)
+
+    // Opening 50 on air / 20 done is a gap of 30; the chart's Gap tile reads
+    // the closing 42. The strip has to account for exactly that movement.
+    const closingGap = Number(within(tile(card, 'Gap')).getByText('42').textContent)
+    expect(sum).toBe(closingGap - 30)
+    expect(sum).toBe(12)
+  })
+
   it('marks the open month as still in progress', async () => {
     serve()
     draw()
@@ -1686,6 +2023,64 @@ describe('the trend section', () => {
     expect(within(card).getByText('+4')).toBeInTheDocument()
     expect(within(card).getByText('−14')).toBeInTheDocument()
     expect(within(card).getByText('60')).toBeInTheDocument()
+  })
+
+  it('closes: opening plus new on air minus drive tests done is the closing bar', async () => {
+    // The property the waterfall exists to make visible, read back off the
+    // rendered bars rather than off the fixture. `opening + arrivals -
+    // completions == closing` holds by construction in
+    // services/snapshots.reconcile, so a chart that stops showing it is the
+    // chart being wrong, not the ledger.
+    serve()
+    draw()
+
+    const card = await section('What moved')
+    // Magnitudes: the direction of each step is carried by which step it is
+    // ("New on air" rises, "Drive tests done" falls), and the +/− on the
+    // label is there to say so to a reader. Signing the numbers here too
+    // would subtract a negative and pass on a ledger that does not close.
+    const figureOf = (step) =>
+      Number(
+        card
+          .querySelector(`[data-step="${step}"] .dt-flow-figure-text`)
+          .textContent.replace(/[^0-9]/g, ''),
+      )
+
+    const opening = figureOf('opening')
+    const arrived = figureOf('arrived')
+    const completed = figureOf('completed')
+    const closing = figureOf('closing')
+
+    expect(opening + arrived - completed).toBe(closing)
+    expect([opening, arrived, completed, closing]).toEqual([70, 4, 14, 60])
+  })
+
+  it('names each step under its own bar, and chains them with connectors', async () => {
+    serve()
+    draw()
+
+    const card = await section('What moved')
+    expect(
+      within(card)
+        .getAllByTestId('dt-flow-bar')
+        .map((g) => g.querySelector('.dt-flow-step-label').textContent),
+    ).toEqual(['Opened at', 'New on air', 'Drive tests done', 'Closed at'])
+
+    // One connector between each adjacent pair: a break in the chain is a
+    // break in the ledger.
+    expect(within(card).getAllByTestId('dt-flow-connector')).toHaveLength(3)
+  })
+
+  it('carries the month\'s net movement in the card header', async () => {
+    serve()
+    draw()
+
+    const card = await section('What moved')
+    const header = card.querySelector('.dt-section-total')
+    // 60 closed against 70 opened: the backlog fell by 10, which is the good
+    // direction, so it is drawn in the done colour.
+    expect(header).toHaveTextContent('-10')
+    expect(header.querySelector('b')).toHaveStyle({ color: 'var(--dt-done)' })
   })
 
   it('says which flows are measured and which are derived', async () => {
@@ -1796,7 +2191,7 @@ describe('the contractor scorecard', () => {
     await userEvent.click(within(card).getByRole('button', { name: /Ongoing/ }))
     expect(rowNames(card)).toEqual(['Alfa Drive Tests', 'Beta Surveys', 'Unattributed'])
 
-    await userEvent.click(within(card).getByRole('button', { name: /Achievement/ }))
+    await userEvent.click(within(card).getByRole('button', { name: /Completion/ }))
     expect(rowNames(card)).toEqual(['Alfa Drive Tests', 'Beta Surveys', 'Unattributed'])
 
     // Assignment ascending puts the smaller book first, and still not the
@@ -1818,7 +2213,7 @@ describe('the contractor scorecard', () => {
     expect(control()).toHaveAttribute('aria-pressed', 'true')
   })
 
-  it('has exactly five sort controls: Contractor, Assignment, DT done, Ongoing, Achievement', async () => {
+  it('has exactly five sort controls: Contractor, Assignment, DT done, Ongoing, Completion', async () => {
     serve()
     draw()
 
@@ -1827,7 +2222,10 @@ describe('the contractor scorecard', () => {
     const labels = within(controls)
       .getAllByRole('button')
       .map((b) => b.textContent.trim())
-    expect(labels).toEqual(['Contractor', 'Assignment', 'DT done', 'Ongoing', 'Achievement'])
+    // "Completion", not "Achievement": Achievement is the Plan and delivery
+    // card's word for delivered-against-PIP, and this is how far a company is
+    // through its own book. One word, two meanings, one page.
+    expect(labels).toEqual(['Contractor', 'Assignment', 'DT done', 'Ongoing', 'Completion'])
   })
 
   it('shows no Problematic or Not started figure anywhere in the list', async () => {
@@ -1839,8 +2237,8 @@ describe('the contractor scorecard', () => {
     expect(within(card).queryByText('Not started')).not.toBeInTheDocument()
   })
 
-  it('rates Achievement as DT done over Assignment, and the Assignment cell as DT done plus Ongoing', async () => {
-    // Alfa: 40 done, 15 ongoing -> assignment 55, achievement 40/55 = 72.7%.
+  it('rates Completion as DT done over Assignment, and the Assignment cell as DT done plus Ongoing', async () => {
+    // Alfa: 40 done, 15 ongoing -> assignment 55, completion 40/55 = 72.7%.
     serve()
     draw()
 
@@ -1866,10 +2264,214 @@ describe('the contractor scorecard', () => {
 
     const card = await section('Contractor scorecard')
 
-    for (const column of ['Contractor', 'Assignment', 'DT done', 'Ongoing', 'Achievement']) {
+    for (const column of ['Contractor', 'Assignment', 'DT done', 'Ongoing', 'Completion']) {
       await userEvent.click(within(card).getByRole('button', { name: column }))
       const names = rowNames(card)
       expect(names[names.length - 1]).toBe('Unattributed')
     }
+  })
+})
+
+describe('the drill-through panel', () => {
+  /** The panel, once its request has resolved. */
+  const panel = async () => {
+    const node = await screen.findByTestId('dt-drill')
+    await waitFor(() => expect(node.querySelector('.dt-skeleton')).toBeNull())
+    return node
+  }
+
+  const countIn = (node) => Number(node.querySelector('.dt-drill-count').textContent)
+
+  it('opens on a figure and is not there before one is clicked', async () => {
+    serve()
+    draw()
+
+    await screen.findByLabelText('Programme totals')
+    expect(screen.queryByTestId('dt-drill')).not.toBeInTheDocument()
+
+    await userEvent.click(screen.getByLabelText('Total pending: 60 sites'))
+    expect(await panel()).toBeInTheDocument()
+  })
+
+  // THE ASSERTION THE PANEL EXISTS FOR. The count in the panel has to be the
+  // figure that opened it. Server-side that is guaranteed by counting before
+  // pagination through the dashboard's own predicates; this side proves the
+  // other half -- that the panel asks for exactly the figure clicked. A
+  // wrong or dropped filter misses SITE_TOTALS and reports -999.
+  it.each([
+    ['pending', () => screen.getByLabelText('Total pending: 60 sites'), 60],
+    [
+      'ongoing',
+      () => screen.getByText('Ongoing', { selector: '.dt-kpi-part-name' }),
+      50,
+    ],
+    [
+      'problematic',
+      () => screen.getByText('Problematic', { selector: '.dt-kpi-part-name' }),
+      10,
+    ],
+  ])('shows the same count as the %s figure that opened it', async (_name, target, expected) => {
+    serve()
+    draw()
+
+    await screen.findByLabelText('Programme totals')
+    await userEvent.click(target())
+    expect(countIn(await panel())).toBe(expected)
+  })
+
+  it('shows the same count as a contractor row that opened it', async () => {
+    serve()
+    draw()
+
+    const card = await section('Contractor scorecard')
+    const row = within(card).getByText('Alfa Drive Tests').closest('.dt-contractor-row')
+    // The assignment figure -- the denominator every rate on the row divides
+    // by, and the one a reader is most likely to want to check.
+    await userEvent.click(within(row).getByText('55'))
+    expect(countIn(await panel())).toBe(55)
+  })
+
+  it('shows the same count as a province row that opened it', async () => {
+    serve()
+    draw()
+
+    const grid = await section('Province breakdown')
+    const card = within(grid).getByText('Kerman').closest('.dt-province-card')
+    await userEvent.click(within(card).getByText('60 on air'))
+    expect(countIn(await panel())).toBe(60)
+  })
+
+  it('carries the province scope into the request rather than resolving it here', async () => {
+    // The client never widens scope and never resolves a province: it sends
+    // the query the link already carried and the endpoint decides what the
+    // caller may see. See api/drive_test._resolve_province and
+    // DriveTestAnalytics._load, where the province WHERE is applied after
+    // apply_work_item_scope.
+    serve()
+    draw('/reports/drive-test?province=7')
+
+    await screen.findByLabelText('Programme totals')
+    await userEvent.click(
+      screen.getByText('Problematic', { selector: '.dt-kpi-part-name' }),
+    )
+    await panel()
+
+    expect(api.get).toHaveBeenCalledWith('/drive-test/sites', {
+      params: { bucket: 'problematic', province_id: '7', limit: 25 },
+    })
+  })
+
+  it('names what was clicked in the words the dashboard used', async () => {
+    serve()
+    draw()
+
+    await screen.findByLabelText('Programme totals')
+    await userEvent.click(screen.getByText('Ongoing', { selector: '.dt-kpi-part-name' }))
+    const node = await panel()
+    // "ongoing sites", not "bucket: ongoing" -- see BUCKET_LABEL.
+    expect(node).toHaveTextContent('ongoing sites')
+  })
+
+  it('lists the sites with their code, province, contractor, state and age', async () => {
+    serve()
+    draw()
+
+    await screen.findByLabelText('Programme totals')
+    await userEvent.click(screen.getByText('Ongoing', { selector: '.dt-kpi-part-name' }))
+    const node = await panel()
+
+    expect(
+      within(node).getAllByRole('columnheader').map((h) => h.textContent),
+    ).toEqual(['Site', 'Province', 'Contractor', 'State', 'Age'])
+    const first = within(node).getAllByRole('row')[1]
+    expect(within(first).getByText('S-1')).toBeInTheDocument()
+    expect(within(first).getByText('Kerman')).toBeInTheDocument()
+    expect(within(first).getByText('2–3 weeks')).toBeInTheDocument()
+  })
+
+  it('exports through the existing site-list endpoint, with the same filters', async () => {
+    // Not a second export path and not a file built in the browser: the
+    // server's export knows the column set, the row cap and the scope, and
+    // a spreadsheet assembled here from the loaded rows would be a
+    // different, silently shorter answer.
+    serve()
+    draw()
+
+    await screen.findByLabelText('Programme totals')
+    await userEvent.click(screen.getByText('Problematic', { selector: '.dt-kpi-part-name' }))
+    const node = await panel()
+
+    api.get.mockImplementationOnce(() =>
+      Promise.resolve({ data: new Blob(['x']), headers: {} }),
+    )
+    await userEvent.click(within(node).getByRole('button', { name: /Export this list/ }))
+
+    expect(api.get).toHaveBeenCalledWith('/drive-test/sites/export', {
+      params: { bucket: 'problematic' },
+      responseType: 'blob',
+    })
+  })
+
+  it('offers a way through to the full list at the same address', async () => {
+    serve()
+    draw()
+
+    await screen.findByLabelText('Programme totals')
+    await userEvent.click(screen.getByText('Ongoing', { selector: '.dt-kpi-part-name' }))
+    const node = await panel()
+
+    expect(within(node).getByRole('link', { name: /Open in site list/ })).toHaveAttribute(
+      'href',
+      '/drive-test/sites?bucket=ongoing',
+    )
+  })
+
+  it('clears the focus when closed, by the button and by Escape', async () => {
+    serve()
+    draw()
+
+    await screen.findByLabelText('Programme totals')
+    await userEvent.click(screen.getByLabelText('Total pending: 60 sites'))
+    await panel()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Close' }))
+    await waitFor(() => expect(screen.queryByTestId('dt-drill')).not.toBeInTheDocument())
+
+    await userEvent.click(screen.getByLabelText('Total pending: 60 sites'))
+    await panel()
+    await userEvent.keyboard('{Escape}')
+    await waitFor(() => expect(screen.queryByTestId('dt-drill')).not.toBeInTheDocument())
+  })
+
+  it('leaves a modified click to the browser, so the href still opens a tab', async () => {
+    // Every figure is still a real link to a real URL. Intercepting only the
+    // plain left click is what keeps middle-click and cmd-click working --
+    // and what keeps the drill-through URL assertions above meaningful.
+    serve()
+    draw()
+
+    await screen.findByLabelText('Programme totals')
+    // fireEvent rather than userEvent: the modifier has to be on the click
+    // event itself, which is what DrillLink reads, and userEvent's keyboard
+    // state is not shared across separate top-level calls.
+    fireEvent.click(screen.getByText('Ongoing', { selector: '.dt-kpi-part-name' }), {
+      metaKey: true,
+    })
+
+    expect(screen.queryByTestId('dt-drill')).not.toBeInTheDocument()
+  })
+
+  it('says what the server said when a filter is refused', async () => {
+    serve()
+    draw()
+    await screen.findByLabelText('Programme totals')
+
+    api.get.mockImplementationOnce(() =>
+      Promise.reject({ response: { data: { detail: 'age_band applies to the ongoing bucket only' } } }),
+    )
+    await userEvent.click(screen.getByText('Ongoing', { selector: '.dt-kpi-part-name' }))
+
+    const node = await screen.findByTestId('dt-drill')
+    expect(await within(node).findByText(/age_band applies to the ongoing bucket only/)).toBeInTheDocument()
   })
 })

@@ -1,49 +1,92 @@
 import { motion, useReducedMotion } from 'framer-motion'
-import {
-  AlertTriangle,
-  CheckCircle2,
-  CircleDashed,
-  Hourglass,
-  Minus,
-  Radio,
-  TrendingDown,
-  TrendingUp,
-} from 'lucide-react'
-import { Link } from 'react-router-dom'
+import { Minus, TrendingDown, TrendingUp } from 'lucide-react'
 import { KPI_DIRECTION, STATE_COLOR } from './constants'
-import { achievement, count, deltaTone, percent, TONE_COLOR } from './format'
+import { count, deltaTone, percent, share, TONE_COLOR } from './format'
 import {
   doneLink,
+  notStartedLink,
   onairLink,
   ongoingLink,
   problematicLink,
   remainingLink,
 } from './links'
-import { AnimatedNumber } from './charts/primitives'
+import { AnimatedNumber, Sparkline } from './charts/primitives'
+import { DrillLink } from './DrillPanel'
 
 /**
- * The programme in one line of progress.
+ * The three totals this programme is run on, and what pending is made of.
  *
- * WHAT THIS REPLACES, AND WHY. A ring split three ways. The ring fixed the
- * split bar it replaced — figures moved out of the geometry and into tiles —
- * but it kept the geometry's own failure: at the completion rate this
- * programme actually runs at, around ninety-five per cent, the done arc is
- * the ring and the two arcs a reader is scanning for are slivers a couple of
- * degrees wide. A part-to-whole chart that cannot show its small parts is
- * decoration.
+ * WHAT THIS REPLACES, AND WHY. A hero built around one big completion
+ * percentage, with a four-state bar under it and five tiles under that. Two
+ * things were wrong with it.
  *
- * So the shape of the answer leads instead of the picture of it. The
- * completion rate is the hero figure, because it is the one number anybody
- * opening this page came for; the counts it is made of sit under it as
- * arithmetic — 625 of 661 — and the backlog, the thing that is actually
- * managed, is an accent badge rather than grey footer text. The bar under
- * them is a plain segmented track: it still sums to the on-air total by
- * construction, but nothing has to be legible *inside* a segment for the
- * band to be readable, so a two-per-cent segment costing nothing is fine.
+ * The percentage led, and it is the figure nobody acts on. At the rate this
+ * programme runs — around ninety-five per cent — it moves a tenth of a point
+ * a month and reads the same all year. The reader opening this page is here
+ * about the backlog: how big is it, which way is it going, and what is it
+ * made of. That is now what the band says, in that order.
  *
- * Each tile is a link to the sites inside it. So are the hero figures and the
- * backlog badge: every number in this band opens the sites it counted.
+ * The four-state bar had the same failure the ring before it had, one level
+ * down. A part-to-whole bar of on-air is a done segment that fills it and
+ * three slivers, and the slivers are the entire question. Splitting *pending*
+ * instead — a number where the three parts are 60/25/15 rather than 95/3/2 —
+ * gives every segment a width a reader can actually see and click.
+ *
+ * So: on air, DT done, and pending, with pending taking the width of the
+ * other two together because it is the one carrying detail. The overall
+ * progress figure and the four-state bar are gone from this band and have not
+ * moved elsewhere.
+ *
+ * EVERY FIGURE HERE IS A LINK to the sites it counted, the three part rows
+ * included — see `links.js`. That is the whole point of the band: a number
+ * you cannot open is a number you have to go and re-find by hand.
  */
+
+/** How many points a sparkline needs before it is worth drawing.
+ *
+ * Seven months, and it is a floor rather than a target: fewer than seven
+ * points is a line whose shape is mostly the accident of where the series
+ * happens to start, and a trend drawn from four months would be read with a
+ * confidence it has not earned. A card whose series is too short draws
+ * without one rather than drawing a shorter one — a missing sparkline is
+ * obviously missing, where a three-point one looks like an answer.
+ */
+const SPARK_MIN_POINTS = 7
+
+/** The three cumulative series the band's sparklines draw, or `null`.
+ *
+ * `/drive-test/flow` returns per-month *activity* — what went on air and what
+ * was drive-tested during each month — not balances. The running totals are
+ * built here, from the opening balance forward, because that is arithmetic on
+ * a payload the page already has: this band adds no request and no backend
+ * field.
+ *
+ * ONE HONEST LIMIT, and it is why these are sparklines rather than figures.
+ * `not_placed` — sites whose dates the flow cannot place in any month — sits
+ * outside the series by construction, so the last point of each line does not
+ * equal the KPI beside it and is not meant to. The line carries the shape;
+ * the figure beside it carries the number. Nothing in this band ever reads a
+ * value off a sparkline.
+ */
+function sparkSeries(flow) {
+  const months = flow?.months
+  if (!months || months.length < SPARK_MIN_POINTS) return null
+
+  let onair = flow.opening?.on_air ?? 0
+  let done = flow.opening?.dt_done ?? 0
+  const running = months.map((m) => {
+    onair += m.on_aired ?? 0
+    done += m.dt_done ?? 0
+    return { onair, done, pending: onair - done }
+  })
+
+  const tail = running.slice(-SPARK_MIN_POINTS)
+  return {
+    onair: tail.map((p) => p.onair),
+    done: tail.map((p) => p.done),
+    pending: tail.map((p) => p.pending),
+  }
+}
 
 function DeltaChip({ delta, direction = 'up', small }) {
   // No baseline, no chip. The placeholder this used to render said "no
@@ -59,8 +102,8 @@ function DeltaChip({ delta, direction = 'up', small }) {
       <Icon size={small ? 12 : 14} strokeWidth={2.2} aria-hidden="true" />
       {delta > 0 ? '+' : ''}
       {count(delta)}
-      {/* The period is named once, on the badge that leads the band, rather
-          than three more times across the tiles under it. */}
+      {/* The period is named on the three card figures and not again on the
+          part rows under them, which share it. */}
       {!small && ' vs last month'}
     </span>
   )
@@ -68,18 +111,7 @@ function DeltaChip({ delta, direction = 'up', small }) {
 
 export { DeltaChip }
 
-// The bar's four legend swatches, in the order they are named. "Rest of
-// pending" is not-started sites: on-air, no drive-test status yet, part of
-// Pending but drawn as the neutral rest of the track rather than a fourth
-// segment, since nothing is actually happening to them yet.
-const BAR_LEGEND = [
-  { key: 'done', label: 'DT done', color: STATE_COLOR.done },
-  { key: 'ongoing', label: 'Ongoing', color: STATE_COLOR.ongoing },
-  { key: 'problematic', label: 'Problematic', color: STATE_COLOR.problematic },
-  { key: 'rest', label: 'Rest of pending', color: 'var(--dt-track)' },
-]
-
-export default function KpiBand({ kpis, provinceId }) {
+export default function KpiBand({ kpis, flow, provinceId }) {
   const reduced = useReducedMotion()
   const scope = provinceId == null ? undefined : { provinceId }
 
@@ -88,64 +120,39 @@ export default function KpiBand({ kpis, provinceId }) {
   const pending = kpis.total_remaining.value
   const ongoing = kpis.total_ongoing.value
   const problematic = kpis.total_problematic.value
+  const notStarted = kpis.total_not_started.value
 
-  const pctOfOnair = (v) => (onair ? (v / onair) * 100 : 0)
-  // Guarded the same way: a programme with nothing pending has nothing to
-  // take a share of, so it reads 0% rather than dividing by zero.
-  const pctOfPending = (v) => (pending ? (v / pending) * 100 : 0)
-  const donePct = pctOfOnair(done)
+  const series = sparkSeries(flow)
+  // Guarded: a programme with nothing on air has nothing to take a share of,
+  // so it reads 0% rather than dividing by zero.
+  const donePct = onair ? (done / onair) * 100 : 0
 
-  // On air and Pending are totals, not states something is happening to, so
-  // they take the neutral mark rather than one of the three state hues —
-  // see constants.js for why this page reserves those three for done,
-  // ongoing and problematic and nothing else.
-  const NEUTRAL = 'var(--dt-notstarted)'
+  /** A part's share of pending.
+   *
+   * Guarded rather than left to `share`, which answers an absent denominator
+   * with an em dash. That is the right answer in a table, where a dash means
+   * "not recorded"; here the denominator is not missing, it is zero, and
+   * every part is zero with it. "0% of pending" says that plainly where
+   * "— of pending" reads as a figure that failed to load.
+   */
+  const shareOfPending = (v) => (pending ? share(v, pending) : '0%')
 
-  const tiles = [
-    {
-      key: 'onair',
-      label: 'On air',
-      value: onair,
-      color: NEUTRAL,
-      icon: Radio,
-      href: onairLink(scope),
-      foot: 'launched sites',
-      kpi: kpis.total_onair,
-      direction: KPI_DIRECTION.total_onair,
-    },
-    {
-      key: 'done',
-      label: 'DT done',
-      value: done,
-      color: STATE_COLOR.done,
-      icon: CheckCircle2,
-      href: doneLink(scope),
-      foot: `${percent(donePct)} of on air`,
-      kpi: kpis.total_dt_done,
-      direction: KPI_DIRECTION.total_dt_done,
-    },
-    {
-      key: 'pending',
-      label: 'Pending',
-      value: pending,
-      color: NEUTRAL,
-      icon: Hourglass,
-      href: remainingLink(scope),
-      foot: 'on air minus DT done',
-      // No delta chip here: Pending's delta already leads the band on the
-      // pill above, and repeating it on the tile is the same number twice
-      // rather than a second fact.
-      kpi: null,
-      tone: 'pending',
-    },
+  /** The three states pending is made of, in the order they are acted on.
+   *
+   * Ongoing first because it is work in flight and the largest of the three;
+   * problematic next because it is the blocker; not started last because it
+   * is the part nothing has happened to yet. Not started carries no delta —
+   * the monthly snapshot has no column for it (see the backend's
+   * `total_not_started`) — and `DeltaChip` renders nothing rather than a
+   * zero, which is the honest answer until it has a baseline of its own.
+   */
+  const parts = [
     {
       key: 'ongoing',
       label: 'Ongoing',
       value: ongoing,
       color: STATE_COLOR.ongoing,
-      icon: CircleDashed,
       href: ongoingLink(scope),
-      foot: `${percent(pctOfPending(ongoing))} of pending`,
       kpi: kpis.total_ongoing,
       direction: KPI_DIRECTION.total_ongoing,
     },
@@ -154,139 +161,176 @@ export default function KpiBand({ kpis, provinceId }) {
       label: 'Problematic',
       value: problematic,
       color: STATE_COLOR.problematic,
-      icon: AlertTriangle,
       href: problematicLink(scope),
-      foot: `${percent(pctOfPending(problematic))} of pending`,
       kpi: kpis.total_problematic,
       direction: KPI_DIRECTION.total_problematic,
-      tone: 'problem',
+    },
+    {
+      key: 'not_started',
+      label: 'Not started',
+      value: notStarted,
+      color: STATE_COLOR.not_started,
+      href: notStartedLink(scope),
+      kpi: kpis.total_not_started,
+      direction: KPI_DIRECTION.total_not_started,
     },
   ]
 
-  // The bar draws only the three states something is happening to, in that
-  // order: done sits against ongoing and problematic rather than being
-  // buried at the far end. Not started is the untouched backlog inside
-  // Pending and is never a segment — see BAR_LEGEND above.
-  const BAR_ORDER = ['done', 'ongoing', 'problematic']
-  const barValues = { done, ongoing, problematic }
-  const barColor = { done: STATE_COLOR.done, ongoing: STATE_COLOR.ongoing, problematic: STATE_COLOR.problematic }
-  const barLabel = { done: 'DT done', ongoing: 'Ongoing', problematic: 'Problematic' }
-  // Only the states that actually have sites are drawn, and the bar's
+  // Only the parts that actually have sites are drawn, and the bar's
   // description is built from the same list — a screen reader is told what
-  // the bar shows, not "Problematic: 0, 0%" for a state that is empty this
-  // month, and Not started is never named here at all.
-  const segments = BAR_ORDER.map((key) => ({
-    key,
-    label: barLabel[key],
-    value: barValues[key],
-    color: barColor[key],
-    share: pctOfOnair(barValues[key]),
-  })).filter((s) => s.share > 0)
+  // the bar shows rather than "Problematic: 0, 0%" for a state that is empty
+  // this month.
+  const segments = parts
+    .map((p) => ({ ...p, pct: pending ? (p.value / pending) * 100 : 0 }))
+    .filter((p) => p.pct > 0)
 
-  const breakdown = segments
-    .map((s) => `${s.label}: ${count(s.value)}, ${percent(s.share)}`)
+  const barDescription = segments
+    .map((s) => `${s.label}: ${count(s.value)}, ${shareOfPending(s.value)}`)
     .join('. ')
 
   return (
-    <section className="dt-hero" aria-label="Programme totals">
-      <header className="dt-hero-head">
-        <div className="dt-hero-primary">
-          <Link
-            to={doneLink(scope)}
-            className="dt-hero-figure tnum"
-            aria-label={`Overall progress: ${achievement(donePct)}`}
-          >
-            {achievement(donePct)}
-          </Link>
-          <span className="dt-hero-label">Overall Progress</span>
-          <span className="dt-hero-denominator tnum">
-            <Link
-              to={doneLink(scope)}
-              className="dt-cell-link"
-              aria-label={`Drive tests done: ${done} sites`}
-            >
-              <AnimatedNumber value={done} />
-            </Link>
-            {' of '}
-            <Link
-              to={onairLink(scope)}
-              className="dt-cell-link"
-              aria-label={`Total on-air: ${onair} sites`}
-            >
-              {count(onair)}
-            </Link>
-            {' sites done'}
-          </span>
-        </div>
+    <section className="dt-kpi-band" aria-label="Programme totals">
+      <KpiCard
+        kpiKey="onair"
+        title="Total on-air"
+        value={onair}
+        href={onairLink(scope)}
+        figureLabel={`Total on-air: ${onair} sites`}
+        kpi={kpis.total_onair}
+        direction={KPI_DIRECTION.total_onair}
+        sub="launched sites"
+        spark={series?.onair}
+        sparkColor="var(--dt-notstarted)"
+        sparkLabel={`On-air over the last ${SPARK_MIN_POINTS} months`}
+      />
 
-        <div className="dt-hero-aside">
-          <Link
+      <KpiCard
+        kpiKey="done"
+        title="Total DT done"
+        value={done}
+        href={doneLink(scope)}
+        figureLabel={`Total DT done: ${done} sites`}
+        kpi={kpis.total_dt_done}
+        direction={KPI_DIRECTION.total_dt_done}
+        sub={`${percent(donePct)} of on-air`}
+        spark={series?.done}
+        sparkColor={STATE_COLOR.done}
+        sparkLabel={`Drive tests done over the last ${SPARK_MIN_POINTS} months`}
+      />
+
+      {/* Pending is wider because it is the only card carrying a breakdown.
+          The figure and its trend stay on the left, in the same shape as the
+          two cards beside it, so the three headline numbers still read as one
+          row rather than as two cards and a panel. */}
+      <div className="dt-kpi-card dt-kpi-card-wide" data-kpi="pending">
+        <div className="dt-kpi-main">
+          <span className="dt-kpi-title">Total pending</span>
+          <DrillLink
             to={remainingLink(scope)}
-            className="dt-backlog"
-            aria-label={`Pending: ${pending} sites`}
+            className="dt-kpi-figure tnum"
+            aria-label={`Total pending: ${pending} sites`}
           >
-            <b className="tnum">
-              <AnimatedNumber value={pending} />
-            </b>
-            <span>Pending</span>
-          </Link>
-          <DeltaChip delta={kpis.total_remaining.delta} direction={KPI_DIRECTION.total_remaining} />
+            <AnimatedNumber value={pending} />
+          </DrillLink>
+          <DeltaChip
+            delta={kpis.total_remaining.delta}
+            direction={KPI_DIRECTION.total_remaining}
+          />
+          <span className="dt-kpi-sub">on air, drive test not done</span>
+          <SparkSlot
+            points={series?.pending}
+            color={STATE_COLOR.ongoing}
+            label={`Pending over the last ${SPARK_MIN_POINTS} months`}
+          />
         </div>
-      </header>
 
-      <div className="dt-hero-bar-row">
-        <div
-          className="dt-hero-bar"
-          role="img"
-          aria-label={`${count(onair)} sites on air. ${breakdown}`}
-        >
-          {segments.map((s, i) => (
-            <motion.span
-              key={s.key}
-              data-testid="dt-hero-segment"
-              data-state={s.key}
-              className="dt-hero-segment"
-              style={{ background: s.color }}
-              title={`${s.label}: ${count(s.value)} (${percent(s.share)} of on-air)`}
-              initial={reduced ? false : { width: 0 }}
-              animate={{ width: `${s.share}%` }}
-              transition={{ duration: 0.7, delay: 0.05 + i * 0.1, ease: [0.16, 1, 0.3, 1] }}
-            />
-          ))}
-        </div>
-        <div className="dt-legend dt-hero-legend">
-          {BAR_LEGEND.map((l) => (
-            <span key={l.key} className="dt-legend-item">
-              <i style={{ background: l.color }} aria-hidden="true" />
-              {l.label}
-            </span>
-          ))}
+        <div className="dt-kpi-parts">
+          <div
+            className="dt-kpi-partbar"
+            role="img"
+            aria-label={`${count(pending)} sites pending. ${barDescription}`}
+          >
+            {segments.map((s, i) => (
+              <motion.span
+                key={s.key}
+                data-testid="dt-kpi-segment"
+                data-state={s.key}
+                className="dt-kpi-partbar-seg"
+                style={{ background: s.color }}
+                title={`${s.label}: ${count(s.value)} (${shareOfPending(s.value)} of pending)`}
+                initial={reduced ? false : { width: 0 }}
+                animate={{ width: `${s.pct}%` }}
+                transition={{ duration: 0.7, delay: 0.05 + i * 0.1, ease: [0.16, 1, 0.3, 1] }}
+              />
+            ))}
+          </div>
+
+          <ul className="dt-kpi-partlist">
+            {parts.map((p) => (
+              <li key={p.key} data-part={p.key}>
+                <DrillLink to={p.href} className="dt-kpi-part" data-part={p.key}>
+                  <span
+                    className="dt-kpi-part-dot"
+                    style={{ background: p.color }}
+                    aria-hidden="true"
+                  />
+                  <span className="dt-kpi-part-name">{p.label}</span>
+                  <span className="dt-kpi-part-value tnum">{count(p.value)}</span>
+                  <DeltaChip delta={p.kpi?.delta} direction={p.direction} small />
+                  <span className="dt-kpi-part-share tnum">
+                    {shareOfPending(p.value)} of pending
+                  </span>
+                </DrillLink>
+              </li>
+            ))}
+          </ul>
         </div>
       </div>
-
-      <ul className="dt-state-tiles">
-        {tiles.map((s) => (
-          <li key={s.key} data-tile={s.key}>
-            <Link
-              to={s.href}
-              data-tile={s.key}
-              className={`dt-state-tile${s.tone ? ` dt-state-tile-${s.tone}` : ''}`}
-            >
-              <span className="dt-state-head">
-                <span className="dt-state-mark" style={{ background: s.color }} aria-hidden="true">
-                  <s.icon size={12} strokeWidth={2.4} />
-                </span>
-                <span className="dt-state-name">{s.label}</span>
-              </span>
-              <span className="dt-state-figure tnum">{count(s.value)}</span>
-              <span className="dt-state-foot">
-                <span className="dt-state-share tnum">{s.foot}</span>
-                {s.kpi && <DeltaChip delta={s.kpi.delta} direction={s.direction} small />}
-              </span>
-            </Link>
-          </li>
-        ))}
-      </ul>
     </section>
+  )
+}
+
+/** One of the two plain cards. Pending is built inline above: it carries a
+ * breakdown these two do not, and abstracting over that difference would
+ * cost more in indirection than it saves in lines. */
+function KpiCard({
+  kpiKey,
+  title,
+  value,
+  href,
+  figureLabel,
+  kpi,
+  direction,
+  sub,
+  spark,
+  sparkColor,
+  sparkLabel,
+}) {
+  return (
+    <div className="dt-kpi-card" data-kpi={kpiKey}>
+      <div className="dt-kpi-main">
+        <span className="dt-kpi-title">{title}</span>
+        <DrillLink to={href} className="dt-kpi-figure tnum" aria-label={figureLabel}>
+          <AnimatedNumber value={value} />
+        </DrillLink>
+        <DeltaChip delta={kpi?.delta} direction={direction} />
+        <span className="dt-kpi-sub">{sub}</span>
+        <SparkSlot points={spark} color={sparkColor} label={sparkLabel} />
+      </div>
+    </div>
+  )
+}
+
+/** The sparkline, or the space it would have taken.
+ *
+ * The slot keeps its height when there is no series, so a card does not jump
+ * when `/drive-test/flow` resolves after `/drive-test/overview` — they are
+ * separate requests and routinely land in that order.
+ */
+function SparkSlot({ points, color, label }) {
+  return (
+    <span className="dt-kpi-sparkslot">
+      {points ? <Sparkline points={points} color={color} label={label} /> : null}
+    </span>
   )
 }

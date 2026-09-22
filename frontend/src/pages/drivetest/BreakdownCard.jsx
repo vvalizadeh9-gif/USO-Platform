@@ -1,6 +1,6 @@
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { BarChart3, Table2 } from 'lucide-react'
-import { useId, useState } from 'react'
+import { useState } from 'react'
 import { count, share } from './format'
 import RankedBars from './charts/RankedBars'
 
@@ -12,61 +12,78 @@ import RankedBars from './charts/RankedBars'
  * one card, where the province filter changes every figure on the page — only
  * the second is a place worth linking to.
  *
- * The tabs are real ARIA tabs now. They were plain buttons with a class,
- * which meant a screen reader announced four unlabelled buttons and gave no
- * hint that picking one changed the panel below.
+ * The tabs are real ARIA tabs. They were plain buttons with a class, which
+ * meant a screen reader announced four unlabelled buttons and gave no hint
+ * that picking one changed the panel below.
+ *
+ * THE TABS RENDER IN THE CARD HEADER, beside the title and the total, rather
+ * than in a control row above the panel. They are the card's question asked
+ * three ways, so they belong on the line that asks it; a row of their own
+ * read as furniture a reader had to get past before reaching the figures.
+ * That is why `BreakdownTabs` is a separate export: `Section` renders it into
+ * the header through its `controls` slot while this component renders the
+ * panel it drives.
+ *
+ * WHICH IS ALSO WHY `idBase` IS A PROP rather than a `useId`. The tablist and
+ * the tabpanel it controls now live in two different components, and
+ * `aria-controls`/`aria-labelledby` have to agree across that gap. A
+ * generated id would be two different ids. The caller passes one stable
+ * string and both sides derive from it, so the relationship a screen reader
+ * depends on cannot come apart.
  */
-export default function BreakdownCard({ tabs, tab, onTab, views, total }) {
+export function BreakdownTabs({ idBase, tabs, tab, onTab }) {
+  const reduced = useReducedMotion()
+  return (
+    <div className="dt-tabs" role="tablist" aria-label="Break down by">
+      {tabs.map((t) => (
+        <button
+          key={t.key}
+          type="button"
+          role="tab"
+          id={`${idBase}-tab-${t.key}`}
+          aria-selected={tab === t.key}
+          aria-controls={`${idBase}-panel`}
+          className={`dt-tab${tab === t.key ? ' dt-tab-active' : ''}`}
+          onClick={() => onTab(t.key)}
+        >
+          {t.label}
+          {tab === t.key && !reduced && (
+            <motion.span className="dt-tab-underline" layoutId={`${idBase}-underline`} />
+          )}
+          {tab === t.key && reduced && <span className="dt-tab-underline" />}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+export default function BreakdownCard({ idBase, tab, views, total }) {
   const [asTable, setAsTable] = useState(false)
   const reduced = useReducedMotion()
-  const base = useId()
   const view = views[tab]
 
   return (
     <>
-      <div className="dt-breakdown-controls">
-        <div className="dt-tabs" role="tablist" aria-label="Break down by">
-          {tabs.map((t) => (
-            <button
-              key={t.key}
-              type="button"
-              role="tab"
-              id={`${base}-tab-${t.key}`}
-              aria-selected={tab === t.key}
-              aria-controls={`${base}-panel`}
-              className={`dt-tab${tab === t.key ? ' dt-tab-active' : ''}`}
-              onClick={() => onTab(t.key)}
-            >
-              {t.label}
-              {tab === t.key && !reduced && (
-                <motion.span className="dt-tab-underline" layoutId={`${base}-underline`} />
-              )}
-              {tab === t.key && reduced && <span className="dt-tab-underline" />}
-            </button>
-          ))}
-        </div>
-
-        <div className="dt-viewtoggle" role="group" aria-label="Chart or table">
-          <button
-            type="button"
-            className={`btn btn-sm${asTable ? ' btn-ghost' : ''}`}
-            aria-pressed={!asTable}
-            onClick={() => setAsTable(false)}
-          >
-            <BarChart3 size={13} aria-hidden="true" /> Chart
-          </button>
-          <button
-            type="button"
-            className={`btn btn-sm${asTable ? '' : ' btn-ghost'}`}
-            aria-pressed={asTable}
-            onClick={() => setAsTable(true)}
-          >
-            <Table2 size={13} aria-hidden="true" /> Table
-          </button>
-        </div>
+      <div className="dt-viewtoggle" role="group" aria-label="Chart or table">
+        <button
+          type="button"
+          className={`btn btn-sm${asTable ? ' btn-ghost' : ''}`}
+          aria-pressed={!asTable}
+          onClick={() => setAsTable(false)}
+        >
+          <BarChart3 size={13} aria-hidden="true" /> Chart
+        </button>
+        <button
+          type="button"
+          className={`btn btn-sm${asTable ? '' : ' btn-ghost'}`}
+          aria-pressed={asTable}
+          onClick={() => setAsTable(true)}
+        >
+          <Table2 size={13} aria-hidden="true" /> Table
+        </button>
       </div>
 
-      <div id={`${base}-panel`} role="tabpanel" aria-labelledby={`${base}-tab-${tab}`}>
+      <div id={`${idBase}-panel`} role="tabpanel" aria-labelledby={`${idBase}-tab-${tab}`}>
         <AnimatePresence mode="wait" initial={false}>
           <motion.div
             key={`${tab}-${asTable}`}
