@@ -1,11 +1,11 @@
 import { motion, useReducedMotion } from 'framer-motion'
 import { ChevronDown, ChevronUp } from 'lucide-react'
 import { useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
 import { STATE_COLOR, UNATTRIBUTED } from './constants'
 import { bookScale, count, percent } from './format'
 import { assignedLink, doneLink, ongoingLink } from './links'
 import BookBar from './charts/BookBar'
+import { DrillLink } from './DrillPanel'
 
 /**
  * Each contractor's assignment, and how much of it is finished.
@@ -192,9 +192,9 @@ export default function ContractorScorecard({ rows, provinceId }) {
               )}
 
               <div className="dt-contractor-main">
-                <Link to={assignedLink(cscope)} className="dt-contractor-name dt-farsi">
+                <DrillLink to={assignedLink(cscope)} drillLabel={row.name} className="dt-contractor-name dt-farsi">
                   {row.name}
-                </Link>
+                </DrillLink>
                 <BookBar
                   label={row.name}
                   total={assignmentOf(row)}
@@ -217,19 +217,19 @@ export default function ContractorScorecard({ rows, provinceId }) {
                   ]}
                 />
                 <div className="dt-contractor-stats">
-                  <Link to={doneLink(cscope)} className="dt-cell-link">
+                  <DrillLink to={doneLink(cscope)} drillLabel={row.name} className="dt-cell-link">
                     {count(row.done)} done
-                  </Link>
-                  <Link to={ongoingLink(cscope)} className="dt-cell-link">
+                  </DrillLink>
+                  <DrillLink to={ongoingLink(cscope)} drillLabel={row.name} className="dt-cell-link">
                     {count(row.ongoing)} ongoing
-                  </Link>
+                  </DrillLink>
                 </div>
               </div>
 
               <div className="dt-contractor-assign">
-                <Link to={assignedLink(cscope)} className="dt-contractor-assign-figure tnum">
+                <DrillLink to={assignedLink(cscope)} drillLabel={row.name} className="dt-contractor-assign-figure tnum">
                   {count(assignmentOf(row))}
-                </Link>
+                </DrillLink>
                 <span className="dt-contractor-assign-caption">assignment</span>
               </div>
 

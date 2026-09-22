@@ -1,11 +1,11 @@
 import { motion, useReducedMotion } from 'framer-motion'
 import { ChevronDown, ChevronUp } from 'lucide-react'
 import { useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
 import { PROVINCE_ROWS, STATE_COLOR } from './constants'
 import { bookScale, count, percent } from './format'
 import { doneLink, onairLink, ongoingLink, problematicLink, remainingLink } from './links'
 import BookBar from './charts/BookBar'
+import { DrillLink } from './DrillPanel'
 
 /**
  * Every province's full picture, sortable, worst first by default.
@@ -227,7 +227,7 @@ export default function ProvinceList({ rows, provinces, onProvince }) {
                     href={remainingLink}
                     value={row.remaining}
                     suffix="remaining"
-                    onClick={stop}
+                    onClick={stop} label={row.name}
                   />
                 </span>
                 <span
@@ -262,22 +262,23 @@ export default function ProvinceList({ rows, provinces, onProvince }) {
                   a list somebody opens, not because the row needs to state
                   it twice. */}
               <div className="dt-province-chips dt-province-chips-muted">
-                <Cell id={id} href={onairLink} value={row.onair} suffix="on air" onClick={stop} />
+                <Cell id={id} href={onairLink} value={row.onair} suffix="on air" onClick={stop} label={row.name} />
                 <span className="dt-chip-sep" aria-hidden="true">·</span>
-                <Cell id={id} href={doneLink} value={row.done} suffix="done" onClick={stop} />
+                <Cell id={id} href={doneLink} value={row.done} suffix="done" onClick={stop} label={row.name} />
                 <span className="dt-chip-sep" aria-hidden="true">·</span>
-                <Cell id={id} href={ongoingLink} value={row.ongoing} suffix="ongoing" onClick={stop} />
+                <Cell id={id} href={ongoingLink} value={row.ongoing} suffix="ongoing" onClick={stop} label={row.name} />
                 {hasProblem && (
                   <>
                     <span className="dt-chip-sep" aria-hidden="true">·</span>
                     {id ? (
-                      <Link
+                      <DrillLink
                         to={problematicLink({ provinceId: id })}
                         className="dt-cell-link-bad"
+                        drillLabel={row.name}
                         onClick={stop}
                       >
                         {count(row.problematic)} problem
-                      </Link>
+                      </DrillLink>
                     ) : (
                       <span className="dt-cell-link-bad">{count(row.problematic)} problem</span>
                     )}
@@ -343,12 +344,17 @@ function pct(part, whole) {
  * to build a link from — it stays plain text rather than becoming a link
  * that would open the whole programme and look like that province's list.
  */
-function Cell({ id, href, value, suffix, onClick }) {
+function Cell({ id, href, value, suffix, onClick, label }) {
   const text = suffix ? `${count(value)} ${suffix}` : count(value)
   if (!id) return <span>{text}</span>
   return (
-    <Link to={href({ provinceId: id })} className="dt-cell-link" onClick={onClick}>
+    <DrillLink
+      to={href({ provinceId: id })}
+      className="dt-cell-link"
+      drillLabel={label}
+      onClick={onClick}
+    >
       {text}
-    </Link>
+    </DrillLink>
   )
 }

@@ -1,8 +1,8 @@
-import { Link } from 'react-router-dom'
 import { achievement, bandColor, count, planScale } from './format'
 import { deliveredLink } from './links'
 import BulletBar, { BulletKey } from './charts/BulletBar'
 import Section from './Section'
+import { DrillLink } from './DrillPanel'
 
 /**
  * What was committed for the month against what was delivered.
@@ -179,9 +179,9 @@ function PlanFigure({ label, value, href, color }) {
       <dt>{label}</dt>
       <dd className="tnum" style={color ? { color } : undefined}>
         {href ? (
-          <Link to={href} className="dt-cell-link" aria-label={`${label}: ${value}`}>
+          <DrillLink to={href} className="dt-cell-link" aria-label={`${label}: ${value}`}>
             {value}
-          </Link>
+          </DrillLink>
         ) : (
           value
         )}

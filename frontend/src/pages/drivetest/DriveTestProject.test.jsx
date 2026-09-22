@@ -10,7 +10,7 @@
 //
 // The suite runs with reduced motion on (see src/test/setup.js), so animated
 // figures render at their final values and can be asserted directly.
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -246,12 +246,76 @@ const flow = (over = {}) => ({
   ...over,
 })
 
+/** What `/drive-test/sites` answers for each query the dashboard can send.
+ *
+ * Keyed by the exact query the panel is expected to ask, and the totals are
+ * the very figures the overview fixture puts on screen. That is what makes
+ * the parity tests mean something: if the panel sends a query that is not
+ * in this table -- a wrong bucket, a dropped province, a contractor id that
+ * never made it into the request -- the lookup misses and the panel reports
+ * NO_SUCH_QUERY instead of quietly agreeing with whatever it was given.
+ *
+ * The real guarantee is the server's, and it is asserted there: `total` is
+ * counted before pagination through the dashboard's own predicates (see
+ * services/dt_site_list). What this side can prove is the other half --
+ * that the panel asks for exactly the figure that was clicked, and shows
+ * what came back.
+ */
+const SITE_TOTALS = {
+  'bucket=remaining': 60,
+  'bucket=ongoing': 50,
+  'bucket=problematic': 10,
+  'bucket=done': 40,
+  'bucket=onair': 100,
+  'bucket=not_started': 0,
+  // Alfa Drive Tests: 40 done + 15 ongoing = 55 assigned.
+  'bucket=assigned&contractor_id=1': 55,
+  'bucket=ongoing&contractor_id=1': 15,
+  // Kerman, province 7.
+  'bucket=onair&province_id=7': 60,
+  'bucket=remaining&province_id=7': 37,
+  'bucket=problematic&province_id=7': 7,
+}
+
+const NO_SUCH_QUERY = -999
+
+const siteRow = (i, over = {}) => ({
+  work_item_id: i,
+  site_code: `S-${i}`,
+  villages: null,
+  province: 'Kerman',
+  contractor: 'Alfa Drive Tests',
+  bucket: 'Ongoing',
+  current_stage: 'DT In Progress',
+  age_band: '2–3 weeks',
+  problem_age_band: null,
+  ...over,
+})
+
+function siteListFor(config) {
+  const params = { ...(config?.params ?? {}) }
+  delete params.limit
+  const key = Object.entries(params)
+    .map(([k, v]) => `${k}=${v}`)
+    .join('&')
+  const total = key in SITE_TOTALS ? SITE_TOTALS[key] : NO_SUCH_QUERY
+  return {
+    total,
+    rows: Array.from({ length: Math.min(Math.max(total, 0), 3) }, (_, i) => siteRow(i + 1)),
+    filters_applied: params,
+    generated_at: '2026-09-22T10:00:00Z',
+    age_bands: [],
+    ongoing_stages: [],
+  }
+}
+
 function serve(plan = planDelivery(), body = overview, series = trend(), flowData = flow()) {
-  api.get.mockImplementation((url) => {
+  api.get.mockImplementation((url, config) => {
     if (url === '/drive-test/overview') return Promise.resolve({ data: body })
     if (url === '/drive-test/plan-delivery') return Promise.resolve({ data: plan })
     if (url === '/drive-test/trend') return Promise.resolve({ data: series })
     if (url === '/drive-test/flow') return Promise.resolve({ data: flowData })
+    if (url === '/drive-test/sites') return Promise.resolve({ data: siteListFor(config) })
     return Promise.reject(new Error(`unexpected ${url}`))
   })
 }
@@ -2205,5 +2269,209 @@ describe('the contractor scorecard', () => {
       const names = rowNames(card)
       expect(names[names.length - 1]).toBe('Unattributed')
     }
+  })
+})
+
+describe('the drill-through panel', () => {
+  /** The panel, once its request has resolved. */
+  const panel = async () => {
+    const node = await screen.findByTestId('dt-drill')
+    await waitFor(() => expect(node.querySelector('.dt-skeleton')).toBeNull())
+    return node
+  }
+
+  const countIn = (node) => Number(node.querySelector('.dt-drill-count').textContent)
+
+  it('opens on a figure and is not there before one is clicked', async () => {
+    serve()
+    draw()
+
+    await screen.findByLabelText('Programme totals')
+    expect(screen.queryByTestId('dt-drill')).not.toBeInTheDocument()
+
+    await userEvent.click(screen.getByLabelText('Total pending: 60 sites'))
+    expect(await panel()).toBeInTheDocument()
+  })
+
+  // THE ASSERTION THE PANEL EXISTS FOR. The count in the panel has to be the
+  // figure that opened it. Server-side that is guaranteed by counting before
+  // pagination through the dashboard's own predicates; this side proves the
+  // other half -- that the panel asks for exactly the figure clicked. A
+  // wrong or dropped filter misses SITE_TOTALS and reports -999.
+  it.each([
+    ['pending', () => screen.getByLabelText('Total pending: 60 sites'), 60],
+    [
+      'ongoing',
+      () => screen.getByText('Ongoing', { selector: '.dt-kpi-part-name' }),
+      50,
+    ],
+    [
+      'problematic',
+      () => screen.getByText('Problematic', { selector: '.dt-kpi-part-name' }),
+      10,
+    ],
+  ])('shows the same count as the %s figure that opened it', async (_name, target, expected) => {
+    serve()
+    draw()
+
+    await screen.findByLabelText('Programme totals')
+    await userEvent.click(target())
+    expect(countIn(await panel())).toBe(expected)
+  })
+
+  it('shows the same count as a contractor row that opened it', async () => {
+    serve()
+    draw()
+
+    const card = await section('Contractor scorecard')
+    const row = within(card).getByText('Alfa Drive Tests').closest('.dt-contractor-row')
+    // The assignment figure -- the denominator every rate on the row divides
+    // by, and the one a reader is most likely to want to check.
+    await userEvent.click(within(row).getByText('55'))
+    expect(countIn(await panel())).toBe(55)
+  })
+
+  it('shows the same count as a province row that opened it', async () => {
+    serve()
+    draw()
+
+    const grid = await section('Province breakdown')
+    const card = within(grid).getByText('Kerman').closest('.dt-province-card')
+    await userEvent.click(within(card).getByText('60 on air'))
+    expect(countIn(await panel())).toBe(60)
+  })
+
+  it('carries the province scope into the request rather than resolving it here', async () => {
+    // The client never widens scope and never resolves a province: it sends
+    // the query the link already carried and the endpoint decides what the
+    // caller may see. See api/drive_test._resolve_province and
+    // DriveTestAnalytics._load, where the province WHERE is applied after
+    // apply_work_item_scope.
+    serve()
+    draw('/reports/drive-test?province=7')
+
+    await screen.findByLabelText('Programme totals')
+    await userEvent.click(
+      screen.getByText('Problematic', { selector: '.dt-kpi-part-name' }),
+    )
+    await panel()
+
+    expect(api.get).toHaveBeenCalledWith('/drive-test/sites', {
+      params: { bucket: 'problematic', province_id: '7', limit: 25 },
+    })
+  })
+
+  it('names what was clicked in the words the dashboard used', async () => {
+    serve()
+    draw()
+
+    await screen.findByLabelText('Programme totals')
+    await userEvent.click(screen.getByText('Ongoing', { selector: '.dt-kpi-part-name' }))
+    const node = await panel()
+    // "ongoing sites", not "bucket: ongoing" -- see BUCKET_LABEL.
+    expect(node).toHaveTextContent('ongoing sites')
+  })
+
+  it('lists the sites with their code, province, contractor, state and age', async () => {
+    serve()
+    draw()
+
+    await screen.findByLabelText('Programme totals')
+    await userEvent.click(screen.getByText('Ongoing', { selector: '.dt-kpi-part-name' }))
+    const node = await panel()
+
+    expect(
+      within(node).getAllByRole('columnheader').map((h) => h.textContent),
+    ).toEqual(['Site', 'Province', 'Contractor', 'State', 'Age'])
+    const first = within(node).getAllByRole('row')[1]
+    expect(within(first).getByText('S-1')).toBeInTheDocument()
+    expect(within(first).getByText('Kerman')).toBeInTheDocument()
+    expect(within(first).getByText('2–3 weeks')).toBeInTheDocument()
+  })
+
+  it('exports through the existing site-list endpoint, with the same filters', async () => {
+    // Not a second export path and not a file built in the browser: the
+    // server's export knows the column set, the row cap and the scope, and
+    // a spreadsheet assembled here from the loaded rows would be a
+    // different, silently shorter answer.
+    serve()
+    draw()
+
+    await screen.findByLabelText('Programme totals')
+    await userEvent.click(screen.getByText('Problematic', { selector: '.dt-kpi-part-name' }))
+    const node = await panel()
+
+    api.get.mockImplementationOnce(() =>
+      Promise.resolve({ data: new Blob(['x']), headers: {} }),
+    )
+    await userEvent.click(within(node).getByRole('button', { name: /Export this list/ }))
+
+    expect(api.get).toHaveBeenCalledWith('/drive-test/sites/export', {
+      params: { bucket: 'problematic' },
+      responseType: 'blob',
+    })
+  })
+
+  it('offers a way through to the full list at the same address', async () => {
+    serve()
+    draw()
+
+    await screen.findByLabelText('Programme totals')
+    await userEvent.click(screen.getByText('Ongoing', { selector: '.dt-kpi-part-name' }))
+    const node = await panel()
+
+    expect(within(node).getByRole('link', { name: /Open in site list/ })).toHaveAttribute(
+      'href',
+      '/drive-test/sites?bucket=ongoing',
+    )
+  })
+
+  it('clears the focus when closed, by the button and by Escape', async () => {
+    serve()
+    draw()
+
+    await screen.findByLabelText('Programme totals')
+    await userEvent.click(screen.getByLabelText('Total pending: 60 sites'))
+    await panel()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Close' }))
+    await waitFor(() => expect(screen.queryByTestId('dt-drill')).not.toBeInTheDocument())
+
+    await userEvent.click(screen.getByLabelText('Total pending: 60 sites'))
+    await panel()
+    await userEvent.keyboard('{Escape}')
+    await waitFor(() => expect(screen.queryByTestId('dt-drill')).not.toBeInTheDocument())
+  })
+
+  it('leaves a modified click to the browser, so the href still opens a tab', async () => {
+    // Every figure is still a real link to a real URL. Intercepting only the
+    // plain left click is what keeps middle-click and cmd-click working --
+    // and what keeps the drill-through URL assertions above meaningful.
+    serve()
+    draw()
+
+    await screen.findByLabelText('Programme totals')
+    // fireEvent rather than userEvent: the modifier has to be on the click
+    // event itself, which is what DrillLink reads, and userEvent's keyboard
+    // state is not shared across separate top-level calls.
+    fireEvent.click(screen.getByText('Ongoing', { selector: '.dt-kpi-part-name' }), {
+      metaKey: true,
+    })
+
+    expect(screen.queryByTestId('dt-drill')).not.toBeInTheDocument()
+  })
+
+  it('says what the server said when a filter is refused', async () => {
+    serve()
+    draw()
+    await screen.findByLabelText('Programme totals')
+
+    api.get.mockImplementationOnce(() =>
+      Promise.reject({ response: { data: { detail: 'age_band applies to the ongoing bucket only' } } }),
+    )
+    await userEvent.click(screen.getByText('Ongoing', { selector: '.dt-kpi-part-name' }))
+
+    const node = await screen.findByTestId('dt-drill')
+    expect(await within(node).findByText(/age_band applies to the ongoing bucket only/)).toBeInTheDocument()
   })
 })

@@ -1,7 +1,7 @@
 import { motion, useReducedMotion } from 'framer-motion'
 import { ChevronRight } from 'lucide-react'
-import { Link } from 'react-router-dom'
 import { count, share } from '../format'
+import { DrillLink } from '../DrillPanel'
 
 /**
  * A ranked list of quantities, each one a link to the sites behind it.
@@ -65,9 +65,14 @@ export default function RankedBars({ points, total, color, hrefFor, emptyLabel =
         return (
           <li key={`${p.name}-${i}`} className={`dt-bar-row${p.muted ? ' dt-muted' : ''}`}>
             {href ? (
-              <Link to={href} className="dt-bar-link" aria-label={`${p.name}: ${p.value} sites`}>
+              <DrillLink
+                to={href}
+                className="dt-bar-link"
+                drillLabel={p.name}
+                aria-label={`${p.name}: ${p.value} sites`}
+              >
                 {body}
-              </Link>
+              </DrillLink>
             ) : (
               <span className="dt-bar-link dt-bar-static">{body}</span>
             )}

@@ -2323,6 +2323,54 @@ a.dt-contractor-assign-figure:hover { color: var(--dt-done); }
 }
 .dt-pair > * { min-width: 0; }
 
+/* ---------- drill-through panel ----------
+   A right-side sheet, not a modal: the dashboard behind it stays readable
+   and usable, because the whole point is comparing what is in the panel
+   against the card that opened it. */
+.dt-drill {
+  position: fixed; inset-block: 0; inset-inline-end: 0; z-index: 60;
+  width: min(560px, 100vw);
+  display: grid; grid-template-rows: auto minmax(0, 1fr) auto;
+  background: var(--surface-1);
+  border-inline-start: 1px solid var(--border);
+  box-shadow: -12px 0 32px rgba(16, 24, 40, 0.12);
+}
+.dt-drill-head {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  gap: 12px; padding: 16px 18px; border-block-end: 1px solid var(--border-soft);
+}
+.dt-drill-title { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.dt-drill-count {
+  font-family: var(--font-display); font-size: 26px; font-weight: 600;
+  letter-spacing: -0.02em; line-height: 1;
+}
+.dt-drill-noun { font-size: 13px; color: var(--text-muted); }
+.dt-drill-scope {
+  font-size: 12px; color: var(--text-dim);
+  padding: 2px 8px; border-radius: 999px; background: var(--surface-2);
+}
+.dt-drill-close { flex: none; }
+.dt-drill-body { overflow: auto; padding: 14px 18px; }
+.dt-drill-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.dt-drill-table th {
+  text-align: start; font-weight: 500; color: var(--text-muted);
+  padding: 0 10px 7px 0; border-block-end: 1px solid var(--border-soft);
+  white-space: nowrap;
+}
+.dt-drill-table td {
+  padding: 7px 10px 7px 0; border-block-end: 1px solid var(--border-soft);
+  vertical-align: top;
+}
+.dt-drill-foot {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  padding: 12px 18px; border-block-start: 1px solid var(--border-soft);
+  background: var(--surface-2);
+}
+
+@media (max-width: 620px) {
+  .dt-drill { width: 100vw; }
+}
+
 /* ---------- responsive ---------- */
 @media (max-width: 1080px) {
   .dt-pair { grid-template-columns: minmax(0, 1fr); }

@@ -1,6 +1,5 @@
 import { motion, useReducedMotion } from 'framer-motion'
 import { Minus, TrendingDown, TrendingUp } from 'lucide-react'
-import { Link } from 'react-router-dom'
 import { KPI_DIRECTION, STATE_COLOR } from './constants'
 import { count, deltaTone, percent, share, TONE_COLOR } from './format'
 import {
@@ -12,6 +11,7 @@ import {
   remainingLink,
 } from './links'
 import { AnimatedNumber, Sparkline } from './charts/primitives'
+import { DrillLink } from './DrillPanel'
 
 /**
  * The three totals this programme is run on, and what pending is made of.
@@ -225,13 +225,13 @@ export default function KpiBand({ kpis, flow, provinceId }) {
       <div className="dt-kpi-card dt-kpi-card-wide" data-kpi="pending">
         <div className="dt-kpi-main">
           <span className="dt-kpi-title">Total pending</span>
-          <Link
+          <DrillLink
             to={remainingLink(scope)}
             className="dt-kpi-figure tnum"
             aria-label={`Total pending: ${pending} sites`}
           >
             <AnimatedNumber value={pending} />
-          </Link>
+          </DrillLink>
           <DeltaChip
             delta={kpis.total_remaining.delta}
             direction={KPI_DIRECTION.total_remaining}
@@ -268,7 +268,7 @@ export default function KpiBand({ kpis, flow, provinceId }) {
           <ul className="dt-kpi-partlist">
             {parts.map((p) => (
               <li key={p.key} data-part={p.key}>
-                <Link to={p.href} className="dt-kpi-part" data-part={p.key}>
+                <DrillLink to={p.href} className="dt-kpi-part" data-part={p.key}>
                   <span
                     className="dt-kpi-part-dot"
                     style={{ background: p.color }}
@@ -280,7 +280,7 @@ export default function KpiBand({ kpis, flow, provinceId }) {
                   <span className="dt-kpi-part-share tnum">
                     {shareOfPending(p.value)} of pending
                   </span>
-                </Link>
+                </DrillLink>
               </li>
             ))}
           </ul>
@@ -310,9 +310,9 @@ function KpiCard({
     <div className="dt-kpi-card" data-kpi={kpiKey}>
       <div className="dt-kpi-main">
         <span className="dt-kpi-title">{title}</span>
-        <Link to={href} className="dt-kpi-figure tnum" aria-label={figureLabel}>
+        <DrillLink to={href} className="dt-kpi-figure tnum" aria-label={figureLabel}>
           <AnimatedNumber value={value} />
-        </Link>
+        </DrillLink>
         <DeltaChip delta={kpi?.delta} direction={direction} />
         <span className="dt-kpi-sub">{sub}</span>
         <SparkSlot points={spark} color={sparkColor} label={sparkLabel} />

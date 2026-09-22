@@ -5,6 +5,7 @@ import { describeBlobError, filenameFrom, saveBlob } from '../../lib/download'
 import { PageHead } from '../../components/ui'
 import { useToast } from '../../context/ToastContext'
 import BreakdownCard, { BreakdownTabs } from './BreakdownCard'
+import { DrillProvider } from './DrillPanel'
 import ContractorScorecard from './ContractorScorecard'
 import KpiBand from './KpiBand'
 import PlanDelivery from './PlanDelivery'
@@ -269,7 +270,7 @@ export default function DriveTestProject() {
   }, [data, provinces, provinceId])
 
   return (
-    <>
+    <DrillProvider>
       <PageHead
         eyebrow="Drive Test Project"
         title="Drive Test Overview"
@@ -461,7 +462,7 @@ export default function DriveTestProject() {
           </Section>
         )}
       </div>
-    </>
+    </DrillProvider>
   )
 }
 

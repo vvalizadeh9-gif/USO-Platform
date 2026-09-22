@@ -1,6 +1,6 @@
 import { motion, useReducedMotion } from 'framer-motion'
-import { Link } from 'react-router-dom'
 import { achievement, bandColor, count } from '../format'
+import { DrillLink } from '../DrillPanel'
 
 /**
  * One contractor's month: what they committed, and what they delivered.
@@ -91,9 +91,14 @@ export default function BulletBar({
       </span>
       <span className="dt-bullet-detail tnum">
         {href ? (
-          <Link to={href} className="dt-cell-link" aria-label={`${label}: ${detail} delivered`}>
+          <DrillLink
+            to={href}
+            className="dt-cell-link"
+            drillLabel={label}
+            aria-label={`${label}: ${detail} delivered`}
+          >
             {detail}
-          </Link>
+          </DrillLink>
         ) : (
           detail
         )}
