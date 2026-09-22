@@ -1819,21 +1819,11 @@ a.dt-bar-link:hover .dt-bar-go { opacity: 1; transform: translateX(2px); }
   box-shadow: var(--shadow-1); font-weight: 600;
 }
 
-/* ---------- contractor scorecard: ranked rows ----------
-   Each row: a rank badge, the book (name + bar + the two counts it splits
-   into), the assignment figure, and achievement as one pill. Replaces a
-   five-column table whose chrome none of these figures needed. */
-.dt-contractor-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
-.dt-contractor-row {
-  display: grid; align-items: center;
-  grid-template-columns: 22px minmax(0, 1fr) auto auto;
-  gap: 8px 14px;
-  background: #fafbfd; border: 1px solid #e7ecf3; border-radius: 10px;
-  padding: 9px 14px;
-}
-.dt-contractor-row-unattributed {
-  background: none; border-style: dashed; border-color: var(--border);
-}
+/* ---------- contractor scorecard: sortable table ----------
+   A rank column, then Contractor, Assignment, DT done, Ongoing and
+   Achievement as one pill -- the sortable-table pattern SiteList.jsx also
+   uses, rather than a bespoke layout. */
+.dt-col-rank { width: 30px; }
 .dt-rank-badge {
   display: grid; place-items: center; width: 22px; height: 22px;
   border-radius: 50%; flex: none;
@@ -1842,26 +1832,14 @@ a.dt-bar-link:hover .dt-bar-go { opacity: 1; transform: translateX(2px); }
 }
 .dt-rank-badge-1 { background: var(--dt-done); color: #fff; }
 .dt-rank-badge-empty { background: none; }
-.dt-contractor-main { display: grid; gap: 5px; min-width: 0; }
 .dt-contractor-name {
   font-size: 13px; font-weight: 600; color: var(--text); text-decoration: none;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 a.dt-contractor-name:hover { text-decoration: underline; text-decoration-color: var(--border); }
-.dt-contractor-row-unattributed .dt-contractor-name { font-weight: 400; font-style: italic; color: var(--text-muted); }
-.dt-contractor-stats {
-  display: flex; align-items: center; gap: 12px;
-  font-size: 11px; color: var(--text-dim);
-}
-.dt-contractor-assign {
-  display: grid; justify-items: end; gap: 0; text-align: right;
-}
-.dt-contractor-assign-figure {
-  font-family: var(--font-display); font-size: 19px; font-weight: 600;
-  letter-spacing: -0.01em; color: var(--text); text-decoration: none; line-height: 1.1;
-}
-a.dt-contractor-assign-figure:hover { color: var(--dt-done); }
-.dt-contractor-assign-caption { font-size: 10px; color: var(--text-dim); }
+/* The unattributed row is not a company: dimmed and italic rather than a
+   per-cell inline style, so the whole row reads apart at a glance. */
+.dt-row-unattributed { color: var(--text-dim); font-style: italic; }
+.dt-row-unattributed .dt-contractor-name { font-weight: 400; }
 
 /* Achievement, as one pill rather than a coloured percentage cell. Amber
    sits back in this one place on the page: a pill's own shape and label
@@ -2392,8 +2370,6 @@ a.dt-contractor-assign-figure:hover { color: var(--dt-done); }
   .dt-key-scale { display: none; }
   .dt-toolbar-right { margin-left: 0; width: 100%; }
   .dt-province-grid { grid-template-columns: minmax(0, 1fr); }
-  .dt-contractor-row { grid-template-columns: 22px minmax(0, 1fr) auto; }
-  .dt-contractor-assign { display: none; }
   .dt-section { padding: 12px 14px 14px; }
   /* A sticky bar that wraps to three rows on a phone eats half the viewport;
      below this width it scrolls away with the page. */

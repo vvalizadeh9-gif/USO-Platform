@@ -1484,8 +1484,8 @@ describe('drill-through', () => {
       // The assignment is what the rate divides by, so it is the figure a
       // contractor will want to check.
       ['55', '/drive-test/sites?bucket=assigned&contractor_id=1'],
-      ['40 done', '/drive-test/sites?bucket=done&contractor_id=1'],
-      ['15 ongoing', '/drive-test/sites?bucket=ongoing&contractor_id=1'],
+      ['40', '/drive-test/sites?bucket=done&contractor_id=1'],
+      ['15', '/drive-test/sites?bucket=ongoing&contractor_id=1'],
     ]) {
       expect(within(row).getByText(text).closest('a')).toHaveAttribute('href', href)
     }
@@ -1499,7 +1499,7 @@ describe('drill-through', () => {
 
     const card = await section('Contractor scorecard')
     const row = within(card).getByText('Unattributed').closest('.dt-contractor-row')
-    expect(within(row).getByText('6 ongoing').closest('a')).toHaveAttribute(
+    expect(within(row).getByText('6').closest('a')).toHaveAttribute(
       'href',
       '/drive-test/sites?bucket=ongoing&contractor_id=none',
     )
@@ -2101,9 +2101,10 @@ describe('the trend section', () => {
 })
 
 describe('the contractor scorecard', () => {
-  // The table became a list of ranked rows -- see ContractorScorecard. Each
-  // row is now `.dt-contractor-row`, sortable through a row of chip buttons
-  // above the list rather than clickable header cells.
+  // The card grid became a sortable table -- see ContractorScorecard. Each
+  // row is `.dt-contractor-row` (a `<tr>` now), sortable through the
+  // `.dt-sort-btn` in each column header rather than a row of chips above
+  // the table.
   const rowNames = (card) =>
     Array.from(card.querySelectorAll('.dt-contractor-row')).map(
       (row) => row.querySelector('.dt-contractor-name').textContent,
@@ -2120,37 +2121,6 @@ describe('the contractor scorecard', () => {
     const row = within(card).getByText('Alfa Drive Tests').closest('.dt-contractor-row')
     expect(within(row).getByText('55')).toBeInTheDocument()
     expect(within(row).getByText('73%')).toBeInTheDocument()
-  })
-
-  it('draws each row against the widest book, so size is not thrown away', async () => {
-    // The bar used to be a fixed-width track filled to the rate, so 73% of 55
-    // and 33% of 27 drew bars of the same length. Length is now the size of
-    // the book; fill is the rate.
-    serve()
-    draw()
-
-    const card = await section('Contractor scorecard')
-    const widths = ['Alfa Drive Tests', 'Beta Surveys'].map((name) => {
-      const row = within(card).getByText(name).closest('.dt-contractor-row')
-      return row.querySelector('.dt-book-bar').style.width
-    })
-
-    expect(widths[0]).toBe('100%')
-    // 27 of 55, to the precision the style attribute carries.
-    expect(parseFloat(widths[1])).toBeCloseTo(49.1, 1)
-  })
-
-  it('splits each bar into what is done and what is still held', async () => {
-    serve()
-    draw()
-
-    const card = await section('Contractor scorecard')
-    const row = within(card).getByText('Alfa Drive Tests').closest('.dt-contractor-row')
-    const segments = within(row)
-      .getAllByTestId('dt-bar')
-      .map((seg) => seg.dataset.segment)
-
-    expect(segments).toEqual(['done', 'ongoing'])
   })
 
   it('still shows the assignment when the payload does not carry it', async () => {
@@ -2206,11 +2176,11 @@ describe('the contractor scorecard', () => {
     draw()
 
     const card = await section('Contractor scorecard')
-    const control = () => within(card).getByRole('button', { name: /Ongoing/ })
+    const header = () => within(card).getByRole('button', { name: /Ongoing/ }).closest('th')
 
-    expect(control()).toHaveAttribute('aria-pressed', 'false')
-    await userEvent.click(control())
-    expect(control()).toHaveAttribute('aria-pressed', 'true')
+    expect(header()).toHaveAttribute('aria-sort', 'none')
+    await userEvent.click(within(card).getByRole('button', { name: /Ongoing/ }))
+    expect(header()).toHaveAttribute('aria-sort', 'descending')
   })
 
   it('has exactly five sort controls: Contractor, Assignment, DT done, Ongoing, Completion', async () => {
@@ -2218,13 +2188,13 @@ describe('the contractor scorecard', () => {
     draw()
 
     const card = await section('Contractor scorecard')
-    const controls = within(card).getByRole('group', { name: 'Sort contractors by' })
-    const labels = within(controls)
-      .getAllByRole('button')
-      .map((b) => b.textContent.trim())
     // "Completion", not "Achievement": Achievement is the Plan and delivery
     // card's word for delivered-against-PIP, and this is how far a company is
     // through its own book. One word, two meanings, one page.
+    const labels = within(card)
+      .getAllByRole('columnheader')
+      .filter((th) => th.querySelector('.dt-sort-btn'))
+      .map((th) => th.textContent.trim())
     expect(labels).toEqual(['Contractor', 'Assignment', 'DT done', 'Ongoing', 'Completion'])
   })
 
