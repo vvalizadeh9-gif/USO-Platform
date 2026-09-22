@@ -8,7 +8,7 @@ import BreakdownCard, { BreakdownTabs } from './BreakdownCard'
 import ContractorScorecard from './ContractorScorecard'
 import KpiBand from './KpiBand'
 import PlanDelivery from './PlanDelivery'
-import ProvinceTable from './ProvinceTable'
+import ProvinceList from './ProvinceList'
 import Section from './Section'
 import Toolbar from './Toolbar'
 import FlowChart, { flowHasActivity } from './charts/FlowChart'
@@ -437,7 +437,7 @@ export default function DriveTestProject() {
             onRetry={refresh}
           >
             {(d) => (
-              <ProvinceTable
+              <ProvinceList
                 rows={d.province_breakdown}
                 provinces={d.provinces}
                 onProvince={setProvince}

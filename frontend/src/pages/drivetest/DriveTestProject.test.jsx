@@ -788,51 +788,122 @@ describe('breakdown sections', () => {
 })
 
 describe('the province grid', () => {
-  // The province table became a 3-column card grid, each card its own
-  // scope-the-dashboard control -- see ProvinceTable. Cards replace rows,
-  // and a row of chip buttons above the grid replaces the sortable header.
+  // The province table became a two-column card list, each card its own
+  // scope-the-dashboard control -- see ProvinceList. Cards replace rows, a
+  // row of chip buttons replaces the sortable header, and the tail past
+  // twelve folds into one row that keeps the list summing.
   const cardNames = (scope) =>
     Array.from(scope.querySelectorAll('.dt-province-card')).map(
       (card) => card.querySelector('.dt-province-name').textContent,
     )
+
+  // Four provinces built so each sort control has a different winner. A
+  // fixture where two sorts agree cannot tell a working control from one
+  // wired to the wrong key.
+  const sortable = {
+    ...overview,
+    province_breakdown: [
+      { name: 'Yazd', onair: 50, done: 45, remaining: 5, ongoing: 5, problematic: 0, not_started: 0, done_percent: 90 },
+      { name: 'Kerman', onair: 400, done: 200, remaining: 200, ongoing: 200, problematic: 0, not_started: 0, done_percent: 50 },
+      { name: 'Bushehr', onair: 300, done: 20, remaining: 280, ongoing: 280, problematic: 0, not_started: 0, done_percent: 7 },
+      { name: 'Ardabil', onair: 10, done: 5, remaining: 5, ongoing: 5, problematic: 0, not_started: 0, done_percent: 50 },
+    ],
+  }
 
   it('opens sorted by remaining, most first', async () => {
     serve(planDelivery(), overviewWithProvinces(10))
     draw()
 
     const provinces = await section('Province breakdown')
+    // Ten fits inside the twelve the list shows, so nothing is folded.
     expect(cardNames(provinces)).toEqual([
-      'Province 1', 'Province 2', 'Province 3', 'Province 4', 'Province 5', 'Province 6',
+      'Province 1', 'Province 2', 'Province 3', 'Province 4', 'Province 5',
+      'Province 6', 'Province 7', 'Province 8', 'Province 9', 'Province 10',
     ])
   })
 
-  it('re-sorts on a sort control, and reverses on a second click', async () => {
-    serve(planDelivery(), overviewWithProvinces(10))
+  it('puts a different province first under each of the four sorts', async () => {
+    serve(planDelivery(), sortable)
     draw()
 
     const provinces = await section('Province breakdown')
-    await userEvent.click(within(provinces).getByRole('button', { name: 'DT done' }))
+    // Remaining is the default and needs no click.
+    expect(cardNames(provinces)[0]).toBe('Bushehr')
 
-    // done ascends with the index, so descending puts the last province first.
-    expect(cardNames(provinces)[0]).toBe('Province 10')
-    await userEvent.click(within(provinces).getByRole('button', { name: 'DT done' }))
-    expect(cardNames(provinces)[0]).toBe('Province 1')
+    for (const [control, first] of [
+      ['Done %', 'Yazd'],
+      ['Size', 'Kerman'],
+      ['A–Z', 'Ardabil'],
+      ['Remaining', 'Bushehr'],
+    ]) {
+      await userEvent.click(within(provinces).getByRole('button', { name: control }))
+      expect(cardNames(provinces)[0]).toBe(first)
+    }
   })
 
-  it('collapses to six cards and expands on Show all', async () => {
-    serve(planDelivery(), overviewWithProvinces(10))
+  it('reverses on a second click of the same control', async () => {
+    serve(planDelivery(), sortable)
     draw()
 
     const provinces = await section('Province breakdown')
-    expect(provinces.querySelectorAll('.dt-province-card')).toHaveLength(6)
-    expect(within(provinces).getByText('4 more not shown')).toBeInTheDocument()
+    await userEvent.click(within(provinces).getByRole('button', { name: 'Size' }))
+    expect(cardNames(provinces)[0]).toBe('Kerman')
+    await userEvent.click(within(provinces).getByRole('button', { name: 'Size' }))
+    expect(cardNames(provinces)[0]).toBe('Ardabil')
+  })
 
-    await userEvent.click(within(provinces).getByRole('button', { name: /Show all 10 provinces/ }))
-    expect(provinces.querySelectorAll('.dt-province-card')).toHaveLength(10)
-    expect(within(provinces).queryByText('4 more not shown')).not.toBeInTheDocument()
+  it('folds everything past twelve into one row and expands on Show all', async () => {
+    serve(planDelivery(), overviewWithProvinces(20))
+    draw()
 
-    await userEvent.click(within(provinces).getByRole('button', { name: /Show top 6/ }))
-    expect(provinces.querySelectorAll('.dt-province-card')).toHaveLength(6)
+    const provinces = await section('Province breakdown')
+    // Twelve provinces and the folded row that stands for the other eight.
+    expect(cardNames(provinces)).toHaveLength(13)
+    expect(within(provinces).getByTestId('dt-province-rest')).toHaveTextContent(
+      '8 more provinces',
+    )
+
+    await userEvent.click(within(provinces).getByRole('button', { name: /Show all 20 provinces/ }))
+    expect(cardNames(provinces)).toHaveLength(20)
+    expect(within(provinces).queryByTestId('dt-province-rest')).not.toBeInTheDocument()
+
+    await userEvent.click(within(provinces).getByRole('button', { name: /Show top 12/ }))
+    expect(cardNames(provinces)).toHaveLength(13)
+  })
+
+  it('adds the twelve rows plus the folded row up to the programme total', async () => {
+    // The property the folded row exists to give, and the difference between
+    // it and the "8 more not shown" line it replaces: that line said how
+    // many rows were missing, this one says how many sites are. A reader
+    // adding the column reaches the programme total instead of falling short
+    // by whatever happened to sit below the fold.
+    //
+    // Twenty provinces, remaining running 100 down to 81, so 1,810 in total.
+    serve(planDelivery(), overviewWithProvinces(20))
+    draw()
+
+    const provinces = await section('Province breakdown')
+    const shown = Array.from(provinces.querySelectorAll('.dt-province-remaining')).reduce(
+      (sum, el) => sum + Number(el.textContent.replace(/[^0-9]/g, '')),
+      0,
+    )
+    expect(shown).toBe(1810)
+  })
+
+  it('draws no bar on the folded row, which is not a province', async () => {
+    // Bar length here is one province's on-air count against the largest
+    // single province. The tail of eight is not a province: drawn on that
+    // scale it would run off the end of the track and read as the biggest
+    // thing on screen.
+    serve(planDelivery(), overviewWithProvinces(20))
+    draw()
+
+    const provinces = await section('Province breakdown')
+    const rest = within(provinces).getByTestId('dt-province-rest')
+    expect(rest.querySelector('.dt-book')).toBeNull()
+    // And it is not a filter control, because there is no one province to
+    // narrow to.
+    expect(rest).not.toHaveAttribute('role', 'button')
   })
 
   it('offers no Show all control when every province already fits', async () => {
@@ -843,7 +914,11 @@ describe('the province grid', () => {
     expect(within(provinces).queryByRole('button', { name: /Show all/ })).not.toBeInTheDocument()
   })
 
-  it('has exactly seven sort controls: Province, On air, DT done, Remaining, Ongoing, Problematic, Done %', async () => {
+  it('has exactly four sort controls: Remaining, Done %, Size, A–Z', async () => {
+    // Four, not seven. One per question anybody asks of this list: where is
+    // the work, who is behind, who is big, and where is a named province.
+    // On air is Size; Ongoing and Problematic ranked the provinces in almost
+    // the same order as Remaining already does.
     serve()
     draw()
 
@@ -853,15 +928,33 @@ describe('the province grid', () => {
     const labels = within(controls)
       .getAllByRole('button')
       .map((b) => b.textContent.trim())
-    expect(labels).toEqual([
-      'Province',
-      'On air',
-      'DT done',
-      'Remaining',
-      'Ongoing',
-      'Problematic',
-      'Done %',
-    ])
+    expect(labels).toEqual(['Remaining', 'Done %', 'Size', 'A–Z'])
+  })
+
+  it('reddens a done % that is below the programme average, not below a fixed band', async () => {
+    // The rule changed and the change is the point. A province at 88% is
+    // doing badly in a programme averaging 95% and well in one averaging
+    // 60%; the fixed 70/30 thresholds said the same thing about both.
+    //
+    // These four come to 270 done of 760 on air, so the average is 35.5%.
+    serve(planDelivery(), sortable)
+    draw()
+
+    const provinces = await section('Province breakdown')
+    const rate = (name) =>
+      within(provinces).getByText(name).closest('.dt-province-card')
+        .querySelector('.dt-province-rate')
+
+    // Below the average, and the only one that is.
+    expect(rate('Bushehr')).toHaveStyle({ color: 'var(--dt-problem)' })
+    // Above it -- including Kerman at 50%, which the old fixed bands would
+    // have drawn in the in-flight colour for being under 70.
+    expect(rate('Kerman')).toHaveStyle({ color: 'var(--text)' })
+    expect(rate('Yazd')).toHaveStyle({ color: 'var(--text)' })
+
+    // And the threshold is stated, because a colour whose rule is not on
+    // screen is one a reader has to guess at.
+    expect(provinces).toHaveTextContent('done % in red is below the 36% programme average')
   })
 
   it('shows no "Not started" anywhere in the grid, its key or its bars', async () => {

@@ -1879,11 +1879,16 @@ a.dt-contractor-assign-figure:hover { color: var(--dt-done); }
 
 /* ---------- province breakdown: card grid ----------
    Three to a row, each card its own scope-the-dashboard control -- see
-   ProvinceTable for why a card can be that and a table row could not.
+   ProvinceList for why a card can be that and a table row could not.
    Replaces a seven-column table whose Remaining/Ongoing/Problematic figures
    this grid now carries as a chip line instead. */
+/* Two columns, not three. Twelve rows across a full-width card at two
+   columns is six rows deep -- the same height the three-column grid was --
+   and each row gets half the page instead of a third, which is what lets
+   the name, the remaining count, the rate and the split share one row
+   without wrapping. */
 .dt-province-grid {
-  display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px;
 }
 .dt-province-card {
   display: grid; gap: 7px; text-align: left;
@@ -1899,13 +1904,36 @@ a.dt-contractor-assign-figure:hover { color: var(--dt-done); }
 .dt-province-card-problem {
   background: #FAF4F4; border-color: #E3CDCC;
 }
+/* Name, remaining, rate -- the three things the row is read for, on one
+   line, with the name taking whatever is left. */
 .dt-province-head {
-  display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
+  display: grid; grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: baseline; gap: 10px;
 }
-.dt-province-name { font-size: 13px; font-weight: 600; color: var(--text); }
+.dt-province-name {
+  font-size: 13px; font-weight: 600; color: var(--text);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.dt-province-remaining { font-size: 11.5px; color: var(--text-muted); flex: none; }
 .dt-province-rate {
   font-family: var(--font-display); font-size: 16px; font-weight: 600;
   letter-spacing: -0.01em; text-align: right; flex: none;
+  min-width: 4ch;
+}
+
+/* The folded tail. Not a province, so not a filter control: no pointer, no
+   hover lift, no focus ring, and a dashed edge saying it stands for the
+   rows that are not here. */
+.dt-province-card-rest {
+  cursor: default;
+  border-style: dashed;
+  background: var(--surface-2);
+}
+.dt-province-card-rest:hover {
+  border-color: var(--border-soft); box-shadow: none; transform: none;
+}
+.dt-province-card-rest .dt-province-name {
+  font-weight: 500; font-style: italic; color: var(--text-muted);
 }
 .dt-province-chips {
   display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap;
