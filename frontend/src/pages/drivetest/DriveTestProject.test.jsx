@@ -1097,7 +1097,11 @@ describe('the KPI band', () => {
 })
 
 describe('the order of the page', () => {
-  it('puts the PIP summary above the ongoing and problematic detail', async () => {
+  it('asks its four questions in order: where, which way, what was promised, what is left', async () => {
+    // The trend moved up to sit directly under the band, which is the second
+    // question the page asks and used to be answered halfway down. The
+    // property this test was written for still holds and is still the point:
+    // the PIP summary stays above the ongoing and problematic detail.
     serve()
     draw()
 
@@ -1115,10 +1119,10 @@ describe('the order of the page', () => {
       )
 
     expect(headings).toEqual([
+      'Where this is going',
       'Plan and delivery',
       'Ongoing breakdown',
       'Problematic breakdown',
-      'Where this is going',
     ])
   })
 })
@@ -1675,6 +1679,69 @@ describe('the flow chart', () => {
 
     // The year picker only appears on this tab.
     expect(within(card).getByRole('combobox', { name: 'Year' })).toBeInTheDocument()
+  })
+
+  it('foots each month with what it did to the backlog', async () => {
+    serve()
+    draw()
+
+    const card = await section('Where this is going')
+    const pills = within(card).getAllByTestId('dt-flow-net')
+    // One per month drawn, not per point: the opening balance is a starting
+    // position, not a month that moved anything.
+    expect(pills).toHaveLength(4)
+    // 10 on air against 4 done is +6 pending; 8 against 6 is +2; 5 against 3
+    // is +2; 4 against 2 is +2.
+    expect(pills.map((p) => p.querySelector('text').textContent)).toEqual([
+      '+6',
+      '+2',
+      '+2',
+      '+2',
+    ])
+    // Every month here grew the backlog, so every pill is the bad tone.
+    expect(pills.map((p) => p.getAttribute('data-tone'))).toEqual([
+      'bad',
+      'bad',
+      'bad',
+      'bad',
+    ])
+  })
+
+  it('colours a month green when the backlog shrank and red when it grew', async () => {
+    serve(planDelivery(), overview, trend(), flow({
+      months: [
+        flowMonth(1404, 1, { on_aired: 10, dt_done: 4 }),   // +6, grew
+        flowMonth(1404, 2, { on_aired: 3, dt_done: 20 }),   // -17, shrank
+        flowMonth(1404, 3, { on_aired: 5, dt_done: 5 }),    // 0, flat
+      ],
+    }))
+    draw()
+
+    const card = await section('Where this is going')
+    const pills = within(card).getAllByTestId('dt-flow-net')
+    expect(pills.map((p) => p.getAttribute('data-tone'))).toEqual(['bad', 'good', 'flat'])
+    expect(pills.map((p) => p.querySelector('text').textContent)).toEqual(['+6', '-17', '0'])
+  })
+
+  it('adds the strip up to the movement in the gap, which is the point of it', async () => {
+    // The parity that makes the strip trustworthy, in the same style as the
+    // ledger's: read the rendered pills, sum them, and check the total
+    // against the gap the chart itself reports. A strip that stops summing
+    // to its own chart is worse than no strip -- it is a second, quieter
+    // answer to a question the lines above already answered.
+    serve()
+    draw()
+
+    const card = await section('Where this is going')
+    const sum = within(card)
+      .getAllByTestId('dt-flow-net')
+      .reduce((total, p) => total + Number(p.querySelector('text').textContent), 0)
+
+    // Opening 50 on air / 20 done is a gap of 30; the chart's Gap tile reads
+    // the closing 42. The strip has to account for exactly that movement.
+    const closingGap = Number(within(tile(card, 'Gap')).getByText('42').textContent)
+    expect(sum).toBe(closingGap - 30)
+    expect(sum).toBe(12)
   })
 
   it('marks the open month as still in progress', async () => {

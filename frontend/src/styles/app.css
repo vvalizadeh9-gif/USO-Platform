@@ -2187,6 +2187,29 @@ a.dt-contractor-assign-figure:hover { color: var(--dt-done); }
   border: 1px solid rgba(176, 90, 90, 0.3);
 }
 
+/* The net-change strip: one pill per month under the axis, saying what that
+   month did to the backlog. Tinted rather than filled -- the pills sit under
+   a chart whose two lines are the figure, and three saturated rows of them
+   would out-shout it. */
+.dt-flow-net-pill { stroke: none; }
+.dt-flow-net-good { fill: var(--dt-done-wash); }
+.dt-flow-net-bad { fill: var(--dt-problem-wash); }
+.dt-flow-net-flat { fill: var(--surface-3); }
+.dt-flow-net-text {
+  font-size: 10px; font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.dt-flow-net-text-good { fill: var(--dt-done); }
+.dt-flow-net-text-bad { fill: var(--dt-problem); }
+.dt-flow-net-text-flat { fill: var(--text-dim); }
+/* The legend swatch for the strip: a pill, tinted the way the good ones are,
+   because "shrank" is the reading the strip exists to make quick. */
+.dt-flow-legend-pill {
+  width: 18px; height: 10px; border-radius: 999px; flex: none;
+  background: var(--dt-done-wash);
+  border: 1px solid var(--dt-done);
+}
+
 /* The chart itself -- two lines, the soft fill between them, one baseline,
    month labels. */
 .dt-flowchart { position: relative; }

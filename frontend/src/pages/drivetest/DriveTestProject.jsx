@@ -316,6 +316,31 @@ export default function DriveTestProject() {
           <KpiBand kpis={data.kpis} flow={flow.data} provinceId={provinceId} />
         ) : null}
 
+        {/* Full width, and directly under the band. It is the answer to the
+            second question the page asks -- which way is this going -- and it
+            used to sit halfway down sharing a row with the month ledger. Two
+            charts side by side at half width each made the trailing shape of
+            an eighteen-month series about three hundred pixels wide, which is
+            where a line chart stops being readable. */}
+        <Section
+          title="Where this is going"
+          subtitle="Sites on air against drive tests done, and what each month did to the backlog"
+          state={flow}
+          onRetry={refresh}
+          skeletonRows={4}
+        >
+          {(f) =>
+            flowHasActivity(f) ? (
+              <FlowChart data={f} />
+            ) : (
+              <div className="dt-empty">
+                No on-air or drive-test activity has been recorded yet. The chart fills in
+                as sites go on air and are drive-tested.
+              </div>
+            )
+          }
+        </Section>
+
         <PlanDelivery
           state={plan}
           onRetry={refresh}
@@ -411,40 +436,19 @@ export default function DriveTestProject() {
           </Section>
         )}
 
-        <div className="dt-pair">
+        {trend.data?.latest_flows && (
           <Section
-            title="Where this is going"
-            subtitle="Sites on air against drive tests done"
-            state={flow}
+            title="What moved"
+            subtitle={`${trend.data.latest_flows.label} ${trend.data.latest_flows.shamsi_year}${
+              trend.data.latest_flows.is_open ? ' · still in progress' : ''
+            }`}
+            state={trend}
             onRetry={refresh}
             skeletonRows={4}
           >
-            {(f) =>
-              flowHasActivity(f) ? (
-                <FlowChart data={f} />
-              ) : (
-                <div className="dt-empty">
-                  No on-air or drive-test activity has been recorded yet. The chart fills in
-                  as sites go on air and are drive-tested.
-                </div>
-              )
-            }
+            {(t) => <FlowLedger flows={t.latest_flows} monthLabel={t.latest_flows.label} />}
           </Section>
-
-          {trend.data?.latest_flows && (
-            <Section
-              title="What moved"
-              subtitle={`${trend.data.latest_flows.label} ${trend.data.latest_flows.shamsi_year}${
-                trend.data.latest_flows.is_open ? ' · still in progress' : ''
-              }`}
-              state={trend}
-              onRetry={refresh}
-              skeletonRows={4}
-            >
-              {(t) => <FlowLedger flows={t.latest_flows} monthLabel={t.latest_flows.label} />}
-            </Section>
-          )}
-        </div>
+        )}
       </div>
     </>
   )

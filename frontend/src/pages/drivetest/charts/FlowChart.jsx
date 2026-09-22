@@ -34,7 +34,7 @@ import { DrawPath, FadeArea } from './primitives'
  */
 
 const VIEW_W = 740
-const VIEW_H = 300
+const VIEW_H = 318
 
 const PAD_L = 16
 const MAIN_TOP = 16
@@ -42,6 +42,10 @@ const MAIN_H = 228
 const MAIN_W = 700
 const PLOT_RIGHT = PAD_L + MAIN_W
 const MAIN_AXIS_Y = MAIN_TOP + MAIN_H + 20
+
+/** The net-change strip, under the month labels and the year captions. */
+const STRIP_TOP = MAIN_AXIS_Y + 26
+const STRIP_H = 17
 
 /** A rounded ceiling for an axis, so the plot has a readable amount of
  * headroom above its highest point. */
@@ -97,6 +101,32 @@ export function yearPoints(data, year) {
     points.push({ year: m.year, month: m.month, onAir, dtDone, gap: onAir - dtDone, isOpen: m.is_open })
   }
   return points
+}
+
+/** What each month did to the backlog, one entry per month drawn.
+ *
+ * The change in pending over the month: sites that went on air minus drive
+ * tests finished. Negative means the backlog shrank.
+ *
+ * DERIVED FROM THE POINTS THE CHART IS ALREADY DRAWING, not fetched again
+ * and not recomputed from the payload, which is what makes the strip
+ * reconcile to the lines above it rather than merely agree with them most of
+ * the time. The sum of these is exactly `last.gap - first.gap`, because each
+ * one is the step between two consecutive gap values and the sum telescopes.
+ * That identity is what the parity test asserts, and it is the reason this
+ * takes `points` rather than `data.months`: a strip built from the payload
+ * would keep summing correctly while the chart beside it drew a filtered
+ * year, and be wrong in the one view where it looked right.
+ *
+ * The sign convention is the one the Gap tile above already uses -- see its
+ * `DeltaChip direction="down"`. A falling gap is good news, so a negative
+ * number here is green. The two would be read together and must not disagree
+ * about which way is which.
+ */
+function netChanges(points) {
+  const out = []
+  for (let i = 1; i < points.length; i += 1) out.push(points[i].gap - points[i - 1].gap)
+  return out
 }
 
 /** Whether the payload has anything at all to draw. An opening balance of
@@ -178,6 +208,12 @@ export default function FlowChart({ data }) {
 
   const notPlaced = data.not_placed?.on_air ?? 0
 
+  // One per month drawn, in the same order as `months`: points[0] is the
+  // opening balance, so the step into month j is netChanges()[j].
+  const nets = netChanges(points)
+  const slotW = MAIN_W / Math.max(n - 1, 1)
+  const pillW = Math.min(slotW - 4, 42)
+
   return (
     <div className="dt-flowcard">
       <div className="dt-flow-controls">
@@ -252,6 +288,10 @@ export default function FlowChart({ data }) {
         <li className="dt-flow-legend-item dt-flow-legend-item-muted">
           <i className="dt-flow-legend-swatch" />
           Gap between them
+        </li>
+        <li className="dt-flow-legend-item dt-flow-legend-item-muted">
+          <i className="dt-flow-legend-pill" />
+          Change in pending, per month — green shrank, red grew
         </li>
       </ul>
 
@@ -374,6 +414,38 @@ export default function FlowChart({ data }) {
               onMouseLeave={() => setActive(null)}
             />
           ))}
+
+          {/* What each month did to the backlog, under the axis it belongs
+              to. The lines above answer "where are we"; a reader still has to
+              squint at the space between them to see whether a given month
+              helped or hurt. This says it outright, once per month, in the
+              one place the months are already laid out. */}
+          {months.map((m, j) => {
+            const net = nets[j]
+            const tone = net === 0 ? 'flat' : net < 0 ? 'good' : 'bad'
+            return (
+              <g key={`net-${j}`} data-testid="dt-flow-net" data-tone={tone}>
+                <rect
+                  x={x(j + 1) - pillW / 2}
+                  y={STRIP_TOP}
+                  width={pillW}
+                  height={STRIP_H}
+                  rx={STRIP_H / 2}
+                  className={`dt-flow-net-pill dt-flow-net-${tone}`}
+                />
+                <text
+                  x={x(j + 1)}
+                  y={STRIP_TOP + STRIP_H / 2}
+                  className={`dt-flow-net-text dt-flow-net-text-${tone}`}
+                  textAnchor="middle"
+                  dominantBaseline="central"
+                >
+                  {net > 0 ? '+' : ''}
+                  {count(net)}
+                </text>
+              </g>
+            )
+          })}
         </svg>
       </div>
 
@@ -410,6 +482,9 @@ export default function FlowChart({ data }) {
           ? 'The running total starts from the opening balance on 1 Farvardin 1404.'
           : `This counts only ${selectedYear}, so its gap differs from the cumulative one.`}
         {isCumulative && floor > 0 && ` Chart scale starts at ${count(floor)}, not zero.`}
+        {' '}The strip under the months is what each one did to the backlog — sites on air
+        that month minus drive tests finished — so the strip adds up to the movement in the
+        gap across the whole chart.
       </p>
       {notPlaced > 0 && (
         <p className="dt-note">
