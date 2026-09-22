@@ -1,10 +1,10 @@
-import { AlertTriangle, CircleDashed } from 'lucide-react'
+import { AlertTriangle } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import api from '../../api/client'
 import { describeBlobError, filenameFrom, saveBlob } from '../../lib/download'
 import { PageHead } from '../../components/ui'
 import { useToast } from '../../context/ToastContext'
-import BreakdownCard from './BreakdownCard'
+import BreakdownCard, { BreakdownTabs } from './BreakdownCard'
 import ContractorScorecard from './ContractorScorecard'
 import KpiBand from './KpiBand'
 import PlanDelivery from './PlanDelivery'
@@ -352,25 +352,30 @@ export default function DriveTestProject() {
           {has('ongoing_breakdown') && (
             <Section
               title="Ongoing breakdown"
-              subtitle="Sites in flight, cut three ways"
               state={overview}
               onRetry={refresh}
               actions={
                 data && (
                   <SectionTotal
-                    icon={CircleDashed}
                     value={data.ongoing_breakdown.total}
                     label="ongoing"
                     color={STATE_COLOR.ongoing}
                   />
                 )
               }
-            >
-              {(d) => (
-                <BreakdownCard
+              controls={
+                <BreakdownTabs
+                  idBase="dt-ongoing"
                   tabs={ONGOING_TABS}
                   tab={ongoingTab}
                   onTab={setOngoingTab}
+                />
+              }
+            >
+              {(d) => (
+                <BreakdownCard
+                  idBase="dt-ongoing"
+                  tab={ongoingTab}
                   views={ongoingViews}
                   total={d.ongoing_breakdown.total}
                 />
@@ -381,25 +386,30 @@ export default function DriveTestProject() {
           {has('problematic_breakdown') && (
             <Section
               title="Problematic breakdown"
-              subtitle="Sites the programme is blocked on, and how long each has been"
               state={overview}
               onRetry={refresh}
               actions={
                 data && (
                   <SectionTotal
-                    icon={AlertTriangle}
                     value={data.problematic_breakdown.total}
                     label="problematic"
                     color={STATE_COLOR.problematic}
                   />
                 )
               }
-            >
-              {(d) => (
-                <BreakdownCard
+              controls={
+                <BreakdownTabs
+                  idBase="dt-problematic"
                   tabs={PROBLEMATIC_TABS}
                   tab={problematicTab}
                   onTab={setProblematicTab}
+                />
+              }
+            >
+              {(d) => (
+                <BreakdownCard
+                  idBase="dt-problematic"
+                  tab={problematicTab}
                   views={problematicViews}
                   total={d.problematic_breakdown.total}
                 />
@@ -454,11 +464,23 @@ export default function DriveTestProject() {
   )
 }
 
-function SectionTotal({ icon: Icon, value, label, color }) {
+/** The card's own total, on the header line beside its title.
+ *
+ * A dot rather than the state's lucide icon, and the figure in the state
+ * colour rather than in the text colour. The icon was a second thing to read
+ * at a glance — a circle-dashed and a warning triangle, at 15px, doing the
+ * job the colour was already doing. The dot is the same mark the KPI band
+ * uses for the same state, so the two read as the same vocabulary.
+ *
+ * The colour is not carrying the meaning on its own: the word is right
+ * there, and the title says it again. See constants.js for why that rule is
+ * absolute on this page.
+ */
+function SectionTotal({ value, label, color }) {
   return (
     <span className="dt-section-total">
-      <Icon size={15} strokeWidth={2} style={{ color }} aria-hidden="true" />
-      <b className="tnum">{count(value)}</b>
+      <i className="dt-section-dot" style={{ background: color }} aria-hidden="true" />
+      <b className="tnum" style={{ color }}>{count(value)}</b>
       <span>{label}</span>
     </span>
   )

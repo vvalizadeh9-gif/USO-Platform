@@ -19,6 +19,7 @@ export default function Section({
   title,
   subtitle,
   actions,
+  controls,
   state,
   onRetry,
   children,
@@ -37,13 +38,28 @@ export default function Section({
       transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
       aria-busy={loading || undefined}
     >
-      <header className="dt-section-head">
-        <div>
+      {/* Two headers, not one with branches. A card carrying `controls` puts
+          everything on one line -- mark, title, total, then the controls
+          pushed right -- because the control belongs to the card's question
+          and reads as furniture once it is a row of its own. Every other
+          card keeps the stacked title/subtitle it has, byte for byte: the
+          inline variant is additive, so nothing that does not ask for it can
+          be changed by it. */}
+      {controls ? (
+        <header className="dt-section-head dt-section-head-inline">
           <h2 className="dt-section-title">{title}</h2>
-          {subtitle && <p className="dt-section-sub dt-farsi">{subtitle}</p>}
-        </div>
-        {actions && <div className="dt-section-actions">{actions}</div>}
-      </header>
+          {actions}
+          <div className="dt-section-controls">{controls}</div>
+        </header>
+      ) : (
+        <header className="dt-section-head">
+          <div>
+            <h2 className="dt-section-title">{title}</h2>
+            {subtitle && <p className="dt-section-sub dt-farsi">{subtitle}</p>}
+          </div>
+          {actions && <div className="dt-section-actions">{actions}</div>}
+        </header>
+      )}
 
       <div className="dt-section-body">
         {error ? (

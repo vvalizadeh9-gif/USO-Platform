@@ -699,6 +699,45 @@ describe('breakdown sections', () => {
     expect(within(problematic).queryByText('Power')).not.toBeInTheDocument()
   })
 
+  it('adds the named rows plus the remainder up to the card total', async () => {
+    // The property the remainder row exists to give, asserted rather than
+    // trusted. A truncated list that does not sum to its own card reads as a
+    // complete one that has lost sites, which is the single worst thing a
+    // breakdown can do -- and it is exactly what dropping the tail would
+    // produce, silently and only for the provinces that fell off the end.
+    //
+    // Ten provinces summing to 55, which is the card total, so the fold has
+    // to account for every site rather than most of them.
+    serve(planDelivery(), {
+      ...overview,
+      ongoing_breakdown: {
+        ...overview.ongoing_breakdown,
+        total: 55,
+        by_province: Array.from({ length: 10 }, (_, i) => ({
+          name: `Province ${i + 1}`,
+          value: 10 - i,
+        })),
+      },
+    })
+    draw()
+
+    const ongoing = await section('Ongoing breakdown')
+    await userEvent.click(within(ongoing).getByRole('tab', { name: 'Province' }))
+
+    // Read off the rendered rows, the remainder among them, not off the
+    // fixture: the sum has to survive the component, not just the data.
+    const rows = within(ongoing).getAllByRole('listitem')
+    const sum = rows.reduce(
+      (total, row) => total + Number(within(row).getByText(/^\d+$/).textContent),
+      0,
+    )
+    expect(sum).toBe(55)
+
+    // And the header is still claiming that same total, so the two cannot
+    // drift apart without this failing.
+    expect(within(ongoing).getByText('55')).toBeInTheDocument()
+  })
+
   it('folds the province tail of a breakdown tab into one remainder line', async () => {
     serve(planDelivery(), {
       ...overview,
