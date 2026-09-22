@@ -42,17 +42,43 @@
 
   /* ---- Drive Test dashboard: colour that means a state, and nothing else.
      Three hues, one per state where something is *happening* to an on-air
-     site, reserved for that meaning everywhere on that page. Validated as a
-     categorical set against a white surface: worst adjacent pair 22.1 ΔE
-     under deuteranopia and 23.7 under normal vision, all three above 3:1
-     contrast.
+     site, reserved for that meaning everywhere on that page.
 
-     Amber is deliberately absent. It is the obvious pick for "in progress",
-     and against this red it lands 3.4 ΔE apart under deuteranopia — a
-     red-green reader could not tell an ongoing site from a problematic one.
-     The brand teal is absent for a different reason: it is the nav-active
-     and primary-button colour, so a data series wearing it reads as the
-     selected thing.
+     SOFTENED DELIBERATELY, on the product owner's call: the previous trio
+     (#17915a / #3b6fd4 / #cf3b3b) read as too saturated on a 1920x1200
+     office display, which is the screen this dashboard is actually read on.
+     What that cost and what it bought is measured below rather than
+     asserted, because the trade is real in both directions.
+
+     BOUGHT: all three now clear 4.5:1 as text on --surface-1 — done 4.85,
+     ongoing 5.37, problem 4.71. The old green was 4.01 and had been failing
+     that bar since it was chosen; softening it is what fixed it.
+
+     COST: separability under deuteranopia falls across the board. Measured
+     as CIEDE2000 over a Vienot deuteranope simulation, the two pairs that
+     sit adjacent on the segmented bar go done↔ongoing 18.5 -> 10.6 and
+     ongoing↔problem 21.0 -> 14.1. Both still clear the ~10 a categorical
+     set needs, but the worst adjacent pair now sits near that line rather
+     than comfortably above it, and it is the number to re-measure before
+     anyone softens these again.
+
+     GREEN AND BRICK ARE NOT SEPARABLE UNDER DEUTERANOPIA, and were not
+     before either: that pair measures 2.8 -> 5.1, which is to say
+     indistinguishable in both palettes. It is not an adjacent pair on the
+     bar, which is why the original validation did not report it. THIS IS
+     THE REASON EVERY CHART ON THIS PAGE KEEPS A LEGEND AND A TEXT LABEL.
+     Colour is the fast read here; it is never the only one. A chart on this
+     page that drops its legend has a red-green reader guessing between a
+     finished site and a broken one.
+
+     Amber stays out. The 3.4 ΔE figure the previous note gave for amber
+     against the old red does not reproduce under the method above (it
+     measures ~19), so the rejection no longer rests on it — it rests on the
+     line above: with green and brick already indistinguishable to a
+     deuteranope, a third warm hue is the one thing this palette cannot
+     afford. The brand teal is absent for a different reason: it is the
+     nav-active and primary-button colour, so a data series wearing it reads
+     as the selected thing.
 
      The fourth state, not-started, takes the neutral rather than a fourth
      hue. Nothing has happened to those sites, and the three-hue rule is
@@ -61,13 +87,13 @@
      colour vocabulary at three things a reader has to learn. It is the same
      neutral as the chart furniture, one step darker so it holds its own as a
      segment rather than reading as an unfilled track. */
-  --dt-done: #17915a;
-  --dt-ongoing: #3b6fd4;
-  --dt-problem: #cf3b3b;
+  --dt-done: #3A7E5E;
+  --dt-ongoing: #5B66A8;
+  --dt-problem: #B05A5A;
   --dt-notstarted: #8a95a6;
-  --dt-done-wash: rgba(23, 145, 90, 0.12);
-  --dt-ongoing-wash: rgba(59, 111, 212, 0.11);
-  --dt-problem-wash: rgba(207, 59, 59, 0.11);
+  --dt-done-wash: rgba(58, 126, 94, 0.12);
+  --dt-ongoing-wash: rgba(91, 102, 168, 0.11);
+  --dt-problem-wash: rgba(176, 90, 90, 0.11);
   --dt-notstarted-wash: rgba(138, 149, 166, 0.13);
 
   /* The one ordinal ramp on that page: the ongoing age bands, which are an
@@ -75,13 +101,20 @@
      monotone in lightness with every step at least 0.06 apart and the light
      end clearing the surface at 2.09:1. Nominal categories — contractors,
      provinces — get a flat colour instead; shading those by size would
-     colour a bar by the length it already has. */
-  --dt-age-1: #9cb3e8;
-  --dt-age-2: #859cd6;
-  --dt-age-3: #6e85c3;
-  --dt-age-4: #566eb1;
-  --dt-age-5: #3f579e;
-  --dt-age-6: #28408c;
+     colour a bar by the length it already has.
+
+     Re-cut onto the softened ongoing hue above, keeping that discipline
+     exactly: L* runs 73.1 -> 33.4 in six steps of 7.8-8.0 each, the light
+     end still clears the surface at 2.09:1, and the dark end is the agreed
+     #414A86. Even steps are the whole point of a ramp — a bunched pair
+     reads as one band, and these bands are an ordered scale a reader is
+     meant to rank at a glance. */
+  --dt-age-1: #AFB0DB;
+  --dt-age-2: #999AC9;
+  --dt-age-3: #8385B8;
+  --dt-age-4: #6D71A7;
+  --dt-age-5: #575D96;
+  --dt-age-6: #414A86;
 
   /* Chart furniture. Everything that is not a state is a step of the neutral
      ramp: the unfilled part of a track, and the ghost bar a commitment is
@@ -1514,7 +1547,7 @@ a.dt-hero-figure:hover { color: var(--dt-done); }
   display: inline-flex; align-items: baseline; gap: 8px;
   padding: 7px 14px; border-radius: 999px;
   background: var(--dt-problem-wash);
-  border: 1px solid rgba(207, 59, 59, 0.3);
+  border: 1px solid rgba(176, 90, 90, 0.3);
   color: var(--dt-problem); font-size: 12.5px; font-weight: 500;
   transition: box-shadow .14s, transform .14s;
 }
@@ -1577,8 +1610,8 @@ a.dt-state-tile:hover {
 /* DT done: the figure this band is actually about, tinted its own colour
    and set a size above everything beside it. */
 .dt-state-tile[data-tile="done"] {
-  background: #f1f9f4;
-  border-color: #bfe0cd;
+  background: #F3F8F5;
+  border-color: #C8DDD1;
   padding: 14px 16px;
 }
 .dt-state-tile[data-tile="done"] .dt-state-figure { font-size: 28px; }
@@ -1590,13 +1623,13 @@ a.dt-state-tile:hover {
 /* Problematic is the operational blocker on this page, and carries its
    state as a wash background. */
 .dt-state-tile-problem {
-  background: #fdf3f3;
-  border-color: #efc9c9;
+  background: #FAF4F4;
+  border-color: #E3CDCC;
   color: var(--dt-problem);
 }
 .dt-state-tile-problem .dt-state-name,
 .dt-state-tile-problem .dt-state-share { color: var(--dt-problem); opacity: 0.86; }
-a.dt-state-tile-problem:hover { border-color: rgba(207, 59, 59, 0.5); }
+a.dt-state-tile-problem:hover { border-color: rgba(176, 90, 90, 0.5); }
 
 /* Pending is what the programme is actually managed against, so it keeps a
    class of its own -- but On air and Pending both leave card chrome behind
@@ -1861,9 +1894,9 @@ a.dt-contractor-assign-figure:hover { color: var(--dt-done); }
   font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
-.dt-pill-good { background: #eaf5ef; color: var(--dt-done); }
+.dt-pill-good { background: #EDF4F0; color: var(--dt-done); }
 .dt-pill-mid { background: #faf2e3; color: #a3660b; }
-.dt-pill-bad { background: #fdf3f3; color: var(--dt-problem); }
+.dt-pill-bad { background: #FAF4F4; color: var(--dt-problem); }
 .dt-pill-dim { background: var(--surface-3); color: var(--text-dim); }
 
 /* ---------- province breakdown: card grid ----------
@@ -1886,7 +1919,7 @@ a.dt-contractor-assign-figure:hover { color: var(--dt-done); }
 }
 .dt-province-card:focus-visible { outline: 2px solid var(--dt-ongoing); outline-offset: 2px; }
 .dt-province-card-problem {
-  background: #fdf3f3; border-color: #efc9c9;
+  background: #FAF4F4; border-color: #E3CDCC;
 }
 .dt-province-head {
   display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
@@ -2185,8 +2218,8 @@ a.dt-contractor-assign-figure:hover { color: var(--dt-done); }
 .dt-flow-legend-dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
 .dt-flow-legend-swatch {
   width: 14px; height: 9px; border-radius: 2px; flex: none;
-  background: linear-gradient(180deg, rgba(207, 59, 59, 0.12), rgba(207, 59, 59, 0.03));
-  border: 1px solid rgba(207, 59, 59, 0.3);
+  background: linear-gradient(180deg, rgba(176, 90, 90, 0.12), rgba(176, 90, 90, 0.03));
+  border: 1px solid rgba(176, 90, 90, 0.3);
 }
 
 /* The chart itself -- two lines, the soft fill between them, one baseline,
