@@ -1,4 +1,3 @@
-import { CheckCircle2, ClipboardList, Gauge, Target } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { achievement, bandColor, count, planScale } from './format'
 import { deliveredLink } from './links'
@@ -66,55 +65,15 @@ export default function PlanDelivery({ state, onRetry, scoped, provinceName }) {
                 )}
               </p>
             )}
-            <div className="dt-figures">
-              <Figure
-                icon={Target}
-                label="PIP"
-                value={count(data.pip)}
-                color="var(--text-dim)"
-                note={
-                  uncommitted > 0
-                    ? `${uncommitted} not committed`
-                    : `${data.committed_contractors} committed`
-                }
-              />
-              <Figure
-                icon={ClipboardList}
-                label="Assigned"
-                value={count(data.assigned)}
-                color="var(--text-dim)"
-              />
-              <Figure
-                icon={CheckCircle2}
-                label="Actual"
-                value={count(data.actual)}
-                color="var(--dt-done)"
-                // Delivered is the one figure here with a list behind it: PIP
-                // and Assigned count commitments and handovers, not sites this
-                // dashboard can open.
-                href={deliveredLink({
-                  year: data.shamsi_year,
-                  month: data.shamsi_month,
-                })}
-              />
-              <Figure
-                icon={Gauge}
-                label="Achievement"
-                value={achievement(data.achievement_percent) ?? '—'}
-                color={bandColor(data.achievement_percent)}
-                // Null, not zero: there is no PIP to have achieved a share
-                // of, and "0%" would report a failure that has not happened.
-                note={data.achievement_percent == null ? 'no approved PIP' : null}
-                emphasis
+            <div className="dt-plan">
+              <PlanSummary data={data} uncommitted={uncommitted} />
+              <ContractorAchievement
+                rows={data.rows}
+                programme={data.programme_achievement_percent}
+                year={data.shamsi_year}
+                month={data.shamsi_month}
               />
             </div>
-
-            <ContractorAchievement
-              rows={data.rows}
-              programme={data.programme_achievement_percent}
-              year={data.shamsi_year}
-              month={data.shamsi_month}
-            />
           </>
         )
       }}
@@ -122,25 +81,111 @@ export default function PlanDelivery({ state, onRetry, scoped, provinceName }) {
   )
 }
 
-function Figure({ icon: Icon, label, value, color, note, emphasis, href }) {
+/** The month in one block: the rate, then the counts behind it.
+ *
+ * The rate leads because it is the figure the card is asked for, and it is
+ * the one figure here that is comparable month to month — 6 delivered means
+ * nothing without the 16 it was promised against. The bar under it is that
+ * same rate drawn, capped at the target rather than at the highest bar on
+ * screen: this is a share of a commitment, not a quantity competing with
+ * other quantities.
+ *
+ * Four counts under it rather than four tiles. Tiles gave each figure a
+ * border, a background and an icon, which spent a card's worth of weight on
+ * three numbers that are the arithmetic behind the fourth. Hairlines say the
+ * same thing — these belong together and are read across — at a fraction of
+ * the ink.
+ *
+ * "Short by" is the figure the card did not have and is the one somebody is
+ * actually chased about. It is arithmetic the reader was being left to do,
+ * on two numbers sitting forty pixels apart.
+ */
+function PlanSummary({ data, uncommitted }) {
+  const pct = data.achievement_percent
+  const color = bandColor(pct)
+  const committed = data.committed_contractors
+  const expected = committed + uncommitted
+  // Floored at zero: a contractor who overshot is not "short by" a negative
+  // number, they are short by nothing.
+  const short = pct == null ? null : Math.max(0, data.pip - data.actual)
+
   return (
-    <div className={`dt-figure-tile${emphasis ? ' dt-figure-emphasis' : ''}`}>
-      <span className="dt-figure-label">
-        <Icon size={14} strokeWidth={2} style={{ color }} aria-hidden="true" />
-        {label}
+    <div className="dt-plan-summary">
+      <span className="dt-plan-rate" style={{ color }}>
+        {achievement(pct) ?? '—'}
       </span>
-      {href ? (
-        <Link to={href} className="dt-cell-link" aria-label={`${label}: ${value}`}>
-          <span className="dt-figure" style={emphasis ? { color } : undefined}>
+      <span className="dt-plan-rate-label">
+        Achievement
+        {/* Null, not zero: there is no PIP to have achieved a share of, and
+            "0%" would report a failure that has not happened. */}
+        {pct == null && (
+          <>
+            {' · '}
+            <em>no approved PIP</em>
+          </>
+        )}
+      </span>
+
+      <span
+        className="dt-plan-progress"
+        role="img"
+        aria-label={pct == null ? 'No approved PIP for this month' : `Achievement ${achievement(pct)}`}
+      >
+        <span
+          data-testid="dt-plan-progress-fill"
+          className="dt-plan-progress-fill"
+          style={{ width: `${Math.min(100, pct ?? 0)}%`, background: color }}
+        />
+      </span>
+
+      <dl className="dt-plan-figures">
+        <PlanFigure label="PIP" value={count(data.pip)} />
+        <PlanFigure label="Assignment" value={count(data.assigned)} />
+        <PlanFigure
+          label="Delivered"
+          value={count(data.actual)}
+          // The one figure here with a list behind it: PIP and Assignment
+          // count commitments and handovers, not sites this dashboard can
+          // open.
+          href={deliveredLink({ year: data.shamsi_year, month: data.shamsi_month })}
+        />
+        <PlanFigure
+          label="Short by"
+          value={short == null ? '—' : count(short)}
+          color={short ? 'var(--dt-problem)' : undefined}
+        />
+      </dl>
+
+      {/* One text node per fact, not an interpolation split across three:
+          "1 not committed" has to be findable as the phrase it is. */}
+      {/* One element per phrase, not an interpolation split across text
+          nodes: "1 not committed" has to be findable as the phrase it is. */}
+      <p className="dt-plan-committed">
+        <span>{`${count(committed)} of ${count(expected)} contractors committed`}</span>
+        {uncommitted > 0 && (
+          <>
+            {' · '}
+            <span>{`${count(uncommitted)} not committed`}</span>
+          </>
+        )}
+      </p>
+    </div>
+  )
+}
+
+function PlanFigure({ label, value, href, color }) {
+  return (
+    <div className="dt-plan-figure">
+      <dt>{label}</dt>
+      <dd className="tnum" style={color ? { color } : undefined}>
+        {href ? (
+          <Link to={href} className="dt-cell-link" aria-label={`${label}: ${value}`}>
             {value}
-          </span>
-        </Link>
-      ) : (
-        <span className="dt-figure" style={emphasis ? { color } : undefined}>
-          {value}
-        </span>
-      )}
-      {note && <span className="dt-figure-note">{note}</span>}
+          </Link>
+        ) : (
+          value
+        )}
+      </dd>
     </div>
   )
 }
@@ -167,6 +212,7 @@ function ContractorAchievement({ rows, programme, year, month }) {
           pip={row.pip}
           actual={row.actual}
           detail={`${count(row.actual)} of ${row.pip || '—'}`}
+          short={row.achievement_percent == null ? null : Math.max(0, row.pip - row.actual)}
           href={deliveredLink({ year, month, contractorId: row.contractor_id })}
           scaleMax={scaleMax}
           index={i}

@@ -276,26 +276,51 @@ beforeEach(() => {
 })
 
 describe('plan and delivery', () => {
-  it('renders the four figures for the month', async () => {
+  it('leads with the rate, then the counts it is made of', async () => {
     serve()
     draw()
 
     const card = await section('Plan and delivery')
     expect(within(card).getByText('شهریور 1405')).toBeInTheDocument()
 
+    // The rate leads: it is the one figure here comparable month to month,
+    // and 6 delivered means nothing without the 16 it was promised against.
+    expect(card.querySelector('.dt-plan-rate')).toHaveTextContent('37.5%')
+
     for (const [label, value] of [
       ['PIP', '16'],
-      ['Assigned', '9'],
-      ['Actual', '6'],
-      ['Achievement', '37.5%'],
+      ['Assignment', '9'],
+      ['Delivered', '6'],
+      // 16 committed against 6 delivered. The figure the card did not carry
+      // and the one somebody is actually chased about -- it was arithmetic
+      // the reader was left to do on two numbers sitting apart.
+      ['Short by', '10'],
     ]) {
-      // Scoped to the tiles: "PIP" is also the word the bullet key below uses,
-      // deliberately, because it is the same figure.
-      const tile = within(card)
+      // Scoped to the figure list: "PIP" is also the word the bullet key
+      // below uses, deliberately, because it is the same figure.
+      const figure = within(card)
         .getAllByText(label)
-        .map((node) => node.closest('.dt-figure-tile'))
+        .map((node) => node.closest('.dt-plan-figure'))
         .find(Boolean)
-      expect(within(tile).getByText(value)).toBeInTheDocument()
+      expect(within(figure).getByText(value)).toBeInTheDocument()
+    }
+  })
+
+  it('says how many each contractor is short, beside what they delivered', async () => {
+    serve()
+    draw()
+
+    const card = await section('Plan and delivery')
+    for (const [name, detail, short] of [
+      ['Beta Surveys', '2 of 2', '0'],
+      ['Alfa Drive Tests', '3 of 4', '1'],
+      ['Gamma Networks', '1 of 10', '9'],
+    ]) {
+      const row = within(card).getByText(name).closest('.dt-bullet')
+      expect(within(row).getByText(detail)).toBeInTheDocument()
+      // A plain 0 where the commitment was met, not a dash: met and
+      // unplanned are different facts and the column has to tell them apart.
+      expect(row.querySelector('.dt-bullet-short')).toHaveTextContent(short)
     }
   })
 
@@ -1345,7 +1370,7 @@ describe('drill-through', () => {
     draw()
 
     const card = await section('Plan and delivery')
-    const tile = within(card).getByText('Actual').closest('.dt-figure-tile')
+    const tile = within(card).getByText('Delivered').closest('.dt-plan-figure')
     expect(within(tile).getByText('6').closest('a')).toHaveAttribute(
       'href',
       '/drive-test/sites?bucket=delivered&year=1405&month=6',
