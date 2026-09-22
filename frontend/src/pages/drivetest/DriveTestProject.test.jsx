@@ -1961,6 +1961,64 @@ describe('the trend section', () => {
     expect(within(card).getByText('60')).toBeInTheDocument()
   })
 
+  it('closes: opening plus new on air minus drive tests done is the closing bar', async () => {
+    // The property the waterfall exists to make visible, read back off the
+    // rendered bars rather than off the fixture. `opening + arrivals -
+    // completions == closing` holds by construction in
+    // services/snapshots.reconcile, so a chart that stops showing it is the
+    // chart being wrong, not the ledger.
+    serve()
+    draw()
+
+    const card = await section('What moved')
+    // Magnitudes: the direction of each step is carried by which step it is
+    // ("New on air" rises, "Drive tests done" falls), and the +/− on the
+    // label is there to say so to a reader. Signing the numbers here too
+    // would subtract a negative and pass on a ledger that does not close.
+    const figureOf = (step) =>
+      Number(
+        card
+          .querySelector(`[data-step="${step}"] .dt-flow-figure-text`)
+          .textContent.replace(/[^0-9]/g, ''),
+      )
+
+    const opening = figureOf('opening')
+    const arrived = figureOf('arrived')
+    const completed = figureOf('completed')
+    const closing = figureOf('closing')
+
+    expect(opening + arrived - completed).toBe(closing)
+    expect([opening, arrived, completed, closing]).toEqual([70, 4, 14, 60])
+  })
+
+  it('names each step under its own bar, and chains them with connectors', async () => {
+    serve()
+    draw()
+
+    const card = await section('What moved')
+    expect(
+      within(card)
+        .getAllByTestId('dt-flow-bar')
+        .map((g) => g.querySelector('.dt-flow-step-label').textContent),
+    ).toEqual(['Opened at', 'New on air', 'Drive tests done', 'Closed at'])
+
+    // One connector between each adjacent pair: a break in the chain is a
+    // break in the ledger.
+    expect(within(card).getAllByTestId('dt-flow-connector')).toHaveLength(3)
+  })
+
+  it('carries the month\'s net movement in the card header', async () => {
+    serve()
+    draw()
+
+    const card = await section('What moved')
+    const header = card.querySelector('.dt-section-total')
+    // 60 closed against 70 opened: the backlog fell by 10, which is the good
+    // direction, so it is drawn in the done colour.
+    expect(header).toHaveTextContent('-10')
+    expect(header.querySelector('b')).toHaveStyle({ color: 'var(--dt-done)' })
+  })
+
   it('says which flows are measured and which are derived', async () => {
     serve()
     draw()

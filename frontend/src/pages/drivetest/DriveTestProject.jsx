@@ -12,9 +12,9 @@ import ProvinceList from './ProvinceList'
 import Section from './Section'
 import Toolbar from './Toolbar'
 import FlowChart, { flowHasActivity } from './charts/FlowChart'
-import FlowLedger from './charts/FlowLedger'
+import FlowLedger, { flowNet } from './charts/FlowLedger'
 import { AGE_RAMP, PROVINCE_LIMIT, STATE_COLOR } from './constants'
-import { count } from './format'
+import { count, deltaTone, TONE_COLOR } from './format'
 import { ongoingLink, problematicLink } from './links'
 import { useDashboard } from './useDashboard'
 
@@ -455,6 +455,7 @@ export default function DriveTestProject() {
             state={trend}
             onRetry={refresh}
             skeletonRows={4}
+            actions={<NetChange value={flowNet(trend.data.latest_flows)} />}
           >
             {(t) => <FlowLedger flows={t.latest_flows} monthLabel={t.latest_flows.label} />}
           </Section>
@@ -476,6 +477,26 @@ export default function DriveTestProject() {
  * there, and the title says it again. See constants.js for why that rule is
  * absolute on this page.
  */
+/** The month's net movement in the backlog, on the ledger's header line.
+ *
+ * Direction-aware like every other delta on this page: the backlog falling
+ * is the good outcome, so a negative number is green. See
+ * `format.deltaTone` for why that is stated per figure rather than assumed.
+ */
+function NetChange({ value }) {
+  if (value == null) return null
+  const tone = deltaTone(value, 'down')
+  return (
+    <span className="dt-section-total">
+      <b className="tnum" style={{ color: tone ? TONE_COLOR[tone] : TONE_COLOR.flat }}>
+        {value > 0 ? '+' : ''}
+        {count(value)}
+      </b>
+      <span>net this month</span>
+    </span>
+  )
+}
+
 function SectionTotal({ value, label, color }) {
   return (
     <span className="dt-section-total">

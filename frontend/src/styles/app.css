@@ -2198,27 +2198,23 @@ a.dt-contractor-assign-figure:hover { color: var(--dt-done); }
 .dt-legend-note { color: var(--text-dim); }
 
 /* ---------- flow ledger ----------
-   A horizontal waterfall: one row per movement, each starting where the last
-   one finished. It was a column chart with the labels wedged under 66-pixel
-   bars; rows cost one line each and carry their label at full length. */
+   A column waterfall: one bar per movement, each starting where the last
+   one finished, with a dashed connector between bar tops. */
 .dt-flow { display: grid; gap: 14px; }
-.dt-flow-rows { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
-.dt-flow-row {
-  display: grid; align-items: center; gap: 12px;
-  grid-template-columns: 132px minmax(0, 1fr) 62px;
-  font-size: 12.5px;
+/* The waterfall. Full width now that this card no longer shares a row, so
+   a column is ~170px with room under it for its label at full length --
+   which is the thing four 66-pixel columns could not do and the reason this
+   was horizontal for a while. */
+.dt-flow-waterfall { display: block; width: 100%; height: auto; }
+.dt-flow-connector {
+  stroke: var(--border); stroke-width: 1.5; stroke-dasharray: 4 4;
 }
-.dt-flow-name { color: var(--text-muted); }
-.dt-flow-balance .dt-flow-name { color: var(--text); font-weight: 500; }
-.dt-flow-track {
-  position: relative; display: block; height: 14px;
-  background: var(--dt-track); border-radius: 4px;
-}
-.dt-flow-fill { position: absolute; top: 0; bottom: 0; border-radius: 3px; }
-.dt-flow-figure {
-  font-family: var(--font-display); font-size: 15px; text-align: right;
+.dt-flow-figure-text {
+  font-family: var(--font-display); font-size: 17px; font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
+.dt-flow-step-label { font-size: 11.5px; fill: var(--text-muted); }
+
 .dt-flow-foot {
   display: flex; align-items: center; gap: 18px; flex-wrap: wrap;
   padding-top: 12px; border-top: 1px solid var(--border-soft); font-size: 12.5px;
@@ -2346,7 +2342,6 @@ a.dt-contractor-assign-figure:hover { color: var(--dt-done); }
   .dt-bullet-detail { display: none; }
   .dt-bullet-key { gap: 10px; }
   .dt-key-scale { display: none; }
-  .dt-flow-row { grid-template-columns: 104px minmax(0, 1fr) 54px; gap: 8px; }
   .dt-toolbar-right { margin-left: 0; width: 100%; }
   .dt-province-grid { grid-template-columns: minmax(0, 1fr); }
   .dt-contractor-row { grid-template-columns: 22px minmax(0, 1fr) auto; }
