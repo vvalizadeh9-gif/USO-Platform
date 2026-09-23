@@ -852,25 +852,26 @@ describe('breakdown sections', () => {
 })
 
 describe('the province grid', () => {
-  // The province table became a two-column card list, each card its own
-  // scope-the-dashboard control -- see ProvinceList. Cards replace rows, a
-  // row of chip buttons replaces the sortable header, and the tail past
-  // twelve folds into one row that keeps the list summing.
+  // The card grid became a sortable table -- see ProvinceList. Cards became
+  // rows, sortable through the `.dt-sort-btn` in each column header rather
+  // than a row of chips above the grid, and every province now loads at
+  // once in `.dt-table-scroll` rather than folding past a fixed count.
   const cardNames = (scope) =>
     Array.from(scope.querySelectorAll('.dt-province-card')).map(
       (card) => card.querySelector('.dt-province-name').textContent,
     )
 
-  // Four provinces built so each sort control has a different winner. A
-  // fixture where two sorts agree cannot tell a working control from one
-  // wired to the wrong key.
+  // Four provinces, each with `done + remaining == onair`, built so every
+  // one of the seven columns has a worked-out order -- a fixture where two
+  // sorts agree cannot tell a working column from one wired to the wrong
+  // key.
   const sortable = {
     ...overview,
     province_breakdown: [
       { name: 'Yazd', onair: 50, done: 45, remaining: 5, ongoing: 5, problematic: 0, not_started: 0, done_percent: 90 },
       { name: 'Kerman', onair: 400, done: 200, remaining: 200, ongoing: 200, problematic: 0, not_started: 0, done_percent: 50 },
-      { name: 'Bushehr', onair: 300, done: 20, remaining: 280, ongoing: 280, problematic: 0, not_started: 0, done_percent: 7 },
-      { name: 'Ardabil', onair: 10, done: 5, remaining: 5, ongoing: 5, problematic: 0, not_started: 0, done_percent: 50 },
+      { name: 'Bushehr', onair: 300, done: 20, remaining: 280, ongoing: 270, problematic: 1, not_started: 0, done_percent: 7 },
+      { name: 'Ardabil', onair: 20, done: 4, remaining: 16, ongoing: 3, problematic: 13, not_started: 0, done_percent: 40 },
     ],
   }
 
@@ -879,29 +880,43 @@ describe('the province grid', () => {
     draw()
 
     const provinces = await section('Province breakdown')
-    // Ten fits inside the twelve the list shows, so nothing is folded.
     expect(cardNames(provinces)).toEqual([
       'Province 1', 'Province 2', 'Province 3', 'Province 4', 'Province 5',
       'Province 6', 'Province 7', 'Province 8', 'Province 9', 'Province 10',
     ])
   })
 
-  it('puts a different province first under each of the four sorts', async () => {
+  it('renders every province at once, with no fold and nothing to expand', async () => {
+    // All 31 rows load in one internally-scrolling table now -- see
+    // `.dt-table-scroll` in app.css -- rather than folding past twelve into
+    // a "Show all" tail.
+    serve(planDelivery(), overviewWithProvinces(20))
+    draw()
+
+    const provinces = await section('Province breakdown')
+    expect(cardNames(provinces)).toHaveLength(20)
+    expect(within(provinces).queryByRole('button', { name: /Show/ })).not.toBeInTheDocument()
+  })
+
+  it('sorts on each of the seven columns', async () => {
     serve(planDelivery(), sortable)
     draw()
 
     const provinces = await section('Province breakdown')
     // Remaining is the default and needs no click.
-    expect(cardNames(provinces)[0]).toBe('Bushehr')
+    expect(cardNames(provinces)).toEqual(['Bushehr', 'Kerman', 'Ardabil', 'Yazd'])
 
-    for (const [control, first] of [
-      ['Done %', 'Yazd'],
-      ['Size', 'Kerman'],
-      ['A–Z', 'Ardabil'],
-      ['Remaining', 'Bushehr'],
+    for (const [control, order] of [
+      ['Province', ['Ardabil', 'Bushehr', 'Kerman', 'Yazd']],
+      ['On air', ['Kerman', 'Bushehr', 'Yazd', 'Ardabil']],
+      ['DT done', ['Kerman', 'Yazd', 'Bushehr', 'Ardabil']],
+      ['Ongoing', ['Bushehr', 'Kerman', 'Yazd', 'Ardabil']],
+      ['Problematic', ['Ardabil', 'Bushehr', 'Yazd', 'Kerman']],
+      ['Done %', ['Yazd', 'Kerman', 'Ardabil', 'Bushehr']],
+      ['Remaining', ['Bushehr', 'Kerman', 'Ardabil', 'Yazd']],
     ]) {
       await userEvent.click(within(provinces).getByRole('button', { name: control }))
-      expect(cardNames(provinces)[0]).toBe(first)
+      expect(cardNames(provinces)).toEqual(order)
     }
   })
 
@@ -910,89 +925,23 @@ describe('the province grid', () => {
     draw()
 
     const provinces = await section('Province breakdown')
-    await userEvent.click(within(provinces).getByRole('button', { name: 'Size' }))
-    expect(cardNames(provinces)[0]).toBe('Kerman')
-    await userEvent.click(within(provinces).getByRole('button', { name: 'Size' }))
-    expect(cardNames(provinces)[0]).toBe('Ardabil')
+    await userEvent.click(within(provinces).getByRole('button', { name: 'On air' }))
+    expect(cardNames(provinces)).toEqual(['Kerman', 'Bushehr', 'Yazd', 'Ardabil'])
+    await userEvent.click(within(provinces).getByRole('button', { name: 'On air' }))
+    expect(cardNames(provinces)).toEqual(['Ardabil', 'Yazd', 'Bushehr', 'Kerman'])
   })
 
-  it('folds everything past twelve into one row and expands on Show all', async () => {
-    serve(planDelivery(), overviewWithProvinces(20))
-    draw()
-
-    const provinces = await section('Province breakdown')
-    // Twelve provinces and the folded row that stands for the other eight.
-    expect(cardNames(provinces)).toHaveLength(13)
-    expect(within(provinces).getByTestId('dt-province-rest')).toHaveTextContent(
-      '8 more provinces',
-    )
-
-    await userEvent.click(within(provinces).getByRole('button', { name: /Show all 20 provinces/ }))
-    expect(cardNames(provinces)).toHaveLength(20)
-    expect(within(provinces).queryByTestId('dt-province-rest')).not.toBeInTheDocument()
-
-    await userEvent.click(within(provinces).getByRole('button', { name: /Show top 12/ }))
-    expect(cardNames(provinces)).toHaveLength(13)
-  })
-
-  it('adds the twelve rows plus the folded row up to the programme total', async () => {
-    // The property the folded row exists to give, and the difference between
-    // it and the "8 more not shown" line it replaces: that line said how
-    // many rows were missing, this one says how many sites are. A reader
-    // adding the column reaches the programme total instead of falling short
-    // by whatever happened to sit below the fold.
-    //
-    // Twenty provinces, remaining running 100 down to 81, so 1,810 in total.
-    serve(planDelivery(), overviewWithProvinces(20))
-    draw()
-
-    const provinces = await section('Province breakdown')
-    const shown = Array.from(provinces.querySelectorAll('.dt-province-remaining')).reduce(
-      (sum, el) => sum + Number(el.textContent.replace(/[^0-9]/g, '')),
-      0,
-    )
-    expect(shown).toBe(1810)
-  })
-
-  it('draws no bar on the folded row, which is not a province', async () => {
-    // Bar length here is one province's on-air count against the largest
-    // single province. The tail of eight is not a province: drawn on that
-    // scale it would run off the end of the track and read as the biggest
-    // thing on screen.
-    serve(planDelivery(), overviewWithProvinces(20))
-    draw()
-
-    const provinces = await section('Province breakdown')
-    const rest = within(provinces).getByTestId('dt-province-rest')
-    expect(rest.querySelector('.dt-book')).toBeNull()
-    // And it is not a filter control, because there is no one province to
-    // narrow to.
-    expect(rest).not.toHaveAttribute('role', 'button')
-  })
-
-  it('offers no Show all control when every province already fits', async () => {
+  it('has exactly seven sort controls: Province, On air, DT done, Remaining, Ongoing, Problematic, Done %', async () => {
     serve()
     draw()
 
     const provinces = await section('Province breakdown')
-    expect(within(provinces).queryByRole('button', { name: /Show all/ })).not.toBeInTheDocument()
-  })
-
-  it('has exactly four sort controls: Remaining, Done %, Size, A–Z', async () => {
-    // Four, not seven. One per question anybody asks of this list: where is
-    // the work, who is behind, who is big, and where is a named province.
-    // On air is Size; Ongoing and Problematic ranked the provinces in almost
-    // the same order as Remaining already does.
-    serve()
-    draw()
-
-    const provinces = await section('Province breakdown')
-    const controls = within(provinces)
-      .getByRole('group', { name: 'Sort provinces by' })
-    const labels = within(controls)
-      .getAllByRole('button')
-      .map((b) => b.textContent.trim())
-    expect(labels).toEqual(['Remaining', 'Done %', 'Size', 'A–Z'])
+    const labels = within(provinces)
+      .getAllByRole('columnheader')
+      .map((th) => th.textContent.trim())
+    expect(labels).toEqual([
+      'Province', 'On air', 'DT done', 'Remaining', 'Ongoing', 'Problematic', 'Done %',
+    ])
   })
 
   it('reddens a done % that is below the programme average, not below a fixed band', async () => {
@@ -1000,7 +949,7 @@ describe('the province grid', () => {
     // doing badly in a programme averaging 95% and well in one averaging
     // 60%; the fixed 70/30 thresholds said the same thing about both.
     //
-    // These four come to 270 done of 760 on air, so the average is 35.5%.
+    // These four come to 269 done of 770 on air, so the average is 35%.
     serve(planDelivery(), sortable)
     draw()
 
@@ -1018,7 +967,7 @@ describe('the province grid', () => {
 
     // And the threshold is stated, because a colour whose rule is not on
     // screen is one a reader has to guess at.
-    expect(provinces).toHaveTextContent('done % in red is below the 36% programme average')
+    expect(provinces).toHaveTextContent('done % in red is below the 35% programme average')
   })
 
   it('shows no "Not started" anywhere in the grid, its key or its bars', async () => {
@@ -1484,8 +1433,8 @@ describe('drill-through', () => {
       // The assignment is what the rate divides by, so it is the figure a
       // contractor will want to check.
       ['55', '/drive-test/sites?bucket=assigned&contractor_id=1'],
-      ['40 done', '/drive-test/sites?bucket=done&contractor_id=1'],
-      ['15 ongoing', '/drive-test/sites?bucket=ongoing&contractor_id=1'],
+      ['40', '/drive-test/sites?bucket=done&contractor_id=1'],
+      ['15', '/drive-test/sites?bucket=ongoing&contractor_id=1'],
     ]) {
       expect(within(row).getByText(text).closest('a')).toHaveAttribute('href', href)
     }
@@ -1499,7 +1448,7 @@ describe('drill-through', () => {
 
     const card = await section('Contractor scorecard')
     const row = within(card).getByText('Unattributed').closest('.dt-contractor-row')
-    expect(within(row).getByText('6 ongoing').closest('a')).toHaveAttribute(
+    expect(within(row).getByText('6').closest('a')).toHaveAttribute(
       'href',
       '/drive-test/sites?bucket=ongoing&contractor_id=none',
     )
@@ -1512,11 +1461,11 @@ describe('drill-through', () => {
     const grid = await section('Province breakdown')
     const card = within(grid).getByText('Kerman').closest('.dt-province-card')
     for (const [text, href] of [
-      ['60 on air', '/drive-test/sites?bucket=onair&province_id=7'],
-      ['23 done', '/drive-test/sites?bucket=done&province_id=7'],
-      ['37 remaining', '/drive-test/sites?bucket=remaining&province_id=7'],
-      ['30 ongoing', '/drive-test/sites?bucket=ongoing&province_id=7'],
-      ['7 problem', '/drive-test/sites?bucket=problematic&province_id=7'],
+      ['60', '/drive-test/sites?bucket=onair&province_id=7'],
+      ['23', '/drive-test/sites?bucket=done&province_id=7'],
+      ['37', '/drive-test/sites?bucket=remaining&province_id=7'],
+      ['30', '/drive-test/sites?bucket=ongoing&province_id=7'],
+      ['7', '/drive-test/sites?bucket=problematic&province_id=7'],
     ]) {
       expect(within(card).getByText(text).closest('a')).toHaveAttribute('href', href)
     }
@@ -2101,9 +2050,10 @@ describe('the trend section', () => {
 })
 
 describe('the contractor scorecard', () => {
-  // The table became a list of ranked rows -- see ContractorScorecard. Each
-  // row is now `.dt-contractor-row`, sortable through a row of chip buttons
-  // above the list rather than clickable header cells.
+  // The card grid became a sortable table -- see ContractorScorecard. Each
+  // row is `.dt-contractor-row` (a `<tr>` now), sortable through the
+  // `.dt-sort-btn` in each column header rather than a row of chips above
+  // the table.
   const rowNames = (card) =>
     Array.from(card.querySelectorAll('.dt-contractor-row')).map(
       (row) => row.querySelector('.dt-contractor-name').textContent,
@@ -2120,37 +2070,6 @@ describe('the contractor scorecard', () => {
     const row = within(card).getByText('Alfa Drive Tests').closest('.dt-contractor-row')
     expect(within(row).getByText('55')).toBeInTheDocument()
     expect(within(row).getByText('73%')).toBeInTheDocument()
-  })
-
-  it('draws each row against the widest book, so size is not thrown away', async () => {
-    // The bar used to be a fixed-width track filled to the rate, so 73% of 55
-    // and 33% of 27 drew bars of the same length. Length is now the size of
-    // the book; fill is the rate.
-    serve()
-    draw()
-
-    const card = await section('Contractor scorecard')
-    const widths = ['Alfa Drive Tests', 'Beta Surveys'].map((name) => {
-      const row = within(card).getByText(name).closest('.dt-contractor-row')
-      return row.querySelector('.dt-book-bar').style.width
-    })
-
-    expect(widths[0]).toBe('100%')
-    // 27 of 55, to the precision the style attribute carries.
-    expect(parseFloat(widths[1])).toBeCloseTo(49.1, 1)
-  })
-
-  it('splits each bar into what is done and what is still held', async () => {
-    serve()
-    draw()
-
-    const card = await section('Contractor scorecard')
-    const row = within(card).getByText('Alfa Drive Tests').closest('.dt-contractor-row')
-    const segments = within(row)
-      .getAllByTestId('dt-bar')
-      .map((seg) => seg.dataset.segment)
-
-    expect(segments).toEqual(['done', 'ongoing'])
   })
 
   it('still shows the assignment when the payload does not carry it', async () => {
@@ -2206,11 +2125,11 @@ describe('the contractor scorecard', () => {
     draw()
 
     const card = await section('Contractor scorecard')
-    const control = () => within(card).getByRole('button', { name: /Ongoing/ })
+    const header = () => within(card).getByRole('button', { name: /Ongoing/ }).closest('th')
 
-    expect(control()).toHaveAttribute('aria-pressed', 'false')
-    await userEvent.click(control())
-    expect(control()).toHaveAttribute('aria-pressed', 'true')
+    expect(header()).toHaveAttribute('aria-sort', 'none')
+    await userEvent.click(within(card).getByRole('button', { name: /Ongoing/ }))
+    expect(header()).toHaveAttribute('aria-sort', 'descending')
   })
 
   it('has exactly five sort controls: Contractor, Assignment, DT done, Ongoing, Completion', async () => {
@@ -2218,13 +2137,13 @@ describe('the contractor scorecard', () => {
     draw()
 
     const card = await section('Contractor scorecard')
-    const controls = within(card).getByRole('group', { name: 'Sort contractors by' })
-    const labels = within(controls)
-      .getAllByRole('button')
-      .map((b) => b.textContent.trim())
     // "Completion", not "Achievement": Achievement is the Plan and delivery
     // card's word for delivered-against-PIP, and this is how far a company is
     // through its own book. One word, two meanings, one page.
+    const labels = within(card)
+      .getAllByRole('columnheader')
+      .filter((th) => th.querySelector('.dt-sort-btn'))
+      .map((th) => th.textContent.trim())
     expect(labels).toEqual(['Contractor', 'Assignment', 'DT done', 'Ongoing', 'Completion'])
   })
 
@@ -2337,7 +2256,7 @@ describe('the drill-through panel', () => {
 
     const grid = await section('Province breakdown')
     const card = within(grid).getByText('Kerman').closest('.dt-province-card')
-    await userEvent.click(within(card).getByText('60 on air'))
+    await userEvent.click(within(card).getByText('60'))
     expect(countIn(await panel())).toBe(60)
   })
 

@@ -1,10 +1,7 @@
-import { motion, useReducedMotion } from 'framer-motion'
-import { ChevronDown, ChevronUp } from 'lucide-react'
 import { useMemo, useState } from 'react'
-import { STATE_COLOR, UNATTRIBUTED } from './constants'
-import { bookScale, count, percent } from './format'
+import { UNATTRIBUTED } from './constants'
+import { count, percent } from './format'
 import { assignedLink, doneLink, ongoingLink } from './links'
-import BookBar from './charts/BookBar'
 import { DrillLink } from './DrillPanel'
 
 /**
@@ -17,27 +14,24 @@ import { DrillLink } from './DrillPanel'
  * sent out for a health check, has not been committed to them, and dividing
  * by it would mark a company down for work the programme never handed over.
  * Problematic and Not started sites are outside the assignment for the same
- * reason and are not shown as a figure here — see the note under the list.
+ * reason and are not shown as a figure here — see the note under the table.
  * The backend computes the assignment the same way — see
  * `_contractor_scorecard`.
  *
- * RANKED ROWS, NOT A TABLE. A table implies every row is read the same way
- * down every column; this list is read one row at a time, in rank order, and
- * a table's chrome — header cells, cell borders — was answering a question
- * nobody was asking of it. Each row now carries its own rank, its book (see
- * `charts/BookBar` for why the bar is sized to the book as well as filled by
- * it), its assignment, and its achievement as a single pill.
+ * A SORTABLE TABLE, matching the pattern SiteList.jsx already uses
+ * (`.table-wrap`, `.dt-sort-btn`, `aria-sort`): a rank column, then
+ * Contractor, Assignment, DT done, Ongoing and Achievement as one pill.
  *
- * The unattributed row sits last and is styled apart, in its own dashed-
- * border row. It is not a company and cannot be beaten or beat anyone; the
- * backend sorts it out of the ranking for the same reason, and re-sorting
- * here keeps it there whichever column is chosen. Its links still open its
- * sites, through `contractor_id=none`: "nobody holds these" is a real list,
- * and the one most worth reading.
+ * The unattributed row sits last and is styled apart, in dimmed italic text.
+ * It is not a company and cannot be beaten or beat anyone; the backend sorts
+ * it out of the ranking for the same reason, and re-sorting here keeps it
+ * there whichever column is chosen. Its links still open its sites, through
+ * `contractor_id=none`: "nobody holds these" is a real list, and the one
+ * most worth reading.
  *
  * TWO COLUMNS ARE MISSING AND ARE NOT AN OVERSIGHT: how many of a
  * contractor's ongoing sites have been held over a month, and the median age
- * of those they hold. Both are the question this list raises and cannot
+ * of those they hold. Both are the question this table raises and cannot
  * answer -- a company 73% through its book looks the same here whether the
  * remainder is a week old or a year old. Neither is on
  * `ContractorScorecardRow`, and neither can be derived from what is: the
@@ -48,15 +42,14 @@ import { DrillLink } from './DrillPanel'
  * SORTING IS THE READER'S. The rows arrive ranked by completion, which is the
  * right default and the wrong thing to be stuck with: "who is holding the
  * most" and "who has the most problems" are the next two questions anybody
- * asks of this list, and both are a control already on screen. Same
- * mechanics as the province cards, so the two read alike.
+ * asks of this table, and both are a column already on screen.
  */
 
 const COLUMNS = [
   { key: 'name', label: 'Contractor' },
-  { key: 'assigned', label: 'Assignment' },
-  { key: 'done', label: 'DT done' },
-  { key: 'ongoing', label: 'Ongoing' },
+  { key: 'assigned', label: 'Assignment', numeric: true },
+  { key: 'done', label: 'DT done', numeric: true },
+  { key: 'ongoing', label: 'Ongoing', numeric: true },
   // "Completion", not "Achievement". Achievement is taken, forty pixels up
   // the page, by the Plan and delivery card -- where it means delivered
   // against PIP, a different numerator over a different denominator across a
@@ -64,7 +57,7 @@ const COLUMNS = [
   // things, is a reader comparing Alfa's 37.5% there with its 73% here and
   // concluding something about neither. This one is how far a company is
   // through its own book, which is what `done_percent` is documented as.
-  { key: 'done_percent', label: 'Completion' },
+  { key: 'done_percent', label: 'Completion', numeric: true },
 ]
 
 /** A contractor's assignment: drive tests finished plus sites still held.
@@ -73,7 +66,7 @@ const COLUMNS = [
  * the backend computes the very same sum -- so there is nothing to disagree
  * with, and a payload that arrives without the field renders the figure
  * instead of a dash. A dash in this figure is the worst possible failure for
- * this list: it is the denominator every rate on the row divides by, so a
+ * this table: it is the denominator every rate on the row divides by, so a
  * reader who cannot see it cannot check any of the others.
  */
 function assignmentOf(row) {
@@ -90,7 +83,6 @@ function completionBand(value) {
 }
 
 export default function ContractorScorecard({ rows, provinceId }) {
-  const reduced = useReducedMotion()
   // `null` means "as the server ranked them" — by completion, with the
   // unattributed row already last. Re-sorting is something the reader turns
   // on, not a default this component imposes over the one it was given.
@@ -122,7 +114,6 @@ export default function ContractorScorecard({ rows, provinceId }) {
   const scope = provinceId == null ? {} : { provinceId }
   /** The id a row's links carry: the company, or the unattributed bucket. */
   const idFor = (row) => (row.contractor_id == null ? UNATTRIBUTED : row.contractor_id)
-  const scale = bookScale(rows.map(assignmentOf))
 
   const toggleSort = (key) =>
     setSort((s) =>
@@ -138,110 +129,87 @@ export default function ContractorScorecard({ rows, provinceId }) {
 
   return (
     <>
-      <div className="dt-key" aria-hidden="true">
-        <span className="dt-key-item">
-          <i style={{ background: STATE_COLOR.done }} />
-          DT done
-        </span>
-        <span className="dt-key-item">
-          <i style={{ background: STATE_COLOR.ongoing }} />
-          Ongoing
-        </span>
-        <span className="dt-key-note">bar length is the size of the assignment</span>
-      </div>
-
-      <div className="dt-sort-controls" role="group" aria-label="Sort contractors by">
-        {COLUMNS.map((col) => (
-          <button
-            key={col.key}
-            type="button"
-            className="dt-sort-chip"
-            aria-pressed={sort?.key === col.key}
-            onClick={() => toggleSort(col.key)}
-          >
-            {col.label}
-            {sort?.key === col.key &&
-              (sort.dir === 'asc' ? (
-                <ChevronUp size={12} aria-hidden="true" />
-              ) : (
-                <ChevronDown size={12} aria-hidden="true" />
+      <div className="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th scope="col" className="dt-col-rank">
+                <span className="dt-sr-only">Rank</span>
+              </th>
+              {COLUMNS.map((col) => (
+                <th
+                  key={col.key}
+                  scope="col"
+                  style={{ textAlign: col.numeric ? 'right' : 'left' }}
+                  aria-sort={
+                    sort?.key === col.key
+                      ? sort.dir === 'asc' ? 'ascending' : 'descending'
+                      : 'none'
+                  }
+                >
+                  <button type="button" className="dt-sort-btn" onClick={() => toggleSort(col.key)}>
+                    {col.label}
+                  </button>
+                </th>
               ))}
-          </button>
-        ))}
+            </tr>
+          </thead>
+          <tbody>
+            {sorted.map((row) => {
+              const unattributed = row.contractor_id == null
+              if (!unattributed) rank += 1
+              const cscope = { ...scope, contractorId: idFor(row) }
+              return (
+                <tr
+                  key={row.contractor_id ?? 'unattributed'}
+                  className={`dt-contractor-row${unattributed ? ' dt-row-unattributed' : ''}`}
+                >
+                  <td className="dt-col-rank">
+                    {unattributed ? (
+                      <span className="dt-rank-badge dt-rank-badge-empty" aria-hidden="true" />
+                    ) : (
+                      <span className={`dt-rank-badge${rank === 1 ? ' dt-rank-badge-1' : ''}`}>
+                        {rank}
+                      </span>
+                    )}
+                  </td>
+                  <td className="dt-farsi">
+                    <DrillLink
+                      to={assignedLink(cscope)}
+                      drillLabel={row.name}
+                      className="dt-contractor-name"
+                    >
+                      {row.name}
+                    </DrillLink>
+                  </td>
+                  <td className="tnum" style={{ textAlign: 'right' }}>
+                    <DrillLink to={assignedLink(cscope)} drillLabel={row.name} className="dt-cell-link">
+                      {count(assignmentOf(row))}
+                    </DrillLink>
+                  </td>
+                  <td className="tnum" style={{ textAlign: 'right' }}>
+                    <DrillLink to={doneLink(cscope)} drillLabel={row.name} className="dt-cell-link">
+                      {count(row.done)}
+                    </DrillLink>
+                  </td>
+                  <td className="tnum" style={{ textAlign: 'right' }}>
+                    <DrillLink to={ongoingLink(cscope)} drillLabel={row.name} className="dt-cell-link">
+                      {count(row.ongoing)}
+                    </DrillLink>
+                  </td>
+                  <td style={{ textAlign: 'right' }}>
+                    <span
+                      className={`dt-pill dt-pill-${unattributed ? 'dim' : completionBand(row.done_percent)}`}
+                    >
+                      {percent(row.done_percent)}
+                    </span>
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
       </div>
-
-      <ul className="dt-contractor-list">
-        {sorted.map((row, i) => {
-          const unattributed = row.contractor_id == null
-          if (!unattributed) rank += 1
-          const cscope = { ...scope, contractorId: idFor(row) }
-          return (
-            <motion.li
-              key={row.contractor_id ?? 'unattributed'}
-              className={`dt-contractor-row${unattributed ? ' dt-contractor-row-unattributed' : ''}`}
-              initial={reduced ? false : { opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: Math.min(i * 0.03, 0.2), duration: 0.25 }}
-            >
-              {unattributed ? (
-                <span className="dt-rank-badge dt-rank-badge-empty" aria-hidden="true" />
-              ) : (
-                <span className={`dt-rank-badge${rank === 1 ? ' dt-rank-badge-1' : ''}`}>
-                  {rank}
-                </span>
-              )}
-
-              <div className="dt-contractor-main">
-                <DrillLink to={assignedLink(cscope)} drillLabel={row.name} className="dt-contractor-name dt-farsi">
-                  {row.name}
-                </DrillLink>
-                <BookBar
-                  label={row.name}
-                  total={assignmentOf(row)}
-                  scaleMax={scale}
-                  index={i}
-                  height={9}
-                  segments={[
-                    {
-                      key: 'done',
-                      label: 'DT done',
-                      value: row.done,
-                      color: unattributed ? 'var(--text-dim)' : STATE_COLOR.done,
-                    },
-                    {
-                      key: 'ongoing',
-                      label: 'Ongoing',
-                      value: row.ongoing,
-                      color: unattributed ? 'var(--border)' : STATE_COLOR.ongoing,
-                    },
-                  ]}
-                />
-                <div className="dt-contractor-stats">
-                  <DrillLink to={doneLink(cscope)} drillLabel={row.name} className="dt-cell-link">
-                    {count(row.done)} done
-                  </DrillLink>
-                  <DrillLink to={ongoingLink(cscope)} drillLabel={row.name} className="dt-cell-link">
-                    {count(row.ongoing)} ongoing
-                  </DrillLink>
-                </div>
-              </div>
-
-              <div className="dt-contractor-assign">
-                <DrillLink to={assignedLink(cscope)} drillLabel={row.name} className="dt-contractor-assign-figure tnum">
-                  {count(assignmentOf(row))}
-                </DrillLink>
-                <span className="dt-contractor-assign-caption">assignment</span>
-              </div>
-
-              <span
-                className={`dt-pill dt-pill-${unattributed ? 'dim' : completionBand(row.done_percent)}`}
-              >
-                {percent(row.done_percent)}
-              </span>
-            </motion.li>
-          )
-        })}
-      </ul>
       <p className="dt-note">
         Assignment = DT done + Ongoing. Problematic sites are not part of a
         contractor&rsquo;s assignment.

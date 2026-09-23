@@ -94,17 +94,6 @@ export const KPI_DIRECTION = {
  * the rest. Six, because those tabs sit inside a half-width card. */
 export const PROVINCE_LIMIT = 6
 
-/** How many rows the province section shows before folding the rest.
- *
- * Twelve rather than the breakdown's six: that section is a two-column list
- * across the full width of the page, so twelve rows is the same height six
- * bars are in a half-width card. Two constants rather than one shared
- * number, because they are answering the same question about two different
- * amounts of space, and tying them together means one of the two is always
- * wrong.
- */
-export const PROVINCE_ROWS = 12
-
 /** The buckets `GET /drive-test/sites` accepts, and how each reads in words.
  *
  * The words are the page title: "64 problematic sites", not "bucket:
