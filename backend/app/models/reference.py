@@ -147,6 +147,20 @@ class User(Base):
         Boolean, default=False, nullable=False
     )
 
+    # Which person in ``province_mapping`` this account is, for the KPI &
+    # Performance page. Read as a regional manager name for a RegionalManager
+    # account and as a PSO coordinator name for a Coordinator account -- the
+    # role decides which column it is matched against, so one column covers
+    # both. Contractors need nothing here: ``contractor_id`` above already
+    # names them, and it is the same value CPM carries in DT SC.
+    #
+    # A name rather than a foreign key, because the mapping deliberately
+    # records people who may have no account at all, and a KPI lens has to keep
+    # working for them. Nullable: an account that has not been linked yet is
+    # refused the KPI page with a message saying so, rather than being shown
+    # somebody else's provinces.
+    kpi_person_name: Mapped[str | None] = mapped_column(String(120))
+
     # Active / Inactive / Suspended. See ``core/user_status.py`` for what each
     # means and why this replaced a boolean.
     status: Mapped[str] = mapped_column(
