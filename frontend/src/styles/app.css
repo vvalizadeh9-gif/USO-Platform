@@ -2097,7 +2097,7 @@ a.dt-contractor-name:hover { text-decoration: underline; text-decoration-color: 
 /* ---------- flow ledger ----------
    A column waterfall: one bar per movement, each starting where the last
    one finished, with a dashed connector between bar tops. */
-.dt-flow { display: grid; gap: 14px; }
+.dt-flow { display: grid; gap: 10px; }
 /* The waterfall. Full width now that this card no longer shares a row, so
    a column is ~170px with room under it for its label at full length --
    which is the thing four 66-pixel columns could not do and the reason this
@@ -2114,7 +2114,7 @@ a.dt-contractor-name:hover { text-decoration: underline; text-decoration-color: 
 
 .dt-flow-foot {
   display: flex; align-items: center; gap: 18px; flex-wrap: wrap;
-  padding-top: 12px; border-top: 1px solid var(--border-soft); font-size: 12.5px;
+  padding-top: 8px; border-top: 1px solid var(--border-soft); font-size: 12.5px;
 }
 .dt-flow-stat { display: inline-flex; align-items: center; gap: 8px; }
 .dt-flow-stat-label { color: var(--text-muted); }
