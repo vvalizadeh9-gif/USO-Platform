@@ -133,13 +133,3 @@ export function planScale(rows) {
   const step = padded > 240 ? 50 : padded > 120 ? 25 : padded > 60 ? 10 : 5
   return Math.ceil(padded / step) * step
 }
-
-/** The widest book on screen, which every book bar is drawn against.
- *
- * One scale for the whole table. Per-row scaling would make every bar full
- * width and throw away the size comparison the bar exists to carry — which is
- * precisely the failure the book bar replaced. See `charts/BookBar`.
- */
-export function bookScale(values) {
-  return Math.max(1, ...values)
-}

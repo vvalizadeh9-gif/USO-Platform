@@ -1783,42 +1783,6 @@ a.dt-bar-link:hover .dt-bar-go { opacity: 1; transform: translateX(2px); }
 }
 .dt-track-fill { display: block; height: 100%; border-radius: 4px 3px 3px 4px; }
 
-/* ---------- the book bar ----------
-   Length is the size of the book; fill is how it splits. See charts/BookBar
-   for why both, and what went wrong when it was only the second. */
-.dt-book {
-  display: block; width: 100%; min-width: 120px;
-  background: var(--dt-track); border-radius: 4px; overflow: hidden;
-}
-.dt-book-bar {
-  display: flex; height: 12px; gap: 2px;
-  transform-origin: left center;
-}
-.dt-book-seg { display: block; height: 100%; border-radius: 2px; min-width: 2px; }
-.dt-book-seg:first-child { border-radius: 4px 2px 2px 4px; }
-.dt-book-seg:last-child { border-radius: 2px 4px 4px 2px; }
-
-/* ---------- sort controls, standalone ----------
-   Same look as a sortable column header, but not one: both the contractor
-   scorecard and the province grid replaced their <table> with rows/cards a
-   header row cannot sit above, so the same control now sits as a row of
-   chips above the list instead. */
-.dt-sort-controls {
-  display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px;
-}
-.dt-sort-chip {
-  display: inline-flex; align-items: center; gap: 4px;
-  padding: 4px 10px; border-radius: 999px;
-  background: var(--surface-2); border: 1px solid var(--border-soft);
-  color: var(--text-muted); font: inherit; font-size: 11.5px; font-weight: 500;
-  transition: background .13s, color .13s, border-color .13s;
-}
-.dt-sort-chip:hover { color: var(--text); border-color: var(--border); }
-.dt-sort-chip[aria-pressed="true"] {
-  background: var(--surface-1); color: var(--text); border-color: var(--border);
-  box-shadow: var(--shadow-1); font-weight: 600;
-}
-
 /* ---------- contractor scorecard: sortable table ----------
    A rank column, then Contractor, Assignment, DT done, Ongoing and
    Achievement as one pill -- the sortable-table pattern SiteList.jsx also
@@ -1855,72 +1819,27 @@ a.dt-contractor-name:hover { text-decoration: underline; text-decoration-color: 
 .dt-pill-bad { background: #FAF4F4; color: var(--dt-problem); }
 .dt-pill-dim { background: var(--surface-3); color: var(--text-dim); }
 
-/* ---------- province breakdown: card grid ----------
-   Three to a row, each card its own scope-the-dashboard control -- see
-   ProvinceList for why a card can be that and a table row could not.
-   Replaces a seven-column table whose Remaining/Ongoing/Problematic figures
-   this grid now carries as a chip line instead. */
-/* Two columns, not three. Twelve rows across a full-width card at two
-   columns is six rows deep -- the same height the three-column grid was --
-   and each row gets half the page instead of a third, which is what lets
-   the name, the remaining count, the rate and the split share one row
-   without wrapping. */
-.dt-province-grid {
-  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px;
-}
-.dt-province-card {
-  display: grid; gap: 7px; text-align: left;
-  background: var(--surface-1); border: 1px solid var(--border-soft);
-  border-radius: var(--radius); padding: 12px 14px;
-  cursor: pointer;
-  transition: border-color .14s, box-shadow .14s, transform .14s;
-}
-.dt-province-card:hover {
-  border-color: var(--border); box-shadow: var(--shadow-1); transform: translateY(-1px);
-}
-.dt-province-card:focus-visible { outline: 2px solid var(--dt-ongoing); outline-offset: 2px; }
-.dt-province-card-problem {
-  background: #FAF4F4; border-color: #E3CDCC;
-}
-/* Name, remaining, rate -- the three things the row is read for, on one
-   line, with the name taking whatever is left. */
-.dt-province-head {
-  display: grid; grid-template-columns: minmax(0, 1fr) auto auto;
-  align-items: baseline; gap: 10px;
-}
-.dt-province-name {
-  font-size: 13px; font-weight: 600; color: var(--text);
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
-.dt-province-remaining { font-size: 11.5px; color: var(--text-muted); flex: none; }
-.dt-province-rate {
-  font-family: var(--font-display); font-size: 16px; font-weight: 600;
-  letter-spacing: -0.01em; text-align: right; flex: none;
-  min-width: 4ch;
-}
+/* ---------- province breakdown: sortable table ----------
+   All 31 provinces in one table, sortable on any column -- the same
+   sortable-table pattern the contractor scorecard and SiteList.jsx use.
+   Each row is still its own scope-the-dashboard control, which is why the
+   row keeps the name `.dt-province-card` carried over from the card layout
+   it replaces rather than a fresh `dt-province-row` -- see ProvinceList for
+   why a row can be that control and a table row does not usually signal it
+   can. */
+.dt-province-card[role='button'] { cursor: pointer; }
+.dt-province-card:focus-visible { outline: 2px solid var(--dt-ongoing); outline-offset: -2px; }
+.dt-province-name { font-weight: 600; }
+.dt-province-rate { font-weight: 600; }
 
-/* The folded tail. Not a province, so not a filter control: no pointer, no
-   hover lift, no focus ring, and a dashed edge saying it stands for the
-   rows that are not here. */
-.dt-province-card-rest {
-  cursor: default;
-  border-style: dashed;
-  background: var(--surface-2);
-}
-.dt-province-card-rest:hover {
-  border-color: var(--border-soft); box-shadow: none; transform: none;
-}
-.dt-province-card-rest .dt-province-name {
-  font-weight: 500; font-style: italic; color: var(--text-muted);
-}
-.dt-province-chips {
-  display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap;
-  font-size: 11.5px; color: var(--text-muted);
-}
-.dt-province-chips-muted { font-size: 11px; color: var(--text-dim); }
-.dt-province-chips .dt-cell-link,
-.dt-province-chips .dt-cell-link-bad { font-weight: 500; }
-.dt-chip-sep { color: var(--text-dim); }
+/* A rule on the row's first cell says "problem here" without tinting the
+   whole row, which the pink card background used to do. */
+.dt-row-problem td:first-child { box-shadow: inset 3px 0 0 var(--dt-problem); }
+
+/* All rows load at once now that there is no fold to expand -- this keeps
+   the card from growing unbounded with more provinces instead. */
+.dt-table-scroll { max-height: 420px; overflow-y: auto; }
+.dt-table-scroll thead th { position: sticky; top: 0; z-index: 1; }
 
 /* ---------- plan and delivery ---------- */
 /* Plan and delivery: the month's rate on the left, the contractors on the
@@ -2352,8 +2271,6 @@ a.dt-contractor-name:hover { text-decoration: underline; text-decoration-color: 
 /* ---------- responsive ---------- */
 @media (max-width: 1080px) {
   .dt-pair { grid-template-columns: minmax(0, 1fr); }
-
-  .dt-province-grid { grid-template-columns: repeat(2, 1fr); }
 }
 @media (max-width: 760px) {
   /* Stacked rather than shrunk: the three figures keep their weight, which
@@ -2369,7 +2286,6 @@ a.dt-contractor-name:hover { text-decoration: underline; text-decoration-color: 
   .dt-bullet-key { gap: 10px; }
   .dt-key-scale { display: none; }
   .dt-toolbar-right { margin-left: 0; width: 100%; }
-  .dt-province-grid { grid-template-columns: minmax(0, 1fr); }
   .dt-section { padding: 12px 14px 14px; }
   /* A sticky bar that wraps to three rows on a phone eats half the viewport;
      below this width it scrolls away with the page. */
