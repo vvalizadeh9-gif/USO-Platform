@@ -2059,3 +2059,64 @@ class MonthlyPlanReturn(BaseModel):
 
 UserOut.model_rebuild()
 TokenResponse.model_rebuild()
+
+
+# ---------------------------------------------------------------------------
+# KPI & Performance
+# ---------------------------------------------------------------------------
+#
+# The summary and contractor payloads are returned as plain dicts rather than
+# being pinned to a response_model. They are one nested shape assembled in
+# ``services/kpi.py`` and consumed by exactly one screen, and mirroring thirty
+# derived fields here would be a second place for the metric definitions to
+# live — which is precisely what the service's docstring exists to prevent.
+# What is modelled below is what the *client sends*, because that is what has
+# to be validated.
+
+
+class ProvinceMappingOut(ORMModel):
+    """One row of province ownership, open or closed."""
+
+    id: int
+    province_fa: str
+    province_en: str
+    cra_region: str
+    pso_coordinator: str
+    regional_manager: str
+    effective_from: date
+    effective_to: date | None
+
+
+class ProvinceMappingWrite(BaseModel):
+    """The three owner fields, for a correction (PUT) or reassignment (POST)."""
+
+    cra_region: str = Field(min_length=1, max_length=60)
+    pso_coordinator: str = Field(min_length=1, max_length=120)
+    regional_manager: str = Field(min_length=1, max_length=120)
+
+
+class ProvinceMappingReassign(ProvinceMappingWrite):
+    """A reassignment also says when the handover takes effect.
+
+    Defaults to today. Backdating is allowed as far as the start of the row
+    being replaced; the service refuses anything earlier, because two rows in
+    force at once would make every lens count that province twice.
+    """
+
+    effective_from: date | None = None
+
+
+class KpiPersonLink(BaseModel):
+    """Which person in the mapping a user account is. None unlinks it."""
+
+    kpi_person_name: str | None = Field(default=None, max_length=120)
+
+
+class KpiLinkableUser(ORMModel):
+    """A Regional Manager or Coordinator account, and who it is linked to."""
+
+    id: int
+    username: str
+    full_name: str
+    role_name: str
+    kpi_person_name: str | None

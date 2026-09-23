@@ -22,6 +22,7 @@ from app.models.health_check import (
     HcTask,
     HcTaskTechnology,
 )
+from app.models.kpi import ProvinceMapping
 from app.models.monthly_plan import ContractorMonthlyPlan
 from app.models.reference import (
     Contractor,
@@ -64,6 +65,7 @@ __all__ = [
     "letter_villages",
     "Contractor",
     "ContractorMonthlyPlan",
+    "ProvinceMapping",
     "ProblemCategory",
     "Province",
     "Region",

@@ -75,3 +75,13 @@ export const MONTHLY_PLAN_ROLES = [
 export function canDecidePlans(user) {
   return user?.role?.name === 'PM'
 }
+
+// KPI & Performance. Four roles see it, each confined to their own scope, and
+// Admin sees none of it -- the product owner's rule, and the same list
+// app/services/kpi.py enforces. This only shapes what the interface offers;
+// every KPI endpoint re-checks the role and re-derives the scope itself.
+export const KPI_ROLES = ['PM', 'RegionalManager', 'Coordinator', 'Contractor']
+
+export function canSeeKpi(user) {
+  return KPI_ROLES.includes(user?.role?.name)
+}

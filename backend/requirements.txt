@@ -27,3 +27,8 @@ jdatetime==5.0.0
 # must keep verifying -- they are upgraded to Argon2id the next time their
 # owner signs in. See app/core/security.py.
 argon2-cffi==23.1.0
+# The KPI & Performance PDF export. A pure-Python renderer: no browser, no
+# headless Chrome, no extra container -- the platform runs on a server with no
+# route to the public internet, and a PDF pipeline that needs one is not an
+# option here. Excel keeps using openpyxl, which was already present.
+reportlab==4.2.5

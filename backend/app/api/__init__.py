@@ -7,6 +7,7 @@ from app.api import (
     auth,
     drive_test,
     health_check,
+    kpi,
     misc,
     monthly_plan,
     work_items,
@@ -20,6 +21,7 @@ api_router.include_router(workflow.router)
 api_router.include_router(health_check.router)
 api_router.include_router(drive_test.router)
 api_router.include_router(acceptance.router)
+api_router.include_router(kpi.router)
 api_router.include_router(monthly_plan.router)
 api_router.include_router(admin.router)
 api_router.include_router(misc.router)

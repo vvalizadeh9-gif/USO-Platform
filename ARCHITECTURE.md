@@ -495,6 +495,101 @@ in the app and the importer will not overwrite them.
 
 ---
 
+## 5b. KPI & Performance
+
+One reporting page, added after the rest. It answers a question none of the
+dashboards above could: **how is one owner doing, against the country?** The
+owner is a Regional Manager, a PSO Coordinator, a Contractor or a CRA Region —
+four lenses over the same numbers.
+
+### The mapping is new master data
+
+`province_mapping` records who owns a province over a period of time: its CRA
+region, PSO coordinator and regional manager, between `effective_from` and
+`effective_to`. A reassignment closes the open row and opens a new one, so a
+figure computed for last quarter still belongs to whoever held the province
+then. A partial unique index enforces one open row per province — two rows in
+force at once would make every lens count that province twice, with no error
+anywhere.
+
+It sits **beside** `provinces.coordinator_user_id` / `regional_manager_user_id`,
+not instead of them. Those columns are Admin's, are read by the Acceptance
+dashboard's filters, and carry neither a CRA region nor any history. The two
+can be set independently and can disagree; only this table decides the KPI page.
+
+`users.kpi_person_name` says which person in that table an account is — matched
+against `regional_manager` for a RegionalManager account and `pso_coordinator`
+for a Coordinator one. Contractors need nothing new: `users.contractor_id`
+already holds what CPM carries in DT SC. An unlinked account is refused the
+page with a message saying so.
+
+### The metric rules
+
+Stated once, in `services/kpi.py`, and followed by the screen and both exports
+because all three read the same payload.
+
+* **Final status only.** A village rejected and later approved counts as
+  approved. `villages.ict_status` / `cra_status` are current standing, and are
+  maintained in the same transaction as every change that could alter them.
+* **Two denominators, deliberately.** On air and DT done divide by the scope's
+  total. ICT and CRA approval and rejection divide by **DT-done villages** — a
+  village whose drive test is unfinished was never eligible for acceptance.
+  The "remained" counts keep the total-villages base.
+* **The country average is weighted**: the sum of every province's numerator
+  over the sum of their denominators, never the mean of 31 percentages.
+* **It is the whole country, always**, whatever the viewer can see. It is the
+  one figure computed outside the viewer's scope, and it is an aggregate of
+  thirty-one provinces, so it identifies nobody.
+* **Fewer than ten DT-done villages and a province is not compared.** It is
+  still shown, in grey, reading "not compared", taking no colour and sorting
+  last. Three approvals out of three is not a 23-point lead.
+* **Nothing ranks people.** The heatmap ranks provinces inside one scope.
+
+### Everything is one GROUP BY
+
+`last_stage`, `dt_status` and `target_classification` are free text that the
+import normalises on the way in, but rows written by earlier imports carry
+spacing and letter-form variants. The distinct values are read first — a few
+dozen across the whole table — and passed through the same `cpm_columns`
+helpers the rest of the platform uses, then used as an `IN` list. The
+aggregation stays a single pass and cannot disagree with what the other screens
+call on air, DT done or a target village.
+
+### Sites with no province
+
+A CPM `استان` cell matching none of the 31 leaves `sites.province_id` NULL.
+Those work items have no province and therefore no owner, so they cannot appear
+in anybody's lens. They are counted in the **country total** and shown as one
+"Unknown province" row rather than dropped: otherwise the per-province rows
+would quietly fail to add up to the country figure, which is the one property
+that makes this page checkable.
+
+### Who sees what
+
+| Role | Scope | Lenses | Contractor comparison |
+|---|---|---|---|
+| PM | All 31 provinces | All four, any person | All contractors |
+| Regional Manager | Own provinces | Own only | Hidden |
+| PSO Coordinator | Own CRA regions | Own only | All contractors in own regions |
+| Contractor | Own sites (DT SC) | Own only | Hidden |
+| Admin | **No access** | — | — |
+
+Enforced on every endpoint, exports included. A non-PM asking for someone
+else's lens or key gets a **403**, not a silent substitution — a substitution
+would show a manager a page headed with another manager's name and let them
+believe it. Admin's absence here is the Admin/PM separation in section 6,
+applied to reporting.
+
+### Exports
+
+Built from the payload the screen already received, never from a second query,
+so a number in the file cannot differ from the one on screen. Excel uses
+`openpyxl`, already present. The PDF uses `reportlab` — a pure-Python renderer,
+no browser and no extra container, because this server has no route to the
+public internet.
+
+---
+
 ## 6. Roles and permissions
 
 Ten roles. Six are staff and workflow roles; four exist solely to own health-check

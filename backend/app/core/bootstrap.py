@@ -11,6 +11,8 @@ and it runs at deploy time (see ``backend/entrypoint.sh``), not from inside the
 application. What is left here is seeding reference data, which is a different
 job: it inserts rows, never structure, and it is safe to repeat.
 """
+from datetime import date
+
 from sqlalchemy.orm import Session
 
 from app.core import user_status
@@ -23,7 +25,9 @@ from app.core.deps import (
     MANAGED_SERVICE,
     NWG_PLANNING,
 )
+from app.core.province_directory import PROVINCE_DIRECTORY
 from app.core.security import hash_password
+from app.models.kpi import ProvinceMapping
 from app.models.reference import ProblemCategory, Province, Role, User
 from app.services.cpm_columns import IRAN_PROVINCES
 
@@ -76,6 +80,7 @@ def init_db() -> None:
         _seed_roles(db)
         _seed_problem_categories(db)
         _seed_provinces(db)
+        _seed_province_mapping(db)
         _seed_admin(db)
         db.commit()
     finally:
@@ -133,6 +138,42 @@ def _seed_provinces(db: Session) -> None:
     for name in IRAN_PROVINCES:
         if name not in existing:
             db.add(Province(name=name))
+    db.flush()
+
+
+def _seed_province_mapping(db: Session) -> None:
+    """Open a ``province_mapping`` row for any province that has none yet.
+
+    Idempotent, and deliberately one-directional: a province that already has
+    an open row is skipped entirely. That is what makes a reassignment made by
+    the PM survive a restart -- this function can only ever fill a gap, never
+    correct what someone put there.
+
+    ``effective_from`` is the day the row is first opened rather than some
+    backdated epoch, because the honest statement is "this is who owns it from
+    when we started recording", not a claim about a period nobody recorded.
+    """
+    open_rows = {
+        row.province_fa
+        for row in db.query(ProvinceMapping)
+        .filter(ProvinceMapping.effective_to.is_(None))
+        .all()
+    }
+    today = date.today()
+    for row in PROVINCE_DIRECTORY:
+        if row.fa in open_rows:
+            continue
+        db.add(
+            ProvinceMapping(
+                province_fa=row.fa,
+                province_en=row.en,
+                cra_region=row.cra_region,
+                pso_coordinator=row.pso_coordinator,
+                regional_manager=row.regional_manager,
+                effective_from=today,
+                effective_to=None,
+            )
+        )
     db.flush()
 
 
