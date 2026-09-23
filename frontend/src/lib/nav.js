@@ -17,11 +17,12 @@ import {
   CalendarRange,
   ClipboardCheck,
   ClipboardList,
+  Gauge,
   ListChecks,
   Radio,
   Wrench,
 } from 'lucide-react'
-import { CATEGORY_OWNER_ROLES, MONTHLY_PLAN_ROLES } from './roles'
+import { CATEGORY_OWNER_ROLES, KPI_ROLES, MONTHLY_PLAN_ROLES } from './roles'
 
 // hideRoles hides an item for the given roles, on top of any `roles`
 // inclusion list — used here to keep these four operational screens out of
@@ -68,6 +69,9 @@ export const DRIVE_TEST_PROJECT = [
 export const REPORTS = [
   { to: '/reports/drive-test', label: 'DT Dashboard', icon: Activity },
   { to: '/reports/acceptance', label: 'Acceptance Dashboard', icon: BadgeCheck },
+  // Admin is absent from KPI_ROLES, which keeps this out of their sidebar --
+  // and the server refuses them every endpoint behind it.
+  { to: '/reports/kpi', label: 'KPI & Performance', icon: Gauge, roles: KPI_ROLES },
 ]
 
 /** Whether this user may see a nav item, from the item's own role lists. */

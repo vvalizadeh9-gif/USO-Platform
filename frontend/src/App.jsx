@@ -3,7 +3,7 @@ import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import Layout from './components/Layout'
 import { useAuth } from './context/AuthContext'
 import { Loading } from './components/ui'
-import { CATEGORY_OWNER_ROLES, MONTHLY_PLAN_ROLES } from './lib/roles'
+import { CATEGORY_OWNER_ROLES, KPI_ROLES, MONTHLY_PLAN_ROLES } from './lib/roles'
 import Login from './pages/Login'
 
 // Route pages are code-split so the initial load only ships the shell +
@@ -22,6 +22,8 @@ const ActionCenter = lazy(() => import('./pages/ActionCenter'))
 const MyWork = lazy(() => import('./pages/mywork/MyWork'))
 const MonthlyPlan = lazy(() => import('./pages/monthlyplan/MonthlyPlan'))
 const AcceptanceDashboard = lazy(() => import('./pages/reports/AcceptanceDashboard'))
+const KpiPerformance = lazy(() => import('./pages/reports/KpiPerformance'))
+const KpiMapping = lazy(() => import('./pages/reports/KpiMapping'))
 const Admin = lazy(() => import('./pages/Admin'))
 const ChangePassword = lazy(() => import('./pages/ChangePassword'))
 
@@ -81,6 +83,26 @@ export default function App() {
           <Route path="/" element={<Navigate to={homeFor(isAdmin)} replace />} />
           <Route path="/reports/drive-test" element={<DriveTestProject />} />
           <Route path="/reports/acceptance" element={<AcceptanceDashboard />} />
+          {/* Admin is refused every KPI endpoint, so the route is closed to it
+              here as well -- otherwise the page loads and then fills with
+              permission errors, which reads as a fault rather than as a rule.
+              The four roles below are the ones the server serves. */}
+          <Route
+            path="/reports/kpi"
+            element={
+              <Protected allowedRoles={KPI_ROLES}>
+                <KpiPerformance />
+              </Protected>
+            }
+          />
+          <Route
+            path="/reports/kpi/mapping"
+            element={
+              <Protected allowedRoles={['PM']}>
+                <KpiMapping />
+              </Protected>
+            }
+          />
           {/* The Acceptance dashboard moved under Reports when that page was
               split into a read surface and a work surface; /acceptance below
               still answers, because it is in people's bookmarks.
