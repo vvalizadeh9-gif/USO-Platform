@@ -253,7 +253,14 @@ def _summary_sheet(ws, *, user, province_name, kpis, breakdowns, plan, is_contra
     row = _block(
         ws, row, f"Plan and delivery — {plan['month_label']}",
         [
-            ("Assigned", plan["assigned"]),
+            # "Assignment", not "Assigned": the stage block above already has a
+            # row called "Assigned" -- the workflow stage, whose spelling is
+            # fixed by ``workflow.py`` and travels in URLs -- and two rows
+            # under one label in one column is a lookup down column A that
+            # silently answers with the other figure. "Assignment" is also
+            # what the Plan and delivery card calls it on screen, which is the
+            # property this whole sheet exists to hold.
+            ("Assignment", plan["assigned"]),
             ("PIP", plan["pip"]),
             ("Delivered", plan["actual"]),
             ("Achievement %", plan["achievement_percent"]),
