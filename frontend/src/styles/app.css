@@ -1528,6 +1528,13 @@ tbody tr:last-child td { border-bottom: none; }
 .dt-freshness {
   font-size: 12px; color: var(--text-dim); font-variant-numeric: tabular-nums;
 }
+.dt-toolbar-filter {
+  gap: 5px;
+}
+.dt-toolbar-label { font-size: 12px; }
+@media (max-width: 860px) {
+  .dt-toolbar-label { display: none; }
+}
 .dt-spin { animation: spin 0.9s linear infinite; }
 
 /* ---------- the bench ---------- */
@@ -1546,20 +1553,19 @@ tbody tr:last-child td { border-bottom: none; }
 
    Written in logical properties throughout so the band mirrors cleanly when a
    Persian label puts a run of it in RTL. */
-/* ---------- the KPI band: three cards, pending broken into its parts ----------
-   Pending takes two columns because it is the only card carrying a
-   breakdown. On air and DT done are the same card twice; the asymmetry is
-   the point, and it is what stops the band reading as three equal things
-   when one of them is the one being managed. */
+/* ---------- the KPI band: four equal cards ----------
+   On-air, DT done, Pending, and Pending Status (donut). Four equal columns
+   give each card the same weight; the donut replaces the old segmented bar
+   that sat inside a wider pending card. */
 .dt-kpi-band {
   display: grid;
   gap: var(--dt-gap);
-  grid-template-columns: 1fr 1fr 2fr;
+  grid-template-columns: repeat(4, 1fr);
   align-items: stretch;
 }
 .dt-kpi-card {
   display: flex;
-  align-items: center;
+  flex-direction: column;
   background: var(--surface-1);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
@@ -1567,147 +1573,143 @@ tbody tr:last-child td { border-bottom: none; }
   padding: 20px;
   min-width: 0;
 }
-/* Neutral: this is the total the other two divide, not a state of its own. */
 .dt-kpi-card[data-kpi="onair"] { border-inline-start: 3px solid var(--border); }
-/* A soft wash of the card's own state colour behind the figure, at 7% --
-   distinct from the ~11-12% -wash tokens elsewhere, which are hover fills
-   meant to be seen, not a background meant to recede. */
 .dt-kpi-card[data-kpi="done"] {
   border-inline-start: 3px solid var(--dt-done);
   background-image: linear-gradient(180deg, rgba(30, 122, 85, 0.07) 0%, transparent 96px);
 }
-/* Pending is not one state -- it is ongoing, problematic and not-started
-   together -- so there is no single STATE_COLOR for it to borrow. Given the
-   --dt-ongoing edge, since that is the colour its own sparkline already used
-   for the same figure before this pass. */
 .dt-kpi-card[data-kpi="pending"] {
+  border-inline-start: 3px solid var(--dt-problem);
+  background-image: linear-gradient(180deg, rgba(178, 58, 48, 0.05) 0%, transparent 96px);
+}
+.dt-kpi-card[data-kpi="status"] {
   border-inline-start: 3px solid var(--dt-ongoing);
   background-image: linear-gradient(180deg, rgba(63, 79, 176, 0.07) 0%, transparent 96px);
 }
 
-/* The figure block, identical in all three cards so the headline numbers
-   sit on one line across the band rather than drifting by a few pixels.
-   Rhythm on a 4px grid: 8px title to figure (6px row-gap + a 2px margin
-   under the title), 6px figure to sub. */
 .dt-kpi-main {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  grid-template-areas:
-    'title title'
-    'figure delta'
-    'sub    sub';
-  align-items: baseline;
-  column-gap: 10px;
-  row-gap: 6px;
-  align-content: start;
-  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
   flex: 1 1 auto;
+  min-width: 0;
 }
 .dt-kpi-title {
-  grid-area: title;
   font-size: 12.5px; font-weight: 500; color: var(--text-muted);
   margin-block-end: 2px;
 }
 .dt-kpi-figure {
-  grid-area: figure;
-  font-family: var(--font-display); font-size: 30px; font-weight: 600;
+  font-family: var(--font-display); font-size: 28px; font-weight: 600;
   letter-spacing: -0.03em; line-height: 1; color: var(--text);
-  justify-self: start;
 }
 a.dt-kpi-figure:hover { color: var(--dt-done); }
-.dt-kpi-main > .dt-delta { grid-area: delta; justify-self: start; }
 .dt-kpi-sub {
-  grid-area: sub;
   font-size: 12px; color: var(--text-dim);
 }
-/* Reserved whether or not a line is drawn: /drive-test/flow and
-   /drive-test/overview are separate requests and routinely land in that
-   order, and a card that grows when the second arrives moves the two beside
-   it. See SparkSlot. Pending's is the only one left -- the two simple cards'
-   sparklines were the same two series the flow chart already draws, larger,
-   directly below this band. */
-.dt-kpi-sparkslot {
-  grid-area: spark;
-  display: block; min-height: 26px; margin-block-start: 10px;
+
+/* Progress bar inside KPI cards */
+.dt-kpi-pbar {
+  height: 6px; width: 100%; border-radius: 999px;
+  background: var(--surface-3); overflow: hidden;
+  margin-top: 8px;
 }
+.dt-kpi-pbar-fill {
+  height: 100%; border-radius: 999px;
+  min-width: 2px;
+}
+.dt-kpi-target {
+  font-size: 11.5px; color: var(--text-dim); margin-top: 4px;
+}
+.dt-kpi-behind {
+  color: var(--dt-problem); font-weight: 500;
+}
+
+/* Sparkline (still used elsewhere) */
 .dt-spark { display: block; overflow: visible; }
 
-/* Wider, and its own column rather than a left/right split: title, figure,
-   sub, then (16px, the fourth rhythm step) the segmented bar and its three
-   rows -- one flow instead of two panels side by side. Pending keeps a
-   fourth row, its own sparkline, so its main block restates the 'spark'
-   area the shared block above dropped. */
-.dt-kpi-card-wide {
-  flex-direction: column;
-  align-items: stretch;
-  gap: 16px;
+/* ---------- donut chart card ---------- */
+.dt-kpi-card-donut {
+  display: flex; flex-direction: column; gap: 10px;
 }
-.dt-kpi-card-wide .dt-kpi-main {
-  grid-template-areas:
-    'title title'
-    'figure delta'
-    'sub    sub'
-    'spark  spark';
+.dt-donut-wrap {
+  display: flex; align-items: center; gap: 16px;
+  flex: 1 1 auto;
 }
-.dt-kpi-parts {
-  display: flex; flex-direction: column; gap: 12px;
+.dt-donut-svg {
+  flex: 0 0 auto;
+  width: 110px; height: 110px;
+}
+.dt-donut-value {
+  font-family: var(--font-display); font-size: 20px; font-weight: 700;
+  fill: var(--text);
+}
+.dt-donut-label {
+  font-size: 11px; fill: var(--text-dim);
+}
+.dt-donut-legend {
+  list-style: none; margin: 0; padding: 0;
+  display: flex; flex-direction: column; gap: 6px;
   flex: 1 1 auto; min-width: 0;
 }
-
-/* Pending split three ways. Unlike the four-state bar this replaces, every
-   segment here has a width a reader can see: the parts of pending run at
-   roughly 60/25/15, where the parts of on-air ran at 95/3/2. */
-.dt-kpi-partbar {
-  display: flex; width: 100%; height: 8px; overflow: hidden;
-  border-radius: 999px; background: var(--dt-track);
-}
-.dt-kpi-partbar-seg { display: block; height: 100%; }
-/* A hairline of surface between fills marks them apart without adding a
-   stroke, which would be ink that is not data. */
-.dt-kpi-partbar-seg + .dt-kpi-partbar-seg { box-shadow: -1.5px 0 0 0 var(--surface-1); }
-
-.dt-kpi-partlist { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
-/* The whole row is the link, not the figure inside it: the row is what a
-   reader aims at, and a 14-pixel number is not a target. */
-.dt-kpi-part {
+.dt-donut-item {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto auto;
-  align-items: baseline;
-  column-gap: 10px;
-  padding: 6px 8px;
+  grid-template-columns: auto 1fr auto auto;
+  align-items: center;
+  column-gap: 8px;
+  padding: 5px 8px;
   border-radius: var(--radius-sm, 6px);
   color: inherit;
   transition: background .14s;
 }
-a.dt-kpi-part:hover, a.dt-kpi-part:focus-visible { background: var(--surface-2); }
-a.dt-kpi-part:focus-visible { outline: 2px solid var(--dt-ongoing); outline-offset: 2px; }
-.dt-kpi-part-dot {
-  width: 9px; height: 9px; border-radius: 3px; flex: none;
-  align-self: center;
-}
-.dt-kpi-part-name { font-size: 12.5px; color: var(--text-muted); font-weight: 500; }
-.dt-kpi-part-value {
-  font-family: var(--font-display); font-size: 17px; font-weight: 600;
-  line-height: 1.1; letter-spacing: -0.01em;
+a.dt-donut-item:hover { background: var(--surface-2); }
+.dt-donut-name { font-size: 12px; color: var(--text-muted); font-weight: 500; }
+.dt-donut-num {
+  font-family: var(--font-display); font-size: 14px; font-weight: 600;
   justify-self: end;
 }
-.dt-kpi-part-share {
-  font-size: 11.5px; color: var(--text-dim); justify-self: end;
-  min-width: 10ch; text-align: end;
+.dt-donut-pct {
+  font-size: 11px; color: var(--text-dim); justify-self: end;
+  min-width: 4ch; text-align: end;
 }
-.dt-kpi-part .dt-delta { justify-self: end; }
+.dt-kpi-part-dot {
+  width: 9px; height: 9px; border-radius: 3px; flex: none;
+}
 
 .dt-kpi-skeleton .dt-skeleton-row { display: block; }
 .dt-kpi-skeleton .dt-skeleton-row:last-child { grid-column: span 1; }
 
-/* Under about 1100px the band stops being a row: pending drops to its own
-   full-width card. Its own internal stack is unchanged at every width. */
 @media (max-width: 1100px) {
   .dt-kpi-band { grid-template-columns: 1fr 1fr; }
-  .dt-kpi-card-wide { grid-column: 1 / -1; }
 }
 @media (max-width: 720px) {
   .dt-kpi-band { grid-template-columns: 1fr; }
+}
+
+/* ---------- alert strip ---------- */
+.dt-alert-strip {
+  display: flex; align-items: center; gap: 12px;
+  background: var(--dt-problem-wash, rgba(178, 58, 48, 0.09));
+  border: 1px solid rgba(178, 58, 48, 0.2);
+  border-radius: var(--radius);
+  padding: 12px 18px;
+  color: var(--dt-problem);
+  font-size: 13.5px; line-height: 1.5;
+}
+.dt-alert-strip svg { flex: none; }
+.dt-alert-body { flex: 1 1 auto; min-width: 0; }
+.dt-alert-main { font-weight: 600; display: block; }
+.dt-alert-secondary { font-size: 12.5px; color: var(--text-muted); display: block; margin-top: 2px; }
+.dt-alert-cta {
+  flex: none;
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 14px; border: 1px solid var(--dt-problem);
+  border-radius: var(--radius-sm); background: transparent;
+  color: var(--dt-problem); font-size: 12.5px; font-weight: 600;
+  cursor: pointer; white-space: nowrap;
+  transition: background .14s, color .14s;
+}
+.dt-alert-cta:hover {
+  background: var(--dt-problem); color: #fff;
 }
 
 
@@ -1891,15 +1893,45 @@ a.dt-contractor-name:hover { text-decoration: underline; text-decoration-color: 
 .dt-province-card:focus-visible { outline: 2px solid var(--dt-ongoing); outline-offset: -2px; }
 .dt-province-name { font-weight: 600; }
 .dt-province-rate { font-weight: 600; }
+.dt-rank { color: var(--text-dim); font-size: 12px; font-weight: 500; width: 32px; }
 
-/* A rule on the row's first cell says "problem here" without tinting the
-   whole row, which the pink card background used to do. */
 .dt-row-problem td:first-child { box-shadow: inset 3px 0 0 var(--dt-problem); }
 
-/* All rows load at once now that there is no fold to expand -- this keeps
-   the card from growing unbounded with more provinces instead. */
-.dt-table-scroll { max-height: 420px; overflow-y: auto; }
+.dt-table-scroll { max-height: 480px; overflow-y: auto; }
 .dt-table-scroll thead th { position: sticky; top: 0; z-index: 1; }
+
+/* Province search */
+.dt-province-search-wrap {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 12px; margin-bottom: 10px;
+  background: var(--surface-2); border-radius: var(--radius-sm);
+  border: 1px solid var(--border-soft);
+}
+.dt-province-search-wrap svg { color: var(--text-dim); flex: none; }
+.dt-province-search {
+  border: 0; background: transparent; outline: none;
+  font-family: var(--font-body); font-size: 13px; color: var(--text);
+  width: 100%; min-height: 28px;
+}
+.dt-province-search::placeholder { color: var(--text-dim); }
+
+/* Province progress bar in DT completion column */
+.dt-province-pbar-cell {
+  display: flex; flex-direction: column; align-items: flex-end; gap: 4px;
+}
+.dt-province-pbar {
+  width: 100%; max-width: 80px; height: 4px;
+  border-radius: 999px; background: var(--surface-3); overflow: hidden;
+}
+.dt-province-pbar-fill {
+  height: 100%; border-radius: 999px; transition: width 0.35s ease;
+}
+
+/* Action column */
+.dt-th-action { width: 32px; }
+.dt-action-cell { text-align: center; width: 32px; }
+.dt-action-arrow { color: var(--text-dim); transition: color .14s; }
+.dt-province-card[role='button']:hover .dt-action-arrow { color: var(--dt-ongoing); }
 
 /* ---------- plan and delivery ---------- */
 /* Plan and delivery: the month's rate on the left, the contractors on the
