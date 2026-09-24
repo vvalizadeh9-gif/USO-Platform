@@ -19,11 +19,20 @@ vi.mock('../../api/client', () => ({
   default: { get: vi.fn() },
 }))
 
+const mockAuth = vi.hoisted(() => ({ current: null }))
+vi.mock('../../context/AuthContext', () => ({
+  useAuth: () => mockAuth.current,
+}))
+
 const api = (await import('../../api/client')).default
 const DriveTestProject = (await import('./DriveTestProject')).default
 const { ToastProvider } = await import('../../context/ToastContext')
 
-function draw(initialPath = '/reports/drive-test') {
+const STAFF = { id: 1, username: 'pm', role: { name: 'PM' } }
+const VIEWER = { id: 2, username: 'v', role: { name: 'Viewer' } }
+
+function draw(initialPath = '/reports/drive-test', user = STAFF) {
+  mockAuth.current = { user }
   return render(
     <MemoryRouter initialEntries={[initialPath]}>
       <ToastProvider>
@@ -991,6 +1000,20 @@ describe('the province grid', () => {
     expect(labels).toEqual([
       '#', 'Province', 'On air', 'DT Done', 'Gap', 'DT completion', 'Ongoing', 'Problematic', '',
     ])
+  })
+
+  it('hides the action column for a Viewer, who cannot act on any row', async () => {
+    serve()
+    draw('/reports/drive-test', VIEWER)
+
+    const provinces = await section('Drive Test Progress by Province')
+    const labels = within(provinces)
+      .getAllByRole('columnheader')
+      .map((th) => th.textContent.trim())
+    expect(labels).toEqual([
+      '#', 'Province', 'On air', 'DT Done', 'Gap', 'DT completion', 'Ongoing', 'Problematic',
+    ])
+    expect(provinces.querySelectorAll('.dt-action-cell')).toHaveLength(0)
   })
 
   it('reddens a done % that is below the programme average, not below a fixed band', async () => {
@@ -2248,19 +2271,29 @@ describe('the contractor scorecard', () => {
     expect(header()).toHaveAttribute('aria-sort', 'descending')
   })
 
-  it('has exactly five sort controls: Contractor, Assignment, DT done, Ongoing, Completion', async () => {
+  it('has exactly six sort controls: Contractor, Assignment, DT done, Ongoing, Completion, This month PIP', async () => {
     serve()
     draw()
 
     const card = await section('Contractor scorecard')
     // "Completion", not "Achievement": Achievement is the Plan and delivery
     // card's word for delivered-against-PIP, and this is how far a company is
-    // through its own book. One word, two meanings, one page.
+    // through its own book. One word, two meanings, one page. "This month
+    // PIP" carries the Achievement meaning instead, on the same row as
+    // Completion, so a reader never has to hold a name in mind while they
+    // scroll to compare the two.
     const labels = within(card)
       .getAllByRole('columnheader')
       .filter((th) => th.querySelector('.dt-sort-btn'))
       .map((th) => th.textContent.trim())
-    expect(labels).toEqual(['Contractor', 'Assignment', 'DT done', 'Ongoing', 'Completion'])
+    expect(labels).toEqual([
+      'Contractor',
+      'Assignment',
+      'DT done',
+      'Ongoing',
+      'Completion',
+      'This month PIP',
+    ])
   })
 
   it('shows no Problematic or Not started figure anywhere in the list', async () => {
@@ -2291,6 +2324,37 @@ describe('the contractor scorecard', () => {
     expect(card).toHaveTextContent(
       'Assignment = DT done + Ongoing. Problematic sites are not part of a contractor’s assignment.',
     )
+  })
+
+  it('carries this month\'s PIP achievement on the same row, from the Plan and delivery rows', async () => {
+    serve()
+    draw()
+
+    const card = await section('Contractor scorecard')
+    // Same payload the Plan and delivery card reads: Alfa 3 of 4 (75%),
+    // Beta 2 of 2 (100%).
+    const rowFor = (name) => within(card).getByText(name).closest('.dt-contractor-row')
+    expect(within(rowFor('Alfa Drive Tests')).getByText('75%')).toBeInTheDocument()
+    expect(within(rowFor('Beta Surveys')).getByText('100%')).toBeInTheDocument()
+  })
+
+  it('reads "no PIP" for a contractor with no plan row this month, rather than a blank cell', async () => {
+    serve(planDelivery({ rows: [] }))
+    draw()
+
+    const card = await section('Contractor scorecard')
+    const rowFor = (name) => within(card).getByText(name).closest('.dt-contractor-row')
+    expect(within(rowFor('Alfa Drive Tests')).getByText('no PIP')).toBeInTheDocument()
+  })
+
+  it('gives the unattributed row an Assign action, and no other row one', async () => {
+    serve()
+    draw()
+
+    const card = await section('Contractor scorecard')
+    const links = within(card).getAllByText('Assign')
+    expect(links).toHaveLength(1)
+    expect(links[0].closest('.dt-contractor-row')).toHaveClass('dt-row-unattributed')
   })
 
   it('keeps the unattributed row last under every sortable control', async () => {

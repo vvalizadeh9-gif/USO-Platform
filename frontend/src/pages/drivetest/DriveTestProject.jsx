@@ -354,7 +354,13 @@ export default function DriveTestProject() {
             state={overview}
             onRetry={refresh}
           >
-            {(d) => <ContractorScorecard rows={d.contractor_scorecard} provinceId={provinceId} />}
+            {(d) => (
+              <ContractorScorecard
+                rows={d.contractor_scorecard}
+                planRows={plan.data?.rows}
+                provinceId={provinceId}
+              />
+            )}
           </Section>
         )}
 
