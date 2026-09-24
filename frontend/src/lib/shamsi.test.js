@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest'
 import {
   SHAMSI_MONTHS,
   currentShamsiPeriod,
+  monthProgress,
   nextPeriod,
   periodLabel,
   planningPeriod,
@@ -85,5 +86,22 @@ describe('planningPeriod', () => {
 
   it('is null when the browser cannot say what month it is', () => {
     expect(planningPeriod(new Date(1980, 0, 1))).toBeNull()
+  })
+})
+
+describe('monthProgress', () => {
+  it('reads how far the current month has run', () => {
+    // 9 September 2026 is 18 Shahrivar 1405, and Shahrivar has 31 days.
+    const now = new Date(2026, 8, 9, 12)
+    expect(monthProgress(1405, 6, now)).toEqual({ elapsed: 18, total: 31, percent: (18 / 31) * 100 })
+  })
+
+  it('is null for a month other than the one in progress', () => {
+    const now = new Date(2026, 8, 9, 12)
+    expect(monthProgress(1405, 5, now)).toBeNull()
+  })
+
+  it('is null when the browser cannot say what month it is', () => {
+    expect(monthProgress(1405, 6, new Date(1980, 0, 1))).toBeNull()
   })
 })

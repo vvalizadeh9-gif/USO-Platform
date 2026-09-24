@@ -1,10 +1,11 @@
 import { ChevronRight, Search } from 'lucide-react'
 import { useMemo, useState } from 'react'
+import { useAuth } from '../../context/AuthContext'
 import { count, percent } from './format'
 import { doneLink, onairLink, ongoingLink, problematicLink, remainingLink } from './links'
 import { DrillLink } from './DrillPanel'
 
-const COLUMNS = [
+const BASE_COLUMNS = [
   { key: 'rank', label: '#', numeric: true },
   { key: 'name', label: 'Province' },
   { key: 'onair', label: 'On air', numeric: true },
@@ -13,12 +14,18 @@ const COLUMNS = [
   { key: 'done_percent', label: 'DT completion', numeric: true },
   { key: 'ongoing', label: 'Ongoing', numeric: true },
   { key: 'problematic', label: 'Problematic', numeric: true },
-  { key: 'action', label: '', numeric: false },
 ]
+const ACTION_COLUMN = { key: 'action', label: '', numeric: false }
 
 export default function ProvinceList({ rows, provinces, onProvince }) {
   const [sort, setSort] = useState({ key: 'remaining', dir: 'desc' })
   const [search, setSearch] = useState('')
+  const { user } = useAuth()
+  // A Viewer reads the table but never scopes the dashboard from it -- the
+  // chevron says "act on this row", which is not true for an account that
+  // cannot act on anything here.
+  const isViewer = user?.role?.name === 'Viewer'
+  const COLUMNS = isViewer ? BASE_COLUMNS : [...BASE_COLUMNS, ACTION_COLUMN]
 
   const byName = useMemo(() => {
     const map = new Map()
@@ -182,11 +189,13 @@ export default function ProvinceList({ rows, provinces, onProvince }) {
                       </span>
                     )}
                   </td>
-                  <td className="dt-action-cell">
-                    {id && (
-                      <ChevronRight size={15} strokeWidth={2} className="dt-action-arrow" />
-                    )}
-                  </td>
+                  {!isViewer && (
+                    <td className="dt-action-cell">
+                      {id && (
+                        <ChevronRight size={15} strokeWidth={2} className="dt-action-arrow" />
+                      )}
+                    </td>
+                  )}
                 </tr>
               )
             })}

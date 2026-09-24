@@ -1,7 +1,8 @@
 import { motion, useReducedMotion } from 'framer-motion'
-import { ArrowDownRight, ArrowUpRight } from 'lucide-react'
+import { ArrowDownRight, ArrowUpRight, Minus } from 'lucide-react'
+import { useId } from 'react'
 import { STATE_COLOR } from '../constants'
-import { count } from '../format'
+import { count, deltaTone, TONE_COLOR } from '../format'
 
 /**
  * What moved through the month, as a waterfall that closes.
@@ -55,11 +56,13 @@ const BAR_W = 104
 
 export default function FlowLedger({ flows, monthLabel }) {
   const reduced = useReducedMotion()
+  const gradientId = useId()
   if (!flows) return null
 
   const { opening_remaining: opening, closing_remaining: closing } = flows
   const arrived = flows.new_onair
   const completed = flows.dt_completed
+  const net = closing - opening
   const afterArrivals = opening + arrived
 
   // The scale covers the levels the month moved between, not zero.
@@ -101,6 +104,7 @@ export default function FlowLedger({ flows, monthLabel }) {
 
   return (
     <div className="dt-flow">
+      <div className="dt-flow-chart">
       <svg
         className="dt-flow-waterfall"
         viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
@@ -110,6 +114,18 @@ export default function FlowLedger({ flows, monthLabel }) {
           `${completed} drive tests were completed, closed at ${closing} remaining.`
         }
       >
+        <defs>
+          {/* A subtle vertical gradient in each bar's own colour, rather
+              than a flat fill — the same light-from-above the rest of the
+              page's charts use. No drop shadow: a gradient on the fill
+              itself reads as material, a shadow under it reads as a sticker. */}
+          {Object.entries(tone).map(([key, hex]) => (
+            <linearGradient key={key} id={`${gradientId}-${key}`} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={hex} stopOpacity={key === 'balance' ? 0.36 : 0.98} />
+              <stop offset="100%" stopColor={hex} stopOpacity={key === 'balance' ? 0.22 : 0.78} />
+            </linearGradient>
+          ))}
+        </defs>
         {/* The floor the two balance bars stand on. Not zero, and said so
             in the footer. */}
         <line x1={0} x2={VIEW_W} y1={AXIS_Y} y2={AXIS_Y} className="dt-gridline" />
@@ -144,8 +160,7 @@ export default function FlowLedger({ flows, monthLabel }) {
                 width={BAR_W}
                 height={height}
                 rx={2}
-                fill={tone[bar.kind]}
-                opacity={balance ? 0.32 : 0.92}
+                fill={`url(#${gradientId}-${bar.kind})`}
                 initial={reduced ? false : { scaleY: 0 }}
                 animate={{ scaleY: 1 }}
                 style={{ transformOrigin: `${centre(i)}px ${top + height}px` }}
@@ -169,20 +184,22 @@ export default function FlowLedger({ flows, monthLabel }) {
           )
         })}
       </svg>
+      </div>
 
       <div className="dt-flow-foot">
         <FlowStat
           icon={ArrowUpRight}
-          label="Newly problematic"
-          value={flows.newly_problematic}
-          color={STATE_COLOR.problematic}
+          label="Arrived on air"
+          value={arrived}
+          color={STATE_COLOR.ongoing}
         />
         <FlowStat
           icon={ArrowDownRight}
-          label="Problems resolved"
-          value={flows.problematic_resolved}
+          label="Drive tests done"
+          value={completed}
           color={STATE_COLOR.done}
         />
+        <NetChangeStat value={net} />
         <span className="dt-flow-floor">scale starts at {count(floor)}, not zero</span>
       </div>
 
@@ -205,6 +222,31 @@ export default function FlowLedger({ flows, monthLabel }) {
 export function flowNet(flows) {
   if (!flows) return null
   return flows.closing_remaining - flows.opening_remaining
+}
+
+/** The footer's copy of the net movement the header already states.
+ *
+ * The header answers "how did the month go" from across the room; this one
+ * sits with the three figures that made it up, signed the same way the bars
+ * above it are, so a reader working across the footer does not have to look
+ * up for the number that closes the other two.
+ */
+function NetChangeStat({ value }) {
+  const tone = deltaTone(value, 'down')
+  const color = tone ? TONE_COLOR[tone] : TONE_COLOR.flat
+  const Icon = value === 0 ? Minus : value > 0 ? ArrowUpRight : ArrowDownRight
+  return (
+    <span className="dt-flow-stat">
+      <span className="dt-flow-stat-icon" style={{ background: color }}>
+        <Icon size={12} strokeWidth={2.4} />
+      </span>
+      <span className="dt-flow-stat-label">Net change</span>
+      <b className="tnum" style={{ color }}>
+        {value > 0 ? '+' : ''}
+        {count(value)}
+      </b>
+    </span>
+  )
 }
 
 function FlowStat({ icon: Icon, label, value, color }) {

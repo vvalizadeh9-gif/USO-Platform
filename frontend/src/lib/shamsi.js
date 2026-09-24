@@ -89,3 +89,50 @@ export function planningPeriod(now = new Date()) {
   const current = currentShamsiPeriod(now)
   return current && nextPeriod(current.year, current.month)
 }
+
+/** Today's Shamsi day-of-month, or null if this browser cannot say. */
+function todayShamsiDay(now) {
+  let parts
+  try {
+    parts = new Intl.DateTimeFormat('en-u-ca-persian-nu-latn', {
+      year: 'numeric',
+      month: 'numeric',
+      day: 'numeric',
+    }).formatToParts(now)
+  } catch {
+    return null
+  }
+  const value = (type) => Number(parts.find((p) => p.type === type)?.value)
+  return { year: value('year'), month: value('month'), day: value('day') }
+}
+
+/**
+ * How far a Shamsi month has run, for a pace marker on a within-month bar.
+ *
+ * Asks the platform's own Intl for today's day-of-month — the same
+ * conversion `currentShamsiPeriod` uses — rather than a hard-coded leap-year
+ * rule, and counts the days in the month by walking Gregorian time until the
+ * Shamsi month changes, so it never disagrees with what Intl itself would say
+ * about any day in that month.
+ *
+ * Returns null when `year`/`month` is not the month this browser calls
+ * "now" — a pace marker only means something for the month in progress, and
+ * a mismatch (a closed month, or a runtime with no Persian calendar) has
+ * nothing honest to place on the bar.
+ */
+export function monthProgress(year, month, now = new Date()) {
+  const today = todayShamsiDay(now)
+  if (!today || today.year !== year || today.month !== month) return null
+
+  const msDay = 24 * 60 * 60 * 1000
+  let cursor = new Date(now.getTime() - (today.day - 1) * msDay)
+  let elapsed = todayShamsiDay(cursor)
+  let total = 0
+  while (elapsed && elapsed.year === year && elapsed.month === month) {
+    total += 1
+    cursor = new Date(cursor.getTime() + msDay)
+    elapsed = todayShamsiDay(cursor)
+  }
+  if (total === 0) return null
+  return { elapsed: today.day, total, percent: (today.day / total) * 100 }
+}

@@ -1,5 +1,5 @@
 import { motion, useReducedMotion } from 'framer-motion'
-import { achievement, bandColor, count } from '../format'
+import { achievement, count } from '../format'
 import { DrillLink } from '../DrillPanel'
 
 /**
@@ -19,7 +19,10 @@ import { DrillLink } from '../DrillPanel'
  *
  *   - the ghost bar is the plan (PIP), so its length is the size of the
  *     commitment and rows are comparable to each other;
- *   - the solid bar is what was delivered, coloured by band;
+ *   - the solid bar is what was delivered, always in the same colour — the
+ *     bar's length already says where a contractor stands, and colouring it
+ *     by band said the same thing twice; colour is left for the one number
+ *     that needs it, below;
  *   - the cap at the ghost's end is the target, which is where it has always
  *     been — and it now sits at a place the reader can see, because a bar
  *     that overshoots visibly passes it.
@@ -27,6 +30,11 @@ import { DrillLink } from '../DrillPanel'
  * A contractor with no approved plan has no ghost and no target: there is
  * nothing to have delivered a share of. Their work still draws, in a neutral
  * colour, because it happened.
+ *
+ * Colour appears exactly twice on a row, and only on a miss: the percentage
+ * and the shortfall both turn red when a contractor fell short, and stay the
+ * default ink otherwise. A bar that hit or beat its target has nothing to
+ * flag.
  *
  * `href`, where it is given, opens the drive tests the delivered figure counts.
  * It goes on the count rather than on the whole row: the row also carries a
@@ -46,7 +54,9 @@ export default function BulletBar({
 }) {
   const reduced = useReducedMotion()
   const noPlan = percent == null
-  const color = anonymous ? 'var(--text-dim)' : bandColor(percent)
+  const barColor = anonymous ? 'var(--text-dim)' : 'var(--dt-ongoing)'
+  const missed = !noPlan && percent < 100
+  const pctColor = noPlan ? 'var(--text-dim)' : missed ? 'var(--dt-problem)' : undefined
 
   const pct = (v) => (scaleMax ? Math.min(100, (v / scaleMax) * 100) : 0)
   const planWidth = pct(pip)
@@ -71,7 +81,7 @@ export default function BulletBar({
         <motion.span
           data-testid="achievement-bar"
           className="dt-bullet-fill"
-          style={{ background: color, width: `${doneWidth}%`, transformOrigin: 'left center' }}
+          style={{ background: barColor, width: `${doneWidth}%`, transformOrigin: 'left center' }}
           initial={reduced ? false : { scaleX: 0 }}
           animate={{ scaleX: 1 }}
           transition={{ duration: 0.6, delay: 0.12 + 0.06 * index, ease: [0.16, 1, 0.3, 1] }}
@@ -86,7 +96,7 @@ export default function BulletBar({
         )}
       </span>
 
-      <span className="dt-bullet-pct tnum" style={{ color: noPlan ? 'var(--text-dim)' : color }}>
+      <span className="dt-bullet-pct tnum" style={pctColor ? { color: pctColor } : undefined}>
         {noPlan ? 'no PIP' : achievement(percent)}
       </span>
       <span className="dt-bullet-detail tnum">

@@ -1943,42 +1943,62 @@ a.dt-contractor-name:hover { text-decoration: underline; text-decoration-color: 
   align-items: start;
 }
 .dt-plan-summary { display: grid; gap: 0; align-content: start; }
+/* The rate and its bar on one line: "how far" is one fact, not a big number
+   over a second copy of the same figure. */
+.dt-plan-rate-row { display: flex; align-items: center; gap: 12px; }
 .dt-plan-rate {
-  font-family: var(--font-display); font-size: 44px; font-weight: 600;
-  letter-spacing: -0.03em; line-height: 1;
+  flex: none;
+  font-family: var(--font-display); font-size: 28px; font-weight: 600;
+  letter-spacing: -0.02em; line-height: 1;
   font-variant-numeric: tabular-nums;
 }
 .dt-plan-rate-label {
-  margin-block-start: 5px;
+  margin-block-start: 6px;
   font-size: 12.5px; font-weight: 500; color: var(--text-muted);
 }
 .dt-plan-rate-label em { color: var(--text-dim); font-style: normal; }
 /* Capped at the target, not at the widest bar on screen: this is a share of
    a commitment, not a quantity competing with other quantities. */
 .dt-plan-progress {
-  display: block; height: 8px; margin-block-start: 12px;
-  border-radius: 999px; background: var(--dt-track); overflow: hidden;
+  position: relative; flex: 1; display: block; height: 8px;
+  border-radius: 999px; background: var(--dt-track); overflow: visible;
 }
-.dt-plan-progress-fill { display: block; height: 100%; border-radius: 999px; }
+.dt-plan-progress-fill {
+  display: block; height: 100%; border-radius: 999px; overflow: hidden;
+}
+/* Where an even pace through the month would have this contractor pool
+   today -- placed on the bar rather than stated as a second number, so
+   "37.5%" reads against the point it is being measured against. */
+.dt-plan-pace {
+  position: absolute; top: -3px; bottom: -3px; width: 2px;
+  background: var(--text); border-radius: 1px; transform: translateX(-1px);
+}
 
-/* Hairlines, not tiles. These three are the arithmetic behind the rate
-   above them and are read across as one row. */
+/* Four tiles, not hairlines: PIP and Assignment carry a neutral edge --
+   commitments and handovers, not yet an outcome. Delivered is green,
+   finished work. Short by is red, the number someone is chased about. */
 .dt-plan-figures {
-  display: grid; margin: 16px 0 0; padding: 0;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  display: grid; gap: 10px; margin: 18px 0 0; padding: 0;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 .dt-plan-figure {
-  padding: 9px 0 9px 12px;
-  border-inline-start: 1px solid var(--border-soft);
-  border-block-start: 1px solid var(--border-soft);
+  background: var(--surface-1);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  border-inline-start: 3px solid transparent;
 }
-.dt-plan-figure:nth-child(-n + 2) { border-block-start: none; }
-.dt-plan-figure:nth-child(odd) { border-inline-start: none; padding-inline-start: 0; }
+.dt-plan-figure-neutral { border-inline-start-color: var(--border); }
+.dt-plan-figure-done { border-inline-start-color: var(--dt-done); }
+.dt-plan-figure-problem { border-inline-start-color: var(--dt-problem); }
 .dt-plan-figure dt { font-size: 11.5px; color: var(--text-muted); }
 .dt-plan-figure dd {
   margin: 2px 0 0;
   font-family: var(--font-display); font-size: 21px; font-weight: 600;
   letter-spacing: -0.02em; line-height: 1.1;
+}
+.dt-plan-figure-caption {
+  margin: 3px 0 0; font-size: 10.5px; color: var(--text-dim);
 }
 .dt-plan-committed {
   margin: 14px 0 0; font-size: 11.5px; color: var(--text-dim);
@@ -1986,6 +2006,9 @@ a.dt-contractor-name:hover { text-decoration: underline; text-decoration-color: 
 
 @media (max-width: 900px) {
   .dt-plan { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 560px) {
+  .dt-plan-figures { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 .dt-figures {
@@ -2189,7 +2212,22 @@ a.dt-contractor-name:hover { text-decoration: underline; text-decoration-color: 
 /* ---------- flow ledger ----------
    A column waterfall: one bar per movement, each starting where the last
    one finished, with a dashed connector between bar tops. */
-.dt-flow { display: grid; gap: 10px; }
+/* Lets the ledger's own flex column (below) actually reach the section's
+   full height, so the chart area has real extra room to grow into rather
+   than a `height: 100%` that resolves against nothing. */
+.dt-flow-section .dt-section-body {
+  flex: 1; display: flex; flex-direction: column; min-height: 0;
+}
+.dt-flow { display: flex; flex-direction: column; gap: 10px; height: 100%; }
+/* Paired with Plan and delivery, which usually runs taller: the chart area
+   is the one flexible part of this card, so it takes the extra height
+   instead of leaving it as a gap below the footer. The bars themselves stay
+   a fixed-aspect drawing -- centred in the room they are given rather than
+   stretched out of proportion. */
+.dt-flow-chart {
+  flex: 1; min-height: 0;
+  display: flex; align-items: center; justify-content: center;
+}
 /* The waterfall. Full width now that this card no longer shares a row, so
    a column is ~170px with room under it for its label at full length --
    which is the thing four 66-pixel columns could not do and the reason this

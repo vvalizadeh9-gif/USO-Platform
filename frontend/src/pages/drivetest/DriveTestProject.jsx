@@ -270,6 +270,7 @@ export default function DriveTestProject() {
               onRetry={refresh}
               skeletonRows={4}
               actions={<NetChange value={flowNet(trend.data.latest_flows)} />}
+              className="dt-flow-section"
             >
               {(t) => <FlowLedger flows={t.latest_flows} monthLabel={t.latest_flows.label} />}
             </Section>
@@ -353,7 +354,13 @@ export default function DriveTestProject() {
             state={overview}
             onRetry={refresh}
           >
-            {(d) => <ContractorScorecard rows={d.contractor_scorecard} provinceId={provinceId} />}
+            {(d) => (
+              <ContractorScorecard
+                rows={d.contractor_scorecard}
+                planRows={plan.data?.rows}
+                provinceId={provinceId}
+              />
+            )}
           </Section>
         )}
 

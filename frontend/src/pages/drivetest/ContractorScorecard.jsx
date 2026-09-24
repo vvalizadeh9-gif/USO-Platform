@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { UNATTRIBUTED } from './constants'
-import { count, percent } from './format'
+import { achievement, count, percent } from './format'
 import { assignedLink, doneLink, ongoingLink } from './links'
 import { DrillLink } from './DrillPanel'
 
@@ -58,6 +58,12 @@ const COLUMNS = [
   // concluding something about neither. This one is how far a company is
   // through its own book, which is what `done_percent` is documented as.
   { key: 'done_percent', label: 'Completion', numeric: true },
+  // The one figure this table used to make a reader go find on a different
+  // card, 800px up the page, against a different denominator. Same word,
+  // same source (`ContractorAchievementRow`, the Plan and delivery card's own
+  // rows) -- one row now carries both facts instead of asking a reader to
+  // hold Alfa's name in mind while they scroll.
+  { key: 'this_month_pct', label: 'This month PIP', numeric: true },
 ]
 
 /** A contractor's assignment: drive tests finished plus sites still held.
@@ -82,11 +88,30 @@ function completionBand(value) {
   return 'bad'
 }
 
-export default function ContractorScorecard({ rows, provinceId }) {
+/** Which band a this-month achievement rate falls in. Same thresholds
+ * `format.bandColor` uses for the bullet chart this figure comes from. */
+function achievementBand(value) {
+  if (value >= 100) return 'good'
+  if (value >= 80) return 'mid'
+  return 'bad'
+}
+
+export default function ContractorScorecard({ rows, planRows, provinceId }) {
   // `null` means "as the server ranked them" — by completion, with the
   // unattributed row already last. Re-sorting is something the reader turns
   // on, not a default this component imposes over the one it was given.
   const [sort, setSort] = useState(null)
+
+  // This month's PIP, by contractor — the same rows the Plan and delivery
+  // card reads, joined in here rather than fetched twice. The PIP is
+  // programme-wide with no contractor for the unattributed row, so it is
+  // never in this map and always reads as "no PIP" below.
+  const planByContractor = useMemo(() => {
+    const map = new Map()
+    for (const row of planRows ?? []) map.set(row.contractor_id, row)
+    return map
+  }, [planRows])
+  const thisMonthPct = (row) => planByContractor.get(row.contractor_id)?.achievement_percent
 
   const sorted = useMemo(() => {
     const all = rows ?? []
@@ -98,14 +123,21 @@ export default function ContractorScorecard({ rows, provinceId }) {
       // as the server's own ranking keeps it.
       const anon = (a.contractor_id == null) - (b.contractor_id == null)
       if (anon !== 0) return anon
-      const av = sort.key === 'assigned' ? assignmentOf(a) : a[sort.key]
-      const bv = sort.key === 'assigned' ? assignmentOf(b) : b[sort.key]
+      const value = (row) => {
+        if (sort.key === 'assigned') return assignmentOf(row)
+        if (sort.key === 'this_month_pct') {
+          return planByContractor.get(row.contractor_id)?.achievement_percent ?? -1
+        }
+        return row[sort.key]
+      }
+      const av = value(a)
+      const bv = value(b)
       const cmp =
         typeof av === 'string' ? av.localeCompare(bv, 'fa') : (av ?? 0) - (bv ?? 0)
       return sort.dir === 'asc' ? cmp : -cmp
     })
     return copy
-  }, [rows, sort])
+  }, [rows, sort, planByContractor])
 
   if (!rows || rows.length === 0) {
     return <div className="dt-empty">No contractor work to show.</div>
@@ -152,6 +184,9 @@ export default function ContractorScorecard({ rows, provinceId }) {
                   </button>
                 </th>
               ))}
+              <th scope="col" className="dt-th-action">
+                <span className="dt-sr-only">Action</span>
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -203,6 +238,29 @@ export default function ContractorScorecard({ rows, provinceId }) {
                     >
                       {percent(row.done_percent)}
                     </span>
+                  </td>
+                  <td style={{ textAlign: 'right' }}>
+                    {(() => {
+                      const pct = thisMonthPct(row)
+                      return pct == null ? (
+                        <span className="dt-pill dt-pill-dim">no PIP</span>
+                      ) : (
+                        <span className={`dt-pill dt-pill-${achievementBand(pct)}`}>
+                          {achievement(pct)}
+                        </span>
+                      )
+                    })()}
+                  </td>
+                  <td className="dt-action-cell">
+                    {unattributed && (
+                      <DrillLink
+                        to={ongoingLink({ contractorId: UNATTRIBUTED })}
+                        drillLabel={row.name}
+                        className="dt-cell-link"
+                      >
+                        Assign
+                      </DrillLink>
+                    )}
                   </td>
                 </tr>
               )

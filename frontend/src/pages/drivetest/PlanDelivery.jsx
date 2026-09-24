@@ -1,5 +1,6 @@
 import { achievement, bandColor, count, planScale } from './format'
 import { deliveredLink } from './links'
+import { monthProgress } from '../../lib/shamsi'
 import BulletBar, { BulletKey } from './charts/BulletBar'
 import Section from './Section'
 import { DrillLink } from './DrillPanel'
@@ -81,24 +82,23 @@ export default function PlanDelivery({ state, onRetry, scoped, provinceName }) {
   )
 }
 
-/** The month in one block: the rate, then the counts behind it.
+/** The month in one block: the rate on its own line with the bar, then the
+ * four tiles the rate is made of.
  *
- * The rate leads because it is the figure the card is asked for, and it is
- * the one figure here that is comparable month to month — 6 delivered means
- * nothing without the 16 it was promised against. The bar under it is that
- * same rate drawn, capped at the target rather than at the highest bar on
- * screen: this is a share of a commitment, not a quantity competing with
- * other quantities.
+ * The rate sits beside its own progress bar rather than stacked above it —
+ * one line for "how far", not two. A pace marker on the bar places where an
+ * even rate through the month would be today, so "37.5%" reads as ahead of
+ * or behind schedule rather than as a number with no month behind it. It
+ * only draws for the month actually running: a closed month has nothing
+ * honest left to pace against.
  *
- * Four counts under it rather than four tiles. Tiles gave each figure a
- * border, a background and an icon, which spent a card's worth of weight on
- * three numbers that are the arithmetic behind the fourth. Hairlines say the
- * same thing — these belong together and are read across — at a fraction of
- * the ink.
- *
- * "Short by" is the figure the card did not have and is the one somebody is
- * actually chased about. It is arithmetic the reader was being left to do,
- * on two numbers sitting forty pixels apart.
+ * Four tiles, not hairlines: PIP and Assignment carry a neutral edge, they
+ * are commitments and handovers rather than outcomes; Delivered is green,
+ * because it is finished work; Short by is red, because it is the number
+ * somebody is actually chased about. The two middle tiles carry a caption
+ * when the figures behind them are known — "N never assigned" is a planning
+ * gap, "N assigned, not done" is a contractor gap, and the two add to the
+ * shortfall.
  */
 function PlanSummary({ data, uncommitted }) {
   const pct = data.achievement_percent
@@ -108,12 +108,42 @@ function PlanSummary({ data, uncommitted }) {
   // Floored at zero: a contractor who overshot is not "short by" a negative
   // number, they are short by nothing.
   const short = pct == null ? null : Math.max(0, data.pip - data.actual)
+  const neverAssigned = Math.max(0, data.pip - data.assigned)
+  const assignedNotDone = Math.max(0, data.assigned - data.actual)
+  const pace = monthProgress(data.shamsi_year, data.shamsi_month)
 
   return (
     <div className="dt-plan-summary">
-      <span className="dt-plan-rate" style={{ color }}>
-        {achievement(pct) ?? '—'}
-      </span>
+      <div className="dt-plan-rate-row">
+        <span className="dt-plan-rate" style={{ color }}>
+          {achievement(pct) ?? '—'}
+        </span>
+        <span
+          className="dt-plan-progress"
+          role="img"
+          aria-label={
+            pct == null
+              ? 'No approved PIP for this month'
+              : `Achievement ${achievement(pct)}${
+                  pace ? `, ${pace.elapsed} of ${pace.total} days into the month` : ''
+                }`
+          }
+        >
+          <span
+            data-testid="dt-plan-progress-fill"
+            className="dt-plan-progress-fill"
+            style={{ width: `${Math.min(100, pct ?? 0)}%`, background: color }}
+          />
+          {pace && (
+            <span
+              data-testid="dt-plan-pace"
+              className="dt-plan-pace"
+              style={{ left: `${Math.min(100, pace.percent)}%` }}
+              aria-hidden="true"
+            />
+          )}
+        </span>
+      </div>
       <span className="dt-plan-rate-label">
         Achievement
         {/* Null, not zero: there is no PIP to have achieved a share of, and
@@ -126,33 +156,28 @@ function PlanSummary({ data, uncommitted }) {
         )}
       </span>
 
-      <span
-        className="dt-plan-progress"
-        role="img"
-        aria-label={pct == null ? 'No approved PIP for this month' : `Achievement ${achievement(pct)}`}
-      >
-        <span
-          data-testid="dt-plan-progress-fill"
-          className="dt-plan-progress-fill"
-          style={{ width: `${Math.min(100, pct ?? 0)}%`, background: color }}
-        />
-      </span>
-
       <dl className="dt-plan-figures">
-        <PlanFigure label="PIP" value={count(data.pip)} />
-        <PlanFigure label="Assignment" value={count(data.assigned)} />
+        <PlanFigure tone="neutral" label="PIP" value={count(data.pip)} />
         <PlanFigure
+          tone="neutral"
+          label="Assignment"
+          value={count(data.assigned)}
+          caption={`${count(neverAssigned)} never assigned`}
+        />
+        <PlanFigure
+          tone="done"
           label="Delivered"
           value={count(data.actual)}
+          caption={`${count(assignedNotDone)} assigned, not done`}
           // The one figure here with a list behind it: PIP and Assignment
           // count commitments and handovers, not sites this dashboard can
           // open.
           href={deliveredLink({ year: data.shamsi_year, month: data.shamsi_month })}
         />
         <PlanFigure
+          tone="problem"
           label="Short by"
           value={short == null ? '—' : count(short)}
-          color={short ? 'var(--dt-problem)' : undefined}
         />
       </dl>
 
@@ -173,11 +198,11 @@ function PlanSummary({ data, uncommitted }) {
   )
 }
 
-function PlanFigure({ label, value, href, color }) {
+function PlanFigure({ label, value, href, tone, caption }) {
   return (
-    <div className="dt-plan-figure">
+    <div className={`dt-plan-figure dt-plan-figure-${tone}`}>
       <dt>{label}</dt>
-      <dd className="tnum" style={color ? { color } : undefined}>
+      <dd className="tnum">
         {href ? (
           <DrillLink to={href} className="dt-cell-link" aria-label={`${label}: ${value}`}>
             {value}
@@ -186,6 +211,7 @@ function PlanFigure({ label, value, href, color }) {
           value
         )}
       </dd>
+      {caption && <p className="dt-plan-figure-caption">{caption}</p>}
     </div>
   )
 }
@@ -195,6 +221,14 @@ function ContractorAchievement({ rows, programme, year, month }) {
     return <div className="dt-empty">No contractor PIP for this month.</div>
   }
   const scaleMax = planScale(rows)
+  // Best first. A contractor with no approved plan has nothing to have
+  // achieved a share of, so they sort behind every contractor who does,
+  // in the order the server gave them.
+  const sorted = [...rows].sort((a, b) => {
+    if (a.achievement_percent == null) return b.achievement_percent == null ? 0 : 1
+    if (b.achievement_percent == null) return -1
+    return b.achievement_percent - a.achievement_percent
+  })
 
   return (
     <div className="dt-achievement">
@@ -204,7 +238,7 @@ function ContractorAchievement({ rows, programme, year, month }) {
             two-pixel tick that a touch screen can never reveal. */}
         <BulletKey scaleMax={scaleMax} />
       </div>
-      {rows.map((row, i) => (
+      {sorted.map((row, i) => (
         <BulletBar
           key={row.contractor_id}
           label={row.name}
