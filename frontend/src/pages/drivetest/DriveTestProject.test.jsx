@@ -1161,14 +1161,27 @@ describe('the KPI band', () => {
     draw()
 
     const band = await screen.findByLabelText('Programme totals')
-    expect(within(card(band, 'Total On-air')).getByText('100')).toBeInTheDocument()
-    expect(within(card(band, 'Total DT Done')).getByText('40')).toBeInTheDocument()
-    expect(within(card(band, 'Total Pending')).getByText('60')).toBeInTheDocument()
+    expect(within(card(band, 'On air')).getByText('100')).toBeInTheDocument()
+    expect(within(card(band, 'DT done')).getByText('40')).toBeInTheDocument()
+    expect(within(card(band, 'Pending')).getByText('60')).toBeInTheDocument()
     // DT done states its share beside the figure. The percentage is what is
     // drawn; what it is a share *of* stays in the accessible name, because a
     // bare percentage next to a count does not say which is its denominator.
-    const pct = within(card(band, 'Total DT Done')).getByText('40%')
+    const pct = within(card(band, 'DT done')).getByText('40%')
     expect(pct).toHaveAttribute('aria-label', '40% of on-air')
+  })
+
+  it('names each card without repeating "Total" on three of them', async () => {
+    // "Total" said three times across one row is three words a reader skips
+    // on every visit. The figures are totals by position; the names say what
+    // each one counts. Checked as whole labels, so "Pending" cannot be
+    // satisfied by "Pending status".
+    serve()
+    draw()
+
+    const band = await screen.findByLabelText('Programme totals')
+    const titles = [...band.querySelectorAll('.dt-kpi-title')].map((t) => t.textContent)
+    expect(titles).toEqual(['On air', 'DT done', 'Pending', 'Pending status'])
   })
 
   it('no longer leads with the overall progress rate or the four-state on-air bar', async () => {
@@ -1200,7 +1213,7 @@ describe('the KPI band', () => {
     )
     expect(values).toEqual([50, 10, 0])
     expect(values.reduce((a, b) => a + b, 0)).toBe(
-      Number(within(card(band, 'Total Pending')).getByText('60').textContent),
+      Number(within(card(band, 'Pending')).getByText('60').textContent),
     )
   })
 
@@ -1223,10 +1236,10 @@ describe('the KPI band', () => {
     draw()
 
     const band = await screen.findByLabelText('Programme totals')
-    expect(card(band, 'Total On-air').querySelector('.dt-kpi-split')).toBeNull()
+    expect(card(band, 'On air').querySelector('.dt-kpi-split')).toBeNull()
     // The three cards that do split something keep theirs.
-    expect(card(band, 'Total DT Done').querySelector('.dt-kpi-split')).not.toBeNull()
-    expect(card(band, 'Total Pending').querySelector('.dt-kpi-split')).not.toBeNull()
+    expect(card(band, 'DT done').querySelector('.dt-kpi-split')).not.toBeNull()
+    expect(card(band, 'Pending').querySelector('.dt-kpi-split')).not.toBeNull()
   })
 
   it('mirrors the pending bar against the DT done bar', async () => {
@@ -1238,8 +1251,8 @@ describe('the KPI band', () => {
     draw()
 
     const band = await screen.findByLabelText('Programme totals')
-    const doneBar = card(band, 'Total DT Done').querySelector('.dt-kpi-split')
-    const pendingBar = card(band, 'Total Pending').querySelector('.dt-kpi-split')
+    const doneBar = card(band, 'DT done').querySelector('.dt-kpi-split')
+    const pendingBar = card(band, 'Pending').querySelector('.dt-kpi-split')
 
     expect(doneBar.querySelector('[data-seg="done"]')).toHaveStyle({ width: '40%' })
     expect(doneBar.querySelector('[data-seg="rest"]')).toHaveStyle({ width: '60%' })
@@ -1259,7 +1272,7 @@ describe('the KPI band', () => {
     draw()
 
     const band = await screen.findByLabelText('Programme totals')
-    const chip = within(card(band, 'Total Pending')).getByText('\u00b10')
+    const chip = within(card(band, 'Pending')).getByText('\u00b10')
     expect(chip).toHaveStyle({ color: 'var(--text-dim)' })
   })
 

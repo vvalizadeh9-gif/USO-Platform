@@ -1636,7 +1636,27 @@ tbody tr:last-child td { border-bottom: none; }
   font-family: var(--font-display); font-size: 25px; font-weight: 700;
   letter-spacing: -0.025em; line-height: 1.2; color: var(--text);
 }
-a.dt-kpi-figure:hover { color: var(--kpi-accent); }
+/* Every figure in the band opens the sites behind it -- the page's core
+   feature -- so it has to look like it does, on a screen with no hover too.
+   A quiet dotted rule at rest, the card's own hue when pointed at, and a real
+   focus ring for the keyboard. The figure keeps its ink colour throughout:
+   On air's hue is the neutral, and greying a figure on hover reads as
+   disabled rather than as live. */
+a.dt-kpi-figure {
+  text-decoration: underline dotted var(--border);
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 5px;
+  border-radius: 4px;
+}
+a.dt-kpi-figure:hover {
+  text-decoration-style: solid;
+  text-decoration-color: var(--kpi-accent);
+}
+a.dt-kpi-figure:focus-visible,
+a.dt-status-row:focus-visible {
+  outline: 2px solid var(--kpi-accent);
+  outline-offset: 2px;
+}
 .dt-kpi-pct {
   font-size: 13.5px; font-weight: 600; color: var(--kpi-accent);
 }
@@ -1669,35 +1689,67 @@ a.dt-kpi-figure:hover { color: var(--kpi-accent); }
 .dt-delta-pill b[data-tone="bad"] { background: var(--dt-problem-wash); }
 .dt-delta-since { color: var(--text-dim); font-size: 11.5px; }
 
-/* ---------- the pending breakdown: stack above, named rows below ----------
-   The rows carry a swatch AND a word AND a figure. Never the swatch alone:
+/* ---------- the pending breakdown: stack above, named parts below ----------
+   Each part carries a swatch AND a word AND a figure. Never the swatch alone:
    green and brick are not separable under deuteranopia (see the note beside
-   the tokens in :root), so a reader who cannot tell the two segments apart
-   reads the rows instead. */
+   the tokens in :root), so a reader who cannot tell two segments apart reads
+   the parts instead.
+
+   THREE COLUMNS, NOT THREE ROWS, wherever the card is wide enough. As rows the
+   parts made this the tallest card in the band by 30-45px, and a band of
+   equal cards takes the height of its tallest -- so the other three carried a
+   dead strip through their middles to make room for it. As columns it lands
+   within a few pixels of DT done and Pending, and every part is a larger
+   target for a finger. Below 240px of card the three labels no longer fit
+   side by side, and the container query drops them back to rows. It is the
+   card's own width that decides, not the viewport's: the band reflows to two
+   and then one column, so the same viewport can give this card either. */
+.dt-kpi-card[data-kpi="status"] { container: kpi-status / inline-size; }
 .dt-status-list {
   list-style: none; margin: 0; padding: 0;
-  display: flex; flex-direction: column; gap: 4px;
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px;
   margin-block-start: auto; padding-block-start: 9px;
 }
 .dt-status-row {
-  display: grid;
-  grid-template-columns: 8px 1fr auto 34px;
-  align-items: center;
-  column-gap: 8px;
-  padding: 2px 4px;
+  display: flex; flex-direction: column; gap: 1px;
+  padding: 3px 4px;
   border-radius: var(--radius-sm);
   color: inherit;
   transition: background 0.14s;
 }
 a.dt-status-row:hover { background: var(--surface-2); }
-.dt-status-name { font-size: 12.5px; color: var(--text-muted); font-weight: 500; }
+/* Wraps rather than truncates. A state name cut to "Proble..." is exactly
+   the text a reader who cannot separate the colours depends on, so the rule
+   is that it is never hidden -- a second line is the price if a card is ever
+   narrower than the threshold below expects. */
+.dt-status-name {
+  font-size: 11.5px; color: var(--text-muted); font-weight: 500;
+  line-height: 1.35; overflow-wrap: anywhere;
+}
+.dt-status-figs {
+  display: flex; align-items: center; gap: 6px;
+}
 .dt-status-num {
-  font-family: var(--font-display); font-size: 13.5px; font-weight: 600;
-  color: var(--text); justify-self: end;
+  font-family: var(--font-display); font-size: 16px; font-weight: 700;
+  color: var(--text); line-height: 1.25;
 }
 .dt-status-pct {
-  font-size: 11.5px; color: var(--text-dim); justify-self: end;
-  min-width: 4ch; text-align: end;
+  font-size: 11.5px; color: var(--text-dim);
+}
+/* Rows again, swatch first, once the card is too narrow for three columns.
+   `display: contents` lifts the figures into the row's own grid so the swatch
+   can lead the line the way a legend does, without a second copy of it. */
+@container kpi-status (max-width: 239px) {
+  .dt-status-list { grid-template-columns: minmax(0, 1fr); gap: 1px; }
+  .dt-status-row {
+    display: grid; grid-template-columns: 8px minmax(0, 1fr) auto 4ch;
+    align-items: center; column-gap: 8px; padding: 2px 4px;
+  }
+  .dt-status-figs { display: contents; }
+  .dt-status-row .dt-kpi-part-dot { order: -1; }
+  .dt-status-name { font-size: 12.5px; }
+  .dt-status-num { font-size: 13.5px; font-weight: 600; justify-self: end; }
+  .dt-status-pct { text-align: end; }
 }
 .dt-kpi-part-dot {
   inline-size: 8px; block-size: 8px; border-radius: 2px; flex: none;

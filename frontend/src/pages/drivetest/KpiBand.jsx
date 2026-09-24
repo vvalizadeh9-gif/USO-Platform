@@ -162,7 +162,7 @@ export default function KpiBand({ kpis, provinceId }) {
           <span className="dt-kpi-ic" aria-hidden="true">
             <RadioTower size={13} strokeWidth={2.2} />
           </span>
-          <span className="dt-kpi-title">Total On-air</span>
+          <span className="dt-kpi-title">On air</span>
         </div>
         <div className="dt-kpi-v">
           <DrillLink
@@ -182,7 +182,7 @@ export default function KpiBand({ kpis, provinceId }) {
           <span className="dt-kpi-ic" aria-hidden="true">
             <CheckCircle2 size={13} strokeWidth={2.2} />
           </span>
-          <span className="dt-kpi-title">Total DT Done</span>
+          <span className="dt-kpi-title">DT done</span>
         </div>
         <div className="dt-kpi-v">
           <DrillLink
@@ -221,7 +221,7 @@ export default function KpiBand({ kpis, provinceId }) {
           <span className="dt-kpi-ic" aria-hidden="true">
             <AlertCircle size={13} strokeWidth={2.2} />
           </span>
-          <span className="dt-kpi-title">Total Pending</span>
+          <span className="dt-kpi-title">Pending</span>
         </div>
         <div className="dt-kpi-v">
           <DrillLink
@@ -248,17 +248,23 @@ export default function KpiBand({ kpis, provinceId }) {
         />
       </div>
 
-      {/* Card 4: Pending Status.
-          The stack says how pending divides; the three rows below name each
-          part in words and figures. Both, never just the stack: green and
+      {/* Card 4: Pending status.
+          The stack says how pending divides; the three parts below name each
+          one in words and figures. Both, never just the stack: green and
           brick are not separable under deuteranopia (see app.css), so colour
-          on this page is the fast read and never the only one. */}
+          on this page is the fast read and never the only one.
+
+          The parts sit as three columns rather than three rows wherever the
+          card is wide enough (a container query in app.css). As rows they
+          made this the tallest card by a clear margin, and a band of equal
+          cards takes the height of its tallest, so three cards carried a dead
+          strip through their middles to make room for this one. */}
       <div className="dt-kpi-card" data-kpi="status">
         <div className="dt-kpi-hd">
           <span className="dt-kpi-ic" aria-hidden="true">
             <PieChart size={13} strokeWidth={2.2} />
           </span>
-          <span className="dt-kpi-title">Pending Status</span>
+          <span className="dt-kpi-title">Pending status</span>
         </div>
         <SplitBar
           label={stackLabel}
@@ -271,15 +277,21 @@ export default function KpiBand({ kpis, provinceId }) {
         <ul className="dt-status-list">
           {parts.map((p) => (
             <li key={p.key}>
+              {/* The swatch rides with the figures, not the word: in the
+                  column layout the word gets the column's full width, which
+                  is what keeps "Problematic" whole at the widths where three
+                  columns only just fit. */}
               <DrillLink to={p.href} className="dt-status-row">
-                <span
-                  className="dt-kpi-part-dot"
-                  style={{ background: p.color }}
-                  aria-hidden="true"
-                />
                 <span className="dt-status-name">{p.label}</span>
-                <span className="dt-status-num tnum">{count(p.value)}</span>
-                <span className="dt-status-pct tnum">{shareOfPending(p.value)}</span>
+                <span className="dt-status-figs">
+                  <span
+                    className="dt-kpi-part-dot"
+                    style={{ background: p.color }}
+                    aria-hidden="true"
+                  />
+                  <span className="dt-status-num tnum">{count(p.value)}</span>
+                  <span className="dt-status-pct tnum">{shareOfPending(p.value)}</span>
+                </span>
               </DrillLink>
             </li>
           ))}
