@@ -1,4 +1,4 @@
-import { BookmarkPlus, Calendar, Download, Filter, MapPin, RefreshCw, X } from 'lucide-react'
+import { Download, MapPin, RefreshCw, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { freshness } from './format'
 
@@ -51,21 +51,12 @@ export default function Toolbar({
           </span>
         )}
 
-        <button type="button" className="btn btn-sm dt-toolbar-filter" title="Saved views">
-          <BookmarkPlus size={13} aria-hidden="true" />
-          <span className="dt-toolbar-label">Saved Views</span>
-        </button>
-
-        <button type="button" className="btn btn-sm dt-toolbar-filter" title="Vendor filter">
-          <Filter size={13} aria-hidden="true" />
-          <span className="dt-toolbar-label">Vendor</span>
-        </button>
-
-        <button type="button" className="btn btn-sm dt-toolbar-filter" title="Date range">
-          <Calendar size={13} aria-hidden="true" />
-          <span className="dt-toolbar-label">Date range</span>
-        </button>
-
+        {/* Saved Views, Vendor and Date range used to sit here as buttons
+            with nothing behind them. A control that looks live and does
+            nothing teaches a reader to distrust the ones that do work, so
+            they are gone until there is something for them to do. The
+            province filter is the one filter this page has; it is set from
+            the province table and cleared from the chip on the left. */}
         <button
           type="button"
           className="btn btn-sm"

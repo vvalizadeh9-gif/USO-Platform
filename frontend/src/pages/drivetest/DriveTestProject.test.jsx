@@ -1688,6 +1688,25 @@ describe('drill-through', () => {
   })
 })
 
+describe('the toolbar', () => {
+  it('offers no control that does nothing', async () => {
+    // Saved Views, Vendor and Date range were buttons with no handler: they
+    // looked like filters and did nothing. If one comes back it should come
+    // back working, not as decoration that teaches a reader to distrust the
+    // controls beside it.
+    serve()
+    draw()
+
+    await screen.findByLabelText('Programme totals')
+    for (const name of [/saved views/i, /vendor/i, /date range/i]) {
+      expect(screen.queryByRole('button', { name })).not.toBeInTheDocument()
+    }
+    // The two that do work are still there.
+    expect(screen.getByRole('button', { name: /refresh the dashboard/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /export/i })).toBeInTheDocument()
+  })
+})
+
 describe('the export button', () => {
   // A deliberate behaviour change: it used to download `/work-items/export`,
   // which is every work item in scope whether on-air or not. A reader pressed

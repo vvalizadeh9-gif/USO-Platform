@@ -1528,13 +1528,6 @@ tbody tr:last-child td { border-bottom: none; }
 .dt-freshness {
   font-size: 12px; color: var(--text-dim); font-variant-numeric: tabular-nums;
 }
-.dt-toolbar-filter {
-  gap: 5px;
-}
-.dt-toolbar-label { font-size: 12px; }
-@media (max-width: 860px) {
-  .dt-toolbar-label { display: none; }
-}
 .dt-spin { animation: spin 0.9s linear infinite; }
 
 /* ---------- the bench ---------- */
