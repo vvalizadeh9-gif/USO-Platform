@@ -388,6 +388,18 @@ describe('plan and delivery', () => {
     }
   })
 
+  it('captions the assignment and delivery tiles with the two shortfalls that make up "short by"', async () => {
+    // pip 16, assigned 9, actual 6: 7 never made it to a contractor, and a
+    // further 3 were handed over but not finished -- 7 + 3 is the 10 the
+    // card is short by, and the two have different owners.
+    serve()
+    draw()
+
+    const card = await section('Plan and delivery')
+    expect(within(card).getByText('7 never assigned')).toBeInTheDocument()
+    expect(within(card).getByText('3 assigned, not done')).toBeInTheDocument()
+  })
+
   it('says how many contractors have not committed, so a short PIP explains itself', async () => {
     serve()
     draw()
@@ -468,11 +480,10 @@ describe('plan and delivery', () => {
     expect(within(row).getByTestId('achievement-bar')).toBeInTheDocument()
   })
 
-  it('colours each bar by band: at target, close to it, short of it', async () => {
-    // One contractor in each band, including the middle one — 80-99 is the
-    // band a two-colour "met it or did not" reading would lose. The middle
-    // band used to be amber, which against this red is 3.4 ΔE apart for a
-    // red-green reader: "nearly there" and "badly short" were the same bar.
+  it('draws every contractor bar in the same colour: the length is the reading', async () => {
+    // The bar used to switch colour by band, which said the same thing the
+    // bar's own length already says. Colour is spent on the one number that
+    // needs it instead — see the next test.
     serve(
       planDelivery({
         rows: [
@@ -488,9 +499,47 @@ describe('plan and delivery', () => {
     const barFor = (name) =>
       within(within(card).getByText(name).closest('.dt-bullet')).getByTestId('achievement-bar')
 
-    expect(barFor('Beta Surveys')).toHaveStyle({ background: 'var(--dt-done)' })
-    expect(barFor('Delta Field')).toHaveStyle({ background: 'var(--dt-ongoing)' })
-    expect(barFor('Gamma Networks')).toHaveStyle({ background: 'var(--dt-problem)' })
+    for (const name of ['Beta Surveys', 'Delta Field', 'Gamma Networks']) {
+      expect(barFor(name)).toHaveStyle({ background: 'var(--dt-ongoing)' })
+    }
+  })
+
+  it('colours the percentage only on a miss, and leaves a hit the default ink', async () => {
+    serve(
+      planDelivery({
+        rows: [
+          { contractor_id: 2, name: 'Beta Surveys', pip: 2, actual: 2, achievement_percent: 100.0 },
+          { contractor_id: 3, name: 'Gamma Networks', pip: 10, actual: 1, achievement_percent: 10.0 },
+        ],
+      }),
+    )
+    draw()
+
+    const card = await section('Plan and delivery')
+    const pctFor = (name) =>
+      within(within(card).getByText(name).closest('.dt-bullet')).getByText(/%$/)
+
+    expect(pctFor('Beta Surveys')).not.toHaveStyle({ color: 'var(--dt-problem)' })
+    expect(pctFor('Gamma Networks')).toHaveStyle({ color: 'var(--dt-problem)' })
+  })
+
+  it('sorts contractor rows by achievement, best first', async () => {
+    serve(
+      planDelivery({
+        rows: [
+          { contractor_id: 3, name: 'Gamma Networks', pip: 10, actual: 1, achievement_percent: 10.0 },
+          { contractor_id: 1, name: 'Alfa Drive Tests', pip: 4, actual: 3, achievement_percent: 75.0 },
+          { contractor_id: 2, name: 'Beta Surveys', pip: 2, actual: 2, achievement_percent: 100.0 },
+        ],
+      }),
+    )
+    draw()
+
+    const card = await section('Plan and delivery')
+    const names = within(card)
+      .getAllByTestId('achievement-bar')
+      .map((bar) => bar.closest('.dt-bullet').querySelector('.dt-bullet-label').textContent)
+    expect(names).toEqual(['Beta Surveys', 'Alfa Drive Tests', 'Gamma Networks'])
   })
 
   it('shows a month with no approved plan as no achievement, not as zero', async () => {
