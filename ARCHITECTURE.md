@@ -692,6 +692,89 @@ the product owner as more complexity than can be handled now.
 
 ---
 
+## 5d. The Mojri tracker
+
+ICT HQ (Mojri) keeps **its own** tracker of which villages are registered with
+it, and it lags behind the verdicts we have already recorded. This feature
+answers one question per village per authority: *has their tracker caught up?*
+
+**It is not a third authority.** `AUTHORITIES` is still `("ICT", "CRA")` and
+this feature never touches it. Mojri is the keeper of a spreadsheet, not a
+party to the acceptance decision — putting it in the value set would drag "ICT
+HQ has typed this village in" into the submit/review pipeline and into every
+figure that counts approvals. It is a separate table
+(`mojri_tracker_status`), read independently of the acceptance arithmetic.
+Nothing here writes `acceptances`, `villages.ict_status`/`cra_status` or any
+submission, and a test asserts it.
+
+### Template out, filled file in
+
+Mojri's raw file is somebody else's, its layout moves, and parsing it is not
+attempted. Instead:
+
+```
+Admin Console ──▶ mojri_template_1404_06.xlsx ──▶ filled by hand, outside UEP
+                    (one row per village we                     │
+                     have already approved)                     ▼
+                                              PM · Mojri Tracker: upload,
+                                              preview, confirm
+```
+
+`site_id` and `site_type` are in the template for the person matching rows
+against Mojri's file, which is organised by site. **The importer reads
+`village_id` and nothing else**: one site routinely serves several villages, and
+registration, like acceptance, is per village.
+
+The template is a **read**, which is why Admin may take it — and the import is a
+write, which is why it is PM's alone. That is the Admin/PM separation in §6,
+applied here. Coordinator reaches neither.
+
+### How a cell is read
+
+Per authority, for **each technology the village actually requested**: a
+recognised positive token → registered; blank → not registered; anything else —
+an unrecognised word, a note, a cell carrying an Excel comment → **needs a
+look**. The village's status is `in_tracker` only if every requested technology
+reads registered, and `needs_look` if any single one does. Never an average.
+
+Two rules that look like omissions:
+
+* a **recognised negative** ("no", "رد") routes to `needs_look`, not to "not
+  registered". In a registration column, refused and not-yet-done are different
+  facts, and reading one as the other records a decision nobody made. The token
+  sets themselves are shared with the CPM importer
+  (`services/acceptance_tokens.py`) rather than copied — two copies would not
+  fail, they would drift;
+* cells for **technologies the village never requested** are ignored entirely,
+  whatever they contain. A 3G/4G village's 2G column is not a gap that can
+  never close.
+
+### Nothing writes before Confirm
+
+`POST /mojri/import/preview` opens the file, reads every cell and returns what
+would happen. It writes nothing at all — no staging table, no temporary file —
+so an abandoned upload leaves nothing behind. Confirm sends the same file back
+with the SHA-256 the preview returned, and a file whose digest does not match is
+refused: without that, "preview then confirm" would guarantee nothing.
+
+The preview names three things rather than counting them: rows whose
+`village_id` matched nothing, rows repeating a `village_id` (neither is written
+— if two rows disagree, taking the last one silently loses the other claim), and
+**villages that were in the tracker last import and are absent from this file**.
+That last group is left exactly as it was. Each file is a full snapshot of the
+villages it names; a row filtered out of a spreadsheet is not a registration
+being withdrawn.
+
+### Not built, deliberately
+
+Aging on the tracker gap (low priority per the product owner), automatic
+parsing of Mojri's raw file (the clean-by-hand step stays manual and outside
+UEP), and the join into the Gap & Performance road's "tracker" and "dep"
+stretches — those two still report zero. Wiring them up is a small, separate,
+explicit step, and it needs the product owner's word first.
+
+---
+
 ## 6. Roles and permissions
 
 Ten roles. Six are staff and workflow roles; four exist solely to own health-check
