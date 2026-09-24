@@ -2896,3 +2896,90 @@ a.lifecycle-step:focus-visible { outline: 2px solid var(--signal); outline-offse
   .kpi-mapping { grid-template-columns: minmax(0, 1fr); }
   .kpi-legend { margin-left: 0; }
 }
+
+/* ---------------------------------------------------------------------------
+   Gap & Performance (Reports → /reports/gaps)
+
+   The road is hand-built SVG and takes its colours from the tokens above, with
+   two exceptions that are stated here rather than tokenised: the queue fill and
+   the selected band. Both encode "this is where the programme is stopped",
+   which is a meaning no other screen has, so a shared token would invite reuse
+   where the meaning does not carry.
+
+   The page reuses the .kpi-* classes for its head, pills, cards and table,
+   because it is the same kind of screen read by the same people — a second
+   visual language for one more report would say the two pages are unrelated.
+   --------------------------------------------------------------------------- */
+.gap-road-head { margin-bottom: 4px; }
+.gap-road-head .kpi-note { margin: 4px 0 12px; }
+
+.gap-road { width: 100%; height: auto; display: block; overflow: visible; }
+
+.gap-lane { fill: var(--surface-3); }
+
+/* Every barrier is one click target covering its whole stretch. */
+.gap-barrier { cursor: pointer; }
+.gap-barrier:focus { outline: none; }
+.gap-barrier:focus-visible .gap-band { stroke: var(--signal-strong); stroke-width: 2; }
+
+.gap-band { fill: transparent; }
+.gap-barrier:hover .gap-band { fill: rgba(14, 163, 148, 0.06); }
+/* The selected stretch: a tinted band AND a taller post (see Barrier). Colour
+   alone would be the first thing to go on the display this is read on. */
+.gap-barrier.selected .gap-band { fill: rgba(14, 163, 148, 0.13); }
+
+.gap-queue { fill: #F4B9B3; }
+.gap-barrier.selected .gap-queue { fill: #E4877F; }
+
+.gap-post { fill: var(--text); }
+.gap-boom { fill: var(--text); }
+.gap-barrier.pending .gap-post,
+.gap-barrier.pending .gap-boom { fill: var(--text-dim); }
+.gap-barrier.pending .gap-label,
+.gap-barrier.pending .gap-figure { fill: var(--text-dim); }
+
+.gap-label {
+  font-family: var(--font-body); font-size: 12.5px; font-weight: 600;
+  fill: var(--text-muted);
+}
+.gap-figure {
+  font-family: var(--font-display); font-size: 25px; font-weight: 700;
+  fill: var(--text);
+}
+.gap-sub { font-family: var(--font-body); font-size: 11.5px; fill: var(--text-muted); }
+
+/* The lens picker sits directly above the list it controls, never in the page
+   head: it changes the rows, not the page. */
+.gap-lens { margin-bottom: 12px; }
+
+.gap-quality span { line-height: 1.55; }
+
+.gap-example {
+  background: var(--surface-2); border-radius: var(--radius-sm);
+  padding: 10px 14px; margin: 0 0 12px;
+  font-size: 13px; line-height: 1.6; color: var(--text-muted);
+}
+
+.gap-table td .gap-bar {
+  height: 12px; min-width: 80px; border-radius: 999px;
+  background: var(--surface-3); overflow: hidden;
+}
+.gap-table td .gap-bar-fill { height: 100%; background: var(--signal); border-radius: 999px; }
+
+.gap-table tr.gap-unowned th .kpi-province { color: var(--text-muted); font-style: italic; }
+
+.gap-table tr.gap-pareto td {
+  border-top: 2px dashed var(--signal-strong);
+  color: var(--signal-strong); font-size: 12px; font-weight: 600;
+  padding-top: 6px; padding-bottom: 6px; background: var(--surface-2);
+}
+
+.gap-checksum {
+  display: flex; align-items: flex-start; gap: 8px;
+  margin: 12px 0 0; padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2); color: var(--text-muted);
+  font-size: 13px; line-height: 1.6;
+  font-variant-numeric: tabular-nums;
+}
+.gap-checksum.bad { background: var(--red-dim); color: var(--red); font-weight: 600; }

@@ -309,6 +309,12 @@ def _regions_for(db: Session, province_names_fa) -> list[str]:
 # whole table -- and turned into an IN list. The aggregation itself stays a
 # single GROUP BY, and it agrees exactly with what the rest of the platform
 # considers on air, DT done and a target village.
+#
+# ``dt_done_values``, ``target_values``, ``count_if`` and ``province_label``
+# carry no leading underscore because ``services/gaps.py`` reads them too. A
+# second reading of "DT done", of "a target village" or of a province's English
+# name is exactly how two reporting screens start disagreeing about the same
+# number, so there is one of each and both pages call it.
 
 
 def _onair_values(db: Session) -> list[str]:
@@ -316,7 +322,7 @@ def _onair_values(db: Session) -> list[str]:
     return [v for v in values if v is not None and C.is_onair_stage(v)]
 
 
-def _dt_done_values(db: Session) -> list[str]:
+def dt_done_values(db: Session) -> list[str]:
     values = db.execute(select(WorkItem.dt_status).distinct()).scalars().all()
     return [
         v
@@ -325,12 +331,12 @@ def _dt_done_values(db: Session) -> list[str]:
     ]
 
 
-def _target_values(db: Session) -> list[str]:
+def target_values(db: Session) -> list[str]:
     values = db.execute(select(Village.target_classification).distinct()).scalars().all()
     return [v for v in values if C.is_pure_target(v)]
 
 
-def _count_if(condition) -> object:
+def count_if(condition) -> object:
     return func.sum(case((condition, 1), else_=0))
 
 
@@ -342,7 +348,7 @@ def _scope_conditions(scope: Scope | None) -> list:
     return [Site.province_id.in_(scope.province_ids or [-1])]
 
 
-def _province_label(name_fa: str | None) -> str:
+def province_label(name_fa: str | None) -> str:
     if name_fa is None:
         return UNKNOWN_PROVINCE_LABEL
     return ENGLISH_BY_PERSIAN.get(name_fa, name_fa)
@@ -375,19 +381,19 @@ class Totals:
 def _village_aggregate(db: Session, scope: Scope | None) -> dict[str | None, Totals]:
     """Per-province village counts, in one GROUP BY."""
     onair = _onair_values(db)
-    done = _dt_done_values(db)
-    targets = _target_values(db)
+    done = dt_done_values(db)
+    targets = target_values(db)
 
     stmt: Select = (
         select(
             Province.name,
             func.count(Village.id),
-            _count_if(WorkItem.last_stage.in_(onair or [""])),
-            _count_if(WorkItem.dt_status.in_(done or [""])),
-            _count_if(Village.ict_status == APPROVED),
-            _count_if(Village.ict_status == REJECTED),
-            _count_if(Village.cra_status == APPROVED),
-            _count_if(Village.cra_status == REJECTED),
+            count_if(WorkItem.last_stage.in_(onair or [""])),
+            count_if(WorkItem.dt_status.in_(done or [""])),
+            count_if(Village.ict_status == APPROVED),
+            count_if(Village.ict_status == REJECTED),
+            count_if(Village.cra_status == APPROVED),
+            count_if(Village.cra_status == REJECTED),
         )
         .select_from(Village)
         .join(WorkItem, Village.work_item_id == WorkItem.id)
@@ -419,14 +425,14 @@ def _village_aggregate(db: Session, scope: Scope | None) -> dict[str | None, Tot
 def _work_item_aggregate(db: Session, scope: Scope | None) -> dict[str | None, Totals]:
     """Per-province work-item counts, in one GROUP BY."""
     onair = _onair_values(db)
-    done = _dt_done_values(db)
+    done = dt_done_values(db)
 
     stmt: Select = (
         select(
             Province.name,
             func.count(WorkItem.id),
-            _count_if(WorkItem.last_stage.in_(onair or [""])),
-            _count_if(WorkItem.dt_status.in_(done or [""])),
+            count_if(WorkItem.last_stage.in_(onair or [""])),
+            count_if(WorkItem.dt_status.in_(done or [""])),
         )
         .select_from(WorkItem)
         .join(Site, WorkItem.site_id == Site.id)
@@ -532,7 +538,7 @@ def _province_row(name_fa: str | None, totals: Totals, country: dict) -> dict:
     base = totals.villages_dt_done
     return {
         "province_fa": name_fa,
-        "province": _province_label(name_fa),
+        "province": province_label(name_fa),
         "cra_region": None,  # filled by the caller, which holds the mapping
         "villages": totals.villages,
         "dt_done_villages": totals.villages_dt_done,
@@ -600,7 +606,7 @@ def summary(db: Session, user: User, lens: str | None, key: str | None) -> dict:
             "provinces": len(scope.province_names_fa),
             "cra_regions": len(scope.cra_regions),
             "chip": scope.chip,
-            "province_names": [_province_label(n) for n in scope.province_names_fa],
+            "province_names": [province_label(n) for n in scope.province_names_fa],
         },
         "last_cpm_import": last_cpm_import(db),
         "work_items": {
@@ -680,13 +686,13 @@ def contractors(db: Session, user: User, key: str | None, mode: str) -> dict:
     scope = _build_scope(db, LENS_COORDINATOR, key, selectable=role == PM) if key else None
 
     approved_column = Village.ict_status if mode == "ict" else Village.cra_status
-    targets = _target_values(db)
+    targets = target_values(db)
 
     stmt = (
         select(
             Contractor.name,
             func.count(Village.id),
-            _count_if(approved_column == APPROVED),
+            count_if(approved_column == APPROVED),
         )
         .select_from(Village)
         .join(WorkItem, Village.work_item_id == WorkItem.id)
