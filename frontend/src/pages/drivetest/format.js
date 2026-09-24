@@ -118,18 +118,3 @@ export function freshness(generatedAt, now = Date.now()) {
   const days = Math.round(hours / 24)
   return `${days} day${days === 1 ? '' : 's'} ago`
 }
-
-/** The upper bound of the contractor bullet chart, in drive tests.
- *
- * A count rather than a percentage, because the bars now carry both the size
- * of each commitment and what was delivered against it — see
- * `charts/BulletBar`. Rounded up to a readable step so the axis ends on a
- * number, and padded so a contractor who overshot their plan has room to
- * visibly pass their target rather than pinning to the end of the track.
- */
-export function planScale(rows) {
-  const highest = Math.max(1, ...rows.flatMap((r) => [r.pip || 0, r.actual || 0]))
-  const padded = highest * 1.08
-  const step = padded > 240 ? 50 : padded > 120 ? 25 : padded > 60 ? 10 : 5
-  return Math.ceil(padded / step) * step
-}

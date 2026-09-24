@@ -84,8 +84,17 @@ export default function Section({
           <div className="dt-failed" role="alert">
             <AlertCircle size={17} strokeWidth={2} aria-hidden="true" />
             <span>
-              <b>Couldn&rsquo;t load {title.toLowerCase()}.</b> The rest of this page is
-              unaffected.
+              {/* Lower-cased to sit in a sentence, except an acronym: "PIP this
+                  month" must not become "pip this month". */}
+              <b>
+                Couldn&rsquo;t load{' '}
+                {title
+                  .split(' ')
+                  .map((w) => (/^[A-Z]{2,}$/.test(w) ? w : w.toLowerCase()))
+                  .join(' ')}
+                .
+              </b>{' '}
+              The rest of this page is unaffected.
             </span>
             {onRetry && (
               <button type="button" className="btn btn-sm" onClick={onRetry}>

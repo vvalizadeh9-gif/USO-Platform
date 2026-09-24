@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { UNATTRIBUTED } from './constants'
 import { achievement, count, percent } from './format'
-import { assignedLink, doneLink, ongoingLink } from './links'
+import { assignedLink, deliveredLink, doneLink, ongoingLink } from './links'
 import { DrillLink } from './DrillPanel'
 
 /**
@@ -20,7 +20,20 @@ import { DrillLink } from './DrillPanel'
  *
  * A SORTABLE TABLE, matching the pattern SiteList.jsx already uses
  * (`.table-wrap`, `.dt-sort-btn`, `aria-sort`): a rank column, then
- * Contractor, Assignment, DT done, Ongoing and Achievement as one pill.
+ * Contractor, Assignment, DT done, Ongoing, Completion, and this month's PIP
+ * plan and what was achieved against it.
+ *
+ * THE PIP COLUMNS ARE THE OLD "PLAN AND DELIVERY" CARD'S CONTRACTOR LIST, in
+ * the table that already names every company. They are the same rows
+ * (`ContractorAchievementRow`), joined here by contractor, so the card could
+ * go without its figures going with it. That promise has one hole to close:
+ * this table lists the companies with drive tests done or in hand, and the
+ * plan lists the companies with a PIP, and those are not the same set -- a
+ * company can hold an approved PIP and have nothing done or ongoing yet. In
+ * the unnarrowed view such a company is appended, unranked, with its true
+ * zeros and its real PIP, rather than dropped. Narrowed to a province it is
+ * not: a programme-wide PIP beside a company with no work in that province is
+ * noise, and the note under the table says the PIP columns are programme-wide.
  *
  * The unattributed row sits last and is styled apart, in dimmed italic text.
  * It is not a company and cannot be beaten or beat anyone; the backend sorts
@@ -50,20 +63,19 @@ const COLUMNS = [
   { key: 'assigned', label: 'Assignment', numeric: true },
   { key: 'done', label: 'DT done', numeric: true },
   { key: 'ongoing', label: 'Ongoing', numeric: true },
-  // "Completion", not "Achievement". Achievement is taken, forty pixels up
-  // the page, by the Plan and delivery card -- where it means delivered
-  // against PIP, a different numerator over a different denominator across a
-  // different period. Two figures on one screen under one word, meaning two
-  // things, is a reader comparing Alfa's 37.5% there with its 73% here and
-  // concluding something about neither. This one is how far a company is
-  // through its own book, which is what `done_percent` is documented as.
+  // "Completion", not "Achieved". Achieved, two columns over, is delivered
+  // against this month's PIP -- a different numerator over a different
+  // denominator across a different period. This one is how far a company is
+  // through its own book, which is what `done_percent` is documented as. Two
+  // figures in one row under one word, meaning two things, is a reader
+  // comparing Alfa's 37.5% with its 73% and concluding something about
+  // neither.
   { key: 'done_percent', label: 'Completion', numeric: true },
-  // The one figure this table used to make a reader go find on a different
-  // card, 800px up the page, against a different denominator. Same word,
-  // same source (`ContractorAchievementRow`, the Plan and delivery card's own
-  // rows) -- one row now carries both facts instead of asking a reader to
-  // hold Alfa's name in mind while they scroll.
-  { key: 'this_month_pct', label: 'This month PIP', numeric: true },
+  // This month's commitment, and what was delivered against it: the old Plan
+  // and delivery card's contractor list, as two columns of the row that
+  // already names the company.
+  { key: 'pip', label: 'PIP plan', numeric: true },
+  { key: 'achieved', label: 'Achieved', numeric: true },
 ]
 
 /** A contractor's assignment: drive tests finished plus sites still held.
@@ -96,7 +108,8 @@ function achievementBand(value) {
   return 'bad'
 }
 
-export default function ContractorScorecard({ rows, planRows, provinceId }) {
+export default function ContractorScorecard({ rows, plan, provinceId }) {
+  const planRows = plan?.rows
   // `null` means "as the server ranked them" — by completion, with the
   // unattributed row already last. Re-sorting is something the reader turns
   // on, not a default this component imposes over the one it was given.
@@ -111,10 +124,39 @@ export default function ContractorScorecard({ rows, planRows, provinceId }) {
     for (const row of planRows ?? []) map.set(row.contractor_id, row)
     return map
   }, [planRows])
-  const thisMonthPct = (row) => planByContractor.get(row.contractor_id)?.achievement_percent
+  /** A contractor's approved PIP for the month, or null. A plan row whose
+   * achievement is null has nothing approved behind it, and reads as no PIP,
+   * exactly as the card these columns replace read it. */
+  const approvedPlan = (row) => {
+    const p = planByContractor.get(row.contractor_id)
+    return p && p.achievement_percent != null ? p : null
+  }
+
+  // Companies holding a PIP with nothing done or ongoing -- see the note at
+  // the top. Appended only in the unnarrowed view, after every ranked
+  // company and before the unattributed bucket, with their true zeros.
+  const withPlanOnly = useMemo(() => {
+    const base = rows ?? []
+    if (provinceId != null || !planRows?.length) return base
+    const listed = new Set(base.map((r) => r.contractor_id))
+    const extra = planRows
+      .filter((p) => p.contractor_id != null && !listed.has(p.contractor_id))
+      .map((p) => ({
+        contractor_id: p.contractor_id,
+        name: p.name,
+        assigned: 0,
+        done: 0,
+        ongoing: 0,
+        done_percent: null,
+        planOnly: true,
+      }))
+    if (extra.length === 0) return base
+    const anon = base.filter((r) => r.contractor_id == null)
+    return [...base.filter((r) => r.contractor_id != null), ...extra, ...anon]
+  }, [rows, planRows, provinceId])
 
   const sorted = useMemo(() => {
-    const all = rows ?? []
+    const all = withPlanOnly
     if (!sort) return all
     const copy = [...all]
     copy.sort((a, b) => {
@@ -125,8 +167,12 @@ export default function ContractorScorecard({ rows, planRows, provinceId }) {
       if (anon !== 0) return anon
       const value = (row) => {
         if (sort.key === 'assigned') return assignmentOf(row)
-        if (sort.key === 'this_month_pct') {
-          return planByContractor.get(row.contractor_id)?.achievement_percent ?? -1
+        if (sort.key === 'pip' || sort.key === 'achieved') {
+          // No approved PIP sorts below every company that has one, in
+          // either direction's natural reading of "nothing".
+          const p = planByContractor.get(row.contractor_id)
+          if (!p || p.achievement_percent == null) return -1
+          return sort.key === 'pip' ? p.pip : p.achievement_percent
         }
         return row[sort.key]
       }
@@ -137,9 +183,9 @@ export default function ContractorScorecard({ rows, planRows, provinceId }) {
       return sort.dir === 'asc' ? cmp : -cmp
     })
     return copy
-  }, [rows, sort, planByContractor])
+  }, [withPlanOnly, sort, planByContractor])
 
-  if (!rows || rows.length === 0) {
+  if (withPlanOnly.length === 0) {
     return <div className="dt-empty">No contractor work to show.</div>
   }
 
@@ -192,7 +238,9 @@ export default function ContractorScorecard({ rows, planRows, provinceId }) {
           <tbody>
             {sorted.map((row) => {
               const unattributed = row.contractor_id == null
-              if (!unattributed) rank += 1
+              // A company with a PIP and no book in scope has no completion to
+              // be ranked by, so it takes no number and moves nobody else's.
+              if (!unattributed && !row.planOnly) rank += 1
               const cscope = { ...scope, contractorId: idFor(row) }
               return (
                 <tr
@@ -200,7 +248,7 @@ export default function ContractorScorecard({ rows, planRows, provinceId }) {
                   className={`dt-contractor-row${unattributed ? ' dt-row-unattributed' : ''}`}
                 >
                   <td className="dt-col-rank">
-                    {unattributed ? (
+                    {unattributed || row.planOnly ? (
                       <span className="dt-rank-badge dt-rank-badge-empty" aria-hidden="true" />
                     ) : (
                       <span className={`dt-rank-badge${rank === 1 ? ' dt-rank-badge-1' : ''}`}>
@@ -234,23 +282,29 @@ export default function ContractorScorecard({ rows, planRows, provinceId }) {
                   </td>
                   <td style={{ textAlign: 'right' }}>
                     <span
-                      className={`dt-pill dt-pill-${unattributed ? 'dim' : completionBand(row.done_percent)}`}
+                      className={`dt-pill dt-pill-${
+                        unattributed || row.done_percent == null
+                          ? 'dim'
+                          : completionBand(row.done_percent)
+                      }`}
                     >
                       {percent(row.done_percent)}
                     </span>
                   </td>
-                  <td style={{ textAlign: 'right' }}>
-                    {(() => {
-                      const pct = thisMonthPct(row)
-                      return pct == null ? (
-                        <span className="dt-pill dt-pill-dim">no PIP</span>
-                      ) : (
-                        <span className={`dt-pill dt-pill-${achievementBand(pct)}`}>
-                          {achievement(pct)}
-                        </span>
-                      )
-                    })()}
-                  </td>
+                  <PipCells
+                    plan={approvedPlan(row)}
+                    delivered={planByContractor.get(row.contractor_id)?.actual}
+                    href={
+                      plan && !unattributed
+                        ? deliveredLink({
+                            year: plan.shamsi_year,
+                            month: plan.shamsi_month,
+                            contractorId: row.contractor_id,
+                          })
+                        : null
+                    }
+                    name={row.name}
+                  />
                   <td className="dt-action-cell">
                     {unattributed && (
                       <DrillLink
@@ -271,7 +325,54 @@ export default function ContractorScorecard({ rows, planRows, provinceId }) {
       <p className="dt-note">
         Assignment = DT done + Ongoing. Problematic sites are not part of a
         contractor&rsquo;s assignment.
+        {provinceId != null && (
+          <>
+            {' '}PIP plan and Achieved cover every province: a PIP is committed per
+            contractor for the whole programme.
+          </>
+        )}
+        {plan && !planRows?.some((p) => p.achievement_percent != null) && (
+          <> No PIP is approved this month, so PIP plan and Achieved are empty.</>
+        )}
       </p>
+    </>
+  )
+}
+
+/** This month's two PIP columns for one row.
+ *
+ * With an approved PIP: the plan, then what was delivered against it and the
+ * rate, banded the way the bullet chart these replace banded it. Without one:
+ * a dash for the plan, because nothing was committed -- and for Achieved, a
+ * dash too unless the company delivered drive tests anyway, in which case the
+ * count stands on its own with no rate, since there is nothing to score it
+ * against. The count opens the drive tests behind it.
+ */
+function PipCells({ plan, delivered, href, name }) {
+  const actual = plan ? plan.actual : delivered
+  const figure =
+    actual > 0 || plan ? (
+      href ? (
+        <DrillLink to={href} drillLabel={name} className="dt-cell-link">
+          {count(actual ?? 0)}
+        </DrillLink>
+      ) : (
+        count(actual ?? 0)
+      )
+    ) : null
+  return (
+    <>
+      <td className="tnum" style={{ textAlign: 'right' }}>
+        {plan ? count(plan.pip) : <span className="dt-pip-none">—</span>}
+      </td>
+      <td className="tnum dt-pip-achieved" style={{ textAlign: 'right' }}>
+        {figure ?? <span className="dt-pip-none">—</span>}
+        {plan && (
+          <span className={`dt-pill dt-pill-${achievementBand(plan.achievement_percent)}`}>
+            {achievement(plan.achievement_percent)}
+          </span>
+        )}
+      </td>
     </>
   )
 }

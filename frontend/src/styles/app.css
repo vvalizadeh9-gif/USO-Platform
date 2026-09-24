@@ -1882,12 +1882,7 @@ a.dt-status-row:hover { background: var(--surface-2); }
   display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
   margin-bottom: 14px; font-size: 11.5px; color: var(--text-muted);
 }
-.dt-key-item { display: inline-flex; align-items: center; gap: 6px; }
-.dt-key-item i { display: inline-block; width: 14px; height: 10px; border-radius: 3px; }
 .dt-key-note { color: var(--text-dim); font-style: italic; }
-.dt-key-plan { background: var(--dt-ghost); }
-.dt-key-done { background: var(--text-muted); }
-.dt-key-scale { color: var(--text-dim); }
 
 /* ---------- ranked bars ---------- */
 .dt-bars {
@@ -2009,84 +2004,6 @@ a.dt-contractor-name:hover { text-decoration: underline; text-decoration-color: 
 .dt-action-arrow { color: var(--text-dim); transition: color .14s; }
 .dt-province-card[role='button']:hover .dt-action-arrow { color: var(--dt-ongoing); }
 
-/* ---------- plan and delivery ---------- */
-/* Plan and delivery: the month's rate on the left, the contractors on the
-   right. Two blocks rather than a stack, because the left one is the
-   summary of the right one -- read across, not down. */
-.dt-plan {
-  display: grid; gap: 24px;
-  grid-template-columns: minmax(200px, 260px) minmax(0, 1fr);
-  align-items: start;
-}
-.dt-plan-summary { display: grid; gap: 0; align-content: start; }
-/* The rate and its bar on one line: "how far" is one fact, not a big number
-   over a second copy of the same figure. */
-.dt-plan-rate-row { display: flex; align-items: center; gap: 12px; }
-.dt-plan-rate {
-  flex: none;
-  font-family: var(--font-display); font-size: 28px; font-weight: 600;
-  letter-spacing: -0.02em; line-height: 1;
-  font-variant-numeric: tabular-nums;
-}
-.dt-plan-rate-label {
-  margin-block-start: 6px;
-  font-size: 12.5px; font-weight: 500; color: var(--text-muted);
-}
-.dt-plan-rate-label em { color: var(--text-dim); font-style: normal; }
-/* Capped at the target, not at the widest bar on screen: this is a share of
-   a commitment, not a quantity competing with other quantities. */
-.dt-plan-progress {
-  position: relative; flex: 1; display: block; height: 8px;
-  border-radius: 999px; background: var(--dt-track); overflow: visible;
-}
-.dt-plan-progress-fill {
-  display: block; height: 100%; border-radius: 999px; overflow: hidden;
-}
-/* Where an even pace through the month would have this contractor pool
-   today -- placed on the bar rather than stated as a second number, so
-   "37.5%" reads against the point it is being measured against. */
-.dt-plan-pace {
-  position: absolute; top: -3px; bottom: -3px; width: 2px;
-  background: var(--text); border-radius: 1px; transform: translateX(-1px);
-}
-
-/* Four tiles, not hairlines: PIP and Assignment carry a neutral edge --
-   commitments and handovers, not yet an outcome. Delivered is green,
-   finished work. Short by is red, the number someone is chased about. */
-.dt-plan-figures {
-  display: grid; gap: 10px; margin: 18px 0 0; padding: 0;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-}
-.dt-plan-figure {
-  background: var(--surface-1);
-  border: 1px solid var(--border-soft);
-  border-radius: var(--radius-sm);
-  padding: 10px 12px;
-  border-inline-start: 3px solid transparent;
-}
-.dt-plan-figure-neutral { border-inline-start-color: var(--border); }
-.dt-plan-figure-done { border-inline-start-color: var(--dt-done); }
-.dt-plan-figure-problem { border-inline-start-color: var(--dt-problem); }
-.dt-plan-figure dt { font-size: 11.5px; color: var(--text-muted); }
-.dt-plan-figure dd {
-  margin: 2px 0 0;
-  font-family: var(--font-display); font-size: 21px; font-weight: 600;
-  letter-spacing: -0.02em; line-height: 1.1;
-}
-.dt-plan-figure-caption {
-  margin: 3px 0 0; font-size: 10.5px; color: var(--text-dim);
-}
-.dt-plan-committed {
-  margin: 14px 0 0; font-size: 11.5px; color: var(--text-dim);
-}
-
-@media (max-width: 900px) {
-  .dt-plan { grid-template-columns: minmax(0, 1fr); }
-}
-@media (max-width: 560px) {
-  .dt-plan-figures { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-}
-
 .dt-figures {
   display: grid; gap: 12px; margin-bottom: 20px;
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
@@ -2107,58 +2024,6 @@ a.dt-contractor-name:hover { text-decoration: underline; text-decoration-color: 
   letter-spacing: -0.02em; font-variant-numeric: tabular-nums; line-height: 1.1;
 }
 .dt-figure-note { font-size: 11.5px; color: var(--text-dim); }
-
-.dt-achievement { display: grid; gap: 9px; }
-.dt-achievement-head {
-  display: flex; align-items: center; justify-content: space-between;
-  gap: 16px; flex-wrap: wrap; margin-bottom: 6px;
-}
-
-/* The key for the bullet: ghost bar = plan, solid bar = delivered. */
-.dt-bullet-key {
-  display: inline-flex; align-items: center; gap: 14px;
-  font-size: 11.5px; color: var(--text-dim);
-}
-
-/* A bullet chart on a shared count scale: the ghost is the commitment, the
-   solid bar is the delivery, and the cap where the ghost ends is the target.
-   The track is bounded so five rows do not stretch into 800px of near-empty
-   progress bars — the marks have to look like data, not like loading. */
-.dt-bullet {
-  display: grid; align-items: center; gap: 14px;
-  grid-template-columns: 158px minmax(0, 1fr) 58px 74px 46px;
-}
-.dt-bullet-short { text-align: right; font-size: 12px; color: var(--text-dim); }
-.dt-bullet-label {
-  font-size: 12.5px; font-weight: 500;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
-.dt-anon .dt-bullet-label { font-style: italic; font-weight: 400; color: var(--text-muted); }
-.dt-bullet-track {
-  position: relative; display: block; height: 14px;
-  background: var(--dt-track);
-  border-radius: 4px;
-}
-.dt-bullet-plan {
-  position: absolute; left: 0; top: 0; bottom: 0;
-  background: var(--dt-ghost);
-  border-radius: 4px 0 0 4px;
-}
-.dt-bullet-fill {
-  position: absolute; left: 0; top: 3px; bottom: 3px;
-  border-radius: 3px;
-}
-.dt-anon .dt-bullet-fill { opacity: 0.6; }
-.dt-bullet-rate { box-shadow: inset 0 0 0 1px var(--border-soft); }
-/* The target: where the plan ends. A cap on the track rather than a floating
-   tick, so it reads as the end of the ghost bar it actually is. */
-.dt-bullet-target {
-  position: absolute; top: -3px; bottom: -3px; width: 2px;
-  background: var(--text); border-radius: 1px; transform: translateX(-1px);
-}
-.dt-bullet-pct { font-size: 12.5px; font-weight: 600; text-align: right; }
-.dt-noplan .dt-bullet-pct { font-weight: 400; font-style: italic; font-size: 11.5px; }
-.dt-bullet-detail { font-size: 11.5px; color: var(--text-dim); text-align: right; }
 
 /* ---------- breakdown chrome ---------- */
 .dt-viewtoggle { display: flex; gap: 4px; justify-content: flex-end; margin-block-end: 10px; }
@@ -2400,6 +2265,23 @@ a.dt-contractor-name:hover { text-decoration: underline; text-decoration-color: 
 .dt-info-tip[hidden] { display: none; }
 
 /* ---------- PIP this month ---------- */
+/* Capped at the target, not at the widest bar on screen: this is a share of
+   a commitment, not a quantity competing with other quantities. */
+.dt-plan-progress {
+  position: relative; flex: 1; display: block; height: 8px;
+  border-radius: 999px; background: var(--dt-track); overflow: visible;
+}
+.dt-plan-progress-fill {
+  display: block; height: 100%; border-radius: 999px; overflow: hidden;
+}
+/* Where an even pace through the month would have the contractor pool
+   today -- placed on the bar rather than stated as a second number, so
+   "37.5%" reads against the point it is being measured against. */
+.dt-plan-pace {
+  position: absolute; top: -3px; bottom: -3px; width: 2px;
+  background: var(--text); border-radius: 1px; transform: translateX(-1px);
+}
+
 .dt-pip-tiles {
   display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 7px;
   margin: 0;
@@ -2429,6 +2311,10 @@ a.dt-contractor-name:hover { text-decoration: underline; text-decoration-color: 
   margin: 9px 0 0; font-size: 11.5px; line-height: 1.55; color: var(--text-muted);
 }
 .dt-pip-section .dt-scope-note { margin-block-end: 9px; font-size: 11.5px; }
+/* The scorecard's two PIP columns: a dash where nothing was committed, and
+   the delivered count followed by its rate where something was. */
+.dt-pip-none { color: var(--text-dim); }
+.dt-pip-achieved .dt-pill { margin-inline-start: 8px; }
 
 /* ---------- flow chart: on-aired vs DT done ---------- */
 .dt-flowcard { display: grid; gap: 14px; }
@@ -2587,10 +2473,6 @@ a.dt-contractor-name:hover { text-decoration: underline; text-decoration-color: 
   .dt-flowtiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .dt-bar-link { grid-template-columns: 110px 1fr 42px; }
   .dt-bar-share, .dt-bar-go { display: none; }
-  .dt-bullet { grid-template-columns: 104px minmax(0, 1fr) 52px; gap: 10px; }
-  .dt-bullet-detail { display: none; }
-  .dt-bullet-key { gap: 10px; }
-  .dt-key-scale { display: none; }
   .dt-toolbar-right { margin-left: 0; width: 100%; }
   .dt-section { padding: 12px 14px 14px; }
   /* A sticky bar that wraps to three rows on a phone eats half the viewport;

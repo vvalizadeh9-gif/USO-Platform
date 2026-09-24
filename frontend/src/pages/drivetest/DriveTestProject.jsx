@@ -11,7 +11,6 @@ import ContractorScorecard from './ContractorScorecard'
 import InfoTip from './InfoTip'
 import KpiBand from './KpiBand'
 import PipThisMonth from './PipThisMonth'
-import PlanDelivery from './PlanDelivery'
 import ProvinceList from './ProvinceList'
 import Section from './Section'
 import Toolbar from './Toolbar'
@@ -304,13 +303,6 @@ export default function DriveTestProject() {
           </div>
         </div>
 
-        <PlanDelivery
-          state={plan}
-          onRetry={refresh}
-          scoped={provinceId != null}
-          provinceName={provinceName}
-        />
-
         <div className="dt-pair">
           {has('ongoing_breakdown') && (
             <Section
@@ -391,7 +383,7 @@ export default function DriveTestProject() {
             {(d) => (
               <ContractorScorecard
                 rows={d.contractor_scorecard}
-                planRows={plan.data?.rows}
+                plan={plan.data}
                 provinceId={provinceId}
               />
             )}
