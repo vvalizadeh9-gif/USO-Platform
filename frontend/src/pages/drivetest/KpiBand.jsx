@@ -111,7 +111,7 @@ function ProgressBar({ value, max, color }) {
   )
 }
 
-export default function KpiBand({ kpis, flow, provinceId }) {
+export default function KpiBand({ kpis, provinceId }) {
   const scope = provinceId == null ? undefined : { provinceId }
 
   const onair = kpis.total_onair.value

@@ -224,7 +224,7 @@ export default function DriveTestProject() {
           <KpiSkeleton />
         ) : data ? (
           <>
-            <KpiBand kpis={data.kpis} flow={flow.data} provinceId={provinceId} />
+            <KpiBand kpis={data.kpis} provinceId={provinceId} />
             <AlertStrip
               kpis={data.kpis}
               provinces={data.province_breakdown}
