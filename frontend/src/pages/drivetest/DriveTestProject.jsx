@@ -270,6 +270,7 @@ export default function DriveTestProject() {
               onRetry={refresh}
               skeletonRows={4}
               actions={<NetChange value={flowNet(trend.data.latest_flows)} />}
+              className="dt-flow-section"
             >
               {(t) => <FlowLedger flows={t.latest_flows} monthLabel={t.latest_flows.label} />}
             </Section>

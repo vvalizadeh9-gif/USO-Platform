@@ -2139,6 +2139,23 @@ describe('the trend section', () => {
     expect(within(card).getByText(/Arrivals are derived from the/)).toBeInTheDocument()
   })
 
+  it('foots the ledger with arrivals, completions and the net change, scale note pushed to the end', async () => {
+    serve()
+    draw()
+
+    const card = await section('What moved')
+    const foot = card.querySelector('.dt-flow-foot')
+    expect(within(foot).getByText('Arrived on air')).toBeInTheDocument()
+    expect(within(foot).getByText('Drive tests done')).toBeInTheDocument()
+    expect(within(foot).getByText('Net change')).toBeInTheDocument()
+    // 70 opened, 60 closed: net change is -10, the same figure the header
+    // states — see "carries the month's net movement in the card header".
+    const netStat = within(foot).getByText('Net change').closest('.dt-flow-stat')
+    expect(within(netStat).getByText('-10')).toBeInTheDocument()
+    // Last child of the footer, after every stat.
+    expect(foot.lastElementChild).toHaveClass('dt-flow-floor')
+  })
+
   it('hides the ledger when no month has one', async () => {
     serve(planDelivery(), overview, trend({ latest_flows: null }))
     draw()
