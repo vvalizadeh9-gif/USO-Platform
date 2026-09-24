@@ -1,9 +1,10 @@
 import { AlertTriangle } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import api from '../../api/client'
 import { describeBlobError, filenameFrom, saveBlob } from '../../lib/download'
 import { PageHead } from '../../components/ui'
 import { useToast } from '../../context/ToastContext'
+import AlertStrip from './AlertStrip'
 import BreakdownCard, { BreakdownTabs } from './BreakdownCard'
 import { DrillProvider } from './DrillPanel'
 import ContractorScorecard from './ContractorScorecard'
@@ -19,43 +20,6 @@ import { count, deltaTone, TONE_COLOR } from './format'
 import { ongoingLink, problematicLink } from './links'
 import { useDashboard } from './useDashboard'
 
-/**
- * The Drive Test dashboard.
- *
- * Read top to bottom it answers four questions in order: where does the
- * programme stand, which way is it going, what moved this month, and where is
- * the outstanding work. The old page answered only the first, then repeated
- * it in eight identically-weighted cards.
- *
- * Everything here that could name a contractor or reach a site is scoped by
- * the endpoints, not by this component. The province filter narrows what is
- * already visible and can never widen it — see
- * `api/drive_test._resolve_province`.
- *
- * TWO THINGS THIS PAGE NO LONGER HAS, and both were removed for the same
- * reason — they were furniture the reader had to learn before they could read
- * anything.
- *
- * The first was a side rail listing the panels with their headline figures.
- * It was answering "how far down am I" on a page that is only long because
- * nothing on it had been made compact, and it duplicated every figure it
- * listed: a reader was given the ongoing total twice, four hundred pixels
- * apart, with nothing saying they were the same number. Shrinking the trend
- * and the ledger took the page to a length a scrollbar handles on its own.
- *
- * The second was "where the ongoing work is stuck", a stage pipeline beside
- * the ongoing breakdown. Its buckets are workflow stages — a vocabulary that
- * belongs to the health-check and assignment screens, where acting on them is
- * possible. Here it was a fourth way of cutting the same ongoing total, and
- * the one nobody on this page could do anything with.
- *
- * EVERY SECTION IS A CARD. Not because cards are decoration, but because this
- * page is read in pieces: a reader comes for the scorecard or the provinces,
- * not for a document. The rule is one card, one question, one heading — and
- * the weight is spent evenly, because after the hero nothing here is more
- * important than anything else.
- */
-
 const ONGOING_TABS = [
   { key: 'contractor', label: 'Contractor' },
   { key: 'province', label: 'Province' },
@@ -68,12 +32,6 @@ const PROBLEMATIC_TABS = [
   { key: 'province', label: 'Province' },
 ]
 
-/** Top `limit` points with the tail folded into one line.
- *
- * The remainder line is not decoration — it is what keeps a truncated view
- * summing to its total. Dropping the tail would make a partial list read as a
- * complete one.
- */
 function collapse(points, limit = PROVINCE_LIMIT) {
   if (!points || points.length <= limit + 1) return points || []
   const head = points.slice(0, limit)
@@ -97,38 +55,21 @@ export default function DriveTestProject() {
   const [problematicTab, setProblematicTab] = useState('category')
   const [exporting, setExporting] = useState(false)
   const toast = useToast()
+  const provinceRef = useRef(null)
 
   const data = overview.data
-  // Memoised because two useMemos below depend on it, and a fresh []
-  // every render would rebuild both on every render.
   const provinces = useMemo(() => data?.provinces ?? [], [data])
   const provinceName = provinces.find((p) => p.id === provinceId)?.name
 
-  /** Whether a section that depends on one payload field should be on screen.
-   *
-   * Present while the request is in flight or has failed, so the section can
-   * show its own skeleton or its own error. Gone once a payload has arrived
-   * without the field — an older backend, or one that dropped it — which is
-   * the same contract the page this replaces had: a section that cannot be
-   * drawn is not drawn, and nothing around it is affected. */
+  const siteCount = data?.kpis?.total_onair?.value
+  const subtitle = provinceName
+    ? `On-air and drive-test status in ${provinceName}`
+    : siteCount
+      ? `Every province · ${count(siteCount)} sites`
+      : 'On-air and drive-test status across your provinces'
+
   const has = (field) => !data || Boolean(data[field])
 
-  /** Download the DT delivery workbook for what is currently on screen.
-   *
-   * This used to fetch `/work-items/export`, which is a different set: every
-   * work item in scope, on-air or not, with five columns. A reader pressed
-   * Export on this dashboard and got a file whose row count matched no figure
-   * on the page — the one thing the drill-through exists to prevent, left in
-   * the toolbar. It now asks for the workbook, which is built from these very
-   * figures.
-   *
-   * The saved filename comes from the server where it sends one: the backend
-   * already builds a dated, scope-named, ASCII-safe name, and inventing a
-   * second one here is how the two come to disagree.
-   *
-   * Saving and failing are both `lib/download`'s job, because the site list
-   * does exactly this and had exactly the same two bugs.
-   */
   async function exportWorkbook() {
     setExporting(true)
     try {
@@ -144,24 +85,16 @@ export default function DriveTestProject() {
         ),
       )
     } catch (err) {
-      // What actually went wrong, not "try again". The body of a failed
-      // request made with `responseType: 'blob'` is a Blob, so the reason the
-      // server gave has to be read back out of it -- see `lib/download`.
       toast.error('Export failed', await describeBlobError(err))
     } finally {
       setExporting(false)
     }
   }
 
-  /** Contractor name -> id, for the ongoing breakdown's bars.
-   *
-   * Those points carry a name and a count and no id, so the id comes from the
-   * scorecard in the same payload — the one place this page already has both.
-   * A name with no row is not linked, which is exactly what should happen to
-   * the unnamed "Other contractors" aggregate a contractor account sees: it
-   * stands for several companies and there is no list behind it they are
-   * allowed to open.
-   */
+  const scrollToProvinces = useCallback(() => {
+    provinceRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }, [])
+
   const contractorIdByName = useMemo(() => {
     const map = new Map()
     for (const row of data?.contractor_scorecard ?? []) {
@@ -183,8 +116,6 @@ export default function DriveTestProject() {
           const id = contractorIdByName.get(p.name)
           return id == null ? null : ongoingLink({ ...scope, contractorId: id })
         },
-        // Stated rather than left to be inferred from a total that does not
-        // match: sites with no contractor are deliberately not a bar here.
         note:
           b.without_contractor > 0
             ? `${count(b.without_contractor)} ongoing ${
@@ -204,12 +135,7 @@ export default function DriveTestProject() {
       age: {
         points: b.by_age,
         unit: 'Held for',
-        // The band's key, not its label: the labels carry en dashes and are
-        // wordings somebody may improve, and a URL built out of one would
-        // break silently — with an empty list rather than an error.
         hrefFor: (p) => (p.key ? ongoingLink({ ...scope, ageBand: p.key }) : null),
-        // The one ramp on the page: these bands are an ordered scale, so the
-        // longer a site has been held the heavier its bar reads.
         color: (_point, i) => AGE_RAMP[Math.min(i, AGE_RAMP.length - 1)],
         note:
           b.without_assignment_date > 0
@@ -232,16 +158,8 @@ export default function DriveTestProject() {
         points: b.by_category,
         unit: 'Category',
         color: STATE_COLOR.problematic,
-        // Each bar opens its own category. It used to open every problematic
-        // site whichever bar was clicked, so a reader who clicked 64 landed
-        // on 194.
         hrefFor: (p) => problematicLink(p.key ? { ...scope, category: p.key } : scope),
       },
-      // How long each of these has been a problem. The category split says
-      // what is wrong and cannot say whether it is this week's news or last
-      // year's, and only the second is somebody's to answer for. Same bands
-      // as the ongoing card, on a different clock: the day each site last
-      // entered the state.
       age: {
         points: b.by_age,
         unit: 'Stuck for',
@@ -254,7 +172,7 @@ export default function DriveTestProject() {
               `${b.without_problem_date === 1 ? 'site was' : 'sites were'} flagged by a ` +
               'CPM import, which records no date, so no clock has started on them and they ' +
               'are not shown above.'
-            : 'Measured from the day each site last became problematic \u2014 a site ' +
+            : 'Measured from the day each site last became problematic — a site ' +
               'flagged, fixed and flagged again is aged from the latest flag.',
       },
       province: {
@@ -274,18 +192,9 @@ export default function DriveTestProject() {
       <PageHead
         eyebrow="Drive Test Project"
         title="Drive Test Overview"
-        subtitle={
-          provinceName
-            ? `On-air and drive-test status in ${provinceName}`
-            : 'On-air and drive-test status across your provinces'
-        }
+        subtitle={subtitle}
       />
 
-      {/* The command bar sticks. It carries the scope the page is showing and
-          the way out of it, and the page is long enough to scroll; a way out
-          you have to scroll back to the top to reach is one people give up
-          on and reload the page instead. The freshness clock has the same
-          problem in reverse — it is only honest while it is on screen. */}
       <div className="dt-command">
         <Toolbar
           provinceId={provinceId}
@@ -314,15 +223,16 @@ export default function DriveTestProject() {
         ) : overview.loading && !data ? (
           <KpiSkeleton />
         ) : data ? (
-          <KpiBand kpis={data.kpis} flow={flow.data} provinceId={provinceId} />
+          <>
+            <KpiBand kpis={data.kpis} provinceId={provinceId} />
+            <AlertStrip
+              kpis={data.kpis}
+              provinces={data.province_breakdown}
+              onScrollToProvinces={scrollToProvinces}
+            />
+          </>
         ) : null}
 
-        {/* Full width, and directly under the band. It is the answer to the
-            second question the page asks -- which way is this going -- and it
-            used to sit halfway down sharing a row with the month ledger. Two
-            charts side by side at half width each made the trailing shape of
-            an eighteen-month series about three hundred pixels wide, which is
-            where a line chart stops being readable. */}
         <Section
           title="Where this is going"
           subtitle="Sites on air against drive tests done, and what each month did to the backlog"
@@ -342,8 +252,6 @@ export default function DriveTestProject() {
           }
         </Section>
 
-        {/* Paired with What moved: both are a month's worth of movement, read
-            against a plan on one side and against last month on the other. */}
         <div className="dt-pair">
           <PlanDelivery
             state={plan}
@@ -450,44 +358,28 @@ export default function DriveTestProject() {
         )}
 
         {has('province_breakdown') && (
-          <Section
-            title="Province breakdown"
-            subtitle="Sort any column; filter the whole dashboard from a row"
-            state={overview}
-            onRetry={refresh}
-          >
-            {(d) => (
-              <ProvinceList
-                rows={d.province_breakdown}
-                provinces={d.provinces}
-                onProvince={setProvince}
-              />
-            )}
-          </Section>
+          <div ref={provinceRef}>
+            <Section
+              title="Drive Test Progress by Province"
+              subtitle="Sort any column; click a row to scope the whole dashboard"
+              state={overview}
+              onRetry={refresh}
+            >
+              {(d) => (
+                <ProvinceList
+                  rows={d.province_breakdown}
+                  provinces={d.provinces}
+                  onProvince={setProvince}
+                />
+              )}
+            </Section>
+          </div>
         )}
       </div>
     </DrillProvider>
   )
 }
 
-/** The card's own total, on the header line beside its title.
- *
- * A dot rather than the state's lucide icon, and the figure in the state
- * colour rather than in the text colour. The icon was a second thing to read
- * at a glance — a circle-dashed and a warning triangle, at 15px, doing the
- * job the colour was already doing. The dot is the same mark the KPI band
- * uses for the same state, so the two read as the same vocabulary.
- *
- * The colour is not carrying the meaning on its own: the word is right
- * there, and the title says it again. See constants.js for why that rule is
- * absolute on this page.
- */
-/** The month's net movement in the backlog, on the ledger's header line.
- *
- * Direction-aware like every other delta on this page: the backlog falling
- * is the good outcome, so a negative number is green. See
- * `format.deltaTone` for why that is stated per figure rather than assumed.
- */
 function NetChange({ value }) {
   if (value == null) return null
   const tone = deltaTone(value, 'down')
@@ -515,9 +407,10 @@ function SectionTotal({ value, label, color }) {
 function KpiSkeleton() {
   return (
     <div className="dt-kpi-band dt-kpi-skeleton" aria-hidden="true">
-      <span className="dt-skeleton-row" style={{ height: 118 }} />
-      <span className="dt-skeleton-row" style={{ height: 118, animationDelay: '0.08s' }} />
-      <span className="dt-skeleton-row" style={{ height: 118, animationDelay: '0.16s' }} />
+      <span className="dt-skeleton-row" style={{ height: 148 }} />
+      <span className="dt-skeleton-row" style={{ height: 148, animationDelay: '0.08s' }} />
+      <span className="dt-skeleton-row" style={{ height: 148, animationDelay: '0.16s' }} />
+      <span className="dt-skeleton-row" style={{ height: 148, animationDelay: '0.24s' }} />
     </div>
   )
 }

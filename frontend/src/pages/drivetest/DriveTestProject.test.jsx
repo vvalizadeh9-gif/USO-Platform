@@ -569,7 +569,7 @@ describe('breakdown sections', () => {
 
     const ongoing = await section('Ongoing breakdown')
     const problematic = await section('Problematic breakdown')
-    const provinces = await section('Province breakdown')
+    const provinces = await section('Drive Test Progress by Province')
 
     // Chart first, table on request: bars are present, the table's own
     // Total row is not.
@@ -879,7 +879,7 @@ describe('the province grid', () => {
     serve(planDelivery(), overviewWithProvinces(10))
     draw()
 
-    const provinces = await section('Province breakdown')
+    const provinces = await section('Drive Test Progress by Province')
     expect(cardNames(provinces)).toEqual([
       'Province 1', 'Province 2', 'Province 3', 'Province 4', 'Province 5',
       'Province 6', 'Province 7', 'Province 8', 'Province 9', 'Province 10',
@@ -893,27 +893,27 @@ describe('the province grid', () => {
     serve(planDelivery(), overviewWithProvinces(20))
     draw()
 
-    const provinces = await section('Province breakdown')
+    const provinces = await section('Drive Test Progress by Province')
     expect(cardNames(provinces)).toHaveLength(20)
     expect(within(provinces).queryByRole('button', { name: /Show/ })).not.toBeInTheDocument()
   })
 
-  it('sorts on each of the seven columns', async () => {
+  it('sorts on each of the sortable columns', async () => {
     serve(planDelivery(), sortable)
     draw()
 
-    const provinces = await section('Province breakdown')
-    // Remaining is the default and needs no click.
+    const provinces = await section('Drive Test Progress by Province')
+    // Gap (was Remaining) is the default and needs no click.
     expect(cardNames(provinces)).toEqual(['Bushehr', 'Kerman', 'Ardabil', 'Yazd'])
 
     for (const [control, order] of [
       ['Province', ['Ardabil', 'Bushehr', 'Kerman', 'Yazd']],
       ['On air', ['Kerman', 'Bushehr', 'Yazd', 'Ardabil']],
-      ['DT done', ['Kerman', 'Yazd', 'Bushehr', 'Ardabil']],
+      ['DT Done', ['Kerman', 'Yazd', 'Bushehr', 'Ardabil']],
       ['Ongoing', ['Bushehr', 'Kerman', 'Yazd', 'Ardabil']],
       ['Problematic', ['Ardabil', 'Bushehr', 'Yazd', 'Kerman']],
-      ['Done %', ['Yazd', 'Kerman', 'Ardabil', 'Bushehr']],
-      ['Remaining', ['Bushehr', 'Kerman', 'Ardabil', 'Yazd']],
+      ['DT completion', ['Yazd', 'Kerman', 'Ardabil', 'Bushehr']],
+      ['Gap', ['Bushehr', 'Kerman', 'Ardabil', 'Yazd']],
     ]) {
       await userEvent.click(within(provinces).getByRole('button', { name: control }))
       expect(cardNames(provinces)).toEqual(order)
@@ -924,23 +924,23 @@ describe('the province grid', () => {
     serve(planDelivery(), sortable)
     draw()
 
-    const provinces = await section('Province breakdown')
+    const provinces = await section('Drive Test Progress by Province')
     await userEvent.click(within(provinces).getByRole('button', { name: 'On air' }))
     expect(cardNames(provinces)).toEqual(['Kerman', 'Bushehr', 'Yazd', 'Ardabil'])
     await userEvent.click(within(provinces).getByRole('button', { name: 'On air' }))
     expect(cardNames(provinces)).toEqual(['Ardabil', 'Yazd', 'Bushehr', 'Kerman'])
   })
 
-  it('has exactly seven sort controls: Province, On air, DT done, Remaining, Ongoing, Problematic, Done %', async () => {
+  it('has nine column headers with eight sort controls: #, Province, On air, DT Done, Gap, DT completion, Ongoing, Problematic, and an Action column', async () => {
     serve()
     draw()
 
-    const provinces = await section('Province breakdown')
+    const provinces = await section('Drive Test Progress by Province')
     const labels = within(provinces)
       .getAllByRole('columnheader')
       .map((th) => th.textContent.trim())
     expect(labels).toEqual([
-      'Province', 'On air', 'DT done', 'Remaining', 'Ongoing', 'Problematic', 'Done %',
+      '#', 'Province', 'On air', 'DT Done', 'Gap', 'DT completion', 'Ongoing', 'Problematic', '',
     ])
   })
 
@@ -953,7 +953,7 @@ describe('the province grid', () => {
     serve(planDelivery(), sortable)
     draw()
 
-    const provinces = await section('Province breakdown')
+    const provinces = await section('Drive Test Progress by Province')
     const rate = (name) =>
       within(provinces).getByText(name).closest('.dt-province-card')
         .querySelector('.dt-province-rate')
@@ -967,32 +967,32 @@ describe('the province grid', () => {
 
     // And the threshold is stated, because a colour whose rule is not on
     // screen is one a reader has to guess at.
-    expect(provinces).toHaveTextContent('done % in red is below the 35% programme average')
+    expect(provinces).toHaveTextContent('Completion rate in red is below the 35% programme average')
   })
 
   it('shows no "Not started" anywhere in the grid, its key or its bars', async () => {
     serve()
     draw()
 
-    const provinces = await section('Province breakdown')
+    const provinces = await section('Drive Test Progress by Province')
     expect(within(provinces).queryByText('Not started')).not.toBeInTheDocument()
   })
 
-  it('keeps the Remaining label -- it is not renamed to Pending here', async () => {
+  it('labels the column Gap -- On air minus DT Done', async () => {
     serve()
     draw()
 
-    const provinces = await section('Province breakdown')
-    expect(within(provinces).getByRole('button', { name: 'Remaining' })).toBeInTheDocument()
+    const provinces = await section('Drive Test Progress by Province')
+    expect(within(provinces).getByRole('button', { name: 'Gap' })).toBeInTheDocument()
   })
 
-  it('explains under the table that Remaining no longer adds up to Ongoing + Problematic', async () => {
+  it('explains under the table that Gap no longer adds up to Ongoing + Problematic', async () => {
     serve()
     draw()
 
-    const provinces = await section('Province breakdown')
+    const provinces = await section('Drive Test Progress by Province')
     expect(provinces).toHaveTextContent(
-      'Remaining = On air − DT done. Ongoing + Problematic can be lower than Remaining, because on-air sites with no DT status yet are counted in Remaining only.',
+      'Gap = On air − DT Done. Ongoing + Problematic can be lower than Gap, because on-air sites with no DT status yet are counted in Gap only.',
     )
   })
 })
@@ -1033,8 +1033,18 @@ describe('delta direction', () => {
     expect(chip).toHaveStyle({ color: 'var(--dt-done)' })
   })
 
-  it('reads rising problems as bad news', async () => {
-    serve(planDelivery(), moving)
+  it('reads a growing backlog as bad news', async () => {
+    const growing = {
+      ...overview,
+      kpis: {
+        ...overview.kpis,
+        total_onair: kpi(100, 5),
+        total_dt_done: kpi(40, 1),
+        total_remaining: kpi(60, 4, 60),
+        current_month_dt_done: kpi(6, 2),
+      },
+    }
+    serve(planDelivery(), growing)
     draw()
 
     await screen.findByLabelText('Programme totals')
@@ -1072,18 +1082,18 @@ describe('the KPI band', () => {
 
   /** A part row of the pending card by its name. */
   const part = (band, name) =>
-    within(band).getByText(name, { selector: '.dt-kpi-part-name' }).closest('.dt-kpi-part')
+    within(band).getByText(name, { selector: '.dt-donut-name' }).closest('.dt-donut-item')
 
   it('leads with the three totals the programme is run on', async () => {
     serve()
     draw()
 
     const band = await screen.findByLabelText('Programme totals')
-    expect(within(card(band, 'Total on-air')).getByText('100')).toBeInTheDocument()
-    expect(within(card(band, 'Total DT done')).getByText('40')).toBeInTheDocument()
-    expect(within(card(band, 'Total pending')).getByText('60')).toBeInTheDocument()
+    expect(within(card(band, 'Total On-air')).getByText('100')).toBeInTheDocument()
+    expect(within(card(band, 'Total DT Done')).getByText('40')).toBeInTheDocument()
+    expect(within(card(band, 'Total Pending')).getByText('60')).toBeInTheDocument()
     // DT done states its share of on-air; the band no longer leads with it.
-    expect(within(card(band, 'Total DT done')).getByText('40% of on-air')).toBeInTheDocument()
+    expect(within(card(band, 'Total DT Done')).getByText('40% of on-air')).toBeInTheDocument()
   })
 
   it('no longer leads with the overall progress rate or the four-state on-air bar', async () => {
@@ -1115,7 +1125,7 @@ describe('the KPI band', () => {
     )
     expect(values).toEqual([50, 10, 0])
     expect(values.reduce((a, b) => a + b, 0)).toBe(
-      Number(within(card(band, 'Total pending')).getByText('60').textContent),
+      Number(within(card(band, 'Total Pending')).getByText('60').textContent),
     )
   })
 
@@ -1124,35 +1134,28 @@ describe('the KPI band', () => {
     draw()
 
     const band = await screen.findByLabelText('Programme totals')
-    expect(within(part(band, 'Ongoing')).getByText('83% of pending')).toBeInTheDocument()
-    expect(within(part(band, 'Problematic')).getByText('17% of pending')).toBeInTheDocument()
-    expect(within(part(band, 'Not started')).getByText('0% of pending')).toBeInTheDocument()
+    expect(part(band, 'Ongoing').querySelector('.dt-donut-pct')).toHaveTextContent('83%')
+    expect(part(band, 'Problematic').querySelector('.dt-donut-pct')).toHaveTextContent('17%')
+    expect(part(band, 'Not started').querySelector('.dt-donut-pct')).toHaveTextContent('0%')
   })
 
-  it('draws one segment per part that has sites, sized against pending', async () => {
+  it('draws the donut with one segment per part that has sites', async () => {
     serve()
     draw()
 
     const band = await screen.findByLabelText('Programme totals')
-    const bar = within(band).getByRole('img', { name: /sites pending/ })
-    expect(bar).toHaveAttribute(
+    const donut = within(band).getByRole('img', { name: /Pending status/ })
+    expect(donut).toHaveAttribute(
       'aria-label',
-      '60 sites pending. Ongoing: 50, 83%. Problematic: 10, 17%',
+      'Pending status: Ongoing 50, Problematic 10',
     )
-    const segments = within(band).getAllByTestId('dt-kpi-segment')
-    // Not started is 0 in the fixture, so it is named in the rows and is not
-    // a segment: a zero-width fill is ink that says nothing.
-    expect(segments.map((s) => s.getAttribute('data-state'))).toEqual([
-      'ongoing',
-      'problematic',
-    ])
-    expect(segments.map((s) => s.getAttribute('title'))).toEqual([
-      'Ongoing: 50 (83% of pending)',
-      'Problematic: 10 (17% of pending)',
-    ])
+    // Background circle plus two segment circles (Not started is 0 in the
+    // fixture, so it is named in the legend but draws no arc).
+    const circles = donut.querySelectorAll('circle')
+    expect(circles).toHaveLength(3)
   })
 
-  it('draws Not started as a segment once it has sites', async () => {
+  it('draws Not started as a donut arc once it has sites', async () => {
     // The state this dashboard once folded into Ongoing. Unlike the band
     // this replaces — which left it to the neutral track because it was
     // splitting on-air — it is a first-class part of pending here, because
@@ -1164,16 +1167,16 @@ describe('the KPI band', () => {
     draw()
 
     const band = await screen.findByLabelText('Programme totals')
-    expect(
-      within(band).getAllByTestId('dt-kpi-segment').map((s) => s.getAttribute('data-state')),
-    ).toEqual(['ongoing', 'problematic', 'not_started'])
+    const donut = within(band).getByRole('img', { name: /Pending status/ })
+    // Background circle plus three segment circles (ongoing, problematic, not_started).
+    const circles = donut.querySelectorAll('circle')
+    expect(circles).toHaveLength(4)
     expect(within(part(band, 'Not started')).getByText('12')).toBeInTheDocument()
   })
 
   it('gives Not started no delta, because the snapshot has no baseline for it', async () => {
-    // Every other figure in the band carries one. This one must not invent
-    // one: the monthly snapshot has no column for it, and a delta derived
-    // from the other four would compare against the old Ongoing definition.
+    // The donut legend items carry no delta chips of their own. Deltas
+    // appear on the main KPI cards (on-air, DT done, pending) only.
     serve(planDelivery(), {
       ...overview,
       kpis: {
@@ -1185,7 +1188,8 @@ describe('the KPI band', () => {
     draw()
 
     const band = await screen.findByLabelText('Programme totals')
-    expect(part(band, 'Ongoing').querySelector('.dt-delta')).toBeInTheDocument()
+    // Neither donut legend part carries a delta chip.
+    expect(part(band, 'Ongoing').querySelector('.dt-delta')).toBeNull()
     expect(part(band, 'Not started').querySelector('.dt-delta')).toBeNull()
   })
 
@@ -1204,7 +1208,7 @@ describe('the KPI band', () => {
 
     const band = await screen.findByLabelText('Programme totals')
     for (const name of ['Ongoing', 'Problematic', 'Not started']) {
-      expect(within(part(band, name)).getByText('0% of pending')).toBeInTheDocument()
+      expect(part(band, name).querySelector('.dt-donut-pct')).toHaveTextContent('0%')
     }
   })
 
@@ -1219,41 +1223,26 @@ describe('the KPI band', () => {
     expect(within(band).queryAllByTestId('dt-spark')).toHaveLength(0)
   })
 
-  it('draws pending\'s sparkline once the series is long enough, and no others', async () => {
-    // On-air and DT done lost theirs (Prompt 4): the flow chart directly
-    // below this band draws the same two series, larger. Pending draws
-    // nowhere else on the page, so it is the only one left here.
+  it('draws no sparklines even when the series is long enough, since the donut replaced them', async () => {
+    // Sparklines were removed from the KPI band in the redesign: the flow
+    // chart directly below draws the same series, larger, and the donut now
+    // occupies the space the sparklines used.
     serve(planDelivery(), overview, trend(), flow({ months: longMonths() }))
     draw()
 
     const band = await screen.findByLabelText('Programme totals')
-    await waitFor(() => expect(within(band).getAllByTestId('dt-spark')).toHaveLength(1))
-    expect(
-      within(band).getAllByTestId('dt-spark').map((s) => s.getAttribute('aria-label')),
-    ).toEqual(['Pending over the last 7 months'])
+    expect(within(band).queryAllByTestId('dt-spark')).toHaveLength(0)
   })
 
-  it('builds the pending sparkline as on-air minus DT done, cumulatively', async () => {
-    // Derived here from the series the flow chart already draws -- no second
-    // request, no new backend field. The last point is the cumulative gap
-    // over the eight fixture months, which is 50-20 opening plus 8 on-aired
-    // and 8 DT-done per month: still 30.
+  it('has no sparklines in the band — the donut and flow chart replaced them', async () => {
+    // The pending sparkline was removed with the rest of them. The flow
+    // chart below draws the cumulative series and the donut shows the
+    // pending split, so the band no longer needs its own trend line.
     serve(planDelivery(), overview, trend(), flow({ months: longMonths() }))
     draw()
 
     const band = await screen.findByLabelText('Programme totals')
-    await waitFor(() => expect(within(band).getAllByTestId('dt-spark')).toHaveLength(1))
-    const spark = within(band).getAllByTestId('dt-spark')[0]
-    const d = spark.querySelector('path').getAttribute('d')
-    // Seven points, and every one of them at the same height: the gap is 30
-    // in all eight fixture months, so the pending line is flat. Were it
-    // drawing on-air or DT done instead, both of which climb by 8 a month,
-    // it would not be.
-    const ys = [...d.matchAll(/[ML]([\d.]+) ([\d.]+)/g)].map((m) => Number(m[2]))
-    expect(ys).toHaveLength(7)
-    expect(new Set(ys).size).toBe(1)
-    // Drawn down the middle rather than divided by a zero span.
-    expect(ys[0]).toBe(13)
+    expect(within(band).queryAllByTestId('dt-spark')).toHaveLength(0)
   })
 
   it('no longer repeats the monthly figure the plan section already carries', async () => {
@@ -1364,21 +1353,21 @@ describe('drill-through', () => {
       text: 'Ongoing',
       // The part rows are the band's other links, so a name is picked out by
       // its own class rather than matched by text alone.
-      selector: '.dt-kpi-part-name',
+      selector: '.dt-donut-name',
       href: '/drive-test/sites?bucket=ongoing',
     },
     {
       name: 'the problematic part of pending',
       open: async () => await screen.findByLabelText('Programme totals'),
       text: 'Problematic',
-      selector: '.dt-kpi-part-name',
+      selector: '.dt-donut-name',
       href: '/drive-test/sites?bucket=problematic',
     },
     {
       name: 'the not-started part of pending',
       open: async () => await screen.findByLabelText('Programme totals'),
       text: 'Not started',
-      selector: '.dt-kpi-part-name',
+      selector: '.dt-donut-name',
       href: '/drive-test/sites?bucket=not_started',
     },
     {
@@ -1448,7 +1437,7 @@ describe('drill-through', () => {
 
     const hero = await screen.findByLabelText('Programme totals')
     expect(
-      within(hero).getByText('Problematic', { selector: '.dt-kpi-part-name' }).closest('a'),
+      within(hero).getByText('Problematic', { selector: '.dt-donut-name' }).closest('a'),
     ).toHaveAttribute('href', '/drive-test/sites?bucket=problematic&province_id=7')
   })
 
@@ -1487,7 +1476,7 @@ describe('drill-through', () => {
     serve()
     draw()
 
-    const grid = await section('Province breakdown')
+    const grid = await section('Drive Test Progress by Province')
     const card = within(grid).getByText('Kerman').closest('.dt-province-card')
     for (const [text, href] of [
       ['60', '/drive-test/sites?bucket=onair&province_id=7'],
@@ -1590,7 +1579,7 @@ describe('the export button', () => {
     draw('/reports/drive-test?province=7')
 
     await screen.findByLabelText('Programme totals')
-    await userEvent.click(screen.getByRole('button', { name: /Export DT workbook/ }))
+    await userEvent.click(screen.getByRole('button', { name: /^Export$/ }))
 
     await waitFor(() =>
       expect(api.get).toHaveBeenCalledWith('/drive-test/export', {
@@ -1615,7 +1604,7 @@ describe('the export button', () => {
     draw()
 
     await screen.findByLabelText('Programme totals')
-    await userEvent.click(screen.getByRole('button', { name: /Export DT workbook/ }))
+    await userEvent.click(screen.getByRole('button', { name: /^Export$/ }))
 
     expect(await screen.findByText('Export failed')).toBeInTheDocument()
   })
@@ -1726,7 +1715,7 @@ describe('the province filter', () => {
     serve()
     draw()
 
-    const card = await section('Province breakdown')
+    const card = await section('Drive Test Progress by Province')
     await userEvent.click(
       within(card).getByRole('button', { name: /Narrow the whole dashboard to Kerman/ }),
     )
@@ -1872,7 +1861,7 @@ describe('the flow chart', () => {
     draw()
 
     const card = await section('Where this is going')
-    await userEvent.click(within(card).getByRole('tab', { name: 'Current year' }))
+    await userEvent.click(within(card).getByRole('tab', { name: 'Monthly Change' }))
 
     // 1405 alone: 5+4 on-aired, 3+2 done -- not the 77/35 the cumulative tab
     // showed a moment ago.
@@ -2282,12 +2271,12 @@ describe('the drill-through panel', () => {
     ['pending', () => screen.getByLabelText('Total pending: 60 sites'), 60],
     [
       'ongoing',
-      () => screen.getByText('Ongoing', { selector: '.dt-kpi-part-name' }),
+      () => screen.getByText('Ongoing', { selector: '.dt-donut-name' }),
       50,
     ],
     [
       'problematic',
-      () => screen.getByText('Problematic', { selector: '.dt-kpi-part-name' }),
+      () => screen.getByText('Problematic', { selector: '.dt-donut-name' }),
       10,
     ],
   ])('shows the same count as the %s figure that opened it', async (_name, target, expected) => {
@@ -2315,7 +2304,7 @@ describe('the drill-through panel', () => {
     serve()
     draw()
 
-    const grid = await section('Province breakdown')
+    const grid = await section('Drive Test Progress by Province')
     const card = within(grid).getByText('Kerman').closest('.dt-province-card')
     await userEvent.click(within(card).getByText('60'))
     expect(countIn(await panel())).toBe(60)
@@ -2332,7 +2321,7 @@ describe('the drill-through panel', () => {
 
     await screen.findByLabelText('Programme totals')
     await userEvent.click(
-      screen.getByText('Problematic', { selector: '.dt-kpi-part-name' }),
+      screen.getByText('Problematic', { selector: '.dt-donut-name' }),
     )
     await panel()
 
@@ -2346,7 +2335,7 @@ describe('the drill-through panel', () => {
     draw()
 
     await screen.findByLabelText('Programme totals')
-    await userEvent.click(screen.getByText('Ongoing', { selector: '.dt-kpi-part-name' }))
+    await userEvent.click(screen.getByText('Ongoing', { selector: '.dt-donut-name' }))
     const node = await panel()
     // "ongoing sites", not "bucket: ongoing" -- see BUCKET_LABEL.
     expect(node).toHaveTextContent('ongoing sites')
@@ -2357,7 +2346,7 @@ describe('the drill-through panel', () => {
     draw()
 
     await screen.findByLabelText('Programme totals')
-    await userEvent.click(screen.getByText('Ongoing', { selector: '.dt-kpi-part-name' }))
+    await userEvent.click(screen.getByText('Ongoing', { selector: '.dt-donut-name' }))
     const node = await panel()
 
     expect(
@@ -2378,7 +2367,7 @@ describe('the drill-through panel', () => {
     draw()
 
     await screen.findByLabelText('Programme totals')
-    await userEvent.click(screen.getByText('Problematic', { selector: '.dt-kpi-part-name' }))
+    await userEvent.click(screen.getByText('Problematic', { selector: '.dt-donut-name' }))
     const node = await panel()
 
     api.get.mockImplementationOnce(() =>
@@ -2397,7 +2386,7 @@ describe('the drill-through panel', () => {
     draw()
 
     await screen.findByLabelText('Programme totals')
-    await userEvent.click(screen.getByText('Ongoing', { selector: '.dt-kpi-part-name' }))
+    await userEvent.click(screen.getByText('Ongoing', { selector: '.dt-donut-name' }))
     const node = await panel()
 
     expect(within(node).getByRole('link', { name: /Open in site list/ })).toHaveAttribute(
@@ -2434,7 +2423,7 @@ describe('the drill-through panel', () => {
     // fireEvent rather than userEvent: the modifier has to be on the click
     // event itself, which is what DrillLink reads, and userEvent's keyboard
     // state is not shared across separate top-level calls.
-    fireEvent.click(screen.getByText('Ongoing', { selector: '.dt-kpi-part-name' }), {
+    fireEvent.click(screen.getByText('Ongoing', { selector: '.dt-donut-name' }), {
       metaKey: true,
     })
 
@@ -2449,7 +2438,7 @@ describe('the drill-through panel', () => {
     api.get.mockImplementationOnce(() =>
       Promise.reject({ response: { data: { detail: 'age_band applies to the ongoing bucket only' } } }),
     )
-    await userEvent.click(screen.getByText('Ongoing', { selector: '.dt-kpi-part-name' }))
+    await userEvent.click(screen.getByText('Ongoing', { selector: '.dt-donut-name' }))
 
     const node = await screen.findByTestId('dt-drill')
     expect(await within(node).findByText(/age_band applies to the ongoing bucket only/)).toBeInTheDocument()

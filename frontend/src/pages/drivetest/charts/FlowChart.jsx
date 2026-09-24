@@ -249,7 +249,7 @@ export default function FlowChart({ data }) {
         <div className="dt-tabs" role="tablist" aria-label="How to read the flow">
           {[
             { key: 'cumulative', label: 'Cumulative' },
-            { key: 'year', label: 'Current year' },
+            { key: 'year', label: 'Monthly Change' },
           ].map((t) => (
             <button
               key={t.key}
