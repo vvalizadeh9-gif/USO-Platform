@@ -568,6 +568,13 @@ def test_mapping_seeds_all_31_provinces_and_matches_the_platform(client, actors)
 
 
 def test_reassignment_closes_the_old_row_and_keeps_it(client, actors):
+    # Today, not a literal. Startup opens every seeded mapping row at
+    # date.today(), and a reassignment may not start before the row it
+    # replaces -- so a date written into this file passes on the day it is
+    # written and fails every day after it.
+    from datetime import date
+
+    today = date.today().isoformat()
     pm = actors["pm"]
     rows = client.get("/api/v1/kpi/mapping", headers=pm).json()["rows"]
     qom = next(r for r in rows if r["province_en"] == "Qom")
@@ -580,7 +587,7 @@ def test_reassignment_closes_the_old_row_and_keeps_it(client, actors):
             "cra_region": qom["cra_region"],
             "pso_coordinator": qom["pso_coordinator"],
             "regional_manager": "Rouhi",
-            "effective_from": "2026-09-23",
+            "effective_from": today,
         },
     )
     assert response.status_code == 200, response.text
@@ -591,7 +598,7 @@ def test_reassignment_closes_the_old_row_and_keeps_it(client, actors):
     ).json()["history"]["قم"]
     assert len(history) == 2
     assert history[0]["regional_manager"] == "Allahyar"
-    assert history[0]["effective_to"] == "2026-09-23"
+    assert history[0]["effective_to"] == today
     assert history[1]["effective_to"] is None
 
     # Put it back so the rest of the module sees the seeded mapping.
