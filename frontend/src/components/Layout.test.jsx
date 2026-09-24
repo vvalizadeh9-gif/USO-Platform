@@ -2,9 +2,9 @@
 //
 // The interesting property is not which links appear — the role lists say
 // that — but that a section heading never appears over nothing. Admin sees no
-// Drive Test Project item at all, and a category owner sees one screen in the
-// whole platform, so an unguarded heading would give both of them a label
-// pointing at empty space.
+// Planning item at all, and a category owner sees one screen in the whole
+// platform, so an unguarded heading would give both of them a label pointing
+// at empty space.
 import { act, render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
@@ -65,10 +65,13 @@ function itemsUnder(label) {
   return names
 }
 
-describe('the Drive Test Project section', () => {
+describe('the Planning section', () => {
+  // Renamed from "Drive Test Project" (Prompt 2): item-for-item the same
+  // group, in the same order, under a new heading among the sidebar's three
+  // — Operations / Planning / Follow-up.
   it('shows a PM the whole project in the order the work happens', async () => {
     await sidebarAs('PM')
-    expect(itemsUnder('Drive Test Project')).toEqual([
+    expect(itemsUnder('Planning')).toEqual([
       'Monthly Plan',
       'Health Check',
       'Drive Test',
@@ -77,7 +80,7 @@ describe('the Drive Test Project section', () => {
 
   it('shows a Coordinator the same four screens', async () => {
     await sidebarAs('Coordinator')
-    expect(itemsUnder('Drive Test Project')).toEqual([
+    expect(itemsUnder('Planning')).toEqual([
       'Monthly Plan',
       'Health Check',
       'Drive Test',
@@ -86,7 +89,7 @@ describe('the Drive Test Project section', () => {
 
   it('shows a contractor only their own three screens', async () => {
     await sidebarAs('Contractor')
-    expect(itemsUnder('Drive Test Project')).toEqual([
+    expect(itemsUnder('Planning')).toEqual([
       'Monthly Plan',
       'My Health Check',
       'My Drive Tests',
@@ -101,10 +104,10 @@ describe('the Drive Test Project section', () => {
 
 describe('a heading is never shown over nothing', () => {
   it.each(['Admin', 'CpgPower', 'NwgPlanning'])(
-    '%s sees no empty Drive Test Project heading',
+    '%s sees no empty Planning heading',
     async (roleName) => {
       await sidebarAs(roleName)
-      expect(screen.queryByText('Drive Test Project')).toBeNull()
+      expect(screen.queryByText('Planning')).toBeNull()
     },
   )
 
@@ -116,7 +119,7 @@ describe('a heading is never shown over nothing', () => {
       'Action Center',
       'My Work',
     ])
-    expect(screen.queryByText('Reports')).not.toBeNull()
+    expect(screen.queryByText('Follow-up')).not.toBeNull()
   })
 })
 

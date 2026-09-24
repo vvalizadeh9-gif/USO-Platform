@@ -15,21 +15,37 @@
   /* Base surfaces */
   --bg: #eef1f6;
   --surface-1: #ffffff;
-  --surface-2: #f6f8fb;
-  --surface-3: #eef2f8;
-  --border: #dbe2 ec;
-  --border: #dbe2ec;
-  --border-soft: #e8edf4;
+  --surface-2: #F4F5F3;
+  --surface-3: #E6EAE7;
+  --border: #D4D9D6;
+  --border-soft: #E3E7E4;
 
   /* Text */
-  --text: #16202e;
-  --text-muted: #55637a;
-  --text-dim: #8b98af;
+  --text: #141A18;
+  --text-muted: #4E5A55;
+  /* Darkened from the #6E7A75 the design brief specified: that value measures
+     4.46:1 on --surface-1 and 4.08:1 on --surface-2, both under the 4.5:1 AA
+     floor this token exists to clear. Same hue, ~8 units darker per channel,
+     measured at 5.09:1 / 4.66:1. */
+  --text-dim: #66726D;
 
   /* Signal accents */
   --signal: #0ea394;          /* primary — coverage teal */
   --signal-strong: #0b8477;
   --signal-glow: rgba(14, 163, 148, 0.14);
+
+  /* The sidebar's own palette: deep slate with a cool teal cast, independent
+     of the light-surface tokens above so the rest of the app can keep
+     changing without ever pulling the nav a shade lighter by accident. */
+  --nav-bg: #0F1A1D;
+  --nav-bg-2: #0C1618;
+  --nav-edge: #1D2B2F;
+  --nav-text: #A3B4B8;
+  --nav-text-strong: #F1F7F7;
+  --nav-dim: #6B7D83;
+  --nav-hover: #18262A;
+  --nav-active: #1E3138;
+  --nav-accent: #16BFAC;
 
   --amber: #c77d00;           /* pending / waiting */
   --amber-dim: rgba(199, 125, 0, 0.12);
@@ -87,13 +103,13 @@
      colour vocabulary at three things a reader has to learn. It is the same
      neutral as the chart furniture, one step darker so it holds its own as a
      segment rather than reading as an unfilled track. */
-  --dt-done: #3A7E5E;
-  --dt-ongoing: #5B66A8;
-  --dt-problem: #B05A5A;
+  --dt-done: #1E7A55;
+  --dt-ongoing: #3F4FB0;
+  --dt-problem: #B23A30;
   --dt-notstarted: #8a95a6;
-  --dt-done-wash: rgba(58, 126, 94, 0.12);
-  --dt-ongoing-wash: rgba(91, 102, 168, 0.11);
-  --dt-problem-wash: rgba(176, 90, 90, 0.11);
+  --dt-done-wash: rgba(30, 122, 85, 0.12);
+  --dt-ongoing-wash: rgba(63, 79, 176, 0.11);
+  --dt-problem-wash: rgba(178, 58, 48, 0.11);
   --dt-notstarted-wash: rgba(138, 149, 166, 0.13);
 
   /* The one ordinal ramp on that page: the ongoing age bands, which are an
@@ -213,15 +229,21 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
 /* ---------- Layout shell ---------- */
 .app-shell {
   display: grid;
-  grid-template-columns: 248px 1fr;
+  grid-template-columns: 216px 1fr;
   min-height: 100vh;
   position: relative;
   z-index: 1;
 }
 
+/* The sidebar is dark in both app themes -- it is not a themed surface, it
+   is fixed chrome, the same way it would be on a native shell. Logical
+   properties throughout (`inset-inline-start`, not `left`) because nothing
+   here should need a second pass the day this app grows an RTL layout --
+   there is no `dir="rtl"` anywhere in the app today, so this could not be
+   confirmed against a live mirrored render, only reasoned through. */
 .sidebar {
-  background: var(--surface-1);
-  border-right: 1px solid var(--border);
+  background: linear-gradient(180deg, var(--nav-bg) 0%, var(--nav-bg-2) 100%);
+  border-inline-end: 1px solid var(--nav-edge);
   padding: 22px 14px;
   display: flex;
   flex-direction: column;
@@ -229,6 +251,7 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
   position: sticky;
   top: 0;
   height: 100vh;
+  color: var(--nav-text);
 }
 
 .brand {
@@ -258,12 +281,16 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
   letter-spacing: -0.02em;
 }
 .brand-text small { color: var(--text-dim); font-size: 11px; letter-spacing: 0.04em; }
+/* `.brand` is shared with the login card, which sits on a light surface --
+   only the sidebar's copy of it goes dark. */
+.sidebar .brand-text b { color: var(--nav-text-strong); }
+.sidebar .brand-text small { color: var(--nav-dim); }
 
 .nav-section-label {
   font-size: 10px;
   text-transform: uppercase;
   letter-spacing: 0.12em;
-  color: var(--text-dim);
+  color: var(--nav-dim);
   padding: 16px 12px 6px;
 }
 
@@ -273,26 +300,28 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
   gap: 11px;
   padding: 9px 12px;
   border-radius: var(--radius-sm);
-  color: var(--text-muted);
+  color: var(--nav-text);
   font-weight: 500;
   font-size: 13.5px;
   transition: background 0.16s, color 0.16s;
   position: relative;
 }
-.nav-item:hover { background: var(--surface-2); color: var(--text); }
-.nav-item.active { background: var(--signal-glow); color: var(--signal-strong); }
+.nav-item:hover { background: var(--nav-hover); color: var(--nav-text-strong); }
+.nav-item.active { background: var(--nav-active); }
+.nav-item.active span:not(.badge) { color: var(--nav-text-strong); }
+.nav-item.active svg { color: var(--nav-accent); }
 .nav-item.active::before {
   content: '';
   position: absolute;
-  left: -14px; top: 50%;
+  inset-inline-start: -14px; top: 50%;
   transform: translateY(-50%);
   width: 3px; height: 20px;
-  background: var(--signal);
+  background: var(--nav-accent);
   border-radius: 0 3px 3px 0;
 }
 .nav-item .badge {
-  margin-left: auto;
-  background: var(--signal);
+  margin-inline-start: auto;
+  background: var(--nav-accent);
   color: #fff;
   font-size: 11px;
   font-weight: 600;
@@ -304,25 +333,25 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
 .sidebar-footer {
   margin-top: auto;
   padding: 12px;
-  border-top: 1px solid var(--border-soft);
+  border-top: 1px solid var(--nav-edge);
 }
 .user-chip { display: flex; align-items: center; gap: 10px; }
 .user-avatar {
   width: 32px; height: 32px; border-radius: 8px;
-  background: var(--signal-glow);
+  background: var(--nav-active);
   display: grid; place-items: center;
   font-family: var(--font-display); font-weight: 600; font-size: 13px;
-  color: var(--signal-strong);
+  color: var(--nav-accent);
 }
 .user-chip .who { flex: 1; min-width: 0; }
-.user-chip .who b { font-size: 13px; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.user-chip .who small { color: var(--text-dim); font-size: 11px; }
+.user-chip .who b { font-size: 13px; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--nav-text-strong); }
+.user-chip .who small { color: var(--nav-dim); font-size: 11px; }
 .logout-btn {
-  background: transparent; border: none; color: var(--text-dim);
+  background: transparent; border: none; color: var(--nav-dim);
   padding: 6px; border-radius: 6px; display: grid; place-items: center;
   transition: color 0.15s, background 0.15s;
 }
-.logout-btn:hover { color: var(--red); background: var(--red-dim); }
+.logout-btn:hover { color: var(--red); background: var(--nav-hover); }
 
 /* ---------- Main content ---------- */
 .main {
@@ -617,7 +646,7 @@ tbody tr:last-child td { border-bottom: none; }
 @media (max-width: 860px) {
   .app-shell { grid-template-columns: 1fr; }
   .sidebar {
-    position: fixed; z-index: 40; width: 248px;
+    position: fixed; z-index: 40; width: 216px;
     transform: translateX(-100%); transition: transform 0.25s;
   }
   .sidebar.open { transform: translateX(0); }
@@ -1530,26 +1559,46 @@ tbody tr:last-child td { border-bottom: none; }
 }
 .dt-kpi-card {
   display: flex;
+  align-items: center;
   background: var(--surface-1);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-2);
-  padding: 18px 20px;
+  padding: 20px;
   min-width: 0;
 }
+/* Neutral: this is the total the other two divide, not a state of its own. */
+.dt-kpi-card[data-kpi="onair"] { border-inline-start: 3px solid var(--border); }
+/* A soft wash of the card's own state colour behind the figure, at 7% --
+   distinct from the ~11-12% -wash tokens elsewhere, which are hover fills
+   meant to be seen, not a background meant to recede. */
+.dt-kpi-card[data-kpi="done"] {
+  border-inline-start: 3px solid var(--dt-done);
+  background-image: linear-gradient(180deg, rgba(30, 122, 85, 0.07) 0%, transparent 96px);
+}
+/* Pending is not one state -- it is ongoing, problematic and not-started
+   together -- so there is no single STATE_COLOR for it to borrow. Given the
+   --dt-ongoing edge, since that is the colour its own sparkline already used
+   for the same figure before this pass. */
+.dt-kpi-card[data-kpi="pending"] {
+  border-inline-start: 3px solid var(--dt-ongoing);
+  background-image: linear-gradient(180deg, rgba(63, 79, 176, 0.07) 0%, transparent 96px);
+}
+
 /* The figure block, identical in all three cards so the headline numbers
-   sit on one line across the band rather than drifting by a few pixels. */
+   sit on one line across the band rather than drifting by a few pixels.
+   Rhythm on a 4px grid: 8px title to figure (6px row-gap + a 2px margin
+   under the title), 6px figure to sub. */
 .dt-kpi-main {
   display: grid;
   grid-template-columns: auto 1fr;
   grid-template-areas:
     'title title'
     'figure delta'
-    'sub    sub'
-    'spark  spark';
+    'sub    sub';
   align-items: baseline;
   column-gap: 10px;
-  row-gap: 2px;
+  row-gap: 6px;
   align-content: start;
   min-width: 0;
   flex: 1 1 auto;
@@ -1557,11 +1606,11 @@ tbody tr:last-child td { border-bottom: none; }
 .dt-kpi-title {
   grid-area: title;
   font-size: 12.5px; font-weight: 500; color: var(--text-muted);
-  margin-block-end: 4px;
+  margin-block-end: 2px;
 }
 .dt-kpi-figure {
   grid-area: figure;
-  font-family: var(--font-display); font-size: 34px; font-weight: 600;
+  font-family: var(--font-display); font-size: 30px; font-weight: 600;
   letter-spacing: -0.03em; line-height: 1; color: var(--text);
   justify-self: start;
 }
@@ -1569,27 +1618,40 @@ a.dt-kpi-figure:hover { color: var(--dt-done); }
 .dt-kpi-main > .dt-delta { grid-area: delta; justify-self: start; }
 .dt-kpi-sub {
   grid-area: sub;
-  margin-block-start: 5px;
   font-size: 12px; color: var(--text-dim);
 }
 /* Reserved whether or not a line is drawn: /drive-test/flow and
    /drive-test/overview are separate requests and routinely land in that
    order, and a card that grows when the second arrives moves the two beside
-   it. See SparkSlot. */
+   it. See SparkSlot. Pending's is the only one left -- the two simple cards'
+   sparklines were the same two series the flow chart already draws, larger,
+   directly below this band. */
 .dt-kpi-sparkslot {
   grid-area: spark;
   display: block; min-height: 26px; margin-block-start: 10px;
 }
 .dt-spark { display: block; overflow: visible; }
 
+/* Wider, and its own column rather than a left/right split: title, figure,
+   sub, then (16px, the fourth rhythm step) the segmented bar and its three
+   rows -- one flow instead of two panels side by side. Pending keeps a
+   fourth row, its own sparkline, so its main block restates the 'spark'
+   area the shared block above dropped. */
 .dt-kpi-card-wide {
-  gap: 24px;
+  flex-direction: column;
   align-items: stretch;
+  gap: 16px;
 }
-.dt-kpi-card-wide .dt-kpi-main { flex: 0 0 34%; }
+.dt-kpi-card-wide .dt-kpi-main {
+  grid-template-areas:
+    'title title'
+    'figure delta'
+    'sub    sub'
+    'spark  spark';
+}
 .dt-kpi-parts {
-  display: flex; flex-direction: column; gap: 10px;
-  flex: 1 1 auto; min-width: 0; justify-content: center;
+  display: flex; flex-direction: column; gap: 12px;
+  flex: 1 1 auto; min-width: 0;
 }
 
 /* Pending split three ways. Unlike the four-state bar this replaces, every
@@ -1604,7 +1666,7 @@ a.dt-kpi-figure:hover { color: var(--dt-done); }
    stroke, which would be ink that is not data. */
 .dt-kpi-partbar-seg + .dt-kpi-partbar-seg { box-shadow: -1.5px 0 0 0 var(--surface-1); }
 
-.dt-kpi-partlist { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.dt-kpi-partlist { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
 /* The whole row is the link, not the figure inside it: the row is what a
    reader aims at, and a 14-pixel number is not a target. */
 .dt-kpi-part {
@@ -1617,7 +1679,8 @@ a.dt-kpi-figure:hover { color: var(--dt-done); }
   color: inherit;
   transition: background .14s;
 }
-a.dt-kpi-part:hover { background: var(--surface-2); }
+a.dt-kpi-part:hover, a.dt-kpi-part:focus-visible { background: var(--surface-2); }
+a.dt-kpi-part:focus-visible { outline: 2px solid var(--dt-ongoing); outline-offset: 2px; }
 .dt-kpi-part-dot {
   width: 9px; height: 9px; border-radius: 3px; flex: none;
   align-self: center;
@@ -1638,16 +1701,13 @@ a.dt-kpi-part:hover { background: var(--surface-2); }
 .dt-kpi-skeleton .dt-skeleton-row:last-child { grid-column: span 1; }
 
 /* Under about 1100px the band stops being a row: pending drops to its own
-   full-width card and its breakdown goes under the figure rather than
-   beside it. */
+   full-width card. Its own internal stack is unchanged at every width. */
 @media (max-width: 1100px) {
   .dt-kpi-band { grid-template-columns: 1fr 1fr; }
   .dt-kpi-card-wide { grid-column: 1 / -1; }
 }
 @media (max-width: 720px) {
   .dt-kpi-band { grid-template-columns: 1fr; }
-  .dt-kpi-card-wide { flex-direction: column; gap: 16px; }
-  .dt-kpi-card-wide .dt-kpi-main { flex: 0 0 auto; }
 }
 
 
@@ -2211,7 +2271,7 @@ a.dt-contractor-name:hover { text-decoration: underline; text-decoration-color: 
 /* Two readings of the same figure, side by side. Also what keeps a five-row
    bar chart from stretching its marks across a 1280px page. */
 .dt-pair {
-  display: grid; gap: var(--dt-gap); align-items: start; min-width: 0;
+  display: grid; gap: var(--dt-gap); align-items: stretch; min-width: 0;
   /* auto-fit, not `1fr 1fr`: when one of the pair is absent — an older
      backend that does not serve the breakdown, a month with no flow ledger —
      a fixed two-track grid leaves the survivor at half width beside a hole.
@@ -2219,6 +2279,12 @@ a.dt-contractor-name:hover { text-decoration: underline; text-decoration-color: 
   grid-template-columns: repeat(auto-fit, minmax(330px, 1fr));
 }
 .dt-pair > * { min-width: 0; }
+/* `stretch` alone only grows the card's box -- its content still stops at
+   its own natural height, which is exactly what leaves the shorter card of
+   a pair looking empty rather than short. Flexing the card itself is what
+   lets a card decide what to do with the extra room (a bigger chart, content
+   pinned to the foot) instead of just trailing white space. */
+.dt-pair > .dt-section { display: flex; flex-direction: column; }
 
 /* ---------- drill-through panel ----------
    A right-side sheet, not a modal: the dashboard behind it stays readable
@@ -2273,11 +2339,10 @@ a.dt-contractor-name:hover { text-decoration: underline; text-decoration-color: 
   .dt-pair { grid-template-columns: minmax(0, 1fr); }
 }
 @media (max-width: 760px) {
-  /* Stacked rather than shrunk: the three figures keep their weight, which
-     is the whole point of them. The band's own stacking is handled at its
-     two breakpoints above; this only tightens the padding. */
+  /* Stacked rather than shrunk: the figures keep their 30px weight at every
+     width. The band's own stacking is handled at its two breakpoints above;
+     this only tightens the padding. */
   .dt-kpi-card { padding: 16px; }
-  .dt-kpi-figure { font-size: 30px; }
   .dt-flowtiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .dt-bar-link { grid-template-columns: 110px 1fr 42px; }
   .dt-bar-share, .dt-bar-go { display: none; }

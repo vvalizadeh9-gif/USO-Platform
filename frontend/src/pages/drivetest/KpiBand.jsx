@@ -53,22 +53,27 @@ import { DrillLink } from './DrillPanel'
  */
 const SPARK_MIN_POINTS = 7
 
-/** The three cumulative series the band's sparklines draw, or `null`.
+/** The cumulative pending series the band's one remaining sparkline draws,
+ * or `null`.
+ *
+ * On-air and DT done used to carry the same sparkline as pending, until the
+ * flow chart directly below this band grew the same two series, larger --
+ * see FlowChart. Pending draws nowhere else on the page, so its line stays.
  *
  * `/drive-test/flow` returns per-month *activity* — what went on air and what
- * was drive-tested during each month — not balances. The running totals are
+ * was drive-tested during each month — not balances. The running total is
  * built here, from the opening balance forward, because that is arithmetic on
  * a payload the page already has: this band adds no request and no backend
  * field.
  *
- * ONE HONEST LIMIT, and it is why these are sparklines rather than figures.
+ * ONE HONEST LIMIT, and it is why this is a sparkline rather than a figure.
  * `not_placed` — sites whose dates the flow cannot place in any month — sits
- * outside the series by construction, so the last point of each line does not
+ * outside the series by construction, so the last point of the line does not
  * equal the KPI beside it and is not meant to. The line carries the shape;
  * the figure beside it carries the number. Nothing in this band ever reads a
- * value off a sparkline.
+ * value off the sparkline.
  */
-function sparkSeries(flow) {
+function pendingSpark(flow) {
   const months = flow?.months
   if (!months || months.length < SPARK_MIN_POINTS) return null
 
@@ -77,15 +82,10 @@ function sparkSeries(flow) {
   const running = months.map((m) => {
     onair += m.on_aired ?? 0
     done += m.dt_done ?? 0
-    return { onair, done, pending: onair - done }
+    return onair - done
   })
 
-  const tail = running.slice(-SPARK_MIN_POINTS)
-  return {
-    onair: tail.map((p) => p.onair),
-    done: tail.map((p) => p.done),
-    pending: tail.map((p) => p.pending),
-  }
+  return running.slice(-SPARK_MIN_POINTS)
 }
 
 function DeltaChip({ delta, direction = 'up', small }) {
@@ -122,7 +122,7 @@ export default function KpiBand({ kpis, flow, provinceId }) {
   const problematic = kpis.total_problematic.value
   const notStarted = kpis.total_not_started.value
 
-  const series = sparkSeries(flow)
+  const pendingPoints = pendingSpark(flow)
   // Guarded: a programme with nothing on air has nothing to take a share of,
   // so it reads 0% rather than dividing by zero.
   const donePct = onair ? (done / onair) * 100 : 0
@@ -199,9 +199,6 @@ export default function KpiBand({ kpis, flow, provinceId }) {
         kpi={kpis.total_onair}
         direction={KPI_DIRECTION.total_onair}
         sub="launched sites"
-        spark={series?.onair}
-        sparkColor="var(--dt-notstarted)"
-        sparkLabel={`On-air over the last ${SPARK_MIN_POINTS} months`}
       />
 
       <KpiCard
@@ -213,9 +210,6 @@ export default function KpiBand({ kpis, flow, provinceId }) {
         kpi={kpis.total_dt_done}
         direction={KPI_DIRECTION.total_dt_done}
         sub={`${percent(donePct)} of on-air`}
-        spark={series?.done}
-        sparkColor={STATE_COLOR.done}
-        sparkLabel={`Drive tests done over the last ${SPARK_MIN_POINTS} months`}
       />
 
       {/* Pending is wider because it is the only card carrying a breakdown.
@@ -238,7 +232,7 @@ export default function KpiBand({ kpis, flow, provinceId }) {
           />
           <span className="dt-kpi-sub">on air, drive test not done</span>
           <SparkSlot
-            points={series?.pending}
+            points={pendingPoints}
             color={STATE_COLOR.ongoing}
             label={`Pending over the last ${SPARK_MIN_POINTS} months`}
           />
@@ -293,19 +287,7 @@ export default function KpiBand({ kpis, flow, provinceId }) {
 /** One of the two plain cards. Pending is built inline above: it carries a
  * breakdown these two do not, and abstracting over that difference would
  * cost more in indirection than it saves in lines. */
-function KpiCard({
-  kpiKey,
-  title,
-  value,
-  href,
-  figureLabel,
-  kpi,
-  direction,
-  sub,
-  spark,
-  sparkColor,
-  sparkLabel,
-}) {
+function KpiCard({ kpiKey, title, value, href, figureLabel, kpi, direction, sub }) {
   return (
     <div className="dt-kpi-card" data-kpi={kpiKey}>
       <div className="dt-kpi-main">
@@ -315,7 +297,6 @@ function KpiCard({
         </DrillLink>
         <DeltaChip delta={kpi?.delta} direction={direction} />
         <span className="dt-kpi-sub">{sub}</span>
-        <SparkSlot points={spark} color={sparkColor} label={sparkLabel} />
       </div>
     </div>
   )

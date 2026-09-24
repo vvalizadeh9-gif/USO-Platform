@@ -1219,19 +1219,18 @@ describe('the KPI band', () => {
     expect(within(band).queryAllByTestId('dt-spark')).toHaveLength(0)
   })
 
-  it('draws one sparkline per card once the series is long enough', async () => {
+  it('draws pending\'s sparkline once the series is long enough, and no others', async () => {
+    // On-air and DT done lost theirs (Prompt 4): the flow chart directly
+    // below this band draws the same two series, larger. Pending draws
+    // nowhere else on the page, so it is the only one left here.
     serve(planDelivery(), overview, trend(), flow({ months: longMonths() }))
     draw()
 
     const band = await screen.findByLabelText('Programme totals')
-    await waitFor(() => expect(within(band).getAllByTestId('dt-spark')).toHaveLength(3))
+    await waitFor(() => expect(within(band).getAllByTestId('dt-spark')).toHaveLength(1))
     expect(
       within(band).getAllByTestId('dt-spark').map((s) => s.getAttribute('aria-label')),
-    ).toEqual([
-      'On-air over the last 7 months',
-      'Drive tests done over the last 7 months',
-      'Pending over the last 7 months',
-    ])
+    ).toEqual(['Pending over the last 7 months'])
   })
 
   it('builds the pending sparkline as on-air minus DT done, cumulatively', async () => {
@@ -1243,8 +1242,8 @@ describe('the KPI band', () => {
     draw()
 
     const band = await screen.findByLabelText('Programme totals')
-    await waitFor(() => expect(within(band).getAllByTestId('dt-spark')).toHaveLength(3))
-    const spark = within(band).getAllByTestId('dt-spark')[2]
+    await waitFor(() => expect(within(band).getAllByTestId('dt-spark')).toHaveLength(1))
+    const spark = within(band).getAllByTestId('dt-spark')[0]
     const d = spark.querySelector('path').getAttribute('d')
     // Seven points, and every one of them at the same height: the gap is 30
     // in all eight fixture months, so the pending line is flat. Were it
@@ -1264,6 +1263,19 @@ describe('the KPI band', () => {
     const band = await screen.findByLabelText('Programme totals')
     expect(within(band).queryByText(/Done this month/i)).not.toBeInTheDocument()
   })
+
+  it('makes a drillable part row reachable and visible by keyboard', async () => {
+    serve()
+    draw()
+
+    const band = await screen.findByLabelText('Programme totals')
+    const row = part(band, 'Ongoing')
+    // A real anchor, not a click handler on a div: it is in the tab order
+    // without anything extra, and a screen reader announces it as a link.
+    expect(row.tagName).toBe('A')
+    row.focus()
+    expect(row).toHaveFocus()
+  })
 })
 
 describe('the order of the page', () => {
@@ -1282,18 +1294,35 @@ describe('the order of the page', () => {
       .filter((t) =>
         [
           'Plan and delivery',
+          'What moved',
           'Ongoing breakdown',
           'Problematic breakdown',
           'Where this is going',
         ].includes(t),
       )
 
+    // "What moved" used to sit at the very foot of the page, four sections
+    // below Plan and delivery, with nothing saying the two were the same
+    // kind of question -- a month's movement, once against a plan and once
+    // against last month. It is paired with Plan and delivery now, directly
+    // under the trend.
     expect(headings).toEqual([
       'Where this is going',
       'Plan and delivery',
+      'What moved',
       'Ongoing breakdown',
       'Problematic breakdown',
     ])
+  })
+
+  it('pairs Plan and delivery with What moved in one row', async () => {
+    serve()
+    draw()
+
+    const plan = await section('Plan and delivery')
+    const moved = await section('What moved')
+    expect(plan.parentElement).toBe(moved.parentElement)
+    expect(plan.parentElement).toHaveClass('dt-pair')
   })
 })
 

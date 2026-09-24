@@ -342,12 +342,31 @@ export default function DriveTestProject() {
           }
         </Section>
 
-        <PlanDelivery
-          state={plan}
-          onRetry={refresh}
-          scoped={provinceId != null}
-          provinceName={provinceName}
-        />
+        {/* Paired with What moved: both are a month's worth of movement, read
+            against a plan on one side and against last month on the other. */}
+        <div className="dt-pair">
+          <PlanDelivery
+            state={plan}
+            onRetry={refresh}
+            scoped={provinceId != null}
+            provinceName={provinceName}
+          />
+
+          {trend.data?.latest_flows && (
+            <Section
+              title="What moved"
+              subtitle={`${trend.data.latest_flows.label} ${trend.data.latest_flows.shamsi_year}${
+                trend.data.latest_flows.is_open ? ' · still in progress' : ''
+              }`}
+              state={trend}
+              onRetry={refresh}
+              skeletonRows={4}
+              actions={<NetChange value={flowNet(trend.data.latest_flows)} />}
+            >
+              {(t) => <FlowLedger flows={t.latest_flows} monthLabel={t.latest_flows.label} />}
+            </Section>
+          )}
+        </div>
 
         <div className="dt-pair">
           {has('ongoing_breakdown') && (
@@ -444,21 +463,6 @@ export default function DriveTestProject() {
                 onProvince={setProvince}
               />
             )}
-          </Section>
-        )}
-
-        {trend.data?.latest_flows && (
-          <Section
-            title="What moved"
-            subtitle={`${trend.data.latest_flows.label} ${trend.data.latest_flows.shamsi_year}${
-              trend.data.latest_flows.is_open ? ' · still in progress' : ''
-            }`}
-            state={trend}
-            onRetry={refresh}
-            skeletonRows={4}
-            actions={<NetChange value={flowNet(trend.data.latest_flows)} />}
-          >
-            {(t) => <FlowLedger flows={t.latest_flows} monthLabel={t.latest_flows.label} />}
           </Section>
         )}
       </div>

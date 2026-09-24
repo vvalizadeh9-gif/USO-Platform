@@ -66,8 +66,11 @@ function SidebarNav({ user, isAdmin, badges }) {
         roleName={roleName}
         badges={badges}
       />
-      <NavSection label="Drive Test Project" items={DRIVE_TEST_PROJECT} roleName={roleName} badges={badges} />
-      <NavSection label="Reports" items={REPORTS} roleName={roleName} badges={badges} />
+      {/* Renamed from "Drive Test Project" and "Reports": three headings
+          instead of five, item-for-item the same groups in the same order —
+          this only relabels which heading each existing group sits under. */}
+      <NavSection label="Planning" items={DRIVE_TEST_PROJECT} roleName={roleName} badges={badges} />
+      <NavSection label="Follow-up" items={REPORTS} roleName={roleName} badges={badges} />
 
       {isAdmin && (
         <>
