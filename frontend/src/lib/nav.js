@@ -20,6 +20,7 @@ import {
   Gauge,
   ListChecks,
   Radio,
+  TrafficCone,
   Wrench,
 } from 'lucide-react'
 import { CATEGORY_OWNER_ROLES, KPI_ROLES, MONTHLY_PLAN_ROLES } from './roles'
@@ -72,6 +73,10 @@ export const REPORTS = [
   // Admin is absent from KPI_ROLES, which keeps this out of their sidebar --
   // and the server refuses them every endpoint behind it.
   { to: '/reports/kpi', label: 'KPI & Performance', icon: Gauge, roles: KPI_ROLES },
+  // Same roles as KPI & Performance, and for the same reason: it reads the
+  // same villages under the same scope rule, and the server refuses Admin
+  // every endpoint behind it.
+  { to: '/reports/gaps', label: 'Gap & Performance', icon: TrafficCone, roles: KPI_ROLES },
 ]
 
 /** Whether this user may see a nav item, from the item's own role lists. */

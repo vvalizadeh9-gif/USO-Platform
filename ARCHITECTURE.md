@@ -590,6 +590,108 @@ public internet.
 
 ---
 
+## 5c. Gap & Performance
+
+The second reporting page over the same villages, and it asks the opposite
+question to the one above it. KPI & Performance asks "how is this owner doing?"
+Gap & Performance asks **"where is the programme stopped, and whose villages are
+stopped there?"**
+
+`/reports/gaps`, served by `GET /gaps/road` and `services/gaps.py`. A pure read:
+no table, no migration, nothing written.
+
+### The road
+
+Four stretches, in the order a village passes them:
+
+```
+drive test done ──▶ ICT approved ──▶ CRA approved ──▶ in Mojri's tracker ──▶ depreciated
+                ICT               CRA              tracker              depreciation
+```
+
+A village is **stopped** on a stretch when it reached that stretch's starting
+state and not its end state. Nothing here is a delta and nothing is a snapshot:
+every figure is current standing, read exactly as the KPI page reads it (the two
+share `dt_done_values`, `target_values` and `province_label` rather than each
+having a view about what "DT done" means).
+
+The last two stretches read the Mojri tracker table, which does not exist yet.
+They are drawn and report **zero**, flagged `available: false`. Counting every
+CRA-approved village as "not in the tracker", when there is no tracker to look
+in, would put a large and confident wrong number on the page.
+
+### Every lens is a partition of the same rows
+
+Five lenses — regional manager, PSO coordinator, contractor, CRA region,
+province. The property that makes the page worth reading is that **each one sums
+back to the same country total.**
+
+A design preview of this page showed a country figure of 2,570 beside an owner
+list adding up to 445, because two of the five lenses were built from a
+different query than the rest. Two aggregates that are supposed to agree are not
+protected by anyone's good intentions, so they are not used:
+
+* `_grid()` is **one** GROUP BY over villages, by (province, DT SC contractor);
+* an owner list is `_fold()` over those cells with a key function naming the
+  owner;
+* the country total is the same `_fold()` with a key function that answers
+  "country" for every cell.
+
+Two groupings of one result set cannot disagree about their total. The parity
+test in `tests/test_gaps_road.py` asserts it for every lens against every
+stretch anyway, and names the lens, the stretch and the size of the discrepancy
+when it fails.
+
+The page then does the same sum **in the browser**, prints it in full under the
+list ("Coordinators below sum to the 940 stopped before ICT: 290 + 240 + 230 +
+180 = 940"), and says so loudly when it does not balance. That line is what
+should have caught the preview's bug before a person did.
+
+### Villages nobody owns are named, never dropped
+
+Three things the programme would like to be true, none of which the schema
+enforces: every village has a province (`sites.province_id` is nullable), every
+work item has a DT SC (nullable too), and every province has a current
+`province_mapping` row. Each missing case becomes its own named row — "Unknown
+province", "Unmapped province", "Unassigned" — carrying an `attribution` the page
+flags. Dropping them would break the sum above, which is the same reason the KPI
+heatmap shows an "Unknown province" row.
+
+A fourth assumption is reported rather than enforced: **ICT approval does not
+always precede CRA approval.** The two authorities are deliberately parallel
+(§5), so a village can be CRA-approved with no ICT approval. Such a village is
+counted once, as stopped on the ICT stretch — which is what it is — and is not
+counted as having reached the CRA stretch. The count travels in every response
+under `data_quality` and is shown on the page, because the arithmetic stays
+sound at any volume but the *shape* of a road drawn ICT-then-CRA stops
+describing the programme honestly if that number is large.
+`python -m app.scripts.gap_road_precheck` answers the same three questions from
+the command line, before the page is opened.
+
+### Who sees what
+
+Not decided here. `services/kpi.py` already answers "may this account see
+delivery numbers, and whose?", so this page calls `require_kpi_access` and
+`resolve_scope` rather than restating them: Admin is refused, PM may switch lens
+and sees every owner, and every other role is forced onto its own lens and its
+own row — asking for another is a 403. The province lens therefore belongs to PM
+alone, no role being confined to it.
+
+The country total is shown to every role, as the country average is on the KPI
+page: it is an aggregate of thirty-one provinces, it identifies nobody, and an
+owner's share of the national gap cannot be computed without it. A scoped
+reader's checksum says "your row is 230 of the 940 stopped nationally" rather
+than printing a sum that cannot balance.
+
+### Deliberately not built
+
+Monthly deltas and "vs last month" (they need a snapshot job that does not
+exist), plan versus actual (it needs the Monthly Plan redesign), the Iran
+coverage map, and reason codes on the ICT/CRA stretches — the last rejected by
+the product owner as more complexity than can be handled now.
+
+---
+
 ## 6. Roles and permissions
 
 Ten roles. Six are staff and workflow roles; four exist solely to own health-check

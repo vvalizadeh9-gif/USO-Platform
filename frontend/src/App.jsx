@@ -23,6 +23,7 @@ const MyWork = lazy(() => import('./pages/mywork/MyWork'))
 const MonthlyPlan = lazy(() => import('./pages/monthlyplan/MonthlyPlan'))
 const AcceptanceDashboard = lazy(() => import('./pages/reports/AcceptanceDashboard'))
 const KpiPerformance = lazy(() => import('./pages/reports/KpiPerformance'))
+const GapRoad = lazy(() => import('./pages/reports/GapRoad'))
 const KpiMapping = lazy(() => import('./pages/reports/KpiMapping'))
 const Admin = lazy(() => import('./pages/Admin'))
 const ChangePassword = lazy(() => import('./pages/ChangePassword'))
@@ -92,6 +93,18 @@ export default function App() {
             element={
               <Protected allowedRoles={KPI_ROLES}>
                 <KpiPerformance />
+              </Protected>
+            }
+          />
+          {/* Gap & Performance reads the same numbers under the same scope
+              rule as KPI & Performance -- Admin is refused every endpoint
+              behind it, and a non-PM is confined by the server to its own
+              scope -- so it is closed to the same roles here. */}
+          <Route
+            path="/reports/gaps"
+            element={
+              <Protected allowedRoles={KPI_ROLES}>
+                <GapRoad />
               </Protected>
             }
           />
