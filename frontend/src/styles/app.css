@@ -15,16 +15,19 @@
   /* Base surfaces */
   --bg: #eef1f6;
   --surface-1: #ffffff;
-  --surface-2: #f6f8fb;
-  --surface-3: #eef2f8;
-  --border: #dbe2 ec;
-  --border: #dbe2ec;
-  --border-soft: #e8edf4;
+  --surface-2: #F4F5F3;
+  --surface-3: #E6EAE7;
+  --border: #D4D9D6;
+  --border-soft: #E3E7E4;
 
   /* Text */
-  --text: #16202e;
-  --text-muted: #55637a;
-  --text-dim: #8b98af;
+  --text: #141A18;
+  --text-muted: #4E5A55;
+  /* Darkened from the #6E7A75 the design brief specified: that value measures
+     4.46:1 on --surface-1 and 4.08:1 on --surface-2, both under the 4.5:1 AA
+     floor this token exists to clear. Same hue, ~8 units darker per channel,
+     measured at 5.09:1 / 4.66:1. */
+  --text-dim: #66726D;
 
   /* Signal accents */
   --signal: #0ea394;          /* primary — coverage teal */
@@ -87,13 +90,13 @@
      colour vocabulary at three things a reader has to learn. It is the same
      neutral as the chart furniture, one step darker so it holds its own as a
      segment rather than reading as an unfilled track. */
-  --dt-done: #3A7E5E;
-  --dt-ongoing: #5B66A8;
-  --dt-problem: #B05A5A;
+  --dt-done: #1E7A55;
+  --dt-ongoing: #3F4FB0;
+  --dt-problem: #B23A30;
   --dt-notstarted: #8a95a6;
-  --dt-done-wash: rgba(58, 126, 94, 0.12);
-  --dt-ongoing-wash: rgba(91, 102, 168, 0.11);
-  --dt-problem-wash: rgba(176, 90, 90, 0.11);
+  --dt-done-wash: rgba(30, 122, 85, 0.12);
+  --dt-ongoing-wash: rgba(63, 79, 176, 0.11);
+  --dt-problem-wash: rgba(178, 58, 48, 0.11);
   --dt-notstarted-wash: rgba(138, 149, 166, 0.13);
 
   /* The one ordinal ramp on that page: the ongoing age bands, which are an
