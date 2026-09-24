@@ -1559,26 +1559,46 @@ tbody tr:last-child td { border-bottom: none; }
 }
 .dt-kpi-card {
   display: flex;
+  align-items: center;
   background: var(--surface-1);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-2);
-  padding: 18px 20px;
+  padding: 20px;
   min-width: 0;
 }
+/* Neutral: this is the total the other two divide, not a state of its own. */
+.dt-kpi-card[data-kpi="onair"] { border-inline-start: 3px solid var(--border); }
+/* A soft wash of the card's own state colour behind the figure, at 7% --
+   distinct from the ~11-12% -wash tokens elsewhere, which are hover fills
+   meant to be seen, not a background meant to recede. */
+.dt-kpi-card[data-kpi="done"] {
+  border-inline-start: 3px solid var(--dt-done);
+  background-image: linear-gradient(180deg, rgba(30, 122, 85, 0.07) 0%, transparent 96px);
+}
+/* Pending is not one state -- it is ongoing, problematic and not-started
+   together -- so there is no single STATE_COLOR for it to borrow. Given the
+   --dt-ongoing edge, since that is the colour its own sparkline already used
+   for the same figure before this pass. */
+.dt-kpi-card[data-kpi="pending"] {
+  border-inline-start: 3px solid var(--dt-ongoing);
+  background-image: linear-gradient(180deg, rgba(63, 79, 176, 0.07) 0%, transparent 96px);
+}
+
 /* The figure block, identical in all three cards so the headline numbers
-   sit on one line across the band rather than drifting by a few pixels. */
+   sit on one line across the band rather than drifting by a few pixels.
+   Rhythm on a 4px grid: 8px title to figure (6px row-gap + a 2px margin
+   under the title), 6px figure to sub. */
 .dt-kpi-main {
   display: grid;
   grid-template-columns: auto 1fr;
   grid-template-areas:
     'title title'
     'figure delta'
-    'sub    sub'
-    'spark  spark';
+    'sub    sub';
   align-items: baseline;
   column-gap: 10px;
-  row-gap: 2px;
+  row-gap: 6px;
   align-content: start;
   min-width: 0;
   flex: 1 1 auto;
@@ -1586,11 +1606,11 @@ tbody tr:last-child td { border-bottom: none; }
 .dt-kpi-title {
   grid-area: title;
   font-size: 12.5px; font-weight: 500; color: var(--text-muted);
-  margin-block-end: 4px;
+  margin-block-end: 2px;
 }
 .dt-kpi-figure {
   grid-area: figure;
-  font-family: var(--font-display); font-size: 34px; font-weight: 600;
+  font-family: var(--font-display); font-size: 30px; font-weight: 600;
   letter-spacing: -0.03em; line-height: 1; color: var(--text);
   justify-self: start;
 }
@@ -1598,27 +1618,40 @@ a.dt-kpi-figure:hover { color: var(--dt-done); }
 .dt-kpi-main > .dt-delta { grid-area: delta; justify-self: start; }
 .dt-kpi-sub {
   grid-area: sub;
-  margin-block-start: 5px;
   font-size: 12px; color: var(--text-dim);
 }
 /* Reserved whether or not a line is drawn: /drive-test/flow and
    /drive-test/overview are separate requests and routinely land in that
    order, and a card that grows when the second arrives moves the two beside
-   it. See SparkSlot. */
+   it. See SparkSlot. Pending's is the only one left -- the two simple cards'
+   sparklines were the same two series the flow chart already draws, larger,
+   directly below this band. */
 .dt-kpi-sparkslot {
   grid-area: spark;
   display: block; min-height: 26px; margin-block-start: 10px;
 }
 .dt-spark { display: block; overflow: visible; }
 
+/* Wider, and its own column rather than a left/right split: title, figure,
+   sub, then (16px, the fourth rhythm step) the segmented bar and its three
+   rows -- one flow instead of two panels side by side. Pending keeps a
+   fourth row, its own sparkline, so its main block restates the 'spark'
+   area the shared block above dropped. */
 .dt-kpi-card-wide {
-  gap: 24px;
+  flex-direction: column;
   align-items: stretch;
+  gap: 16px;
 }
-.dt-kpi-card-wide .dt-kpi-main { flex: 0 0 34%; }
+.dt-kpi-card-wide .dt-kpi-main {
+  grid-template-areas:
+    'title title'
+    'figure delta'
+    'sub    sub'
+    'spark  spark';
+}
 .dt-kpi-parts {
-  display: flex; flex-direction: column; gap: 10px;
-  flex: 1 1 auto; min-width: 0; justify-content: center;
+  display: flex; flex-direction: column; gap: 12px;
+  flex: 1 1 auto; min-width: 0;
 }
 
 /* Pending split three ways. Unlike the four-state bar this replaces, every
@@ -1633,7 +1666,7 @@ a.dt-kpi-figure:hover { color: var(--dt-done); }
    stroke, which would be ink that is not data. */
 .dt-kpi-partbar-seg + .dt-kpi-partbar-seg { box-shadow: -1.5px 0 0 0 var(--surface-1); }
 
-.dt-kpi-partlist { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.dt-kpi-partlist { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
 /* The whole row is the link, not the figure inside it: the row is what a
    reader aims at, and a 14-pixel number is not a target. */
 .dt-kpi-part {
@@ -1646,7 +1679,8 @@ a.dt-kpi-figure:hover { color: var(--dt-done); }
   color: inherit;
   transition: background .14s;
 }
-a.dt-kpi-part:hover { background: var(--surface-2); }
+a.dt-kpi-part:hover, a.dt-kpi-part:focus-visible { background: var(--surface-2); }
+a.dt-kpi-part:focus-visible { outline: 2px solid var(--dt-ongoing); outline-offset: 2px; }
 .dt-kpi-part-dot {
   width: 9px; height: 9px; border-radius: 3px; flex: none;
   align-self: center;
@@ -1667,16 +1701,13 @@ a.dt-kpi-part:hover { background: var(--surface-2); }
 .dt-kpi-skeleton .dt-skeleton-row:last-child { grid-column: span 1; }
 
 /* Under about 1100px the band stops being a row: pending drops to its own
-   full-width card and its breakdown goes under the figure rather than
-   beside it. */
+   full-width card. Its own internal stack is unchanged at every width. */
 @media (max-width: 1100px) {
   .dt-kpi-band { grid-template-columns: 1fr 1fr; }
   .dt-kpi-card-wide { grid-column: 1 / -1; }
 }
 @media (max-width: 720px) {
   .dt-kpi-band { grid-template-columns: 1fr; }
-  .dt-kpi-card-wide { flex-direction: column; gap: 16px; }
-  .dt-kpi-card-wide .dt-kpi-main { flex: 0 0 auto; }
 }
 
 
@@ -2308,11 +2339,10 @@ a.dt-contractor-name:hover { text-decoration: underline; text-decoration-color: 
   .dt-pair { grid-template-columns: minmax(0, 1fr); }
 }
 @media (max-width: 760px) {
-  /* Stacked rather than shrunk: the three figures keep their weight, which
-     is the whole point of them. The band's own stacking is handled at its
-     two breakpoints above; this only tightens the padding. */
+  /* Stacked rather than shrunk: the figures keep their 30px weight at every
+     width. The band's own stacking is handled at its two breakpoints above;
+     this only tightens the padding. */
   .dt-kpi-card { padding: 16px; }
-  .dt-kpi-figure { font-size: 30px; }
   .dt-flowtiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .dt-bar-link { grid-template-columns: 110px 1fr 42px; }
   .dt-bar-share, .dt-bar-go { display: none; }
