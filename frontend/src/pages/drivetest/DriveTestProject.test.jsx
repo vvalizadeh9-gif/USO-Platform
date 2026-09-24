@@ -1823,11 +1823,14 @@ describe('the flow chart', () => {
     draw()
 
     const card = await section('Where this is going')
-    // Opening 50/20 plus four months of on-aired/dt_done: 77 on-aired, 35 done.
-    expect(within(tile(card, 'On-aired')).getByText('77')).toBeInTheDocument()
+    // Opening 50/20, plus the 3 not-placed on-air sites that belong to no
+    // month and so open with the chart, plus four months of on-aired/dt_done:
+    // 53 + 27 on-aired, 20 + 15 done. The tiles have to read what the KPI
+    // cards above them read, and the cards count not-placed sites too.
+    expect(within(tile(card, 'On-aired')).getByText('80')).toBeInTheDocument()
     expect(within(tile(card, 'DT done')).getByText('35')).toBeInTheDocument()
-    expect(within(tile(card, 'Gap')).getByText('42')).toBeInTheDocument()
-    expect(within(tile(card, 'Coverage')).getByText('45%')).toBeInTheDocument()
+    expect(within(tile(card, 'Gap')).getByText('45')).toBeInTheDocument()
+    expect(within(tile(card, 'Coverage')).getByText('44%')).toBeInTheDocument()
 
     // No window picker, no legend -- both gone with the chart they belonged to.
     expect(screen.queryByRole('button', { name: '6m' })).not.toBeInTheDocument()
@@ -1907,10 +1910,13 @@ describe('the flow chart', () => {
       .getAllByTestId('dt-flow-net')
       .reduce((total, p) => total + Number(p.querySelector('text').textContent), 0)
 
-    // Opening 50 on air / 20 done is a gap of 30; the chart's Gap tile reads
-    // the closing 42. The strip has to account for exactly that movement.
-    const closingGap = Number(within(tile(card, 'Gap')).getByText('42').textContent)
-    expect(sum).toBe(closingGap - 30)
+    // Opening 53 on air (50 plus 3 not placed) / 20 done is a gap of 33; the
+    // chart's Gap tile reads the closing 45. The strip has to account for
+    // exactly that movement -- folding not-placed sites into the opening
+    // balance moves both ends of it by the same amount, so the strip itself
+    // does not change.
+    const closingGap = Number(within(tile(card, 'Gap')).getByText('45').textContent)
+    expect(sum).toBe(closingGap - 33)
     expect(sum).toBe(12)
   })
 
@@ -1950,13 +1956,39 @@ describe('the flow chart', () => {
     ).toBeInTheDocument()
   })
 
-  it('foots the count of sites with no on-air date', async () => {
+  it('foots the count of sites with no date to place them', async () => {
     serve()
     draw()
 
     const card = await section('Where this is going')
     expect(
-      within(card).getByText(/3 sites have no on-air date and are not counted/),
+      within(card).getByText(
+        /3 sites have no date to place them on the timeline, so they sit in the opening balance/,
+      ),
+    ).toBeInTheDocument()
+  })
+
+  it('counts sites whose drive test has no date, not just their on-air date', async () => {
+    // The bug this guards: the chart built its running totals from opening +
+    // months only, so the backend's not-placed bucket fell out of all four
+    // tiles, and the footnote that should have disclosed it was driven by the
+    // on-air side alone -- silent in exactly the case that reached production,
+    // where the undated sites were on the DT-done side. Its DT done and Gap
+    // therefore disagreed with the KPI cards directly above it.
+    serve(planDelivery(), overview, trend(), flow({ not_placed: { on_air: 0, dt_done: 7 } }))
+    draw()
+
+    const card = await section('Where this is going')
+    // Opening 50/20 and four months of 27/15, with the 7 undated drive tests
+    // on the done side: 77 on air, 20 + 15 + 7 done, so the gap is 7 smaller
+    // than the 42 it would be with them dropped.
+    expect(within(tile(card, 'On-aired')).getByText('77')).toBeInTheDocument()
+    expect(within(tile(card, 'DT done')).getByText('42')).toBeInTheDocument()
+    expect(within(tile(card, 'Gap')).getByText('35')).toBeInTheDocument()
+    expect(
+      within(card).getByText(
+        /7 sites have no date to place them on the timeline, so they sit in the opening balance/,
+      ),
     ).toBeInTheDocument()
   })
 })

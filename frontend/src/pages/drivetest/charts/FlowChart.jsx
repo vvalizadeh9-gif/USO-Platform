@@ -76,10 +76,28 @@ function niceFloorBelow(value) {
 }
 
 /** Running totals from the opening balance, one point per month plus the
- * start, Farvardin 1404 to now. */
+ * start, Farvardin 1404 to now.
+ *
+ * `not_placed` IS PART OF THE OPENING BALANCE HERE. The backend hands back
+ * three things -- an opening balance, one entry per month, and a not-placed
+ * bucket for sites it could not put in any Shamsi month -- and the KPI cards
+ * above this chart count all three. A series built from `opening + months`
+ * alone therefore ends below the card it sits under, and the four tiles,
+ * which read the last point of this series, disagree with it: the same sites
+ * missing from DT done and so added to the gap. The backend's own parity
+ * test spells the identity out -- `opening + sum(months) + not_placed` is the
+ * KPI figure -- and this is where the third term was missing.
+ *
+ * The opening balance is the only placement that does not invent a month for
+ * them: an undated site belongs to no month, and the position the chart opens
+ * with is exactly the part of the total that predates the timeline. Per-month
+ * values stay untouched, so the net-change strip is unaffected -- the opening
+ * and closing gaps both shift by the same amount, and the steps between them
+ * are what the strip draws.
+ */
 export function cumulativePoints(data) {
-  let onAir = data.opening.on_air
-  let dtDone = data.opening.dt_done
+  let onAir = data.opening.on_air + (data.not_placed?.on_air ?? 0)
+  let dtDone = data.opening.dt_done + (data.not_placed?.dt_done ?? 0)
   const points = [{ year: null, month: null, onAir, dtDone, gap: onAir - dtDone, isOpen: false }]
   for (const m of data.months) {
     onAir += m.on_aired
@@ -89,7 +107,13 @@ export function cumulativePoints(data) {
   return points
 }
 
-/** Running totals restarting at zero for one Shamsi year. */
+/** Running totals restarting at zero for one Shamsi year.
+ *
+ * No `not_placed` here, deliberately. This tab counts one year's activity and
+ * opens at zero by design, so its tiles already differ from the KPI cards on
+ * purpose; a site with no date belongs to no year either, and folding it in
+ * would attribute it to whichever year happened to be selected.
+ */
 export function yearPoints(data, year) {
   const months = data.months.filter((m) => m.year === year)
   let onAir = 0
@@ -206,7 +230,12 @@ export default function FlowChart({ data }) {
   const activeMonth = active == null ? null : months[active]
   const activePoint = active == null ? null : points[active + 1]
 
-  const notPlaced = data.not_placed?.on_air ?? 0
+  // Both sides, not just on-air: the bug this footnote exists to disclose
+  // showed up on the DT-done side, where a footnote driven by `on_air` alone
+  // stayed silent. The larger of the two rather than their sum, because a
+  // site can be missing both dates and be counted on both sides -- so this is
+  // the count that cannot overstate how many sites have no month.
+  const notPlaced = Math.max(data.not_placed?.on_air ?? 0, data.not_placed?.dt_done ?? 0)
 
   // One per month drawn, in the same order as `months`: points[0] is the
   // opening balance, so the step into month j is netChanges()[j].
@@ -488,8 +517,10 @@ export default function FlowChart({ data }) {
       </p>
       {notPlaced > 0 && (
         <p className="dt-note">
-          {count(notPlaced)} {notPlaced === 1 ? 'site has' : 'sites have'} no on-air date and are not
-          counted.
+          {count(notPlaced)} {notPlaced === 1 ? 'site has' : 'sites have'} no date to place
+          {notPlaced === 1 ? ' it' : ' them'} on the timeline, so{' '}
+          {notPlaced === 1 ? 'it sits' : 'they sit'}{' '}
+          {isCumulative ? 'in the opening balance.' : 'outside this year’s count.'}
         </p>
       )}
     </div>
