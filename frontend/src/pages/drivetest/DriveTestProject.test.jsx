@@ -1417,36 +1417,40 @@ describe('the order of the page', () => {
       .map((h) => h.textContent)
       .filter((t) =>
         [
-          'Plan and delivery',
           'What moved',
+          'PIP this month',
           'Ongoing breakdown',
           'Problematic breakdown',
           'Where this is going',
         ].includes(t),
       )
 
-    // "What moved" used to sit at the very foot of the page, four sections
-    // below Plan and delivery, with nothing saying the two were the same
-    // kind of question -- a month's movement, once against a plan and once
-    // against last month. It is paired with Plan and delivery now, directly
-    // under the trend.
+    // The month's two short answers -- what moved against last month, and
+    // what was promised for this one -- sit in the column beside the trend,
+    // so they read straight after it and still above the ongoing and
+    // problematic detail.
     expect(headings).toEqual([
       'Where this is going',
-      'Plan and delivery',
       'What moved',
+      'PIP this month',
       'Ongoing breakdown',
       'Problematic breakdown',
     ])
   })
 
-  it('pairs Plan and delivery with What moved in one row', async () => {
+  it('stacks What moved and PIP this month in the column beside the trend', async () => {
     serve()
     draw()
 
-    const plan = await section('Plan and delivery')
+    const trend = await section('Where this is going')
     const moved = await section('What moved')
-    expect(plan.parentElement).toBe(moved.parentElement)
-    expect(plan.parentElement).toHaveClass('dt-pair')
+    const pip = await section('PIP this month')
+    // One column, the two short cards together, the trend in the grid beside
+    // it -- not a full-width chart with a half-empty pair under it.
+    expect(moved.parentElement).toBe(pip.parentElement)
+    expect(moved.parentElement).toHaveClass('dt-stack')
+    expect(trend.parentElement).toBe(moved.parentElement.parentElement)
+    expect(trend.parentElement).toHaveClass('dt-grid2')
   })
 })
 
@@ -2236,29 +2240,56 @@ describe('the trend section', () => {
     expect(header.querySelector('b')).toHaveStyle({ color: 'var(--dt-done)' })
   })
 
-  it('says which flows are measured and which are derived', async () => {
+  it('says which flows are measured and which are derived, behind its info icon', async () => {
+    // Moved off the card into the icon, which is a toggletip rather than a
+    // hover tooltip: hover does not exist on a tablet, and this note is the
+    // only place the chart says which of its four numbers are estimates.
     serve()
     draw()
 
     const card = await section('What moved')
-    expect(within(card).getByText(/Arrivals are derived from the/)).toBeInTheDocument()
+    const note = within(card).getByText(/Arrivals are derived from the/)
+    expect(note).not.toBeVisible()
+
+    await userEvent.click(within(card).getByRole('button', { name: /how what moved is counted/i }))
+    expect(note).toBeVisible()
+
+    await userEvent.keyboard('{Escape}')
+    expect(note).not.toBeVisible()
   })
 
-  it('foots the ledger with arrivals, completions and the net change, scale note pushed to the end', async () => {
+  it('closes the note on a press anywhere else', async () => {
     serve()
     draw()
 
     const card = await section('What moved')
-    const foot = card.querySelector('.dt-flow-foot')
-    expect(within(foot).getByText('Arrived on air')).toBeInTheDocument()
-    expect(within(foot).getByText('Drive tests done')).toBeInTheDocument()
-    expect(within(foot).getByText('Net change')).toBeInTheDocument()
-    // 70 opened, 60 closed: net change is -10, the same figure the header
-    // states — see "carries the month's net movement in the card header".
-    const netStat = within(foot).getByText('Net change').closest('.dt-flow-stat')
-    expect(within(netStat).getByText('-10')).toBeInTheDocument()
-    // Last child of the footer, after every stat.
-    expect(foot.lastElementChild).toHaveClass('dt-flow-floor')
+    const button = within(card).getByRole('button', { name: /how what moved is counted/i })
+    await userEvent.click(button)
+    expect(button).toHaveAttribute('aria-expanded', 'true')
+
+    // Moving off it does not close a note that was opened on purpose -- only
+    // hover-opened ones follow the pointer. (The unhover is explicit because
+    // user-event sends no pointer-out when moving to the button's own
+    // ancestor, which a real pointer leaving the icon always does.)
+    await userEvent.unhover(button)
+    expect(button).toHaveAttribute('aria-expanded', 'true')
+
+    await userEvent.click(document.body)
+    expect(button).toHaveAttribute('aria-expanded', 'false')
+  })
+
+  it('states the floor the bars are drawn from, since it is not zero', async () => {
+    // The footer that used to carry this is gone with the stat row, which
+    // repeated figures the bars already print. The floor is the one thing
+    // from it that the bars cannot say for themselves, so it moved into the
+    // note -- computed by the same `flowScale` the bars are drawn with.
+    // 70 -> 74 -> 60: padded by 35% of the 14 span and rounded, 55.
+    serve()
+    draw()
+
+    const card = await section('What moved')
+    expect(card.querySelector('.dt-flow-foot')).toBeNull()
+    expect(within(card).getByText(/The scale starts at 55, not zero/)).toBeInTheDocument()
   })
 
   it('hides the ledger when no month has one', async () => {
@@ -2267,6 +2298,119 @@ describe('the trend section', () => {
 
     await screen.findByText('Drive Test Overview')
     await waitFor(() => expect(screen.queryByText('What moved')).not.toBeInTheDocument())
+  })
+})
+
+describe('PIP this month', () => {
+  const tile = (card, label) =>
+    within(card).getByText(label, { selector: 'dt' }).closest('.dt-pip-tile')
+
+  it('states plan, assigned, remaining and achieved, in that order, from the payload', async () => {
+    // 16 planned, 9 assigned, 6 delivered. Remaining is the old card's
+    // "Short by", arithmetic unchanged: 16 - 6 = 10.
+    serve()
+    draw()
+
+    const card = await section('PIP this month')
+    const labels = [...card.querySelectorAll('.dt-pip-tile dt')].map((d) => d.textContent)
+    expect(labels).toEqual(['Plan', 'Assigned', 'Remaining', 'Achieved'])
+    expect(within(tile(card, 'Plan')).getByText('16')).toBeInTheDocument()
+    expect(within(tile(card, 'Assigned')).getByText('9')).toBeInTheDocument()
+    expect(within(tile(card, 'Remaining')).getByText('10')).toBeInTheDocument()
+    expect(within(tile(card, 'Achieved')).getByText('6')).toBeInTheDocument()
+  })
+
+  it('is short by nothing, not by a negative, when delivery overshot the plan', async () => {
+    serve(planDelivery({ pip: 4, actual: 6, achievement_percent: 150 }))
+    draw()
+
+    const card = await section('PIP this month')
+    expect(within(tile(card, 'Remaining')).getByText('0')).toBeInTheDocument()
+  })
+
+  it('reads a month with nothing committed as nothing committed, not as a failure', async () => {
+    // No approved PIP: the figures go to the softest ink, Remaining is a
+    // dash because there is nothing to be short of, there is no rate to pace,
+    // and the sentence says which of the two a zero here means.
+    serve(
+      planDelivery({
+        pip: 0,
+        assigned: 0,
+        actual: 0,
+        achievement_percent: null,
+        committed_contractors: 0,
+        uncommitted_contractors: 3,
+        rows: [],
+      }),
+    )
+    draw()
+
+    const card = await section('PIP this month')
+    expect(card.querySelector('.dt-pip-tiles')).toHaveClass('is-uncommitted')
+    expect(within(tile(card, 'Remaining')).getByText('—')).toBeInTheDocument()
+    expect(within(card).queryByTestId('dt-pip-progress-fill')).toBeNull()
+    expect(card).toHaveTextContent(
+      '0 of 3 contractors have an approved PIP, so nothing is committed and nothing is scored.',
+    )
+  })
+
+  it('paces the rate against the month only when something is committed', async () => {
+    serve()
+    draw()
+
+    const card = await section('PIP this month')
+    expect(card.querySelector('.dt-pip-tiles')).not.toHaveClass('is-uncommitted')
+    expect(within(card).getByTestId('dt-pip-progress-fill')).toHaveStyle({ width: '37.5%' })
+    expect(card).toHaveTextContent('3 of 4 contractors have an approved PIP.')
+  })
+
+  it('opens the drive tests delivered this month from Achieved', async () => {
+    serve()
+    draw()
+
+    const card = await section('PIP this month')
+    expect(within(card).getByRole('link', { name: 'Achieved: 6' })).toHaveAttribute(
+      'href',
+      '/drive-test/sites?bucket=delivered&year=1405&month=6',
+    )
+  })
+
+  it('says it is not narrowed when a province filter is applied', async () => {
+    // A PIP carries no province. Narrowing the delivered half alone would
+    // divide one province's delivery by the whole programme's commitment.
+    serve()
+    draw('/reports/drive-test?province=7')
+
+    const card = await section('PIP this month')
+    expect(card.querySelector('.dt-scope-note')).toHaveTextContent(
+      /Not narrowed to .*a PIP is committed per contractor for the whole programme/,
+    )
+  })
+
+  it("gives a contractor the programme average, their only benchmark past their own row", async () => {
+    serve(planDelivery({ programme_achievement_percent: 62.5 }))
+    draw()
+
+    const card = await section('PIP this month')
+    expect(card).toHaveTextContent('Programme average 62.5% across all contractors.')
+  })
+
+  it('offers the monthly plan only to a role that can open it', async () => {
+    // The same list the sidebar gates its Monthly Plan entry on. Admin is a
+    // systems role and is not offered the page anywhere in the interface.
+    serve()
+    const { unmount } = draw()
+    let card = await section('PIP this month')
+    expect(within(card).getByRole('link', { name: 'Monthly plan' })).toHaveAttribute(
+      'href',
+      '/monthly-plan',
+    )
+    unmount()
+
+    serve()
+    draw('/reports/drive-test', { id: 9, username: 'admin', role: { name: 'Admin' } })
+    card = await section('PIP this month')
+    expect(within(card).queryByRole('link', { name: 'Monthly plan' })).toBeNull()
   })
 })
 

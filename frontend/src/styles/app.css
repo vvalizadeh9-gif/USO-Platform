@@ -2285,56 +2285,150 @@ a.dt-contractor-name:hover { text-decoration: underline; text-decoration-color: 
 }
 .dt-legend-note { color: var(--text-dim); }
 
-/* ---------- flow ledger ----------
-   A column waterfall: one bar per movement, each starting where the last
-   one finished, with a dashed connector between bar tops. */
-/* Lets the ledger's own flex column (below) actually reach the section's
-   full height, so the chart area has real extra room to grow into rather
-   than a `height: 100%` that resolves against nothing. */
-.dt-flow-section .dt-section-body {
-  flex: 1; display: flex; flex-direction: column; min-height: 0;
+/* ---------- What moved: the compact waterfall ----------
+   Four columns, each a plot of the same fixed height with its bar positioned
+   in percent of the month's scale -- so the bars scale with the column while
+   every figure and label stays at its true size. It lives in the column beside
+   the trend chart now, about a third of the page wide, where the SVG it
+   replaced would have drawn its 12px labels at about 6px.
+
+   A balance bar stands on the floor; a movement bar floats between the two
+   levels it moved the backlog between. Balances are the neutral (where the
+   backlog stood); arrivals take the ongoing hue and completions the done hue,
+   as everywhere else on this page. */
+.dt-wf {
+  --wf-gap: 8px;
+  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--wf-gap); padding-block-start: 18px;
 }
-.dt-flow { display: flex; flex-direction: column; gap: 10px; height: 100%; }
-/* Paired with Plan and delivery, which usually runs taller: the chart area
-   is the one flexible part of this card, so it takes the extra height
-   instead of leaving it as a gap below the footer. The bars themselves stay
-   a fixed-aspect drawing -- centred in the room they are given rather than
-   stretched out of proportion. */
-.dt-flow-chart {
-  flex: 1; min-height: 0;
-  display: flex; align-items: center; justify-content: center;
+.dt-wf-col { display: flex; flex-direction: column; align-items: stretch; min-width: 0; }
+.dt-wf-plot {
+  position: relative; block-size: 76px;
+  border-block-end: 1px solid var(--border-soft);
 }
-/* The waterfall. Full width now that this card no longer shares a row, so
-   a column is ~170px with room under it for its label at full length --
-   which is the thing four 66-pixel columns could not do and the reason this
-   was horizontal for a while. */
-.dt-flow-waterfall { display: block; width: 100%; height: auto; }
-.dt-flow-connector {
-  stroke: var(--border); stroke-width: 1.5; stroke-dasharray: 4 4;
+.dt-wf-bar {
+  position: absolute; inset-inline: 20%; min-block-size: 2px;
+  border-radius: 3px 3px 0 0;
+}
+.dt-wf-balance .dt-wf-bar { background: var(--dt-notstarted); opacity: 0.55; }
+.dt-wf-up .dt-wf-bar { background: var(--dt-ongoing); border-radius: 3px; }
+.dt-wf-down .dt-wf-bar { background: var(--dt-done); border-radius: 3px; }
+/* The connector leaves the top of the previous bar and meets this one: it
+   starts at the previous bar's inline end (20% in from its column's edge,
+   plus the gap) and stops at this bar's start. A broken chain is a broken
+   ledger, which is the whole reason it is drawn. */
+.dt-wf-link {
+  position: absolute; block-size: 0;
+  inset-inline-start: calc(-20% - var(--wf-gap));
+  inline-size: calc(40% + var(--wf-gap));
+  border-block-start: 1px dashed var(--text-dim);
+  opacity: 0.6;
 }
 .dt-flow-figure-text {
-  font-family: var(--font-display); font-size: 17px; font-weight: 600;
-  font-variant-numeric: tabular-nums;
+  position: absolute; inset-inline: 0; text-align: center;
+  font-family: var(--font-display); font-size: 13.5px; font-weight: 700;
+  line-height: 1.2; font-variant-numeric: tabular-nums;
 }
-.dt-flow-step-label { font-size: 11.5px; fill: var(--text-muted); }
+.dt-flow-step-label {
+  margin-block-start: 5px; text-align: center;
+  font-size: 10.5px; line-height: 1.3; color: var(--text-muted);
+}
 
-.dt-flow-foot {
-  display: flex; align-items: center; gap: 18px; flex-wrap: wrap;
-  padding-top: 8px; border-top: 1px solid var(--border-soft); font-size: 12.5px;
+/* ---------- the trend beside the month ----------
+   A container query on the bench, so the layout follows the page's width
+   rather than the window's: the content is capped, and a 1440 window and a
+   1920 window give nearly the same page. */
+.dt-bench { container: dt-bench / inline-size; }
+/* Both columns end on one line. Whichever is taller sets the height and the
+   other grows into it with something useful rather than a gap: the waterfall's
+   plot takes the spare height beside a tall chart (a bigger waterfall is more
+   legible, not padding), and an empty chart card centres its one sentence
+   beside a taller column. */
+.dt-grid2 {
+  display: grid; gap: var(--dt-gap); align-items: stretch; min-width: 0;
+  grid-template-columns: minmax(0, 2.2fr) minmax(0, 1fr);
 }
-.dt-flow-stat { display: inline-flex; align-items: center; gap: 8px; }
-.dt-flow-stat-label { color: var(--text-muted); }
-.dt-flow-stat b { font-family: var(--font-display); font-size: 16px; }
-.dt-flow-stat-icon {
-  display: grid; place-items: center; width: 20px; height: 20px;
-  border-radius: 6px; color: #fff;
+.dt-stack { display: flex; flex-direction: column; gap: var(--dt-gap); min-width: 0; }
+.dt-stack > .dt-flow-section { flex: 1 1 auto; }
+.dt-trend-section, .dt-flow-section { display: flex; flex-direction: column; }
+.dt-trend-section > .dt-section-body,
+.dt-flow-section > .dt-section-body {
+  flex: 1 1 auto; display: flex; flex-direction: column; min-height: 0;
 }
-/* The ledger's scale is truncated on purpose — see charts/FlowLedger — so it
-   says where the floor is rather than leaving zero to be assumed. */
-.dt-flow-floor { color: var(--text-dim); font-style: italic; font-size: 11.5px; margin-left: auto; }
-.dt-flow-note {
-  font-size: 11.5px; color: var(--text-dim); line-height: 1.55; margin: 0;
+.dt-trend-section > .dt-section-body > .dt-empty { margin-block: auto; }
+.dt-flow-section .dt-wf { flex: 1 1 auto; }
+.dt-flow-section .dt-wf-plot { flex: 1 1 auto; min-block-size: 76px; block-size: auto; }
+/* 1000px of page, not more: a 1366 laptop gives about 1070, and the side
+   column is still ~330px there, enough for four tiles and four bars. */
+@container dt-bench (max-width: 1000px) {
+  .dt-grid2 { grid-template-columns: minmax(0, 1fr); }
+  .dt-stack { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+@container dt-bench (max-width: 700px) {
+  .dt-stack { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* A clause on the heading, on its line: the month a compact card is about. */
+.dt-section-note { font-size: 11.5px; color: var(--text-dim); }
+.dt-section-head-inline .dt-section-actions { margin-inline-start: auto; }
+.dt-section-head-inline .dt-section-total b { font-size: 16px; }
+
+/* ---------- the info toggletip ----------
+   The note anchors to the card header rather than to the icon (the wrapper
+   is deliberately not positioned), and spans it: a card in the narrow side
+   column then cannot push its note off the page. */
+.dt-section-head { position: relative; }
+.dt-info { display: inline-flex; align-self: center; }
+.dt-info-btn {
+  display: grid; place-items: center; inline-size: 20px; block-size: 20px;
+  padding: 0; border: 0; border-radius: 50%; background: none;
+  color: var(--text-dim); cursor: pointer;
+}
+.dt-info-btn:hover, .dt-info-btn[aria-expanded="true"] {
+  color: var(--text); background: var(--surface-3);
+}
+.dt-info-btn:focus-visible { outline: 2px solid var(--dt-ongoing); outline-offset: 1px; }
+.dt-info-tip {
+  position: absolute; z-index: 30;
+  inset-block-start: calc(100% + 6px); inset-inline-start: 0;
+  max-inline-size: min(100%, 420px);
+  padding: 9px 11px; border-radius: var(--radius-sm);
+  background: var(--text); color: var(--surface-1);
+  font-size: 11.5px; line-height: 1.55; font-weight: 400;
+  box-shadow: var(--shadow-2);
+}
+.dt-info-tip[hidden] { display: none; }
+
+/* ---------- PIP this month ---------- */
+.dt-pip-tiles {
+  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 7px;
+  margin: 0;
+}
+.dt-pip-tile {
+  border: 1px solid var(--border-soft); border-radius: var(--radius-sm);
+  background: var(--surface-2); padding: 7px 6px; text-align: center; min-width: 0;
+}
+.dt-pip-tile dt { font-size: 10.5px; color: var(--text-muted); margin-block-end: 2px; }
+.dt-pip-tile dd {
+  margin: 0; font-family: var(--font-display); font-size: 17px; font-weight: 700;
+  letter-spacing: -0.02em; color: var(--text);
+}
+.dt-pip-tile[data-tone="done"] dd { color: var(--dt-done); }
+.dt-pip-tile[data-tone="problem"] dd { color: var(--dt-problem); }
+/* Nothing committed: every figure in the softest ink, so a zero reads as
+   "nothing was promised" rather than as a measured result. */
+.dt-pip-tiles.is-uncommitted dd,
+.dt-pip-tiles.is-uncommitted dd a { color: var(--text-dim); }
+.dt-pip-rate {
+  display: flex; align-items: center; gap: 10px; margin-block-start: 10px;
+}
+.dt-pip-rate-value {
+  font-family: var(--font-display); font-size: 13.5px; font-weight: 700; min-width: 5ch;
+}
+.dt-pip-note {
+  margin: 9px 0 0; font-size: 11.5px; line-height: 1.55; color: var(--text-muted);
+}
+.dt-pip-section .dt-scope-note { margin-block-end: 9px; font-size: 11.5px; }
 
 /* ---------- flow chart: on-aired vs DT done ---------- */
 .dt-flowcard { display: grid; gap: 14px; }

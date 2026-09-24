@@ -8,13 +8,16 @@ import AlertStrip from './AlertStrip'
 import BreakdownCard, { BreakdownTabs } from './BreakdownCard'
 import { DrillProvider } from './DrillPanel'
 import ContractorScorecard from './ContractorScorecard'
+import InfoTip from './InfoTip'
 import KpiBand from './KpiBand'
+import PipThisMonth from './PipThisMonth'
 import PlanDelivery from './PlanDelivery'
 import ProvinceList from './ProvinceList'
 import Section from './Section'
 import Toolbar from './Toolbar'
 import FlowChart, { flowHasActivity } from './charts/FlowChart'
 import FlowLedger, { flowNet } from './charts/FlowLedger'
+import { flowScale } from './charts/flowScale'
 import { AGE_RAMP, PROVINCE_LIMIT, STATE_COLOR } from './constants'
 import { count, deltaTone, TONE_COLOR } from './format'
 import { ongoingLink, problematicLink } from './links'
@@ -233,49 +236,80 @@ export default function DriveTestProject() {
           </>
         ) : null}
 
-        <Section
-          title="Where this is going"
-          subtitle="Sites on air against drive tests done, and what each month did to the backlog"
-          state={flow}
-          onRetry={refresh}
-          skeletonRows={4}
-        >
-          {(f) =>
-            flowHasActivity(f) ? (
-              <FlowChart data={f} />
-            ) : (
-              <div className="dt-empty">
-                No on-air or drive-test activity has been recorded yet. The chart fills in
-                as sites go on air and are drive-tested.
-              </div>
-            )
-          }
-        </Section>
-
-        <div className="dt-pair">
-          <PlanDelivery
-            state={plan}
+        {/* The trend and the month side by side: the chart takes the wide
+            column and the month's two short answers -- what moved, and what
+            was promised -- stack beside it. They used to be a full-width
+            chart and then a pair of half-width cards under it, and that pair
+            spent about 370px of height on what, in a month with no approved
+            PIP, was mostly zeros. The chart gains from it too: it is drawn on
+            a 740-unit canvas, and full width scaled its 11.5px axis labels up
+            to about 18px. The column narrows it to roughly its drawn size.
+            Below about 1080px of page the grid gives up the side column and
+            the two short cards sit side by side under the chart instead (a
+            container query on the bench, so it follows the page's width, not
+            the window's). */}
+        <div className="dt-grid2">
+          <Section
+            title="Where this is going"
+            subtitle="Sites on air against drive tests done, and what each month did to the backlog"
+            state={flow}
             onRetry={refresh}
-            scoped={provinceId != null}
-            provinceName={provinceName}
-          />
+            skeletonRows={4}
+            className="dt-trend-section"
+          >
+            {(f) =>
+              flowHasActivity(f) ? (
+                <FlowChart data={f} />
+              ) : (
+                <div className="dt-empty">
+                  No on-air or drive-test activity has been recorded yet. The chart fills in
+                  as sites go on air and are drive-tested.
+                </div>
+              )
+            }
+          </Section>
 
-          {trend.data?.latest_flows && (
-            <Section
-              title="What moved"
-              subtitle={`${trend.data.latest_flows.label} ${trend.data.latest_flows.shamsi_year}${
-                trend.data.latest_flows.is_open ? ' · still in progress' : ''
-              }`}
-              state={trend}
+          <div className="dt-stack">
+            {trend.data?.latest_flows && (
+              <Section
+                title="What moved"
+                subtitle={`${trend.data.latest_flows.label} ${trend.data.latest_flows.shamsi_year}${
+                  trend.data.latest_flows.is_open ? ' · in progress' : ''
+                }`}
+                inline
+                state={trend}
+                onRetry={refresh}
+                skeletonRows={3}
+                actions={<NetChange value={flowNet(trend.data.latest_flows)} />}
+                info={
+                  <InfoTip label="How What moved is counted">
+                    Completions are counted directly. Arrivals are derived from the balances.
+                    Problem flags and resolutions are counted where the platform dates the
+                    change and reconciled against the balances where it does not. The scale
+                    starts at {count(flowScale(trend.data.latest_flows).floor)}, not zero.
+                  </InfoTip>
+                }
+                className="dt-flow-section"
+              >
+                {(t) => <FlowLedger flows={t.latest_flows} monthLabel={t.latest_flows.label} />}
+              </Section>
+            )}
+
+            <PipThisMonth
+              state={plan}
               onRetry={refresh}
-              skeletonRows={4}
-              actions={<NetChange value={flowNet(trend.data.latest_flows)} />}
-              className="dt-flow-section"
-            >
-              {(t) => <FlowLedger flows={t.latest_flows} monthLabel={t.latest_flows.label} />}
-            </Section>
-          )}
+              scoped={provinceId != null}
+              provinceName={provinceName}
+            />
+          </div>
         </div>
+
+        <PlanDelivery
+          state={plan}
+          onRetry={refresh}
+          scoped={provinceId != null}
+          provinceName={provinceName}
+        />
 
         <div className="dt-pair">
           {has('ongoing_breakdown') && (
@@ -396,7 +430,7 @@ function NetChange({ value }) {
         {value > 0 ? '+' : ''}
         {count(value)}
       </b>
-      <span>net this month</span>
+      <span>net</span>
     </span>
   )
 }

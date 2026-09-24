@@ -20,6 +20,8 @@ export default function Section({
   subtitle,
   actions,
   controls,
+  info,
+  inline = false,
   state,
   onRetry,
   children,
@@ -45,17 +47,33 @@ export default function Section({
           card keeps the stacked title/subtitle it has, byte for byte: the
           inline variant is additive, so nothing that does not ask for it can
           be changed by it. */}
-      {controls ? (
+      {/* `inline` asks for the same one-line header without controls: the
+          compact cards in the column beside the trend chart put title, note,
+          info and their one action on a single line, because a stacked
+          header would cost them a fifth of their height.
+
+          `info` is the card's caveats behind an icon beside the title (see
+          InfoTip). It sits in both headers, so any card can carry one. */}
+      {controls || inline ? (
         <header className="dt-section-head dt-section-head-inline">
           <h2 className="dt-section-title">{title}</h2>
-          {actions}
-          <div className="dt-section-controls">{controls}</div>
+          {inline && subtitle && <span className="dt-section-note dt-farsi">{subtitle}</span>}
+          {info}
+          {controls ? (
+            <>
+              {actions}
+              <div className="dt-section-controls">{controls}</div>
+            </>
+          ) : (
+            actions && <div className="dt-section-actions">{actions}</div>
+          )}
         </header>
       ) : (
         <header className="dt-section-head">
           <div>
             <h2 className="dt-section-title">{title}</h2>
             {subtitle && <p className="dt-section-sub dt-farsi">{subtitle}</p>}
+            {info}
           </div>
           {actions && <div className="dt-section-actions">{actions}</div>}
         </header>
