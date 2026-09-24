@@ -2240,7 +2240,7 @@ a.dt-contractor-name:hover { text-decoration: underline; text-decoration-color: 
 /* Two readings of the same figure, side by side. Also what keeps a five-row
    bar chart from stretching its marks across a 1280px page. */
 .dt-pair {
-  display: grid; gap: var(--dt-gap); align-items: start; min-width: 0;
+  display: grid; gap: var(--dt-gap); align-items: stretch; min-width: 0;
   /* auto-fit, not `1fr 1fr`: when one of the pair is absent — an older
      backend that does not serve the breakdown, a month with no flow ledger —
      a fixed two-track grid leaves the survivor at half width beside a hole.
@@ -2248,6 +2248,12 @@ a.dt-contractor-name:hover { text-decoration: underline; text-decoration-color: 
   grid-template-columns: repeat(auto-fit, minmax(330px, 1fr));
 }
 .dt-pair > * { min-width: 0; }
+/* `stretch` alone only grows the card's box -- its content still stops at
+   its own natural height, which is exactly what leaves the shorter card of
+   a pair looking empty rather than short. Flexing the card itself is what
+   lets a card decide what to do with the extra room (a bigger chart, content
+   pinned to the foot) instead of just trailing white space. */
+.dt-pair > .dt-section { display: flex; flex-direction: column; }
 
 /* ---------- drill-through panel ----------
    A right-side sheet, not a modal: the dashboard behind it stays readable

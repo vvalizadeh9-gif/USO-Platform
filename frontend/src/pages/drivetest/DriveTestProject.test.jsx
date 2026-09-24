@@ -1282,18 +1282,35 @@ describe('the order of the page', () => {
       .filter((t) =>
         [
           'Plan and delivery',
+          'What moved',
           'Ongoing breakdown',
           'Problematic breakdown',
           'Where this is going',
         ].includes(t),
       )
 
+    // "What moved" used to sit at the very foot of the page, four sections
+    // below Plan and delivery, with nothing saying the two were the same
+    // kind of question -- a month's movement, once against a plan and once
+    // against last month. It is paired with Plan and delivery now, directly
+    // under the trend.
     expect(headings).toEqual([
       'Where this is going',
       'Plan and delivery',
+      'What moved',
       'Ongoing breakdown',
       'Problematic breakdown',
     ])
+  })
+
+  it('pairs Plan and delivery with What moved in one row', async () => {
+    serve()
+    draw()
+
+    const plan = await section('Plan and delivery')
+    const moved = await section('What moved')
+    expect(plan.parentElement).toBe(moved.parentElement)
+    expect(plan.parentElement).toHaveClass('dt-pair')
   })
 })
 
