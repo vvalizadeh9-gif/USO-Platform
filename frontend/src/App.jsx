@@ -24,6 +24,7 @@ const MonthlyPlan = lazy(() => import('./pages/monthlyplan/MonthlyPlan'))
 const AcceptanceDashboard = lazy(() => import('./pages/reports/AcceptanceDashboard'))
 const KpiPerformance = lazy(() => import('./pages/reports/KpiPerformance'))
 const GapRoad = lazy(() => import('./pages/reports/GapRoad'))
+const MojriImport = lazy(() => import('./pages/mojri/MojriImport'))
 const KpiMapping = lazy(() => import('./pages/reports/KpiMapping'))
 const Admin = lazy(() => import('./pages/Admin'))
 const ChangePassword = lazy(() => import('./pages/ChangePassword'))
@@ -162,6 +163,17 @@ export default function App() {
             element={
               <Protected allowedRoles={MONTHLY_PLAN_ROLES}>
                 <MonthlyPlan />
+              </Protected>
+            }
+          />
+          {/* The Mojri reconciliation writes operational data, so it is PM's
+              alone -- Admin is refused both import endpoints on the server and
+              takes only the template, from the Admin Console. */}
+          <Route
+            path="/mojri-tracker"
+            element={
+              <Protected allowedRoles={['PM']}>
+                <MojriImport />
               </Protected>
             }
           />

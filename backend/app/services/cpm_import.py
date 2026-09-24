@@ -43,6 +43,7 @@ from app.services import acceptance_workflow
 from app.services.acceptance_workflow import SOURCE_APP as _APP_SOURCE
 from app.models.reference import Contractor, Province, Region
 from app.models.workitem import Site, Village, WorkItem
+from app.services import acceptance_tokens as tokens
 from app.services import cpm_columns as C
 from app.services.audit import record_audit
 
@@ -596,15 +597,14 @@ class CpmImportService:
     # Values (case-insensitive) that a field team may type to mean approved or
     # rejected. Anything unrecognised falls through to Pending. Kept permissive
     # because these come straight from hand-edited Excel cells.
-    _APPROVED_TOKENS = frozenset({
-        "approved", "approve", "approval", "accepted", "accept", "ok", "okay",
-        "yes", "y", "done", "true", "1", "✓", "✔", "√",
-        "تایید", "تأیید", "تاييد", "تایید شده", "تأیید شده", "موافقت", "بله",
-    })
-    _REJECTED_TOKENS = frozenset({
-        "rejected", "reject", "rej", "no", "n", "false", "0", "✗", "x", "×",
-        "رد", "مردود", "عدم تایید", "عدم تأیید",
-    })
+    #
+    # They live in services/acceptance_tokens.py because the Mojri tracker
+    # importer reads the same kind of hand-typed cell and must read the same
+    # vocabulary. Two copies would not fail, they would drift: one importer
+    # would learn a spelling the other never did. The names are kept here so
+    # the call sites below read as they always did.
+    _APPROVED_TOKENS = tokens.APPROVED_TOKENS
+    _REJECTED_TOKENS = tokens.REJECTED_TOKENS
 
     @classmethod
     def _approval(cls, cell: str | None, tech: str) -> str:

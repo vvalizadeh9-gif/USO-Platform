@@ -17,6 +17,7 @@ import {
   CalendarRange,
   ClipboardCheck,
   ClipboardList,
+  FileSpreadsheet,
   Gauge,
   ListChecks,
   Radio,
@@ -40,6 +41,10 @@ export const NAV = [
   { to: '/my-fix-queue', label: 'My Fix Queue', icon: Wrench, roles: CATEGORY_OWNER_ROLES },
   { to: '/action-center', label: 'Action Center', icon: Radio, key: 'action' },
   { to: '/my-work', label: 'My Work', icon: BadgeCheck, hideRoles: ['Admin'] },
+  // The monthly Mojri reconciliation. Deliberately not under Reports:
+  // everything there is read-only, and this one writes. PM only, as the
+  // server has it -- Admin takes the template from the Admin Console.
+  { to: '/mojri-tracker', label: 'Mojri Tracker', icon: FileSpreadsheet, roles: ['PM'] },
 ]
 
 // One project, in the order the work happens: a target for the month, the

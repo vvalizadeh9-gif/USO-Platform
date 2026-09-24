@@ -31,6 +31,7 @@ vi.mock('./pages/ActionCenter', () => page('action-center'))
 vi.mock('./pages/mywork/MyWork', () => page('my-work'))
 vi.mock('./pages/monthlyplan/MonthlyPlan', () => page('monthly-plan'))
 vi.mock('./pages/reports/AcceptanceDashboard', () => page('acceptance'))
+vi.mock('./pages/mojri/MojriImport', () => page('mojri'))
 vi.mock('./pages/Admin', () => page('admin'))
 vi.mock('./pages/ChangePassword', () => page('change-password'))
 
@@ -134,6 +135,28 @@ describe('guarded routes', () => {
     signedInAs('PM')
     expect(await landOn('/admin')).toBe('admin')
   })
+
+  // The Mojri reconciliation is the Admin/PM separation again: the import
+  // writes operational data, so PM alone reaches it. Admin takes the template
+  // from the Admin Console, which is a read, and the server refuses Admin both
+  // import endpoints regardless of what the interface offers.
+  it('lets a PM onto the Mojri reconciliation', async () => {
+    signedInAs('PM')
+    expect(await landOn('/mojri-tracker')).toBe('mojri')
+  })
+
+  it('sends an admin away from the Mojri import', async () => {
+    signedInAs('Admin')
+    expect(await landOn('/mojri-tracker')).toBe('admin')
+  })
+
+  it.each(['Coordinator', 'Contractor', 'RegionalManager', 'Viewer'])(
+    'keeps %s off the Mojri import',
+    async (role) => {
+      signedInAs(role)
+      expect(await landOn('/mojri-tracker')).toBe('action-center')
+    },
+  )
 })
 
 // The drive test used to be two tabs at the end of the Health Check row, and

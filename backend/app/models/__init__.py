@@ -23,6 +23,7 @@ from app.models.health_check import (
     HcTaskTechnology,
 )
 from app.models.kpi import ProvinceMapping
+from app.models.mojri import MojriImportRun, MojriTrackerStatus
 from app.models.monthly_plan import ContractorMonthlyPlan
 from app.models.reference import (
     Contractor,
@@ -65,6 +66,8 @@ __all__ = [
     "letter_villages",
     "Contractor",
     "ContractorMonthlyPlan",
+    "MojriImportRun",
+    "MojriTrackerStatus",
     "ProvinceMapping",
     "ProblemCategory",
     "Province",
