@@ -1,5 +1,13 @@
 import { motion, useReducedMotion } from 'framer-motion'
-import { Minus, TrendingDown, TrendingUp } from 'lucide-react'
+import {
+  AlertCircle,
+  CheckCircle2,
+  Minus,
+  PieChart,
+  RadioTower,
+  TrendingDown,
+  TrendingUp,
+} from 'lucide-react'
 import { KPI_DIRECTION, STATE_COLOR } from './constants'
 import { count, deltaTone, percent, share, TONE_COLOR } from './format'
 import {
@@ -13,10 +21,39 @@ import {
 import { AnimatedNumber } from './charts/primitives'
 import { DrillLink } from './DrillPanel'
 
-function DeltaChip({ delta, direction = 'up', small }) {
+/** The month-over-month change on a KPI card, or beside a chart figure.
+ *
+ * Three states and no more: grey when the figure did not move, green when it
+ * moved the way this KPI wants, red when it moved the other way. Which way is
+ * "the way this KPI wants" is not a property of the sign — it comes from
+ * `KPI_DIRECTION`, because three of these count work you want to see fall. See
+ * `format.deltaTone` for what the dashboard this replaces got backwards.
+ *
+ * TWO RENDERINGS, ONE RULE. `pill` is the KPI band's: a tinted chip carrying
+ * the number, with the comparison spelled out beside it. The default is the
+ * inline icon-and-number form, which is what `charts/FlowChart` draws beside
+ * the gap figure. They differ in appearance only — the tone, and therefore the
+ * meaning, is computed once above the branch.
+ */
+function DeltaChip({ delta, direction = 'up', small, pill }) {
   if (delta == null) return null
   const tone = deltaTone(delta, direction)
   const color = tone ? TONE_COLOR[tone] : TONE_COLOR.flat
+  // A flat month is written ±0 rather than 0: the sign is what the eye reads
+  // on this chip, and "0" beside "+4" and "-12" scans as a missing sign.
+  const text = delta === 0 ? '±0' : `${delta > 0 ? '+' : ''}${count(delta)}`
+
+  if (pill) {
+    return (
+      <span className="dt-delta dt-delta-pill">
+        <b style={{ color }} data-tone={tone ?? 'flat'}>
+          {text}
+        </b>
+        <span className="dt-delta-since">vs last month</span>
+      </span>
+    )
+  }
+
   const Icon = delta === 0 ? Minus : delta > 0 ? TrendingUp : TrendingDown
   return (
     <span className="dt-delta" style={{ color, fontSize: small ? 11.5 : 12.5 }}>
@@ -30,83 +67,36 @@ function DeltaChip({ delta, direction = 'up', small }) {
 
 export { DeltaChip }
 
-function DonutChart({ ongoing, problematic, notStarted, total }) {
+/** A single track carrying a proportional split.
+ *
+ * One component for both jobs the band asks of it: the two-part bar under DT
+ * done and Pending, and the three-part stack above the pending breakdown. A
+ * segment with nothing in it is dropped rather than drawn at zero width, so
+ * the count of segments is the count of states that actually have sites.
+ *
+ * The widths are the only thing here that carries data, and they are handed in
+ * already computed — this draws a split, it never works one out.
+ */
+function SplitBar({ segments, label }) {
   const reduced = useReducedMotion()
-  const radius = 48
-  const cx = 62
-  const cy = 62
-  const circumference = 2 * Math.PI * radius
-  const strokeW = 13
-
-  const segments = [
-    { value: ongoing, color: STATE_COLOR.ongoing, label: 'Ongoing' },
-    { value: problematic, color: STATE_COLOR.problematic, label: 'Problematic' },
-    { value: notStarted, color: STATE_COLOR.not_started, label: 'Not started' },
-  ].filter((s) => s.value > 0)
-
-  let offset = 0
-
+  const drawn = segments.filter((s) => s.pct > 0)
   return (
-    <svg
-      viewBox={`0 0 ${cx * 2} ${cy * 2}`}
-      className="dt-donut-svg"
-      role="img"
-      aria-label={`Pending status: ${segments.map((s) => `${s.label} ${count(s.value)}`).join(', ')}`}
+    <div
+      className="dt-kpi-split"
+      {...(label
+        ? { role: 'img', 'aria-label': label }
+        : { role: 'presentation', 'aria-hidden': 'true' })}
     >
-      <circle
-        cx={cx}
-        cy={cy}
-        r={radius}
-        fill="none"
-        stroke="var(--surface-3)"
-        strokeWidth={strokeW}
-      />
-      {segments.map((seg, i) => {
-        const pct = total ? seg.value / total : 0
-        const dashLen = pct * circumference
-        const gap = circumference - dashLen
-        const currentOffset = -offset + circumference * 0.25
-        offset += dashLen
-        return (
-          <motion.circle
-            key={seg.label}
-            cx={cx}
-            cy={cy}
-            r={radius}
-            fill="none"
-            stroke={seg.color}
-            strokeWidth={strokeW}
-            strokeDasharray={`${dashLen} ${gap}`}
-            strokeDashoffset={currentOffset}
-            strokeLinecap="butt"
-            initial={reduced ? false : { strokeDasharray: `0 ${circumference}` }}
-            animate={{ strokeDasharray: `${dashLen} ${gap}` }}
-            transition={{ duration: 0.8, delay: i * 0.12, ease: [0.16, 1, 0.3, 1] }}
-          />
-        )
-      })}
-      <text x={cx} y={cy - 4} textAnchor="middle" className="dt-donut-value tnum">
-        {count(total)}
-      </text>
-      <text x={cx} y={cy + 14} textAnchor="middle" className="dt-donut-label">
-        sites
-      </text>
-    </svg>
-  )
-}
-
-function ProgressBar({ value, max, color }) {
-  const reduced = useReducedMotion()
-  const pct = max > 0 ? Math.min((value / max) * 100, 100) : 0
-  return (
-    <div className="dt-kpi-pbar">
-      <motion.div
-        className="dt-kpi-pbar-fill"
-        style={{ background: color }}
-        initial={reduced ? false : { width: 0 }}
-        animate={{ width: `${pct}%` }}
-        transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
-      />
+      {drawn.map((seg, i) => (
+        <motion.i
+          key={seg.key}
+          data-seg={seg.key}
+          style={{ background: seg.color }}
+          initial={reduced ? false : { width: 0 }}
+          animate={{ width: `${seg.pct}%` }}
+          transition={{ duration: 0.7, delay: i * 0.08, ease: [0.16, 1, 0.3, 1] }}
+        />
+      ))}
     </div>
   )
 }
@@ -121,6 +111,10 @@ export default function KpiBand({ kpis, provinceId }) {
   const problematic = kpis.total_problematic.value
   const notStarted = kpis.total_not_started.value
 
+  // Unchanged from the band this restyles: the same two ratios, computed the
+  // same way, and reused by the split bars rather than worked out a second
+  // time. Two figures on one card that disagree about a percentage is the
+  // failure this page is most often accused of.
   const donePct = onair ? (done / onair) * 100 : 0
   const pendingPct = onair ? (pending / onair) * 100 : 0
 
@@ -150,12 +144,27 @@ export default function KpiBand({ kpis, provinceId }) {
     },
   ]
 
+  // Named parts only, so the bar's accessible name says which states are in
+  // it rather than reading out three numbers where one of them is zero.
+  const stackLabel = `Pending status: ${parts
+    .filter((p) => p.value > 0)
+    .map((p) => `${p.label} ${count(p.value)}`)
+    .join(', ')}`
+
   return (
     <section className="dt-kpi-band" aria-label="Programme totals">
-      {/* Card 1: Total On-air */}
+      {/* Card 1: Total On-air.
+          No bar. The one it used to carry read value against a maximum that
+          was the same number, so it filled the track every time and told a
+          reader nothing they could not see from the figure above it. */}
       <div className="dt-kpi-card" data-kpi="onair">
-        <div className="dt-kpi-main">
+        <div className="dt-kpi-hd">
+          <span className="dt-kpi-ic" aria-hidden="true">
+            <RadioTower size={13} strokeWidth={2.2} />
+          </span>
           <span className="dt-kpi-title">Total On-air</span>
+        </div>
+        <div className="dt-kpi-v">
           <DrillLink
             to={onairLink(scope)}
             className="dt-kpi-figure tnum"
@@ -163,17 +172,19 @@ export default function KpiBand({ kpis, provinceId }) {
           >
             <AnimatedNumber value={onair} />
           </DrillLink>
-          <DeltaChip delta={kpis.total_onair.delta} direction={KPI_DIRECTION.total_onair} />
-          <span className="dt-kpi-sub">Launched sites</span>
-          <ProgressBar value={onair} max={onair} color="var(--border)" />
-          <span className="dt-kpi-target tnum">{count(onair)} / {count(onair)}</span>
         </div>
+        <DeltaChip pill delta={kpis.total_onair.delta} direction={KPI_DIRECTION.total_onair} />
       </div>
 
       {/* Card 2: Total DT Done */}
       <div className="dt-kpi-card" data-kpi="done">
-        <div className="dt-kpi-main">
+        <div className="dt-kpi-hd">
+          <span className="dt-kpi-ic" aria-hidden="true">
+            <CheckCircle2 size={13} strokeWidth={2.2} />
+          </span>
           <span className="dt-kpi-title">Total DT Done</span>
+        </div>
+        <div className="dt-kpi-v">
           <DrillLink
             to={doneLink(scope)}
             className="dt-kpi-figure tnum"
@@ -181,22 +192,38 @@ export default function KpiBand({ kpis, provinceId }) {
           >
             <AnimatedNumber value={done} />
           </DrillLink>
-          <DeltaChip delta={kpis.total_dt_done.delta} direction={KPI_DIRECTION.total_dt_done} />
-          <span className="dt-kpi-sub">{percent(donePct)} of on-air</span>
-          <ProgressBar value={done} max={onair} color="var(--dt-done)" />
-          <span className="dt-kpi-target tnum">
-            {count(done)} / {count(onair)}
-            {pending > 0 && (
-              <span className="dt-kpi-behind"> · {count(pending)} remaining</span>
-            )}
+          {/* The share is stated next to the figure, as the agreed layout
+              has it. "of on-air" is what it is a share *of*, and a bare
+              percentage beside a count is ambiguous without it, so the
+              denominator stays in the accessible name. */}
+          <span className="dt-kpi-pct tnum" aria-label={`${percent(donePct)} of on-air`}>
+            {percent(donePct)}
           </span>
         </div>
+        <SplitBar
+          segments={[
+            { key: 'done', pct: donePct, color: 'var(--dt-done)' },
+            { key: 'rest', pct: pendingPct, color: 'var(--dt-problem-wash)' },
+          ]}
+        />
+        <DeltaChip
+          pill
+          delta={kpis.total_dt_done.delta}
+          direction={KPI_DIRECTION.total_dt_done}
+        />
       </div>
 
-      {/* Card 3: Total Pending */}
+      {/* Card 3: Total Pending. The bar mirrors DT done's — same two ratios,
+          the other way round — so the pair reads as one split across two
+          cards rather than as two unrelated measurements. */}
       <div className="dt-kpi-card" data-kpi="pending">
-        <div className="dt-kpi-main">
+        <div className="dt-kpi-hd">
+          <span className="dt-kpi-ic" aria-hidden="true">
+            <AlertCircle size={13} strokeWidth={2.2} />
+          </span>
           <span className="dt-kpi-title">Total Pending</span>
+        </div>
+        <div className="dt-kpi-v">
           <DrillLink
             to={remainingLink(scope)}
             className="dt-kpi-figure tnum"
@@ -204,43 +231,59 @@ export default function KpiBand({ kpis, provinceId }) {
           >
             <AnimatedNumber value={pending} />
           </DrillLink>
-          <DeltaChip
-            delta={kpis.total_remaining.delta}
-            direction={KPI_DIRECTION.total_remaining}
-          />
-          <span className="dt-kpi-sub">On air, drive test not done</span>
-          <ProgressBar value={pending} max={onair} color="var(--dt-problem)" />
-          <span className="dt-kpi-target tnum">{percent(pendingPct)} of on-air</span>
+          <span className="dt-kpi-pct tnum" aria-label={`${percent(pendingPct)} of on-air`}>
+            {percent(pendingPct)}
+          </span>
         </div>
+        <SplitBar
+          segments={[
+            { key: 'pending', pct: pendingPct, color: 'var(--dt-problem)' },
+            { key: 'rest', pct: donePct, color: 'var(--dt-track)' },
+          ]}
+        />
+        <DeltaChip
+          pill
+          delta={kpis.total_remaining.delta}
+          direction={KPI_DIRECTION.total_remaining}
+        />
       </div>
 
-      {/* Card 4: Pending Status donut */}
-      <div className="dt-kpi-card dt-kpi-card-donut" data-kpi="status">
-        <span className="dt-kpi-title">Pending Status</span>
-        <div className="dt-donut-wrap">
-          <DonutChart
-            ongoing={ongoing}
-            problematic={problematic}
-            notStarted={notStarted}
-            total={pending}
-          />
-          <ul className="dt-donut-legend">
-            {parts.map((p) => (
-              <li key={p.key}>
-                <DrillLink to={p.href} className="dt-donut-item">
-                  <span
-                    className="dt-kpi-part-dot"
-                    style={{ background: p.color }}
-                    aria-hidden="true"
-                  />
-                  <span className="dt-donut-name">{p.label}</span>
-                  <span className="dt-donut-num tnum">{count(p.value)}</span>
-                  <span className="dt-donut-pct tnum">{shareOfPending(p.value)}</span>
-                </DrillLink>
-              </li>
-            ))}
-          </ul>
+      {/* Card 4: Pending Status.
+          The stack says how pending divides; the three rows below name each
+          part in words and figures. Both, never just the stack: green and
+          brick are not separable under deuteranopia (see app.css), so colour
+          on this page is the fast read and never the only one. */}
+      <div className="dt-kpi-card" data-kpi="status">
+        <div className="dt-kpi-hd">
+          <span className="dt-kpi-ic" aria-hidden="true">
+            <PieChart size={13} strokeWidth={2.2} />
+          </span>
+          <span className="dt-kpi-title">Pending Status</span>
         </div>
+        <SplitBar
+          label={stackLabel}
+          segments={parts.map((p) => ({
+            key: p.key,
+            pct: pending ? (p.value / pending) * 100 : 0,
+            color: p.color,
+          }))}
+        />
+        <ul className="dt-status-list">
+          {parts.map((p) => (
+            <li key={p.key}>
+              <DrillLink to={p.href} className="dt-status-row">
+                <span
+                  className="dt-kpi-part-dot"
+                  style={{ background: p.color }}
+                  aria-hidden="true"
+                />
+                <span className="dt-status-name">{p.label}</span>
+                <span className="dt-status-num tnum">{count(p.value)}</span>
+                <span className="dt-status-pct tnum">{shareOfPending(p.value)}</span>
+              </DrillLink>
+            </li>
+          ))}
+        </ul>
       </div>
     </section>
   )
