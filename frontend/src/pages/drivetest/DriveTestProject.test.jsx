@@ -1154,7 +1154,7 @@ describe('the KPI band', () => {
 
   /** A part row of the pending card by its name. */
   const part = (band, name) =>
-    within(band).getByText(name, { selector: '.dt-donut-name' }).closest('.dt-donut-item')
+    within(band).getByText(name, { selector: '.dt-status-name' }).closest('.dt-status-row')
 
   it('leads with the three totals the programme is run on', async () => {
     serve()
@@ -1164,8 +1164,11 @@ describe('the KPI band', () => {
     expect(within(card(band, 'Total On-air')).getByText('100')).toBeInTheDocument()
     expect(within(card(band, 'Total DT Done')).getByText('40')).toBeInTheDocument()
     expect(within(card(band, 'Total Pending')).getByText('60')).toBeInTheDocument()
-    // DT done states its share of on-air; the band no longer leads with it.
-    expect(within(card(band, 'Total DT Done')).getByText('40% of on-air')).toBeInTheDocument()
+    // DT done states its share beside the figure. The percentage is what is
+    // drawn; what it is a share *of* stays in the accessible name, because a
+    // bare percentage next to a count does not say which is its denominator.
+    const pct = within(card(band, 'Total DT Done')).getByText('40%')
+    expect(pct).toHaveAttribute('aria-label', '40% of on-air')
   })
 
   it('no longer leads with the overall progress rate or the four-state on-air bar', async () => {
@@ -1206,28 +1209,77 @@ describe('the KPI band', () => {
     draw()
 
     const band = await screen.findByLabelText('Programme totals')
-    expect(part(band, 'Ongoing').querySelector('.dt-donut-pct')).toHaveTextContent('83%')
-    expect(part(band, 'Problematic').querySelector('.dt-donut-pct')).toHaveTextContent('17%')
-    expect(part(band, 'Not started').querySelector('.dt-donut-pct')).toHaveTextContent('0%')
+    expect(part(band, 'Ongoing').querySelector('.dt-status-pct')).toHaveTextContent('83%')
+    expect(part(band, 'Problematic').querySelector('.dt-status-pct')).toHaveTextContent('17%')
+    expect(part(band, 'Not started').querySelector('.dt-status-pct')).toHaveTextContent('0%')
   })
 
-  it('draws the donut with one segment per part that has sites', async () => {
+  it('gives the on-air card no bar, because it would always read full', async () => {
+    // The bar this card used to carry measured on-air against on-air, so it
+    // filled its track every time and moved for no input. A bar that cannot
+    // report anything but 100% is decoration standing where information
+    // should be.
     serve()
     draw()
 
     const band = await screen.findByLabelText('Programme totals')
-    const donut = within(band).getByRole('img', { name: /Pending status/ })
-    expect(donut).toHaveAttribute(
+    expect(card(band, 'Total On-air').querySelector('.dt-kpi-split')).toBeNull()
+    // The three cards that do split something keep theirs.
+    expect(card(band, 'Total DT Done').querySelector('.dt-kpi-split')).not.toBeNull()
+    expect(card(band, 'Total Pending').querySelector('.dt-kpi-split')).not.toBeNull()
+  })
+
+  it('mirrors the pending bar against the DT done bar', async () => {
+    // The two are one split drawn across two cards, so their segments have
+    // to be the same two ratios the other way round. Read off the rendered
+    // widths rather than off the fixture: a card that starts computing its
+    // own share instead of reusing the band's fails here.
+    serve()
+    draw()
+
+    const band = await screen.findByLabelText('Programme totals')
+    const doneBar = card(band, 'Total DT Done').querySelector('.dt-kpi-split')
+    const pendingBar = card(band, 'Total Pending').querySelector('.dt-kpi-split')
+
+    expect(doneBar.querySelector('[data-seg="done"]')).toHaveStyle({ width: '40%' })
+    expect(doneBar.querySelector('[data-seg="rest"]')).toHaveStyle({ width: '60%' })
+    expect(pendingBar.querySelector('[data-seg="pending"]')).toHaveStyle({ width: '60%' })
+    expect(pendingBar.querySelector('[data-seg="rest"]')).toHaveStyle({ width: '40%' })
+  })
+
+  it('writes a month that did not move as a grey plus-or-minus zero', async () => {
+    // The third state of the change chip. A flat month is neither good news
+    // nor bad, so it takes the neutral rather than whichever colour the sign
+    // would have implied -- see `format.deltaTone`, which returns null here
+    // for exactly that reason.
+    serve(planDelivery(), {
+      ...overview,
+      kpis: { ...overview.kpis, total_remaining: kpi(60, 0, 60) },
+    })
+    draw()
+
+    const band = await screen.findByLabelText('Programme totals')
+    const chip = within(card(band, 'Total Pending')).getByText('\u00b10')
+    expect(chip).toHaveStyle({ color: 'var(--text-dim)' })
+  })
+
+  it('stacks one segment per part that has sites', async () => {
+    serve()
+    draw()
+
+    const band = await screen.findByLabelText('Programme totals')
+    const stack = within(band).getByRole('img', { name: /Pending status/ })
+    expect(stack).toHaveAttribute(
       'aria-label',
       'Pending status: Ongoing 50, Problematic 10',
     )
-    // Background circle plus two segment circles (Not started is 0 in the
-    // fixture, so it is named in the legend but draws no arc).
-    const circles = donut.querySelectorAll('circle')
-    expect(circles).toHaveLength(3)
+    // Two segments. Not started is 0 in the fixture, so it is named in the
+    // rows beneath but draws nothing — a zero-width segment is not drawn
+    // rather than drawn at zero.
+    expect(stack.querySelectorAll('[data-seg]')).toHaveLength(2)
   })
 
-  it('draws Not started as a donut arc once it has sites', async () => {
+  it('stacks Not started as its own segment once it has sites', async () => {
     // The state this dashboard once folded into Ongoing. Unlike the band
     // this replaces — which left it to the neutral track because it was
     // splitting on-air — it is a first-class part of pending here, because
@@ -1239,10 +1291,8 @@ describe('the KPI band', () => {
     draw()
 
     const band = await screen.findByLabelText('Programme totals')
-    const donut = within(band).getByRole('img', { name: /Pending status/ })
-    // Background circle plus three segment circles (ongoing, problematic, not_started).
-    const circles = donut.querySelectorAll('circle')
-    expect(circles).toHaveLength(4)
+    const stack = within(band).getByRole('img', { name: /Pending status/ })
+    expect(stack.querySelectorAll('[data-seg]')).toHaveLength(3)
     expect(within(part(band, 'Not started')).getByText('12')).toBeInTheDocument()
   })
 
@@ -1280,7 +1330,7 @@ describe('the KPI band', () => {
 
     const band = await screen.findByLabelText('Programme totals')
     for (const name of ['Ongoing', 'Problematic', 'Not started']) {
-      expect(part(band, name).querySelector('.dt-donut-pct')).toHaveTextContent('0%')
+      expect(part(band, name).querySelector('.dt-status-pct')).toHaveTextContent('0%')
     }
   })
 
@@ -1425,21 +1475,21 @@ describe('drill-through', () => {
       text: 'Ongoing',
       // The part rows are the band's other links, so a name is picked out by
       // its own class rather than matched by text alone.
-      selector: '.dt-donut-name',
+      selector: '.dt-status-name',
       href: '/drive-test/sites?bucket=ongoing',
     },
     {
       name: 'the problematic part of pending',
       open: async () => await screen.findByLabelText('Programme totals'),
       text: 'Problematic',
-      selector: '.dt-donut-name',
+      selector: '.dt-status-name',
       href: '/drive-test/sites?bucket=problematic',
     },
     {
       name: 'the not-started part of pending',
       open: async () => await screen.findByLabelText('Programme totals'),
       text: 'Not started',
-      selector: '.dt-donut-name',
+      selector: '.dt-status-name',
       href: '/drive-test/sites?bucket=not_started',
     },
     {
@@ -1509,7 +1559,7 @@ describe('drill-through', () => {
 
     const hero = await screen.findByLabelText('Programme totals')
     expect(
-      within(hero).getByText('Problematic', { selector: '.dt-donut-name' }).closest('a'),
+      within(hero).getByText('Problematic', { selector: '.dt-status-name' }).closest('a'),
     ).toHaveAttribute('href', '/drive-test/sites?bucket=problematic&province_id=7')
   })
 
@@ -2401,12 +2451,12 @@ describe('the drill-through panel', () => {
     ['pending', () => screen.getByLabelText('Total pending: 60 sites'), 60],
     [
       'ongoing',
-      () => screen.getByText('Ongoing', { selector: '.dt-donut-name' }),
+      () => screen.getByText('Ongoing', { selector: '.dt-status-name' }),
       50,
     ],
     [
       'problematic',
-      () => screen.getByText('Problematic', { selector: '.dt-donut-name' }),
+      () => screen.getByText('Problematic', { selector: '.dt-status-name' }),
       10,
     ],
   ])('shows the same count as the %s figure that opened it', async (_name, target, expected) => {
@@ -2451,7 +2501,7 @@ describe('the drill-through panel', () => {
 
     await screen.findByLabelText('Programme totals')
     await userEvent.click(
-      screen.getByText('Problematic', { selector: '.dt-donut-name' }),
+      screen.getByText('Problematic', { selector: '.dt-status-name' }),
     )
     await panel()
 
@@ -2465,7 +2515,7 @@ describe('the drill-through panel', () => {
     draw()
 
     await screen.findByLabelText('Programme totals')
-    await userEvent.click(screen.getByText('Ongoing', { selector: '.dt-donut-name' }))
+    await userEvent.click(screen.getByText('Ongoing', { selector: '.dt-status-name' }))
     const node = await panel()
     // "ongoing sites", not "bucket: ongoing" -- see BUCKET_LABEL.
     expect(node).toHaveTextContent('ongoing sites')
@@ -2476,7 +2526,7 @@ describe('the drill-through panel', () => {
     draw()
 
     await screen.findByLabelText('Programme totals')
-    await userEvent.click(screen.getByText('Ongoing', { selector: '.dt-donut-name' }))
+    await userEvent.click(screen.getByText('Ongoing', { selector: '.dt-status-name' }))
     const node = await panel()
 
     expect(
@@ -2497,7 +2547,7 @@ describe('the drill-through panel', () => {
     draw()
 
     await screen.findByLabelText('Programme totals')
-    await userEvent.click(screen.getByText('Problematic', { selector: '.dt-donut-name' }))
+    await userEvent.click(screen.getByText('Problematic', { selector: '.dt-status-name' }))
     const node = await panel()
 
     api.get.mockImplementationOnce(() =>
@@ -2516,7 +2566,7 @@ describe('the drill-through panel', () => {
     draw()
 
     await screen.findByLabelText('Programme totals')
-    await userEvent.click(screen.getByText('Ongoing', { selector: '.dt-donut-name' }))
+    await userEvent.click(screen.getByText('Ongoing', { selector: '.dt-status-name' }))
     const node = await panel()
 
     expect(within(node).getByRole('link', { name: /Open in site list/ })).toHaveAttribute(
@@ -2553,7 +2603,7 @@ describe('the drill-through panel', () => {
     // fireEvent rather than userEvent: the modifier has to be on the click
     // event itself, which is what DrillLink reads, and userEvent's keyboard
     // state is not shared across separate top-level calls.
-    fireEvent.click(screen.getByText('Ongoing', { selector: '.dt-donut-name' }), {
+    fireEvent.click(screen.getByText('Ongoing', { selector: '.dt-status-name' }), {
       metaKey: true,
     })
 
@@ -2568,7 +2618,7 @@ describe('the drill-through panel', () => {
     api.get.mockImplementationOnce(() =>
       Promise.reject({ response: { data: { detail: 'age_band applies to the ongoing bucket only' } } }),
     )
-    await userEvent.click(screen.getByText('Ongoing', { selector: '.dt-donut-name' }))
+    await userEvent.click(screen.getByText('Ongoing', { selector: '.dt-status-name' }))
 
     const node = await screen.findByTestId('dt-drill')
     expect(await within(node).findByText(/age_band applies to the ongoing bucket only/)).toBeInTheDocument()
