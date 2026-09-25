@@ -1,21 +1,14 @@
-// The Acceptance Dashboard: what the province table says, and where its
-// figures go when they are clicked.
+// The Acceptance Dashboard: what its figures say, and where they go when
+// they are clicked.
 //
-// This page makes one promise that is easy to break and hard to notice: every
-// number opens the list it counted. Two ways it was broken, both asserted
-// here:
-//
-//   * the authority figures are *verdicts* and linked at the queue's *status*,
-//     which is a different question and silently dropped every village
-//     somebody had already re-filed;
-//   * "Open" on a Needs-attention row carried the authority but not the
-//     province, so a row about Kerman opened every province.
-//
-// The province table itself is the second subject: two lines per province,
-// counts then the same counts aged, with refused and unanswered split apart
-// because rejected is a subset of outstanding and cannot be a second bar
-// beside it.
-import { render, screen, waitFor, within } from '@testing-library/react'
+// The page makes one promise that is easy to break and hard to notice: every
+// number opens the list it counted. After the simplification pass there are
+// six of them — three in the KPI band, three in the strip beneath it — and
+// each is asserted here against the bucket it is supposed to open. The
+// province table, the authority cards, the approval gap, the filter bar and
+// the tab strip are gone; the last block of tests holds them gone, because
+// each one was deleted on purpose and a reappearance is a regression.
+import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -44,43 +37,6 @@ function signedInAs(roleName) {
 const api = (await import('../../api/client')).default
 const AcceptanceDashboard = (await import('./AcceptanceDashboard')).default
 
-const bands = (over = {}) => ({ lt_warn: 0, warn: 0, critical: 0, unknown: 0, ...over })
-
-/** Shaped from app/schemas: ProvinceAcceptanceRow. */
-const province = (over = {}) => ({
-  name: 'Kerman',
-  province_id: 7,
-  total: 120,
-  total_villages: 140,
-  ict_approved: 88,
-  ict_rejected: 9,
-  ict_pending: 23,
-  ict_remained: 32,
-  ict_approved_pct: 73.3,
-  ict_remained_pct: 26.7,
-  cra_approved: 74,
-  cra_rejected: 4,
-  cra_pending: 42,
-  cra_remained: 46,
-  cra_approved_pct: 61.7,
-  cra_remained_pct: 38.3,
-  ict_oldest_days: 12,
-  cra_oldest_days: 30,
-  ict_oldest_age_days: 310,
-  cra_oldest_age_days: 240,
-  ict_age_buckets: bands({ warn: 23, critical: 9 }),
-  cra_age_buckets: bands({ warn: 42, critical: 4 }),
-  ict_rejected_age_buckets: bands({ critical: 9 }),
-  ict_pending_age_buckets: bands({ warn: 23 }),
-  cra_rejected_age_buckets: bands({ critical: 4 }),
-  cra_pending_age_buckets: bands({ warn: 42 }),
-  ict_rejected_oldest_age_days: 310,
-  ict_pending_oldest_age_days: 96,
-  cra_rejected_oldest_age_days: 240,
-  cra_pending_oldest_age_days: 180,
-  ...over,
-})
-
 const overview = (over = {}) => ({
   kpis: {
     total_dt_done_villages: 120,
@@ -96,7 +52,10 @@ const overview = (over = {}) => ({
     villages_both_approved: 70, villages_accepted: 70,
     villages_needs_attention: 13, villages_in_review: 23, villages_not_filed: 14,
   },
-  provinces: [province()],
+  // Still returned by the endpoint and still ignored client-side — the page
+  // no longer draws a province table. Kept in the fixture so a payload that
+  // carries it cannot make the page throw.
+  provinces: [{ name: 'Kerman', province_id: 7, total: 120 }],
   ...over,
 })
 
@@ -159,24 +118,12 @@ const went = () => {
   return new URLSearchParams(navigate.mock.calls[0][0].split('?')[1])
 }
 
-/** Opens the tab and hands back its table, once the overview has gone. */
-const openProvinceTab = async (user) => {
-  await screen.findByText('Total villages')
-  await user.click(screen.getByRole('button', { name: /Province Status/ }))
-  await screen.findByText('Province status')
-  return waitFor(() => {
-    const table = document.querySelector('table.grouped')
-    expect(table).not.toBeNull()
-    return table
-  })
-}
+/** The card carrying a KPI, found by its title. */
+const kpiCard = async (title) => (await screen.findByText(title)).closest('.dt-kpi-card')
 
 beforeEach(() => {
   vi.clearAllMocks()
   signedInAs('Viewer')
-  // The filter bar's three reference lookups share this mock with
-  // /acceptance/overview — give them an empty list each rather than the
-  // overview payload, which is not an array and would break their .map().
   api.get.mockImplementation((url) => {
     if (url === '/acceptance/overview') return Promise.resolve({ data: overview() })
     if (url === '/acceptance/plan') return Promise.resolve({ data: plan() })
@@ -186,148 +133,75 @@ beforeEach(() => {
   })
 })
 
-describe('an authority figure', () => {
-  it('opens the villages with that verdict, not that queue status', async () => {
-    const user = userEvent.setup()
+describe('the KPI band', () => {
+  it('reads the four headline figures off /acceptance/overview', async () => {
     page()
-    await screen.findByText('Total villages')
 
-    await user.click(screen.getByRole('button', { name: /ICT rejected: 9 villages/i }))
-
-    const params = went()
-    // The dashboard counts verdicts. status=Rejected is the queue's question
-    // and loses every refusal that has already been re-filed.
-    expect(params.get('ict_verdict')).toBe('Rejected')
-    expect(params.get('status')).toBeNull()
-    expect(params.get('bucket')).toBe('all')
+    expect(within(await kpiCard('Total villages')).getByText('120')).toBeInTheDocument()
+    // 70 of 120 fully accepted leaves 50 remaining — derived here, never
+    // taken from a second server figure that could disagree with it.
+    const approved = await kpiCard('Fully approved')
+    expect(within(approved).getByText('70')).toBeInTheDocument()
+    expect(within(approved).getByText('58% of 120')).toBeInTheDocument()
+    const remaining = await kpiCard('Remaining')
+    expect(within(remaining).getByText('50')).toBeInTheDocument()
+    expect(within(remaining).getByText('42% of 120')).toBeInTheDocument()
   })
 
-  it('sends the headline approved figure to the same list as its cell', async () => {
+  it('sends the fully-approved figure to the closed bucket', async () => {
     const user = userEvent.setup()
     page()
     await screen.findByText('Total villages')
 
-    // Two of them, deliberately: the 32px headline and the Approved cell are
-    // the same figure, so they say the same thing and go the same place.
-    const both = screen.getAllByRole('button', { name: /CRA approved: 74 villages/i })
-    expect(both).toHaveLength(2)
-    await user.click(both[0])
-    expect(went().get('cra_verdict')).toBe('Approved')
+    await user.click(screen.getByRole('button', { name: /Fully approved: 70 villages/i }))
+
+    // Every bucket the figure counted, not this role's usual landing one.
+    expect(went().get('bucket')).toBe('closed')
+  })
+
+  it('asks for the overview with no filter parameters', async () => {
+    page()
+    await screen.findByText('Total villages')
+
+    const call = api.get.mock.calls.find(([url]) => url === '/acceptance/overview')
+    expect(call).toBeDefined()
+    // The filter bar went; both endpoints are programme-wide now, and the
+    // params they are given must not quietly come back as empty strings.
+    expect(call[1]).toBeUndefined()
+    const trendCall = api.get.mock.calls.find(([url]) => url === '/acceptance/trends')
+    expect(trendCall[1].params).toEqual({ months: 9 })
   })
 })
 
-describe('the cross tab', () => {
-  it('asks for both verdicts at once', async () => {
+describe('the three outstanding figures', () => {
+  it('renders each as its own tile with its count', async () => {
+    page()
+    await screen.findByText('Total villages')
+
+    const strip = document.querySelector('.acc-remaining-strip')
+    expect(strip).not.toBeNull()
+    expect(strip.querySelectorAll('.acc-remaining-tile')).toHaveLength(3)
+    expect(within(strip).getByText('Needs an answer')).toBeInTheDocument()
+    expect(within(strip).getByText('13')).toBeInTheDocument()
+    expect(within(strip).getByText('With an authority')).toBeInTheDocument()
+    expect(within(strip).getByText('23')).toBeInTheDocument()
+    expect(within(strip).getByText('Never filed')).toBeInTheDocument()
+    expect(within(strip).getByText('14')).toBeInTheDocument()
+  })
+
+  it.each([
+    ['Needs an answer', 13, 'needs_attention'],
+    ['With an authority', 23, 'awaiting_review'],
+    ['Never filed', 14, 'ready'],
+  ])('sends %s to its own bucket', async (label, count, bucket) => {
     const user = userEvent.setup()
     page()
     await screen.findByText('Total villages')
 
     await user.click(
-      screen.getByRole('button', { name: /ICT approved — CRA not: 18 villages/i })
+      screen.getByRole('button', { name: new RegExp(`${label}: ${count} villages`, 'i') })
     )
-    const params = went()
-    expect(params.get('ict_verdict')).toBe('Approved')
-    expect(params.get('cra_verdict')).toBe('NotApproved')
-  })
-
-  it('leaves the site figures alone, because every list here is villages', async () => {
-    page()
-    await screen.findByText('Total villages')
-
-    expect(screen.queryByRole('button', { name: /Sites ICT ✓/i })).toBeNull()
-  })
-})
-
-describe('needs attention', () => {
-  it('opens one province, not every province with that authority', async () => {
-    const user = userEvent.setup()
-    page()
-    await screen.findByText('Top outstanding provinces')
-
-    await user.click(
-      screen.getByRole('button', { name: /Open Kerman, outstanding with ICT/ })
-    )
-
-    const params = went()
-    expect(params.get('province_id')).toBe('7')
-    expect(params.get('province')).toBe('Kerman')
-    // The row's own figure is what is outstanding, which is wider than what
-    // is sitting with the office right now.
-    expect(params.get('ict_verdict')).toBe('NotApproved')
-  })
-})
-
-describe('the province table', () => {
-  it('shows the funnel and the three verdicts per authority', async () => {
-    const user = userEvent.setup()
-    page()
-    const table = await openProvinceTab(user)
-
-    const counts = table.querySelector('.prov-counts')
-    expect(within(counts).getByText('140')).toBeInTheDocument()  // villages
-    expect(within(counts).getByText('120')).toBeInTheDocument()  // DT done
-    expect(within(counts).getByText('88')).toBeInTheDocument()   // ICT approved
-    expect(within(counts).getByText('9')).toBeInTheDocument()    // ICT rejected
-    expect(within(counts).getByText('23')).toBeInTheDocument()   // ICT pending
-  })
-
-  it('ages refused and unanswered apart, on the line below the counts', async () => {
-    const user = userEvent.setup()
-    page()
-    const table = await openProvinceTab(user)
-
-    const aging = table.querySelector('.prov-aging')
-    expect(aging).not.toBeNull()
-    // Two halves per authority, four in all — never one bar for rejected
-    // beside one for outstanding, which would count a refusal twice.
-    expect(aging.querySelectorAll('.age-one')).toHaveLength(4)
-    expect(within(aging).getAllByText('Rejected')).toHaveLength(2)
-    expect(within(aging).getAllByText('Pending')).toHaveLength(2)
-    expect(within(aging).getByText('310d')).toBeInTheDocument()
-  })
-
-  it('opens each figure scoped to its own province and verdict', async () => {
-    const user = userEvent.setup()
-    page()
-    const table = await openProvinceTab(user)
-
-    const counts = table.querySelector('.prov-counts')
-    await user.click(within(counts).getByRole('button', { name: /CRA pending: 42 villages/i }))
-
-    const params = went()
-    expect(params.get('province_id')).toBe('7')
-    expect(params.get('cra_verdict')).toBe('Pending')
-    expect(params.get('ict_verdict')).toBeNull()
-  })
-
-  it('sends an age bar to the same list as the count above it', async () => {
-    const user = userEvent.setup()
-    page()
-    const table = await openProvinceTab(user)
-
-    const aging = table.querySelector('.prov-aging')
-    await user.click(within(aging).getByRole('button', { name: /ICT rejected — by age/ }))
-
-    const params = went()
-    expect(params.get('ict_verdict')).toBe('Rejected')
-    expect(params.get('province_id')).toBe('7')
-  })
-
-  it('does not offer a list behind a zero', async () => {
-    const user = userEvent.setup()
-    const customOverview = overview({
-      provinces: [province({ ict_rejected: 0, ict_rejected_age_buckets: bands() })],
-    })
-    api.get.mockImplementation((url) =>
-      Promise.resolve({ data: url === '/acceptance/overview' ? customOverview : [] })
-    )
-    page()
-    const table = await openProvinceTab(user)
-
-    const counts = table.querySelector('.prov-counts')
-    expect(within(counts).queryByRole('button', { name: /ICT rejected/i })).toBeNull()
-    const aging = table.querySelector('.prov-aging')
-    expect(within(aging).queryByRole('button', { name: /ICT rejected — by age/ })).toBeNull()
+    expect(went().get('bucket')).toBe(bucket)
   })
 })
 
@@ -337,9 +211,9 @@ describe('the monthly plan KPI card', () => {
     await screen.findByText('Total villages')
 
     // Scoped to the KPI card itself: 3,200 is also this fixture's latest
-    // month's plan target, which the new trend charts' hover readouts
+    // month's plan target, which the trend charts' hover readouts
     // legitimately repeat elsewhere on the page.
-    const card = (await screen.findByText('Monthly plan')).closest('.card')
+    const card = await kpiCard('Monthly plan')
     expect(within(card).getByText('3,200')).toBeInTheDocument()
     expect(within(card).getByText(/\+340 from مرداد 1405/)).toBeInTheDocument()
   })
@@ -355,7 +229,7 @@ describe('the monthly plan KPI card', () => {
     page()
     await screen.findByText('Total villages')
 
-    const card = (await screen.findByText('Monthly plan')).closest('.card')
+    const card = await kpiCard('Monthly plan')
     expect(within(card).getByText('Not set yet')).toBeInTheDocument()
     expect(within(card).queryByText(/^3,200$/)).toBeNull()
   })
@@ -378,28 +252,20 @@ describe('the monthly plan KPI card', () => {
 })
 
 describe('the plan-and-trend widgets', () => {
-  it('renders every new section from the mockup, in order, after Authority performance', async () => {
+  it('renders all six, and nothing else', async () => {
     page()
     await screen.findByText('Total villages')
 
-    const headings = (await screen.findAllByText(/Plan vs actual progress|Approval flow|Monthly approval velocity|ICT vs CRA comparison|ICT approval progress|CRA approval progress|Authority performance|Approval gap/))
-      .map((el) => el.textContent.trim())
-
-    expect(headings).toContain('Authority performance')
-    expect(headings.some((h) => /Plan vs actual progress/i.test(h))).toBe(true)
-    expect(headings.some((h) => /Approval flow/i.test(h))).toBe(true)
-    expect(headings.some((h) => /Monthly approval velocity/i.test(h))).toBe(true)
-    expect(headings.some((h) => /ICT vs CRA comparison/i.test(h))).toBe(true)
-    expect(headings.some((h) => /ICT approval progress/i.test(h))).toBe(true)
-    expect(headings.some((h) => /CRA approval progress/i.test(h))).toBe(true)
-
-    // Order: Authority performance, then the new widgets, then Approval gap.
-    const order = headings.map((h) => h.trim())
-    const authorityIdx = order.indexOf('Authority performance')
-    const planVsActualIdx = order.findIndex((h) => /Plan vs actual progress/i.test(h))
-    const gapIdx = order.indexOf('Approval gap')
-    expect(authorityIdx).toBeLessThan(planVsActualIdx)
-    expect(planVsActualIdx).toBeLessThan(gapIdx)
+    for (const title of [
+      'Plan vs actual progress',
+      'Approval flow & status distribution',
+      'Monthly approval velocity',
+      'ICT vs CRA comparison',
+      'ICT approval progress',
+      'CRA approval progress',
+    ]) {
+      expect(await screen.findByText(title)).toBeInTheDocument()
+    }
   })
 
   it('draws the approval-flow Sankey from the overview payload alone, with no fabricated "not started" figure', async () => {
@@ -433,10 +299,55 @@ describe('the plan-and-trend widgets', () => {
     await screen.findByText('Monthly approval velocity')
 
     // Two Monthly/Cumulative segmented controls exist (plan-vs-actual and
-    // velocity); the velocity one is the second.
+    // velocity); the velocity one is the second. The comparison card's
+    // Count/Percentage toggle is gone — it never hid either figure, it only
+    // swapped which one led.
     const cumulativeButtons = screen.getAllByRole('button', { name: 'Cumulative' })
-    expect(cumulativeButtons.length).toBeGreaterThanOrEqual(2)
+    expect(cumulativeButtons).toHaveLength(2)
     await user.click(cumulativeButtons[1])
     expect(cumulativeButtons[1]).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  it('leads the ICT/CRA comparison with the count and follows it with the share', async () => {
+    page()
+    const heading = await screen.findByText('ICT vs CRA comparison')
+    const card = heading.closest('.card')
+
+    expect(screen.queryByRole('button', { name: 'Percentage' })).toBeNull()
+    // ICT: 88 approved, 23 pending, 9 rejected — 88 of 120 is 73%.
+    expect(within(card).getByText('88')).toBeInTheDocument()
+    expect(within(card).getByText('73%')).toBeInTheDocument()
+  })
+})
+
+describe('what the simplification pass removed', () => {
+  it('has no filter bar and asks for no reference lists', async () => {
+    page()
+    await screen.findByText('Total villages')
+
+    expect(screen.queryByLabelText(/Regional manager/i)).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Apply' })).toBeNull()
+    const urls = api.get.mock.calls.map(([url]) => url)
+    expect(urls).not.toContain('/reference/regional-managers')
+    expect(urls).not.toContain('/reference/coordinators')
+    expect(urls).not.toContain('/reference/contractors')
+  })
+
+  it('has no tab strip, because Overview is the only thing left', async () => {
+    page()
+    await screen.findByText('Total villages')
+
+    expect(document.querySelector('.tabs')).toBeNull()
+    expect(screen.queryByRole('button', { name: /Province Status/ })).toBeNull()
+  })
+
+  it('has no province table, authority cards, approval gap or outstanding list', async () => {
+    page()
+    await screen.findByText('Total villages')
+
+    expect(document.querySelector('table.grouped')).toBeNull()
+    expect(screen.queryByText('Authority performance')).toBeNull()
+    expect(screen.queryByText('Approval gap')).toBeNull()
+    expect(screen.queryByText('Top outstanding provinces')).toBeNull()
   })
 })

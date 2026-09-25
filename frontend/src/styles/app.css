@@ -1603,6 +1603,33 @@ tbody tr:last-child td { border-bottom: none; }
   --kpi-ic: var(--dt-ongoing-wash);
 }
 
+/* The Acceptance Dashboard's four, on the same shell. Same three tones of one
+   hue, taken from that page's own palette (pages/reports/acceptanceTheme.js)
+   rather than the drive test's state tokens: the two pages count different
+   things, and a card that borrowed --dt-done for "fully approved" would tie
+   two unrelated meanings to one hue. Total villages takes the coverage teal
+   because it is the denominator the other three are shares of. */
+.dt-kpi-card[data-kpi="acc-total"] {
+  --kpi-accent: var(--signal);
+  --kpi-tint: rgba(14, 163, 148, 0.07);
+  --kpi-ic: var(--signal-glow);
+}
+.dt-kpi-card[data-kpi="acc-plan"] {
+  --kpi-accent: var(--violet);
+  --kpi-tint: rgba(109, 91, 208, 0.07);
+  --kpi-ic: var(--violet-dim);
+}
+.dt-kpi-card[data-kpi="acc-approved"] {
+  --kpi-accent: var(--green);
+  --kpi-tint: rgba(23, 145, 90, 0.07);
+  --kpi-ic: var(--green-dim);
+}
+.dt-kpi-card[data-kpi="acc-remaining"] {
+  --kpi-accent: var(--red);
+  --kpi-tint: rgba(217, 65, 65, 0.06);
+  --kpi-ic: var(--red-dim);
+}
+
 /* Header row: the icon sits inline with the label, not above it, so the label
    is what the eye lands on and the icon is a tint beside it. */
 .dt-kpi-hd {
@@ -1662,6 +1689,51 @@ a.dt-status-row:focus-visible {
   margin-block-start: 9px; background: var(--dt-track);
 }
 .dt-kpi-split > i { display: block; block-size: 100%; }
+
+/* The line under a figure saying what it is a share of. The drive test band
+   puts its share in the `.dt-kpi-pct` chip on the figure's own line; the
+   Acceptance band names the denominator too ("35% of 4,437"), which does not
+   fit there. */
+.dt-kpi-sub {
+  font-size: 11.5px; color: var(--text-dim); margin-block-start: 2px;
+}
+
+/* ---------- the three outstanding figures, beneath the Acceptance band ----
+   Needs an answer / With an authority / Never filed used to sit three-across
+   inside the Remaining card, where at four cards wide every label broke onto
+   three lines. Given the page's own width they read in one, and each stays
+   what it was: a figure that opens the villages behind it. */
+.acc-remaining-strip {
+  display: grid; gap: var(--dt-gap);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-block-start: var(--dt-gap);
+}
+/* Typed against the element as well as the class, so the box wins over
+   `.drill`'s own border/padding reset further down this file. */
+button.acc-remaining-tile {
+  display: flex; align-items: center; gap: 9px;
+  border: 1px solid var(--border); border-radius: var(--radius);
+  box-shadow: var(--shadow-1); background: var(--surface-1);
+  padding: 10px 14px; min-width: 0; text-align: start;
+  transition: background 0.14s;
+}
+button.acc-remaining-tile:hover { background: var(--surface-2); }
+.acc-tile-ic {
+  inline-size: 24px; block-size: 24px; border-radius: 7px; flex: none;
+  display: grid; place-items: center;
+}
+.acc-tile-label {
+  font-size: 12.5px; font-weight: 600; color: var(--text-muted);
+  min-width: 0; overflow-wrap: anywhere;
+}
+.acc-tile-num {
+  margin-inline-start: auto; flex: none;
+  font-family: var(--font-display); font-size: 19px; font-weight: 700;
+  letter-spacing: -0.02em; color: var(--text);
+}
+@media (max-width: 720px) {
+  .acc-remaining-strip { grid-template-columns: 1fr; }
+}
 
 /* The change chip, and the floor rule.
    `margin-block-start: auto` on whichever element ends the card is what
