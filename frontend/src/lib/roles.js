@@ -76,6 +76,13 @@ export function canDecidePlans(user) {
   return user?.role?.name === 'PM'
 }
 
+// The Acceptance Dashboard's monthly target. Same decider as the PIP —
+// PM alone — and must agree with app/api/acceptance.py's own `require_pm`
+// alias over PUT /acceptance/plan.
+export function canSetAcceptancePlan(user) {
+  return user?.role?.name === 'PM'
+}
+
 // KPI & Performance. Four roles see it, each confined to their own scope, and
 // Admin sees none of it -- the product owner's rule, and the same list
 // app/services/kpi.py enforces. This only shapes what the interface offers;

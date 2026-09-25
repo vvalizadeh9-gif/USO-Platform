@@ -19,14 +19,27 @@ import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { ToastProvider } from '../../context/ToastContext'
 
-vi.mock('../../api/client', () => ({ default: { get: vi.fn() } }))
+vi.mock('../../api/client', () => ({ default: { get: vi.fn(), put: vi.fn() } }))
 
 const navigate = vi.hoisted(() => vi.fn())
 vi.mock('react-router-dom', async (importOriginal) => ({
   ...(await importOriginal()),
   useNavigate: () => navigate,
 }))
+
+// Signed in as a Viewer by default — someone who can see the dashboard but
+// not the PM-only "+ Set target" control. Individual tests override this
+// with `signedInAs`.
+const mockAuth = vi.hoisted(() => ({ current: { user: { full_name: 'Someone', role: { name: 'Viewer' } } } }))
+vi.mock('../../context/AuthContext', () => ({
+  useAuth: () => mockAuth.current,
+}))
+
+function signedInAs(roleName) {
+  mockAuth.current = { user: { full_name: 'Someone', role: { name: roleName } } }
+}
 
 const api = (await import('../../api/client')).default
 const AcceptanceDashboard = (await import('./AcceptanceDashboard')).default
@@ -87,11 +100,57 @@ const overview = (over = {}) => ({
   ...over,
 })
 
+/** Shaped from app/schemas: AcceptancePlanResponse. */
+const plan = (over = {}) => ({
+  current: {
+    shamsi_year: 1405, shamsi_month: 6, label: 'شهریور 1405',
+    target_count: 3200, set_by: 'PM One', set_at: '2026-08-20T00:00:00Z', note: null,
+  },
+  previous: {
+    shamsi_year: 1405, shamsi_month: 5, label: 'مرداد 1405',
+    target_count: 2860, set_by: 'PM One', set_at: '2026-07-20T00:00:00Z', note: null,
+  },
+  history: [],
+  ...over,
+})
+
+/** Shaped from app/schemas: AcceptanceTrendsResponse. */
+const trends = (over = {}) => ({
+  months: [
+    {
+      shamsi_year: 1405, shamsi_month: 5, label: 'مرداد',
+      ict_new: 40, cra_new: 30, fully_accepted_new: 20,
+      ict_cumulative: 100, cra_cumulative: 80, fully_accepted_cumulative: 60,
+      target_count: 2860,
+    },
+    {
+      shamsi_year: 1405, shamsi_month: 6, label: 'شهریور',
+      ict_new: 45, cra_new: 35, fully_accepted_new: 25,
+      ict_cumulative: 145, cra_cumulative: 115, fully_accepted_cumulative: 85,
+      target_count: 3200,
+    },
+  ],
+  ...over,
+})
+
+/** Shaped from app/schemas: DriveTestTrend. */
+const dtTrend = (over = {}) => ({
+  months: [
+    { shamsi_year: 1405, shamsi_month: 5, label: 'مرداد', captured: true, estimated: false, is_open: false, onair: 200, dt_done: 120, remaining: 80, ongoing: 50, problematic: 10 },
+    { shamsi_year: 1405, shamsi_month: 6, label: 'شهریور', captured: true, estimated: false, is_open: true, onair: 210, dt_done: 140, remaining: 70, ongoing: 45, problematic: 8 },
+  ],
+  latest_flows: null,
+  province_id: null,
+  ...over,
+})
+
 const page = () =>
   render(
-    <MemoryRouter>
-      <AcceptanceDashboard />
-    </MemoryRouter>
+    <ToastProvider>
+      <MemoryRouter>
+        <AcceptanceDashboard />
+      </MemoryRouter>
+    </ToastProvider>
   )
 
 /** The query string of the single navigation this click caused. */
@@ -114,12 +173,17 @@ const openProvinceTab = async (user) => {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  signedInAs('Viewer')
   // The filter bar's three reference lookups share this mock with
   // /acceptance/overview — give them an empty list each rather than the
   // overview payload, which is not an array and would break their .map().
-  api.get.mockImplementation((url) =>
-    Promise.resolve({ data: url === '/acceptance/overview' ? overview() : [] })
-  )
+  api.get.mockImplementation((url) => {
+    if (url === '/acceptance/overview') return Promise.resolve({ data: overview() })
+    if (url === '/acceptance/plan') return Promise.resolve({ data: plan() })
+    if (url === '/acceptance/trends') return Promise.resolve({ data: trends() })
+    if (url === '/drivetest/trend') return Promise.resolve({ data: dtTrend() })
+    return Promise.resolve({ data: [] })
+  })
 })
 
 describe('an authority figure', () => {
@@ -264,5 +328,115 @@ describe('the province table', () => {
     expect(within(counts).queryByRole('button', { name: /ICT rejected/i })).toBeNull()
     const aging = table.querySelector('.prov-aging')
     expect(within(aging).queryByRole('button', { name: /ICT rejected — by age/ })).toBeNull()
+  })
+})
+
+describe('the monthly plan KPI card', () => {
+  it('shows the current target and its delta from last month', async () => {
+    page()
+    await screen.findByText('Total villages')
+
+    // Scoped to the KPI card itself: 3,200 is also this fixture's latest
+    // month's plan target, which the new trend charts' hover readouts
+    // legitimately repeat elsewhere on the page.
+    const card = (await screen.findByText('Monthly plan')).closest('.card')
+    expect(within(card).getByText('3,200')).toBeInTheDocument()
+    expect(within(card).getByText(/\+340 from مرداد 1405/)).toBeInTheDocument()
+  })
+
+  it('shows an explicit empty state rather than a fabricated 0 when no target is set', async () => {
+    api.get.mockImplementation((url) => {
+      if (url === '/acceptance/overview') return Promise.resolve({ data: overview() })
+      if (url === '/acceptance/plan') return Promise.resolve({ data: { current: null, previous: null, history: [] } })
+      if (url === '/acceptance/trends') return Promise.resolve({ data: trends() })
+      if (url === '/drivetest/trend') return Promise.resolve({ data: dtTrend() })
+      return Promise.resolve({ data: [] })
+    })
+    page()
+    await screen.findByText('Total villages')
+
+    const card = (await screen.findByText('Monthly plan')).closest('.card')
+    expect(within(card).getByText('Not set yet')).toBeInTheDocument()
+    expect(within(card).queryByText(/^3,200$/)).toBeNull()
+  })
+
+  it('does not offer the set-target control to a Viewer', async () => {
+    signedInAs('Viewer')
+    page()
+    await screen.findByText('Total villages')
+
+    expect(screen.queryByRole('button', { name: /Set this month’s acceptance target/ })).toBeNull()
+  })
+
+  it('offers the set-target control to a PM', async () => {
+    signedInAs('PM')
+    page()
+    await screen.findByText('Total villages')
+
+    expect(screen.getByRole('button', { name: /Set this month’s acceptance target/ })).toBeInTheDocument()
+  })
+})
+
+describe('the plan-and-trend widgets', () => {
+  it('renders every new section from the mockup, in order, after Authority performance', async () => {
+    page()
+    await screen.findByText('Total villages')
+
+    const headings = (await screen.findAllByText(/Plan vs actual progress|Approval flow|Monthly approval velocity|ICT vs CRA comparison|ICT approval progress|CRA approval progress|Authority performance|Approval gap/))
+      .map((el) => el.textContent.trim())
+
+    expect(headings).toContain('Authority performance')
+    expect(headings.some((h) => /Plan vs actual progress/i.test(h))).toBe(true)
+    expect(headings.some((h) => /Approval flow/i.test(h))).toBe(true)
+    expect(headings.some((h) => /Monthly approval velocity/i.test(h))).toBe(true)
+    expect(headings.some((h) => /ICT vs CRA comparison/i.test(h))).toBe(true)
+    expect(headings.some((h) => /ICT approval progress/i.test(h))).toBe(true)
+    expect(headings.some((h) => /CRA approval progress/i.test(h))).toBe(true)
+
+    // Order: Authority performance, then the new widgets, then Approval gap.
+    const order = headings.map((h) => h.trim())
+    const authorityIdx = order.indexOf('Authority performance')
+    const planVsActualIdx = order.findIndex((h) => /Plan vs actual progress/i.test(h))
+    const gapIdx = order.indexOf('Approval gap')
+    expect(authorityIdx).toBeLessThan(planVsActualIdx)
+    expect(planVsActualIdx).toBeLessThan(gapIdx)
+  })
+
+  it('draws the approval-flow Sankey from the overview payload alone, with no fabricated "not started" figure', async () => {
+    page()
+    await screen.findByText('Total villages')
+
+    // total (120) - fully accepted (70) - ICT-only (18) - CRA-only (5) = 27
+    expect(await screen.findByText('27')).toBeInTheDocument()
+    expect(screen.getByText('Not started (no approval yet)')).toBeInTheDocument()
+  })
+
+  it('does not crash when /acceptance/trends or /drivetest/trend fail', async () => {
+    api.get.mockImplementation((url) => {
+      if (url === '/acceptance/overview') return Promise.resolve({ data: overview() })
+      if (url === '/acceptance/plan') return Promise.resolve({ data: plan() })
+      if (url === '/acceptance/trends') return Promise.reject(new Error('boom'))
+      if (url === '/drivetest/trend') return Promise.reject(new Error('boom'))
+      return Promise.resolve({ data: [] })
+    })
+    page()
+
+    await screen.findByText('Total villages')
+    expect(await screen.findByText('Plan vs actual progress')).toBeInTheDocument()
+    expect(await screen.findByText(/Could not load the plan\/actual trend\./)).toBeInTheDocument()
+  })
+
+  it('toggles the velocity chart between monthly and cumulative figures', async () => {
+    const user = userEvent.setup()
+    page()
+    await screen.findByText('Total villages')
+    await screen.findByText('Monthly approval velocity')
+
+    // Two Monthly/Cumulative segmented controls exist (plan-vs-actual and
+    // velocity); the velocity one is the second.
+    const cumulativeButtons = screen.getAllByRole('button', { name: 'Cumulative' })
+    expect(cumulativeButtons.length).toBeGreaterThanOrEqual(2)
+    await user.click(cumulativeButtons[1])
+    expect(cumulativeButtons[1]).toHaveAttribute('aria-pressed', 'true')
   })
 })
