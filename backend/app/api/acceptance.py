@@ -11,7 +11,7 @@ its buckets, and the submit / correct / review / evidence endpoints. All of it
 goes through services/acceptance_workflow.py — this module resolves and
 authorises, and holds no rules of its own.
 """
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy.orm import Session
 
 from app.core import audit_actions, jalali
@@ -25,12 +25,14 @@ from app.schemas import (
     AcceptancePlanPeriod,
     AcceptancePlanResponse,
     AcceptancePlanUpdate,
+    AcceptanceSiteList,
+    AcceptanceSiteRow,
     AcceptanceTrendMonth,
     AcceptanceTrendsResponse,
     ProvinceAcceptanceRow,
 )
-from app.services import acceptance_plan
-from app.services.acceptance_analytics import AcceptanceAnalytics
+from app.services import acceptance_plan, acceptance_site_export
+from app.services.acceptance_analytics import SITE_METRICS, AcceptanceAnalytics
 
 router = APIRouter(prefix="/acceptance", tags=["acceptance"])
 
@@ -93,6 +95,109 @@ def acceptance_overview(
         kpis=AcceptanceKpis(**data["kpis"]),
         analysis=AcceptanceAnalysis(**data["analysis"]),
         provinces=[ProvinceAcceptanceRow(**row) for row in data["provinces"]],
+    )
+
+
+# ---------------------------------------------------------------------------
+# The sites behind a figure: what every quantity on the dashboard opens.
+# ---------------------------------------------------------------------------
+_XLSX_MEDIA_TYPE = (
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+)
+
+
+def _site_rows(
+    db: Session,
+    user: User,
+    metric: str,
+    coordinator_id: int | None,
+    regional_manager_id: int | None,
+    contractor_id: int | None,
+) -> dict:
+    """One figure's sites, through the same analytics the figure came from.
+
+    An unknown metric is a 422, not an empty list: a list that silently
+    answers a different question from the one asked is the failure this whole
+    drill-through exists to prevent.
+    """
+    province_ids = _resolve_province_filter(db, coordinator_id, regional_manager_id)
+    analytics = AcceptanceAnalytics(
+        db, user, province_ids=province_ids, contractor_id=contractor_id
+    )
+    try:
+        return analytics.site_rows(metric)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+
+
+@router.get("/sites", response_model=AcceptanceSiteList)
+def acceptance_sites(
+    metric: str = Query(
+        description=f"Which figure to open. One of: {', '.join(SITE_METRICS)}"
+    ),
+    limit: int = Query(100, ge=1, le=500, description="Rows per page, at most 500"),
+    offset: int = Query(0, ge=0),
+    coordinator_id: int | None = Query(default=None),
+    regional_manager_id: int | None = Query(default=None),
+    contractor_id: int | None = Query(default=None),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> AcceptanceSiteList:
+    """The sites behind one quantity on the Acceptance dashboard.
+
+    ``total`` is the figure that was clicked — village rows, counted before
+    the page is cut, through the dashboard's own universe. The rows are the
+    sites those villages sit on, so a reader can go straight from a number to
+    the site ids it is about.
+
+    Open to every signed-in role because the answer is already scoped to the
+    caller: ``apply_work_item_scope`` inside the analytics decides which work
+    items exist for them, and the three filters here can only narrow that.
+    """
+    data = _site_rows(
+        db, user, metric, coordinator_id, regional_manager_id, contractor_id
+    )
+    page = data["rows"][offset : offset + limit]
+    return AcceptanceSiteList(
+        metric=data["metric"],
+        label=data["label"],
+        total=data["total"],
+        site_count=data["site_count"],
+        rows=[AcceptanceSiteRow(**row) for row in page],
+    )
+
+
+@router.get("/sites/export")
+def export_acceptance_sites(
+    metric: str = Query(
+        description=f"Which figure to open. One of: {', '.join(SITE_METRICS)}"
+    ),
+    coordinator_id: int | None = Query(default=None),
+    regional_manager_id: int | None = Query(default=None),
+    contractor_id: int | None = Query(default=None),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> Response:
+    """The same list as an Excel file: same figure, same scope, same rows.
+
+    Built from the same call the screen makes, so the file cannot hold a site
+    the panel would not have shown. It is not paginated — the panel shows a
+    screenful and this is how a reader gets the rest.
+    """
+    data = _site_rows(
+        db, user, metric, coordinator_id, regional_manager_id, contractor_id
+    )
+    content = acceptance_site_export.build_site_list_export(
+        data["rows"], label=data["label"], total=data["total"]
+    )
+    return Response(
+        content=content,
+        media_type=_XLSX_MEDIA_TYPE,
+        headers={
+            "Content-Disposition": (
+                f'attachment; filename="{acceptance_site_export.filename(metric)}"'
+            )
+        },
     )
 
 
@@ -238,7 +343,10 @@ def acceptance_trends(
 # ---------------------------------------------------------------------------
 from datetime import datetime, timedelta, timezone  # noqa: E402
 
-from fastapi import File, Form, HTTPException, Query, Response, UploadFile  # noqa: E402
+# HTTPException, Query and Response are already imported at the top of the
+# module, which the drill-through endpoints above need; only the
+# submission workflow's own names are added here.
+from fastapi import File, Form, UploadFile  # noqa: E402
 from sqlalchemy import and_, exists, func, or_, select  # noqa: E402
 from sqlalchemy.orm import selectinload  # noqa: E402
 

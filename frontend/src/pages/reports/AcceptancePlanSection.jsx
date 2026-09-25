@@ -1,8 +1,9 @@
 import { LineChart, Scale, TrendingUp, Waypoints, Zap } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import api from '../../api/client'
 import { APPROVED, CRA, ICT, PENDING, PLANNED, REJECTED, WASH } from './acceptanceTheme'
 import ApprovalFlowSankey from './ApprovalFlowSankey'
+import PlanTargetCard from './PlanTargetCard'
 import { mergeMonthlySeries } from './acceptancePlan'
 import { AuthorityCompareBars, TrendLineChart, VelocityBars } from './acceptancePlanCharts'
 
@@ -53,11 +54,17 @@ function CardHead({ icon: Icon, title, sub, action }) {
  * that the page's single `/acceptance/overview` load has no reason to know
  * about. Both are programme-wide: the page carries no filters any more, so
  * neither call takes parameters beyond the month window.
+ *
+ * The monthly plan target lives here too, and loads with them. It used to be
+ * the second card in the KPI band, in the middle of a funnel it is not a step
+ * of: that band counts what has happened, and a target is what was promised.
+ * Beside the plan-vs-actual chart it is read against the line it sets.
  */
 export default function AcceptancePlanSection({ total, analysis, kpis }) {
   const [trends, setTrends] = useState(null)
   const [trendsError, setTrendsError] = useState(false)
   const [dtTrend, setDtTrend] = useState(null)
+  const [plan, setPlan] = useState(null)
 
   const [planMode, setPlanMode] = useState('cumulative')
   const [velocityMode, setVelocityMode] = useState('monthly')
@@ -73,6 +80,14 @@ export default function AcceptancePlanSection({ total, analysis, kpis }) {
   useEffect(() => {
     api.get('/drivetest/trend', { params: { months: MONTHS } }).then((r) => setDtTrend(r.data)).catch(() => setDtTrend({ months: [] }))
   }, [])
+
+  // The plan is programme-wide, so it is loaded once here rather than folded
+  // into the overview payload. Re-read after a PM saves, so the card and the
+  // chart's target line move together.
+  const loadPlan = useCallback(() => {
+    api.get('/acceptance/plan').then((r) => setPlan(r.data)).catch(() => setPlan(null))
+  }, [])
+  useEffect(loadPlan, [loadPlan])
 
   const months = useMemo(
     () => mergeMonthlySeries(trends?.months, dtTrend?.months),
@@ -122,6 +137,14 @@ export default function AcceptancePlanSection({ total, analysis, kpis }) {
 
   return (
     <>
+      {/* The target, at the head of the section it governs. Narrow on
+          purpose: it is one figure and a PM-only control, and a card stretched
+          across the page would read as a fifth KPI — which is exactly the
+          confusion that moving it out of the band was meant to end. */}
+      <section className="acc-plan-row" aria-label="Acceptance plan target">
+        <PlanTargetCard plan={plan} onSaved={loadPlan} />
+      </section>
+
       <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(380px, 1fr))', alignItems: 'stretch', marginTop: 16 }}>
         <div className="card">
           <CardHead

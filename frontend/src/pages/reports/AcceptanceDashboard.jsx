@@ -1,27 +1,11 @@
-import { useCallback, useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import {
-  CheckCircle2,
-  Clock,
-  FileQuestion,
-  Hourglass,
-  Target,
-  XCircle,
-} from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { CheckCircle2, Clock, RadioTower, Target } from 'lucide-react'
 import api from '../../api/client'
 import { Loading, PageHead } from '../../components/ui'
 import AcceptancePlanSection from './AcceptancePlanSection'
-import { APPROVED, IDLE, PENDING, REJECTED, WASH } from './acceptanceTheme'
+import { AcceptanceDrillProvider, DrillFigure } from './AcceptanceDrillPanel'
+import { APPROVED, ICT, PENDING, REJECTED } from './acceptanceTheme'
 import { fmtCount } from './kpiTheme'
-import PlanTargetCard from './PlanTargetCard'
-
-// Where a number goes when it is clicked: My Work, filtered to exactly the
-// villages it counted. The Action Center's counters already open that screen
-// this way, so a figure behaves the same wherever it is met.
-const workLink = (params) =>
-  `/my-work?${new URLSearchParams(
-    Object.entries(params).filter(([, v]) => v != null && v !== '')
-  )}`
 
 /**
  * Reports → Acceptance Dashboard: where ICT/CRA status is *read*.
@@ -32,20 +16,26 @@ const workLink = (params) =>
  * different times, and a screen that tried to be both made the reader wade
  * through a work queue and the worker wade through KPIs.
  *
- * What is left after the simplification pass is one column of it: the KPI
- * band, the three figures that make up what is outstanding, and the six
- * plan-and-trend widgets. No filter bar, no second tab, no province table —
- * the per-province and per-authority detail all lives in My Work, which every
- * figure here opens.
+ * What is left is one column of it: the KPI band and the six plan-and-trend
+ * widgets. No filter bar, no second tab, no province table — the per-province
+ * and per-authority detail all lives in My Work and in the widgets below.
+ *
+ * THE BAND IS A FUNNEL, READ LEFT TO RIGHT. On air → drive-test done →
+ * approved → remaining, each card a step of the one before it. That order is
+ * the page's whole argument, so nothing else sits in the middle of it: the
+ * monthly plan target is a different question (what we said we would do, not
+ * what is done) and now rides with the plan-vs-actual chart it belongs to.
  *
  * Two rules still hold everywhere on this page:
  *
- * Every number opens the list it counted. A figure that cannot be examined is
- * a figure that gets argued with.
+ * Every quantity opens the sites behind it, in a panel on the right — the
+ * same panel, and the same gesture, as the Drive Test dashboard's on-air
+ * figure. A figure that cannot be examined is a figure that gets argued with,
+ * and a village count nobody can turn into site ids cannot be acted on.
  *
- * Counts are of every (site, village) row in the DT-Done هدف universe,
- * duplicates kept — see acceptance_analytics.py. Nothing here writes, apart
- * from the PM-only monthly target on `PlanTargetCard`.
+ * Counts are of every (site, village) row in the هدف universe, duplicates
+ * kept — see acceptance_analytics.py. Nothing here writes, apart from the
+ * PM-only monthly target inside the plan section.
  */
 export default function AcceptanceDashboard() {
   const [data, setData] = useState(null)
@@ -63,22 +53,18 @@ export default function AcceptanceDashboard() {
   if (!data) return <Loading label="Loading acceptance data" />
 
   return (
-    <>
-      <PageHead
-        eyebrow="Reports"
-        title="Acceptance Dashboard"
-        subtitle="ICT and CRA approval across your provinces, village by village."
-      />
+    <AcceptanceDrillProvider>
+      <PageHead eyebrow="Reports" title="Acceptance Dashboard" />
       <Overview data={data} />
-    </>
+    </AcceptanceDrillProvider>
   )
 }
 
 /* ---------------------------------------------------------------- Overview */
 
 /**
- * The whole page below the head: four KPI cards, the three outstanding
- * figures under them, and the plan-and-trend widgets.
+ * The whole page below the head: the four KPI cards and the plan-and-trend
+ * widgets.
  *
  * The KPI band borrows the Drive Test dashboard's card system wholesale
  * (`drivetest/KpiBand.jsx`, `.dt-kpi-*` in app.css) rather than keeping a
@@ -88,86 +74,100 @@ export default function AcceptanceDashboard() {
  * `data-kpi="acc-*"` blocks beside the drive test ones.
  */
 function Overview({ data }) {
-  const navigate = useNavigate()
   const { kpis, analysis } = data
+  // The head of the funnel: every target village on a live site, drive test
+  // finished or not. Everything after it is a share of something narrower.
+  const onair = kpis.total_onair_villages ?? 0
   const total = kpis.total_dt_done_villages
   const accepted = analysis.villages_accepted ?? analysis.villages_both_approved ?? 0
   const remaining = total - accepted
-  const acceptedPct = total ? Math.round((accepted / total) * 100) : 0
-  const remainingPct = total ? Math.round((remaining / total) * 100) : 0
+  // The two halves of remaining. Taken from the server, which partitions the
+  // same population the Approved card is counted against, rather than derived
+  // here from a second figure that could disagree — with a defensive fallback
+  // so an older payload still adds up on screen.
+  const rejected = analysis.villages_rejected ?? 0
+  const remained = analysis.villages_remained ?? Math.max(0, remaining - rejected)
 
-  // The plan is programme-wide, so it is loaded once here rather than folded
-  // into the overview payload.
-  const [plan, setPlan] = useState(null)
-  const loadPlan = useCallback(() => {
-    api.get('/acceptance/plan').then((r) => setPlan(r.data)).catch(() => setPlan(null))
-  }, [])
-  useEffect(loadPlan, [loadPlan])
+  const pct = (part, whole) => (whole ? Math.round((part / whole) * 100) : 0)
+  const donePct = pct(total, onair)
+  const acceptedPct = pct(accepted, total)
+  const remainingPct = pct(remaining, total)
 
-  // The three ways a village can still be outstanding. They used to be
-  // crammed three-across inside the Remaining card, where at four cards wide
-  // every label wrapped onto three lines; given the page's full width they
-  // read in one. Each keeps the drill-through it had.
-  const outstanding = [
+  // The two ways a village can still be outstanding, and they need different
+  // people: a refusal is the programme's to answer, a wait is the province
+  // office's to chase. They sit inside the Remaining card because they are
+  // that number split, not two more numbers beside it.
+  const parts = [
     {
-      key: 'needs_attention',
-      icon: XCircle,
-      label: 'Needs an answer',
+      key: 'rejected',
+      metric: 'rejected',
+      label: 'Rejected',
       color: REJECTED,
-      value: analysis.villages_needs_attention ?? 0,
-      to: workLink({ bucket: 'needs_attention' }),
+      value: rejected,
     },
     {
-      key: 'awaiting_review',
-      icon: Hourglass,
-      label: 'With an authority',
+      key: 'remained',
+      metric: 'remained',
+      label: 'Remained',
       color: PENDING,
-      value: analysis.villages_in_review ?? 0,
-      to: workLink({ bucket: 'awaiting_review' }),
-    },
-    {
-      key: 'ready',
-      icon: FileQuestion,
-      label: 'Never filed',
-      color: IDLE,
-      value: analysis.villages_not_filed ?? 0,
-      to: workLink({ bucket: 'ready' }),
+      value: remained,
     },
   ]
 
   return (
     <>
       <section className="dt-kpi-band" aria-label="Acceptance totals">
+        <div className="dt-kpi-card" data-kpi="acc-onair">
+          <div className="dt-kpi-hd">
+            <span className="dt-kpi-ic" aria-hidden="true">
+              <RadioTower size={13} strokeWidth={2.2} />
+            </span>
+            <span className="dt-kpi-title">On air villages</span>
+          </div>
+          <div className="dt-kpi-v">
+            <DrillFigure
+              metric="onair"
+              label="On air villages"
+              value={onair}
+              className="dt-kpi-figure tnum"
+            />
+          </div>
+          <div className="dt-kpi-sub">Target villages on live sites</div>
+        </div>
+
         <div className="dt-kpi-card" data-kpi="acc-total">
           <div className="dt-kpi-hd">
             <span className="dt-kpi-ic" aria-hidden="true">
               <Target size={13} strokeWidth={2.2} />
             </span>
-            <span className="dt-kpi-title">Total villages</span>
+            <span className="dt-kpi-title">DT done</span>
           </div>
           <div className="dt-kpi-v">
-            <span className="dt-kpi-figure tnum">{fmtCount(total)}</span>
+            <DrillFigure
+              metric="dt_done"
+              label="DT done villages"
+              value={total}
+              className="dt-kpi-figure tnum"
+            />
           </div>
-          <div className="dt-kpi-sub">Drive-test done</div>
+          <div className="dt-kpi-sub">{donePct}% of {fmtCount(onair)}</div>
+          <ShareBar pct={donePct} color={ICT} />
         </div>
-
-        <PlanTargetCard plan={plan} onSaved={loadPlan} />
 
         <div className="dt-kpi-card" data-kpi="acc-approved">
           <div className="dt-kpi-hd">
             <span className="dt-kpi-ic" aria-hidden="true">
               <CheckCircle2 size={13} strokeWidth={2.2} />
             </span>
-            <span className="dt-kpi-title">Fully approved</span>
+            <span className="dt-kpi-title">Approved</span>
           </div>
           <div className="dt-kpi-v">
-            <button
-              className="drill dt-kpi-figure tnum"
-              onClick={() => navigate(workLink({ bucket: 'closed' }))}
-              aria-label={`Fully approved: ${accepted} villages — open the list`}
-            >
-              {fmtCount(accepted)}
-            </button>
+            <DrillFigure
+              metric="approved"
+              label="Approved villages"
+              value={accepted}
+              className="dt-kpi-figure tnum"
+            />
           </div>
           <div className="dt-kpi-sub">{acceptedPct}% of {fmtCount(total)}</div>
           <ShareBar pct={acceptedPct} color={APPROVED} />
@@ -181,34 +181,43 @@ function Overview({ data }) {
             <span className="dt-kpi-title">Remaining</span>
           </div>
           <div className="dt-kpi-v">
-            <span className="dt-kpi-figure tnum">{fmtCount(remaining)}</span>
+            <DrillFigure
+              metric="remaining"
+              label="Remaining villages"
+              value={remaining}
+              className="dt-kpi-figure tnum"
+            />
           </div>
           <div className="dt-kpi-sub">{remainingPct}% of {fmtCount(total)}</div>
           <ShareBar pct={remainingPct} color={REJECTED} />
+          {/* Both halves are named in words and figures, never by colour
+              alone: red and amber are not separable under deuteranopia, and
+              this is the one card whose two parts a reader must tell apart. */}
+          <ul className="dt-status-list">
+            {parts.map((p) => (
+              <li key={p.key}>
+                <DrillFigure
+                  metric={p.metric}
+                  label={`${p.label} villages`}
+                  value={p.value}
+                  className="dt-status-row"
+                >
+                  <span className="dt-status-name">{p.label}</span>
+                  <span className="dt-status-figs">
+                    <span
+                      className="dt-kpi-part-dot"
+                      style={{ background: p.color }}
+                      aria-hidden="true"
+                    />
+                    <span className="dt-status-num tnum">{fmtCount(p.value)}</span>
+                    <span className="dt-status-pct tnum">{pct(p.value, remaining)}%</span>
+                  </span>
+                </DrillFigure>
+              </li>
+            ))}
+          </ul>
         </div>
       </section>
-
-      <div className="acc-remaining-strip">
-        {outstanding.map((o) => (
-          <button
-            key={o.key}
-            type="button"
-            className="drill acc-remaining-tile"
-            onClick={() => navigate(o.to)}
-            aria-label={`${o.label}: ${o.value} villages — open the list`}
-          >
-            <span
-              className="acc-tile-ic"
-              aria-hidden="true"
-              style={{ background: WASH[o.color] || 'var(--surface-3)', color: o.color }}
-            >
-              <o.icon size={13} strokeWidth={2.2} />
-            </span>
-            <span className="acc-tile-label">{o.label}</span>
-            <span className="acc-tile-num tnum">{o.value}</span>
-          </button>
-        ))}
-      </div>
 
       <AcceptancePlanSection total={total} analysis={analysis} kpis={kpis} />
     </>

@@ -10,16 +10,21 @@ import { fmtCount } from './kpiTheme'
 import { planDeltaTone } from './acceptancePlan'
 
 /**
- * The 2nd KPI card: this month's programme-wide acceptance target, and —
- * for a PM only — the control that sets it.
+ * This month's programme-wide acceptance target, and — for a PM only — the
+ * control that sets it.
  *
  * The figure is `current.target_count` from GET /acceptance/plan, never
  * fabricated: a programme with no target yet shows an explicit "not set"
  * state rather than a 0 that would read as a real, very bad, target.
  *
- * It wears the same `.dt-kpi-card` shell as the three cards beside it (the
- * drive test dashboard's KPI system — see app.css), with the PM's control
- * riding at the end of the header row rather than in a corner of its own.
+ * It keeps the `.dt-kpi-card` shell (the drive test dashboard's KPI system —
+ * see app.css), with the PM's control riding at the end of the header row
+ * rather than in a corner of its own. It is no longer *in* the KPI band: that
+ * band is a funnel of what has happened — on air, drive-test done, approved,
+ * remaining — and a target is what was promised, which is a different
+ * question and was breaking the funnel's reading order from the second card
+ * onwards. It now heads AcceptancePlanSection, beside the plan-vs-actual
+ * chart whose target line it sets.
  */
 export default function PlanTargetCard({ plan, onSaved }) {
   const { user } = useAuth()

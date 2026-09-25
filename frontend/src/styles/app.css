@@ -1607,17 +1607,35 @@ tbody tr:last-child td { border-bottom: none; }
    hue, taken from that page's own palette (pages/reports/acceptanceTheme.js)
    rather than the drive test's state tokens: the two pages count different
    things, and a card that borrowed --dt-done for "fully approved" would tie
-   two unrelated meanings to one hue. Total villages takes the coverage teal
-   because it is the denominator the other three are shares of. */
+   two unrelated meanings to one hue.
+
+   The four are one funnel read left to right — on air, drive-test done,
+   approved, remaining — so their hues are ordered too. On air takes the
+   neutral for the same reason the drive test band's does: it is the
+   denominator everything after it is a share of, not a state something is
+   in. Drive-test done keeps the coverage teal it has always had. */
+.dt-kpi-card[data-kpi="acc-onair"] {
+  --kpi-accent: var(--dt-notstarted);
+  --kpi-tint: rgba(138, 149, 166, 0.07);
+  --kpi-ic: var(--dt-notstarted-wash);
+}
 .dt-kpi-card[data-kpi="acc-total"] {
   --kpi-accent: var(--signal);
   --kpi-tint: rgba(14, 163, 148, 0.07);
   --kpi-ic: var(--signal-glow);
 }
+/* The monthly target, which is no longer in the band at all — it heads the
+   plan section below, where it is read against the line it sets. It keeps the
+   card shell and its violet: neither an authority nor a verdict, because a
+   promise is not a state anything is in. */
 .dt-kpi-card[data-kpi="acc-plan"] {
   --kpi-accent: var(--violet);
   --kpi-tint: rgba(109, 91, 208, 0.07);
   --kpi-ic: var(--violet-dim);
+}
+.acc-plan-row {
+  display: grid; grid-template-columns: minmax(0, 320px);
+  margin-block-start: var(--dt-gap);
 }
 .dt-kpi-card[data-kpi="acc-approved"] {
   --kpi-accent: var(--green);
@@ -1698,42 +1716,34 @@ a.dt-status-row:focus-visible {
   font-size: 11.5px; color: var(--text-dim); margin-block-start: 2px;
 }
 
-/* ---------- the three outstanding figures, beneath the Acceptance band ----
-   Needs an answer / With an authority / Never filed used to sit three-across
-   inside the Remaining card, where at four cards wide every label broke onto
-   three lines. Given the page's own width they read in one, and each stays
-   what it was: a figure that opens the villages behind it. */
-.acc-remaining-strip {
-  display: grid; gap: var(--dt-gap);
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  margin-block-start: var(--dt-gap);
+/* ---------- the two halves of Remaining, inside its own card ----
+   A refusal somebody has to answer, and a wait somebody has to chase. They
+   borrow the pending-status card's part list (`.dt-status-*` below) rather
+   than a layout of their own, because they are the same object: a figure
+   split into named parts, each opening the sites behind it. Two columns, not
+   the three that list defaults to. */
+.dt-kpi-card[data-kpi="acc-remaining"] .dt-status-list {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
-/* Typed against the element as well as the class, so the box wins over
-   `.drill`'s own border/padding reset further down this file. */
-button.acc-remaining-tile {
-  display: flex; align-items: center; gap: 9px;
-  border: 1px solid var(--border); border-radius: var(--radius);
-  box-shadow: var(--shadow-1); background: var(--surface-1);
-  padding: 10px 14px; min-width: 0; text-align: start;
-  transition: background 0.14s;
+/* The part rows here are buttons, not links — there is no separate page for
+   these two figures to address, only the panel. Typed against the element so
+   the box survives `.drill`'s own border/padding reset further down. */
+button.dt-status-row {
+  border: 0; background: none; font: inherit; text-align: start;
+  cursor: pointer; padding: 3px 4px;
 }
-button.acc-remaining-tile:hover { background: var(--surface-2); }
-.acc-tile-ic {
-  inline-size: 24px; block-size: 24px; border-radius: 7px; flex: none;
-  display: grid; place-items: center;
+button.dt-status-row:hover { background: var(--surface-2); }
+button.dt-status-row:focus-visible {
+  outline: 2px solid var(--kpi-accent); outline-offset: 2px;
 }
-.acc-tile-label {
-  font-size: 12.5px; font-weight: 600; color: var(--text-muted);
-  min-width: 0; overflow-wrap: anywhere;
-}
-.acc-tile-num {
-  margin-inline-start: auto; flex: none;
-  font-family: var(--font-display); font-size: 19px; font-weight: 700;
-  letter-spacing: -0.02em; color: var(--text);
-}
-@media (max-width: 720px) {
-  .acc-remaining-strip { grid-template-columns: 1fr; }
-}
+
+/* The strip of outstanding tiles that used to sit under this band —
+   `.acc-remaining-strip` and its `.acc-tile-*` parts — is gone. It split
+   Remaining three ways (needs an answer / with an authority / never filed)
+   directly beneath a card that now splits the same number two ways, and one
+   figure divided two different ways on one screen is a screen people stop
+   trusting. My Work still holds the four queue buckets, which is where that
+   split is acted on. */
 
 /* The change chip, and the floor rule.
    `margin-block-start: auto` on whichever element ends the card is what
@@ -1769,7 +1779,11 @@ button.acc-remaining-tile:hover { background: var(--surface-2); }
    side by side, and the container query drops them back to rows. It is the
    card's own width that decides, not the viewport's: the band reflows to two
    and then one column, so the same viewport can give this card either. */
-.dt-kpi-card[data-kpi="status"] { container: kpi-status / inline-size; }
+/* The Acceptance band's Remaining card carries the same part list (its two
+   halves, refused and waiting), so it takes the same container name and gets
+   the same fallback to rows when it is too narrow for its columns. */
+.dt-kpi-card[data-kpi="status"],
+.dt-kpi-card[data-kpi="acc-remaining"] { container: kpi-status / inline-size; }
 .dt-status-list {
   list-style: none; margin: 0; padding: 0;
   display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px;
@@ -1805,8 +1819,18 @@ a.dt-status-row:hover { background: var(--surface-2); }
    `display: contents` lifts the figures into the row's own grid so the swatch
    can lead the line the way a legend does, without a second copy of it. */
 @container kpi-status (max-width: 239px) {
-  .dt-status-list { grid-template-columns: minmax(0, 1fr); gap: 1px; }
-  .dt-status-row {
+  .dt-status-list,
+  /* Restated at the Acceptance card's own specificity: its two-column rule
+     above is more specific than a bare `.dt-status-list`, so without this the
+     halves would keep their columns at a width where they no longer fit. */
+  .dt-kpi-card[data-kpi="acc-remaining"] .dt-status-list {
+    grid-template-columns: minmax(0, 1fr); gap: 1px;
+  }
+  /* The button form is listed beside the link form for the same reason as
+     above: it carries an element in its selector, so a bare class here would
+     lose to it and leave the padding at the wide layout's value. */
+  .dt-status-row,
+  button.dt-status-row {
     display: grid; grid-template-columns: 8px minmax(0, 1fr) auto 4ch;
     align-items: center; column-gap: 8px; padding: 2px 4px;
   }
