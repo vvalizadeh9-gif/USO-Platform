@@ -8,10 +8,10 @@ import { AuthorityCompareBars, TrendLineChart, VelocityBars } from './acceptance
 
 const MONTHS = 9
 
-/** A segmented Monthly/Cumulative (or Count/Percentage) toggle, the
- * design system's own `.seg`/`.seg-btn` pair — used here rather than the
- * tab strip, since picking a mode re-reads the same numbers, it does not
- * switch to a different question. */
+/** A segmented Monthly/Cumulative toggle, the design system's own
+ * `.seg`/`.seg-btn` pair — used here rather than the tab strip, since
+ * picking a mode re-reads the same numbers, it does not switch to a
+ * different question. */
 function ModeToggle({ value, onChange, options }) {
   return (
     <div className="seg">
@@ -48,39 +48,27 @@ function CardHead({ icon: Icon, title, sub, action }) {
  * Sankey, monthly velocity bars, the ICT/CRA comparison and the two mini
  * per-authority progress charts.
  *
- * A section of its own — not folded into `OverviewTab` — because it owns a
- * second, filter-dependent load (`/acceptance/trends`) and a third,
- * programme-wide one (`/drivetest/trend`) that `OverviewTab`'s single
- * `/acceptance/overview` load has no reason to know about.
- *
- * `/drivetest/trend` takes no `regional_manager_id`/`coordinator_id`/
- * `contractor_id` — only `province_id`, which this page's filter bar does
- * not resolve client-side (the province set behind a regional manager or
- * coordinator pick is resolved server-side, inside `/acceptance/overview`
- * and `/acceptance/trends`). So "Added villages" stays programme-wide
- * regardless of the filter bar; every other series on this section still
- * narrows with it, through `/acceptance/trends`.
+ * A section of its own — not folded into the page component — because it
+ * owns a second load (`/acceptance/trends`) and a third (`/drivetest/trend`)
+ * that the page's single `/acceptance/overview` load has no reason to know
+ * about. Both are programme-wide: the page carries no filters any more, so
+ * neither call takes parameters beyond the month window.
  */
-export default function AcceptancePlanSection({ total, analysis, kpis, filters }) {
+export default function AcceptancePlanSection({ total, analysis, kpis }) {
   const [trends, setTrends] = useState(null)
   const [trendsError, setTrendsError] = useState(false)
   const [dtTrend, setDtTrend] = useState(null)
 
   const [planMode, setPlanMode] = useState('cumulative')
   const [velocityMode, setVelocityMode] = useState('monthly')
-  const [compareMode, setCompareMode] = useState('count')
 
   useEffect(() => {
     setTrendsError(false)
-    // Same rule as the top-level /acceptance/overview load: an unset filter
-    // is an empty string in this page's controlled selects, and the server
-    // expects it left out entirely, not sent as `foo=`.
-    const clean = Object.fromEntries(Object.entries(filters || {}).filter(([, v]) => v !== ''))
     api
-      .get('/acceptance/trends', { params: { months: MONTHS, ...clean } })
+      .get('/acceptance/trends', { params: { months: MONTHS } })
       .then((r) => setTrends(r.data))
       .catch(() => setTrendsError(true))
-  }, [filters])
+  }, [])
 
   useEffect(() => {
     api.get('/drivetest/trend', { params: { months: MONTHS } }).then((r) => setDtTrend(r.data)).catch(() => setDtTrend({ months: [] }))
@@ -134,7 +122,7 @@ export default function AcceptancePlanSection({ total, analysis, kpis, filters }
 
   return (
     <>
-      <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(380px, 1fr))', alignItems: 'stretch' }}>
+      <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(380px, 1fr))', alignItems: 'stretch', marginTop: 16 }}>
         <div className="card">
           <CardHead
             icon={LineChart}
@@ -219,16 +207,9 @@ export default function AcceptancePlanSection({ total, analysis, kpis, filters }
             icon={Scale}
             title="ICT vs CRA comparison"
             sub={`Each authority's villages by verdict, out of ${total}`}
-            action={
-              <ModeToggle
-                value={compareMode}
-                onChange={setCompareMode}
-                options={[{ value: 'count', label: 'Count' }, { value: 'pct', label: 'Percentage' }]}
-              />
-            }
           />
           <div style={{ padding: '14px 20px 20px' }}>
-            <AuthorityCompareBars rows={compareRows} mode={compareMode} />
+            <AuthorityCompareBars rows={compareRows} />
           </div>
         </div>
       </div>
@@ -278,6 +259,6 @@ export default function AcceptancePlanSection({ total, analysis, kpis, filters }
 // "Not started" takes the mockup's red, matching the approved design.
 // Worth knowing if this is ever revisited: elsewhere on this platform red
 // means a refusal, and a village nobody has filed for is an absence of
-// activity rather than a rejection — the "Never filed" cell on the
-// Remaining KPI card gives that same population IDLE. The design calls for
-// red here, so red it is; IDLE is the alternative if that ever changes.
+// activity rather than a rejection — the "Never filed" tile under the KPI
+// band gives that same population IDLE. The design calls for red here, so
+// red it is; IDLE is the alternative if that ever changes.

@@ -7,8 +7,6 @@ import { canSetAcceptancePlan } from '../../lib/roles'
 import { currentShamsiPeriod } from '../../lib/shamsi'
 import PeriodPicker from '../monthlyplan/PeriodPicker'
 import { fmtCount } from './kpiTheme'
-import { KpiHeader } from './KpiHeader'
-import { CRA } from './acceptanceTheme'
 import { planDeltaTone } from './acceptancePlan'
 
 /**
@@ -18,6 +16,10 @@ import { planDeltaTone } from './acceptancePlan'
  * The figure is `current.target_count` from GET /acceptance/plan, never
  * fabricated: a programme with no target yet shows an explicit "not set"
  * state rather than a 0 that would read as a real, very bad, target.
+ *
+ * It wears the same `.dt-kpi-card` shell as the three cards beside it (the
+ * drive test dashboard's KPI system — see app.css), with the PM's control
+ * riding at the end of the header row rather than in a corner of its own.
  */
 export default function PlanTargetCard({ plan, onSaved }) {
   const { user } = useAuth()
@@ -30,9 +32,12 @@ export default function PlanTargetCard({ plan, onSaved }) {
   const tone = planDeltaTone(delta)
 
   return (
-    <div className="card card-pad" style={{ position: 'relative' }}>
-      <div className="row" style={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
-        <KpiHeader icon={Flag} iconColor={CRA} label="Monthly plan" sub={current?.label || 'Cumulative target'} />
+    <div className="dt-kpi-card" data-kpi="acc-plan" style={{ position: 'relative' }}>
+      <div className="dt-kpi-hd">
+        <span className="dt-kpi-ic" aria-hidden="true">
+          <Flag size={13} strokeWidth={2.2} />
+        </span>
+        <span className="dt-kpi-title">Monthly plan</span>
         {canSet && (
           <button
             type="button"
@@ -40,7 +45,7 @@ export default function PlanTargetCard({ plan, onSaved }) {
             onClick={() => setOpen((o) => !o)}
             aria-expanded={open}
             aria-label={open ? 'Close set-target form' : 'Set this month’s acceptance target'}
-            style={{ flexShrink: 0, padding: '4px 8px', fontSize: 11.5 }}
+            style={{ marginInlineStart: 'auto', flexShrink: 0, padding: '2px 7px', fontSize: 11 }}
           >
             {open ? <X size={13} /> : '+ Set target'}
           </button>
@@ -49,16 +54,14 @@ export default function PlanTargetCard({ plan, onSaved }) {
 
       {current ? (
         <>
-          <div
-            className="tnum"
-            style={{ fontFamily: 'var(--font-display)', fontSize: 32, fontWeight: 600, marginTop: 14 }}
-          >
-            {fmtCount(current.target_count)}
+          <div className="dt-kpi-v">
+            <span className="dt-kpi-figure tnum">{fmtCount(current.target_count)}</span>
           </div>
+          <div className="dt-kpi-sub">{current.label || 'Cumulative target'}</div>
           {delta != null ? (
             <div
               className="row"
-              style={{ gap: 4, fontSize: 11.5, marginTop: 2, color: tone === 'up' ? 'var(--green)' : tone === 'down' ? 'var(--red)' : 'var(--text-dim)' }}
+              style={{ gap: 4, fontSize: 11.5, marginTop: 3, color: tone === 'up' ? 'var(--green)' : tone === 'down' ? 'var(--red)' : 'var(--text-dim)' }}
             >
               {tone === 'up' && <ArrowUp size={11} />}
               {tone === 'down' && <ArrowDown size={11} />}
@@ -68,11 +71,11 @@ export default function PlanTargetCard({ plan, onSaved }) {
               </span>
             </div>
           ) : (
-            <div className="dim" style={{ fontSize: 11.5, marginTop: 2 }}>No prior month’s target to compare</div>
+            <div className="dt-kpi-sub">No prior month’s target to compare</div>
           )}
         </>
       ) : (
-        <div className="dim" style={{ fontSize: 13, marginTop: 18 }}>Not set yet</div>
+        <div className="dim" style={{ fontSize: 13, marginTop: 10 }}>Not set yet</div>
       )}
 
       {open && canSet && (

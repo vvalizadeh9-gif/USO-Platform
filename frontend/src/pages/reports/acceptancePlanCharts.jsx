@@ -273,25 +273,19 @@ export function VelocityBars({ months, series, height = 240 }) {
 }
 
 /**
- * "ICT vs CRA Comparison" — one stacked bar per authority (Approved /
- * Pending / Rejected), the same split-bar language `AuthorityCard` already
- * draws lower on this page, with a count/percentage toggle on the trailing
- * figures.
- */
-/**
- * One labelled track per verdict, per authority — Approved, Pending and
- * Rejected each get their own row rather than three segments of one stacked
- * bar. Three separate tracks are what makes the two authorities comparable
- * down the column: ICT's Pending row sits directly above CRA's, so the eye
- * reads one verdict across both without first having to find that segment
- * inside a shared bar.
+ * "ICT vs CRA Comparison" — one labelled track per verdict, per authority.
+ * Approved, Pending and Rejected each get their own row rather than three
+ * segments of one stacked bar. Three separate tracks are what makes the two
+ * authorities comparable down the column: ICT's Pending row sits directly
+ * above CRA's, so the eye reads one verdict across both without first having
+ * to find that segment inside a shared bar.
  *
- * Both figures stay on screen in either mode. The toggle chooses which one
- * leads — a count reads as the workload, a percentage as the standing — and
- * the other follows it, muted, so switching never hides a number somebody
- * was reading.
+ * Both figures are on every row — the count leads, because it is the
+ * workload somebody has to move, and the percentage follows it muted as the
+ * standing. There used to be a toggle that swapped which of the two led;
+ * since neither was ever hidden it only moved them around, so it went.
  */
-export function AuthorityCompareBars({ rows, mode }) {
+export function AuthorityCompareBars({ rows }) {
   return (
     <div style={{ display: 'grid', gap: 18 }}>
       {rows.map((r) => {
@@ -304,8 +298,6 @@ export function AuthorityCompareBars({ rows, mode }) {
             <div style={{ display: 'grid', gap: 8 }}>
               {r.parts.map((p, i) => {
                 const pct = Math.round((p.value / total) * 100)
-                const lead = mode === 'pct' ? `${pct}%` : fmtCount(p.value)
-                const follow = mode === 'pct' ? fmtCount(p.value) : `${pct}%`
                 return (
                   <div key={p.label} className="row" style={{ gap: 10 }}>
                     <span style={{ width: 66, flexShrink: 0, fontSize: 11.5, color: 'var(--text-muted)' }}>
@@ -324,13 +316,13 @@ export function AuthorityCompareBars({ rows, mode }) {
                       {pct < 100 && <span style={{ flex: 100 - pct, background: 'transparent' }} />}
                     </span>
                     <b className="tnum" style={{ width: 58, flexShrink: 0, textAlign: 'right', fontSize: 12.5 }}>
-                      {lead}
+                      {fmtCount(p.value)}
                     </b>
                     <span
                       className="tnum dim"
                       style={{ width: 46, flexShrink: 0, textAlign: 'right', fontSize: 11.5 }}
                     >
-                      {follow}
+                      {pct}%
                     </span>
                   </div>
                 )

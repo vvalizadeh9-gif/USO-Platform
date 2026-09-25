@@ -12,7 +12,11 @@ const NODE_X = 20
 const NODE_W = 20
 const BAR_X = W - 220
 const BAR_W = 14
-const MIN_H = 26
+// Each destination bar has to be at least as tall as the two-line label
+// parked beside it: a 13px name over a 15.5px figure, 18px apart, is a ~32px
+// block. 34 leaves a hair of room at the thin "CRA approved, ICT pending"
+// band rather than letting its label ride into the one below.
+const MIN_H = 34
 
 /**
  * "Approval Flow & Status Distribution" — every DT-done هدف village, fanned
@@ -64,7 +68,7 @@ export default function ApprovalFlowSankey({ total, nodes }) {
       <rect x={NODE_X} y={TOP} width={NODE_W} height={AVAIL} rx={6} fill="var(--surface-3)" stroke="var(--border-soft)" />
       <text
         x={NODE_X + NODE_W / 2} y={TOP + AVAIL / 2}
-        textAnchor="middle" fontSize={11} fontWeight={700} fill="var(--text)"
+        textAnchor="middle" fontSize={13} fontWeight={700} fill="var(--text)"
         transform={`rotate(-90 ${NODE_X + NODE_W / 2} ${TOP + AVAIL / 2})`}
       >
         {fmtCount(total)} villages
@@ -81,12 +85,16 @@ export default function ApprovalFlowSankey({ total, nodes }) {
       {ribbons.map((r) => (
         <g key={`bar-${r.key}`}>
           <rect x={BAR_X} y={r.destY0} width={BAR_W} height={r.destH} rx={4} fill={r.color} />
-          <text x={BAR_X + BAR_W + 10} y={r.destY0 + r.destH / 2 - 4} fontSize={11} fontWeight={600} fill="var(--text)">
+          {/* Two baselines 18px apart, straddling the bar's midpoint: the
+              name above, the figure below it. Both grew — at 11px they were
+              unreadable at the size this card is actually drawn — so the
+              offsets and MIN_H above grew with them. */}
+          <text x={BAR_X + BAR_W + 10} y={r.destY0 + r.destH / 2 - 6} fontSize={13} fontWeight={600} fill="var(--text)">
             {r.label}
           </text>
-          <text x={BAR_X + BAR_W + 10} y={r.destY0 + r.destH / 2 + 12} fontSize={11.5} fontWeight={700} fill={r.color}>
+          <text x={BAR_X + BAR_W + 10} y={r.destY0 + r.destH / 2 + 12} fontSize={15.5} fontWeight={700} fill={r.color}>
             {fmtCount(r.value)}
-            <tspan fill="var(--text-dim)" fontWeight={500}> · {r.pct}%</tspan>
+            <tspan fill="var(--text-dim)" fontWeight={500} fontSize={12.5}> · {r.pct}%</tspan>
           </text>
         </g>
       ))}
