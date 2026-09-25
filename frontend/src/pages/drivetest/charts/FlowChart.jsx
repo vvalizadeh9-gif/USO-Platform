@@ -117,7 +117,10 @@ export default function FlowChart({ data, scope = 'all' }) {
   // opening balance, so the step into month j is netChanges()[j].
   const nets = netChanges(points)
   const slotW = MAIN_W / Math.max(n - 1, 1)
-  const pillW = Math.min(slotW - 4, 42)
+  // See .dt-flow-dense in app.css: the pill label only grows where a month
+  // has the room for it.
+  const densePills = slotW < 44
+  const pillW = Math.min(slotW - 4, densePills ? 42 : 48)
 
   return (
     <div className="dt-flowcard">
@@ -189,7 +192,10 @@ export default function FlowChart({ data, scope = 'all' }) {
           (last.isOpen ? ' The latest month is still in progress.' : '')
         }
       >
-        <svg viewBox={`0 0 ${VIEW_W} ${VIEW_H}`} className="dt-flowchart-svg">
+        <svg
+          viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
+          className={`dt-flowchart-svg${densePills ? ' dt-flow-dense' : ''}`}
+        >
           <defs>
             {/* A soft shadow rather than a textured ribbon: the two lines and
                 the space between them are the whole chart now, so the gap
