@@ -348,6 +348,57 @@ beforeEach(() => {
   vi.clearAllMocks()
 })
 
+describe('breakdown chrome', () => {
+  it('says when no problematic site has a category yet, rather than drawing it as a finding', async () => {
+    // One bar reading "Uncategorized 100%" looks like a result. It is the
+    // absence of one.
+    serve(planDelivery(), {
+      ...overview,
+      problematic_breakdown: {
+        ...overview.problematic_breakdown,
+        by_category: [{ name: 'Uncategorized', value: 10, key: 'Uncategorized' }],
+      },
+    })
+    draw()
+
+    const card = await section('Problematic breakdown')
+    expect(card).toHaveTextContent(
+      'No site has a category yet — nothing to break down until they do.',
+    )
+  })
+
+  it('says nothing of the kind once any site has a category', async () => {
+    serve()
+    draw()
+
+    const card = await section('Problematic breakdown')
+    expect(within(card).queryByText(/No site has a category yet/)).toBeNull()
+  })
+
+  it('keeps the chart/table switch in the card foot, below the bars', async () => {
+    // It used to take a row of its own above them.
+    serve()
+    draw()
+
+    const card = await section('Ongoing breakdown')
+    const toggle = within(card).getByRole('group', { name: 'Chart or table' })
+    expect(toggle.closest('.dt-breakdown-foot')).not.toBeNull()
+    const bars = card.querySelector('.dt-bars')
+    expect(bars.compareDocumentPosition(toggle) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
+
+  it('switches views with a segmented control in the header', async () => {
+    serve()
+    draw()
+
+    const card = await section('Problematic breakdown')
+    const tabs = within(card.querySelector('.dt-section-head')).getByRole('tablist', {
+      name: 'Break down by',
+    })
+    expect(tabs).toHaveClass('dt-seg')
+  })
+})
+
 describe('breakdown sections', () => {
   it('renders each section, opening on its chart view', async () => {
     serve()

@@ -168,6 +168,12 @@ export default function DriveTestProject() {
         unit: 'Category',
         color: STATE_COLOR.problematic,
         hrefFor: (p) => problematicLink(p.key ? { ...scope, category: p.key } : scope),
+        // One bar reading "Uncategorized, 100%" looks like a finding. It is
+        // the absence of one, and says so.
+        note:
+          b.by_category.length > 0 && b.by_category.every((p) => p.key === 'Uncategorized')
+            ? 'No site has a category yet — nothing to break down until they do.'
+            : undefined,
       },
       age: {
         points: b.by_age,
