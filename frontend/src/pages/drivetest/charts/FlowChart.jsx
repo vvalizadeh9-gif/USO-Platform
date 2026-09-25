@@ -1,9 +1,10 @@
 import { motion, useReducedMotion } from 'framer-motion'
-import { useId, useMemo, useState } from 'react'
+import { useId, useState } from 'react'
 import { shamsiMonthName } from '../../../lib/shamsi'
 import { STATE_COLOR } from '../constants'
 import { count, share } from '../format'
 import { DeltaChip } from '../KpiBand'
+import { flowView, labelledMonths, netChanges } from './flowView'
 import { DrawPath, FadeArea } from './primitives'
 
 /**
@@ -27,10 +28,20 @@ import { DrawPath, FadeArea } from './primitives'
  *
  * NO GRIDLINES, NO AXIS, NO HATCH. The figures a reader would check a
  * y-axis against -- On-aired, DT done, Gap, Coverage -- are already named in
- * the text row above the chart, in numerals rather than a ruler a reader has
+ * the stat line above the chart, in numerals rather than a ruler a reader has
  * to interpolate against. What is left to draw is the shape: two lines and
  * the gap between them, which a soft gradient reads as a shadow the second
  * line casts rather than a ribbon that has to be decoded against a legend.
+ *
+ * THE PAGE CHOOSES THE READING. Which of the two is on screen is a prop,
+ * because the card header carries both the control that switches it and the
+ * info note that describes it (where the scale starts, what the year view
+ * restarts), and those must agree with what is drawn. The arithmetic is in
+ * `flowView.js` for the same reason: the chart and the note read one copy.
+ *
+ * THE READOUT IS NEVER BLANK. It opens on the latest month and returns there
+ * when the pointer leaves, so the running totals and "this month" are on
+ * screen without anyone having to find them by hovering.
  */
 
 const VIEW_W = 740
@@ -45,150 +56,21 @@ const MAIN_AXIS_Y = MAIN_TOP + MAIN_H + 20
 
 /** The net-change strip, under the month labels and the year captions. */
 const STRIP_TOP = MAIN_AXIS_Y + 26
-const STRIP_H = 17
+const STRIP_H = 20
 
-/** A rounded ceiling for an axis, so the plot has a readable amount of
- * headroom above its highest point. */
-function niceMax(value) {
-  if (value <= 0) return 10
-  const magnitude = 10 ** Math.floor(Math.log10(value))
-  const steps = [1, 1.25, 1.5, 2, 2.5, 3, 4, 5, 7.5, 10]
-  for (const step of steps) {
-    const candidate = step * magnitude
-    if (candidate >= value) return candidate
-  }
-  return 10 * magnitude
-}
-
-/** A round floor visibly below the minimum, for an axis that does not open
- * at zero. Picks the largest "nice" number that still sits under 85% of the
- * minimum, so the reader always has a labelled step between the floor and
- * the lowest point actually drawn. */
-function niceFloorBelow(value) {
-  if (value <= 0) return 0
-  const target = value * 0.85
-  const magnitude = 10 ** Math.floor(Math.log10(Math.max(target, 1)))
-  for (const step of [10, 5, 2.5, 2, 1]) {
-    const candidate = step * magnitude
-    if (candidate <= target) return candidate
-  }
-  return magnitude / 10
-}
-
-/** Running totals from the opening balance, one point per month plus the
- * start, Farvardin 1404 to now.
- *
- * `not_placed` IS PART OF THE OPENING BALANCE HERE. The backend hands back
- * three things -- an opening balance, one entry per month, and a not-placed
- * bucket for sites it could not put in any Shamsi month -- and the KPI cards
- * above this chart count all three. A series built from `opening + months`
- * alone therefore ends below the card it sits under, and the four tiles,
- * which read the last point of this series, disagree with it: the same sites
- * missing from DT done and so added to the gap. The backend's own parity
- * test spells the identity out -- `opening + sum(months) + not_placed` is the
- * KPI figure -- and this is where the third term was missing.
- *
- * The opening balance is the only placement that does not invent a month for
- * them: an undated site belongs to no month, and the position the chart opens
- * with is exactly the part of the total that predates the timeline. Per-month
- * values stay untouched, so the net-change strip is unaffected -- the opening
- * and closing gaps both shift by the same amount, and the steps between them
- * are what the strip draws.
- */
-export function cumulativePoints(data) {
-  let onAir = data.opening.on_air + (data.not_placed?.on_air ?? 0)
-  let dtDone = data.opening.dt_done + (data.not_placed?.dt_done ?? 0)
-  const points = [{ year: null, month: null, onAir, dtDone, gap: onAir - dtDone, isOpen: false }]
-  for (const m of data.months) {
-    onAir += m.on_aired
-    dtDone += m.dt_done
-    points.push({ year: m.year, month: m.month, onAir, dtDone, gap: onAir - dtDone, isOpen: m.is_open })
-  }
-  return points
-}
-
-/** Running totals restarting at zero for one Shamsi year.
- *
- * No `not_placed` here, deliberately. This tab counts one year's activity and
- * opens at zero by design, so its tiles already differ from the KPI cards on
- * purpose; a site with no date belongs to no year either, and folding it in
- * would attribute it to whichever year happened to be selected.
- */
-export function yearPoints(data, year) {
-  const months = data.months.filter((m) => m.year === year)
-  let onAir = 0
-  let dtDone = 0
-  const points = [{ year, month: null, onAir, dtDone, gap: 0, isOpen: false }]
-  for (const m of months) {
-    onAir += m.on_aired
-    dtDone += m.dt_done
-    points.push({ year: m.year, month: m.month, onAir, dtDone, gap: onAir - dtDone, isOpen: m.is_open })
-  }
-  return points
-}
-
-/** What each month did to the backlog, one entry per month drawn.
- *
- * The change in pending over the month: sites that went on air minus drive
- * tests finished. Negative means the backlog shrank.
- *
- * DERIVED FROM THE POINTS THE CHART IS ALREADY DRAWING, not fetched again
- * and not recomputed from the payload, which is what makes the strip
- * reconcile to the lines above it rather than merely agree with them most of
- * the time. The sum of these is exactly `last.gap - first.gap`, because each
- * one is the step between two consecutive gap values and the sum telescopes.
- * That identity is what the parity test asserts, and it is the reason this
- * takes `points` rather than `data.months`: a strip built from the payload
- * would keep summing correctly while the chart beside it drew a filtered
- * year, and be wrong in the one view where it looked right.
- *
- * The sign convention is the one the Gap tile above already uses -- see its
- * `DeltaChip direction="down"`. A falling gap is good news, so a negative
- * number here is green. The two would be read together and must not disagree
- * about which way is which.
- */
-function netChanges(points) {
-  const out = []
-  for (let i = 1; i < points.length; i += 1) out.push(points[i].gap - points[i - 1].gap)
-  return out
-}
-
-/** Whether the payload has anything at all to draw. An opening balance of
- * zero and every month empty is a brand-new deployment, not a chart. */
-export function flowHasActivity(data) {
-  if (!data || !data.opening || !Array.isArray(data.months)) return false
-  return (
-    data.opening.on_air > 0 ||
-    data.opening.dt_done > 0 ||
-    data.months.some((m) => m.on_aired > 0 || m.dt_done > 0)
-  )
-}
-
-export default function FlowChart({ data }) {
+export default function FlowChart({ data, tab = 'cumulative', year }) {
   const reduced = useReducedMotion()
   const base = useId()
-  const [tab, setTab] = useState('cumulative')
+  const { selectedYear, isCumulative, points, months, ceiling, floor } = flowView(data, tab, year)
 
-  const years = useMemo(() => {
-    const set = new Set(data.months.map((m) => m.year))
-    return Array.from(set).sort((a, b) => a - b)
-  }, [data])
-
-  const [year, setYear] = useState(() => years[years.length - 1])
-  const selectedYear = years.includes(year) ? year : years[years.length - 1]
-
-  const isCumulative = tab === 'cumulative'
-  const points = isCumulative ? cumulativePoints(data) : yearPoints(data, selectedYear)
-  const months = isCumulative ? data.months : data.months.filter((m) => m.year === selectedYear)
-
-  const [active, setActive] = useState(null)
+  // The month the crosshair and readout show. `null` is "the latest", which
+  // is where the chart opens and where it returns when the pointer leaves.
+  const [hover, setHover] = useState(null)
+  const latest = months.length - 1
+  const active = hover != null && hover <= latest ? hover : latest
 
   const n = points.length
   const x = (i) => PAD_L + (MAIN_W * i) / Math.max(n - 1, 1)
-
-  const values = points.flatMap((p) => [p.onAir, p.dtDone])
-  const ceiling = niceMax(Math.max(1, ...values))
-  const floor = isCumulative ? niceFloorBelow(Math.min(points[0].onAir, points[0].dtDone)) : 0
   const span = Math.max(ceiling - floor, 1)
   const y = (v) => MAIN_TOP + MAIN_H - ((v - floor) / span) * MAIN_H
 
@@ -197,7 +79,6 @@ export default function FlowChart({ data }) {
   const gapDelta = prev ? last.gap - prev.gap : null
 
   const openTail = last.isOpen && n > 1
-
   const solidLineFor = (key) => (openTail ? points.slice(0, -1) : points)
     .map((p, i) => `${i === 0 ? 'M' : 'L'}${x(i)},${y(p[key])}`)
     .join(' ')
@@ -215,27 +96,21 @@ export default function FlowChart({ data }) {
           .join(' ')} Z`
 
   const labelEvery = isCumulative ? 3 : months.length > 8 ? 2 : 1
+  const labelled = labelledMonths(months, labelEvery, isCumulative)
 
   const handleKey = (e) => {
     if (!months.length) return
     if (e.key === 'ArrowLeft') {
       e.preventDefault()
-      setActive((i) => (i == null ? months.length - 1 : Math.max(0, i - 1)))
+      setHover(Math.max(0, active - 1))
     } else if (e.key === 'ArrowRight') {
       e.preventDefault()
-      setActive((i) => (i == null ? 0 : Math.min(months.length - 1, i + 1)))
+      setHover(Math.min(latest, active + 1))
     }
   }
 
-  const activeMonth = active == null ? null : months[active]
-  const activePoint = active == null ? null : points[active + 1]
-
-  // Both sides, not just on-air: the bug this footnote exists to disclose
-  // showed up on the DT-done side, where a footnote driven by `on_air` alone
-  // stayed silent. The larger of the two rather than their sum, because a
-  // site can be missing both dates and be counted on both sides -- so this is
-  // the count that cannot overstate how many sites have no month.
-  const notPlaced = Math.max(data.not_placed?.on_air ?? 0, data.not_placed?.dt_done ?? 0)
+  const activeMonth = months[active]
+  const activePoint = points[active + 1]
 
   // One per month drawn, in the same order as `months`: points[0] is the
   // opening balance, so the step into month j is netChanges()[j].
@@ -245,46 +120,8 @@ export default function FlowChart({ data }) {
 
   return (
     <div className="dt-flowcard">
-      <div className="dt-flow-controls">
-        <div className="dt-tabs" role="tablist" aria-label="How to read the flow">
-          {[
-            { key: 'cumulative', label: 'Cumulative' },
-            { key: 'year', label: 'Monthly Change' },
-          ].map((t) => (
-            <button
-              key={t.key}
-              type="button"
-              role="tab"
-              aria-selected={tab === t.key}
-              className={`dt-tab${tab === t.key ? ' dt-tab-active' : ''}`}
-              onClick={() => {
-                setTab(t.key)
-                setActive(null)
-              }}
-            >
-              {t.label}
-            </button>
-          ))}
-        </div>
-        {tab === 'year' && (
-          <select
-            className="dt-flow-yearselect"
-            aria-label="Year"
-            value={selectedYear}
-            onChange={(e) => {
-              setYear(Number(e.target.value))
-              setActive(null)
-            }}
-          >
-            {years.map((yr) => (
-              <option key={yr} value={yr}>
-                {yr}
-              </option>
-            ))}
-          </select>
-        )}
-      </div>
-
+      {/* The stat line: the four figures a reader would otherwise check an
+          axis against, in one row rather than a row of tiles. */}
       <ul className="dt-flowtiles">
         <li className="dt-flowtile dt-flowtile-ongoing">
           <span className="dt-flowtile-label">On-aired</span>
@@ -297,8 +134,13 @@ export default function FlowChart({ data }) {
         <li className="dt-flowtile dt-flowtile-problem">
           <span className="dt-flowtile-label">Gap</span>
           <span className="dt-flowtile-figure tnum">{count(last.gap)}</span>
-          <DeltaChip delta={gapDelta} direction="down" />
         </li>
+        {gapDelta != null && (
+          <li className="dt-flowtile">
+            <span className="dt-flowtile-label">vs last month</span>
+            <DeltaChip delta={gapDelta} direction="down" small />
+          </li>
+        )}
         <li className="dt-flowtile">
           <span className="dt-flowtile-label">Coverage</span>
           <span className="dt-flowtile-figure tnum">{share(last.dtDone, last.onAir)}</span>
@@ -329,6 +171,7 @@ export default function FlowChart({ data }) {
         tabIndex={0}
         role="img"
         onKeyDown={handleKey}
+        onMouseLeave={() => setHover(null)}
         aria-label={
           `On-aired vs drive tests done, ${isCumulative ? 'cumulative' : `year ${selectedYear}`}. ` +
           `On-aired ${last.onAir}, DT done ${last.dtDone}, gap ${last.gap}.` +
@@ -351,27 +194,36 @@ export default function FlowChart({ data }) {
               just where the months sit. */}
           <line x1={PAD_L} x2={PLOT_RIGHT} y1={MAIN_TOP + MAIN_H} y2={MAIN_TOP + MAIN_H} className="dt-gridline" />
 
-          {/* The gap between the lines, as a soft fill rather than a ribbon
-              that needs its own legend entry. */}
           {areaPath && <FadeArea d={areaPath} fill={`url(#${base}-gap-gradient)`} />}
 
           {/* Year boundaries, cumulative only. */}
           {isCumulative &&
             data.months.map((m, j) =>
               m.month === 1 && j > 0 ? (
-                <g key={`yr-${m.year}`}>
-                  <line
-                    x1={x(j + 1)}
-                    x2={x(j + 1)}
-                    y1={MAIN_TOP}
-                    y2={MAIN_TOP + MAIN_H}
-                    className="dt-flowchart-yearline"
-                  />
-                </g>
+                <line
+                  key={`yr-${m.year}`}
+                  x1={x(j + 1)}
+                  x2={x(j + 1)}
+                  y1={MAIN_TOP}
+                  y2={MAIN_TOP + MAIN_H}
+                  className="dt-flowchart-yearline"
+                />
               ) : null,
             )}
 
-          {/* Series lines */}
+          {/* The crosshair, always on a month: the latest one until a reader
+              points somewhere else. */}
+          {months.length > 0 && (
+            <line
+              data-testid="dt-flow-crosshair"
+              x1={x(active + 1)}
+              x2={x(active + 1)}
+              y1={MAIN_TOP}
+              y2={MAIN_TOP + MAIN_H}
+              className="dt-hover-rule"
+            />
+          )}
+
           {[
             { key: 'onAir', color: STATE_COLOR.ongoing },
             { key: 'dtDone', color: STATE_COLOR.done },
@@ -400,10 +252,12 @@ export default function FlowChart({ data }) {
             </g>
           ))}
 
-          {/* Month labels */}
+          {/* Month names: every third step in the cumulative view, the year
+              on a second line under each Farvardin -- see labelledMonths for
+              how the latest month is fitted in without a collision. */}
           {months.map((m, j) =>
-            j % labelEvery === 0 || j === months.length - 1 ? (
-              <g key={`x-${j}`}>
+            labelled.has(j) ? (
+              <g key={`x-${j}`} data-testid="dt-flow-month-label">
                 <text
                   x={x(j + 1)}
                   y={MAIN_AXIS_Y}
@@ -413,7 +267,7 @@ export default function FlowChart({ data }) {
                   {shamsiMonthName(m.month)}
                 </text>
                 {isCumulative && m.month === 1 && (
-                  <text x={x(j + 1)} y={MAIN_AXIS_Y + 13} className="dt-axis-label" textAnchor="middle">
+                  <text x={x(j + 1)} y={MAIN_AXIS_Y + 14} className="dt-axis-label" textAnchor="middle">
                     {m.year}
                   </text>
                 )}
@@ -421,39 +275,34 @@ export default function FlowChart({ data }) {
             ) : null,
           )}
 
-          {/* Hit areas and hover/focus crosshair, spanning the plot. */}
-          {active != null && (
-            <line
-              x1={x(active + 1)}
-              x2={x(active + 1)}
-              y1={MAIN_TOP}
-              y2={MAIN_TOP + MAIN_H}
-              className="dt-hover-rule"
-            />
-          )}
+          {/* Hit areas, one per month, spanning the plot and the pills. */}
           {months.map((m, j) => (
             <rect
               key={`h-${j}`}
-              x={x(j + 1) - MAIN_W / Math.max(n - 1, 1) / 2}
+              x={x(j + 1) - slotW / 2}
               y={MAIN_TOP}
-              width={MAIN_W / Math.max(n - 1, 1)}
-              height={MAIN_H}
+              width={slotW}
+              height={STRIP_TOP + STRIP_H - MAIN_TOP}
               fill="transparent"
-              onMouseEnter={() => setActive(j)}
-              onMouseLeave={() => setActive(null)}
+              onMouseEnter={() => setHover(j)}
             />
           ))}
 
-          {/* What each month did to the backlog, under the axis it belongs
-              to. The lines above answer "where are we"; a reader still has to
-              squint at the space between them to see whether a given month
-              helped or hurt. This says it outright, once per month, in the
-              one place the months are already laid out. */}
+          {/* What each month did to the backlog, one pill per month under the
+              axis. The lines above answer "where are we"; this says outright,
+              once per month, whether that month helped or hurt. The pill of
+              the month the readout is on is outlined, so the two read as one. */}
           {months.map((m, j) => {
             const net = nets[j]
             const tone = net === 0 ? 'flat' : net < 0 ? 'good' : 'bad'
             return (
-              <g key={`net-${j}`} data-testid="dt-flow-net" data-tone={tone}>
+              <g
+                key={`net-${j}`}
+                data-testid="dt-flow-net"
+                data-tone={tone}
+                data-active={j === active || undefined}
+                pointerEvents="none"
+              >
                 <rect
                   x={x(j + 1) - pillW / 2}
                   y={STRIP_TOP}
@@ -479,7 +328,7 @@ export default function FlowChart({ data }) {
       </div>
 
       {activeMonth && activePoint && (
-        <div className="dt-trend-readout" role="status">
+        <div className="dt-trend-readout" role="status" data-testid="dt-flow-readout">
           <span className="dt-farsi dt-readout-month">
             {shamsiMonthName(activeMonth.month)} {activeMonth.year}
           </span>
@@ -504,24 +353,6 @@ export default function FlowChart({ data }) {
           </span>
           {activeMonth.is_open && <em>still in progress</em>}
         </div>
-      )}
-
-      <p className="dt-note">
-        {isCumulative
-          ? 'The running total starts from the opening balance on 1 Farvardin 1404.'
-          : `This counts only ${selectedYear}, so its gap differs from the cumulative one.`}
-        {isCumulative && floor > 0 && ` Chart scale starts at ${count(floor)}, not zero.`}
-        {' '}The strip under the months is what each one did to the backlog — sites on air
-        that month minus drive tests finished — so the strip adds up to the movement in the
-        gap across the whole chart.
-      </p>
-      {notPlaced > 0 && (
-        <p className="dt-note">
-          {count(notPlaced)} {notPlaced === 1 ? 'site has' : 'sites have'} no date to place
-          {notPlaced === 1 ? ' it' : ' them'} on the timeline, so{' '}
-          {notPlaced === 1 ? 'it sits' : 'they sit'}{' '}
-          {isCumulative ? 'in the opening balance.' : 'outside this year’s count.'}
-        </p>
       )}
     </div>
   )

@@ -2127,9 +2127,9 @@ a.dt-contractor-name:hover { text-decoration: underline; text-decoration-color: 
 
 .dt-trend-readout {
   display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
-  margin-top: 10px; padding: 9px 12px;
+  padding: 7px 11px; min-height: 34px;
   background: var(--surface-2); border: 1px solid var(--border-soft);
-  border-radius: var(--radius-sm); font-size: 12px;
+  border-radius: var(--radius-sm); font-size: 11.5px;
 }
 .dt-readout-month { font-weight: 600; }
 .dt-readout-item { display: inline-flex; align-items: center; gap: 6px; color: var(--text-muted); }
@@ -2263,6 +2263,8 @@ a.dt-contractor-name:hover { text-decoration: underline; text-decoration-color: 
   box-shadow: var(--shadow-2);
 }
 .dt-info-tip[hidden] { display: none; }
+.dt-info-line { display: block; }
+.dt-info-line + .dt-info-line { margin-block-start: 6px; }
 
 /* ---------- PIP this month ---------- */
 /* Capped at the target, not at the widest bar on screen: this is a share of
@@ -2317,8 +2319,23 @@ a.dt-contractor-name:hover { text-decoration: underline; text-decoration-color: 
 .dt-pip-achieved .dt-pill { margin-inline-start: 8px; }
 
 /* ---------- flow chart: on-aired vs DT done ---------- */
-.dt-flowcard { display: grid; gap: 14px; }
-.dt-flow-controls { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.dt-flowcard { display: grid; gap: 10px; }
+/* Cumulative / Monthly change, in the card header: a segmented control
+   rather than underline tabs, because it switches one chart between two
+   readings rather than moving between panels of different content. */
+.dt-flow-view { display: flex; align-items: center; gap: 8px; }
+.dt-seg {
+  display: inline-flex; padding: 2px; border-radius: 7px; background: var(--surface-3);
+}
+.dt-seg button {
+  border: 0; background: none; font: inherit; font-size: 11.5px; font-weight: 500;
+  padding: 3px 10px; border-radius: 5px; color: var(--text-muted); cursor: pointer;
+}
+.dt-seg button.is-on {
+  background: var(--surface-1); color: var(--text); font-weight: 600;
+  box-shadow: var(--shadow-1);
+}
+.dt-seg button:focus-visible { outline: 2px solid var(--dt-ongoing); outline-offset: 1px; }
 .dt-flow-yearselect {
   padding: 4px 10px; border-radius: 999px;
   background: var(--surface-2); border: 1px solid var(--border-soft);
@@ -2336,11 +2353,15 @@ a.dt-contractor-name:hover { text-decoration: underline; text-decoration-color: 
 .dt-flowtile {
   display: inline-flex; align-items: baseline; gap: 6px;
 }
-.dt-flowtile-label { font-size: 11.5px; color: var(--text-muted); font-weight: 500; }
+.dt-flowtile-label {
+  font-size: 10.5px; color: var(--text-muted); font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.05em;
+}
 .dt-flowtile-figure {
-  font-family: var(--font-display); font-size: 18px; font-weight: 600;
+  font-family: var(--font-display); font-size: 16px; font-weight: 700;
   letter-spacing: -0.015em; line-height: 1.1;
 }
+.dt-flowtile .dt-delta { align-self: center; }
 /* A figure borrows its own series colour, which is what the tile card's top
    rule used to carry -- a reader still gets the colour key before finding
    the legend, without the card chrome around it. */
@@ -2353,7 +2374,7 @@ a.dt-contractor-name:hover { text-decoration: underline; text-decoration-color: 
 .dt-flow-legend {
   list-style: none; margin: 0; padding: 0;
   display: flex; flex-wrap: wrap; gap: 16px;
-  font-size: 12px; color: var(--text-muted);
+  font-size: 11.5px; color: var(--text-muted);
 }
 .dt-flow-legend-item { display: inline-flex; align-items: center; gap: 6px; }
 .dt-flow-legend-item-muted { color: var(--text-dim); }
@@ -2373,9 +2394,12 @@ a.dt-contractor-name:hover { text-decoration: underline; text-decoration-color: 
 .dt-flow-net-bad { fill: var(--dt-problem-wash); }
 .dt-flow-net-flat { fill: var(--surface-3); }
 .dt-flow-net-text {
-  font-size: 10px; font-weight: 600;
+  font-size: 11.5px; font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
+/* The pill of the month the readout is on, outlined, so the crosshair, the
+   pill and the readout read as one selection. */
+[data-active="true"] > .dt-flow-net-pill { stroke: var(--text-dim); stroke-width: 1.4; }
 .dt-flow-net-text-good { fill: var(--dt-done); }
 .dt-flow-net-text-bad { fill: var(--dt-problem); }
 .dt-flow-net-text-flat { fill: var(--text-dim); }

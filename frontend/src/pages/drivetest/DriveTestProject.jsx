@@ -14,7 +14,9 @@ import PipThisMonth from './PipThisMonth'
 import ProvinceList from './ProvinceList'
 import Section from './Section'
 import Toolbar from './Toolbar'
-import FlowChart, { flowHasActivity } from './charts/FlowChart'
+import FlowChart from './charts/FlowChart'
+import FlowViewControl from './charts/FlowViewControl'
+import { flowHasActivity, flowNotes, flowYears } from './charts/flowView'
 import FlowLedger, { flowNet } from './charts/FlowLedger'
 import { flowScale } from './charts/flowScale'
 import { AGE_RAMP, PROVINCE_LIMIT, STATE_COLOR } from './constants'
@@ -55,6 +57,11 @@ export default function DriveTestProject() {
   } = useDashboard()
   const [ongoingTab, setOngoingTab] = useState('contractor')
   const [problematicTab, setProblematicTab] = useState('category')
+  // Which reading of the trend is on screen. Held here, not in the chart,
+  // because the card header shows both the control that switches it and the
+  // note that describes it. `null` year is "the latest the payload has".
+  const [flowTab, setFlowTab] = useState('cumulative')
+  const [flowYear, setFlowYear] = useState(null)
   const [exporting, setExporting] = useState(false)
   const toast = useToast()
   const provinceRef = useRef(null)
@@ -248,17 +255,45 @@ export default function DriveTestProject() {
             container query on the bench, so it follows the page's width, not
             the window's). */}
         <div className="dt-grid2">
+          {/* One-line header from the first frame: the control and the info
+              icon arrive with the data, and a header that changed shape as
+              they did would jump under the reader. The sentence that used to
+              be its subtitle opens the info note. */}
           <Section
             title="Where this is going"
-            subtitle="Sites on air against drive tests done, and what each month did to the backlog"
+            inline
             state={flow}
             onRetry={refresh}
             skeletonRows={4}
             className="dt-trend-section"
+            info={
+              flowHasActivity(flow.data) && (
+                <InfoTip label="How this chart is drawn">
+                  {flowNotes(flow.data, flowTab, flowYear).map((line) => (
+                    <span key={line} className="dt-info-line">
+                      {line}
+                    </span>
+                  ))}
+                </InfoTip>
+              )
+            }
+            controls={
+              flowHasActivity(flow.data) && (
+                <FlowViewControl
+                  tab={flowTab}
+                  onTab={setFlowTab}
+                  years={flowYears(flow.data)}
+                  year={flowYear ?? flowYears(flow.data).at(-1)}
+                  onYear={setFlowYear}
+                />
+              )
+            }
           >
             {(f) =>
               flowHasActivity(f) ? (
-                <FlowChart data={f} />
+                // Keyed on the reading, so switching it resets where the
+                // readout sits back to that reading's latest month.
+                <FlowChart key={`${flowTab}-${flowYear}`} data={f} tab={flowTab} year={flowYear} />
               ) : (
                 <div className="dt-empty">
                   No on-air or drive-test activity has been recorded yet. The chart fills in

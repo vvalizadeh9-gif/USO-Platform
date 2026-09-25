@@ -1743,7 +1743,7 @@ describe('the flow chart', () => {
     draw()
 
     const card = await section('Where this is going')
-    await userEvent.click(within(card).getByRole('tab', { name: 'Monthly Change' }))
+    await userEvent.click(within(card).getByRole('tab', { name: 'Monthly change' }))
 
     // 1405 alone: 5+4 on-aired, 3+2 done -- not the 77/35 the cumulative tab
     // showed a moment ago.
@@ -1752,6 +1752,76 @@ describe('the flow chart', () => {
 
     // The year picker only appears on this tab.
     expect(within(card).getByRole('combobox', { name: 'Year' })).toBeInTheDocument()
+    // And the header's note describes the reading that is on screen.
+    expect(
+      within(card).getByText('This counts only 1405, so its gap differs from the cumulative one.'),
+    ).toBeInTheDocument()
+  })
+
+  it('puts the reading control in the card header, beside the title', async () => {
+    serve()
+    draw()
+
+    const card = await section('Where this is going')
+    const header = card.querySelector('.dt-section-head')
+    expect(within(header).getByRole('tablist', { name: 'How to read the flow' })).toBeInTheDocument()
+    expect(within(header).getByRole('tab', { name: 'Cumulative' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    )
+  })
+
+  it('opens the readout on the latest month rather than leaving it blank', async () => {
+    serve()
+    draw()
+
+    const card = await section('Where this is going')
+    const readout = within(card).getByTestId('dt-flow-readout')
+    expect(readout).toHaveTextContent('اردیبهشت 1405')
+    expect(readout).toHaveTextContent('Running: 80 on-aired, 35 done, gap 45')
+    expect(within(card).getByTestId('dt-flow-crosshair')).toBeInTheDocument()
+    // The latest month's pill is the outlined one, so the three read as one.
+    expect(
+      within(card)
+        .getAllByTestId('dt-flow-net')
+        .map((p) => p.getAttribute('data-active')),
+    ).toEqual([null, null, null, 'true'])
+  })
+
+  it('moves the readout with the arrow keys, and back to the latest month when the pointer leaves', async () => {
+    serve()
+    draw()
+
+    const card = await section('Where this is going')
+    const chart = card.querySelector('.dt-flowchart')
+    chart.focus()
+    await userEvent.keyboard('{ArrowLeft}')
+    // Farvardin 1405: 53 + 10 + 8 + 5 on-aired, 20 + 4 + 6 + 3 done.
+    expect(within(card).getByTestId('dt-flow-readout')).toHaveTextContent('فروردین 1405')
+    expect(within(card).getByTestId('dt-flow-readout')).toHaveTextContent(
+      'Running: 76 on-aired, 33 done, gap 43',
+    )
+
+    fireEvent.mouseLeave(chart)
+    expect(within(card).getByTestId('dt-flow-readout')).toHaveTextContent('اردیبهشت 1405')
+  })
+
+  it("keeps the chart's notes behind the header's info icon, not under the chart", async () => {
+    serve()
+    draw()
+
+    const card = await section('Where this is going')
+    expect(card.querySelector('.dt-flowcard .dt-note')).toBeNull()
+    const note = within(card).getByText(
+      /The running total starts from the opening balance on 1 Farvardin 1404/,
+    )
+    // 53 on air and 20 done open the chart; the floor is the round number
+    // under 85% of the lower one, 10.
+    expect(note).toHaveTextContent('The scale starts at 10, not zero.')
+    expect(note).not.toBeVisible()
+
+    await userEvent.click(within(card).getByRole('button', { name: 'How this chart is drawn' }))
+    expect(note).toBeVisible()
   })
 
   it('foots each month with what it did to the backlog', async () => {
