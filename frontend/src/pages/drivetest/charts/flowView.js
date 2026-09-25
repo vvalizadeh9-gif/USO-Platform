@@ -3,38 +3,43 @@
 // A module of its own because two places read it: the chart, and the card's
 // info note, which states where the chart's scale starts and how many sites
 // sit in its opening balance. Both must get those figures from one place, not
-// work them out twice. Everything here is moved unchanged from FlowChart.jsx;
-// `flowView` and `flowNotes` are the only additions, and they only assemble
-// what the functions below already compute.
+// work them out twice.
 
 import { count } from '../format'
 
-/** A rounded ceiling for an axis, so the plot has a readable amount of
- * headroom above its highest point. */
-export function niceMax(value) {
-  if (value <= 0) return 10
-  const magnitude = 10 ** Math.floor(Math.log10(value))
-  const steps = [1, 1.25, 1.5, 2, 2.5, 3, 4, 5, 7.5, 10]
-  for (const step of steps) {
-    const candidate = step * magnitude
-    if (candidate >= value) return candidate
+/** A step that reads as round -- 1, 2, 2.5 or 5 times a power of ten --
+ * close to `raw`. */
+function niceStep(raw) {
+  if (raw <= 0) return 1
+  const magnitude = 10 ** Math.floor(Math.log10(raw))
+  for (const step of [1, 2, 2.5, 5, 10]) {
+    if (step * magnitude >= raw) return step * magnitude
   }
   return 10 * magnitude
 }
 
-/** A round floor visibly below the minimum, for an axis that does not open
- * at zero. Picks the largest "nice" number that still sits under 85% of the
- * minimum, so the reader always has a labelled step between the floor and
- * the lowest point actually drawn. */
-export function niceFloorBelow(value) {
-  if (value <= 0) return 0
-  const target = value * 0.85
-  const magnitude = 10 ** Math.floor(Math.log10(Math.max(target, 1)))
-  for (const step of [10, 5, 2.5, 2, 1]) {
-    const candidate = step * magnitude
-    if (candidate <= target) return candidate
-  }
-  return magnitude / 10
+/** The vertical scale for the values on screen: their range plus a margin,
+ * rounded out to a round step.
+ *
+ * FITTED TO WHAT IS DRAWN. It used to round the programme's values to a
+ * coarse magnitude -- a floor of 1,000 and a ceiling of 4,000 around lines
+ * that ran from ~1,800 to ~3,083 -- so the two lines, which are the whole
+ * chart, used about 40% of its height, and zooming in to one year would have
+ * given each month more width and no more height. Fitted, the lines fill most
+ * of the plot in every view.
+ *
+ * The chart draws no axis, so the floor is stated in the card's note ("the
+ * scale starts at N, not zero"); a truncated scale is only honest if it says
+ * where it starts. It never goes below zero.
+ */
+export function fitScale(values) {
+  const lo = Math.min(...values)
+  const hi = Math.max(...values)
+  const pad = Math.max((hi - lo) * 0.12, hi * 0.02, 1)
+  const step = niceStep((hi - lo + 2 * pad) / 4)
+  const floor = Math.max(0, Math.floor((lo - pad) / step) * step)
+  const ceiling = Math.max(floor + step, Math.ceil((hi + pad) / step) * step)
+  return { floor, ceiling }
 }
 
 /** Running totals from the opening balance, one point per month plus the
@@ -62,26 +67,6 @@ export function cumulativePoints(data) {
   let dtDone = data.opening.dt_done + (data.not_placed?.dt_done ?? 0)
   const points = [{ year: null, month: null, onAir, dtDone, gap: onAir - dtDone, isOpen: false }]
   for (const m of data.months) {
-    onAir += m.on_aired
-    dtDone += m.dt_done
-    points.push({ year: m.year, month: m.month, onAir, dtDone, gap: onAir - dtDone, isOpen: m.is_open })
-  }
-  return points
-}
-
-/** Running totals restarting at zero for one Shamsi year.
- *
- * No `not_placed` here, deliberately. This tab counts one year's activity and
- * opens at zero by design, so its tiles already differ from the KPI cards on
- * purpose; a site with no date belongs to no year either, and folding it in
- * would attribute it to whichever year happened to be selected.
- */
-export function yearPoints(data, year) {
-  const months = data.months.filter((m) => m.year === year)
-  let onAir = 0
-  let dtDone = 0
-  const points = [{ year, month: null, onAir, dtDone, gap: 0, isOpen: false }]
-  for (const m of months) {
     onAir += m.on_aired
     dtDone += m.dt_done
     points.push({ year: m.year, month: m.month, onAir, dtDone, gap: onAir - dtDone, isOpen: m.is_open })
@@ -131,45 +116,67 @@ export function flowYears(data) {
   return Array.from(new Set(data.months.map((m) => m.year))).sort((a, b) => a - b)
 }
 
-/** Everything one view of the chart draws from: its points, the months they
- * cover, and the scale. `tab` is 'cumulative' or 'year'; `year` is the year
- * asked for, falling back to the latest the payload has. */
-export function flowView(data, tab, year) {
+/** Everything one view of the chart draws from.
+ *
+ * `scope` is 'all' or a Shamsi year. EVERY SCOPE IS THE SAME LEDGER, ZOOMED.
+ * A single year is a window onto the running totals, not a count restarted
+ * at zero: its first point is the balance the year opened with, and every
+ * figure after it is the real running total, so the gap is always the real
+ * backlog and coverage can never pass 100%. The view this replaces restarted
+ * both counts at zero for a year, which drew a year that finished more drive
+ * tests than it brought on air as "coverage 295%" and a negative gap.
+ *
+ * What that view could say that this one would otherwise not -- how much the
+ * year itself put on air and drive-tested -- is `yearActivity`, the sums of
+ * the year's own months.
+ */
+export function flowView(data, scope = 'all') {
   const years = flowYears(data)
-  const selectedYear = years.includes(year) ? year : years[years.length - 1]
-  const isCumulative = tab === 'cumulative'
-  const points = isCumulative ? cumulativePoints(data) : yearPoints(data, selectedYear)
-  const months = isCumulative ? data.months : data.months.filter((m) => m.year === selectedYear)
-  const values = points.flatMap((p) => [p.onAir, p.dtDone])
-  const ceiling = niceMax(Math.max(1, ...values))
-  const floor = isCumulative ? niceFloorBelow(Math.min(points[0].onAir, points[0].dtDone)) : 0
+  const selected = years.includes(scope) ? scope : 'all'
+  const all = cumulativePoints(data)
+  let points = all
+  let months = data.months
+  let yearActivity = null
+  if (selected !== 'all') {
+    const first = data.months.findIndex((m) => m.year === selected)
+    const inYear = data.months.filter((m) => m.year === selected).length
+    // all[i] is the balance before month i, so the year's window opens on
+    // the balance it inherited and closes on its last month.
+    points = all.slice(first, first + inYear + 1)
+    months = data.months.slice(first, first + inYear)
+    yearActivity = {
+      onAired: months.reduce((sum, m) => sum + m.on_aired, 0),
+      dtDone: months.reduce((sum, m) => sum + m.dt_done, 0),
+    }
+  }
+  const { floor, ceiling } = fitScale(points.flatMap((p) => [p.onAir, p.dtDone]))
   // Both sides, not just on-air: the bug this count exists to disclose showed
   // up on the DT-done side. The larger of the two rather than their sum,
   // because a site can be missing both dates and be counted on both sides.
   const notPlaced = Math.max(data.not_placed?.on_air ?? 0, data.not_placed?.dt_done ?? 0)
-  return { years, selectedYear, isCumulative, points, months, ceiling, floor, notPlaced }
+  return { years, selected, isAll: selected === 'all', points, months, floor, ceiling, notPlaced, yearActivity }
 }
 
-/** The notes that used to sit under the chart, as the sentences the card's
- * info icon shows. Worded as they were; only their place changed. */
-export function flowNotes(data, tab, year) {
-  const { isCumulative, selectedYear, floor, notPlaced } = flowView(data, tab, year)
+/** The notes behind the card's info icon, for the view on screen. */
+export function flowNotes(data, scope = 'all') {
+  const { selected, isAll, floor, notPlaced } = flowView(data, scope)
   const notes = [
     'Sites on air against drive tests done, and what each month did to the backlog.',
-    isCumulative
-      ? 'The running total starts from the opening balance on 1 Farvardin 1404.' +
-        (floor > 0 ? ` The scale starts at ${count(floor)}, not zero.` : '')
-      : `This counts only ${selectedYear}, so its gap differs from the cumulative one.`,
+    (isAll
+      ? 'The running total starts from the opening balance on 1 Farvardin 1404.'
+      : `Showing ${selected} only. These are the programme’s real running totals, ` +
+        `carrying everything before ${selected}, so the gap is the real backlog at each ` +
+        'month’s end.') + (floor > 0 ? ` The scale starts at ${count(floor)}, not zero.` : ''),
     'The pills under the months are what each one did to the backlog — sites on air that ' +
       'month minus drive tests finished — so they add up to the movement in the gap across ' +
-      'the whole chart. Green shrank it, red grew it.',
+      'the chart. Green shrank it, red grew it.',
   ]
   if (notPlaced > 0) {
     notes.push(
       `${count(notPlaced)} ${notPlaced === 1 ? 'site has' : 'sites have'} no date ` +
         `to place ${notPlaced === 1 ? 'it' : 'them'} on the timeline, so ` +
-        `${notPlaced === 1 ? 'it sits' : 'they sit'} ` +
-        (isCumulative ? 'in the opening balance.' : 'outside this year’s count.'),
+        `${notPlaced === 1 ? 'it sits' : 'they sit'} in the opening balance, and so in every ` +
+        'running total after it.',
     )
   }
   return notes

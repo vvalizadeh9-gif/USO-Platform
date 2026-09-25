@@ -57,11 +57,10 @@ export default function DriveTestProject() {
   } = useDashboard()
   const [ongoingTab, setOngoingTab] = useState('contractor')
   const [problematicTab, setProblematicTab] = useState('category')
-  // Which reading of the trend is on screen. Held here, not in the chart,
-  // because the card header shows both the control that switches it and the
-  // note that describes it. `null` year is "the latest the payload has".
-  const [flowTab, setFlowTab] = useState('cumulative')
-  const [flowYear, setFlowYear] = useState(null)
+  // Which years the trend shows: 'all', or one Shamsi year. Held here, not
+  // in the chart, because the card header shows both the control that
+  // switches it and the note that describes the view.
+  const [flowScope, setFlowScope] = useState('all')
   const [provinceSearch, setProvinceSearch] = useState('')
   const [exporting, setExporting] = useState(false)
   const toast = useToast()
@@ -276,7 +275,7 @@ export default function DriveTestProject() {
             info={
               flowHasActivity(flow.data) && (
                 <InfoTip label="How this chart is drawn">
-                  {flowNotes(flow.data, flowTab, flowYear).map((line) => (
+                  {flowNotes(flow.data, flowScope).map((line) => (
                     <span key={line} className="dt-info-line">
                       {line}
                     </span>
@@ -287,20 +286,18 @@ export default function DriveTestProject() {
             controls={
               flowHasActivity(flow.data) && (
                 <FlowViewControl
-                  tab={flowTab}
-                  onTab={setFlowTab}
                   years={flowYears(flow.data)}
-                  year={flowYear ?? flowYears(flow.data).at(-1)}
-                  onYear={setFlowYear}
+                  scope={flowScope}
+                  onScope={setFlowScope}
                 />
               )
             }
           >
             {(f) =>
               flowHasActivity(f) ? (
-                // Keyed on the reading, so switching it resets where the
-                // readout sits back to that reading's latest month.
-                <FlowChart key={`${flowTab}-${flowYear}`} data={f} tab={flowTab} year={flowYear} />
+                // Keyed on the years shown, so switching resets the readout to
+                // the latest month of the new view.
+                <FlowChart key={String(flowScope)} data={f} scope={flowScope} />
               ) : (
                 <div className="dt-empty">
                   No on-air or drive-test activity has been recorded yet. The chart fills in

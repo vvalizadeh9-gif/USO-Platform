@@ -16,15 +16,16 @@ import { DrawPath, FadeArea } from './primitives'
  * last one. This chart is the trailing shape behind those two totals: every
  * month since the obligation was tracked, on-aired and drive-tested, running.
  *
- * TWO READINGS OF THE SAME LEDGER. Cumulative is the honest one — it starts
- * from the opening balance the programme actually carried into Farvardin
- * 1404 and never resets, so the totals on it are the real totals. Current
- * year restarts at zero on purpose: a reader asking "how is this year going"
- * is asking a bounded question, and answering it against a total that
- * includes years of prior work would hide a bad quarter inside a good
- * decade. Neither is more correct than the other; they answer different
- * questions, which is why both stay one click apart rather than one
- * replacing the other.
+ * ONE LEDGER, ZOOMED BY YEAR. It opens on every year together -- the whole
+ * trajectory since the opening balance carried into Farvardin 1404, which is
+ * the question the card's title asks -- and a year can be picked on its own.
+ * A single year is a window onto the same running totals, not a count
+ * restarted at zero, so every figure on it is still a real total: the gap is
+ * the real backlog at each month's end. What changes is the room: a year's
+ * months get the whole width, so every month (or every other) is named and
+ * each month's pill has space, and the scale fits that year's range. The
+ * year's own activity -- how much it put on air and drive-tested -- is added
+ * to the stat line.
  *
  * NO GRIDLINES, NO AXIS, NO HATCH. The figures a reader would check a
  * y-axis against -- On-aired, DT done, Gap, Coverage -- are already named in
@@ -33,10 +34,10 @@ import { DrawPath, FadeArea } from './primitives'
  * the gap between them, which a soft gradient reads as a shadow the second
  * line casts rather than a ribbon that has to be decoded against a legend.
  *
- * THE PAGE CHOOSES THE READING. Which of the two is on screen is a prop,
- * because the card header carries both the control that switches it and the
- * info note that describes it (where the scale starts, what the year view
- * restarts), and those must agree with what is drawn. The arithmetic is in
+ * THE PAGE CHOOSES THE YEARS. Which years are on screen is a prop, because
+ * the card header carries both the control that switches them and the info
+ * note that describes the view (where its scale starts), and those must
+ * agree with what is drawn. The arithmetic is in
  * `flowView.js` for the same reason: the chart and the note read one copy.
  *
  * THE READOUT IS NEVER BLANK. It opens on the latest month and returns there
@@ -58,10 +59,10 @@ const MAIN_AXIS_Y = MAIN_TOP + MAIN_H + 20
 const STRIP_TOP = MAIN_AXIS_Y + 26
 const STRIP_H = 20
 
-export default function FlowChart({ data, tab = 'cumulative', year }) {
+export default function FlowChart({ data, scope = 'all' }) {
   const reduced = useReducedMotion()
   const base = useId()
-  const { selectedYear, isCumulative, points, months, ceiling, floor } = flowView(data, tab, year)
+  const { selected, isAll, points, months, ceiling, floor, yearActivity } = flowView(data, scope)
 
   // The month the crosshair and readout show. `null` is "the latest", which
   // is where the chart opens and where it returns when the pointer leaves.
@@ -95,8 +96,8 @@ export default function FlowChart({ data, tab = 'cumulative', year }) {
           .map((p, i) => `L${x(n - 1 - i)},${y(p.dtDone)}`)
           .join(' ')} Z`
 
-  const labelEvery = isCumulative ? 3 : months.length > 8 ? 2 : 1
-  const labelled = labelledMonths(months, labelEvery, isCumulative)
+  const labelEvery = isAll ? 3 : months.length > 8 ? 2 : 1
+  const labelled = labelledMonths(months, labelEvery, isAll)
 
   const handleKey = (e) => {
     if (!months.length) return
@@ -116,7 +117,10 @@ export default function FlowChart({ data, tab = 'cumulative', year }) {
   // opening balance, so the step into month j is netChanges()[j].
   const nets = netChanges(points)
   const slotW = MAIN_W / Math.max(n - 1, 1)
-  const pillW = Math.min(slotW - 4, 42)
+  // See .dt-flow-dense in app.css: the pill label only grows where a month
+  // has the room for it.
+  const densePills = slotW < 44
+  const pillW = Math.min(slotW - 4, densePills ? 42 : 48)
 
   return (
     <div className="dt-flowcard">
@@ -137,7 +141,9 @@ export default function FlowChart({ data, tab = 'cumulative', year }) {
         </li>
         {gapDelta != null && (
           <li className="dt-flowtile">
-            <span className="dt-flowtile-label">vs last month</span>
+            {/* "Previous month", not "last month": in a past year's view the
+                last step is that year's Esfand against its Bahman. */}
+            <span className="dt-flowtile-label">vs previous month</span>
             <DeltaChip delta={gapDelta} direction="down" small />
           </li>
         )}
@@ -145,6 +151,14 @@ export default function FlowChart({ data, tab = 'cumulative', year }) {
           <span className="dt-flowtile-label">Coverage</span>
           <span className="dt-flowtile-figure tnum">{share(last.dtDone, last.onAir)}</span>
         </li>
+        {yearActivity && (
+          <li className="dt-flowtile dt-flowtile-year" data-testid="dt-flow-year-activity">
+            <span className="dt-flowtile-label">In {selected}</span>
+            <span className="dt-flowtile-note tnum">
+              +{count(yearActivity.onAired)} on air · +{count(yearActivity.dtDone)} done
+            </span>
+          </li>
+        )}
       </ul>
 
       <ul className="dt-flow-legend">
@@ -173,12 +187,15 @@ export default function FlowChart({ data, tab = 'cumulative', year }) {
         onKeyDown={handleKey}
         onMouseLeave={() => setHover(null)}
         aria-label={
-          `On-aired vs drive tests done, ${isCumulative ? 'cumulative' : `year ${selectedYear}`}. ` +
+          `On-aired vs drive tests done, running totals, ${isAll ? 'every year' : selected}. ` +
           `On-aired ${last.onAir}, DT done ${last.dtDone}, gap ${last.gap}.` +
           (last.isOpen ? ' The latest month is still in progress.' : '')
         }
       >
-        <svg viewBox={`0 0 ${VIEW_W} ${VIEW_H}`} className="dt-flowchart-svg">
+        <svg
+          viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
+          className={`dt-flowchart-svg${densePills ? ' dt-flow-dense' : ''}`}
+        >
           <defs>
             {/* A soft shadow rather than a textured ribbon: the two lines and
                 the space between them are the whole chart now, so the gap
@@ -197,7 +214,7 @@ export default function FlowChart({ data, tab = 'cumulative', year }) {
           {areaPath && <FadeArea d={areaPath} fill={`url(#${base}-gap-gradient)`} />}
 
           {/* Year boundaries, cumulative only. */}
-          {isCumulative &&
+          {isAll &&
             data.months.map((m, j) =>
               m.month === 1 && j > 0 ? (
                 <line
@@ -266,7 +283,7 @@ export default function FlowChart({ data, tab = 'cumulative', year }) {
                 >
                   {shamsiMonthName(m.month)}
                 </text>
-                {isCumulative && m.month === 1 && (
+                {isAll && m.month === 1 && (
                   <text x={x(j + 1)} y={MAIN_AXIS_Y + 14} className="dt-axis-label" textAnchor="middle">
                     {m.year}
                   </text>
