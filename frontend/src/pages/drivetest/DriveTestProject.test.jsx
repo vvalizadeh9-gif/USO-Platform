@@ -712,27 +712,56 @@ describe('the province grid', () => {
     ],
   }
 
-  it('opens sorted by remaining, most first', async () => {
+  it('opens sorted by remaining, most first, showing the eight with the most left', async () => {
     serve(planDelivery(), overviewWithProvinces(10))
     draw()
 
     const provinces = await section('Drive Test Progress by Province')
     expect(cardNames(provinces)).toEqual([
-      'Province 1', 'Province 2', 'Province 3', 'Province 4', 'Province 5',
-      'Province 6', 'Province 7', 'Province 8', 'Province 9', 'Province 10',
+      'Province 1', 'Province 2', 'Province 3', 'Province 4',
+      'Province 5', 'Province 6', 'Province 7', 'Province 8',
     ])
+    expect(provinces).toHaveTextContent('Showing 8 of 10 provinces')
   })
 
-  it('renders every province at once, with no fold and nothing to expand', async () => {
-    // All 31 rows load in one internally-scrolling table now -- see
-    // `.dt-table-scroll` in app.css -- rather than folding past twelve into
-    // a "Show all" tail.
+  it('shows the rest on View all, and folds them again, with no scroll inside the table', async () => {
+    // It used to show every province inside a 480px box with its own
+    // scrollbar -- a scroll inside a scrolling page. The page scrolls now,
+    // and the table folds past eight.
     serve(planDelivery(), overviewWithProvinces(20))
     draw()
 
     const provinces = await section('Drive Test Progress by Province')
+    expect(provinces.querySelector('.dt-table-scroll')).toBeNull()
+    expect(cardNames(provinces)).toHaveLength(8)
+
+    await userEvent.click(within(provinces).getByRole('button', { name: 'View all' }))
     expect(cardNames(provinces)).toHaveLength(20)
-    expect(within(provinces).queryByRole('button', { name: /Show/ })).not.toBeInTheDocument()
+    expect(provinces).toHaveTextContent('Showing 20 of 20 provinces')
+
+    await userEvent.click(within(provinces).getByRole('button', { name: 'Show fewer' }))
+    expect(cardNames(provinces)).toHaveLength(8)
+  })
+
+  it('shows every match when searching, however far down the ranking it sits', async () => {
+    // A reader who typed a name is looking for that row. "Province 1"
+    // matches Province 1 and Province 10 to 19: eleven, past the fold.
+    serve(planDelivery(), overviewWithProvinces(20))
+    draw()
+
+    const provinces = await section('Drive Test Progress by Province')
+    await userEvent.type(within(provinces).getByRole('textbox', { name: 'Search provinces' }), 'Province 1')
+    expect(cardNames(provinces)).toHaveLength(11)
+    expect(provinces).toHaveTextContent('11 of 20 provinces match')
+    expect(within(provinces).queryByRole('button', { name: 'View all' })).toBeNull()
+  })
+
+  it('offers no fold when every province already fits', async () => {
+    serve()
+    draw()
+
+    const provinces = await section('Drive Test Progress by Province')
+    expect(within(provinces).queryByRole('button', { name: 'View all' })).toBeNull()
   })
 
   it('sorts on each of the sortable columns', async () => {
@@ -2392,14 +2421,19 @@ describe('the contractor scorecard', () => {
     expect(within(row).getByText('73%')).toBeInTheDocument()
   })
 
-  it('names Problematic as outside the assignment in a note under the table', async () => {
+  it("names Problematic as outside the assignment, behind the card's info icon", async () => {
+    // A standing definition, so it moved off the card into the icon; the
+    // notes that depend on what is on screen stay under the table.
     serve()
     draw()
 
     const card = await section('Contractor scorecard')
-    expect(card).toHaveTextContent(
-      'Assignment = DT done + Ongoing. Problematic sites are not part of a contractor’s assignment.',
+    const note = within(card).getByText(
+      /Assignment = DT done \+ Ongoing\. Problematic sites are not part of a contractor’s assignment/,
     )
+    expect(note).not.toBeVisible()
+    await userEvent.click(within(card).getByRole('button', { name: 'What the scorecard counts' }))
+    expect(note).toBeVisible()
   })
 
   it('carries this month\'s PIP achievement on the same row, from the Plan and delivery rows', async () => {

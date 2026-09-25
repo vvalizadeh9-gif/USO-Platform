@@ -11,7 +11,7 @@ import ContractorScorecard from './ContractorScorecard'
 import InfoTip from './InfoTip'
 import KpiBand from './KpiBand'
 import PipThisMonth from './PipThisMonth'
-import ProvinceList from './ProvinceList'
+import ProvinceList, { ProvinceSearch } from './ProvinceList'
 import Section from './Section'
 import Toolbar from './Toolbar'
 import FlowChart from './charts/FlowChart'
@@ -62,6 +62,7 @@ export default function DriveTestProject() {
   // note that describes it. `null` year is "the latest the payload has".
   const [flowTab, setFlowTab] = useState('cumulative')
   const [flowYear, setFlowYear] = useState(null)
+  const [provinceSearch, setProvinceSearch] = useState('')
   const [exporting, setExporting] = useState(false)
   const toast = useToast()
   const provinceRef = useRef(null)
@@ -414,41 +415,73 @@ export default function DriveTestProject() {
           )}
         </div>
 
-        {has('contractor_scorecard') && (
-          <Section
-            title="Contractor scorecard"
-            subtitle="Assignment is drive tests done plus sites still held — problematic sites are not assigned work"
-            state={overview}
-            onRetry={refresh}
-          >
-            {(d) => (
-              <ContractorScorecard
-                rows={d.contractor_scorecard}
-                plan={plan.data}
-                provinceId={provinceId}
-              />
-            )}
-          </Section>
-        )}
-
-        {has('province_breakdown') && (
-          <div ref={provinceRef}>
+        {/* The two tables, stacked: side by side they do not fit this
+            page's width without hiding columns -- measured, see app.css. */}
+        <div className="dt-tables">
+          {has('contractor_scorecard') && (
             <Section
-              title="Drive Test Progress by Province"
-              subtitle="Sort any column; click a row to scope the whole dashboard"
+              title="Contractor scorecard"
+              inline
               state={overview}
               onRetry={refresh}
+              info={
+                <InfoTip label="What the scorecard counts">
+                  <span className="dt-info-line">
+                    Assignment = DT done + Ongoing. Problematic sites are not part of a
+                    contractor&rsquo;s assignment: a site in a problem category has not been
+                    handed to them, and counting it would mark a company down for work the
+                    programme never gave it.
+                  </span>
+                  <span className="dt-info-line">
+                    PIP plan and Achieved are this month&rsquo;s approved plan and what was
+                    delivered against it.
+                  </span>
+                </InfoTip>
+              }
             >
               {(d) => (
-                <ProvinceList
-                  rows={d.province_breakdown}
-                  provinces={d.provinces}
-                  onProvince={setProvince}
+                <ContractorScorecard
+                  rows={d.contractor_scorecard}
+                  plan={plan.data}
+                  provinceId={provinceId}
                 />
               )}
             </Section>
-          </div>
-        )}
+          )}
+
+          {has('province_breakdown') && (
+            <div ref={provinceRef} className="dt-tables-cell">
+              <Section
+                title="Drive Test Progress by Province"
+                inline
+                state={overview}
+                onRetry={refresh}
+                info={
+                  <InfoTip label="How the province table reads">
+                    <span className="dt-info-line">
+                      Gap = On air − DT Done. Ongoing + Problematic can be lower than Gap,
+                      because on-air sites with no DT status yet are counted in Gap only.
+                    </span>
+                    <span className="dt-info-line">
+                      Sort any column; click a row to narrow the whole dashboard to that
+                      province.
+                    </span>
+                  </InfoTip>
+                }
+                controls={<ProvinceSearch value={provinceSearch} onChange={setProvinceSearch} />}
+              >
+                {(d) => (
+                  <ProvinceList
+                    rows={d.province_breakdown}
+                    provinces={d.provinces}
+                    onProvince={setProvince}
+                    search={provinceSearch}
+                  />
+                )}
+              </Section>
+            </div>
+          )}
+        </div>
       </div>
     </DrillProvider>
   )

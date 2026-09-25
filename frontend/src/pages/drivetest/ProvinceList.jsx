@@ -17,9 +17,38 @@ const BASE_COLUMNS = [
 ]
 const ACTION_COLUMN = { key: 'action', label: '', numeric: false }
 
-export default function ProvinceList({ rows, provinces, onProvince }) {
+/** How many provinces the table shows before "View all".
+ *
+ * The table used to show all 31 inside a 480px box with its own scrollbar --
+ * a scroll inside a scrolling page, where the wheel moved one or the other
+ * depending on where the pointer happened to be. It now shows the eight with
+ * the most left to do (or the first eight of whatever it is sorted by) and
+ * the page scrolls. Eight is about the height of the scorecard beside it. A
+ * search shows every match: a reader who typed a name is looking for that
+ * row, wherever it ranks. */
+export const PROVINCE_ROWS = 8
+
+/** The province search box, for the card header. Its value lives with the
+ * page, which passes it back to the table. */
+export function ProvinceSearch({ value, onChange }) {
+  return (
+    <div className="dt-province-search-wrap">
+      <Search size={14} strokeWidth={2} aria-hidden="true" />
+      <input
+        type="text"
+        className="dt-province-search"
+        placeholder="Search province…"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        aria-label="Search provinces"
+      />
+    </div>
+  )
+}
+
+export default function ProvinceList({ rows, provinces, onProvince, search = '' }) {
   const [sort, setSort] = useState({ key: 'remaining', dir: 'desc' })
-  const [search, setSearch] = useState('')
+  const [showAll, setShowAll] = useState(false)
   const { user } = useAuth()
   // A Viewer reads the table but never scopes the dashboard from it -- the
   // chevron says "act on this row", which is not true for an account that
@@ -54,6 +83,10 @@ export default function ProvinceList({ rows, provinces, onProvince }) {
 
   if (!rows || rows.length === 0) return <div className="dt-empty">No provinces to show.</div>
 
+  const searching = search.trim() !== ''
+  const capped = !searching && !showAll && sorted.length > PROVINCE_ROWS
+  const visible = capped ? sorted.slice(0, PROVINCE_ROWS) : sorted
+
   const totalOnair = rows.reduce((sum, r) => sum + (r.onair ?? 0), 0)
   const totalDone = rows.reduce((sum, r) => sum + (r.done ?? 0), 0)
   const average = totalOnair ? (totalDone / totalOnair) * 100 : 0
@@ -73,19 +106,7 @@ export default function ProvinceList({ rows, provinces, onProvince }) {
 
   return (
     <>
-      <div className="dt-province-search-wrap">
-        <Search size={14} strokeWidth={2} aria-hidden="true" />
-        <input
-          type="text"
-          className="dt-province-search"
-          placeholder="Search province…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          aria-label="Search provinces"
-        />
-      </div>
-
-      <div className="table-wrap dt-table-scroll">
+      <div className="table-wrap">
         <table>
           <thead>
             <tr>
@@ -113,7 +134,7 @@ export default function ProvinceList({ rows, provinces, onProvince }) {
             </tr>
           </thead>
           <tbody>
-            {sorted.map((row, idx) => {
+            {visible.map((row, idx) => {
               const id = byName.get(row.name)
               const hasProblem = row.problematic > 0
               const donePct = row.done_percent ?? 0
@@ -203,12 +224,22 @@ export default function ProvinceList({ rows, provinces, onProvince }) {
         </table>
       </div>
 
-      <p className="dt-note">
-        Gap = On air − DT Done. Ongoing + Problematic can be lower than
-        Gap, because on-air sites with no DT status yet are counted in
-        Gap only.
-      </p>
-      <p className="dt-note">Completion rate in red is below the {percent(average)} programme average.</p>
+      {/* The count, the colour key and the fold on one line. The colour key
+          stays on the card rather than behind the info icon: red is on every
+          row, and a key a reader has to go looking for is not a key. */}
+      <div className="dt-table-foot">
+        <span>
+          {searching
+            ? `${count(sorted.length)} of ${count(rows.length)} provinces match`
+            : `Showing ${count(visible.length)} of ${count(rows.length)} provinces`}
+        </span>
+        <span>Completion rate in red is below the {percent(average)} programme average.</span>
+        {!searching && sorted.length > PROVINCE_ROWS && (
+          <button type="button" className="dt-link-btn" onClick={() => setShowAll((v) => !v)}>
+            {showAll ? 'Show fewer' : 'View all'}
+          </button>
+        )}
+      </div>
     </>
   )
 }

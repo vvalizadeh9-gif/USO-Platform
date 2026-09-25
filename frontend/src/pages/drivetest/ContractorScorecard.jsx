@@ -322,19 +322,21 @@ export default function ContractorScorecard({ rows, plan, provinceId }) {
           </tbody>
         </table>
       </div>
-      <p className="dt-note">
-        Assignment = DT done + Ongoing. Problematic sites are not part of a
-        contractor&rsquo;s assignment.
-        {provinceId != null && (
-          <>
-            {' '}PIP plan and Achieved cover every province: a PIP is committed per
-            contractor for the whole programme.
-          </>
-        )}
-        {plan && !planRows?.some((p) => p.achievement_percent != null) && (
-          <> No PIP is approved this month, so PIP plan and Achieved are empty.</>
-        )}
-      </p>
+      {/* Only the notes that depend on what is on screen stay here. The
+          standing definition of Assignment is behind the card's info icon. */}
+      {(provinceId != null || (plan && !planRows?.some((p) => p.achievement_percent != null))) && (
+        <p className="dt-note dt-table-foot">
+          {provinceId != null && (
+            <span>
+              PIP plan and Achieved cover every province: a PIP is committed per contractor
+              for the whole programme.
+            </span>
+          )}
+          {plan && !planRows?.some((p) => p.achievement_percent != null) && (
+            <span>No PIP is approved this month, so PIP plan and Achieved are empty.</span>
+          )}
+        </p>
+      )}
     </>
   )
 }
