@@ -91,12 +91,17 @@ describe('flowView', () => {
     expect(v.yearActivity).toBeNull()
   })
 
-  it('zooms to a year without restarting the count', () => {
-    // 1405 opens on the balance 1404 closed with, and every point is a real
-    // running total -- the view this replaces started 1405 at 0/0.
+  it('caps at the selected year rather than windowing onto it alone', () => {
+    // 1405 is the payload's last year, so picking it draws exactly the same
+    // points as 'all' -- a year caps the ledger, it does not crop the years
+    // before it off screen. The view this replaces started 1405 at 0/0.
     const v = flowView(data, 1405)
-    expect(totals(v)).toEqual([[71, 30], [76, 33], [80, 35]])
-    expect(v.months.map((m) => m.month)).toEqual([1, 2])
+    expect(totals(v)).toEqual([[53, 20], [63, 24], [71, 30], [76, 33], [80, 35]])
+    expect(v.months.map((m) => `${m.year}-${m.month}`)).toEqual([
+      '1404-1', '1404-2', '1405-1', '1405-2',
+    ])
+    // What the year itself did is still isolated, even though the points
+    // drawn now carry every year before it too.
     expect(v.yearActivity).toEqual({ onAired: 9, dtDone: 5 })
   })
 
@@ -104,6 +109,23 @@ describe('flowView', () => {
     const v = flowView(data, 1404)
     expect(totals(v)).toEqual([[53, 20], [63, 24], [71, 30]])
     expect(v.yearActivity).toEqual({ onAired: 18, dtDone: 10 })
+  })
+
+  it('cuts off years after the one picked, but keeps every year before it', () => {
+    // A third year the two-year fixture above can't show: picking the middle
+    // one must carry 1404 forward and still stop before 1406.
+    const threeYears = {
+      opening: { on_air: 50, dt_done: 20 },
+      months: [
+        ...data.months,
+        { year: 1406, month: 1, on_aired: 6, dt_done: 1, is_open: true },
+      ],
+      not_placed: { on_air: 3, dt_done: 0 },
+    }
+    const v = flowView(threeYears, 1405)
+    expect(totals(v)).toEqual([[53, 20], [63, 24], [71, 30], [76, 33], [80, 35]])
+    expect(v.months.map((m) => m.year)).toEqual([1404, 1404, 1405, 1405])
+    expect(v.yearActivity).toEqual({ onAired: 9, dtDone: 5 })
   })
 
   it('falls back to every year for a year the payload does not have', () => {
@@ -133,12 +155,15 @@ describe('flowNotes', () => {
     )
   })
 
-  it('says a single year is the real running totals, not a restarted count', () => {
+  it('says a capped year is still the real running totals, not a restarted count', () => {
     const notes = flowNotes(data, 1405)
+    // 1405 is this fixture's last year, so the points drawn -- and so the
+    // fitted scale -- are identical to 'all': the floor is 850, the same as
+    // the 'all' note above, not the 900 a window onto 1405 alone would fit.
     expect(notes).toContain(
-      'Showing 1405 only. These are the programme’s real running totals, carrying everything ' +
-        'before 1405, so the gap is the real backlog at each month’s end. ' +
-        'The scale starts at 900, not zero.',
+      'Showing every month from the opening balance on 1 Farvardin 1404 through 1405. ' +
+        'These are the programme’s real running totals, so the gap is the real backlog at each ' +
+        'month’s end. The scale starts at 850, not zero.',
     )
   })
 })

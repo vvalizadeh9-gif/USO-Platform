@@ -1818,10 +1818,11 @@ describe('the flow chart', () => {
     expect(within(card).queryAllByRole('link')).toHaveLength(0)
   })
 
-  it('zooms to one year without restarting the count', async () => {
+  it('picking the latest year draws the same ledger as every year together', async () => {
     // The view this replaces restarted both counts at zero for a year, which
     // drew a year that tested more than it put on air as coverage over 100%.
-    // A year is now a window onto the same running totals.
+    // A year now caps the ledger rather than windowing onto it, so picking
+    // 1405 -- the payload's last year -- draws exactly what 'all' draws.
     serve()
     draw()
 
@@ -1837,25 +1838,29 @@ describe('the flow chart', () => {
     expect(within(card).getByTestId('dt-flow-year-activity')).toHaveTextContent(
       'In 1405+9 on air · +5 done',
     )
-    // One pill per month of 1405, the same steps as in the full view.
+    // Every month is still drawn, 1404's included, not just 1405's two.
     expect(
       within(card)
         .getAllByTestId('dt-flow-net')
         .map((p) => p.querySelector('text').textContent),
-    ).toEqual(['+2', '+2'])
+    ).toEqual(['+6', '+2', '+2', '+2'])
     expect(
-      within(card).getByText(/Showing 1405 only\. These are the programme’s real running totals/),
+      within(card).getByText(
+        /Showing every month from the opening balance on 1 Farvardin 1404 through 1405/,
+      ),
     ).toBeInTheDocument()
   })
 
-  it('zooms to a past year and ends on that year, not today', async () => {
+  it('caps at a past year but keeps every year before it, ending on that year, not today', async () => {
     serve()
     draw()
 
     const card = await section('Where this is going')
     await userEvent.click(within(card).getByRole('tab', { name: '1404' }))
 
-    // End of 1404: 53 + 10 + 8 on air, 20 + 4 + 6 done.
+    // End of 1404: 53 + 10 + 8 on air, 20 + 4 + 6 done. 1404 is the payload's
+    // first year, so this is also everything from the opening balance --
+    // there is nothing before it to keep.
     expect(within(tile(card, 'On-aired')).getByText('71')).toBeInTheDocument()
     expect(within(tile(card, 'DT done')).getByText('30')).toBeInTheDocument()
     expect(within(tile(card, 'Gap')).getByText('41')).toBeInTheDocument()

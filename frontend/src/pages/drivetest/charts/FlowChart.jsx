@@ -16,16 +16,16 @@ import { DrawPath, FadeArea } from './primitives'
  * last one. This chart is the trailing shape behind those two totals: every
  * month since the obligation was tracked, on-aired and drive-tested, running.
  *
- * ONE LEDGER, ZOOMED BY YEAR. It opens on every year together -- the whole
+ * ONE LEDGER, CAPPED BY YEAR. It opens on every year together -- the whole
  * trajectory since the opening balance carried into Farvardin 1404, which is
- * the question the card's title asks -- and a year can be picked on its own.
- * A single year is a window onto the same running totals, not a count
- * restarted at zero, so every figure on it is still a real total: the gap is
- * the real backlog at each month's end. What changes is the room: a year's
- * months get the whole width, so every month (or every other) is named and
- * each month's pill has space, and the scale fits that year's range. The
- * year's own activity -- how much it put on air and drive-tested -- is added
- * to the stat line.
+ * the question the card's title asks -- and a year can be picked to stop the
+ * chart there instead. Picking a year does not crop the months before it off
+ * screen: every figure is still a real running total, carried from the same
+ * opening balance, so the gap is the real backlog at each month's end and
+ * coverage can never pass 100%. What changes is where the line ends and the
+ * scale's range -- a year in the past does not drag the axis out to fit
+ * today's numbers. The selected year's own activity -- how much it put on
+ * air and drive-tested -- is added to the stat line.
  *
  * NO GRIDLINES, NO AXIS, NO HATCH. The figures a reader would check a
  * y-axis against -- On-aired, DT done, Gap, Coverage -- are already named in
@@ -62,7 +62,10 @@ const STRIP_H = 20
 export default function FlowChart({ data, scope = 'all' }) {
   const reduced = useReducedMotion()
   const base = useId()
-  const { selected, isAll, points, months, ceiling, floor, yearActivity } = flowView(data, scope)
+  const { selected, isAll, multiYear, points, months, ceiling, floor, yearActivity } = flowView(
+    data,
+    scope,
+  )
 
   // The month the crosshair and readout show. `null` is "the latest", which
   // is where the chart opens and where it returns when the pointer leaves.
@@ -96,8 +99,8 @@ export default function FlowChart({ data, scope = 'all' }) {
           .map((p, i) => `L${x(n - 1 - i)},${y(p.dtDone)}`)
           .join(' ')} Z`
 
-  const labelEvery = isAll ? 3 : months.length > 8 ? 2 : 1
-  const labelled = labelledMonths(months, labelEvery, isAll)
+  const labelEvery = multiYear ? 3 : months.length > 8 ? 2 : 1
+  const labelled = labelledMonths(months, labelEvery, multiYear)
 
   const handleKey = (e) => {
     if (!months.length) return
@@ -213,9 +216,13 @@ export default function FlowChart({ data, scope = 'all' }) {
 
           {areaPath && <FadeArea d={areaPath} fill={`url(#${base}-gap-gradient)`} />}
 
-          {/* Year boundaries, cumulative only. */}
-          {isAll &&
-            data.months.map((m, j) =>
+          {/* Year boundaries, wherever the drawn window spans more than one --
+              not just the all-years view any more, since a capped year can
+              too. `months` (the window), not `data.months` (the payload): the
+              window is always a prefix of the payload now, so its own index
+              lines up with `x()` even when it stops short of today. */}
+          {multiYear &&
+            months.map((m, j) =>
               m.month === 1 && j > 0 ? (
                 <line
                   key={`yr-${m.year}`}
@@ -283,7 +290,7 @@ export default function FlowChart({ data, scope = 'all' }) {
                 >
                   {shamsiMonthName(m.month)}
                 </text>
-                {isAll && m.month === 1 && (
+                {multiYear && m.month === 1 && (
                   <text x={x(j + 1)} y={MAIN_AXIS_Y + 14} className="dt-axis-label" textAnchor="middle">
                     {m.year}
                   </text>

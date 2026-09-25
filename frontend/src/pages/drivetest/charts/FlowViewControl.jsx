@@ -12,6 +12,9 @@
  * "All" or "Both", so it stays true as the programme runs into more years.
  * With a single year of data there is nothing to choose, and no control.
  *
+ * A year here caps the chart at that year's last month; it does not crop the
+ * years before it off screen. See `flowView` for why.
+ *
  * Still a tab list: what it switches is the one panel under it.
  */
 export default function FlowViewControl({ years, scope, onScope }) {
