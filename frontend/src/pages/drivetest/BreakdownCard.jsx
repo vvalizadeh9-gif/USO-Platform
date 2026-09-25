@@ -24,6 +24,13 @@ import RankedBars from './charts/RankedBars'
  * the header through its `controls` slot while this component renders the
  * panel it drives.
  *
+ * A SEGMENTED CONTROL, not underline tabs. Three underline tabs beside a
+ * title and a total were wider than a half-width card, so the Problematic
+ * card's tabs wrapped to a second line and the two cards of the pair stood at
+ * different heights. The segmented control is the same three choices in
+ * about two thirds of the width, and the same control the trend card uses.
+ * Still real ARIA tabs: what they switch is a panel.
+ *
  * WHICH IS ALSO WHY `idBase` IS A PROP rather than a `useId`. The tablist and
  * the tabpanel it controls now live in two different components, and
  * `aria-controls`/`aria-labelledby` have to agree across that gap. A
@@ -32,9 +39,8 @@ import RankedBars from './charts/RankedBars'
  * depends on cannot come apart.
  */
 export function BreakdownTabs({ idBase, tabs, tab, onTab }) {
-  const reduced = useReducedMotion()
   return (
-    <div className="dt-tabs" role="tablist" aria-label="Break down by">
+    <div className="dt-seg" role="tablist" aria-label="Break down by">
       {tabs.map((t) => (
         <button
           key={t.key}
@@ -43,14 +49,10 @@ export function BreakdownTabs({ idBase, tabs, tab, onTab }) {
           id={`${idBase}-tab-${t.key}`}
           aria-selected={tab === t.key}
           aria-controls={`${idBase}-panel`}
-          className={`dt-tab${tab === t.key ? ' dt-tab-active' : ''}`}
+          className={tab === t.key ? 'is-on' : undefined}
           onClick={() => onTab(t.key)}
         >
           {t.label}
-          {tab === t.key && !reduced && (
-            <motion.span className="dt-tab-underline" layoutId={`${idBase}-underline`} />
-          )}
-          {tab === t.key && reduced && <span className="dt-tab-underline" />}
         </button>
       ))}
     </div>
@@ -64,25 +66,6 @@ export default function BreakdownCard({ idBase, tab, views, total }) {
 
   return (
     <>
-      <div className="dt-viewtoggle" role="group" aria-label="Chart or table">
-        <button
-          type="button"
-          className={`btn btn-sm${asTable ? ' btn-ghost' : ''}`}
-          aria-pressed={!asTable}
-          onClick={() => setAsTable(false)}
-        >
-          <BarChart3 size={13} aria-hidden="true" /> Chart
-        </button>
-        <button
-          type="button"
-          className={`btn btn-sm${asTable ? '' : ' btn-ghost'}`}
-          aria-pressed={asTable}
-          onClick={() => setAsTable(true)}
-        >
-          <Table2 size={13} aria-hidden="true" /> Table
-        </button>
-      </div>
-
       <div id={`${idBase}-panel`} role="tabpanel" aria-labelledby={`${idBase}-tab-${tab}`}>
         <AnimatePresence mode="wait" initial={false}>
           <motion.div
@@ -102,9 +85,34 @@ export default function BreakdownCard({ idBase, tab, views, total }) {
                 hrefFor={view.hrefFor}
               />
             )}
-            {view.note && <p className="dt-note">{view.note}</p>}
           </motion.div>
         </AnimatePresence>
+
+        {/* The view's note and the chart/table switch share the card's foot.
+            The switch used to take a row of its own above the bars -- a row
+            of chrome over what is often two or three bars -- and the table
+            is the second view, for checking the total, not the first. */}
+        <div className="dt-breakdown-foot">
+          {view.note ? <p className="dt-note">{view.note}</p> : <span />}
+          <div className="dt-seg dt-seg-sm" role="group" aria-label="Chart or table">
+            <button
+              type="button"
+              className={asTable ? undefined : 'is-on'}
+              aria-pressed={!asTable}
+              onClick={() => setAsTable(false)}
+            >
+              <BarChart3 size={12} aria-hidden="true" /> Chart
+            </button>
+            <button
+              type="button"
+              className={asTable ? 'is-on' : undefined}
+              aria-pressed={asTable}
+              onClick={() => setAsTable(true)}
+            >
+              <Table2 size={12} aria-hidden="true" /> Table
+            </button>
+          </div>
+        </div>
       </div>
     </>
   )

@@ -348,275 +348,54 @@ beforeEach(() => {
   vi.clearAllMocks()
 })
 
-describe('plan and delivery', () => {
-  it('leads with the rate, then the counts it is made of', async () => {
-    serve()
-    draw()
-
-    const card = await section('Plan and delivery')
-    expect(within(card).getByText('شهریور 1405')).toBeInTheDocument()
-
-    // The rate leads: it is the one figure here comparable month to month,
-    // and 6 delivered means nothing without the 16 it was promised against.
-    expect(card.querySelector('.dt-plan-rate')).toHaveTextContent('37.5%')
-
-    for (const [label, value] of [
-      ['PIP', '16'],
-      ['Assignment', '9'],
-      ['Delivered', '6'],
-      // 16 committed against 6 delivered. The figure the card did not carry
-      // and the one somebody is actually chased about -- it was arithmetic
-      // the reader was left to do on two numbers sitting apart.
-      ['Short by', '10'],
-    ]) {
-      // Scoped to the figure list: "PIP" is also the word the bullet key
-      // below uses, deliberately, because it is the same figure.
-      const figure = within(card)
-        .getAllByText(label)
-        .map((node) => node.closest('.dt-plan-figure'))
-        .find(Boolean)
-      expect(within(figure).getByText(value)).toBeInTheDocument()
-    }
-  })
-
-  it('says how many each contractor is short, beside what they delivered', async () => {
-    serve()
-    draw()
-
-    const card = await section('Plan and delivery')
-    for (const [name, detail, short] of [
-      ['Beta Surveys', '2 of 2', '0'],
-      ['Alfa Drive Tests', '3 of 4', '1'],
-      ['Gamma Networks', '1 of 10', '9'],
-    ]) {
-      const row = within(card).getByText(name).closest('.dt-bullet')
-      expect(within(row).getByText(detail)).toBeInTheDocument()
-      // A plain 0 where the commitment was met, not a dash: met and
-      // unplanned are different facts and the column has to tell them apart.
-      expect(row.querySelector('.dt-bullet-short')).toHaveTextContent(short)
-    }
-  })
-
-  it('captions the assignment and delivery tiles with the two shortfalls that make up "short by"', async () => {
-    // pip 16, assigned 9, actual 6: 7 never made it to a contractor, and a
-    // further 3 were handed over but not finished -- 7 + 3 is the 10 the
-    // card is short by, and the two have different owners.
-    serve()
-    draw()
-
-    const card = await section('Plan and delivery')
-    expect(within(card).getByText('7 never assigned')).toBeInTheDocument()
-    expect(within(card).getByText('3 assigned, not done')).toBeInTheDocument()
-  })
-
-  it('says how many contractors have not committed, so a short PIP explains itself', async () => {
-    serve()
-    draw()
-
-    const card = await section('Plan and delivery')
-    expect(within(card).getByText('1 not committed')).toBeInTheDocument()
-  })
-
-  it('draws one achievement bar per contractor, in the order it was given', async () => {
-    serve()
-    draw()
-
-    const card = await section('Plan and delivery')
-    expect(within(card).getAllByTestId('achievement-bar')).toHaveLength(3)
-    // A target marker on every row: the bar is meaningless without the 100%
-    // line it is being read against.
-    expect(within(card).getAllByTestId('target-marker')).toHaveLength(3)
-
-    for (const [name, percent, detail] of [
-      ['Beta Surveys', '100%', '2 of 2'],
-      ['Alfa Drive Tests', '75%', '3 of 4'],
-      ['Gamma Networks', '10%', '1 of 10'],
-    ]) {
-      const row = within(card).getByText(name).closest('.dt-bullet')
-      expect(within(row).getByText(percent)).toBeInTheDocument()
-      expect(within(row).getByText(detail)).toBeInTheDocument()
-    }
-  })
-
-  it('says on screen what the two bars mean, rather than in a tooltip', async () => {
-    // The old dashboard's only explanation of the marker was a title
-    // attribute, which a touch screen can never reveal. The bullet now names
-    // both marks and the scale they are drawn on.
-    serve()
-    draw()
-
-    const card = await section('Plan and delivery')
-    // PIP, not "plan": the tile above these bars says PIP and it is the same
-    // commitment. Two words forty pixels apart make a reader go looking for
-    // the difference between them.
-    const key = card.querySelector('.dt-bullet-key')
-    expect(within(key).getByText('PIP')).toBeInTheDocument()
-    expect(within(key).getByText('delivered')).toBeInTheDocument()
-    // PIP tops out at 10 in the fixture, so the scale rounds to a readable 15.
-    expect(within(card).getByText(/drive tests$/)).toBeInTheDocument()
-  })
-
-  it('draws the plan as a ghost bar behind what was delivered', async () => {
-    // The bar used to encode the ratio alone, so a contractor who committed
-    // to 48 and one who committed to 4 drew identical marks at the same rate.
-    serve()
-    draw()
-
-    const card = await section('Plan and delivery')
-    const row = within(card).getByText('Gamma Networks').closest('.dt-bullet')
-    // Gamma delivered 1 of 10 on a scale that tops out at 15.
-    expect(row.querySelector('.dt-bullet-plan')).toHaveStyle({ width: `${(10 / 15) * 100}%` })
-    expect(within(row).getByTestId('achievement-bar')).toHaveStyle({
-      width: `${(1 / 15) * 100}%`,
+describe('breakdown chrome', () => {
+  it('says when no problematic site has a category yet, rather than drawing it as a finding', async () => {
+    // One bar reading "Uncategorized 100%" looks like a result. It is the
+    // absence of one.
+    serve(planDelivery(), {
+      ...overview,
+      problematic_breakdown: {
+        ...overview.problematic_breakdown,
+        by_category: [{ name: 'Uncategorized', value: 10, key: 'Uncategorized' }],
+      },
     })
-  })
-
-  it('gives a contractor with no plan no ghost bar and no target', async () => {
-    serve(
-      planDelivery({
-        rows: [
-          { contractor_id: 1, name: 'Alfa Drive Tests', pip: 0, actual: 5, achievement_percent: null },
-        ],
-      }),
-    )
     draw()
 
-    const card = await section('Plan and delivery')
-    const row = within(card).getByText('Alfa Drive Tests').closest('.dt-bullet')
-    expect(row.querySelector('.dt-bullet-plan')).toBeNull()
-    expect(within(row).queryByTestId('target-marker')).not.toBeInTheDocument()
-    // The work still draws, because it happened.
-    expect(within(row).getByTestId('achievement-bar')).toBeInTheDocument()
+    const card = await section('Problematic breakdown')
+    expect(card).toHaveTextContent(
+      'No site has a category yet — nothing to break down until they do.',
+    )
   })
 
-  it('draws every contractor bar in the same colour: the length is the reading', async () => {
-    // The bar used to switch colour by band, which said the same thing the
-    // bar's own length already says. Colour is spent on the one number that
-    // needs it instead — see the next test.
-    serve(
-      planDelivery({
-        rows: [
-          { contractor_id: 2, name: 'Beta Surveys', pip: 2, actual: 2, achievement_percent: 100.0 },
-          { contractor_id: 4, name: 'Delta Field', pip: 20, actual: 17, achievement_percent: 85.0 },
-          { contractor_id: 3, name: 'Gamma Networks', pip: 10, actual: 1, achievement_percent: 10.0 },
-        ],
-      }),
-    )
+  it('says nothing of the kind once any site has a category', async () => {
+    serve()
     draw()
 
-    const card = await section('Plan and delivery')
-    const barFor = (name) =>
-      within(within(card).getByText(name).closest('.dt-bullet')).getByTestId('achievement-bar')
-
-    for (const name of ['Beta Surveys', 'Delta Field', 'Gamma Networks']) {
-      expect(barFor(name)).toHaveStyle({ background: 'var(--dt-ongoing)' })
-    }
+    const card = await section('Problematic breakdown')
+    expect(within(card).queryByText(/No site has a category yet/)).toBeNull()
   })
 
-  it('colours the percentage only on a miss, and leaves a hit the default ink', async () => {
-    serve(
-      planDelivery({
-        rows: [
-          { contractor_id: 2, name: 'Beta Surveys', pip: 2, actual: 2, achievement_percent: 100.0 },
-          { contractor_id: 3, name: 'Gamma Networks', pip: 10, actual: 1, achievement_percent: 10.0 },
-        ],
-      }),
-    )
+  it('keeps the chart/table switch in the card foot, below the bars', async () => {
+    // It used to take a row of its own above them.
+    serve()
     draw()
 
-    const card = await section('Plan and delivery')
-    const pctFor = (name) =>
-      within(within(card).getByText(name).closest('.dt-bullet')).getByText(/%$/)
-
-    expect(pctFor('Beta Surveys')).not.toHaveStyle({ color: 'var(--dt-problem)' })
-    expect(pctFor('Gamma Networks')).toHaveStyle({ color: 'var(--dt-problem)' })
+    const card = await section('Ongoing breakdown')
+    const toggle = within(card).getByRole('group', { name: 'Chart or table' })
+    expect(toggle.closest('.dt-breakdown-foot')).not.toBeNull()
+    const bars = card.querySelector('.dt-bars')
+    expect(bars.compareDocumentPosition(toggle) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })
 
-  it('sorts contractor rows by achievement, best first', async () => {
-    serve(
-      planDelivery({
-        rows: [
-          { contractor_id: 3, name: 'Gamma Networks', pip: 10, actual: 1, achievement_percent: 10.0 },
-          { contractor_id: 1, name: 'Alfa Drive Tests', pip: 4, actual: 3, achievement_percent: 75.0 },
-          { contractor_id: 2, name: 'Beta Surveys', pip: 2, actual: 2, achievement_percent: 100.0 },
-        ],
-      }),
-    )
+  it('switches views with a segmented control in the header', async () => {
+    serve()
     draw()
 
-    const card = await section('Plan and delivery')
-    const names = within(card)
-      .getAllByTestId('achievement-bar')
-      .map((bar) => bar.closest('.dt-bullet').querySelector('.dt-bullet-label').textContent)
-    expect(names).toEqual(['Beta Surveys', 'Alfa Drive Tests', 'Gamma Networks'])
-  })
-
-  it('shows a month with no approved plan as no achievement, not as zero', async () => {
-    serve(
-      planDelivery({
-        pip: 0,
-        actual: 2,
-        achievement_percent: null,
-        committed_contractors: 0,
-        uncommitted_contractors: 3,
-        rows: [
-          { contractor_id: 1, name: 'Alfa Drive Tests', pip: 0, actual: 2, achievement_percent: null },
-        ],
-      }),
-    )
-    draw()
-
-    const card = await section('Plan and delivery')
-    expect(within(card).getByText('no approved PIP')).toBeInTheDocument()
-    expect(within(card).queryByText('0%')).not.toBeInTheDocument()
-    expect(within(card).getByText('no PIP')).toBeInTheDocument()
-  })
-
-  it('renders an empty month without breaking the page', async () => {
-    serve(
-      planDelivery({
-        pip: 0,
-        assigned: 0,
-        actual: 0,
-        achievement_percent: null,
-        committed_contractors: 0,
-        uncommitted_contractors: 0,
-        rows: [],
-      }),
-    )
-    draw()
-
-    const card = await section('Plan and delivery')
-    expect(within(card).getByText('No contractor PIP for this month.')).toBeInTheDocument()
-    // The rest of the dashboard is still there.
-    expect(screen.getByText('Drive Test Overview')).toBeInTheDocument()
-  })
-
-  it('gives a contractor their own row and an unnamed programme line', async () => {
-    serve(
-      planDelivery({
-        pip: 10,
-        assigned: 4,
-        actual: 1,
-        achievement_percent: 10.0,
-        committed_contractors: 1,
-        uncommitted_contractors: 0,
-        programme_achievement_percent: 15.0,
-        rows: [
-          { contractor_id: 1, name: 'Alfa Drive Tests', pip: 10, actual: 1, achievement_percent: 10.0 },
-        ],
-      }),
-    )
-    draw()
-
-    const card = await section('Plan and delivery')
-    expect(within(card).getByText('Alfa Drive Tests')).toBeInTheDocument()
-    expect(within(card).getByText('Programme average')).toBeInTheDocument()
-    expect(within(card).getByText('all contractors')).toBeInTheDocument()
-    // The benchmark carries no company name with it.
-    expect(within(card).getAllByTestId('achievement-bar')).toHaveLength(2)
-    expect(within(card).queryByText('Beta Surveys')).not.toBeInTheDocument()
-    expect(within(card).queryByText('Gamma Networks')).not.toBeInTheDocument()
+    const card = await section('Problematic breakdown')
+    const tabs = within(card.querySelector('.dt-section-head')).getByRole('tablist', {
+      name: 'Break down by',
+    })
+    expect(tabs).toHaveClass('dt-seg')
   })
 })
 
@@ -933,27 +712,56 @@ describe('the province grid', () => {
     ],
   }
 
-  it('opens sorted by remaining, most first', async () => {
+  it('opens sorted by remaining, most first, showing the eight with the most left', async () => {
     serve(planDelivery(), overviewWithProvinces(10))
     draw()
 
     const provinces = await section('Drive Test Progress by Province')
     expect(cardNames(provinces)).toEqual([
-      'Province 1', 'Province 2', 'Province 3', 'Province 4', 'Province 5',
-      'Province 6', 'Province 7', 'Province 8', 'Province 9', 'Province 10',
+      'Province 1', 'Province 2', 'Province 3', 'Province 4',
+      'Province 5', 'Province 6', 'Province 7', 'Province 8',
     ])
+    expect(provinces).toHaveTextContent('Showing 8 of 10 provinces')
   })
 
-  it('renders every province at once, with no fold and nothing to expand', async () => {
-    // All 31 rows load in one internally-scrolling table now -- see
-    // `.dt-table-scroll` in app.css -- rather than folding past twelve into
-    // a "Show all" tail.
+  it('shows the rest on View all, and folds them again, with no scroll inside the table', async () => {
+    // It used to show every province inside a 480px box with its own
+    // scrollbar -- a scroll inside a scrolling page. The page scrolls now,
+    // and the table folds past eight.
     serve(planDelivery(), overviewWithProvinces(20))
     draw()
 
     const provinces = await section('Drive Test Progress by Province')
+    expect(provinces.querySelector('.dt-table-scroll')).toBeNull()
+    expect(cardNames(provinces)).toHaveLength(8)
+
+    await userEvent.click(within(provinces).getByRole('button', { name: 'View all' }))
     expect(cardNames(provinces)).toHaveLength(20)
-    expect(within(provinces).queryByRole('button', { name: /Show/ })).not.toBeInTheDocument()
+    expect(provinces).toHaveTextContent('Showing 20 of 20 provinces')
+
+    await userEvent.click(within(provinces).getByRole('button', { name: 'Show fewer' }))
+    expect(cardNames(provinces)).toHaveLength(8)
+  })
+
+  it('shows every match when searching, however far down the ranking it sits', async () => {
+    // A reader who typed a name is looking for that row. "Province 1"
+    // matches Province 1 and Province 10 to 19: eleven, past the fold.
+    serve(planDelivery(), overviewWithProvinces(20))
+    draw()
+
+    const provinces = await section('Drive Test Progress by Province')
+    await userEvent.type(within(provinces).getByRole('textbox', { name: 'Search provinces' }), 'Province 1')
+    expect(cardNames(provinces)).toHaveLength(11)
+    expect(provinces).toHaveTextContent('11 of 20 provinces match')
+    expect(within(provinces).queryByRole('button', { name: 'View all' })).toBeNull()
+  })
+
+  it('offers no fold when every province already fits', async () => {
+    serve()
+    draw()
+
+    const provinces = await section('Drive Test Progress by Province')
+    expect(within(provinces).queryByRole('button', { name: 'View all' })).toBeNull()
   })
 
   it('sorts on each of the sortable columns', async () => {
@@ -1161,14 +969,27 @@ describe('the KPI band', () => {
     draw()
 
     const band = await screen.findByLabelText('Programme totals')
-    expect(within(card(band, 'Total On-air')).getByText('100')).toBeInTheDocument()
-    expect(within(card(band, 'Total DT Done')).getByText('40')).toBeInTheDocument()
-    expect(within(card(band, 'Total Pending')).getByText('60')).toBeInTheDocument()
+    expect(within(card(band, 'On air')).getByText('100')).toBeInTheDocument()
+    expect(within(card(band, 'DT done')).getByText('40')).toBeInTheDocument()
+    expect(within(card(band, 'Pending')).getByText('60')).toBeInTheDocument()
     // DT done states its share beside the figure. The percentage is what is
     // drawn; what it is a share *of* stays in the accessible name, because a
     // bare percentage next to a count does not say which is its denominator.
-    const pct = within(card(band, 'Total DT Done')).getByText('40%')
+    const pct = within(card(band, 'DT done')).getByText('40%')
     expect(pct).toHaveAttribute('aria-label', '40% of on-air')
+  })
+
+  it('names each card without repeating "Total" on three of them', async () => {
+    // "Total" said three times across one row is three words a reader skips
+    // on every visit. The figures are totals by position; the names say what
+    // each one counts. Checked as whole labels, so "Pending" cannot be
+    // satisfied by "Pending status".
+    serve()
+    draw()
+
+    const band = await screen.findByLabelText('Programme totals')
+    const titles = [...band.querySelectorAll('.dt-kpi-title')].map((t) => t.textContent)
+    expect(titles).toEqual(['On air', 'DT done', 'Pending', 'Pending status'])
   })
 
   it('no longer leads with the overall progress rate or the four-state on-air bar', async () => {
@@ -1200,7 +1021,7 @@ describe('the KPI band', () => {
     )
     expect(values).toEqual([50, 10, 0])
     expect(values.reduce((a, b) => a + b, 0)).toBe(
-      Number(within(card(band, 'Total Pending')).getByText('60').textContent),
+      Number(within(card(band, 'Pending')).getByText('60').textContent),
     )
   })
 
@@ -1223,10 +1044,10 @@ describe('the KPI band', () => {
     draw()
 
     const band = await screen.findByLabelText('Programme totals')
-    expect(card(band, 'Total On-air').querySelector('.dt-kpi-split')).toBeNull()
+    expect(card(band, 'On air').querySelector('.dt-kpi-split')).toBeNull()
     // The three cards that do split something keep theirs.
-    expect(card(band, 'Total DT Done').querySelector('.dt-kpi-split')).not.toBeNull()
-    expect(card(band, 'Total Pending').querySelector('.dt-kpi-split')).not.toBeNull()
+    expect(card(band, 'DT done').querySelector('.dt-kpi-split')).not.toBeNull()
+    expect(card(band, 'Pending').querySelector('.dt-kpi-split')).not.toBeNull()
   })
 
   it('mirrors the pending bar against the DT done bar', async () => {
@@ -1238,8 +1059,8 @@ describe('the KPI band', () => {
     draw()
 
     const band = await screen.findByLabelText('Programme totals')
-    const doneBar = card(band, 'Total DT Done').querySelector('.dt-kpi-split')
-    const pendingBar = card(band, 'Total Pending').querySelector('.dt-kpi-split')
+    const doneBar = card(band, 'DT done').querySelector('.dt-kpi-split')
+    const pendingBar = card(band, 'Pending').querySelector('.dt-kpi-split')
 
     expect(doneBar.querySelector('[data-seg="done"]')).toHaveStyle({ width: '40%' })
     expect(doneBar.querySelector('[data-seg="rest"]')).toHaveStyle({ width: '60%' })
@@ -1259,7 +1080,7 @@ describe('the KPI band', () => {
     draw()
 
     const band = await screen.findByLabelText('Programme totals')
-    const chip = within(card(band, 'Total Pending')).getByText('\u00b10')
+    const chip = within(card(band, 'Pending')).getByText('\u00b10')
     expect(chip).toHaveStyle({ color: 'var(--text-dim)' })
   })
 
@@ -1404,36 +1225,40 @@ describe('the order of the page', () => {
       .map((h) => h.textContent)
       .filter((t) =>
         [
-          'Plan and delivery',
           'What moved',
+          'PIP this month',
           'Ongoing breakdown',
           'Problematic breakdown',
           'Where this is going',
         ].includes(t),
       )
 
-    // "What moved" used to sit at the very foot of the page, four sections
-    // below Plan and delivery, with nothing saying the two were the same
-    // kind of question -- a month's movement, once against a plan and once
-    // against last month. It is paired with Plan and delivery now, directly
-    // under the trend.
+    // The month's two short answers -- what moved against last month, and
+    // what was promised for this one -- sit in the column beside the trend,
+    // so they read straight after it and still above the ongoing and
+    // problematic detail.
     expect(headings).toEqual([
       'Where this is going',
-      'Plan and delivery',
       'What moved',
+      'PIP this month',
       'Ongoing breakdown',
       'Problematic breakdown',
     ])
   })
 
-  it('pairs Plan and delivery with What moved in one row', async () => {
+  it('stacks What moved and PIP this month in the column beside the trend', async () => {
     serve()
     draw()
 
-    const plan = await section('Plan and delivery')
+    const trend = await section('Where this is going')
     const moved = await section('What moved')
-    expect(plan.parentElement).toBe(moved.parentElement)
-    expect(plan.parentElement).toHaveClass('dt-pair')
+    const pip = await section('PIP this month')
+    // One column, the two short cards together, the trend in the grid beside
+    // it -- not a full-width chart with a half-empty pair under it.
+    expect(moved.parentElement).toBe(pip.parentElement)
+    expect(moved.parentElement).toHaveClass('dt-stack')
+    expect(trend.parentElement).toBe(moved.parentElement.parentElement)
+    expect(trend.parentElement).toHaveClass('dt-grid2')
   })
 })
 
@@ -1536,8 +1361,14 @@ describe('drill-through', () => {
     },
     {
       name: "a contractor's delivered count",
-      open: () => section('Plan and delivery'),
-      text: '2 of 2',
+      // The scorecard's Achieved cell, where the old card's contractor list
+      // now lives. Beta delivered 2 of its 2.
+      open: async () =>
+        within(await section('Contractor scorecard'))
+          .getByText('Beta Surveys')
+          .closest('.dt-contractor-row')
+          .querySelector('.dt-pip-achieved'),
+      text: '2',
       href: '/drive-test/sites?bucket=delivered&contractor_id=2&year=1405&month=6',
     },
   ]
@@ -1611,18 +1442,6 @@ describe('drill-through', () => {
     }
   })
 
-  it('links the month’s delivered figure to that month’s drive tests', async () => {
-    serve()
-    draw()
-
-    const card = await section('Plan and delivery')
-    const tile = within(card).getByText('Delivered').closest('.dt-plan-figure')
-    expect(within(tile).getByText('6').closest('a')).toHaveAttribute(
-      'href',
-      '/drive-test/sites?bucket=delivered&year=1405&month=6',
-    )
-  })
-
   it('leaves the flow chart and the flow ledger unlinked', async () => {
     // Both are aggregate figures over a month or a running total, not a
     // filtered list. There is no list of sites behind either one, and a link
@@ -1672,6 +1491,25 @@ describe('drill-through', () => {
       '/drive-test/sites?bucket=ongoing&contractor_id=1',
     )
     expect(within(card).getByText('Other contractors').closest('a')).toBeNull()
+  })
+})
+
+describe('the toolbar', () => {
+  it('offers no control that does nothing', async () => {
+    // Saved Views, Vendor and Date range were buttons with no handler: they
+    // looked like filters and did nothing. If one comes back it should come
+    // back working, not as decoration that teaches a reader to distrust the
+    // controls beside it.
+    serve()
+    draw()
+
+    await screen.findByLabelText('Programme totals')
+    for (const name of [/saved views/i, /vendor/i, /date range/i]) {
+      expect(screen.queryByRole('button', { name })).not.toBeInTheDocument()
+    }
+    // The two that do work are still there.
+    expect(screen.getByRole('button', { name: /refresh the dashboard/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /export/i })).toBeInTheDocument()
   })
 })
 
@@ -1745,8 +1583,8 @@ describe('failure and freshness', () => {
     draw()
 
     expect(await screen.findByText('Drive Test Overview')).toBeInTheDocument()
-    const card = await section('Plan and delivery')
-    expect(await within(card).findByText(/Couldn’t load plan and delivery/)).toBeInTheDocument()
+    const card = await section('PIP this month')
+    expect(await within(card).findByText(/Couldn’t load PIP this month/)).toBeInTheDocument()
     expect(within(card).getByRole('button', { name: /Retry/ })).toBeInTheDocument()
   })
 
@@ -1763,9 +1601,11 @@ describe('failure and freshness', () => {
     })
     draw()
 
-    const card = await section('Plan and delivery')
+    const card = await section('PIP this month')
     await userEvent.click(await within(card).findByRole('button', { name: /Retry/ }))
-    expect(await screen.findByText('1 not committed')).toBeInTheDocument()
+    expect(
+      await within(card).findByText(/3 of 4 contractors have an approved PIP/),
+    ).toBeInTheDocument()
   })
 
   it('says how old the figures are instead of calling them live', async () => {
@@ -1785,8 +1625,8 @@ describe('failure and freshness', () => {
     draw()
 
     expect(await screen.findByText(/Could not load the Drive Test figures/)).toBeInTheDocument()
-    // Plan and delivery comes from a different request and is unaffected.
-    expect(await screen.findByText('1 not committed')).toBeInTheDocument()
+    // PIP this month comes from a different request and is unaffected.
+    expect(await screen.findByText(/3 of 4 contractors have an approved PIP/)).toBeInTheDocument()
   })
 
   it('leaves the rest of the dashboard standing when a breakdown is absent', async () => {
@@ -1901,7 +1741,7 @@ describe('the province filter', () => {
     })
     draw('/reports/drive-test?province=7')
 
-    const card = await section('Plan and delivery')
+    const card = await section('PIP this month')
     expect(
       within(card).getByText(/committed per contractor for the whole programme/),
     ).toBeInTheDocument()
@@ -1924,7 +1764,7 @@ describe('the province filter', () => {
     serve()
     draw('/reports/drive-test?province=7')
 
-    const card = await section('Plan and delivery')
+    const card = await section('PIP this month')
     expect(
       within(card).getByText(/committed per contractor for the whole programme/),
     ).toBeInTheDocument()
@@ -1934,7 +1774,7 @@ describe('the province filter', () => {
     serve()
     draw()
 
-    const card = await section('Plan and delivery')
+    const card = await section('PIP this month')
     expect(
       within(card).queryByText(/committed per contractor for the whole programme/),
     ).not.toBeInTheDocument()
@@ -1983,7 +1823,7 @@ describe('the flow chart', () => {
     draw()
 
     const card = await section('Where this is going')
-    await userEvent.click(within(card).getByRole('tab', { name: 'Monthly Change' }))
+    await userEvent.click(within(card).getByRole('tab', { name: 'Monthly change' }))
 
     // 1405 alone: 5+4 on-aired, 3+2 done -- not the 77/35 the cumulative tab
     // showed a moment ago.
@@ -1992,6 +1832,76 @@ describe('the flow chart', () => {
 
     // The year picker only appears on this tab.
     expect(within(card).getByRole('combobox', { name: 'Year' })).toBeInTheDocument()
+    // And the header's note describes the reading that is on screen.
+    expect(
+      within(card).getByText('This counts only 1405, so its gap differs from the cumulative one.'),
+    ).toBeInTheDocument()
+  })
+
+  it('puts the reading control in the card header, beside the title', async () => {
+    serve()
+    draw()
+
+    const card = await section('Where this is going')
+    const header = card.querySelector('.dt-section-head')
+    expect(within(header).getByRole('tablist', { name: 'How to read the flow' })).toBeInTheDocument()
+    expect(within(header).getByRole('tab', { name: 'Cumulative' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    )
+  })
+
+  it('opens the readout on the latest month rather than leaving it blank', async () => {
+    serve()
+    draw()
+
+    const card = await section('Where this is going')
+    const readout = within(card).getByTestId('dt-flow-readout')
+    expect(readout).toHaveTextContent('اردیبهشت 1405')
+    expect(readout).toHaveTextContent('Running: 80 on-aired, 35 done, gap 45')
+    expect(within(card).getByTestId('dt-flow-crosshair')).toBeInTheDocument()
+    // The latest month's pill is the outlined one, so the three read as one.
+    expect(
+      within(card)
+        .getAllByTestId('dt-flow-net')
+        .map((p) => p.getAttribute('data-active')),
+    ).toEqual([null, null, null, 'true'])
+  })
+
+  it('moves the readout with the arrow keys, and back to the latest month when the pointer leaves', async () => {
+    serve()
+    draw()
+
+    const card = await section('Where this is going')
+    const chart = card.querySelector('.dt-flowchart')
+    chart.focus()
+    await userEvent.keyboard('{ArrowLeft}')
+    // Farvardin 1405: 53 + 10 + 8 + 5 on-aired, 20 + 4 + 6 + 3 done.
+    expect(within(card).getByTestId('dt-flow-readout')).toHaveTextContent('فروردین 1405')
+    expect(within(card).getByTestId('dt-flow-readout')).toHaveTextContent(
+      'Running: 76 on-aired, 33 done, gap 43',
+    )
+
+    fireEvent.mouseLeave(chart)
+    expect(within(card).getByTestId('dt-flow-readout')).toHaveTextContent('اردیبهشت 1405')
+  })
+
+  it("keeps the chart's notes behind the header's info icon, not under the chart", async () => {
+    serve()
+    draw()
+
+    const card = await section('Where this is going')
+    expect(card.querySelector('.dt-flowcard .dt-note')).toBeNull()
+    const note = within(card).getByText(
+      /The running total starts from the opening balance on 1 Farvardin 1404/,
+    )
+    // 53 on air and 20 done open the chart; the floor is the round number
+    // under 85% of the lower one, 10.
+    expect(note).toHaveTextContent('The scale starts at 10, not zero.')
+    expect(note).not.toBeVisible()
+
+    await userEvent.click(within(card).getByRole('button', { name: 'How this chart is drawn' }))
+    expect(note).toBeVisible()
   })
 
   it('foots each month with what it did to the backlog', async () => {
@@ -2204,29 +2114,56 @@ describe('the trend section', () => {
     expect(header.querySelector('b')).toHaveStyle({ color: 'var(--dt-done)' })
   })
 
-  it('says which flows are measured and which are derived', async () => {
+  it('says which flows are measured and which are derived, behind its info icon', async () => {
+    // Moved off the card into the icon, which is a toggletip rather than a
+    // hover tooltip: hover does not exist on a tablet, and this note is the
+    // only place the chart says which of its four numbers are estimates.
     serve()
     draw()
 
     const card = await section('What moved')
-    expect(within(card).getByText(/Arrivals are derived from the/)).toBeInTheDocument()
+    const note = within(card).getByText(/Arrivals are derived from the/)
+    expect(note).not.toBeVisible()
+
+    await userEvent.click(within(card).getByRole('button', { name: /how what moved is counted/i }))
+    expect(note).toBeVisible()
+
+    await userEvent.keyboard('{Escape}')
+    expect(note).not.toBeVisible()
   })
 
-  it('foots the ledger with arrivals, completions and the net change, scale note pushed to the end', async () => {
+  it('closes the note on a press anywhere else', async () => {
     serve()
     draw()
 
     const card = await section('What moved')
-    const foot = card.querySelector('.dt-flow-foot')
-    expect(within(foot).getByText('Arrived on air')).toBeInTheDocument()
-    expect(within(foot).getByText('Drive tests done')).toBeInTheDocument()
-    expect(within(foot).getByText('Net change')).toBeInTheDocument()
-    // 70 opened, 60 closed: net change is -10, the same figure the header
-    // states — see "carries the month's net movement in the card header".
-    const netStat = within(foot).getByText('Net change').closest('.dt-flow-stat')
-    expect(within(netStat).getByText('-10')).toBeInTheDocument()
-    // Last child of the footer, after every stat.
-    expect(foot.lastElementChild).toHaveClass('dt-flow-floor')
+    const button = within(card).getByRole('button', { name: /how what moved is counted/i })
+    await userEvent.click(button)
+    expect(button).toHaveAttribute('aria-expanded', 'true')
+
+    // Moving off it does not close a note that was opened on purpose -- only
+    // hover-opened ones follow the pointer. (The unhover is explicit because
+    // user-event sends no pointer-out when moving to the button's own
+    // ancestor, which a real pointer leaving the icon always does.)
+    await userEvent.unhover(button)
+    expect(button).toHaveAttribute('aria-expanded', 'true')
+
+    await userEvent.click(document.body)
+    expect(button).toHaveAttribute('aria-expanded', 'false')
+  })
+
+  it('states the floor the bars are drawn from, since it is not zero', async () => {
+    // The footer that used to carry this is gone with the stat row, which
+    // repeated figures the bars already print. The floor is the one thing
+    // from it that the bars cannot say for themselves, so it moved into the
+    // note -- computed by the same `flowScale` the bars are drawn with.
+    // 70 -> 74 -> 60: padded by 35% of the 14 span and rounded, 55.
+    serve()
+    draw()
+
+    const card = await section('What moved')
+    expect(card.querySelector('.dt-flow-foot')).toBeNull()
+    expect(within(card).getByText(/The scale starts at 55, not zero/)).toBeInTheDocument()
   })
 
   it('hides the ledger when no month has one', async () => {
@@ -2235,6 +2172,119 @@ describe('the trend section', () => {
 
     await screen.findByText('Drive Test Overview')
     await waitFor(() => expect(screen.queryByText('What moved')).not.toBeInTheDocument())
+  })
+})
+
+describe('PIP this month', () => {
+  const tile = (card, label) =>
+    within(card).getByText(label, { selector: 'dt' }).closest('.dt-pip-tile')
+
+  it('states plan, assigned, remaining and achieved, in that order, from the payload', async () => {
+    // 16 planned, 9 assigned, 6 delivered. Remaining is the old card's
+    // "Short by", arithmetic unchanged: 16 - 6 = 10.
+    serve()
+    draw()
+
+    const card = await section('PIP this month')
+    const labels = [...card.querySelectorAll('.dt-pip-tile dt')].map((d) => d.textContent)
+    expect(labels).toEqual(['Plan', 'Assigned', 'Remaining', 'Achieved'])
+    expect(within(tile(card, 'Plan')).getByText('16')).toBeInTheDocument()
+    expect(within(tile(card, 'Assigned')).getByText('9')).toBeInTheDocument()
+    expect(within(tile(card, 'Remaining')).getByText('10')).toBeInTheDocument()
+    expect(within(tile(card, 'Achieved')).getByText('6')).toBeInTheDocument()
+  })
+
+  it('is short by nothing, not by a negative, when delivery overshot the plan', async () => {
+    serve(planDelivery({ pip: 4, actual: 6, achievement_percent: 150 }))
+    draw()
+
+    const card = await section('PIP this month')
+    expect(within(tile(card, 'Remaining')).getByText('0')).toBeInTheDocument()
+  })
+
+  it('reads a month with nothing committed as nothing committed, not as a failure', async () => {
+    // No approved PIP: the figures go to the softest ink, Remaining is a
+    // dash because there is nothing to be short of, there is no rate to pace,
+    // and the sentence says which of the two a zero here means.
+    serve(
+      planDelivery({
+        pip: 0,
+        assigned: 0,
+        actual: 0,
+        achievement_percent: null,
+        committed_contractors: 0,
+        uncommitted_contractors: 3,
+        rows: [],
+      }),
+    )
+    draw()
+
+    const card = await section('PIP this month')
+    expect(card.querySelector('.dt-pip-tiles')).toHaveClass('is-uncommitted')
+    expect(within(tile(card, 'Remaining')).getByText('—')).toBeInTheDocument()
+    expect(within(card).queryByTestId('dt-pip-progress-fill')).toBeNull()
+    expect(card).toHaveTextContent(
+      '0 of 3 contractors have an approved PIP, so nothing is committed and nothing is scored.',
+    )
+  })
+
+  it('paces the rate against the month only when something is committed', async () => {
+    serve()
+    draw()
+
+    const card = await section('PIP this month')
+    expect(card.querySelector('.dt-pip-tiles')).not.toHaveClass('is-uncommitted')
+    expect(within(card).getByTestId('dt-pip-progress-fill')).toHaveStyle({ width: '37.5%' })
+    expect(card).toHaveTextContent('3 of 4 contractors have an approved PIP.')
+  })
+
+  it('opens the drive tests delivered this month from Achieved', async () => {
+    serve()
+    draw()
+
+    const card = await section('PIP this month')
+    expect(within(card).getByRole('link', { name: 'Achieved: 6' })).toHaveAttribute(
+      'href',
+      '/drive-test/sites?bucket=delivered&year=1405&month=6',
+    )
+  })
+
+  it('says it is not narrowed when a province filter is applied', async () => {
+    // A PIP carries no province. Narrowing the delivered half alone would
+    // divide one province's delivery by the whole programme's commitment.
+    serve()
+    draw('/reports/drive-test?province=7')
+
+    const card = await section('PIP this month')
+    expect(card.querySelector('.dt-scope-note')).toHaveTextContent(
+      /Not narrowed to .*a PIP is committed per contractor for the whole programme/,
+    )
+  })
+
+  it("gives a contractor the programme average, their only benchmark past their own row", async () => {
+    serve(planDelivery({ programme_achievement_percent: 62.5 }))
+    draw()
+
+    const card = await section('PIP this month')
+    expect(card).toHaveTextContent('Programme average 62.5% across all contractors.')
+  })
+
+  it('offers the monthly plan only to a role that can open it', async () => {
+    // The same list the sidebar gates its Monthly Plan entry on. Admin is a
+    // systems role and is not offered the page anywhere in the interface.
+    serve()
+    const { unmount } = draw()
+    let card = await section('PIP this month')
+    expect(within(card).getByRole('link', { name: 'Monthly plan' })).toHaveAttribute(
+      'href',
+      '/monthly-plan',
+    )
+    unmount()
+
+    serve()
+    draw('/reports/drive-test', { id: 9, username: 'admin', role: { name: 'Admin' } })
+    card = await section('PIP this month')
+    expect(within(card).queryByRole('link', { name: 'Monthly plan' })).toBeNull()
   })
 })
 
@@ -2267,7 +2317,10 @@ describe('the contractor scorecard', () => {
     // without the field renders the figure instead of a dash, and a dash is
     // the worst failure this column has: it is the denominator every rate on
     // the row divides by, so losing it costs the reader the whole row.
-    serve({
+    // The overview is serve()'s second argument. This test used to pass it
+    // first, in the plan slot, so the page kept the unmodified overview and
+    // the fallback below was never exercised.
+    serve(planDelivery(), {
       ...overview,
       contractor_scorecard: overview.contractor_scorecard.map(
         ({ assigned: _assigned, ...rest }) => rest,
@@ -2285,8 +2338,10 @@ describe('the contractor scorecard', () => {
     // "Who is holding the most" and "who has the most problems" are the next
     // two questions asked of this table and both are a column already on it.
     // The unattributed row is not a company, so it cannot out-rank one or be
-    // out-ranked by one, whichever column is chosen.
-    serve()
+    // out-ranked by one, whichever column is chosen. Served without Gamma's
+    // plan row, so every company here has a book -- plan-only companies have
+    // their own test below.
+    serve(planDelivery({ rows: planDelivery().rows.filter((r) => r.contractor_id !== 3) }))
     draw()
 
     const card = await section('Contractor scorecard')
@@ -2321,17 +2376,16 @@ describe('the contractor scorecard', () => {
     expect(header()).toHaveAttribute('aria-sort', 'descending')
   })
 
-  it('has exactly six sort controls: Contractor, Assignment, DT done, Ongoing, Completion, This month PIP', async () => {
+  it('has seven sort controls, ending with this month\'s PIP plan and what was achieved', async () => {
     serve()
     draw()
 
     const card = await section('Contractor scorecard')
-    // "Completion", not "Achievement": Achievement is the Plan and delivery
-    // card's word for delivered-against-PIP, and this is how far a company is
-    // through its own book. One word, two meanings, one page. "This month
-    // PIP" carries the Achievement meaning instead, on the same row as
-    // Completion, so a reader never has to hold a name in mind while they
-    // scroll to compare the two.
+    // "Completion", not "Achieved": Achieved is delivered against this
+    // month's PIP, and Completion is how far a company is through its own
+    // book. The old single "This month PIP" pill is two columns now -- the
+    // commitment and the delivery against it -- because the Plan and
+    // delivery card that carried the counts is gone.
     const labels = within(card)
       .getAllByRole('columnheader')
       .filter((th) => th.querySelector('.dt-sort-btn'))
@@ -2342,7 +2396,8 @@ describe('the contractor scorecard', () => {
       'DT done',
       'Ongoing',
       'Completion',
-      'This month PIP',
+      'PIP plan',
+      'Achieved',
     ])
   })
 
@@ -2366,14 +2421,19 @@ describe('the contractor scorecard', () => {
     expect(within(row).getByText('73%')).toBeInTheDocument()
   })
 
-  it('names Problematic as outside the assignment in a note under the table', async () => {
+  it("names Problematic as outside the assignment, behind the card's info icon", async () => {
+    // A standing definition, so it moved off the card into the icon; the
+    // notes that depend on what is on screen stay under the table.
     serve()
     draw()
 
     const card = await section('Contractor scorecard')
-    expect(card).toHaveTextContent(
-      'Assignment = DT done + Ongoing. Problematic sites are not part of a contractor’s assignment.',
+    const note = within(card).getByText(
+      /Assignment = DT done \+ Ongoing\. Problematic sites are not part of a contractor’s assignment/,
     )
+    expect(note).not.toBeVisible()
+    await userEvent.click(within(card).getByRole('button', { name: 'What the scorecard counts' }))
+    expect(note).toBeVisible()
   })
 
   it('carries this month\'s PIP achievement on the same row, from the Plan and delivery rows', async () => {
@@ -2388,13 +2448,86 @@ describe('the contractor scorecard', () => {
     expect(within(rowFor('Beta Surveys')).getByText('100%')).toBeInTheDocument()
   })
 
-  it('reads "no PIP" for a contractor with no plan row this month, rather than a blank cell', async () => {
-    serve(planDelivery({ rows: [] }))
+  it('reads a dash for plan and achieved where a contractor has no approved PIP', async () => {
+    serve(planDelivery({ rows: [], achievement_percent: null }))
     draw()
 
     const card = await section('Contractor scorecard')
-    const rowFor = (name) => within(card).getByText(name).closest('.dt-contractor-row')
-    expect(within(rowFor('Alfa Drive Tests')).getByText('no PIP')).toBeInTheDocument()
+    const row = within(card).getByText('Alfa Drive Tests').closest('.dt-contractor-row')
+    const cells = row.querySelectorAll('td')
+    // PIP plan and Achieved are the two columns before the action cell.
+    expect(cells[cells.length - 3]).toHaveTextContent('—')
+    expect(cells[cells.length - 2]).toHaveTextContent('—')
+    expect(card).toHaveTextContent('No PIP is approved this month, so PIP plan and Achieved are empty.')
+  })
+
+  it("states each contractor's PIP plan and what they achieved against it", async () => {
+    // Alfa: 4 planned, 3 delivered, 75%. The count opens the drive tests
+    // behind it, as the old card's contractor bar did.
+    serve()
+    draw()
+
+    const card = await section('Contractor scorecard')
+    const row = within(card).getByText('Alfa Drive Tests').closest('.dt-contractor-row')
+    const cells = row.querySelectorAll('td')
+    expect(cells[cells.length - 3]).toHaveTextContent('4')
+    const achieved = row.querySelector('.dt-pip-achieved')
+    expect(achieved.querySelector('.dt-pill')).toHaveTextContent('75%')
+    expect(within(achieved).getByText('3').closest('a')).toHaveAttribute(
+      'href',
+      '/drive-test/sites?bucket=delivered&contractor_id=1&year=1405&month=6',
+    )
+  })
+
+  it('lists a contractor with a PIP and no work yet, unranked, rather than dropping them', async () => {
+    // Gamma has an approved PIP (10) and no drive tests done or ongoing, so
+    // the scorecard's own rows do not include it. The old card listed it;
+    // deleting that card must not make its PIP disappear.
+    serve()
+    draw()
+
+    const card = await section('Contractor scorecard')
+    expect(rowNames(card)).toEqual([
+      'Alfa Drive Tests',
+      'Beta Surveys',
+      'Gamma Networks',
+      'Unattributed',
+    ])
+    const row = within(card).getByText('Gamma Networks').closest('.dt-contractor-row')
+    // No book, so no completion to rank by: no number, and nobody else's moves.
+    expect(row.querySelector('.dt-rank-badge-empty')).not.toBeNull()
+    // Its PIP is there in full: 10 planned, 1 delivered, 10%.
+    const cells = row.querySelectorAll('td')
+    expect(cells[cells.length - 3]).toHaveTextContent('10')
+    const achieved = row.querySelector('.dt-pip-achieved')
+    expect(within(achieved).getByText('1')).toBeInTheDocument()
+    expect(achieved.querySelector('.dt-pill')).toHaveTextContent('10%')
+  })
+
+  it('keeps a delivered count with no rate where nothing was approved to score it against', async () => {
+    serve(
+      planDelivery({
+        rows: [{ contractor_id: 1, name: 'Alfa Drive Tests', pip: 0, actual: 2, achievement_percent: null }],
+      }),
+    )
+    draw()
+
+    const card = await section('Contractor scorecard')
+    const row = within(card).getByText('Alfa Drive Tests').closest('.dt-contractor-row')
+    const achieved = row.querySelector('.dt-pip-achieved')
+    expect(achieved).toHaveTextContent(/^2$/)
+    expect(achieved.querySelector('.dt-pill')).toBeNull()
+  })
+
+  it('says the PIP columns are programme-wide when narrowed, and adds no plan-only rows', async () => {
+    serve()
+    draw('/reports/drive-test?province=7')
+
+    const card = await section('Contractor scorecard')
+    expect(card).toHaveTextContent(
+      'PIP plan and Achieved cover every province: a PIP is committed per contractor for the whole programme.',
+    )
+    expect(within(card).queryByText('Gamma Networks')).toBeNull()
   })
 
   it('gives the unattributed row an Assign action, and no other row one', async () => {

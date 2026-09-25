@@ -83,7 +83,7 @@ export function useDashboard() {
       api
         // No province: a PIP is a contractor's commitment for a month and
         // carries none, so there is no province figure to narrow to. See the
-        // note in `PlanDelivery`, which says so on the card.
+        // note in `PipThisMonth`, which says so on the card.
         .get('/drive-test/plan-delivery')
         .then((r) => fresh(setPlan)({ data: r.data, error: false, loading: false }))
         .catch(() => fresh(setPlan)({ data: null, error: true, loading: false })),
