@@ -1585,6 +1585,10 @@ class AcceptanceKpis(BaseModel):
     """Overview KPI cards. Counts are of every (site, village) row in the
     DT-Done هدف universe — duplicates are not removed."""
 
+    # Every هدف village on a live site, drive-tested or not — the head of the
+    # funnel the other three cards are steps of. Defaulted so a cached or
+    # hand-built payload without it still validates.
+    total_onair_villages: int = 0
     total_dt_done_villages: int
     total_ict_approval: int
     # "Remained" is rejected + pending, kept as-is for the consumers that read
@@ -1620,6 +1624,11 @@ class AcceptanceAnalysis(BaseModel):
     villages_needs_attention: int = 0
     villages_in_review: int = 0
     villages_not_filed: int = 0
+    # Remaining, split the way the KPI band shows it: a refusal somebody has
+    # to answer, and a wait somebody has to chase. The pair sums to
+    # total_dt_done_villages - villages_accepted exactly.
+    villages_rejected: int = 0
+    villages_remained: int = 0
 
 
 class ProvinceAcceptanceRow(BaseModel):
@@ -1679,6 +1688,42 @@ class AcceptanceOverview(BaseModel):
     kpis: AcceptanceKpis
     analysis: AcceptanceAnalysis
     provinces: list[ProvinceAcceptanceRow]
+
+
+class AcceptanceSiteRow(BaseModel):
+    """One site behind a dashboard figure, with the villages it counted on it.
+
+    ``villages`` is this site's share of the figure; the four counts under it
+    say what those villages are doing. They are counted over the same
+    selection, so they never exceed it — and for a figure that is already one
+    state (Approved, say) they are simply that state's own count.
+    """
+
+    site_id: int | None = None
+    site_code: str | None = None
+    province_id: int | None = None
+    province: str = "—"
+    villages: int
+    village_names: list[str] = Field(default_factory=list)
+    dt_done: int = 0
+    approved: int = 0
+    rejected: int = 0
+    pending: int = 0
+
+
+class AcceptanceSiteList(BaseModel):
+    """The sites behind one figure on the Acceptance dashboard.
+
+    ``total`` is the figure that was clicked — villages, not sites — computed
+    before the page is cut, so the panel's headline count can be trusted
+    against the card that opened it. ``rows`` is the current page of sites.
+    """
+
+    metric: str
+    label: str
+    total: int
+    site_count: int
+    rows: list[AcceptanceSiteRow]
 
 
 # ----- Acceptance plan: the PM's monthly target, and the trend against it -----

@@ -577,3 +577,194 @@ def test_province_rows_carry_their_id_for_the_drill_through(client):
 
     assert all(row["province_id"] is not None for row in rows)
     assert len({row["province_id"] for row in rows}) == len(rows)
+
+
+# ---------------------------------------------------------------------------
+# The rebuilt KPI band: an on-air head to the funnel, Remaining split into a
+# refusal and a wait, and every quantity opening the sites behind it.
+#
+# These run last because the first of them widens the universe again: a fourth
+# province whose site is live but whose drive test is not finished, which is
+# exactly the population the on-air card counts and no other figure does.
+# ---------------------------------------------------------------------------
+def _seed_onair(db):
+    """A live site whose drive test is not done, plus one that is.
+
+    Nothing seeded above sets ``last_stage`` at all, so before this every
+    village in the fixture is off-air as far as the on-air figure is
+    concerned. That is deliberate: it makes the two numbers this seeds the
+    only ones the on-air assertions can be reading.
+    """
+    from app.models.reference import Province
+    from app.models.workitem import Site, Village, WorkItem
+
+    p4 = Province(name="Prov4")
+    db.add(p4)
+    db.flush()
+    s4 = Site(site_code="S4", province_id=p4.id)
+    db.add(s4)
+    db.flush()
+
+    # Live, drive test not finished: on air, and in no other figure.
+    wi_live = WorkItem(site_id=s4.id, site_type="G", dt_status=None,
+                       last_stage="راه_اندازی_موقت",
+                       requested_technology="2G", current_stage="New")
+    # Live and finished, fully approved: on air *and* in every figure after it.
+    wi_done = WorkItem(site_id=s4.id, site_type="H", dt_status="Done",
+                       last_stage="راه_اندازی_دائم",
+                       requested_technology="2G", current_stage="New")
+    db.add_all([wi_live, wi_done])
+    db.flush()
+
+    v8 = Village(work_item_id=wi_live.id, village_code="V8",
+                 target_classification="هدف")
+    # Not هدف: outside the universe entirely, on air or not.
+    v9 = Village(work_item_id=wi_live.id, village_code="V9",
+                 target_classification="اقماری")
+    v10 = Village(work_item_id=wi_done.id, village_code="V10",
+                  target_classification="هدف",
+                  ict_status="Approved", cra_status="Approved")
+    v10.acceptances = [_acc("2G", "Approved", "Approved")]
+    db.add_all([v8, v9, v10])
+    db.commit()
+
+
+def test_onair_villages_count_live_sites_drive_tested_or_not(client):
+    """The head of the funnel is wider than the DT-Done universe under it.
+
+    It is the same "live site" test the Drive Test dashboard's On air card
+    applies — the last completed stage — so the two pages cannot disagree
+    about which sites are on air.
+    """
+    from app.services.acceptance_analytics import AcceptanceAnalytics
+    from app.services.snapshots import _SystemScope
+
+    db = SessionLocal()
+    _seed_onair(db)
+    kpis = AcceptanceAnalytics(db, _SystemScope()).compute_kpis()
+    db.close()
+
+    # V8 (live, not drive-tested) and V10 (live, done). V9 is اقماری, and
+    # every other seeded work item has no last stage at all.
+    assert kpis["total_onair_villages"] == 2
+    # V10 joins the DT-Done universe; V8 cannot, because acceptance does not
+    # start until the drive test does.
+    assert kpis["total_dt_done_villages"] == 7
+
+
+def test_remaining_splits_into_rejected_and_remained(client):
+    """Approved + rejected + remained is the whole DT-Done universe.
+
+    The two halves are a partition of what the Approved card leaves behind, so
+    a reader can add the band up across the page and land exactly on the first
+    figure in it. A village with a standing refusal from either authority is
+    the rejected half; everything else outstanding is the wait.
+    """
+    from app.services.acceptance_analytics import AcceptanceAnalytics
+    from app.services.snapshots import _SystemScope
+
+    db = SessionLocal()
+    scope = AcceptanceAnalytics(db, _SystemScope())
+    analysis = scope.compute_analysis()
+    universe = scope.compute_kpis()["total_dt_done_villages"]
+    db.close()
+
+    accepted = analysis["villages_accepted"]
+    assert accepted == 1                       # V10, the only one closed
+    assert analysis["villages_rejected"] == 1  # V6, refused by both
+    assert analysis["villages_remained"] == universe - accepted - 1
+    assert (
+        accepted + analysis["villages_rejected"] + analysis["villages_remained"]
+        == universe
+    )
+
+
+def test_site_rows_count_the_villages_the_figure_counted(client):
+    """Each figure's list totals the figure, and names the sites behind it."""
+    from app.services.acceptance_analytics import SITE_METRICS, AcceptanceAnalytics
+    from app.services.snapshots import _SystemScope
+
+    db = SessionLocal()
+    scope = AcceptanceAnalytics(db, _SystemScope())
+    kpis = scope.compute_kpis()
+    analysis = scope.compute_analysis()
+    lists = {metric: scope.site_rows(metric) for metric in SITE_METRICS}
+    db.close()
+
+    expected = {
+        "onair": kpis["total_onair_villages"],
+        "dt_done": kpis["total_dt_done_villages"],
+        "approved": analysis["villages_accepted"],
+        "remaining": kpis["total_dt_done_villages"] - analysis["villages_accepted"],
+        "rejected": analysis["villages_rejected"],
+        "remained": analysis["villages_remained"],
+    }
+    for metric, total in expected.items():
+        data = lists[metric]
+        # The promise the panel makes: its headline is the figure that opened
+        # it, and the village counts on the rows add back up to that headline.
+        assert data["total"] == total, metric
+        assert sum(row["villages"] for row in data["rows"]) == total, metric
+        assert data["site_count"] == len(data["rows"]), metric
+
+    # The rejected list is S3's alone (V6), and it names the site by its code.
+    assert [r["site_code"] for r in lists["rejected"]["rows"]] == ["S3"]
+    # The approved list is S4's (V10), with its province named for the reader.
+    approved_rows = lists["approved"]["rows"]
+    assert [r["site_code"] for r in approved_rows] == ["S4"]
+    assert approved_rows[0]["province"] == "Prov4"
+    assert approved_rows[0]["approved"] == 1
+    # Sites come back in site-code order, which is how a list of ids is read.
+    codes = [r["site_code"] for r in lists["onair"]["rows"]]
+    assert codes == sorted(codes)
+
+
+def test_site_rows_refuse_a_metric_they_do_not_have(client):
+    """An unknown figure is an error, never an empty list.
+
+    A list that silently answers a different question from the one asked is
+    the failure this whole drill-through exists to prevent.
+    """
+    from app.services.acceptance_analytics import AcceptanceAnalytics
+    from app.services.snapshots import _SystemScope
+
+    db = SessionLocal()
+    with pytest.raises(ValueError):
+        AcceptanceAnalytics(db, _SystemScope()).site_rows("everything")
+    db.close()
+
+
+def test_sites_endpoint_and_its_export(client):
+    r = client.get("/api/v1/acceptance/sites?metric=approved")
+    assert r.status_code == 401
+
+    token = client.post(
+        "/api/v1/auth/login", data=login_form(client)
+    ).json()["access_token"]
+    auth = {"Authorization": f"Bearer {token}"}
+
+    r = client.get("/api/v1/acceptance/sites?metric=approved", headers=auth)
+    assert r.status_code == 200
+    body = r.json()
+    assert body["metric"] == "approved"
+    assert body["total"] == 1
+    assert [row["site_code"] for row in body["rows"]] == ["S4"]
+
+    # A page smaller than the list keeps the server's total, which is the
+    # figure — the panel's count must not become "how many rows fitted".
+    r = client.get("/api/v1/acceptance/sites?metric=onair&limit=1", headers=auth)
+    assert r.status_code == 200
+    page = r.json()
+    assert page["total"] == 2
+    assert len(page["rows"]) == 1
+
+    assert client.get(
+        "/api/v1/acceptance/sites?metric=nonsense", headers=auth
+    ).status_code == 422
+
+    r = client.get("/api/v1/acceptance/sites/export?metric=rejected", headers=auth)
+    assert r.status_code == 200
+    assert "spreadsheetml" in r.headers["content-type"]
+    assert "acceptance-rejected" in r.headers["content-disposition"]
+    # A real workbook, not an error page with the wrong content type.
+    assert r.content[:2] == b"PK"

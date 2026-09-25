@@ -21,6 +21,14 @@ Business rules (agreed with the product owner):
   lives in ``acceptance_workflow.authority_verdict`` — this module reads it
   rather than re-deriving it, so the dashboard and My Work can never disagree
   about a village.
+* On-air villages : the head of the funnel, and the one figure here that is
+  *not* gated on the drive test — every هدف village whose work item is on air
+  (``cpm_columns.is_onair_stage``, the same test the Drive Test dashboard's On
+  air card applies). Everything else on the dashboard is a share of something
+  narrower than it.
+* Remaining : everything not fully accepted, partitioned into a standing
+  refusal from either authority and a wait. Approved + rejected + remained is
+  the DT-Done universe exactly — see ``_remaining_split``.
 * Rejected vs Pending : "remained" is kept as the sum of the two, because a
   province that has been told no needs a different conversation than one still
   waiting for an answer, but the old combined number is still what several
@@ -66,11 +74,18 @@ class _Unit:
 
     ``bucket`` is where My Work would file it, so the dashboard's headline and
     the queue's chips count the same four groups.
+
+    ``site_code`` / ``village_name`` are carried for one reason only: the
+    drill-through list behind every figure names the sites it counted, and it
+    is built from this same universe rather than from a second query — which
+    is what makes the list's length equal to the figure that opened it.
     """
 
     __slots__ = (
         "village_id",
+        "village_name",
         "site_id",
+        "site_code",
         "province_id",
         "ict",
         "cra",
@@ -90,9 +105,14 @@ class _Unit:
         ict_status: str | None,
         cra_status: str | None,
         dt_age: int | None,
+        *,
+        village_name: str | None = None,
+        site_code: str | None = None,
     ) -> None:
         self.village_id = village_id
+        self.village_name = village_name
         self.site_id = site_id
+        self.site_code = site_code
         self.province_id = province_id
         self.ict = ict
         self.cra = cra
@@ -100,6 +120,41 @@ class _Unit:
         self.cra_status = cra_status
         self.dt_age = dt_age
         self.bucket = flow.queue_bucket(ict_status, cra_status)
+
+
+class _Row:
+    """One هدف village row in the *whole* universe, drive-tested or not.
+
+    The KPI band's first card counts on-air villages, which is a wider
+    population than the DT-Done one every other figure is computed over: a
+    village whose site is live but whose drive test is not finished has no
+    acceptance status at all, and so no ``_Unit``. Keeping both in one pass
+    means the funnel — on air → DT done → approved → remaining — is read off
+    a single load, and every step of it can open the sites behind it.
+    """
+
+    __slots__ = ("village_name", "site_id", "site_code", "province_id",
+                 "onair", "unit")
+
+    def __init__(
+        self,
+        village_name: str | None,
+        site_id: int | None,
+        site_code: str | None,
+        province_id: int | None,
+        onair: bool,
+        unit: "_Unit | None",
+    ) -> None:
+        self.village_name = village_name
+        self.site_id = site_id
+        self.site_code = site_code
+        self.province_id = province_id
+        self.onair = onair
+        self.unit = unit
+
+    @property
+    def dt_done(self) -> bool:
+        return self.unit is not None
 
 
 class AcceptanceAnalytics:
@@ -128,18 +183,31 @@ class AcceptanceAnalytics:
         self._province_ids = province_ids
         self._contractor_id = contractor_id
         self._units: list[_Unit] | None = None
+        self._rows: list[_Row] | None = None
         self._village_totals: dict[int | None, int] = {}
 
     # ---------- data loading ----------
     def _load_units(self) -> list[_Unit]:
-        """Build the village-row universe once and cache it.
+        """The DT-Done village rows — what every acceptance figure counts.
 
         One entry per qualifying Village row — duplicates across site-types are
         intentionally kept (product decision): every site-id/village-id row is
         counted independently in every metric.
         """
-        if self._units is not None:
-            return self._units
+        if self._units is None:
+            self._units = [r.unit for r in self._load_rows() if r.unit is not None]
+        return self._units
+
+    def _load_rows(self) -> list[_Row]:
+        """Build the whole هدف village universe once and cache it.
+
+        Wider than :meth:`_load_units` by exactly the villages whose drive test
+        is not finished: the on-air card counts those, everything else does
+        not. One pass builds both, so the funnel's steps can never be loaded
+        from two differently-scoped queries.
+        """
+        if self._rows is not None:
+            return self._rows
 
         stmt = select(WorkItem).where(WorkItem.deleted_at.is_(None))
         stmt = apply_work_item_scope(stmt, self._user, self._db)
@@ -149,13 +217,14 @@ class AcceptanceAnalytics:
         )
         work_items = self._db.execute(stmt).scalars().all()
 
-        units: list[_Unit] = []
+        rows: list[_Row] = []
         # Every هدف village, drive-tested or not. Acceptance cannot start until
         # the drive test is done, so this is the larger number the DT-Done
         # universe is a share of — the funnel the province table now shows.
         village_totals: dict[int | None, int] = defaultdict(int)
         for wi in work_items:
             site_id = wi.site.id if wi.site else None
+            site_code = wi.site.site_code if wi.site else None
             province_id = wi.site.province_id if wi.site else None
             if self._province_ids is not None and province_id not in self._province_ids:
                 continue
@@ -166,16 +235,21 @@ class AcceptanceAnalytics:
                 continue
             dt_done = wi.dt_status == _DT_DONE
             dt_age = flow.dt_age_days(wi) if dt_done else None
+            # The same "live site" test the Drive Test dashboard's On air card
+            # applies (``cpm_columns.is_onair_stage`` on the last completed
+            # stage), so the two pages cannot disagree about which sites are
+            # on air — they differ only in what they count on them, villages
+            # here and sites there.
+            onair = C.is_onair_stage(wi.last_stage)
             for village in wi.villages:
                 if village.deleted_at is not None:
                     continue
                 if not C.is_pure_target(village.target_classification):
                     continue
                 village_totals[province_id] += 1
-                if not dt_done:
-                    continue  # acceptance only applies once the drive test is done
-                units.append(
-                    _Unit(
+                unit = None
+                if dt_done:  # acceptance only applies once the drive test is done
+                    unit = _Unit(
                         village.id,
                         site_id,
                         province_id,
@@ -184,12 +258,23 @@ class AcceptanceAnalytics:
                         village.ict_status,
                         village.cra_status,
                         dt_age,
+                        village_name=village.village_name,
+                        site_code=site_code,
+                    )
+                rows.append(
+                    _Row(
+                        village.village_name,
+                        site_id,
+                        site_code,
+                        province_id,
+                        onair,
+                        unit,
                     )
                 )
 
-        self._units = units
+        self._rows = rows
         self._village_totals = dict(village_totals)
-        return units
+        return rows
 
     # ---------- KPI cards ----------
     def compute_kpis(self) -> dict:
@@ -204,6 +289,13 @@ class AcceptanceAnalytics:
         ict = _verdict_counts(v.ict for v in units)
         cra = _verdict_counts(v.cra for v in units)
         return {
+            # The head of the funnel: every هدف village on a live site,
+            # whether or not its drive test is finished. It is the only figure
+            # in the band that is not a share of the DT-Done universe, and it
+            # is what makes the rest legible — a programme with 1,000 villages
+            # approved out of 1,200 drive-tested reads very differently when
+            # 4,000 are on air.
+            "total_onair_villages": sum(1 for r in self._load_rows() if r.onair),
             "total_dt_done_villages": total,
             "total_ict_approval": ict[APPROVED],
             "total_ict_remained": total - ict[APPROVED],
@@ -424,6 +516,73 @@ class AcceptanceAnalytics:
         rows = self._db.query(Province).filter(Province.id.in_(clean_ids)).all()
         return {p.id: p.name for p in rows}
 
+    # ---------- the sites behind one figure ----------
+    def site_rows(self, metric: str) -> dict:
+        """The sites behind one KPI figure, and the villages it counted on each.
+
+        Every quantity on the dashboard opens this. It is computed from the
+        same universe the figure itself was — :meth:`_load_rows` — rather than
+        from a second query written to match, which is the only way the two can
+        be guaranteed to agree. ``total`` is therefore the figure that was
+        clicked, exactly, and the rows below it are the sites those villages
+        sit on.
+
+        Sites, not villages, because a site id is what a person acts on: it is
+        what they look up, what they put in a mail to a contractor and what the
+        drive test and health check screens are keyed by. The village count
+        rides on the row so the list still adds up to the figure.
+        """
+        if metric not in SITE_METRICS:
+            raise ValueError(f"metric must be one of: {', '.join(SITE_METRICS)}")
+        selected = [r for r in self._load_rows() if _METRIC_PREDICATE[metric](r)]
+
+        by_site: dict[tuple, dict] = {}
+        for row in selected:
+            key = (row.site_id, row.site_code)
+            entry = by_site.get(key)
+            if entry is None:
+                entry = by_site[key] = {
+                    "site_id": row.site_id,
+                    "site_code": row.site_code,
+                    "province_id": row.province_id,
+                    "villages": 0,
+                    "village_names": [],
+                    "dt_done": 0,
+                    "approved": 0,
+                    "rejected": 0,
+                    "pending": 0,
+                }
+            entry["villages"] += 1
+            if row.village_name:
+                entry["village_names"].append(row.village_name)
+            unit = row.unit
+            if unit is None:
+                continue
+            entry["dt_done"] += 1
+            if unit.bucket == flow.BUCKET_CLOSED:
+                entry["approved"] += 1
+            elif REJECTED in (unit.ict, unit.cra):
+                entry["rejected"] += 1
+            else:
+                entry["pending"] += 1
+
+        names = self._province_names([e["province_id"] for e in by_site.values()])
+        rows = []
+        for entry in by_site.values():
+            entry["province"] = names.get(entry["province_id"], "—")
+            rows.append(entry)
+        # By site code, which is the order a reader scans a list of ids in. A
+        # site with no code sorts last rather than first, where it would be
+        # the first thing read and the least useful.
+        rows.sort(key=lambda r: (r["site_code"] is None, r["site_code"] or "", r["site_id"] or 0))
+        return {
+            "metric": metric,
+            "label": METRIC_LABEL[metric],
+            "total": len(selected),
+            "site_count": len(rows),
+            "rows": rows,
+        }
+
     # ---------- assembly ----------
     def build(self) -> dict:
         return {
@@ -431,6 +590,41 @@ class AcceptanceAnalytics:
             "analysis": self.compute_analysis(),
             "provinces": self.compute_provinces(),
         }
+
+
+#: The KPI band's figures, as the drill-through list names them.
+#:
+#: One key per quantity on the page, because every quantity opens its own
+#: list. They are not independent filters that could be combined: each is a
+#: figure the band already shows, and naming them one-for-one is what keeps
+#: the panel's count equal to the number that was clicked.
+SITE_METRICS = ("onair", "dt_done", "approved", "remaining", "rejected", "remained")
+
+#: What the panel calls each figure, in the words the card used.
+METRIC_LABEL = {
+    "onair": "on-air villages",
+    "dt_done": "drive-test done villages",
+    "approved": "approved villages",
+    "remaining": "remaining villages",
+    "rejected": "rejected villages",
+    "remained": "villages still waiting",
+}
+
+
+def _is_remaining(row) -> bool:
+    return row.dt_done and row.unit.bucket != flow.BUCKET_CLOSED
+
+
+#: Which village rows each figure counted. Written once, here, and read by
+#: both the figure and the list it opens.
+_METRIC_PREDICATE = {
+    "onair": lambda r: r.onair,
+    "dt_done": lambda r: r.dt_done,
+    "approved": lambda r: r.dt_done and r.unit.bucket == flow.BUCKET_CLOSED,
+    "remaining": _is_remaining,
+    "rejected": lambda r: _is_remaining(r) and REJECTED in (r.unit.ict, r.unit.cra),
+    "remained": lambda r: _is_remaining(r) and REJECTED not in (r.unit.ict, r.unit.cra),
+}
 
 
 def _village_partition(units) -> dict[str, int]:
@@ -458,7 +652,41 @@ def _village_partition(units) -> dict[str, int]:
         "villages_needs_attention": counts[flow.BUCKET_NEEDS_ATTENTION],
         "villages_in_review": counts[flow.BUCKET_AWAITING_REVIEW],
         "villages_not_filed": counts[flow.BUCKET_READY],
+        **_remaining_split(units),
     }
+
+
+def _remaining_split(units) -> dict[str, int]:
+    """What is left, in the two halves the KPI band now shows: refused, waiting.
+
+    "Remaining" is everything not fully accepted, and a reader given one
+    number cannot tell the two situations in it apart. A refusal is the
+    programme's to answer — somebody has to change something and re-file. A
+    wait is the office's to finish, and chasing it is a phone call. They need
+    different people on different days, so the card names both.
+
+    Rejected is the *verdict*, not the queue status: one requested technology
+    refused refuses the village (``authority_verdict``), by either authority.
+    That is the same rule the ICT and CRA rejected figures already count by,
+    and it is what the drill-through list filters on, so the two agree. A
+    village already re-filed after a refusal still reads Rejected here,
+    because the refusal is still the thing standing between it and approval.
+
+    The two sum to remaining exactly — they are a partition of "not accepted",
+    taken against the same ``villages_accepted`` the Approved card shows, so
+    approved + rejected + remained is the DT-Done total with nothing left
+    over and nothing counted twice.
+    """
+    rejected = 0
+    remained = 0
+    for unit in units:
+        if unit.bucket == flow.BUCKET_CLOSED:
+            continue
+        if REJECTED in (unit.ict, unit.cra):
+            rejected += 1
+        else:
+            remained += 1
+    return {"villages_rejected": rejected, "villages_remained": remained}
 
 
 def _verdict_counts(verdicts) -> dict[str, int]:
