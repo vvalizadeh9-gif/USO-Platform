@@ -10,6 +10,7 @@ from app.models.acceptance import (
     SnapshotContractorCompletion,
     letter_villages,
 )
+from app.models.acceptance_plan import AcceptanceMonthlyTarget
 from app.models.acceptance_workflow import (
     AcceptanceEvidence,
     AcceptanceSubmission,
@@ -46,6 +47,7 @@ from app.models.workitem import (
 
 __all__ = [
     "Acceptance",
+    "AcceptanceMonthlyTarget",
     "AcceptanceEvidence",
     "AcceptanceSubmission",
     "AcceptanceSubmissionTech",

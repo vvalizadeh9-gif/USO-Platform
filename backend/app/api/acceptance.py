@@ -14,19 +14,31 @@ authorises, and holds no rules of its own.
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
-from app.core import audit_actions
+from app.core import audit_actions, jalali
 from app.core.database import get_db
-from app.core.deps import get_current_user
+from app.core.deps import PM, get_current_user, require_roles
 from app.models.reference import Province, User
 from app.schemas import (
     AcceptanceAnalysis,
     AcceptanceKpis,
     AcceptanceOverview,
+    AcceptancePlanPeriod,
+    AcceptancePlanResponse,
+    AcceptancePlanUpdate,
+    AcceptanceTrendMonth,
+    AcceptanceTrendsResponse,
     ProvinceAcceptanceRow,
 )
+from app.services import acceptance_plan
 from app.services.acceptance_analytics import AcceptanceAnalytics
 
 router = APIRouter(prefix="/acceptance", tags=["acceptance"])
+
+#: The target is a PM's to set, mirroring ``api/monthly_plan.py``'s own local
+#: alias of the same guard -- re-declared here rather than imported from that
+#: sibling module, which is this codebase's existing convention for a
+#: one-line role alias.
+require_pm = require_roles(PM)
 
 
 def _resolve_province_filter(
@@ -81,6 +93,143 @@ def acceptance_overview(
         kpis=AcceptanceKpis(**data["kpis"]),
         analysis=AcceptanceAnalysis(**data["analysis"]),
         provinces=[ProvinceAcceptanceRow(**row) for row in data["provinces"]],
+    )
+
+
+# ---------------------------------------------------------------------------
+# Acceptance plan: the PM's monthly target, and the trend it is measured
+# against.
+# ---------------------------------------------------------------------------
+def _plan_names(db: Session, targets: list) -> dict[int, str]:
+    ids = {t.set_by for t in targets if t.set_by is not None}
+    if not ids:
+        return {}
+    from sqlalchemy import select as _select
+
+    return dict(
+        db.execute(_select(User.id, User.full_name).where(User.id.in_(ids))).all()
+    )
+
+
+def _plan_period(target, names: dict[int, str]) -> AcceptancePlanPeriod:
+    return AcceptancePlanPeriod(
+        shamsi_year=target.shamsi_year,
+        shamsi_month=target.shamsi_month,
+        label=jalali.month_name(target.shamsi_month),
+        target_count=target.target_count,
+        set_by=names.get(target.set_by),
+        set_at=target.set_at,
+        note=target.note,
+    )
+
+
+@router.get("/plan", response_model=AcceptancePlanResponse)
+def acceptance_plan_view(
+    months: int = Query(12, ge=1, le=acceptance_plan.MAX_HISTORY_MONTHS),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> AcceptancePlanResponse:
+    """The programme's acceptance target: this month's, last month's, history.
+
+    Same read permission as ``/overview`` -- anyone who can see the dashboard
+    can see the plan it is measured against. Only a PM may change it (see
+    ``PUT /plan``).
+    """
+    year, month = jalali.current_shamsi_period()
+    current = acceptance_plan.get_current_target(db, year, month)
+
+    # The period to look "previous" up against is the current target's own
+    # period when one is set, or the running month otherwise -- so a
+    # programme with no target yet still gets a sensible (empty) previous
+    # rather than one computed off an arbitrary period.
+    base_year, base_month = (
+        (current.shamsi_year, current.shamsi_month) if current is not None
+        else (year, month)
+    )
+    prev_year, prev_month = jalali.previous_period(base_year, base_month)
+    previous = acceptance_plan.get_current_target(db, prev_year, prev_month)
+
+    history = acceptance_plan.recent_targets(
+        db, upto_year=year, upto_month=month, months=months
+    )
+    names = _plan_names(db, [t for t in (current, previous) if t] + history)
+
+    return AcceptancePlanResponse(
+        current=_plan_period(current, names) if current is not None else None,
+        previous=_plan_period(previous, names) if previous is not None else None,
+        history=[_plan_period(t, names) for t in history],
+    )
+
+
+@router.put("/plan", response_model=AcceptancePlanPeriod)
+def set_acceptance_plan(
+    payload: AcceptancePlanUpdate,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_pm),
+) -> AcceptancePlanPeriod:
+    """Set the programme's cumulative acceptance target for one Shamsi month.
+
+    PM only. Always appends a new version -- see
+    ``services/acceptance_plan.set_target`` and the module docstring on
+    ``models/acceptance_plan.py`` for why there is no in-place edit.
+    """
+    before = acceptance_plan.get_current_target(
+        db, payload.shamsi_year, payload.shamsi_month
+    )
+    before_snapshot = (
+        {"target_count": before.target_count, "version": before.version}
+        if before is not None else None
+    )
+    try:
+        target = acceptance_plan.set_target(
+            db,
+            year=payload.shamsi_year,
+            month=payload.shamsi_month,
+            target_count=payload.target_count,
+            user=user,
+            note=payload.note,
+        )
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from None
+
+    record_audit(
+        db, user_id=user.id, action=audit_actions.CREATED,
+        module="Acceptance",
+        entity_type="AcceptanceMonthlyTarget", entity_id=target.id,
+        old_value=before_snapshot,
+        new_value={
+            "shamsi_year": target.shamsi_year,
+            "shamsi_month": target.shamsi_month,
+            "target_count": target.target_count,
+            "version": target.version,
+        },
+        reason=target.note,
+    )
+    db.commit()
+    db.refresh(target)
+    names = _plan_names(db, [target])
+    return _plan_period(target, names)
+
+
+@router.get("/trends", response_model=AcceptanceTrendsResponse)
+def acceptance_trends(
+    coordinator_id: int | None = Query(default=None),
+    regional_manager_id: int | None = Query(default=None),
+    contractor_id: int | None = Query(default=None),
+    months: int = Query(9, ge=1, le=acceptance_plan.MAX_HISTORY_MONTHS),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> AcceptanceTrendsResponse:
+    """Monthly pace of ICT/CRA/full acceptance, for this user's scope.
+
+    Same scope resolution as ``/overview``, and the same read permission.
+    """
+    province_ids = _resolve_province_filter(db, coordinator_id, regional_manager_id)
+    months_data = acceptance_plan.monthly_approval_trend(
+        db, user, province_ids=province_ids, contractor_id=contractor_id, months=months
+    )
+    return AcceptanceTrendsResponse(
+        months=[AcceptanceTrendMonth(**m) for m in months_data]
     )
 
 

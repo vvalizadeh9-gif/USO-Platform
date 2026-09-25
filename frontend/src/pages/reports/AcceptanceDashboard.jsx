@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from 'framer-motion'
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   AlertTriangle,
@@ -20,29 +20,10 @@ import {
 import api from '../../api/client'
 import { Loading, PageHead, fadeUp } from '../../components/ui'
 import { AGE_BANDS, AGE_META, ageTone, bandTotal } from './acceptanceAge'
-
-// ICT and CRA get a stable accent colour each, reused across every card and
-// table so the eye can track one authority at a glance when they sit side by
-// side. The verdict colours are the platform's and mean the same thing here as
-// everywhere else: green decided yes, red decided no, amber nobody has said.
-const ICT = 'var(--signal, #4f8cff)'
-const CRA = 'var(--violet, #a06bff)'
-const APPROVED = 'var(--green)'
-const REJECTED = 'var(--red)'
-const PENDING = 'var(--amber)'
-const IDLE = 'var(--text-dim)'
-
-// The washed-out background each accent gets behind an icon chip — the
-// tokens the design system already defines for exactly this, rather than
-// computing a tint ad hoc per use site.
-const WASH = {
-  [ICT]: 'var(--signal-glow)',
-  [CRA]: 'var(--violet-dim)',
-  [APPROVED]: 'var(--green-dim)',
-  [REJECTED]: 'var(--red-dim)',
-  [PENDING]: 'var(--amber-dim)',
-  [IDLE]: 'var(--surface-3)',
-}
+import AcceptancePlanSection from './AcceptancePlanSection'
+import { APPROVED, CRA, ICT, IDLE, PENDING, REJECTED, WASH } from './acceptanceTheme'
+import { KpiHeader } from './KpiHeader'
+import PlanTargetCard from './PlanTargetCard'
 
 const TABS = [
   { key: 'overview', label: 'Overview', icon: LayoutDashboard },
@@ -162,7 +143,7 @@ export default function AcceptanceDashboard() {
           exit={{ opacity: 0, y: -8 }}
           transition={{ duration: 0.2 }}
         >
-          {tab === 'overview' && <OverviewTab data={data} />}
+          {tab === 'overview' && <OverviewTab data={data} filters={appliedFilters} />}
           {tab === 'provinces' && <ProvinceTab provinces={data.provinces} />}
         </motion.div>
       </AnimatePresence>
@@ -309,7 +290,7 @@ function AgeLegend() {
 
 /* ---------------------------------------------------------------- Overview */
 
-function OverviewTab({ data }) {
+function OverviewTab({ data, filters }) {
   const navigate = useNavigate()
   const { kpis, analysis, provinces } = data
   const total = kpis.total_dt_done_villages
@@ -317,6 +298,16 @@ function OverviewTab({ data }) {
   const remaining = total - accepted
   const acceptedPct = total ? Math.round((accepted / total) * 100) : 0
   const remainingPct = total ? Math.round((remaining / total) * 100) : 0
+
+  // The plan is programme-wide — not scoped by this page's regional
+  // manager / coordinator / contractor filters, the same as the KPI
+  // contract in the task brief says of PUT /acceptance/plan — so it is
+  // loaded once here rather than re-fetched on every filter change.
+  const [plan, setPlan] = useState(null)
+  const loadPlan = useCallback(() => {
+    api.get('/acceptance/plan').then((r) => setPlan(r.data)).catch(() => setPlan(null))
+  }, [])
+  useEffect(loadPlan, [loadPlan])
 
   return (
     <>
@@ -326,6 +317,8 @@ function OverviewTab({ data }) {
             {total}
           </div>
         </KpiCard>
+
+        <PlanTargetCard plan={plan} onSaved={loadPlan} />
 
         <KpiCard icon={CheckCircle2} iconColor={APPROVED} label="Fully approved" sub="Both ICT + CRA">
           <button
@@ -386,33 +379,13 @@ function OverviewTab({ data }) {
         ))}
       </div>
 
+      <AcceptancePlanSection total={total} analysis={analysis} kpis={kpis} filters={filters} />
+
       <div className="acc-section"><GitCompareArrows size={13} /> Approval gap</div>
       <ApprovalGap analysis={analysis} />
 
       <div className="mt-16"><TopOutstandingProvinces provinces={provinces} /></div>
     </>
-  )
-}
-
-/** A KPI card's icon + label + sub, factored out since two of the three
- * cards need it above content that differs (a plain number vs. a button). */
-function KpiHeader({ icon: Icon, iconColor, label, sub }) {
-  return (
-    <div className="row" style={{ gap: 9 }}>
-      <span
-        style={{
-          width: 30, height: 30, borderRadius: 8, flexShrink: 0,
-          background: WASH[iconColor] || 'var(--surface-3)',
-          color: iconColor, display: 'grid', placeItems: 'center',
-        }}
-      >
-        <Icon size={15} />
-      </span>
-      <div style={{ minWidth: 0 }}>
-        <div style={{ fontWeight: 600, fontSize: 13.5, whiteSpace: 'nowrap' }}>{label}</div>
-        <div className="dim" style={{ fontSize: 11, whiteSpace: 'nowrap' }}>{sub}</div>
-      </div>
-    </div>
   )
 }
 

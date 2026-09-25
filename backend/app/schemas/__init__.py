@@ -1681,6 +1681,51 @@ class AcceptanceOverview(BaseModel):
     provinces: list[ProvinceAcceptanceRow]
 
 
+# ----- Acceptance plan: the PM's monthly target, and the trend against it -----
+class AcceptancePlanPeriod(BaseModel):
+    """One version of the programme's cumulative acceptance target."""
+
+    shamsi_year: int
+    shamsi_month: int
+    label: str
+    target_count: int
+    set_by: str | None = None
+    set_at: datetime | None = None
+    note: str | None = None
+
+
+class AcceptancePlanResponse(BaseModel):
+    current: AcceptancePlanPeriod | None
+    previous: AcceptancePlanPeriod | None
+    history: list[AcceptancePlanPeriod]
+
+
+class AcceptancePlanUpdate(BaseModel):
+    shamsi_year: int
+    shamsi_month: int
+    target_count: int
+    note: str | None = None
+
+
+class AcceptanceTrendMonth(BaseModel):
+    """One Shamsi month's acceptance pace: new this month, and running totals."""
+
+    shamsi_year: int
+    shamsi_month: int
+    label: str
+    ict_new: int
+    cra_new: int
+    fully_accepted_new: int
+    ict_cumulative: int
+    cra_cumulative: int
+    fully_accepted_cumulative: int
+    target_count: int | None
+
+
+class AcceptanceTrendsResponse(BaseModel):
+    months: list[AcceptanceTrendMonth]
+
+
 # ---------- Admin Dashboard ----------
 class AdminStatsOut(BaseModel):
     active_users_count: int
