@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { flowNotes, labelledMonths } from './flowView'
+import { fitScale, flowNotes, flowView, labelledMonths } from './flowView'
 
 /** Months from Farvardin 1404, `n` of them, as the payload lists them. */
 function monthsFrom1404(n) {
@@ -53,6 +53,64 @@ describe('labelledMonths', () => {
   })
 })
 
+describe('fitScale', () => {
+  it('fits the scale to the values drawn, with a margin, on round steps', () => {
+    // Lines from 1,800 to 3,083 used to sit on 1,000..4,000 -- about 40% of
+    // the plot. Fitted, they use most of it.
+    expect(fitScale([1800, 2400, 3083, 3032])).toEqual({ floor: 1500, ceiling: 3500 })
+  })
+
+  it('never goes below zero', () => {
+    expect(fitScale([0, 5, 40]).floor).toBe(0)
+  })
+
+  it('still draws a scale for a flat series', () => {
+    const { floor, ceiling } = fitScale([500, 500])
+    expect(ceiling).toBeGreaterThan(floor)
+    expect(floor).toBeLessThanOrEqual(500)
+    expect(ceiling).toBeGreaterThanOrEqual(500)
+  })
+})
+
+describe('flowView', () => {
+  const data = {
+    opening: { on_air: 50, dt_done: 20 },
+    months: [
+      { year: 1404, month: 1, on_aired: 10, dt_done: 4, is_open: false },
+      { year: 1404, month: 2, on_aired: 8, dt_done: 6, is_open: false },
+      { year: 1405, month: 1, on_aired: 5, dt_done: 3, is_open: false },
+      { year: 1405, month: 2, on_aired: 4, dt_done: 2, is_open: true },
+    ],
+    not_placed: { on_air: 3, dt_done: 0 },
+  }
+  const totals = (v) => v.points.map((p) => [p.onAir, p.dtDone])
+
+  it('shows every year as one running total from the opening balance', () => {
+    const v = flowView(data, 'all')
+    expect(totals(v)).toEqual([[53, 20], [63, 24], [71, 30], [76, 33], [80, 35]])
+    expect(v.yearActivity).toBeNull()
+  })
+
+  it('zooms to a year without restarting the count', () => {
+    // 1405 opens on the balance 1404 closed with, and every point is a real
+    // running total -- the view this replaces started 1405 at 0/0.
+    const v = flowView(data, 1405)
+    expect(totals(v)).toEqual([[71, 30], [76, 33], [80, 35]])
+    expect(v.months.map((m) => m.month)).toEqual([1, 2])
+    expect(v.yearActivity).toEqual({ onAired: 9, dtDone: 5 })
+  })
+
+  it('opens the first year on the opening balance, undated sites included', () => {
+    const v = flowView(data, 1404)
+    expect(totals(v)).toEqual([[53, 20], [63, 24], [71, 30]])
+    expect(v.yearActivity).toEqual({ onAired: 18, dtDone: 10 })
+  })
+
+  it('falls back to every year for a year the payload does not have', () => {
+    expect(flowView(data, 1399).isAll).toBe(true)
+  })
+})
+
 describe('flowNotes', () => {
   const data = {
     opening: { on_air: 1000, dt_done: 900 },
@@ -63,25 +121,24 @@ describe('flowNotes', () => {
     not_placed: { on_air: 0, dt_done: 7 },
   }
 
-  it('states where the cumulative scale starts, and the undated sites', () => {
-    const notes = flowNotes(data, 'cumulative', null)
-    // 907 done opens the chart (900 + the 7 undated); 85% of it is ~771,
-    // and the round number under that is 500.
+  it('states where the running total starts, where the scale starts, and the undated sites', () => {
+    const notes = flowNotes(data, 'all')
     expect(notes).toContain(
       'The running total starts from the opening balance on 1 Farvardin 1404. ' +
-        'The scale starts at 500, not zero.',
+        'The scale starts at 850, not zero.',
     )
     expect(notes).toContain(
-      '7 sites have no date to place them on the timeline, so they sit in the opening balance.',
+      '7 sites have no date to place them on the timeline, so they sit in the opening ' +
+        'balance, and so in every running total after it.',
     )
   })
 
-  it('describes the year reading, which opens at zero and leaves undated sites out', () => {
-    const notes = flowNotes(data, 'year', 1404)
-    expect(notes).toContain('This counts only 1404, so its gap differs from the cumulative one.')
-    expect(notes.join(' ')).not.toMatch(/scale starts/)
+  it('says a single year is the real running totals, not a restarted count', () => {
+    const notes = flowNotes(data, 1405)
     expect(notes).toContain(
-      '7 sites have no date to place them on the timeline, so they sit outside this year’s count.',
+      'Showing 1405 only. These are the programme’s real running totals, carrying everything ' +
+        'before 1405, so the gap is the real backlog at each month’s end. ' +
+        'The scale starts at 900, not zero.',
     )
   })
 })

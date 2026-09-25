@@ -2339,10 +2339,7 @@ a.dt-contractor-name:hover { text-decoration: underline; text-decoration-color: 
 
 /* ---------- flow chart: on-aired vs DT done ---------- */
 .dt-flowcard { display: grid; gap: 10px; }
-/* Cumulative / Monthly change, in the card header: a segmented control
-   rather than underline tabs, because it switches one chart between two
-   readings rather than moving between panels of different content. */
-.dt-flow-view { display: flex; align-items: center; gap: 8px; }
+/* The segmented control: the trend card's years, the breakdowns' views. */
 .dt-seg {
   display: inline-flex; padding: 2px; border-radius: 7px; background: var(--surface-3);
 }
@@ -2355,11 +2352,6 @@ a.dt-contractor-name:hover { text-decoration: underline; text-decoration-color: 
   box-shadow: var(--shadow-1);
 }
 .dt-seg button:focus-visible { outline: 2px solid var(--dt-ongoing); outline-offset: 1px; }
-.dt-flow-yearselect {
-  padding: 4px 10px; border-radius: 999px;
-  background: var(--surface-2); border: 1px solid var(--border-soft);
-  color: var(--text); font: inherit; font-size: 12.5px; font-variant-numeric: tabular-nums;
-}
 
 /* A plain text row, not a card grid: On-aired / DT done / Gap / Coverage
    were four identical cards competing with the chart underneath them for
@@ -2381,6 +2373,9 @@ a.dt-contractor-name:hover { text-decoration: underline; text-decoration-color: 
   letter-spacing: -0.015em; line-height: 1.1;
 }
 .dt-flowtile .dt-delta { align-self: center; }
+/* A single year's own activity, beside its running totals: a sentence, not a
+   figure, so it takes the note weight rather than a figure's. */
+.dt-flowtile-note { font-size: 12.5px; color: var(--text-muted); font-weight: 500; }
 /* A figure borrows its own series colour, which is what the tile card's top
    rule used to carry -- a reader still gets the colour key before finding
    the legend, without the card chrome around it. */

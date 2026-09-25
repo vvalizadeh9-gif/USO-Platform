@@ -1,49 +1,39 @@
 /**
- * The two readings of "Where this is going", as a segmented control in the
- * card header, with the year picker beside it when a single year is shown.
+ * Which years "Where this is going" shows: each year on its own, or all of
+ * them together, as one segmented control in the card header.
  *
- * It lives in the header rather than in the card body because the page owns
- * which reading is on screen: the header's info note describes the reading
- * too -- where its scale starts, which count it restarts -- and a control and
- * a note that disagree about what is being shown are worse than neither.
+ * It replaces "Cumulative / Monthly change" and a year dropdown that only
+ * appeared on the second tab. That pair asked a reader to learn that
+ * "Monthly change" meant "one year, counted from zero", and the from-zero
+ * count drew a year that tested more than it put on air as coverage over
+ * 100%. Every choice here is the same ledger, zoomed: see `flowView`.
  *
- * Still a tab list, as the underline tabs it replaces were: two views of one
- * panel is what tabs are, whatever they look like.
+ * "All" is labelled with the span it covers -- "1404–1405" -- rather than
+ * "All" or "Both", so it stays true as the programme runs into more years.
+ * With a single year of data there is nothing to choose, and no control.
+ *
+ * Still a tab list: what it switches is the one panel under it.
  */
-export default function FlowViewControl({ tab, onTab, years, year, onYear }) {
+export default function FlowViewControl({ years, scope, onScope }) {
+  if (years.length < 2) return null
+  const options = [
+    ...years.map((y) => ({ key: y, label: String(y) })),
+    { key: 'all', label: `${years[0]}–${years[years.length - 1]}` },
+  ]
   return (
-    <div className="dt-flow-view">
-      <div className="dt-seg" role="tablist" aria-label="How to read the flow">
-        {[
-          { key: 'cumulative', label: 'Cumulative' },
-          { key: 'year', label: 'Monthly change' },
-        ].map((t) => (
-          <button
-            key={t.key}
-            type="button"
-            role="tab"
-            aria-selected={tab === t.key}
-            className={tab === t.key ? 'is-on' : undefined}
-            onClick={() => onTab(t.key)}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
-      {tab === 'year' && years.length > 0 && (
-        <select
-          className="dt-flow-yearselect"
-          aria-label="Year"
-          value={year}
-          onChange={(e) => onYear(Number(e.target.value))}
+    <div className="dt-seg" role="tablist" aria-label="Years shown">
+      {options.map((o) => (
+        <button
+          key={o.key}
+          type="button"
+          role="tab"
+          aria-selected={scope === o.key}
+          className={scope === o.key ? 'is-on' : undefined}
+          onClick={() => onScope(o.key)}
         >
-          {years.map((yr) => (
-            <option key={yr} value={yr}>
-              {yr}
-            </option>
-          ))}
-        </select>
-      )}
+          {o.label}
+        </button>
+      ))}
     </div>
   )
 }

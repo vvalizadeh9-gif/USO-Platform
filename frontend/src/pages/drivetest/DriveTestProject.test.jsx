@@ -1818,37 +1818,67 @@ describe('the flow chart', () => {
     expect(within(card).queryAllByRole('link')).toHaveLength(0)
   })
 
-  it('switches to the current year and restarts the running total at zero', async () => {
+  it('zooms to one year without restarting the count', async () => {
+    // The view this replaces restarted both counts at zero for a year, which
+    // drew a year that tested more than it put on air as coverage over 100%.
+    // A year is now a window onto the same running totals.
     serve()
     draw()
 
     const card = await section('Where this is going')
-    await userEvent.click(within(card).getByRole('tab', { name: 'Monthly change' }))
+    await userEvent.click(within(card).getByRole('tab', { name: '1405' }))
 
-    // 1405 alone: 5+4 on-aired, 3+2 done -- not the 77/35 the cumulative tab
-    // showed a moment ago.
-    expect(within(tile(card, 'On-aired')).getByText('9')).toBeInTheDocument()
-    expect(within(tile(card, 'DT done')).getByText('5')).toBeInTheDocument()
-
-    // The year picker only appears on this tab.
-    expect(within(card).getByRole('combobox', { name: 'Year' })).toBeInTheDocument()
-    // And the header's note describes the reading that is on screen.
+    // Real totals at the end of 1405: 80 on air, 35 done, a gap of 45 --
+    // the same as every year together, because 1405 is the latest year.
+    expect(within(tile(card, 'On-aired')).getByText('80')).toBeInTheDocument()
+    expect(within(tile(card, 'DT done')).getByText('35')).toBeInTheDocument()
+    expect(within(tile(card, 'Gap')).getByText('45')).toBeInTheDocument()
+    // What 1405 itself did, which the from-zero view was the only way to see.
+    expect(within(card).getByTestId('dt-flow-year-activity')).toHaveTextContent(
+      'In 1405+9 on air · +5 done',
+    )
+    // One pill per month of 1405, the same steps as in the full view.
     expect(
-      within(card).getByText('This counts only 1405, so its gap differs from the cumulative one.'),
+      within(card)
+        .getAllByTestId('dt-flow-net')
+        .map((p) => p.querySelector('text').textContent),
+    ).toEqual(['+2', '+2'])
+    expect(
+      within(card).getByText(/Showing 1405 only\. These are the programme’s real running totals/),
     ).toBeInTheDocument()
   })
 
-  it('puts the reading control in the card header, beside the title', async () => {
+  it('zooms to a past year and ends on that year, not today', async () => {
+    serve()
+    draw()
+
+    const card = await section('Where this is going')
+    await userEvent.click(within(card).getByRole('tab', { name: '1404' }))
+
+    // End of 1404: 53 + 10 + 8 on air, 20 + 4 + 6 done.
+    expect(within(tile(card, 'On-aired')).getByText('71')).toBeInTheDocument()
+    expect(within(tile(card, 'DT done')).getByText('30')).toBeInTheDocument()
+    expect(within(tile(card, 'Gap')).getByText('41')).toBeInTheDocument()
+    expect(within(card).getByTestId('dt-flow-year-activity')).toHaveTextContent(
+      '+18 on air · +10 done',
+    )
+    expect(within(card).getByTestId('dt-flow-readout')).toHaveTextContent('اردیبهشت 1404')
+  })
+
+  it('puts the year control in the card header, opening on every year', async () => {
     serve()
     draw()
 
     const card = await section('Where this is going')
     const header = card.querySelector('.dt-section-head')
-    expect(within(header).getByRole('tablist', { name: 'How to read the flow' })).toBeInTheDocument()
-    expect(within(header).getByRole('tab', { name: 'Cumulative' })).toHaveAttribute(
+    const tabs = within(header).getAllByRole('tab').map((t) => t.textContent)
+    expect(tabs).toEqual(['1404', '1405', '1404–1405'])
+    expect(within(header).getByRole('tab', { name: '1404–1405' })).toHaveAttribute(
       'aria-selected',
       'true',
     )
+    // No year activity on the all-years view: it would repeat the totals.
+    expect(within(card).queryByTestId('dt-flow-year-activity')).toBeNull()
   })
 
   it('opens the readout on the latest month rather than leaving it blank', async () => {
@@ -1895,9 +1925,9 @@ describe('the flow chart', () => {
     const note = within(card).getByText(
       /The running total starts from the opening balance on 1 Farvardin 1404/,
     )
-    // 53 on air and 20 done open the chart; the floor is the round number
-    // under 85% of the lower one, 10.
-    expect(note).toHaveTextContent('The scale starts at 10, not zero.')
+    // 20..80 fitted with a margin reaches zero, so this view claims no
+    // truncated scale -- the note only says so when it is true.
+    expect(note).not.toHaveTextContent('The scale starts at')
     expect(note).not.toBeVisible()
 
     await userEvent.click(within(card).getByRole('button', { name: 'How this chart is drawn' }))
