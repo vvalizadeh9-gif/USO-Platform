@@ -264,6 +264,31 @@ def authority_verdict(village: Village, authority: str) -> str:
     return PENDING
 
 
+def authority_verdict_date(village: Village, authority: str) -> date | None:
+    """The date this village's *whole* ICT or CRA verdict became Approved.
+
+    None unless ``authority_verdict(village, authority) == APPROVED``. When it
+    is, this is the latest of the per-technology approval dates -- the date
+    the *last* outstanding technology cleared, which is when the village-level
+    verdict actually flipped to Approved.
+    """
+    if authority_verdict(village, authority) != APPROVED:
+        return None
+    technologies = requested_technologies(village)
+    by_tech = {a.technology: a for a in village.acceptances}
+    field = f"{authority.lower()}_date"
+    dates = [
+        d
+        for d in (getattr(by_tech[t], field) for t in technologies)
+        if d is not None
+    ]
+    # Every technology is guaranteed Approved with a non-null date at this
+    # point -- authority_verdict already confirmed every status is Approved --
+    # but a genuinely None date is guarded against defensively, so a data
+    # inconsistency reads as "no date" rather than crashing the endpoint.
+    return max(dates) if dates else None
+
+
 def village_verdict(village: Village) -> str:
     """Approved only when both authorities approved; Rejected if either did not."""
     ict = authority_verdict(village, "ICT")
