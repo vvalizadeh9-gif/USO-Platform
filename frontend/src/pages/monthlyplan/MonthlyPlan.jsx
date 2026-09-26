@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { EmptyState, PageHead } from '../../components/ui'
 import { useAuth } from '../../context/AuthContext'
 import { canDecidePlans, canSetAcceptancePlan } from '../../lib/roles'
@@ -36,7 +37,13 @@ function ContractorMonthlyPlan() {
   // plan is filed during the month before the month it covers. The running
   // month is on the screen as figures (and its revision block), not as the
   // month picked. Not stored: it is a default the picker can change.
-  const [period, setPeriod] = useState(planningPeriod)
+  // An Action Center link (?year&month) opens the month it is about.
+  const [params] = useSearchParams()
+  const [period, setPeriod] = useState(() => {
+    const year = Number(params.get('year'))
+    const month = Number(params.get('month'))
+    return year && month >= 1 && month <= 12 ? { year, month } : planningPeriod()
+  })
   const complete = Boolean(period?.year && period?.month)
 
   return (

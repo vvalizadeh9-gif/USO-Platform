@@ -27,6 +27,11 @@ const COUNTER_META = {
   // the age matters more than the count and the card says both.
   awaiting_ict: { icon: ShieldCheck, color: 'var(--signal)' },
   awaiting_cra: { icon: Landmark, color: 'var(--violet)' },
+  // Monthly plans: what the PM decides, and what a contractor answers.
+  plans_to_approve: { icon: ClipboardCheck, color: 'var(--blue)' },
+  revisions_to_approve: { icon: GitCompare, color: 'var(--violet)' },
+  plans_returned: { icon: Undo2, color: 'var(--amber)' },
+  plans_missing: { icon: ClipboardList, color: 'var(--amber)' },
 }
 
 // The counters are the page.

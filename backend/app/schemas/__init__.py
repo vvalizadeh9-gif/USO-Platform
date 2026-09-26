@@ -797,7 +797,7 @@ class ActionItem(BaseModel):
     exactly one entity via ``url`` so clicking it goes straight there."""
 
     id: str
-    category: str  # drive_test | assignment | cpm | health_check | event
+    category: str  # drive_test | assignment | cpm | health_check | plan | event
     label: str
     subtitle: str | None = None
     url: str

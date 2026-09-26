@@ -7,6 +7,7 @@
 // the interface offers, which is what decides whether a person can work.
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ToastProvider } from '../../context/ToastContext'
 
@@ -204,7 +205,12 @@ function serve({ my, queue: q, scorecard = SCORECARD, plan = acceptancePlan() })
   })
 }
 
-const show = () => render(<ToastProvider><MonthlyPlan /></ToastProvider>)
+const show = (path = '/monthly-plan') =>
+  render(
+    <MemoryRouter initialEntries={[path]}>
+      <ToastProvider><MonthlyPlan /></ToastProvider>
+    </MemoryRouter>,
+  )
 const showQueue = (canDecide = true) =>
   render(<ToastProvider><PlanQueue period={{ year: 1405, month: 7 }} canDecide={canDecide} /></ToastProvider>)
 
@@ -854,7 +860,7 @@ describe('the acceptance target', () => {
   it('is not offered to a contractor', async () => {
     signedInAs('Contractor')
     serve({ my: context() })
-    render(<ToastProvider><MonthlyPlan /></ToastProvider>)
+    render(<MemoryRouter><ToastProvider><MonthlyPlan /></ToastProvider></MemoryRouter>)
 
     await screen.findByText('Planning مهر 1405')
     expect(screen.queryByText('Acceptance target')).toBeNull()
@@ -1089,5 +1095,28 @@ describe('the PM export', () => {
         responseType: 'blob',
       }),
     )
+  })
+})
+
+describe('links from the Action Center', () => {
+  it('opens the PM on that month, with that plan’s drawer', async () => {
+    signedInAs('PM')
+    serveOverview()
+    show('/monthly-plan?year=1405&month=8&stream=ACCEPTANCE&contractor=1')
+
+    await screen.findByRole('dialog', { name: 'Plan decision' })
+    expect(api.get).toHaveBeenCalledWith('/pip/queue', { params: { year: 1405, month: 8, stream: 'ACCEPTANCE' } })
+    expect(api.get.mock.calls.find(([url]) => url === '/pip/overview')[1].params)
+      .toMatchObject({ period: 'month', year: 1405, month: 8 })
+  })
+
+  it('opens a contractor on the month the item is about', async () => {
+    signedInAs('Contractor')
+    serve({ my: context() })
+    show('/monthly-plan?year=1405&month=6')
+
+    await screen.findByText('Planning مهر 1405')
+    const asked = api.get.mock.calls.filter(([url]) => url === '/pip/my').map(([, c]) => c.params)
+    expect(asked[0]).toMatchObject({ year: 1405, month: 6 })
   })
 })

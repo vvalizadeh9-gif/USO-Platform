@@ -1,5 +1,6 @@
 import { ChevronLeft, ChevronRight, Download } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import api from '../../api/client'
 import { Loading } from '../../components/ui'
 import { useToast } from '../../context/ToastContext'
@@ -43,11 +44,17 @@ const ATTENTION_COLOR = {
 export default function PmPlan({ canDecide, canSetTarget }) {
   const toast = useToast()
   const running = currentShamsiPeriod()
+  // An Action Center link lands here as ?year&month[&stream&contractor]: it
+  // opens that month and, with a contractor, that plan's drawer.
+  const [params] = useSearchParams()
+  const linked = linkedTarget(params)
   const [view, setView] = useState('month')
-  const [period, setPeriod] = useState(running || { year: 0, month: 0 })
+  const [period, setPeriod] = useState(
+    linked ? { year: linked.year, month: linked.month } : running || { year: 0, month: 0 },
+  )
   const [data, setData] = useState(null)
   const [failed, setFailed] = useState(false)
-  const [drawer, setDrawer] = useState(null)
+  const [drawer, setDrawer] = useState(linked?.contractorId ? linked : null)
 
   const load = useCallback(() => {
     setFailed(false)
@@ -207,4 +214,20 @@ export default function PmPlan({ canDecide, canSetTarget }) {
       )}
     </div>
   )
+}
+
+/** The month (and plan) an Action Center link points at, or null. */
+function linkedTarget(params) {
+  const year = Number(params.get('year'))
+  const month = Number(params.get('month'))
+  if (!year || !month || month < 1 || month > 12) return null
+  const contractorId = Number(params.get('contractor')) || null
+  const stream = params.get('stream')
+  return {
+    year,
+    month,
+    contractorId,
+    stream: stream === 'ACCEPTANCE' ? 'ACCEPTANCE' : 'DT',
+    name: '',
+  }
 }
