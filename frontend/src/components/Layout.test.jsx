@@ -5,8 +5,8 @@
 // Planning item at all, and a category owner sees one screen in the whole
 // platform, so an unguarded heading would give both of them a label pointing
 // at empty space.
-import { act, render, screen } from '@testing-library/react'
-import { Link, MemoryRouter } from 'react-router-dom'
+import { act, fireEvent, render, screen } from '@testing-library/react'
+import { Link, MemoryRouter, useLocation } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const HC_QUEUE_COUNTS = {
@@ -224,5 +224,113 @@ describe('when the badges are re-read', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+})
+
+describe('the account menu at the foot of the sidebar', () => {
+  function Where() {
+    return <div data-testid="where">{useLocation().pathname}</div>
+  }
+
+  async function renderAs(roleName, { mustChangePassword = false } = {}) {
+    const logout = vi.fn()
+    mockAuth.current = {
+      user: { full_name: 'Sara Karimi', role: { name: roleName } },
+      logout,
+      isAdmin: roleName === 'Admin',
+      mustChangePassword,
+    }
+    render(
+      <MemoryRouter initialEntries={['/work-items']}>
+        <Layout />
+        <Where />
+        <Link to="/health-check">elsewhere</Link>
+        <p>outside</p>
+      </MemoryRouter>,
+    )
+    await act(async () => {})
+    return logout
+  }
+
+  const accountButton = () => screen.getByRole('button', { name: /Sara Karimi/ })
+
+  it('has no "Your account" section and no Change password link in the nav', async () => {
+    await renderAs('PM')
+    expect(screen.queryByText('Your account')).toBeNull()
+    expect(screen.queryByRole('link', { name: 'Change password' })).toBeNull()
+  })
+
+  it('is a real menu button showing the name and the role in full', async () => {
+    await renderAs('PM')
+    const button = accountButton()
+    expect(button.tagName).toBe('BUTTON')
+    expect(button).toHaveAttribute('aria-haspopup', 'menu')
+    expect(button).toHaveAttribute('aria-expanded', 'false')
+    expect(button).toHaveTextContent('Project Manager')
+    expect(screen.queryByRole('menu')).toBeNull()
+  })
+
+  it('opens with Change password and Log out', async () => {
+    await renderAs('PM')
+    fireEvent.click(accountButton())
+    expect(accountButton()).toHaveAttribute('aria-expanded', 'true')
+    const items = screen.getAllByRole('menuitem').map((el) => el.textContent)
+    expect(items).toEqual(['Change password', 'Log out'])
+  })
+
+  it('closes on a second click', async () => {
+    await renderAs('PM')
+    fireEvent.click(accountButton())
+    fireEvent.click(accountButton())
+    expect(screen.queryByRole('menu')).toBeNull()
+  })
+
+  it('closes on Escape and gives focus back to the button', async () => {
+    await renderAs('PM')
+    fireEvent.click(accountButton())
+    fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' })
+    expect(screen.queryByRole('menu')).toBeNull()
+    expect(accountButton()).toHaveFocus()
+  })
+
+  it('closes on a click outside it', async () => {
+    await renderAs('PM')
+    fireEvent.click(accountButton())
+    fireEvent.mouseDown(screen.getByText('outside'))
+    expect(screen.queryByRole('menu')).toBeNull()
+  })
+
+  it('closes when the page changes', async () => {
+    await renderAs('PM')
+    fireEvent.click(accountButton())
+    await act(async () => { screen.getByText('elsewhere').click() })
+    expect(screen.getByTestId('where')).toHaveTextContent('/health-check')
+    expect(screen.queryByRole('menu')).toBeNull()
+  })
+
+  it('takes Change password to /change-password', async () => {
+    await renderAs('PM')
+    fireEvent.click(accountButton())
+    await act(async () => {
+      fireEvent.click(screen.getByRole('menuitem', { name: 'Change password' }))
+    })
+    expect(screen.getByTestId('where')).toHaveTextContent('/change-password')
+    expect(screen.queryByRole('menu')).toBeNull()
+  })
+
+  it('calls logout from Log out', async () => {
+    const logout = await renderAs('PM')
+    fireEvent.click(accountButton())
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Log out' }))
+    expect(logout).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps the "Set a new password" link while a new password is owed', async () => {
+    const logout = await renderAs('PM', { mustChangePassword: true })
+    const link = screen.getByRole('link', { name: 'Set a new password' })
+    expect(link).toHaveAttribute('href', '/change-password')
+    expect(screen.queryByRole('button', { name: /Sara Karimi/ })).toBeNull()
+    fireEvent.click(screen.getByTitle('Sign out'))
+    expect(logout).toHaveBeenCalledTimes(1)
   })
 })

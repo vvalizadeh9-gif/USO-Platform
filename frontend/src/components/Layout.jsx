@@ -1,11 +1,12 @@
 import { motion } from 'framer-motion'
-import { KeyRound, LogOut, Menu, Settings } from 'lucide-react'
-import { useCallback, useEffect, useState } from 'react'
-import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
+import { ChevronsUpDown, KeyRound, LogOut, Menu, Settings } from 'lucide-react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import BrandMark from './BrandMark'
 import { DATA_CHANGED_EVENT } from '../lib/dataChanged'
 import { DRIVE_TEST_PROJECT, NAV, REPORTS, navItemVisible } from '../lib/nav'
+import { roleLabel } from '../lib/roles'
 import api from '../api/client'
 
 /**
@@ -86,16 +87,126 @@ function SidebarNav({ user, isAdmin, badges }) {
           </NavLink>
         </>
       )}
-
-      <div className="nav-section-label">Your account</div>
-      <NavLink
-        to="/change-password"
-        className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
-      >
-        <KeyRound size={18} strokeWidth={1.75} />
-        <span>Change password</span>
-      </NavLink>
     </>
+  )
+}
+
+/**
+ * The person signed in, and the two things they can do to their own session:
+ * change the password and sign out. One button at the foot of the sidebar
+ * rather than a section of its own, because neither is a place in the work --
+ * they belong with the name, not among the screens.
+ *
+ * A menu that opens upwards: it closes on Escape, a click outside it, or a
+ * change of page, and focus goes back to the button whenever the menu takes
+ * it away (Escape, or choosing an item).
+ */
+function AccountMenu({ user, initials, logout }) {
+  const [open, setOpen] = useState(false)
+  const wrapRef = useRef(null)
+  const buttonRef = useRef(null)
+  const menuRef = useRef(null)
+  const location = useLocation()
+  const navigate = useNavigate()
+
+  const close = useCallback((refocus) => {
+    setOpen(false)
+    if (refocus) buttonRef.current?.focus()
+  }, [])
+
+  // A new page is a choice made; the menu has done its job.
+  useEffect(() => {
+    setOpen(false)
+  }, [location.pathname])
+
+  useEffect(() => {
+    if (!open) return undefined
+    // Focus the first item, so the keyboard lands inside what just opened.
+    menuRef.current?.querySelector('[role="menuitem"]')?.focus()
+    const onPointer = (e) => {
+      if (!wrapRef.current?.contains(e.target)) close(false)
+    }
+    document.addEventListener('mousedown', onPointer)
+    document.addEventListener('touchstart', onPointer)
+    return () => {
+      document.removeEventListener('mousedown', onPointer)
+      document.removeEventListener('touchstart', onPointer)
+    }
+  }, [open, close])
+
+  const onMenuKeyDown = (e) => {
+    if (e.key === 'Escape') {
+      e.preventDefault()
+      close(true)
+      return
+    }
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault()
+      const items = [...menuRef.current.querySelectorAll('[role="menuitem"]')]
+      const i = items.indexOf(document.activeElement)
+      const step = e.key === 'ArrowDown' ? 1 : -1
+      items[(i + step + items.length) % items.length]?.focus()
+    }
+  }
+
+  return (
+    <div className="account" ref={wrapRef}>
+      {open && (
+        <div
+          className="account-menu"
+          role="menu"
+          id="account-menu"
+          aria-label="Account"
+          ref={menuRef}
+          onKeyDown={onMenuKeyDown}
+        >
+          <button
+            type="button"
+            role="menuitem"
+            className="account-menu-item"
+            onClick={() => {
+              close(true)
+              navigate('/change-password')
+            }}
+          >
+            <KeyRound size={16} strokeWidth={1.75} />
+            <span>Change password</span>
+          </button>
+          <div className="account-menu-divider" role="separator" />
+          <button
+            type="button"
+            role="menuitem"
+            className="account-menu-item danger"
+            onClick={() => {
+              close(true)
+              logout()
+            }}
+          >
+            <LogOut size={16} strokeWidth={1.75} />
+            <span>Log out</span>
+          </button>
+        </div>
+      )}
+      <button
+        type="button"
+        ref={buttonRef}
+        className="user-chip account-button"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-controls={open ? 'account-menu' : undefined}
+        onClick={() => setOpen((o) => !o)}
+        onKeyDown={(e) => {
+          if (e.key === 'Escape' && open) close(true)
+        }}
+      >
+        <span className="user-avatar" aria-hidden="true">{initials}</span>
+        <span className="who">
+          <b>{user?.full_name}</b>
+          <small>{roleLabel(user?.role?.name)}</small>
+        </span>
+        <ChevronsUpDown size={16} strokeWidth={1.75} className="account-chevron" aria-hidden="true" />
+      </button>
+    </div>
   )
 }
 
@@ -219,22 +330,25 @@ export default function Layout() {
         )}
 
         <div className="sidebar-footer">
-          <div className="user-chip">
-            <div className="user-avatar">{initials}</div>
-            <div className="who">
-              <b>{user?.full_name}</b>
-              {mustChangePassword ? (
+          {/* While a new password is owed, the chip stays as it was: a link
+              to the one screen that works, and a way out. A menu offering
+              "Change password" there would only repeat the link. */}
+          {mustChangePassword ? (
+            <div className="user-chip">
+              <div className="user-avatar">{initials}</div>
+              <div className="who">
+                <b>{user?.full_name}</b>
                 <Link to="/change-password" style={{ fontSize: 12 }}>
                   Set a new password
                 </Link>
-              ) : (
-                <small>{user?.role?.name}</small>
-              )}
+              </div>
+              <button className="logout-btn" onClick={logout} title="Sign out">
+                <LogOut size={16} />
+              </button>
             </div>
-            <button className="logout-btn" onClick={logout} title="Sign out">
-              <LogOut size={16} />
-            </button>
-          </div>
+          ) : (
+            <AccountMenu user={user} initials={initials} logout={logout} />
+          )}
         </div>
       </aside>
 
