@@ -5,6 +5,8 @@ Keeping this in one constant means a future CPM layout change is a
 single-file edit (maintainability).
 """
 
+import functools
+
 # ----- Master block (A..AT) : refreshed monthly by import -----
 COL = {
     "village_code": 2,          # کد آبادی
@@ -126,8 +128,21 @@ def is_pure_target(value: object) -> bool:
     ``normalize_persian`` so a plain هدف still matches regardless of how it was
     typed, while any parenthetical suffix ("(Verbally)" etc.) fails the match.
     """
+    try:
+        return _is_pure_target_cached(value)
+    except TypeError:  # an unhashable cell value; never seen, but not an error
+        return _is_pure_target(value)
+
+
+def _is_pure_target(value: object) -> bool:
     norm = normalize_persian(clean(value))
     return norm is not None and norm == normalize_persian(TARGET_PURE)
+
+
+# The column holds a handful of distinct values, and the Acceptance dashboard
+# asks about every village on every load -- tens of thousands of times for the
+# same few strings. Remembering the answer per value skips the normalising.
+_is_pure_target_cached = functools.lru_cache(maxsize=1024)(_is_pure_target)
 
 
 # ----- On-air status (column X: آخرین مرحله انجام شده) -----

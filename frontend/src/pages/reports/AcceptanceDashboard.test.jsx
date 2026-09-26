@@ -140,7 +140,7 @@ beforeEach(() => {
   api.get.mockImplementation((url) => {
     if (url === '/acceptance/overview') return Promise.resolve({ data: overview() })
     if (url === '/acceptance/trends') return Promise.resolve({ data: trends() })
-    if (url === '/drivetest/trend') return Promise.resolve({ data: dtTrend() })
+    if (url === '/drive-test/trend') return Promise.resolve({ data: dtTrend() })
     if (url === '/acceptance/sites') return Promise.resolve({ data: sites() })
     return Promise.resolve({ data: [] })
   })
@@ -328,7 +328,7 @@ describe('the sites behind a figure', () => {
     api.get.mockImplementation((url) => {
       if (url === '/acceptance/overview') return Promise.resolve({ data: overview() })
       if (url === '/acceptance/trends') return Promise.resolve({ data: trends() })
-      if (url === '/drivetest/trend') return Promise.resolve({ data: dtTrend() })
+      if (url === '/drive-test/trend') return Promise.resolve({ data: dtTrend() })
       if (url === '/acceptance/sites') {
         return Promise.reject({ response: { data: { detail: 'metric must be one of: onair' } } })
       }
@@ -377,7 +377,7 @@ describe('the acceptance target', () => {
         const t = trends()
         return Promise.resolve({ data: { months: t.months.map((m) => ({ ...m, target_count: null })) } })
       }
-      if (url === '/drivetest/trend') return Promise.resolve({ data: dtTrend() })
+      if (url === '/drive-test/trend') return Promise.resolve({ data: dtTrend() })
       return Promise.resolve({ data: [] })
     })
     page()
@@ -420,11 +420,11 @@ describe('the plan-and-trend widgets', () => {
     expect(screen.getByText('Not started (no approval yet)')).toBeInTheDocument()
   })
 
-  it('does not crash when /acceptance/trends or /drivetest/trend fail', async () => {
+  it('does not crash when /acceptance/trends or /drive-test/trend fail', async () => {
     api.get.mockImplementation((url) => {
       if (url === '/acceptance/overview') return Promise.resolve({ data: overview() })
       if (url === '/acceptance/trends') return Promise.reject(new Error('boom'))
-      if (url === '/drivetest/trend') return Promise.reject(new Error('boom'))
+      if (url === '/drive-test/trend') return Promise.reject(new Error('boom'))
       return Promise.resolve({ data: [] })
     })
     page()

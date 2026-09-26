@@ -44,12 +44,12 @@ function CardHead({ icon: Icon, title, sub, action }) {
 
 /**
  * Everything on the Overview tab that reads /acceptance/trends and
- * /drivetest/trend: the plan-vs-actual line chart, the approval-flow
+ * /drive-test/trend: the plan-vs-actual line chart, the approval-flow
  * Sankey, monthly velocity bars, the ICT/CRA comparison and the two mini
  * per-authority progress charts.
  *
  * A section of its own — not folded into the page component — because it
- * owns a second load (`/acceptance/trends`) and a third (`/drivetest/trend`)
+ * owns a second load (`/acceptance/trends`) and a third (`/drive-test/trend`)
  * that the page's single `/acceptance/overview` load has no reason to know
  * about. Both are programme-wide: the page carries no filters any more, so
  * neither call takes parameters beyond the month window.
@@ -77,7 +77,7 @@ export default function AcceptancePlanSection({ total, analysis, kpis }) {
   }, [])
 
   useEffect(() => {
-    api.get('/drivetest/trend', { params: { months: MONTHS } }).then((r) => setDtTrend(r.data)).catch(() => setDtTrend({ months: [] }))
+    api.get('/drive-test/trend', { params: { months: MONTHS } }).then((r) => setDtTrend(r.data)).catch(() => setDtTrend({ months: [] }))
   }, [])
 
   const months = useMemo(

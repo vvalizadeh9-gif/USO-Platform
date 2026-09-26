@@ -37,15 +37,15 @@ from collections import defaultdict
 from datetime import date
 
 from sqlalchemy import func, select
-from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.orm import Session
 
 from app.core import jalali
 from app.core.deps import CONTRACTOR
 from app.models.monthly_plan import STATUS_APPROVED, ContractorMonthlyPlan
 from app.models.reference import Contractor, Province
-from app.models.workitem import Site, WorkItem
+from app.models.workitem import WorkItem
 from app.services import cpm_columns as C
-from app.services.visibility import apply_work_item_scope
+from app.services import dt_universe
 from app.services.workflow import (
     STAGE_ASSIGNED,
     STAGE_DT_SUBMITTED,
@@ -462,15 +462,17 @@ class DriveTestAnalytics:
         self._user = user
         self._province_id = province_id
         self._work_items: list[WorkItem] | None = None
+        self._onair: list[WorkItem] | None = None
 
     # ---------- data loading ----------
     def _load(self) -> list[WorkItem]:
         """Load the user's visible work items once and cache them.
 
-        Eager-loads ``site`` (needed by ``chart_progress_by_province``),
-        ``assignments`` (needed for live contractor attribution), and the HC
-        workflow relations (needed to detect in-app Problematic status and
-        its category) — all in the same query, avoiding N+1 lazy loads.
+        Each work item carries ``site`` (needed by
+        ``chart_progress_by_province``), ``assignments`` (needed for live
+        contractor attribution), and the HC workflow relations (needed to
+        detect in-app Problematic status and its category) — read as plain
+        columns by ``dt_universe``, in a handful of queries.
 
         A ``province_id`` narrows the result *after* ``apply_work_item_scope``
         has run, and is applied as an additional ``WHERE`` on the same
@@ -480,21 +482,10 @@ class DriveTestAnalytics:
         view control, never an access one.
         """
         if self._work_items is None:
-            stmt = select(WorkItem).where(WorkItem.deleted_at.is_(None))
-            stmt = apply_work_item_scope(stmt, self._user, self._db)
-            if self._province_id is not None:
-                stmt = stmt.where(
-                    WorkItem.site_id.in_(
-                        select(Site.id).where(Site.province_id == self._province_id)
-                    )
-                )
-            stmt = stmt.options(
-                selectinload(WorkItem.site),
-                selectinload(WorkItem.assignments),
-                selectinload(WorkItem.hc_tasks),
-                selectinload(WorkItem.health_checks),
+            # Plain columns, not ORM objects: see ``dt_universe`` for why.
+            self._work_items = dt_universe.load(
+                self._db, self._user, self._province_id
             )
-            self._work_items = list(self._db.execute(stmt).scalars().all())
         return self._work_items
 
     # ---------- KPI helpers ----------
@@ -514,7 +505,10 @@ class DriveTestAnalytics:
     _assignment_date = staticmethod(assignment_date)
 
     def _onair_items(self) -> list[WorkItem]:
-        return [w for w in self._load() if is_onair(w)]
+        # Asked for by nearly every figure on the page; filtered once.
+        if self._onair is None:
+            self._onair = [w for w in self._load() if is_onair(w)]
+        return self._onair
 
     def onair_items(self) -> list[WorkItem]:
         """The scoped on-air work items, for a caller outside this class.
