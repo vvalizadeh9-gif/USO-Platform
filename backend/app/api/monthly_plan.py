@@ -14,6 +14,11 @@ it off the authenticated account, and the PM side addresses a plan by its own
 primary key behind a role guard a contractor cannot pass. There is no request
 a contractor can construct that names another company.
 
+**Revisions go through the PM.** A contractor asks for a new number on an
+approved plan (``POST /my/revision-request``); the PM approves or returns it
+through the same two endpoints that decide a first submission. The approved
+number stays in force until the request is approved.
+
 **PM approves; Admin does not.** Deciding a contractor's monthly target is an
 operational act, and Admin is a systems role -- the separation of duties in
 ARCHITECTURE.md, which is deliberate and is the rule most often broken by a
@@ -45,13 +50,14 @@ from app.schemas import (
     MonthlyPlanQueueOut,
     MonthlyPlanQueueRow,
     MonthlyPlanReturn,
-    MonthlyPlanRevise,
+    MonthlyPlanRevisionRequest,
     MonthlyPlanWrite,
     MonthStanding,
     PlanMonthPoint,
     PlanningMonth,
     PlanRevision,
     PlanRevisionsOut,
+    PlanStream,
     ScorecardOut,
 )
 from app.services import monthly_plan as plans
@@ -112,6 +118,7 @@ def _guard(call):
 def my_plan(
     year: int = Query(..., description="Shamsi year, e.g. 1405"),
     month: int = Query(..., ge=1, le=12, description="Shamsi month, 1-12"),
+    stream: PlanStream = Query("DT", description="DT or ACCEPTANCE"),
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> MonthlyPlanContext:
@@ -130,7 +137,8 @@ def my_plan(
     contractor_id = _own_contractor(user)
     _guard(lambda: plans.validate_period(year, month))
 
-    plan = plans.current_plan(db, contractor_id, year, month)
+    plan = plans.current_plan(db, contractor_id, year, month, stream)
+    in_force = plans.in_force_plan(db, contractor_id, year, month, stream)
     deadline = plans.deadline_for(year, month)
 
     # The six months behind the planning month, the running one last. One
@@ -146,7 +154,7 @@ def my_plan(
         shamsi_month_name=jalali.month_name(month),
         plan=_as_out(plan) if plan is not None else None,
         previous_month_committed=plans.previous_approved_count(
-            db, contractor_id, year, month
+            db, contractor_id, year, month, stream
         ),
         open_assignments=plans.open_assignment_count(db, user),
         deadline_shamsi=jalali.format_shamsi(deadline),
@@ -157,6 +165,7 @@ def my_plan(
             shamsi_month=month,
             shamsi_month_name=jalali.month_name(month),
             label=plans.month_label(year, month),
+            stream=stream,
             version=plan.version if plan is not None else None,
             status=plan.status if plan is not None else None,
             committed_count=plan.committed_count if plan is not None else None,
@@ -171,6 +180,11 @@ def my_plan(
             deadline_passed=plans.deadline_has_passed(year, month),
             is_late=plans.is_late(plan) if plan is not None else False,
             days_remaining=plans.days_remaining(year, month),
+            in_force_count=in_force.committed_count if in_force is not None else None,
+            in_force_version=in_force.version if in_force is not None else None,
+            revision_reason=plan.revision_reason if plan is not None else None,
+            revision_comment=plan.revision_comment if plan is not None else None,
+            revision_open=plans.revision_window_open(year, month),
         ),
         current_month=MonthStanding(
             **{k: v for k, v in running.items() if k != "in_progress"},
@@ -197,6 +211,7 @@ def my_plan(
 @router.get("/my/history", response_model=list[MonthlyPlanHistoryRow])
 def my_history(
     months: int = Query(6, ge=1, le=plans.MAX_HISTORY_MONTHS),
+    stream: PlanStream = Query("DT", description="DT or ACCEPTANCE"),
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> list[MonthlyPlanHistoryRow]:
@@ -208,14 +223,16 @@ def my_history(
     """
     contractor_id = _own_contractor(user)
     rows = []
-    for year, month, plan in plans.history(db, contractor_id, months):
-        approved = plan is not None and plan.status == STATUS_APPROVED
+    for year, month, plan in plans.history(db, contractor_id, months, stream):
+        # The number in force, not the latest version's: a pending revision
+        # is a proposal, and this is a history of commitments.
+        in_force = plans.in_force_plan(db, contractor_id, year, month, stream)
         rows.append(
             MonthlyPlanHistoryRow(
                 shamsi_year=year,
                 shamsi_month=month,
                 shamsi_month_name=jalali.month_name(month),
-                committed_count=plan.committed_count if approved else None,
+                committed_count=in_force.committed_count if in_force else None,
                 status=plan.status if plan is not None else None,
                 version=plan.version if plan is not None else None,
             )
@@ -237,7 +254,7 @@ def save_my_plan(
     """
     contractor_id = _own_contractor(user)
     existing = plans.current_plan(
-        db, contractor_id, payload.shamsi_year, payload.shamsi_month
+        db, contractor_id, payload.shamsi_year, payload.shamsi_month, payload.stream
     )
     before = plans.audit_snapshot(existing) if existing is not None else None
 
@@ -250,6 +267,7 @@ def save_my_plan(
             month=payload.shamsi_month,
             committed_count=payload.committed_count,
             submit=payload.submit,
+            stream=payload.stream,
         )
     )
 
@@ -270,41 +288,45 @@ def save_my_plan(
     return _as_out(plan)
 
 
-@router.post("/my/revise", response_model=MonthlyPlanOut)
-def revise_my_plan(
-    payload: MonthlyPlanRevise,
+@router.post("/my/revision-request", response_model=MonthlyPlanOut)
+def request_revision(
+    payload: MonthlyPlanRevisionRequest,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> MonthlyPlanOut:
-    """Open the next version of an approved plan, as a draft.
+    """Ask the PM to change this month's approved number.
 
-    A separate, explicit act rather than something ``POST /my`` falls into,
-    because it is a different thing to do: the approved figure stays on the
-    record exactly as decided and a second one begins beside it. The new
-    version arrives as a Draft, and is handed in through ``POST /my`` like any
-    other.
+    Writes a new version with status ``RevisionRequested``; the approved
+    version is not touched and stays in force until the PM approves the
+    request. Open for the running month only, until the end of day 15 on the
+    Tehran clock. The contractor is the caller's own -- this endpoint takes no
+    contractor id -- so the request can only ever be about the caller's
+    company.
     """
     contractor_id = _own_contractor(user)
     previous = plans.current_plan(
-        db, contractor_id, payload.shamsi_year, payload.shamsi_month
+        db, contractor_id, payload.shamsi_year, payload.shamsi_month, payload.stream
     )
     before = plans.audit_snapshot(previous) if previous is not None else None
 
     plan = _guard(
-        lambda: plans.revise(
+        lambda: plans.request_revision(
             db,
             contractor_id=contractor_id,
             user=user,
             year=payload.shamsi_year,
             month=payload.shamsi_month,
+            stream=payload.stream,
             committed_count=payload.committed_count,
+            reason=payload.reason,
+            comment=payload.comment,
         )
     )
 
     record_audit(
         db,
         user_id=user.id,
-        action=audit_actions.CREATED,
+        action=audit_actions.SUBMITTED,
         module="PIP",
         entity_type="ContractorMonthlyPlan",
         entity_id=plan.id,
@@ -322,6 +344,7 @@ def revise_my_plan(
 def queue(
     year: int = Query(..., description="Shamsi year, e.g. 1405"),
     month: int = Query(..., ge=1, le=12, description="Shamsi month, 1-12"),
+    stream: PlanStream = Query("DT", description="DT or ACCEPTANCE"),
     db: Session = Depends(get_db),
     user: User = Depends(require_queue_reader),
 ) -> MonthlyPlanQueueOut:
@@ -330,7 +353,8 @@ def queue(
     Closed to contractors: this is a list of what every other company in the
     programme has committed to, and no contractor has any business reading it.
     """
-    rows = _guard(lambda: plans.queue_rows(db, year, month))
+    rows = _guard(lambda: plans.queue_rows(db, year, month, stream))
+    in_force = plans.approved_pip_in_force(db, year, month, stream)
 
     # The month now running, for every contractor this caller may see. Same
     # service the contractor's own screen reads, so a figure here and a figure
@@ -343,6 +367,7 @@ def queue(
         shamsi_month=month,
         shamsi_month_name=jalali.month_name(month),
         label=plans.month_label(year, month),
+        stream=stream,
         deadline_shamsi=jalali.format_shamsi(plans.deadline_for(year, month)),
         deadline_passed=plans.deadline_has_passed(year, month),
         days_remaining=plans.days_remaining(year, month),
@@ -361,6 +386,9 @@ def queue(
                 submitted_at=plan.submitted_at if plan is not None else None,
                 is_late=plans.is_late(plan) if plan is not None else False,
                 return_comment=plan.return_comment if plan is not None else None,
+                in_force_count=in_force.get(contractor.id),
+                revision_reason=plan.revision_reason if plan is not None else None,
+                revision_comment=plan.revision_comment if plan is not None else None,
                 # A contractor the running month never touched has no row in
                 # the scorecard, which is an answer and not a gap: they held
                 # nothing and delivered nothing.
@@ -386,9 +414,11 @@ def approve_plan(
     db: Session = Depends(get_db),
     user: User = Depends(require_pm),
 ) -> MonthlyPlanOut:
-    """Lock a submitted plan as that contractor's target for the month.
+    """Lock a submitted plan, or a revision request, as the month's target.
 
-    PM only. Admin gets a 403 here by design — see the module docstring.
+    PM only. Admin gets a 403 here by design — see the module docstring. A
+    revision request can only be approved up to the end of day 15; after it,
+    the approved plan is final and the request can only be returned.
     """
     plan = _load_plan(plan_id, db)
     before = plans.audit_snapshot(plan)
@@ -415,9 +445,10 @@ def return_plan(
     db: Session = Depends(get_db),
     user: User = Depends(require_pm),
 ) -> MonthlyPlanOut:
-    """Send a submitted plan back to the contractor, with the reason.
+    """Send a submitted plan or a revision request back, with the reason.
 
-    PM only, and the comment is required: a number returned without one tells
+    A returned revision leaves the approved version in force. PM only, and the
+    comment is required: a number returned without one tells
     the contractor that the PM disagreed and nothing about what to write
     instead.
     """
@@ -520,10 +551,14 @@ def revisions(
     contractor_id: int | None = Query(
         None, description="Staff only; a contractor always reads their own"
     ),
+    stream: PlanStream = Query("DT", description="DT or ACCEPTANCE"),
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> PlanRevisionsOut:
-    """Every version of one contractor's plan for one month, oldest first.
+    """Every version of one contractor's plan for one stream and month, oldest first.
+
+    Each version says who handed it in or asked for it and when, who decided
+    it and when, and which one is in force.
 
     Nothing is reconstructed here: the table already keeps a row per version,
     which is what the append-on-revision rule exists for. This reads them.
@@ -542,15 +577,20 @@ def revisions(
             raise HTTPException(400, "contractor_id is required")
 
     _guard(lambda: plans.validate_period(year, month))
-    rows = plans.all_versions(db, contractor_id, year, month)
+    rows = plans.all_versions(db, contractor_id, year, month, stream)
     contractor = db.get(Contractor, contractor_id)
     if contractor is None:
         raise HTTPException(404, "No such contractor")
 
-    who = plans.decider_names(db, rows)
+    who = plans.user_names(
+        db, {p.decided_by for p in rows} | {p.submitted_by for p in rows}
+    )
+    approved = [p.version for p in rows if p.status == STATUS_APPROVED]
+    in_force_version = max(approved) if approved else None
     return PlanRevisionsOut(
         contractor_id=contractor_id,
         contractor_name=contractor.name,
+        stream=stream,
         shamsi_year=year,
         shamsi_month=month,
         shamsi_month_name=jalali.month_name(month),
@@ -560,11 +600,17 @@ def revisions(
                 status=p.status,
                 committed_count=p.committed_count,
                 is_current=p.is_current,
+                in_force=p.version == in_force_version,
                 is_late=plans.is_late(p),
                 return_comment=p.return_comment,
+                revision_reason=p.revision_reason,
+                revision_comment=p.revision_comment,
+                submitted_by=who.get(p.submitted_by),
+                submitted_at=p.submitted_at,
                 submitted_shamsi=jalali.format_shamsi(
                     p.submitted_at.date() if p.submitted_at else None
                 ),
+                decided_at=p.decided_at,
                 decided_shamsi=jalali.format_shamsi(
                     p.decided_at.date() if p.decided_at else None
                 ),
