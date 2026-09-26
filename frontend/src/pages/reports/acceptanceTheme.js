@@ -3,7 +3,7 @@
 //
 // Kept separate from AcceptanceDashboard.jsx itself (which used to define
 // these locally) so that the page's own new sections — AcceptancePlanSection,
-// PlanTargetCard, the acceptancePlanCharts widgets — can import them without
+// the acceptancePlanCharts widgets, the sankey — can import them without
 // creating a circular import back into the page component that renders them.
 
 // ICT and CRA get a stable accent colour each — ICT blue, CRA violet — reused

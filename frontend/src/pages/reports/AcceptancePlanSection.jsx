@@ -1,9 +1,8 @@
 import { LineChart, Scale, TrendingUp, Waypoints, Zap } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import api from '../../api/client'
 import { APPROVED, CRA, ICT, IDLE, PENDING, PLANNED, REJECTED, WASH } from './acceptanceTheme'
 import ApprovalFlowSankey from './ApprovalFlowSankey'
-import PlanTargetCard from './PlanTargetCard'
 import { mergeMonthlySeries } from './acceptancePlan'
 import { AuthorityCompareBars, TrendLineChart, VelocityBars } from './acceptancePlanCharts'
 
@@ -55,16 +54,16 @@ function CardHead({ icon: Icon, title, sub, action }) {
  * about. Both are programme-wide: the page carries no filters any more, so
  * neither call takes parameters beyond the month window.
  *
- * The monthly plan target lives here too, and loads with them. It used to be
- * the second card in the KPI band, in the middle of a funnel it is not a step
- * of: that band counts what has happened, and a target is what was promised.
- * Beside the plan-vs-actual chart it is read against the line it sets.
+ * The dashed "Planned" line on the three progress charts is the acceptance
+ * target a PM sets on the Monthly Plan page, as /acceptance/trends returns it
+ * month by month — never a ramp drawn here. Where no month has a target, the
+ * line and its legend entry are left out rather than drawn from a made-up
+ * number.
  */
 export default function AcceptancePlanSection({ total, analysis, kpis }) {
   const [trends, setTrends] = useState(null)
   const [trendsError, setTrendsError] = useState(false)
   const [dtTrend, setDtTrend] = useState(null)
-  const [plan, setPlan] = useState(null)
 
   const [planMode, setPlanMode] = useState('cumulative')
   const [velocityMode, setVelocityMode] = useState('monthly')
@@ -81,18 +80,17 @@ export default function AcceptancePlanSection({ total, analysis, kpis }) {
     api.get('/drivetest/trend', { params: { months: MONTHS } }).then((r) => setDtTrend(r.data)).catch(() => setDtTrend({ months: [] }))
   }, [])
 
-  // The plan is programme-wide, so it is loaded once here rather than folded
-  // into the overview payload. Re-read after a PM saves, so the card and the
-  // chart's target line move together.
-  const loadPlan = useCallback(() => {
-    api.get('/acceptance/plan').then((r) => setPlan(r.data)).catch(() => setPlan(null))
-  }, [])
-  useEffect(loadPlan, [loadPlan])
-
   const months = useMemo(
     () => mergeMonthlySeries(trends?.months, dtTrend?.months),
     [trends, dtTrend]
   )
+
+  // Whether any month in the window has a stored target. Without one there is
+  // no plan to draw, and a legend entry for a line that is not there would be
+  // a promise the chart cannot keep.
+  const hasTarget = months.some((m) => m.target != null)
+  const plannedSeries = (value) =>
+    hasTarget ? [{ key: 'planned', label: 'Planned (target)', color: PLANNED, dashed: true, value }] : []
 
   const monthlyTarget = (m, i) => {
     if (m.target == null) return null
@@ -137,14 +135,6 @@ export default function AcceptancePlanSection({ total, analysis, kpis }) {
 
   return (
     <>
-      {/* The target, at the head of the section it governs. Narrow on
-          purpose: it is one figure and a PM-only control, and a card stretched
-          across the page would read as a fifth KPI — which is exactly the
-          confusion that moving it out of the band was meant to end. */}
-      <section className="acc-plan-row" aria-label="Acceptance plan target">
-        <PlanTargetCard plan={plan} onSaved={loadPlan} />
-      </section>
-
       <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(380px, 1fr))', alignItems: 'stretch', marginTop: 16 }}>
         <div className="card">
           <CardHead
@@ -169,10 +159,7 @@ export default function AcceptancePlanSection({ total, analysis, kpis }) {
                 ariaLabel="Plan versus actual progress, by Shamsi month"
                 months={months}
                 series={[
-                  {
-                    key: 'planned', label: 'Planned (target)', color: PLANNED, dashed: true,
-                    value: (m, i) => (planMode === 'cumulative' ? m.target : monthlyTarget(m, i)),
-                  },
+                  ...plannedSeries((m, i) => (planMode === 'cumulative' ? m.target : monthlyTarget(m, i))),
                   {
                     key: 'added', label: 'Added villages (actual)', color: ICT, area: true,
                     value: (m) => (planMode === 'cumulative' ? m.added_cumulative : m.added_new),
@@ -183,6 +170,13 @@ export default function AcceptancePlanSection({ total, analysis, kpis }) {
                   },
                 ]}
               />
+            )}
+            {hasMonths && (
+              <div className="dim" style={{ fontSize: 12.5, marginTop: 10 }}>
+                {hasTarget
+                  ? 'The target line is the acceptance target set on the Monthly Plan page.'
+                  : 'No acceptance target set yet. A PM sets it on the Monthly Plan page.'}
+              </div>
             )}
           </div>
         </div>
@@ -249,7 +243,7 @@ export default function AcceptancePlanSection({ total, analysis, kpis }) {
                 ariaLabel="ICT approval progress against the planned target"
                 months={months}
                 series={[
-                  { key: 'planned', label: 'Planned (target)', color: PLANNED, dashed: true, value: (m) => m.target },
+                  ...plannedSeries((m) => m.target),
                   { key: 'actual', label: 'Actual', color: ICT, area: true, value: (m) => m.ict_cumulative },
                 ]}
               />
@@ -267,7 +261,7 @@ export default function AcceptancePlanSection({ total, analysis, kpis }) {
                 ariaLabel="CRA approval progress against the planned target"
                 months={months}
                 series={[
-                  { key: 'planned', label: 'Planned (target)', color: PLANNED, dashed: true, value: (m) => m.target },
+                  ...plannedSeries((m) => m.target),
                   { key: 'actual', label: 'Actual', color: CRA, area: true, value: (m) => m.cra_cumulative },
                 ]}
               />

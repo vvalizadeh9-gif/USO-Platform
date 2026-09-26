@@ -1625,10 +1625,10 @@ tbody tr:last-child td { border-bottom: none; }
   --kpi-accent: var(--dt-notstarted);
   --kpi-tint: rgba(138, 149, 166, 0.07);
 }
-/* The monthly target, which is no longer in the band at all — it heads the
-   plan section below, where it is read against the line it sets. It keeps the
-   card shell and its violet: neither an authority nor a verdict, because a
-   promise is not a state anything is in. */
+/* The acceptance target, which lives on the Monthly Plan page, not in this
+   band — the dashboard reads it only as the dashed line on its Plan vs Actual
+   chart. It keeps the card shell and its violet there: neither an authority
+   nor a verdict, because a promise is not a state anything is in. */
 .dt-kpi-card[data-kpi="acc-plan"] {
   --kpi-accent: var(--violet);
   --kpi-tint: rgba(109, 91, 208, 0.07);
@@ -1636,7 +1636,7 @@ tbody tr:last-child td { border-bottom: none; }
 }
 .acc-plan-row {
   display: grid; grid-template-columns: minmax(0, 320px);
-  margin-block-start: var(--dt-gap);
+  margin-block-end: 24px;
 }
 .dt-kpi-card[data-kpi="acc-approved"] {
   --kpi-accent: var(--green);

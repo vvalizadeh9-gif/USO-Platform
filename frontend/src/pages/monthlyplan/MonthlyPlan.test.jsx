@@ -11,7 +11,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ToastProvider } from '../../context/ToastContext'
 
 vi.mock('../../api/client', () => ({
-  default: { get: vi.fn(), post: vi.fn() },
+  default: { get: vi.fn(), post: vi.fn(), put: vi.fn() },
 }))
 
 const mockAuth = vi.hoisted(() => ({ current: null }))
@@ -165,11 +165,28 @@ const SCORECARD = {
   is_contractor: false,
 }
 
-function serve({ my, queue: q, scorecard = SCORECARD }) {
+/** Shaped from app/schemas: AcceptancePlanResponse. */
+const acceptancePlan = (over = {}) => ({
+  current: {
+    shamsi_year: 1405, shamsi_month: 6, label: 'شهریور 1405',
+    target_count: 3200, set_by: 'PM One', set_at: '2026-08-20T00:00:00Z', note: null,
+  },
+  previous: {
+    shamsi_year: 1405, shamsi_month: 5, label: 'مرداد 1405',
+    target_count: 2860, set_by: 'PM One', set_at: '2026-07-20T00:00:00Z', note: null,
+  },
+  history: [],
+  ...over,
+})
+
+function serve({ my, queue: q, scorecard = SCORECARD, plan = acceptancePlan() }) {
   api.get.mockImplementation((url) => {
     if (url === '/pip/my') return Promise.resolve({ data: my })
     if (url === '/pip/queue') return Promise.resolve({ data: q })
     if (url === '/pip/scorecard') return Promise.resolve({ data: scorecard })
+    if (url === '/acceptance/plan') {
+      return plan instanceof Error ? Promise.reject(plan) : Promise.resolve({ data: plan })
+    }
     return Promise.reject(new Error(`unexpected GET ${url}`))
   })
 }
@@ -179,6 +196,7 @@ const show = () => render(<ToastProvider><MonthlyPlan /></ToastProvider>)
 beforeEach(() => {
   vi.clearAllMocks()
   api.post.mockResolvedValue({ data: {} })
+  api.put.mockResolvedValue({ data: {} })
 })
 
 // ----------------------------------------------------------------- the form
@@ -578,5 +596,80 @@ describe('everyone else who reads the queue', () => {
     show()
 
     expect(await screen.findByText(/not yours to read/i)).toBeInTheDocument()
+  })
+})
+
+// ------------------------------------------------------- acceptance target
+//
+// The programme's acceptance target moved here from the Acceptance
+// Dashboard, whose Plan vs Actual chart still draws its dashed line from it.
+// It is a PM's to set and everyone else's to read; a contractor has no part
+// in it.
+describe('the acceptance target', () => {
+  const targetCard = async () =>
+    (await screen.findByText('Acceptance target', { selector: '.dt-kpi-title' })).closest('.dt-kpi-card')
+
+  it('shows the current target and its change from last month', async () => {
+    signedInAs('Coordinator')
+    serve({ queue: MIXED_QUEUE })
+    show()
+
+    const card = await targetCard()
+    expect(within(card).getByText('3,200')).toBeInTheDocument()
+    expect(within(card).getByText(/\+340 from مرداد 1405/)).toBeInTheDocument()
+    // Readable, not settable, for anyone but the PM.
+    expect(within(card).queryByRole('button', { name: /Set this month’s acceptance target/ })).toBeNull()
+  })
+
+  it('lets the PM set it, and re-reads it once saved', async () => {
+    signedInAs('PM')
+    serve({ queue: MIXED_QUEUE })
+    show()
+
+    const card = await targetCard()
+    await userEvent.click(within(card).getByRole('button', { name: /Set this month’s acceptance target/ }))
+    const input = screen.getByLabelText('Target (villages)')
+    await userEvent.clear(input)
+    await userEvent.type(input, '3500')
+    await userEvent.click(screen.getByRole('button', { name: 'Save target' }))
+
+    await waitFor(() =>
+      expect(api.put).toHaveBeenCalledWith(
+        '/acceptance/plan',
+        expect.objectContaining({ target_count: 3500 }),
+      ),
+    )
+    await waitFor(() =>
+      expect(api.get.mock.calls.filter(([url]) => url === '/acceptance/plan')).toHaveLength(2),
+    )
+  })
+
+  it('says "not set yet" rather than showing a 0 when there is no target', async () => {
+    signedInAs('PM')
+    serve({ queue: MIXED_QUEUE, plan: { current: null, previous: null, history: [] } })
+    show()
+
+    expect(within(await targetCard()).getByText('Not set yet')).toBeInTheDocument()
+  })
+
+  it('shows nothing, rather than "not set yet", when the target cannot be read', async () => {
+    signedInAs('PM')
+    serve({ queue: MIXED_QUEUE, plan: new Error('boom') })
+    show()
+
+    await screen.findByText('Alpha Telecom')
+    await waitFor(() => expect(api.get).toHaveBeenCalledWith('/acceptance/plan'))
+    expect(screen.queryByText('Acceptance target')).toBeNull()
+    expect(screen.queryByText('Not set yet')).toBeNull()
+  })
+
+  it('is not offered to a contractor', async () => {
+    signedInAs('Contractor')
+    serve({ my: context() })
+    show()
+
+    await screen.findByText('Planning مهر 1405')
+    expect(screen.queryByText('Acceptance target')).toBeNull()
+    expect(api.get).not.toHaveBeenCalledWith('/acceptance/plan')
   })
 })

@@ -3,6 +3,7 @@ import { EmptyState, PageHead } from '../../components/ui'
 import { useAuth } from '../../context/AuthContext'
 import { canDecidePlans } from '../../lib/roles'
 import { planningPeriod } from '../../lib/shamsi'
+import AcceptanceTarget from './AcceptanceTarget'
 import ContractorPlan from './ContractorPlan'
 import PeriodPicker from './PeriodPicker'
 import PlanQueue from './PlanQueue'
@@ -47,6 +48,11 @@ export default function MonthlyPlan() {
         }
         actions={<PeriodPicker period={period} onChange={setPeriod} />}
       />
+
+      {/* The programme's acceptance target: one figure a PM sets each month,
+          which the Acceptance Dashboard's Plan vs Actual chart draws its
+          dashed line from. A contractor has no part in it. */}
+      {!isContractor && <AcceptanceTarget />}
 
       <div>
         {complete ? (

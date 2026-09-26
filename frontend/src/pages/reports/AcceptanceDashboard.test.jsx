@@ -29,9 +29,8 @@ vi.mock('react-router-dom', async (importOriginal) => ({
   useNavigate: () => navigate,
 }))
 
-// Signed in as a Viewer by default — someone who can see the dashboard but
-// not the PM-only "+ Set target" control. Individual tests override this
-// with `signedInAs`.
+// Signed in as a Viewer by default. Individual tests override this with
+// `signedInAs` — a PM, to show the set-target control is not here any more.
 const mockAuth = vi.hoisted(() => ({ current: { user: { full_name: 'Someone', role: { name: 'Viewer' } } } }))
 vi.mock('../../context/AuthContext', () => ({
   useAuth: () => mockAuth.current,
@@ -67,20 +66,6 @@ const overview = (over = {}) => ({
   // no longer draws a province table. Kept in the fixture so a payload that
   // carries it cannot make the page throw.
   provinces: [{ name: 'Kerman', province_id: 7, total: 120 }],
-  ...over,
-})
-
-/** Shaped from app/schemas: AcceptancePlanResponse. */
-const plan = (over = {}) => ({
-  current: {
-    shamsi_year: 1405, shamsi_month: 6, label: 'شهریور 1405',
-    target_count: 3200, set_by: 'PM One', set_at: '2026-08-20T00:00:00Z', note: null,
-  },
-  previous: {
-    shamsi_year: 1405, shamsi_month: 5, label: 'مرداد 1405',
-    target_count: 2860, set_by: 'PM One', set_at: '2026-07-20T00:00:00Z', note: null,
-  },
-  history: [],
   ...over,
 })
 
@@ -154,7 +139,6 @@ beforeEach(() => {
   signedInAs('Viewer')
   api.get.mockImplementation((url) => {
     if (url === '/acceptance/overview') return Promise.resolve({ data: overview() })
-    if (url === '/acceptance/plan') return Promise.resolve({ data: plan() })
     if (url === '/acceptance/trends') return Promise.resolve({ data: trends() })
     if (url === '/drivetest/trend') return Promise.resolve({ data: dtTrend() })
     if (url === '/acceptance/sites') return Promise.resolve({ data: sites() })
@@ -217,7 +201,7 @@ describe('the KPI band', () => {
         const data = overview()
         return Promise.resolve({ data: { ...data, kpis: { ...data.kpis, total_onair_villages: 100 } } })
       }
-      return Promise.resolve({ data: url === '/acceptance/plan' ? plan() : { months: [] } })
+      return Promise.resolve({ data: { months: [] } })
     })
     page()
 
@@ -343,7 +327,6 @@ describe('the sites behind a figure', () => {
     const user = userEvent.setup()
     api.get.mockImplementation((url) => {
       if (url === '/acceptance/overview') return Promise.resolve({ data: overview() })
-      if (url === '/acceptance/plan') return Promise.resolve({ data: plan() })
       if (url === '/acceptance/trends') return Promise.resolve({ data: trends() })
       if (url === '/drivetest/trend') return Promise.resolve({ data: dtTrend() })
       if (url === '/acceptance/sites') {
@@ -360,52 +343,54 @@ describe('the sites behind a figure', () => {
   })
 })
 
-describe('the monthly plan target, now heading the plan section', () => {
-  it('shows the current target and its delta from last month', async () => {
-    page()
-    await screen.findByText('Total on-air villages')
-
-    // Scoped to the card itself: 3,200 is also this fixture's latest
-    // month's plan target, which the trend charts' hover readouts
-    // legitimately repeat elsewhere on the page.
-    const card = await kpiCard('Monthly plan')
-    // Out of the funnel, into the section whose chart it sets the line for.
-    expect(card.closest('.acc-plan-row')).not.toBeNull()
-    expect(card.closest('[aria-label="Acceptance totals"]')).toBeNull()
-    expect(within(card).getByText('3,200')).toBeInTheDocument()
-    expect(within(card).getByText(/\+340 from مرداد 1405/)).toBeInTheDocument()
-  })
-
-  it('shows an explicit empty state rather than a fabricated 0 when no target is set', async () => {
-    api.get.mockImplementation((url) => {
-      if (url === '/acceptance/overview') return Promise.resolve({ data: overview() })
-      if (url === '/acceptance/plan') return Promise.resolve({ data: { current: null, previous: null, history: [] } })
-      if (url === '/acceptance/trends') return Promise.resolve({ data: trends() })
-      if (url === '/drivetest/trend') return Promise.resolve({ data: dtTrend() })
-      return Promise.resolve({ data: [] })
-    })
-    page()
-    await screen.findByText('Total on-air villages')
-
-    const card = await kpiCard('Monthly plan')
-    expect(within(card).getByText('Not set yet')).toBeInTheDocument()
-    expect(within(card).queryByText(/^3,200$/)).toBeNull()
-  })
-
-  it('does not offer the set-target control to a Viewer', async () => {
-    signedInAs('Viewer')
-    page()
-    await screen.findByText('Total on-air villages')
-
-    expect(screen.queryByRole('button', { name: /Set this month’s acceptance target/ })).toBeNull()
-  })
-
-  it('offers the set-target control to a PM', async () => {
+describe('the acceptance target', () => {
+  it('is not on this page any more, and is not asked for', async () => {
     signedInAs('PM')
     page()
     await screen.findByText('Total on-air villages')
 
-    expect(screen.getByRole('button', { name: /Set this month’s acceptance target/ })).toBeInTheDocument()
+    // It is set on the Monthly Plan page now. The card, and the PM's control
+    // with it, are gone from here, and so is the read that fed them.
+    expect(screen.queryByText('Monthly plan')).toBeNull()
+    expect(screen.queryByText('Acceptance target')).toBeNull()
+    expect(screen.queryByRole('button', { name: /Set this month’s acceptance target/ })).toBeNull()
+    expect(api.get.mock.calls.map(([url]) => url)).not.toContain('/acceptance/plan')
+  })
+
+  it('draws the Planned line from the stored targets, and says where they are set', async () => {
+    page()
+    const heading = await screen.findByText('Plan vs actual progress')
+    const card = heading.closest('.card')
+
+    expect((await within(card).findAllByText('Planned (target)')).length).toBeGreaterThan(0)
+    // The latest month's stored target, 3,200, is what the readout shows.
+    expect(within(card).getByText('3,200')).toBeInTheDocument()
+    expect(
+      within(card).getByText('The target line is the acceptance target set on the Monthly Plan page.')
+    ).toBeInTheDocument()
+  })
+
+  it('leaves the line and its legend entry out when no target is stored', async () => {
+    api.get.mockImplementation((url) => {
+      if (url === '/acceptance/overview') return Promise.resolve({ data: overview() })
+      if (url === '/acceptance/trends') {
+        const t = trends()
+        return Promise.resolve({ data: { months: t.months.map((m) => ({ ...m, target_count: null })) } })
+      }
+      if (url === '/drivetest/trend') return Promise.resolve({ data: dtTrend() })
+      return Promise.resolve({ data: [] })
+    })
+    page()
+    await screen.findByText('Plan vs actual progress')
+
+    // Not on the plan chart and not on the ICT/CRA progress charts: no ramp
+    // drawn as a stand-in, and no legend entry for a line that is not there.
+    await screen.findByText('Added villages (actual)')
+    expect(screen.queryByText('Planned (target)')).toBeNull()
+    expect(screen.queryByText(/Planned \(target\):/)).toBeNull()
+    expect(
+      screen.getByText('No acceptance target set yet. A PM sets it on the Monthly Plan page.')
+    ).toBeInTheDocument()
   })
 })
 
@@ -438,7 +423,6 @@ describe('the plan-and-trend widgets', () => {
   it('does not crash when /acceptance/trends or /drivetest/trend fail', async () => {
     api.get.mockImplementation((url) => {
       if (url === '/acceptance/overview') return Promise.resolve({ data: overview() })
-      if (url === '/acceptance/plan') return Promise.resolve({ data: plan() })
       if (url === '/acceptance/trends') return Promise.reject(new Error('boom'))
       if (url === '/drivetest/trend') return Promise.reject(new Error('boom'))
       return Promise.resolve({ data: [] })

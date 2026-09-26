@@ -22,8 +22,9 @@ import { fmtCount } from './kpiTheme'
  * THE BAND IS A FUNNEL, READ LEFT TO RIGHT. On air → drive-test done →
  * approved → remaining, each card a step of the one before it. That order is
  * the page's whole argument, so nothing else sits in the middle of it: the
- * monthly plan target is a different question (what we said we would do, not
- * what is done) and now rides with the plan-vs-actual chart it belongs to.
+ * acceptance target is a different question (what we said we would do, not
+ * what is done). A PM sets it on the Monthly Plan page, and this page reads
+ * it only as the dashed line on the plan-vs-actual chart.
  *
  * Two rules still hold everywhere on this page:
  *
@@ -33,8 +34,7 @@ import { fmtCount } from './kpiTheme'
  * and a village count nobody can turn into site ids cannot be acted on.
  *
  * Counts are of every (site, village) row in the هدف universe, duplicates
- * kept — see acceptance_analytics.py. Nothing here writes, apart from the
- * PM-only monthly target inside the plan section.
+ * kept — see acceptance_analytics.py. Nothing here writes.
  */
 export default function AcceptanceDashboard() {
   const [data, setData] = useState(null)
