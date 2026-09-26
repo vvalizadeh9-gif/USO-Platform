@@ -7,9 +7,10 @@ and the ratio of the last two.
 What is worth testing here is not the arithmetic — it is one division — but
 the four things this section gets wrong easily:
 
-* **Which plans count.** Approved *and* current. A superseded version and an
-  unapproved revision are both easy to add in by accident, and either one
-  turns the programme's target into a number nobody agreed to.
+* **Which plans count.** The approved version in force: the highest approved
+  version of the DT plan. A superseded version and an unapproved revision are
+  both easy to add in by accident, and either one turns the programme's
+  target into a number nobody agreed to.
 * **A month with nothing in it.** A dashboard that divides by an absent plan
   takes the whole page down, and the page has five other sections on it.
 * **What a contractor is shown.** This is the only payload on this dashboard
@@ -312,32 +313,36 @@ def test_a_month_with_neither_plans_nor_work_still_answers(client, actors):
 
 
 # ---------------------------------------------------------------------------
-# 3. A revision counts once, at its current version
+# 3. A revision counts once, at the version in force
 # ---------------------------------------------------------------------------
-def test_revision_counts_the_current_version_only_once(client, actors):
+def test_revision_counts_the_version_in_force_only_once(client, actors, monkeypatch):
     year, month = _shift(-8)
     _approve(client, actors, "alfa", year, month, 40)
 
+    # Revisions are open for the running month up to day 15, so the clock is
+    # put inside that window for this month.
+    monkeypatch.setattr(jalali, "tehran_today", lambda: _day_in(year, month, 10))
     r = client.post(
-        f"{PIP}/my/revise",
+        f"{PIP}/my/revision-request",
         headers=actors["alfa"],
-        json={"year": year, "month": month, "committed_count": 55},
+        json={
+            "year": year,
+            "month": month,
+            "stream": "DT",
+            "committed_count": 55,
+            "reason": "SCOPE_CHANGE",
+        },
     )
     assert r.status_code == 200, r.text
 
-    # Mid-revision: version 1 is no longer current and version 2 is not yet
-    # approved, so there is no approved current plan to count.
+    # Mid-revision: the request is not approved, so the approved 40 is still
+    # the target -- and it is counted once, not alongside the request.
     mid = _ask(client, actors["pm"], year, month)
-    assert mid["pip"] == 0, "a superseded approval is not still the target"
+    assert mid["pip"] == 40, "the approved number stays in force while a revision is pending"
     assert len([r for r in mid["rows"] if r["name"] == "Alfa Drive Tests"]) == 1
 
-    r = client.post(
-        f"{PIP}/my",
-        headers=actors["alfa"],
-        json={"year": year, "month": month, "committed_count": 55, "submit": True},
-    )
-    assert r.status_code == 200, r.text
-    client.post(f"{PIP}/{r.json()['id']}/approve", headers=actors["pm"])
+    approved = client.post(f"{PIP}/{r.json()['id']}/approve", headers=actors["pm"])
+    assert approved.status_code == 200, approved.text
 
     after = _ask(client, actors["pm"], year, month)
     assert after["pip"] == 55, "40 + 55 would be counting both versions"

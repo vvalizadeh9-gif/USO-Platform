@@ -5,9 +5,14 @@ never depends directly on the calendar library (easy to swap later).
 """
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
+from zoneinfo import ZoneInfo
 
 import jdatetime
+
+#: The programme's clock. Day boundaries that carry a rule -- "revisions close
+#: at the end of day 15" -- are Tehran's, whatever timezone the server runs in.
+TEHRAN = ZoneInfo("Asia/Tehran")
 
 # Shamsi month names in order (index 1..12).
 SHAMSI_MONTHS = [
@@ -63,6 +68,17 @@ def days_in_month(year: int, month: int) -> int:
     start = from_shamsi_date(year, month, 1)
     next_year, next_month = next_period(year, month)
     return (from_shamsi_date(next_year, next_month, 1) - start).days
+
+
+def tehran_today() -> date:
+    """Today's (Gregorian) date on the Tehran wall clock.
+
+    Distinct from ``date.today()``, which is the server's: a container on UTC
+    is still on the previous day for the first three and a half hours of
+    every Tehran day, and a cutoff "at the end of day 15" has to mean the end
+    of the day the people it binds are living in.
+    """
+    return datetime.now(TEHRAN).date()
 
 
 def month_name(month: int) -> str:

@@ -282,24 +282,42 @@ def test_returning_without_a_comment_is_refused(client, actors):
 # ---------------------------------------------------------------------------
 # 4 and 5. Revision appends a version, and leaves exactly one current
 # ---------------------------------------------------------------------------
-def test_revising_an_approved_plan_appends_a_version(client, actors):
+def _request_revision(client, headers, year, month, count, reason="SCOPE_CHANGE"):
+    return client.post(
+        f"{PIP}/my/revision-request",
+        headers=headers,
+        json={
+            "year": year,
+            "month": month,
+            "stream": "DT",
+            "committed_count": count,
+            "reason": reason,
+        },
+    )
+
+
+def _inside_revision_window(monkeypatch, year, month):
+    """Put the Tehran clock on day 10 of the given month."""
+    monkeypatch.setattr(
+        jalali, "tehran_today", lambda: jalali.from_shamsi_date(year, month, 10)
+    )
+
+
+def test_revising_an_approved_plan_appends_a_version(client, actors, monkeypatch):
     year, month = _future(5)
+    _inside_revision_window(monkeypatch, year, month)
     first_id = _save(client, actors["a1"], year, month, 30, True).json()["id"]
     client.post(f"{PIP}/{first_id}/approve", headers=actors["pm"])
 
     blocked = _save(client, actors["a1"], year, month, 31, False)
     assert blocked.status_code == 400, "an approved plan is not edited in place"
 
-    revised = client.post(
-        f"{PIP}/my/revise",
-        headers=actors["a1"],
-        json={"year": year, "month": month, "committed_count": 55},
-    )
+    revised = _request_revision(client, actors["a1"], year, month, 55)
     assert revised.status_code == 200, revised.text
     second = revised.json()
     assert second["version"] == 2
     assert second["is_current"] is True
-    assert second["status"] == "Draft"
+    assert second["status"] == "RevisionRequested"
     assert second["committed_count"] == 55
     assert second["id"] != first_id
 
@@ -318,15 +336,12 @@ def test_revising_an_approved_plan_appends_a_version(client, actors):
     assert [r["is_current"] for r in rows].count(True) == 1
 
 
-def test_revising_a_plan_that_is_not_approved_is_refused(client, actors):
+def test_revising_a_plan_that_is_not_approved_is_refused(client, actors, monkeypatch):
     year, month = _future(6)
+    _inside_revision_window(monkeypatch, year, month)
     _save(client, actors["a1"], year, month, 3, False)
 
-    refused = client.post(
-        f"{PIP}/my/revise",
-        headers=actors["a1"],
-        json={"year": year, "month": month, "committed_count": 9},
-    )
+    refused = _request_revision(client, actors["a1"], year, month, 9)
     assert refused.status_code == 400, refused.text
     assert len(_rows_for(actors["company_a"], year, month)) == 1
 

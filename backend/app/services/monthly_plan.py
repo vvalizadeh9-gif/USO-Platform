@@ -7,8 +7,8 @@ no rules of its own.
 Two of the rules are load-bearing and neither is enforced by the database, so
 they are worth naming before the code:
 
-**One current version per contractor per month.** Creating a new version flips
-the previous one's ``is_current`` in the same transaction. A partial unique
+**One current version per contractor per stream per month.** Creating a new
+version flips the previous one's ``is_current`` in the same transaction. A partial unique
 index would say the same thing to PostgreSQL, but the test suite builds its
 database on SQLite, which treats partial indexes differently — a guarantee that
 production has and the tests cannot exercise is a guarantee nobody is checking.
@@ -17,6 +17,14 @@ So it lives here, where the tests reach it.
 **The status transitions.** Anything not in :data:`ALLOWED_TRANSITIONS` is
 refused. An ``Approved`` row is immutable: it is a target somebody is measured
 against, and a target that can be edited afterwards measures nothing.
+
+And one definition worth naming because two nearly-identical ones exist:
+**current** is the latest version, whatever its status; **in force** is the
+latest *approved* version, and is the PIP. They part company while a revision
+is pending or after one was returned -- the approved number stays in force
+until a revision of it is approved. :func:`in_force_plan` and
+:func:`approved_pip_in_force` are the only places that decide which row that
+is.
 """
 from __future__ import annotations
 
@@ -27,10 +35,16 @@ from sqlalchemy.orm import Session
 
 from app.core import jalali
 from app.models.monthly_plan import (
+    PLAN_STREAMS,
+    REASON_OTHER,
+    REVISION_REASONS,
     STATUS_APPROVED,
     STATUS_DRAFT,
     STATUS_RETURNED,
+    STATUS_REVISION_REQUESTED,
+    STATUS_REVISION_RETURNED,
     STATUS_SUBMITTED,
+    STREAM_DT,
     ContractorMonthlyPlan,
 )
 from app.models.reference import Contractor, User
@@ -56,6 +70,13 @@ MAX_SHAMSI_YEAR = 1500
 #: instead. Anything past this is a document, and belongs somewhere else.
 MAX_RETURN_COMMENT = 1000
 
+#: The same limit for the contractor's side of a revision request.
+MAX_REVISION_COMMENT = 1000
+
+#: Revisions of an approved plan close at the end of this day of the month the
+#: plan covers, on the Tehran clock. After it, the approved PIP is final.
+REVISION_CUTOFF_DAY = 15
+
 #: The plan is due on day 3 of the month it covers. Later submissions are
 #: accepted — a plan filed late is worth more than no plan — and recorded as
 #: late through ``submitted_at``, which is what :func:`is_late` reads. This is
@@ -69,12 +90,17 @@ MAX_HISTORY_MONTHS = 36
 #: Draft and Returned are the two states the contractor still owns, so both
 #: accept an edit and both submit. Submitted is nobody's to edit — the PM owes
 #: a decision on the number they were given — and Approved is nobody's at all,
-#: which is what :func:`revise` exists for.
+#: which is what :func:`request_revision` exists for. A revision request is
+#: the PM's to decide, and once decided it is final either way: approved, it is
+#: the new PIP in force; returned, it is the record of a request that was
+#: turned down, and a second request is a new version.
 ALLOWED_TRANSITIONS: dict[str, tuple[str, ...]] = {
     STATUS_DRAFT: (STATUS_DRAFT, STATUS_SUBMITTED),
     STATUS_RETURNED: (STATUS_RETURNED, STATUS_SUBMITTED),
     STATUS_SUBMITTED: (STATUS_APPROVED, STATUS_RETURNED),
     STATUS_APPROVED: (),
+    STATUS_REVISION_REQUESTED: (STATUS_APPROVED, STATUS_REVISION_RETURNED),
+    STATUS_REVISION_RETURNED: (),
 }
 
 
@@ -119,12 +145,37 @@ def validate_count(count: int | None, *, required: bool) -> None:
         )
 
 
+def validate_stream(stream: str) -> None:
+    """Refuse a stream that is not one of :data:`PLAN_STREAMS`."""
+    if stream not in PLAN_STREAMS:
+        raise PlanError(f"Stream must be one of {', '.join(PLAN_STREAMS)}")
+
+
+def validate_revision_reason(reason: str, comment: str | None) -> str | None:
+    """Refuse a revision request whose reason is missing or unexplained.
+
+    Returns the comment trimmed, or None when there is nothing in it.
+    """
+    if reason not in REVISION_REASONS:
+        raise PlanError(
+            f"The reason must be one of {', '.join(REVISION_REASONS)}"
+        )
+    comment = (comment or "").strip() or None
+    if reason == REASON_OTHER and comment is None:
+        raise PlanError("A comment is required when the reason is OTHER")
+    if comment is not None and len(comment) > MAX_REVISION_COMMENT:
+        raise PlanError(
+            f"The comment cannot be longer than {MAX_REVISION_COMMENT} characters"
+        )
+    return comment
+
+
 def _check_transition(current: str, target: str) -> None:
     if target not in ALLOWED_TRANSITIONS.get(current, ()):
         if current == STATUS_APPROVED:
             raise PlanError(
                 "This month's plan is approved and cannot be edited. "
-                "Submit a revision instead."
+                "Request a revision instead."
             )
         raise PlanError(f"A {current} plan cannot become {target}")
 
@@ -165,21 +216,44 @@ def is_late(plan: ContractorMonthlyPlan) -> bool:
     return submitted.date() > deadline_for(plan.shamsi_year, plan.shamsi_month)
 
 
+def revision_window_open(year: int, month: int, today: date | None = None) -> bool:
+    """Whether an approved plan for this month may still be revised.
+
+    Only a plan for the month now running, and only up to the end of day
+    :data:`REVISION_CUTOFF_DAY` of it -- both on the Tehran clock. A month
+    that has not started yet has no approved plan to revise in the sense this
+    rule means (its plan is still being agreed), and a month that has ended is
+    closed.
+    """
+    ref_year, ref_month, ref_day = jalali.to_shamsi_date(
+        today or jalali.tehran_today()
+    )
+    return (ref_year, ref_month) == (year, month) and ref_day <= REVISION_CUTOFF_DAY
+
+
 # ---------------------------------------------------------------------------
 # Reads
 # ---------------------------------------------------------------------------
 def current_plan(
-    db: Session, contractor_id: int, year: int, month: int
+    db: Session,
+    contractor_id: int,
+    year: int,
+    month: int,
+    stream: str = STREAM_DT,
 ) -> ContractorMonthlyPlan | None:
-    """The live version of one contractor's plan for one month, or None.
+    """The latest version of one contractor's plan for one stream and month.
 
     Keyed by contractor rather than by user, which is the whole of decision 2:
     a second account at the same company opening this month finds the plan its
     colleague started, not an empty form.
+
+    This is the row the contractor works on and the PM decides. It is *not*
+    necessarily the PIP -- see :func:`in_force_plan`.
     """
     return db.execute(
         select(ContractorMonthlyPlan).where(
             ContractorMonthlyPlan.contractor_id == contractor_id,
+            ContractorMonthlyPlan.stream == stream,
             ContractorMonthlyPlan.shamsi_year == year,
             ContractorMonthlyPlan.shamsi_month == month,
             ContractorMonthlyPlan.is_current.is_(True),
@@ -187,8 +261,76 @@ def current_plan(
     ).scalar_one_or_none()
 
 
+def in_force_plan(
+    db: Session,
+    contractor_id: int,
+    year: int,
+    month: int,
+    stream: str = STREAM_DT,
+) -> ContractorMonthlyPlan | None:
+    """The approved version in force for one contractor, stream and month.
+
+    The highest approved version. A pending or returned revision above it
+    does not displace it: the approved number stays in force until a revision
+    of it is approved, and then that revision is the highest approved version.
+    """
+    return db.execute(
+        select(ContractorMonthlyPlan)
+        .where(
+            ContractorMonthlyPlan.contractor_id == contractor_id,
+            ContractorMonthlyPlan.stream == stream,
+            ContractorMonthlyPlan.shamsi_year == year,
+            ContractorMonthlyPlan.shamsi_month == month,
+            ContractorMonthlyPlan.status == STATUS_APPROVED,
+        )
+        .order_by(ContractorMonthlyPlan.version.desc())
+        .limit(1)
+    ).scalar_one_or_none()
+
+
+def approved_pip_in_force(
+    db: Session,
+    year: int,
+    month: int,
+    stream: str = STREAM_DT,
+    contractor_id: int | None = None,
+) -> dict[int, int]:
+    """Every contractor's PIP in force for one stream and month, by id.
+
+    The bulk form of :func:`in_force_plan`, for readers that want the whole
+    month at once (the scorecard, the programme total). ``contractor_id``
+    narrows it in the query, so a contractor-scoped caller never loads a
+    competitor's number to throw it away afterwards.
+    """
+    stmt = (
+        select(
+            ContractorMonthlyPlan.contractor_id,
+            ContractorMonthlyPlan.committed_count,
+        )
+        .where(
+            ContractorMonthlyPlan.stream == stream,
+            ContractorMonthlyPlan.shamsi_year == year,
+            ContractorMonthlyPlan.shamsi_month == month,
+            ContractorMonthlyPlan.status == STATUS_APPROVED,
+        )
+        # Ascending, so the highest approved version is the one left standing
+        # when the rows are folded into the dict below.
+        .order_by(ContractorMonthlyPlan.version)
+    )
+    if contractor_id is not None:
+        stmt = stmt.where(ContractorMonthlyPlan.contractor_id == contractor_id)
+    out: dict[int, int] = {}
+    for cid, count in db.execute(stmt).all():
+        out[cid] = count or 0
+    return out
+
+
 def previous_approved_count(
-    db: Session, contractor_id: int, year: int, month: int
+    db: Session,
+    contractor_id: int,
+    year: int,
+    month: int,
+    stream: str = STREAM_DT,
 ) -> int | None:
     """Last month's approved commitment for this contractor, or None.
 
@@ -196,10 +338,8 @@ def previous_approved_count(
     month's: almost every plan is last month's figure adjusted.
     """
     prev_year, prev_month = jalali.previous_period(year, month)
-    plan = current_plan(db, contractor_id, prev_year, prev_month)
-    if plan is None or plan.status != STATUS_APPROVED:
-        return None
-    return plan.committed_count
+    plan = in_force_plan(db, contractor_id, prev_year, prev_month, stream)
+    return plan.committed_count if plan is not None else None
 
 
 def open_assignment_count(db: Session, user: User) -> int:
@@ -228,7 +368,7 @@ def open_assignment_count(db: Session, user: User) -> int:
 
 
 def history(
-    db: Session, contractor_id: int, months: int
+    db: Session, contractor_id: int, months: int, stream: str = STREAM_DT
 ) -> list[tuple[int, int, ContractorMonthlyPlan | None]]:
     """The last *months* Shamsi periods, newest first, with each one's plan.
 
@@ -241,7 +381,7 @@ def history(
     year, month = jalali.current_shamsi_period()
     out: list[tuple[int, int, ContractorMonthlyPlan | None]] = []
     for _ in range(months):
-        out.append((year, month, current_plan(db, contractor_id, year, month)))
+        out.append((year, month, current_plan(db, contractor_id, year, month, stream)))
         year, month = jalali.previous_period(year, month)
     return out
 
@@ -421,9 +561,13 @@ def running_month(db: Session, user: User) -> dict:
 
 
 def all_versions(
-    db: Session, contractor_id: int, year: int, month: int
+    db: Session,
+    contractor_id: int,
+    year: int,
+    month: int,
+    stream: str = STREAM_DT,
 ) -> list[ContractorMonthlyPlan]:
-    """Every version of one contractor's plan for one month, oldest first.
+    """Every version of one contractor's plan for one stream and month, oldest first.
 
     Nothing is reconstructed and nothing is inferred: the append-on-revision
     rule already writes a row per version, so the revision history *is* the
@@ -435,6 +579,7 @@ def all_versions(
             select(ContractorMonthlyPlan)
             .where(
                 ContractorMonthlyPlan.contractor_id == contractor_id,
+                ContractorMonthlyPlan.stream == stream,
                 ContractorMonthlyPlan.shamsi_year == year,
                 ContractorMonthlyPlan.shamsi_month == month,
             )
@@ -453,7 +598,12 @@ def decider_names(
     One query for the whole list rather than one per row: a plan revised four
     times is four rows and, more often than not, the same PM on all of them.
     """
-    ids = {p.decided_by for p in plans if p.decided_by is not None}
+    return user_names(db, {p.decided_by for p in plans})
+
+
+def user_names(db: Session, ids: set[int | None]) -> dict[int, str]:
+    """Display names for a set of user ids, in one query."""
+    ids = {i for i in ids if i is not None}
     if not ids:
         return {}
     rows = db.execute(select(User.id, User.full_name, User.username).where(User.id.in_(ids))).all()
@@ -461,7 +611,7 @@ def decider_names(
 
 
 def queue_rows(
-    db: Session, year: int, month: int
+    db: Session, year: int, month: int, stream: str = STREAM_DT
 ) -> list[tuple[Contractor, ContractorMonthlyPlan | None, int | None]]:
     """One row per contractor for the PM's queue, submitted or not.
 
@@ -474,8 +624,10 @@ def queue_rows(
     disappear from the queue it is owed in.
     """
     validate_period(year, month)
+    validate_stream(stream)
 
     with_a_plan = select(ContractorMonthlyPlan.contractor_id).where(
+        ContractorMonthlyPlan.stream == stream,
         ContractorMonthlyPlan.shamsi_year == year,
         ContractorMonthlyPlan.shamsi_month == month,
     )
@@ -490,8 +642,8 @@ def queue_rows(
 
     rows = []
     for contractor in contractors:
-        plan = current_plan(db, contractor.id, year, month)
-        previous = previous_approved_count(db, contractor.id, year, month)
+        plan = current_plan(db, contractor.id, year, month, stream)
+        previous = previous_approved_count(db, contractor.id, year, month, stream)
         rows.append((contractor, plan, previous))
     return rows
 
@@ -499,8 +651,10 @@ def queue_rows(
 # ---------------------------------------------------------------------------
 # Writes
 # ---------------------------------------------------------------------------
-def _clear_current(db: Session, contractor_id: int, year: int, month: int) -> None:
-    """Take ``is_current`` off every row for this contractor and month.
+def _clear_current(
+    db: Session, contractor_id: int, year: int, month: int, stream: str
+) -> None:
+    """Take ``is_current`` off every row for this contractor, stream and month.
 
     Called immediately before a new version is inserted, in the same
     transaction, which is what keeps "exactly one current version" true
@@ -510,6 +664,7 @@ def _clear_current(db: Session, contractor_id: int, year: int, month: int) -> No
         db.query(ContractorMonthlyPlan)
         .filter(
             ContractorMonthlyPlan.contractor_id == contractor_id,
+            ContractorMonthlyPlan.stream == stream,
             ContractorMonthlyPlan.shamsi_year == year,
             ContractorMonthlyPlan.shamsi_month == month,
             ContractorMonthlyPlan.is_current.is_(True),
@@ -520,11 +675,14 @@ def _clear_current(db: Session, contractor_id: int, year: int, month: int) -> No
         row.is_current = False
 
 
-def _next_version(db: Session, contractor_id: int, year: int, month: int) -> int:
+def _next_version(
+    db: Session, contractor_id: int, year: int, month: int, stream: str
+) -> int:
     highest = (
         db.query(ContractorMonthlyPlan.version)
         .filter(
             ContractorMonthlyPlan.contractor_id == contractor_id,
+            ContractorMonthlyPlan.stream == stream,
             ContractorMonthlyPlan.shamsi_year == year,
             ContractorMonthlyPlan.shamsi_month == month,
         )
@@ -544,6 +702,7 @@ def save_plan(
     month: int,
     committed_count: int | None,
     submit: bool,
+    stream: str = STREAM_DT,
 ) -> ContractorMonthlyPlan:
     """Create or update this month's plan, optionally submitting it.
 
@@ -553,23 +712,28 @@ def save_plan(
 
     A plan already awaiting a PM's decision is refused rather than silently
     edited: the number the PM is looking at has to be the number that was
-    handed to them. An approved one is refused too — :func:`revise` is the way
-    past that, and it is a deliberate, separate act.
+    handed to them. An approved one is refused too — :func:`request_revision`
+    is the way past that, and it is a deliberate, separate act. So is a plan
+    whose revision is pending or was returned: there is an approved number in
+    force behind it either way.
     """
     validate_period(year, month)
+    validate_stream(stream)
     validate_count(committed_count, required=submit)
 
-    plan = current_plan(db, contractor_id, year, month)
+    plan = current_plan(db, contractor_id, year, month, stream)
 
     if plan is not None:
         # Two states this endpoint will not touch, spelled out here rather
         # than left to the transition table so each one can say what to do
         # instead. Both are refusals to edit a number somebody else is
         # already acting on.
-        if plan.status == STATUS_APPROVED:
+        if plan.status in (
+            STATUS_APPROVED, STATUS_REVISION_REQUESTED, STATUS_REVISION_RETURNED
+        ):
             raise PlanError(
                 "This month's plan is approved and cannot be edited. "
-                "Submit a revision instead."
+                "Request a revision instead."
             )
         if plan.status == STATUS_SUBMITTED:
             raise PlanError(
@@ -580,9 +744,10 @@ def save_plan(
     if plan is None:
         plan = ContractorMonthlyPlan(
             contractor_id=contractor_id,
+            stream=stream,
             shamsi_year=year,
             shamsi_month=month,
-            version=_next_version(db, contractor_id, year, month),
+            version=_next_version(db, contractor_id, year, month, stream),
             is_current=True,
             status=STATUS_DRAFT,
             is_default=False,
@@ -590,7 +755,7 @@ def save_plan(
         # Defensive: nothing should be current if the read above found
         # nothing, but if a row ever were, two current versions would be
         # worse than a redundant update.
-        _clear_current(db, contractor_id, year, month)
+        _clear_current(db, contractor_id, year, month, stream)
         db.add(plan)
 
     plan.committed_count = committed_count
@@ -611,45 +776,64 @@ def save_plan(
     return plan
 
 
-def revise(
+def request_revision(
     db: Session,
     *,
     contractor_id: int,
     user: User,
     year: int,
     month: int,
+    stream: str,
     committed_count: int,
+    reason: str,
+    comment: str | None,
+    today: date | None = None,
 ) -> ContractorMonthlyPlan:
-    """Open the next version of an approved plan, as a draft.
+    """Ask the PM to change this month's approved number.
 
-    The approved row is left exactly as it was decided and stops being
-    current; the new row carries ``version = previous + 1``. Both stay
-    readable, which is the point — a revision is a second promise, not a
-    correction of the record of the first.
+    Appends a new version with status ``RevisionRequested``. The approved row
+    is left exactly as it was decided and stays in force -- it is still the
+    contractor's PIP -- until the PM approves the request. Only
+    ``is_current`` moves, because the request is now the latest version.
 
-    It arrives as a Draft rather than as a submission, so the SC gets the same
-    save-then-submit as any other month and there is only one code path that
-    hands a plan to a PM.
+    Refused unless the plan is approved (directly, or with an earlier request
+    already returned), no other request is pending, and the revision window
+    for the month is still open.
     """
     validate_period(year, month)
+    validate_stream(stream)
     validate_count(committed_count, required=True)
+    comment = validate_revision_reason(reason, comment)
 
-    approved = current_plan(db, contractor_id, year, month)
-    if approved is None:
-        raise PlanError("There is no plan for this month to revise")
-    if approved.status != STATUS_APPROVED:
-        raise PlanError("Only an approved plan is revised; edit this one instead")
+    if not revision_window_open(year, month, today):
+        raise PlanError(
+            "Revisions are only open for the running month, until the end of "
+            f"day {REVISION_CUTOFF_DAY}. The approved plan is final."
+        )
 
-    _clear_current(db, contractor_id, year, month)
+    latest = current_plan(db, contractor_id, year, month, stream)
+    if latest is None or in_force_plan(db, contractor_id, year, month, stream) is None:
+        raise PlanError("Only an approved plan can be revised")
+    if latest.status == STATUS_REVISION_REQUESTED:
+        raise PlanError("A revision of this plan is already waiting on the PM")
+    if latest.status not in (STATUS_APPROVED, STATUS_REVISION_RETURNED):
+        raise PlanError("Only an approved plan can be revised")
+
+    _clear_current(db, contractor_id, year, month, stream)
     plan = ContractorMonthlyPlan(
         contractor_id=contractor_id,
+        stream=stream,
         shamsi_year=year,
         shamsi_month=month,
-        version=_next_version(db, contractor_id, year, month),
+        version=_next_version(db, contractor_id, year, month, stream),
         is_current=True,
-        status=STATUS_DRAFT,
+        status=STATUS_REVISION_REQUESTED,
         is_default=False,
         committed_count=committed_count,
+        submitted_by=user.id,
+        submitted_at=_now(),
+        revision_reason=reason,
+        revision_comment=comment,
     )
     db.add(plan)
     db.flush()
@@ -657,10 +841,28 @@ def revise(
 
 
 def approve(
-    db: Session, *, plan: ContractorMonthlyPlan, user: User
+    db: Session,
+    *,
+    plan: ContractorMonthlyPlan,
+    user: User,
+    today: date | None = None,
 ) -> ContractorMonthlyPlan:
-    """Lock a submitted plan as this contractor's target for the month."""
+    """Lock a submitted plan, or a revision, as the target for the month.
+
+    Approving a revision makes it the highest approved version, which is what
+    puts it in force; the version it replaces is not touched. A revision can
+    only be approved while the revision window is open -- after the end of day
+    15 the approved PIP is final, so a request still pending then can only be
+    returned.
+    """
     _check_transition(plan.status, STATUS_APPROVED)
+    if plan.status == STATUS_REVISION_REQUESTED and not revision_window_open(
+        plan.shamsi_year, plan.shamsi_month, today
+    ):
+        raise PlanError(
+            f"Revisions closed at the end of day {REVISION_CUTOFF_DAY}. "
+            "The approved plan is final; return this request instead."
+        )
     plan.status = STATUS_APPROVED
     plan.decided_by = user.id
     plan.decided_at = _now()
@@ -671,11 +873,16 @@ def approve(
 def return_plan(
     db: Session, *, plan: ContractorMonthlyPlan, user: User, comment: str
 ) -> ContractorMonthlyPlan:
-    """Send a submitted plan back, with the reason attached.
+    """Send a submitted plan or a revision request back, with the reason.
 
     The comment is required and is the whole value of returning rather than
     rejecting: a number sent back without one tells the contractor that the PM
     disagreed and nothing about what to write instead.
+
+    A returned revision becomes ``RevisionReturned`` rather than
+    ``Returned``: it is not reopened for editing, because the approved number
+    behind it is still in force and nothing is owed. A further request is a
+    new version.
     """
     comment = (comment or "").strip()
     if not comment:
@@ -684,8 +891,13 @@ def return_plan(
         raise PlanError(
             f"The comment cannot be longer than {MAX_RETURN_COMMENT} characters"
         )
-    _check_transition(plan.status, STATUS_RETURNED)
-    plan.status = STATUS_RETURNED
+    target = (
+        STATUS_REVISION_RETURNED
+        if plan.status == STATUS_REVISION_REQUESTED
+        else STATUS_RETURNED
+    )
+    _check_transition(plan.status, target)
+    plan.status = target
     plan.decided_by = user.id
     plan.decided_at = _now()
     plan.return_comment = comment
@@ -699,10 +911,13 @@ def audit_snapshot(plan: ContractorMonthlyPlan) -> dict:
         "status": plan.status,
         "committed_count": plan.committed_count,
         "version": plan.version,
+        "stream": plan.stream,
         "shamsi_year": plan.shamsi_year,
         "shamsi_month": plan.shamsi_month,
         "contractor_id": plan.contractor_id,
         "return_comment": plan.return_comment,
+        "revision_reason": plan.revision_reason,
+        "revision_comment": plan.revision_comment,
     }
 
 

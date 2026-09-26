@@ -36,16 +36,17 @@ from __future__ import annotations
 from collections import defaultdict
 from datetime import date
 
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core import jalali
 from app.core.deps import CONTRACTOR
-from app.models.monthly_plan import STATUS_APPROVED, ContractorMonthlyPlan
+from app.models.monthly_plan import STREAM_DT, ContractorMonthlyPlan
 from app.models.reference import Contractor, Province
 from app.models.workitem import WorkItem
 from app.services import cpm_columns as C
 from app.services import dt_universe
+from app.services.monthly_plan import approved_pip_in_force
 from app.services.workflow import (
     STAGE_ASSIGNED,
     STAGE_DT_SUBMITTED,
@@ -1093,32 +1094,21 @@ class DriveTestAnalytics:
         return [w for w in self._load() if self._effective_contractor_id(w) == own]
 
     def _approved_pip(self, year: int, month: int) -> dict[int, int]:
-        """Each contractor's approved commitment for the month, by contractor id.
+        """Each contractor's DT PIP in force for the month, by contractor id.
 
-        ``is_current`` and ``Approved`` together are what "the approved
-        current-version plan" means: a superseded version is not current, and
-        a revision that has not been approved yet is not approved. So a
-        contractor revising an approved plan contributes nothing until the new
-        number is approved — and shows up in the uncommitted count rather than
-        silently keeping last version's target.
+        "In force" is the highest approved version of the DT plan: a revision
+        that is pending or was returned does not displace it, and one that is
+        approved replaces it. The definition lives in
+        ``monthly_plan.approved_pip_in_force`` so this and the plan screens
+        cannot disagree about which number a contractor is held to.
 
-        The contractor filter is applied here, in the query, rather than to
+        The contractor filter is applied there, in the query, rather than to
         the rows afterwards: a filter on the way out is one refactor away from
         being dropped, and what it would leak is every competitor's number.
         """
-        stmt = select(
-            ContractorMonthlyPlan.contractor_id,
-            ContractorMonthlyPlan.committed_count,
-        ).where(
-            ContractorMonthlyPlan.shamsi_year == year,
-            ContractorMonthlyPlan.shamsi_month == month,
-            ContractorMonthlyPlan.is_current.is_(True),
-            ContractorMonthlyPlan.status == STATUS_APPROVED,
+        return approved_pip_in_force(
+            self._db, year, month, STREAM_DT, contractor_id=self._own_contractor_id()
         )
-        own = self._own_contractor_id()
-        if own is not None:
-            stmt = stmt.where(ContractorMonthlyPlan.contractor_id == own)
-        return {cid: (count or 0) for cid, count in self._db.execute(stmt).all()}
 
     def _plan_universe(self, year: int, month: int) -> dict[int, str]:
         """The contractors who are expected to have a plan for this month.
@@ -1131,6 +1121,7 @@ class DriveTestAnalytics:
         which this needs, at one query each.
         """
         with_a_plan = select(ContractorMonthlyPlan.contractor_id).where(
+            ContractorMonthlyPlan.stream == STREAM_DT,
             ContractorMonthlyPlan.shamsi_year == year,
             ContractorMonthlyPlan.shamsi_month == month,
         )
@@ -1159,15 +1150,7 @@ class DriveTestAnalytics:
         The dating rule is then applied in Python exactly as everywhere else;
         the date window is only how the rows are fetched.
         """
-        pip = self._db.execute(
-            select(func.coalesce(func.sum(ContractorMonthlyPlan.committed_count), 0))
-            .where(
-                ContractorMonthlyPlan.shamsi_year == year,
-                ContractorMonthlyPlan.shamsi_month == month,
-                ContractorMonthlyPlan.is_current.is_(True),
-                ContractorMonthlyPlan.status == STATUS_APPROVED,
-            )
-        ).scalar_one()
+        pip = sum(approved_pip_in_force(self._db, year, month, STREAM_DT).values())
         if not pip:
             return None
 

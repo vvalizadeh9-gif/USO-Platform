@@ -12,9 +12,16 @@ from app.core.user_status import USER_STATUSES
 from app.services.monthly_plan import (
     MAX_COMMITTED_COUNT,
     MAX_RETURN_COMMENT,
+    MAX_REVISION_COMMENT,
     MAX_SHAMSI_YEAR,
     MIN_SHAMSI_YEAR,
 )
+
+#: The two PIP streams and the revision reasons, as request types. The same
+#: values as ``models/monthly_plan.PLAN_STREAMS`` / ``REVISION_REASONS``, which
+#: the service checks again for callers that do not come through a schema.
+PlanStream = Literal["DT", "ACCEPTANCE"]
+RevisionReason = Literal["SITES_BLOCKED", "SCOPE_CHANGE", "PERMITS", "OTHER"]
 
 
 class ORMModel(BaseModel):
@@ -1844,6 +1851,7 @@ class MonthlyPlanOut(ORMModel):
 
     id: int
     contractor_id: int
+    stream: str
     shamsi_year: int
     shamsi_month: int
     version: int
@@ -1856,6 +1864,8 @@ class MonthlyPlanOut(ORMModel):
     decided_by: int | None
     decided_at: datetime | None
     return_comment: str | None
+    revision_reason: str | None = None
+    revision_comment: str | None = None
     #: Handed in after day 3 of the month it covers. Derived from
     #: ``submitted_at``, not stored -- see services/monthly_plan.is_late.
     is_late: bool = False
@@ -1878,6 +1888,7 @@ class PlanningMonth(BaseModel):
     shamsi_month_name: str
     #: "مهر 1405" — the month as a person reads it.
     label: str
+    stream: str = "DT"
     version: int | None = None
     #: None when nothing has been filed. Not an error and not a 404: on day
     #: one of the month it is the normal state, and it is the state the form
@@ -1896,6 +1907,18 @@ class PlanningMonth(BaseModel):
     #: Signed: negative once the deadline is behind us. "Three days late" and
     #: "due today" are different things to be told.
     days_remaining: int
+    #: The approved number this contractor is held to for the month, and its
+    #: version. Differs from ``committed_count`` while a revision is pending
+    #: or after one was returned: the approved number stays in force until a
+    #: revision of it is approved. None when nothing has been approved.
+    in_force_count: int | None = None
+    in_force_version: int | None = None
+    #: On a revision request: why the contractor asked.
+    revision_reason: str | None = None
+    revision_comment: str | None = None
+    #: Whether an approved plan for this month may still be revised -- the
+    #: running month, up to the end of day 15, Tehran time.
+    revision_open: bool = False
 
 
 class MonthStanding(BaseModel):
@@ -2011,6 +2034,12 @@ class MonthlyPlanQueueRow(BaseModel):
     submitted_at: datetime | None = None
     is_late: bool = False
     return_comment: str | None = None
+    #: The approved number in force for the month being decided. Differs
+    #: from ``committed_count`` while a revision is pending: that is the
+    #: number asked for, this is the one that stands until it is approved.
+    in_force_count: int | None = None
+    revision_reason: str | None = None
+    revision_comment: str | None = None
     #: Sites held in the month now running: carried in plus newly assigned.
     assignment: int = 0
     #: What was approved for the running month. None, never 0.
@@ -2032,6 +2061,7 @@ class MonthlyPlanQueueOut(BaseModel):
     shamsi_month_name: str
     #: "مهر 1405" — the month being decided, as a person reads it.
     label: str
+    stream: str = "DT"
     deadline_shamsi: str
     deadline_passed: bool
     days_remaining: int
@@ -2095,15 +2125,28 @@ class ScorecardOut(BaseModel):
 
 
 class PlanRevision(BaseModel):
-    """One version of one contractor's plan, in the order it happened."""
+    """One version of one contractor's plan, in the order it happened.
+
+    Who did what and when: ``submitted_*`` is the contractor's act (handing
+    the plan in, or asking for the revision), ``decided_*`` the PM's
+    (approving or returning it).
+    """
 
     version: int
     status: str
     committed_count: int | None
     is_current: bool
+    #: The approved version this contractor is held to. Exactly one row
+    #: carries it once anything has been approved.
+    in_force: bool = False
     is_late: bool
     return_comment: str | None
+    revision_reason: str | None = None
+    revision_comment: str | None = None
+    submitted_by: str | None = None
+    submitted_at: datetime | None = None
     submitted_shamsi: str | None
+    decided_at: datetime | None = None
     decided_shamsi: str | None
     decided_by: str | None
 
@@ -2111,6 +2154,7 @@ class PlanRevision(BaseModel):
 class PlanRevisionsOut(BaseModel):
     contractor_id: int
     contractor_name: str
+    stream: str = "DT"
     shamsi_year: int
     shamsi_month: int
     shamsi_month_name: str
@@ -2129,18 +2173,34 @@ class MonthlyPlanWrite(BaseModel):
 
     shamsi_year: int = Field(alias="year", ge=MIN_SHAMSI_YEAR, le=MAX_SHAMSI_YEAR)
     shamsi_month: int = Field(alias="month", ge=1, le=12)
+    #: DT unless said otherwise, so the screen that predates streams keeps
+    #: filing the plan it always filed.
+    stream: PlanStream = "DT"
     committed_count: int | None = Field(default=None, ge=0, le=MAX_COMMITTED_COUNT)
     submit: bool = False
 
 
-class MonthlyPlanRevise(BaseModel):
-    """Open the next version of an approved plan."""
+class MonthlyPlanRevisionRequest(BaseModel):
+    """Ask the PM to change an approved plan's number.
+
+    ``committed_count`` is strict: a whole number sent as a JSON integer.
+    ``12.5``, ``12.0`` and ``"12"`` are all refused rather than coerced -- a
+    commitment is a count, and a value that needed converting is a value
+    somebody did not mean to send. The stream is required, unlike on
+    ``MonthlyPlanWrite``: there is no older caller to stay compatible with,
+    and a revision aimed at the wrong stream is worse than a 422.
+    """
 
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
     shamsi_year: int = Field(alias="year", ge=MIN_SHAMSI_YEAR, le=MAX_SHAMSI_YEAR)
     shamsi_month: int = Field(alias="month", ge=1, le=12)
-    committed_count: int = Field(ge=0, le=MAX_COMMITTED_COUNT)
+    stream: PlanStream
+    committed_count: int = Field(strict=True, ge=0, le=MAX_COMMITTED_COUNT)
+    reason: RevisionReason
+    #: Required when ``reason`` is OTHER; the service checks that, because it
+    #: depends on another field.
+    comment: str | None = Field(default=None, max_length=MAX_REVISION_COMMENT)
 
 
 class MonthlyPlanReturn(BaseModel):
