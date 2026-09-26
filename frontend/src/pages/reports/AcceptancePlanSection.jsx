@@ -35,8 +35,8 @@ function CardHead({ icon: Icon, title, sub, action }) {
   return (
     <div className="row wrap" style={{ justifyContent: 'space-between', alignItems: 'center', padding: '16px 20px 4px', gap: 12 }}>
       <div>
-        <h3 className="row" style={{ fontSize: 14, gap: 7 }}><Icon size={14} /> {title}</h3>
-        {sub && <div className="dim" style={{ fontSize: 11.5, marginTop: 2 }}>{sub}</div>}
+        <h3 className="row" style={{ fontSize: 15, gap: 7 }}><Icon size={15} /> {title}</h3>
+        {sub && <div className="dim" style={{ fontSize: 12.5, marginTop: 2 }}>{sub}</div>}
       </div>
       {action}
     </div>

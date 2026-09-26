@@ -2,14 +2,35 @@ import { motion, useReducedMotion } from 'framer-motion'
 import { useId, useState } from 'react'
 import { DrawPath, FadeArea } from '../drivetest/charts/primitives'
 import { fmtCount } from './kpiTheme'
+import useChartWidth from './useChartWidth'
+
+/* ---------------------------------------------------------- shared text */
+
+// Every label drawn inside an SVG here. The viewBox is sized from the
+// container (useChartWidth), so these are the sizes they render at — the
+// page's small-print step, and never below it.
+const AXIS_FONT = 11.5
+// Roughly how wide one character of an axis label is at AXIS_FONT, used only
+// to decide how many month labels fit side by side. Deliberately generous:
+// the cost of over-estimating is a skipped label, the cost of under-
+// estimating is two labels printed over each other.
+const AXIS_CHAR_PX = 7.2
+
+/** The widest month label, in pixels, plus a little air either side. */
+function labelWidth(months) {
+  const longest = months.reduce((w, m) => Math.max(w, String(m.label ?? '').length), 0)
+  return longest * AXIS_CHAR_PX + 10
+}
+
+/** Print every `n`th month label, `n` just large enough that none collide. */
+function labelStep(slotW, months) {
+  return Math.max(1, Math.ceil(labelWidth(months) / Math.max(slotW, 1)))
+}
 
 /* ------------------------------------------------------------- line chart */
 
-const LINE_W = 640
-const LINE_PAD_L = 8
-const LINE_PAD_R = 8
 const LINE_PAD_T = 10
-const LINE_PAD_B = 22
+const LINE_PAD_B = 24
 
 /**
  * A trend line/area chart for a month-keyed series — the pattern
@@ -27,11 +48,17 @@ export function TrendLineChart({ months, series, height = 220, ariaLabel, legend
   const reduced = useReducedMotion()
   const base = useId()
   const [hover, setHover] = useState(null)
+  const [wrapRef, W] = useChartWidth()
 
   const n = months.length
-  const plotW = LINE_W - LINE_PAD_L - LINE_PAD_R
+  // The first and last points sit under a centred month label, so the plot
+  // is inset by half the widest label — otherwise the end labels are clipped
+  // at the card's edge.
+  const padL = Math.max(8, Math.ceil(labelWidth(months) / 2))
+  const padR = padL
+  const plotW = Math.max(1, W - padL - padR)
   const plotH = height - LINE_PAD_T - LINE_PAD_B
-  const x = (i) => LINE_PAD_L + (n > 1 ? (plotW * i) / (n - 1) : plotW / 2)
+  const x = (i) => padL + (n > 1 ? (plotW * i) / (n - 1) : plotW / 2)
 
   const allValues = series.flatMap((s) => months.map((m, i) => s.value(m, i)).filter((v) => v != null))
   const rawMax = allValues.length ? Math.max(...allValues, 0) : 0
@@ -71,17 +98,18 @@ export function TrendLineChart({ months, series, height = 220, ariaLabel, legend
     return `${top} L${x(lastI).toFixed(1)},${LINE_PAD_T + plotH} L${x(firstI).toFixed(1)},${LINE_PAD_T + plotH} Z`
   }
 
-  const labelEvery = n > 9 ? 2 : 1
+  const labelEvery = labelStep(n > 1 ? plotW / (n - 1) : plotW, months)
 
   return (
     <div>
       <div
+        ref={wrapRef}
         role="img"
         aria-label={ariaLabel}
         onMouseLeave={() => setHover(null)}
         style={{ width: '100%' }}
       >
-        <svg viewBox={`0 0 ${LINE_W} ${height}`} style={{ width: '100%', height: 'auto', display: 'block' }}>
+        <svg width={W} height={height} viewBox={`0 0 ${W} ${height}`} style={{ width: '100%', height, display: 'block' }}>
           <defs>
             {series.filter((s) => s.area).map((s) => (
               <linearGradient key={s.key} id={`${base}-${s.key}`} x1="0" y1="0" x2="0" y2="1">
@@ -92,7 +120,7 @@ export function TrendLineChart({ months, series, height = 220, ariaLabel, legend
           </defs>
 
           <line
-            x1={LINE_PAD_L} x2={LINE_W - LINE_PAD_R}
+            x1={padL} x2={W - padR}
             y1={LINE_PAD_T + plotH} y2={LINE_PAD_T + plotH}
             stroke="var(--border-soft)" strokeWidth={1}
           />
@@ -137,10 +165,12 @@ export function TrendLineChart({ months, series, height = 220, ariaLabel, legend
           ))}
 
           {months.map((m, i) =>
-            i % labelEvery === 0 || i === n - 1 ? (
+            // Counted back from the latest month, which always gets its label
+            // — it is the one the crosshair opens on.
+            (n - 1 - i) % labelEvery === 0 ? (
               <text
                 key={i} x={x(i)} y={height - 6}
-                textAnchor="middle" fontSize={9.5} fill="var(--text-dim)"
+                textAnchor="middle" fontSize={AXIS_FONT} fill="var(--text-dim)"
               >
                 {m.label}
               </text>
@@ -160,7 +190,7 @@ export function TrendLineChart({ months, series, height = 220, ariaLabel, legend
       </div>
 
       {activeMonth && (
-        <div className="row wrap" style={{ gap: 14, fontSize: 11.5, marginTop: 6 }} role="status">
+        <div className="row wrap" style={{ gap: 14, fontSize: 12.5, marginTop: 6 }} role="status">
           <b className="dim" style={{ fontWeight: 600 }}>{activeMonth.label}</b>
           {series.map((s) => {
             const v = s.value(activeMonth, active)
@@ -175,7 +205,7 @@ export function TrendLineChart({ months, series, height = 220, ariaLabel, legend
       )}
 
       {legend && (
-        <div className="row wrap" style={{ gap: 14, fontSize: 11.5, marginTop: 8 }}>
+        <div className="row wrap" style={{ gap: 14, fontSize: 12.5, marginTop: 8 }}>
           {series.map((s) => (
             <span key={s.key} className="row" style={{ gap: 5, color: 'var(--text-muted)' }}>
               <i
@@ -195,11 +225,10 @@ export function TrendLineChart({ months, series, height = 220, ariaLabel, legend
 
 /* ------------------------------------------------------------- bar charts */
 
-const BAR_W = 640
 const BAR_PAD_L = 8
 const BAR_PAD_R = 8
-const BAR_PAD_T = 18
-const BAR_PAD_B = 22
+const BAR_PAD_T = 10
+const BAR_PAD_B = 24
 
 /**
  * Grouped, animated vertical bars — "Monthly Approval Velocity": three
@@ -210,7 +239,8 @@ const BAR_PAD_B = 22
  */
 export function VelocityBars({ months, series, height = 240 }) {
   const reduced = useReducedMotion()
-  const plotW = BAR_W - BAR_PAD_L - BAR_PAD_R
+  const [wrapRef, W] = useChartWidth()
+  const plotW = W - BAR_PAD_L - BAR_PAD_R
   const plotH = height - BAR_PAD_T - BAR_PAD_B
   const n = months.length || 1
 
@@ -221,12 +251,13 @@ export function VelocityBars({ months, series, height = 240 }) {
   const groupPad = 8
   const barGap = 3
   const barW = Math.max(2, (groupW - groupPad * 2 - barGap * (series.length - 1)) / series.length)
+  const labelEvery = labelStep(groupW, months)
 
   return (
-    <div>
-      <svg viewBox={`0 0 ${BAR_W} ${height}`} style={{ width: '100%', height: 'auto', display: 'block' }}>
+    <div ref={wrapRef}>
+      <svg width={W} height={height} viewBox={`0 0 ${W} ${height}`} style={{ width: '100%', height, display: 'block' }}>
         <line
-          x1={BAR_PAD_L} x2={BAR_W - BAR_PAD_R} y1={BAR_PAD_T + plotH} y2={BAR_PAD_T + plotH}
+          x1={BAR_PAD_L} x2={W - BAR_PAD_R} y1={BAR_PAD_T + plotH} y2={BAR_PAD_T + plotH}
           stroke="var(--border-soft)" strokeWidth={1}
         />
         {months.map((m, gi) => {
@@ -250,17 +281,19 @@ export function VelocityBars({ months, series, height = 240 }) {
                   />
                 )
               })}
-              <text
-                x={BAR_PAD_L + gi * groupW + groupW / 2} y={height - 6}
-                textAnchor="middle" fontSize={9.5} fill="var(--text-dim)"
-              >
-                {m.label}
-              </text>
+              {(months.length - 1 - gi) % labelEvery === 0 && (
+                <text
+                  x={BAR_PAD_L + gi * groupW + groupW / 2} y={height - 6}
+                  textAnchor="middle" fontSize={AXIS_FONT} fill="var(--text-dim)"
+                >
+                  {m.label}
+                </text>
+              )}
             </g>
           )
         })}
       </svg>
-      <div className="row wrap" style={{ gap: 14, fontSize: 11.5, marginTop: 8 }}>
+      <div className="row wrap" style={{ gap: 14, fontSize: 12.5, marginTop: 8 }}>
         {series.map((s) => (
           <span key={s.key} className="row" style={{ gap: 5, color: 'var(--text-muted)' }}>
             <i style={{ width: 9, height: 9, borderRadius: 2, background: s.color, display: 'inline-block' }} />
@@ -300,7 +333,7 @@ export function AuthorityCompareBars({ rows }) {
                 const pct = Math.round((p.value / total) * 100)
                 return (
                   <div key={p.label} className="row" style={{ gap: 10 }}>
-                    <span style={{ width: 66, flexShrink: 0, fontSize: 11.5, color: 'var(--text-muted)' }}>
+                    <span style={{ width: 76, flexShrink: 0, fontSize: 13, color: 'var(--text-muted)' }}>
                       {p.label}
                     </span>
                     <span
@@ -315,12 +348,12 @@ export function AuthorityCompareBars({ rows }) {
                       />
                       {pct < 100 && <span style={{ flex: 100 - pct, background: 'transparent' }} />}
                     </span>
-                    <b className="tnum" style={{ width: 58, flexShrink: 0, textAlign: 'right', fontSize: 12.5 }}>
+                    <b className="tnum" style={{ width: 62, flexShrink: 0, textAlign: 'right', fontSize: 13 }}>
                       {fmtCount(p.value)}
                     </b>
                     <span
                       className="tnum dim"
-                      style={{ width: 46, flexShrink: 0, textAlign: 'right', fontSize: 11.5 }}
+                      style={{ width: 46, flexShrink: 0, textAlign: 'right', fontSize: 12.5 }}
                     >
                       {pct}%
                     </span>

@@ -1648,6 +1648,23 @@ tbody tr:last-child td { border-bottom: none; }
   --kpi-ic: var(--red-dim);
 }
 
+/* ---------- the Acceptance Dashboard's type ramp ----
+   Six steps and nothing between them: page title 26, KPI figure 31, card
+   title 15, body and labels 13, secondary 12.5, small print and chart axes
+   11.5 — the floor; nothing on the page is smaller. Scoped to `.acc-page`
+   because the KPI and drill classes it resizes are shared with the Drive Test
+   dashboard, which keeps its own sizes. Text drawn inside the charts takes
+   the same steps from the chart components themselves, whose viewBox is the
+   card's real width so a declared size is the rendered one. */
+.acc-page .page-head .eyebrow { font-size: 11.5px; }
+.acc-page .page-head h1 { font-size: 26px; }
+.acc-page .dt-kpi-title { font-size: 13px; }
+.acc-page .dt-kpi-figure { font-size: 31px; line-height: 1.1; }
+.acc-page .dt-kpi-sub { font-size: 12.5px; }
+.acc-page .dt-drill-scope { font-size: 12.5px; }
+.acc-page .dt-drill-table { font-size: 12.5px; }
+.acc-page .dt-drill-table th { font-size: 11.5px; }
+
 /* Header row: the icon sits inline with the label, not above it, so the label
    is what the eye lands on and the icon is a tint beside it. */
 .dt-kpi-hd {

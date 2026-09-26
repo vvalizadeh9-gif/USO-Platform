@@ -1,8 +1,8 @@
 import { useId } from 'react'
 import { FadeArea } from '../drivetest/charts/primitives'
 import { fmtCount } from './kpiTheme'
+import useChartWidth from './useChartWidth'
 
-const W = 640
 const H = 320
 const TOP = 20
 const BOTTOM = H - 20
@@ -10,13 +10,24 @@ const AVAIL = BOTTOM - TOP
 const GAP = 12
 const NODE_X = 20
 const NODE_W = 20
-const BAR_X = W - 220
 const BAR_W = 14
-// Each destination bar has to be at least as tall as the two-line label
-// parked beside it: a 13px name over a 15.5px figure, 18px apart, is a ~32px
-// block. 34 leaves a hair of room at the thin "CRA approved, ICT pending"
-// band rather than letting its label ride into the one below.
-const MIN_H = 34
+const LABEL_GAP = 10
+// The label column beside the bars: as wide as the longest name needs, and
+// never more than half the card, so the ribbons keep room to read as flow.
+const LABEL_MAX = 210
+// Text sizes on the page's ramp: body for the name, card-title for the
+// figure, secondary for its share. The viewBox is the card's real width
+// (useChartWidth), so these are the sizes they render at.
+const NAME_FONT = 13
+const FIGURE_FONT = 15
+const PCT_FONT = 12.5
+// Line pitch of a wrapped name, and the step from its last line down to the
+// figure under it.
+const NAME_LINE = 16
+const FIGURE_STEP = 19
+// Generous per-character estimate at NAME_FONT, used only to decide where a
+// name wraps; over-estimating costs an early wrap, never an overlap.
+const NAME_CHAR_PX = 7.2
 
 /**
  * "Approval Flow & Status Distribution" — every DT-done هدف village, fanned
@@ -32,16 +43,25 @@ const MIN_H = 34
  */
 export default function ApprovalFlowSankey({ total, nodes }) {
   const base = useId()
+  const [wrapRef, W] = useChartWidth()
   if (!total) {
     return <div className="empty" style={{ padding: 18 }}>No DT-done هدف villages yet.</div>
   }
 
-  // Every destination bar gets at least MIN_H of height so a small slice
-  // (CRA-approved-ICT-pending is often the thinnest) still carries a
-  // readable label, taken from the larger slices rather than left to
-  // overflow the plot.
+  const labelW = Math.min(LABEL_MAX, Math.floor(W / 2))
+  const BAR_X = W - labelW - BAR_W - LABEL_GAP
+  const maxChars = Math.max(8, Math.floor(labelW / NAME_CHAR_PX))
+  const lines = nodes.map((n) => wrapLabel(n.label, maxChars))
+
+  // Every destination bar has to be at least as tall as the label block
+  // parked beside it — its name, one or two lines, over the figure — so a
+  // small slice (CRA-approved-ICT-pending is often the thinnest) still
+  // carries a readable label, funded from the larger slices rather than left
+  // to ride into the one below.
+  const longest = Math.max(...lines.map((l) => l.length))
+  const minH = (longest - 1) * NAME_LINE + FIGURE_STEP + FIGURE_FONT + 4
   const barsAvail = AVAIL - GAP * (nodes.length - 1)
-  const heights = allocateHeights(nodes.map((n) => n.value), barsAvail, MIN_H)
+  const heights = allocateHeights(nodes.map((n) => n.value), barsAvail, minH)
 
   let srcCum = 0
   let destCum = TOP
@@ -60,46 +80,64 @@ export default function ApprovalFlowSankey({ total, nodes }) {
       `L${x2},${destY1} C${cx},${destY1} ${cx},${srcY1} ${x1},${srcY1} Z`
     srcCum += srcH
     destCum += destH + GAP
-    return { ...n, d, destY0, destH, pct: Math.round((n.value / total) * 100) }
+    return { ...n, d, destY0, destH, lines: lines[i], pct: Math.round((n.value / total) * 100) }
   })
 
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Approval flow: every village fanned into its ICT and CRA outcome" style={{ width: '100%', height: 'auto', display: 'block' }}>
-      <rect x={NODE_X} y={TOP} width={NODE_W} height={AVAIL} rx={6} fill="var(--surface-3)" stroke="var(--border-soft)" />
-      <text
-        x={NODE_X + NODE_W / 2} y={TOP + AVAIL / 2}
-        textAnchor="middle" fontSize={13} fontWeight={700} fill="var(--text)"
-        transform={`rotate(-90 ${NODE_X + NODE_W / 2} ${TOP + AVAIL / 2})`}
-      >
-        {fmtCount(total)} villages
-      </text>
+    <div ref={wrapRef}>
+      <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Approval flow: every village fanned into its ICT and CRA outcome" style={{ width: '100%', height: H, display: 'block' }}>
+        <rect x={NODE_X} y={TOP} width={NODE_W} height={AVAIL} rx={6} fill="var(--surface-3)" stroke="var(--border-soft)" />
+        <text
+          x={NODE_X + NODE_W / 2} y={TOP + AVAIL / 2}
+          textAnchor="middle" fontSize={NAME_FONT} fontWeight={700} fill="var(--text)"
+          transform={`rotate(-90 ${NODE_X + NODE_W / 2} ${TOP + AVAIL / 2})`}
+        >
+          {fmtCount(total)} villages
+        </text>
 
-      {ribbons.map((r) => (
-        // The wash tint, not the solid accent — the ribbon reads as a shadow
-        // the destination bar casts back to the source, not a second solid
-        // block competing with it. Same WASH table the icon chips use
-        // elsewhere on this page (see AcceptanceDashboard.jsx).
-        <FadeArea key={`${base}-${r.key}`} d={r.d} fill={r.wash || r.color} />
-      ))}
+        {ribbons.map((r) => (
+          // The wash tint, not the solid accent — the ribbon reads as a shadow
+          // the destination bar casts back to the source, not a second solid
+          // block competing with it. Same WASH table the icon chips use
+          // elsewhere on this page (see AcceptanceDashboard.jsx).
+          <FadeArea key={`${base}-${r.key}`} d={r.d} fill={r.wash || r.color} />
+        ))}
 
-      {ribbons.map((r) => (
-        <g key={`bar-${r.key}`}>
-          <rect x={BAR_X} y={r.destY0} width={BAR_W} height={r.destH} rx={4} fill={r.color} />
-          {/* Two baselines 18px apart, straddling the bar's midpoint: the
-              name above, the figure below it. Both grew — at 11px they were
-              unreadable at the size this card is actually drawn — so the
-              offsets and MIN_H above grew with them. */}
-          <text x={BAR_X + BAR_W + 10} y={r.destY0 + r.destH / 2 - 6} fontSize={13} fontWeight={600} fill="var(--text)">
-            {r.label}
-          </text>
-          <text x={BAR_X + BAR_W + 10} y={r.destY0 + r.destH / 2 + 12} fontSize={15.5} fontWeight={700} fill={r.color}>
-            {fmtCount(r.value)}
-            <tspan fill="var(--text-dim)" fontWeight={500} fontSize={12.5}> · {r.pct}%</tspan>
-          </text>
-        </g>
-      ))}
-    </svg>
+        {ribbons.map((r) => {
+          // The label block — name lines, then the figure — centred on the
+          // bar's midpoint.
+          const blockH = (r.lines.length - 1) * NAME_LINE + FIGURE_STEP
+          const y0 = r.destY0 + r.destH / 2 - blockH / 2
+          const tx = BAR_X + BAR_W + LABEL_GAP
+          return (
+            <g key={`bar-${r.key}`}>
+              <rect x={BAR_X} y={r.destY0} width={BAR_W} height={r.destH} rx={4} fill={r.color} />
+              <text x={tx} y={y0} fontSize={NAME_FONT} fontWeight={600} fill="var(--text)">
+                {r.lines.map((line, li) => (
+                  <tspan key={li} x={tx} dy={li === 0 ? 0 : NAME_LINE}>{line}</tspan>
+                ))}
+              </text>
+              <text x={tx} y={y0 + blockH} fontSize={FIGURE_FONT} fontWeight={700} fill={r.color}>
+                {fmtCount(r.value)}
+                <tspan fill="var(--text-dim)" fontWeight={500} fontSize={PCT_FONT}> · {r.pct}%</tspan>
+              </text>
+            </g>
+          )
+        })}
+      </svg>
+    </div>
   )
+}
+
+/** Break a name into at most two lines of about `maxChars`, at spaces. */
+function wrapLabel(text, maxChars) {
+  const lines = ['']
+  for (const word of String(text).split(' ')) {
+    const cur = lines[lines.length - 1]
+    if (cur && (cur + ' ' + word).length > maxChars && lines.length < 2) lines.push(word)
+    else lines[lines.length - 1] = cur ? `${cur} ${word}` : word
+  }
+  return lines
 }
 
 /** Give every node at least `minH`, funding it from the nodes with room to

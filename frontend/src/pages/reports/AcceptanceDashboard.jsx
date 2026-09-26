@@ -53,10 +53,14 @@ export default function AcceptanceDashboard() {
   if (!data) return <Loading label="Loading acceptance data" />
 
   return (
-    <AcceptanceDrillProvider>
-      <PageHead eyebrow="Reports" title="Acceptance Dashboard" />
-      <Overview data={data} />
-    </AcceptanceDrillProvider>
+    // `.acc-page` scopes this page's type ramp (see app.css) — the drill
+    // panel included, which is why the provider sits inside it.
+    <div className="acc-page">
+      <AcceptanceDrillProvider>
+        <PageHead eyebrow="Reports" title="Acceptance Dashboard" />
+        <Overview data={data} />
+      </AcceptanceDrillProvider>
+    </div>
   )
 }
 
