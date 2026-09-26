@@ -218,6 +218,5 @@ def test_the_dashboard_trend_counts_the_same_villages(client, world):
     finally:
         db.close()
     card = _card("admin")
-    for month, period in zip(card["months"], (P1, P2)):
-        if period in months:
-            assert months[period]["fully_accepted_new"] == month["delivered"]
+    for month, period in zip(card["months"], (P1, P2), strict=True):
+        assert months[period]["fully_accepted_new"] == month["delivered"]
