@@ -60,12 +60,13 @@ from app.schemas import (
     PlanningMonth,
     PlanRevision,
     PlanRevisionsOut,
+    PipOverviewOut,
     PlanStream,
     ScorecardOut,
 )
 from app.services import acceptance_plan as internal_targets
 from app.services import monthly_plan as plans
-from app.services import pip_export
+from app.services import pip_export, pip_overview
 from app.services.audit import record_audit
 from app.services.drive_test_analytics import DriveTestAnalytics
 
@@ -403,6 +404,35 @@ def queue(
             for contractor, plan, previous in rows
         ],
     )
+
+
+#: Who may read the overview: the staff roles the Monthly Plan page is open to
+#: (``MONTHLY_PLAN_ROLES`` less Contractor). Not Admin, whom the page does not
+#: serve, and never a contractor: the response carries MTN's internal target
+#: and every company's numbers.
+OVERVIEW_READERS = (PM, COORDINATOR, REGIONAL, VIEWER)
+require_overview_reader = require_roles(*OVERVIEW_READERS)
+
+
+@router.get("/overview", response_model=PipOverviewOut)
+def overview(
+    period: str = Query("month", description="month, year or since_start"),
+    year: int | None = Query(None, description="Shamsi year; the running month if omitted"),
+    month: int | None = Query(None, ge=1, le=12),
+    db: Session = Depends(get_db),
+    user: User = Depends(require_overview_reader),
+) -> PipOverviewOut:
+    """The PM's Monthly Plan page: DT and Acceptance side by side, one read.
+
+    KPIs, an All-contractors row, one row per contractor (non-filers
+    included), a 12-month trend, and what needs attention now. See
+    ``services/pip_overview.py`` for how each figure is made.
+    """
+    try:
+        data = pip_overview.overview(db, user, period=period, year=year, month=month)
+    except (pip_overview.OverviewError, plans.PlanError) as exc:
+        raise HTTPException(400, str(exc)) from None
+    return PipOverviewOut(**data)
 
 
 def _load_plan(plan_id: int, db: Session) -> ContractorMonthlyPlan:
