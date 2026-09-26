@@ -234,12 +234,15 @@ def acceptance_plan_view(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> AcceptancePlanResponse:
-    """The programme's acceptance target: this month's, last month's, history.
+    """MTN's internal acceptance target: this month's, last month's, history.
 
-    Same read permission as ``/overview`` -- anyone who can see the dashboard
-    can see the plan it is measured against. Only a PM may change it (see
-    ``PUT /plan``).
+    A monthly amount (villages to be fully accepted in that month). Staff
+    only: this is MTN's own number, and a contractor sees only its own data --
+    its plan line on the dashboard is its own approved PIP (``/trends``).
+    Only a PM may change it (see ``PUT /plan``).
     """
+    if user.role.name == CONTRACTOR:
+        raise HTTPException(403, "The internal target is not available to contractors")
     year, month = jalali.current_shamsi_period()
     current = acceptance_plan.get_current_target(db, year, month)
 
@@ -272,7 +275,7 @@ def set_acceptance_plan(
     db: Session = Depends(get_db),
     user: User = Depends(require_pm),
 ) -> AcceptancePlanPeriod:
-    """Set the programme's cumulative acceptance target for one Shamsi month.
+    """Set MTN's internal acceptance target (a monthly amount) for one month.
 
     PM only. Always appends a new version -- see
     ``services/acceptance_plan.set_target`` and the module docstring on

@@ -284,6 +284,144 @@ def _event_items(db: Session, user: User) -> list[ActionItem]:
     return items
 
 
+# ---------------------------------------------------------------------------
+# Monthly plans (PIP)
+# ---------------------------------------------------------------------------
+_STREAM_NAME = {"DT": "DT", "ACCEPTANCE": "Acceptance"}
+
+
+def _plan_url(plan, *, drawer: bool) -> str:
+    url = f"/monthly-plan?year={plan.shamsi_year}&month={plan.shamsi_month}"
+    if drawer:
+        url += f"&stream={plan.stream}&contractor={plan.contractor_id}"
+    return url
+
+
+def _plan_when(plan) -> datetime | None:
+    return plan.submitted_at or plan.decided_at or plan.updated_at
+
+
+def _pm_plan_items(db: Session, user: User) -> list[ActionItem]:
+    """Plans and revisions waiting on the PM. PM only -- Admin does not decide
+    plans (the Admin/PM separation), and a Coordinator reads but cannot."""
+    from app.models.monthly_plan import (
+        STATUS_REVISION_REQUESTED,
+        STATUS_SUBMITTED,
+        ContractorMonthlyPlan,
+    )
+    from app.models.reference import Contractor
+    from app.core import jalali
+
+    if user.role.name != PM:
+        return []
+    rows = db.execute(
+        select(ContractorMonthlyPlan, Contractor.name)
+        .join(Contractor, Contractor.id == ContractorMonthlyPlan.contractor_id)
+        .where(
+            ContractorMonthlyPlan.is_current.is_(True),
+            ContractorMonthlyPlan.status.in_([STATUS_SUBMITTED, STATUS_REVISION_REQUESTED]),
+        )
+    ).all()
+    items = []
+    for plan, name in rows:
+        month = f"{jalali.month_name(plan.shamsi_month)} {plan.shamsi_year}"
+        stream = _STREAM_NAME.get(plan.stream, plan.stream)
+        revision = plan.status == STATUS_REVISION_REQUESTED
+        items.append(ActionItem(
+            id=f"pip-{'revision' if revision else 'approve'}:{plan.id}",
+            category="plan",
+            label=f"{name}, {stream}, {month}",
+            subtitle=(
+                f"Revision awaiting approval: {plan.committed_count}"
+                if revision else f"Plan awaiting approval: {plan.committed_count}"
+            ),
+            url=_plan_url(plan, drawer=True),
+            created_at=_plan_when(plan),
+        ))
+    return items
+
+
+def _contractor_plan_items(db: Session, user: User) -> list[ActionItem]:
+    """A contractor's own plans that need them: returned, or not filed.
+
+    * **Returned** (a plan, or a revision request) with the PM's comment --
+      until they resubmit, or the window for it closes: the month the plan
+      covers has ended, or for a revision, the revision window (day 15).
+    * **Not submitted** -- the running month, per stream, once its deadline
+      (day 3) has passed with no plan filed. Clears when one is.
+
+    Only ever the caller's own company: every query is narrowed to it.
+    """
+    from app.core import jalali
+    from app.models.monthly_plan import (
+        PLAN_STREAMS,
+        STATUS_DRAFT,
+        STATUS_RETURNED,
+        STATUS_REVISION_RETURNED,
+        ContractorMonthlyPlan,
+    )
+    from app.services import monthly_plan as plans
+
+    if user.role.name != CONTRACTOR or user.contractor_id is None:
+        return []
+    today = jalali.tehran_today()
+    running = jalali.to_shamsi_date(today)[:2]
+    items = []
+
+    returned = db.execute(
+        select(ContractorMonthlyPlan).where(
+            ContractorMonthlyPlan.contractor_id == user.contractor_id,
+            ContractorMonthlyPlan.is_current.is_(True),
+            ContractorMonthlyPlan.status.in_([STATUS_RETURNED, STATUS_REVISION_RETURNED]),
+        )
+    ).scalars().all()
+    for plan in returned:
+        period = (plan.shamsi_year, plan.shamsi_month)
+        if plan.status == STATUS_REVISION_RETURNED:
+            if not plans.revision_window_open(*period, today=today):
+                continue
+        elif period < running:
+            continue  # the month it covered is over
+        month = f"{jalali.month_name(plan.shamsi_month)} {plan.shamsi_year}"
+        stream = _STREAM_NAME.get(plan.stream, plan.stream)
+        what = "Revision returned" if plan.status == STATUS_REVISION_RETURNED else "Plan returned"
+        items.append(ActionItem(
+            id=f"pip-returned:{plan.id}",
+            category="plan",
+            label=f"{stream} PIP, {month}",
+            subtitle=f"{what}: {plan.return_comment}" if plan.return_comment else what,
+            url=_plan_url(plan, drawer=False),
+            created_at=_plan_when(plan),
+        ))
+
+    if plans.deadline_has_passed(*running, today=today):
+        filed = {
+            stream
+            for stream, status in db.execute(
+                select(ContractorMonthlyPlan.stream, ContractorMonthlyPlan.status).where(
+                    ContractorMonthlyPlan.contractor_id == user.contractor_id,
+                    ContractorMonthlyPlan.shamsi_year == running[0],
+                    ContractorMonthlyPlan.shamsi_month == running[1],
+                    ContractorMonthlyPlan.is_current.is_(True),
+                )
+            ).all()
+            if status != STATUS_DRAFT
+        }
+        month = f"{jalali.month_name(running[1])} {running[0]}"
+        for stream in PLAN_STREAMS:
+            if stream in filed:
+                continue
+            items.append(ActionItem(
+                id=f"pip-missing:{stream}:{running[0]}-{running[1]}",
+                category="plan",
+                label=f"{_STREAM_NAME[stream]} PIP, {month}",
+                subtitle="Plan not submitted; the deadline has passed",
+                url=f"/monthly-plan?year={running[0]}&month={running[1]}",
+                created_at=None,
+            ))
+    return items
+
+
 def _sort_key(item: ActionItem) -> datetime:
     dt = item.created_at
     if dt is None:
@@ -298,6 +436,8 @@ def build(db: Session, user: User) -> list[ActionItem]:
         *_cpm_change_request_items(db, user),
         *_health_check_items(db, user),
         *_remediation_items(db, user),
+        *_pm_plan_items(db, user),
+        *_contractor_plan_items(db, user),
         *_event_items(db, user),
     ]
     items.sort(key=_sort_key, reverse=True)
@@ -458,6 +598,18 @@ def counters(db: Session, user: User) -> list[ActionCounter]:
                 key="my_fixes", label="Fixes Assigned To You",
                 count=open_fixes, url="/my-fix-queue",
             ))
+
+    # Monthly plans: the same items, counted. PM decides; a contractor answers.
+    plan_items = _pm_plan_items(db, user) + _contractor_plan_items(db, user)
+    for key, label, prefix in (
+        ("plans_to_approve", "Plans To Approve", "pip-approve:"),
+        ("revisions_to_approve", "Revisions To Approve", "pip-revision:"),
+        ("plans_returned", "Plans Returned", "pip-returned:"),
+        ("plans_missing", "Plans Not Submitted", "pip-missing:"),
+    ):
+        count = sum(1 for i in plan_items if i.id.startswith(prefix))
+        if count:
+            out.append(ActionCounter(key=key, label=label, count=count, url="/monthly-plan"))
 
     if role in (ADMIN, PM):
         pending_cpm = len(_cpm_change_request_items(db, user))

@@ -1,29 +1,28 @@
-"""Acceptance monthly target: the PM's programme-wide village-acceptance plan.
+"""MTN internal target: the PM's own monthly number, per stream.
 
-A PM sets, once per Shamsi month, how many villages the programme should have
-fully accepted -- ICT **and** CRA, cumulatively, by the end of that month.
-Coordinators across every province work toward that single number; it is not
-attributed to a contractor, a province or a technology, because full
-acceptance is the one thing every one of them shares responsibility for.
+A PM sets, once per Shamsi month and per stream, what MTN commits to
+management for that month:
 
-This is deliberately a different shape from ``ContractorMonthlyPlan`` in
-``monthly_plan.py``, even though the two tables sit side by side and share a
-name pattern. That one is a per-contractor *drive-test volume commitment*,
-submitted by a contractor and approved by a PM every month. This one is a
-programme-wide *acceptance target*, set unilaterally by a PM with nobody to
-submit it and nobody to approve it -- there is no workflow here, only a
-number and who set it.
+* ``ACCEPTANCE`` -- villages to become fully accepted (ICT **and** CRA) in
+  that month;
+* ``DT`` -- drive tests to be delivered in that month.
 
-Two shape decisions are worth stating, because each is the reason a more
-obvious design was not used:
+Both are **monthly amounts**, the same unit as a contractor's PIP and as
+Delivered, so "internal target vs actual" and "internal target vs the
+contractors' PIPs" are direct comparisons. A cumulative view (the plan's
+running total) is derived when read, never stored.
 
-**Cumulative, not a monthly delta.** ``target_count`` means "by the end of
-this month, this many villages total should be fully accepted" rather than
-"this many new villages this month". A programme target is almost always
-phrased that way -- "1,200 villages accepted by the end of مهر" -- and a
-cumulative figure is also the one that can be plotted directly against the
-cumulative acceptance trend this feature computes, with no further
-arithmetic on either side.
+This is deliberately a different table from ``ContractorMonthlyPlan`` in
+``monthly_plan.py``. That one is a contractor's own commitment, submitted by
+the contractor and approved by a PM. This one is MTN's internal number, set
+unilaterally by a PM with nobody to submit it and nobody to approve it --
+there is no workflow here, only a number and who set it. **It is staff-only:
+no contractor ever reads it.** A contractor measures itself against its own
+approved PIP instead.
+
+Until revision ``c4f9a2e7d318`` the Acceptance target was cumulative
+("1,200 villages accepted by the end of مهر"); that migration converted the
+stored rows to monthly amounts and records the original in each row's note.
 
 **Append-only, exactly like ``ContractorMonthlyPlan``.** Setting a new target
 for a month that already has one does not edit the row: it inserts a new row
@@ -47,33 +46,59 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    String,
     Text,
     UniqueConstraint,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
+from app.models.monthly_plan import PLAN_STREAMS, STREAM_ACCEPTANCE, STREAM_DT
+
+#: Which of the two targets a row is. The same two names the contractors'
+#: PIPs use (``models/monthly_plan.py``), re-exported so callers of this
+#: module need not reach into that one.
+TARGET_STREAMS: tuple[str, ...] = PLAN_STREAMS
+__all__ = [
+    "AcceptanceMonthlyTarget",
+    "STREAM_ACCEPTANCE",
+    "STREAM_DT",
+    "TARGET_STREAMS",
+]
 
 
 class AcceptanceMonthlyTarget(Base):
-    """One version of the programme's cumulative acceptance target for one
-    Shamsi month."""
+    """One version of one stream's MTN internal target for one Shamsi month."""
 
     __tablename__ = "acceptance_monthly_targets"
     __table_args__ = (
         # A version number is only meaningful within one month, and two rows
         # claiming the same one would make "which is version 2" unanswerable
         # -- the constraint the append-on-revision rule rests on.
+        # Versions count per stream: a DT target and an Acceptance target
+        # for the same month are independent histories.
         UniqueConstraint(
-            "shamsi_year", "shamsi_month", "version",
-            name="uq_acceptance_target_period_version",
+            "stream", "shamsi_year", "shamsi_month", "version",
+            name="uq_internal_target_stream_period_version",
         ),
-        # How every read of this table starts: one month's current target, or
-        # the trend's month-by-month lookup.
-        Index("ix_acceptance_target_period", "shamsi_year", "shamsi_month"),
+        # How every read of this table starts: one stream's current target
+        # for a month, or the trend's month-by-month lookup.
+        Index(
+            "ix_internal_target_stream_period",
+            "stream", "shamsi_year", "shamsi_month",
+        ),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
+
+    #: ``DT`` or ``ACCEPTANCE``. Every row that predates streams is
+    #: ``ACCEPTANCE``, the only target there was.
+    stream: Mapped[str] = mapped_column(
+        String(20),
+        default=STREAM_ACCEPTANCE,
+        server_default=STREAM_ACCEPTANCE,
+        nullable=False,
+    )
 
     shamsi_year: Mapped[int] = mapped_column(Integer, nullable=False)
     shamsi_month: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -83,8 +108,8 @@ class AcceptanceMonthlyTarget(Base):
     #: ``services/acceptance_plan.py`` is what keeps that true.
     is_current: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
-    #: Cumulative: how many villages should be fully accepted by the end of
-    #: this month, counting everything accepted before it too. Validated
+    #: This month alone: villages fully accepted (ACCEPTANCE) or drive tests
+    #: delivered (DT). Validated
     #: non-negative at the service/schema layer, matching how
     #: ``committed_count`` is handled on ``ContractorMonthlyPlan``.
     target_count: Mapped[int] = mapped_column(Integer, nullable=False)

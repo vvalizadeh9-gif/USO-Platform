@@ -5,6 +5,7 @@ import api from '../../api/client'
 import { EmptyState, Loading, fadeUp, stagger } from '../../components/ui'
 import { useToast } from '../../context/ToastContext'
 import Revisions from './Revisions'
+import { downloadXlsx } from './xlsx'
 
 /**
  * Commitment against delivery, month by month.
@@ -72,16 +73,7 @@ export default function Scorecard({ canSeeAllContractors }) {
 
   async function download() {
     try {
-      const r = await api.get('/pip/scorecard.xlsx', {
-        params: range,
-        responseType: 'blob',
-      })
-      const url = URL.createObjectURL(r.data)
-      const link = document.createElement('a')
-      link.href = url
-      link.download = filenameFrom(r.headers['content-disposition']) || 'pip-scorecard.xlsx'
-      link.click()
-      URL.revokeObjectURL(url)
+      await downloadXlsx('/pip/scorecard.xlsx', range, 'pip-scorecard.xlsx')
     } catch {
       toast.error('Could not build the file', 'Please try again.')
     }
@@ -171,11 +163,6 @@ function bandColor(value) {
   if (value >= 100) return 'var(--green)'
   if (value >= 80) return 'var(--amber)'
   return 'var(--red)'
-}
-
-function filenameFrom(disposition) {
-  const match = /filename="([^"]+)"/.exec(disposition || '')
-  return match ? match[1] : null
 }
 
 /** Rolling window, or a whole Shamsi year.

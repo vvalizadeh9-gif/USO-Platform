@@ -7,6 +7,7 @@
 // the interface offers, which is what decides whether a person can work.
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ToastProvider } from '../../context/ToastContext'
 
@@ -21,6 +22,8 @@ vi.mock('../../context/AuthContext', () => ({
 
 const api = (await import('../../api/client')).default
 const MonthlyPlan = (await import('./MonthlyPlan')).default
+const PlanQueue = (await import('./PlanQueue')).default
+const AcceptanceTarget = (await import('./AcceptanceTarget')).default
 
 function signedInAs(roleName) {
   mockAuth.current = { user: { full_name: 'Someone', role: { name: roleName } } }
@@ -179,9 +182,20 @@ const acceptancePlan = (over = {}) => ({
   ...over,
 })
 
+const revisionsOut = (params = {}) => ({
+  contractor_id: 1, contractor_name: 'Alpha Telecom', stream: params.stream || 'DT',
+  shamsi_year: params.year, shamsi_month: params.month, shamsi_month_name: 'مهر',
+  revisions: [],
+})
+
 function serve({ my, queue: q, scorecard = SCORECARD, plan = acceptancePlan() }) {
-  api.get.mockImplementation((url) => {
-    if (url === '/pip/my') return Promise.resolve({ data: my })
+  api.get.mockImplementation((url, config) => {
+    // `my` is one context for every /pip/my read, or a function of the
+    // params (year, month, stream) when a test needs them to differ.
+    if (url === '/pip/my') {
+      return Promise.resolve({ data: typeof my === 'function' ? my(config?.params ?? {}) : my })
+    }
+    if (url === '/pip/revisions') return Promise.resolve({ data: revisionsOut(config?.params) })
     if (url === '/pip/queue') return Promise.resolve({ data: q })
     if (url === '/pip/scorecard') return Promise.resolve({ data: scorecard })
     if (url === '/acceptance/plan') {
@@ -191,7 +205,14 @@ function serve({ my, queue: q, scorecard = SCORECARD, plan = acceptancePlan() })
   })
 }
 
-const show = () => render(<ToastProvider><MonthlyPlan /></ToastProvider>)
+const show = (path = '/monthly-plan') =>
+  render(
+    <MemoryRouter initialEntries={[path]}>
+      <ToastProvider><MonthlyPlan /></ToastProvider>
+    </MemoryRouter>,
+  )
+const showQueue = (canDecide = true) =>
+  render(<ToastProvider><PlanQueue period={{ year: 1405, month: 7 }} canDecide={canDecide} /></ToastProvider>)
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -206,46 +227,113 @@ beforeEach(() => {
 // behind it. What these tests hold up is that order, the three words the
 // figures are called by, and the two buttons that are no longer there.
 describe('a contractor filing next month', () => {
-  it('names the month being planned and hands the number in', async () => {
+  it('names the month being planned and hands both numbers in, one plan per stream', async () => {
     signedInAs('Contractor')
     serve({ my: context() })
     show()
 
     expect(await screen.findByText('Planning مهر 1405')).toBeInTheDocument()
 
-    const input = await screen.findByLabelText(/your مهر PIP/i)
-    await userEvent.type(input, '42')
+    await userEvent.type(await screen.findByLabelText(/your مهر DT PIP/i), '42')
+    await userEvent.type(screen.getByLabelText(/your مهر Acceptance PIP/i), '18')
     await userEvent.click(screen.getByRole('button', { name: 'Submit' }))
 
-    await waitFor(() =>
-      expect(api.post).toHaveBeenCalledWith(
-        '/pip/my',
-        expect.objectContaining({ committed_count: 42, submit: true }),
-      ),
+    await waitFor(() => expect(api.post).toHaveBeenCalledTimes(2))
+    expect(api.post).toHaveBeenCalledWith(
+      '/pip/my',
+      expect.objectContaining({ stream: 'DT', committed_count: 42, submit: true }),
+    )
+    expect(api.post).toHaveBeenCalledWith(
+      '/pip/my',
+      expect.objectContaining({ stream: 'ACCEPTANCE', committed_count: 18, submit: true }),
     )
   })
 
-  it('offers no draft to save and no revision to open', async () => {
+  it('reads each stream’s plan on its own', async () => {
+    signedInAs('Contractor')
+    serve({ my: context() })
+    show()
+
+    await screen.findByText('Planning مهر 1405')
+    const streams = api.get.mock.calls
+      .filter(([url]) => url === '/pip/my')
+      .map(([, config]) => config.params.stream)
+    expect(streams).toContain('DT')
+    expect(streams).toContain('ACCEPTANCE')
+  })
+
+  it('will not hand in one number without the other', async () => {
+    signedInAs('Contractor')
+    serve({ my: context() })
+    show()
+
+    await userEvent.type(await screen.findByLabelText(/your مهر DT PIP/i), '42')
+    await userEvent.click(screen.getByRole('button', { name: 'Submit' }))
+
+    expect(await screen.findByText('Enter your Acceptance PIP')).toBeInTheDocument()
+    expect(api.post).not.toHaveBeenCalled()
+  })
+
+  it('says which number failed, and does not report success for both', async () => {
+    signedInAs('Contractor')
+    serve({ my: context() })
+    api.post.mockImplementation((url, body) =>
+      body.stream === 'ACCEPTANCE'
+        ? Promise.reject({ response: { data: { detail: 'The deadline has passed' } } })
+        : Promise.resolve({ data: {} }),
+    )
+    show()
+
+    await userEvent.type(await screen.findByLabelText(/your مهر DT PIP/i), '42')
+    await userEvent.type(screen.getByLabelText(/your مهر Acceptance PIP/i), '18')
+    await userEvent.click(screen.getByRole('button', { name: 'Submit' }))
+
+    expect(await screen.findByText('Only your DT PIP was handed in')).toBeInTheDocument()
+    expect(screen.getByText(/Acceptance: The deadline has passed/)).toBeInTheDocument()
+    expect(screen.queryByText('Handed in')).not.toBeInTheDocument()
+  })
+
+  it('submits only the stream still open when the other is with the PM', async () => {
+    signedInAs('Contractor')
+    serve({
+      my: ({ stream }) =>
+        stream === 'DT'
+          ? context({ planning: { status: 'Submitted', committed_count: 40 } })
+          : context(),
+    })
+    show()
+
+    await userEvent.type(await screen.findByLabelText(/your مهر Acceptance PIP/i), '18')
+    await userEvent.click(screen.getByRole('button', { name: 'Submit' }))
+
+    await waitFor(() => expect(api.post).toHaveBeenCalledTimes(1))
+    expect(api.post).toHaveBeenCalledWith('/pip/my', expect.objectContaining({ stream: 'ACCEPTANCE' }))
+  })
+
+  // The old rule was "no revision, ever"; revisions now exist, for the running
+  // month's approved PIP only. With nothing approved there is nothing to revise.
+  it('offers no draft to save, and no revision while nothing is approved', async () => {
     signedInAs('Contractor')
     serve({ my: context() })
     show()
 
     await screen.findByRole('button', { name: 'Submit' })
-    // The endpoints behind both are gone; offering either would be a button
-    // whose only outcome is an error.
     expect(screen.queryByRole('button', { name: /save draft/i })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /revise/i })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /open revision/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /request revision/i })).not.toBeInTheDocument()
   })
 
-  it('shows the version, the deadline and how long is left beside the field', async () => {
+  it('shows the version, the deadline and how long is left beside each field', async () => {
     signedInAs('Contractor')
     serve({ my: context() })
     show()
 
-    const meta = (await screen.findByText(/1405\/07\/03/)).closest('.pip-meta')
-    expect(meta).toHaveTextContent('Version 1')
-    expect(meta).toHaveTextContent('6 days left')
+    const metas = await screen.findAllByText(/1405\/07\/03/)
+    expect(metas).toHaveLength(2)
+    for (const node of metas) {
+      const meta = node.closest('.pip-meta')
+      expect(meta).toHaveTextContent('Version 1')
+      expect(meta).toHaveTextContent('6 days left')
+    }
   })
 
   it('says how late it is once the deadline is behind them', async () => {
@@ -253,7 +341,7 @@ describe('a contractor filing next month', () => {
     serve({ my: context({ planning: { days_remaining: -4, deadline_passed: true } }) })
     show()
 
-    expect(await screen.findByText('4 days late')).toBeInTheDocument()
+    expect((await screen.findAllByText('4 days late')).length).toBeGreaterThan(0)
   })
 
   it('puts the PM comment, and their name, in front of the field that answers it', async () => {
@@ -269,7 +357,7 @@ describe('a contractor filing next month', () => {
     })
     show()
 
-    const note = (await screen.findByText(/Ali Karimi, PM/)).closest('.pip-note')
+    const note = (await screen.findAllByText(/Ali Karimi, PM/))[0].closest('.pip-note')
     expect(within(note).getByText(/Resubmit closer to 30/)).toBeInTheDocument()
     // And the way to answer it, labelled as the answer it is.
     expect(screen.getByRole('button', { name: 'Resubmit' })).toBeInTheDocument()
@@ -288,7 +376,7 @@ describe('a contractor filing next month', () => {
     })
     show()
 
-    const note = (await screen.findByText(/Ali Karimi, PM/)).closest('.pip-note')
+    const note = (await screen.findAllByText(/Ali Karimi, PM/))[0].closest('.pip-note')
     expect(note.querySelector('img')).toBeNull()
     expect(note).toHaveTextContent('<img src=x onerror="alert(1)">too low')
   })
@@ -300,7 +388,7 @@ describe('a contractor filing next month', () => {
     })
     show()
 
-    expect(await screen.findByText(/this is your target for the month/i)).toBeInTheDocument()
+    expect((await screen.findAllByText(/this is your target for the month/i)).length).toBe(2)
     expect(document.querySelector('.pip-locked')).toHaveTextContent('40')
     expect(screen.queryByRole('spinbutton')).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /submit|revise/i })).not.toBeInTheDocument()
@@ -311,7 +399,7 @@ describe('a contractor filing next month', () => {
     serve({ my: context({ planning: { status: 'Submitted', committed_count: 40 } }) })
     show()
 
-    expect(await screen.findByText(/waiting on the pm/i)).toBeInTheDocument()
+    expect((await screen.findAllByText(/waiting on the pm/i)).length).toBe(2)
     expect(screen.queryByRole('spinbutton')).not.toBeInTheDocument()
   })
 
@@ -405,6 +493,122 @@ describe('a contractor filing next month', () => {
     expect(within(chart).getByText('—')).toBeInTheDocument()
   })
 
+  // ----------------------------------------------------- revision requests
+  //
+  // The running month is شهریور (the fixture's current_month); the picker
+  // opens on the planning month, so the running month is read separately.
+  const runningApproved = (over = {}) =>
+    context({
+      shamsi_month: 6,
+      planning: {
+        shamsi_month: 6, shamsi_month_name: 'شهریور', label: 'شهریور 1405',
+        status: 'Approved', committed_count: 38, version: 1,
+        in_force_count: 38, in_force_version: 1, revision_open: true,
+        ...over,
+      },
+    })
+  const byMonth = (running) => ({ month: m, stream }) =>
+    m === 6 ? running(stream) : context()
+
+  it('asks the PM for a new number, with a reason, while the window is open', async () => {
+    signedInAs('Contractor')
+    serve({ my: byMonth(() => runningApproved()) })
+    show()
+
+    const row = (await screen.findAllByRole('button', { name: 'Request revision' }))[0].closest('[data-revision]')
+    expect(row).toHaveAttribute('data-revision', 'DT')
+    await userEvent.click(within(row).getByRole('button', { name: 'Request revision' }))
+    await userEvent.type(within(row).getByRole('spinbutton'), '35')
+    await userEvent.selectOptions(within(row).getByRole('combobox'), 'SITES_BLOCKED')
+    await userEvent.click(within(row).getByRole('button', { name: 'Send to PM' }))
+
+    await waitFor(() =>
+      expect(api.post).toHaveBeenCalledWith('/pip/my/revision-request', {
+        year: 1405, month: 6, stream: 'DT', committed_count: 35, reason: 'SITES_BLOCKED', comment: undefined,
+      }),
+    )
+  })
+
+  it('needs a comment when the reason is Other', async () => {
+    signedInAs('Contractor')
+    serve({ my: byMonth(() => runningApproved()) })
+    show()
+
+    const row = (await screen.findAllByRole('button', { name: 'Request revision' }))[0].closest('[data-revision]')
+    await userEvent.click(within(row).getByRole('button', { name: 'Request revision' }))
+    await userEvent.type(within(row).getByRole('spinbutton'), '35')
+    await userEvent.selectOptions(within(row).getByRole('combobox'), 'OTHER')
+    await userEvent.click(within(row).getByRole('button', { name: 'Send to PM' }))
+
+    expect(await screen.findByText('Add a comment')).toBeInTheDocument()
+    expect(api.post).not.toHaveBeenCalled()
+  })
+
+  it('offers a revision for each approved stream', async () => {
+    signedInAs('Contractor')
+    serve({ my: byMonth(() => runningApproved()) })
+    show()
+
+    const buttons = await screen.findAllByRole('button', { name: 'Request revision' })
+    expect(buttons.map((b) => b.closest('[data-revision]').dataset.revision)).toEqual(['DT', 'ACCEPTANCE'])
+  })
+
+  it('hides the request once the window has closed', async () => {
+    signedInAs('Contractor')
+    serve({ my: byMonth(() => runningApproved({ revision_open: false })) })
+    show()
+
+    await screen.findByText('شهریور 1405 — your approved PIP')
+    expect(screen.queryByRole('button', { name: 'Request revision' })).not.toBeInTheDocument()
+  })
+
+  it('says a request is pending and the approved number stays in force', async () => {
+    signedInAs('Contractor')
+    serve({
+      my: byMonth((stream) =>
+        stream === 'DT'
+          ? runningApproved({ status: 'RevisionRequested', committed_count: 35, version: 2 })
+          : runningApproved(),
+      ),
+    })
+    show()
+
+    expect(await screen.findByText('Revision to 35 requested · 38 stays in force')).toBeInTheDocument()
+    const dt = document.querySelector('[data-revision="DT"]')
+    expect(within(dt).queryByRole('button', { name: 'Request revision' })).not.toBeInTheDocument()
+  })
+
+  it('shows the PM’s comment when a request was returned', async () => {
+    signedInAs('Contractor')
+    serve({
+      my: byMonth((stream) =>
+        stream === 'ACCEPTANCE'
+          ? runningApproved({
+              status: 'RevisionReturned', committed_count: 20, version: 2,
+              return_comment: 'Permits are cleared, keep 38.', returned_by: 'Ali Karimi',
+            })
+          : runningApproved(),
+      ),
+    })
+    show()
+
+    expect(await screen.findByText('Permits are cleared, keep 38.')).toBeInTheDocument()
+  })
+
+  it('opens the version history of one stream', async () => {
+    signedInAs('Contractor')
+    serve({ my: byMonth(() => runningApproved()) })
+    show()
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Acceptance revision history' }))
+    await waitFor(() =>
+      expect(api.get).toHaveBeenCalledWith('/pip/revisions', {
+        params: { year: 1405, month: 6, stream: 'ACCEPTANCE' },
+      }),
+    )
+    expect(await screen.findByText('Revision history')).toBeInTheDocument()
+  })
+
   // ---------------------------------------------------------- what is gone
   it('shows neither the scorecard ledger nor a table of past months', async () => {
     signedInAs('Contractor')
@@ -442,7 +646,7 @@ describe('the PM deciding the month', () => {
   it('names the month being decided and counts what is outstanding', async () => {
     signedInAs('PM')
     serve({ queue: MIXED_QUEUE })
-    show()
+    showQueue()
 
     expect(await screen.findByText('Deciding مهر 1405')).toBeInTheDocument()
     expect(screen.getByText('1 awaiting a decision')).toBeInTheDocument()
@@ -454,7 +658,7 @@ describe('the PM deciding the month', () => {
   it('shows the programme in the same three words the contractor sees', async () => {
     signedInAs('PM')
     serve({ queue: MIXED_QUEUE })
-    show()
+    showQueue()
 
     await screen.findByText(/شهریور 1405 — where the programme stands/)
     // Scoped to the three cards: "PIP" is also a column heading in the table
@@ -472,7 +676,7 @@ describe('the PM deciding the month', () => {
   it('puts each company\'s running month beside what they are proposing', async () => {
     signedInAs('PM')
     serve({ queue: MIXED_QUEUE })
-    show()
+    showQueue()
 
     const row = (await screen.findByText('Beta Networks')).closest('tr')
     expect(within(row).getByText('52')).toBeInTheDocument()   // assignment
@@ -485,7 +689,7 @@ describe('the PM deciding the month', () => {
   it('lists every contractor, including one who has not filed', async () => {
     signedInAs('PM')
     serve({ queue: MIXED_QUEUE })
-    show()
+    showQueue()
 
     expect(await screen.findByText('Alpha Telecom')).toBeInTheDocument()
     expect(screen.getByText('Beta Networks')).toBeInTheDocument()
@@ -500,7 +704,7 @@ describe('the PM deciding the month', () => {
   it('totals the proposals but never the assignment column', async () => {
     signedInAs('PM')
     serve({ queue: MIXED_QUEUE })
-    show()
+    showQueue()
 
     const totals = (await screen.findByText(/total — 3 contractors/i)).closest('tr')
     expect(within(totals).getByText('65')).toBeInTheDocument()   // 40 + 25 proposed
@@ -512,7 +716,7 @@ describe('the PM deciding the month', () => {
   it('will not return a plan until there is a reason to send back', async () => {
     signedInAs('PM')
     serve({ queue: MIXED_QUEUE })
-    show()
+    showQueue()
 
     await userEvent.click(await screen.findByRole('button', { name: 'Alpha Telecom' }))
 
@@ -533,7 +737,7 @@ describe('the PM deciding the month', () => {
   it('approves the plan that is waiting on them', async () => {
     signedInAs('PM')
     serve({ queue: MIXED_QUEUE })
-    show()
+    showQueue()
 
     await userEvent.click(await screen.findByRole('button', { name: 'Alpha Telecom' }))
     await userEvent.click(screen.getByRole('button', { name: /approve/i }))
@@ -544,7 +748,7 @@ describe('the PM deciding the month', () => {
   it('carries both months into the panel it opens', async () => {
     signedInAs('PM')
     serve({ queue: MIXED_QUEUE })
-    show()
+    showQueue()
 
     await userEvent.click(await screen.findByRole('button', { name: 'Alpha Telecom' }))
     expect(
@@ -555,24 +759,11 @@ describe('the PM deciding the month', () => {
   it('offers no decision on a plan that is not waiting on them', async () => {
     signedInAs('PM')
     serve({ queue: MIXED_QUEUE })
-    show()
+    showQueue()
 
     await userEvent.click(await screen.findByRole('button', { name: 'Beta Networks' }))
     expect(screen.getByText(/approved and locked/i)).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /^approve$/i })).not.toBeInTheDocument()
-  })
-
-  it('keeps the scorecard ledger, below the decisions rather than above them', async () => {
-    signedInAs('PM')
-    serve({ queue: MIXED_QUEUE })
-    show()
-
-    const decisions = await screen.findByText('Decisions')
-    const ledger = await screen.findByText(/commitment against delivery/i)
-    // The PM opens this screen to decide a month; the record is what you read
-    // afterwards.
-    expect(decisions.compareDocumentPosition(ledger) & Node.DOCUMENT_POSITION_FOLLOWING)
-      .toBeTruthy()
   })
 })
 
@@ -580,7 +771,7 @@ describe('everyone else who reads the queue', () => {
   it('shows a coordinator the month and no way to decide it', async () => {
     signedInAs('Coordinator')
     serve({ queue: MIXED_QUEUE })
-    show()
+    showQueue(false)
 
     expect(await screen.findByText('Alpha Telecom')).toBeInTheDocument()
     expect(screen.getByText('Gamma Survey')).toBeInTheDocument()
@@ -593,7 +784,7 @@ describe('everyone else who reads the queue', () => {
   it('says so when the server refuses the queue', async () => {
     signedInAs('Viewer')
     api.get.mockRejectedValue({ response: { status: 403 } })
-    show()
+    showQueue(false)
 
     expect(await screen.findByText(/not yours to read/i)).toBeInTheDocument()
   })
@@ -606,6 +797,10 @@ describe('everyone else who reads the queue', () => {
 // It is a PM's to set and everyone else's to read; a contractor has no part
 // in it.
 describe('the acceptance target', () => {
+  // AcceptanceTarget is no longer on the PM page (the split screen has a
+  // Set link per stream); the component is kept, and tested on its own.
+  const show = () => render(<ToastProvider><AcceptanceTarget /></ToastProvider>)
+
   const targetCard = async () =>
     (await screen.findByText('Acceptance target', { selector: '.dt-kpi-title' })).closest('.dt-kpi-card')
 
@@ -628,7 +823,7 @@ describe('the acceptance target', () => {
 
     const card = await targetCard()
     await userEvent.click(within(card).getByRole('button', { name: /Set this month’s acceptance target/ }))
-    const input = screen.getByLabelText('Target (villages)')
+    const input = screen.getByLabelText('Target (villages this month)')
     await userEvent.clear(input)
     await userEvent.type(input, '3500')
     await userEvent.click(screen.getByRole('button', { name: 'Save target' }))
@@ -657,7 +852,6 @@ describe('the acceptance target', () => {
     serve({ queue: MIXED_QUEUE, plan: new Error('boom') })
     show()
 
-    await screen.findByText('Alpha Telecom')
     await waitFor(() => expect(api.get).toHaveBeenCalledWith('/acceptance/plan'))
     expect(screen.queryByText('Acceptance target')).toBeNull()
     expect(screen.queryByText('Not set yet')).toBeNull()
@@ -666,10 +860,263 @@ describe('the acceptance target', () => {
   it('is not offered to a contractor', async () => {
     signedInAs('Contractor')
     serve({ my: context() })
-    show()
+    render(<MemoryRouter><ToastProvider><MonthlyPlan /></ToastProvider></MemoryRouter>)
 
     await screen.findByText('Planning مهر 1405')
     expect(screen.queryByText('Acceptance target')).toBeNull()
     expect(api.get).not.toHaveBeenCalledWith('/acceptance/plan')
+  })
+})
+
+// ------------------------------------------------------ the PM split screen
+//
+// Shaped from app/schemas: PipOverviewOut.
+const hit = (h, of) => ({ hit: h, of })
+const ovRow = (over = {}) => ({
+  contractor_id: 1, name: 'Alpha Telecom', assignment: 40, pip: 38, delivered: 21, diff: -17,
+  status: 'approved', pip_above_assignment: false, hit_last_6: hit(4, 6),
+  plan_id: 11, plan_status: 'Approved', committed_count: 38, version: 1,
+  in_force_count: 38, in_force_version: 1, revision_from: null, revision_to: null,
+  revision_reason: null, revision_comment: null, return_comment: null, is_late: false,
+  ...over,
+})
+const trendPoints = Array.from({ length: 12 }, (_, i) => ({
+  shamsi_year: i < 6 ? 1404 : 1405, shamsi_month: ((i + 6) % 12) + 1,
+  shamsi_month_name: ['فروردین', 'اردیبهشت', 'خرداد', 'تیر', 'مرداد', 'شهریور', 'مهر', 'آبان', 'آذر', 'دی', 'بهمن', 'اسفند'][(i + 6) % 12],
+  pip: 100, delivered: i % 2 ? 110 : 80, hit: Boolean(i % 2), in_progress: i === 11,
+}))
+const streamOut = (stream, rows, over = {}) => ({
+  stream,
+  kpis: {
+    assignment: stream === 'DT' ? 143 : null, internal_pip: stream === 'DT' ? 150 : null,
+    contractor_pip: 143, gap_vs_internal: stream === 'DT' ? -7 : null, delivered: 21,
+    achievement_percent: 14.7, expected_by_today: 19, pace_diff: 2,
+  },
+  all_contractors: {
+    assignment: stream === 'DT' ? 143 : null, pip: 143, delivered: 21, diff: -122,
+    plans_approved: 3, plans_total: 5, hit_last_6: hit(3, 6),
+  },
+  rows,
+  trend: trendPoints,
+  ...over,
+})
+const overview = (over = {}) => ({
+  period: 'month', shamsi_year: 1405, shamsi_month: 7, shamsi_month_name: 'مهر',
+  months: [{ shamsi_year: 1405, shamsi_month: 7, shamsi_month_name: 'مهر' }],
+  running_year: 1405, running_month: 7, day_of_month: 4, days_in_month: 30,
+  revision_window_open: true, revisions_close_on: '1405/07/15',
+  dt: streamOut('DT', [
+    ovRow(),
+    ovRow({ contractor_id: 2, name: 'Beta Networks', pip: 50, assignment: 30, pip_above_assignment: true, in_force_count: 50 }),
+    ovRow({ contractor_id: 3, name: 'Gamma Survey', pip: null, delivered: 0, diff: null, status: 'not_submitted', plan_id: null, in_force_count: null }),
+  ]),
+  acceptance: streamOut('ACCEPTANCE', [
+    ovRow({ assignment: null, pip_above_assignment: null, status: 'revision_requested', revision_from: 38, revision_to: 35 }),
+  ]),
+  needs_attention: [
+    { contractor_id: 3, name: 'Gamma Survey', stream: 'DT', kind: 'not_submitted', label: 'DT مهر · not submitted', shamsi_year: 1405, shamsi_month: 7, plan_id: null },
+    { contractor_id: 1, name: 'Alpha Telecom', stream: 'ACCEPTANCE', kind: 'awaiting_approval', label: 'Acceptance آبان · 20 awaiting approval', shamsi_year: 1405, shamsi_month: 8, plan_id: 21 },
+  ],
+  ...over,
+})
+const accQueue = queue([
+  queueRow({ plan_id: 21, status: 'Submitted', committed_count: 20, in_force_count: null }),
+], { current_month: {} })
+
+function serveOverview(data = overview()) {
+  api.get.mockImplementation((url, config) => {
+    if (url === '/pip/overview') return Promise.resolve({ data })
+    if (url === '/pip/queue') return Promise.resolve({ data: { ...accQueue, label: 'آبان 1405', stream: config?.params?.stream } })
+    if (url === '/pip/revisions') return Promise.resolve({ data: revisionsOut(config?.params) })
+    return Promise.reject(new Error(`unexpected GET ${url}`))
+  })
+}
+
+describe('the PM split screen', () => {
+  it('shows DT Delivery and Acceptance side by side, from one read', async () => {
+    signedInAs('PM')
+    serveOverview()
+    show()
+
+    const dt = await screen.findByRole('region', { name: 'DT Delivery' })
+    const acc = screen.getByRole('region', { name: 'Acceptance' })
+    expect(within(dt).getByText('Assignment', { selector: '.mp-kpi-label' })).toBeInTheDocument()
+    expect(within(acc).queryByText('Assignment')).toBeNull()
+    expect(within(dt).getByText('−7 vs internal')).toBeInTheDocument()
+    expect(within(dt).getByText('By today 19 (+2)')).toBeInTheDocument()
+    expect(within(dt).getByText('3 of 5 plans approved')).toBeInTheDocument()
+    expect(within(dt).getByText('Hit 3/6')).toBeInTheDocument()
+    expect(within(acc).getByText('Revision 38→35')).toBeInTheDocument()
+    expect(screen.getByText('Day 4 of 30 · revisions until day 15')).toBeInTheDocument()
+    const reads = api.get.mock.calls.filter(([url]) => url === '/pip/overview')
+    expect(reads).toHaveLength(1)
+    expect(reads[0][1].params).toMatchObject({ period: 'month' })
+    // The old ledger and queue table are not on the page.
+    expect(api.get).not.toHaveBeenCalledWith('/pip/scorecard', expect.anything())
+    expect(document.querySelector('table')).toBeNull()
+  })
+
+  it('renders Not submitted and PIP > assignment', async () => {
+    signedInAs('PM')
+    serveOverview()
+    show()
+
+    const dt = await screen.findByRole('region', { name: 'DT Delivery' })
+    const gamma = within(dt).getByText('Gamma Survey').closest('.mp-row')
+    expect(within(gamma).getByText('Not submitted')).toBeInTheDocument()
+    const beta = within(dt).getByText('Beta Networks').closest('.mp-row')
+    expect(within(beta).getByText('PIP > assignment')).toBeInTheDocument()
+    expect(beta.querySelector('.mp-bar-tick-over')).not.toBeNull()
+  })
+
+  it('opens the decision drawer from a Needs attention chip, on that stream and month', async () => {
+    signedInAs('PM')
+    serveOverview()
+    show()
+
+    expect(await screen.findByText('Needs attention · 2')).toBeInTheDocument()
+    await userEvent.click(screen.getByText('Acceptance آبان · 20 awaiting approval'))
+
+    const drawer = await screen.findByRole('dialog', { name: 'Plan decision' })
+    expect(api.get).toHaveBeenCalledWith('/pip/queue', { params: { year: 1405, month: 8, stream: 'ACCEPTANCE' } })
+    expect(await within(drawer).findByRole('button', { name: 'Approve 20' })).toBeInTheDocument()
+    await waitFor(() =>
+      expect(api.get).toHaveBeenCalledWith('/pip/revisions', {
+        params: { year: 1405, month: 8, stream: 'ACCEPTANCE', contractor_id: 1 },
+      }),
+    )
+  })
+
+  it('approves through /pip/{id}/approve and reloads the page', async () => {
+    signedInAs('PM')
+    serveOverview()
+    show()
+
+    await userEvent.click(await screen.findByText('Acceptance آبان · 20 awaiting approval'))
+    const drawer = await screen.findByRole('dialog', { name: 'Plan decision' })
+    await userEvent.click(await within(drawer).findByRole('button', { name: 'Approve 20' }))
+
+    await waitFor(() => expect(api.post).toHaveBeenCalledWith('/pip/21/approve'))
+    await waitFor(() =>
+      expect(api.get.mock.calls.filter(([url]) => url === '/pip/overview')).toHaveLength(2),
+    )
+  })
+
+  it('will not return without a comment', async () => {
+    signedInAs('PM')
+    serveOverview()
+    show()
+
+    await userEvent.click(await screen.findByText('Acceptance آبان · 20 awaiting approval'))
+    const drawer = await screen.findByRole('dialog', { name: 'Plan decision' })
+    const ret = await within(drawer).findByRole('button', { name: 'Return' })
+    expect(ret).toBeDisabled()
+    await userEvent.type(within(drawer).getByRole('textbox'), 'Too low for آبان.')
+    await userEvent.click(ret)
+    await waitFor(() => expect(api.post).toHaveBeenCalledWith('/pip/21/return', { comment: 'Too low for آبان.' }))
+  })
+
+  it('opens the drawer from a contractor row', async () => {
+    signedInAs('PM')
+    serveOverview()
+    show()
+
+    const dt = await screen.findByRole('region', { name: 'DT Delivery' })
+    await userEvent.click(within(dt).getByText('Beta Networks'))
+    await screen.findByRole('dialog', { name: 'Plan decision' })
+    expect(api.get).toHaveBeenCalledWith('/pip/queue', { params: { year: 1405, month: 7, stream: 'DT' } })
+  })
+
+  it('shows a non-PM the drawer read-only, with no Approve and no Set link', async () => {
+    signedInAs('Coordinator')
+    serveOverview()
+    show()
+
+    await userEvent.click(await screen.findByText('Acceptance آبان · 20 awaiting approval'))
+    const drawer = await screen.findByRole('dialog', { name: 'Plan decision' })
+    expect(await within(drawer).findByText('Waiting on the PM’s decision.')).toBeInTheDocument()
+    expect(within(drawer).queryByRole('button', { name: /approve/i })).toBeNull()
+    expect(within(drawer).queryByRole('button', { name: 'Return' })).toBeNull()
+    expect(screen.queryByRole('button', { name: /internal target/ })).toBeNull()
+  })
+
+  it('offers the PM a Set link for an internal target, per stream', async () => {
+    signedInAs('PM')
+    serveOverview()
+    show()
+
+    const acc = await screen.findByRole('region', { name: 'Acceptance' })
+    expect(within(acc).getByText('Not set')).toBeInTheDocument()
+    await userEvent.click(within(acc).getByRole('button', { name: 'Set the Acceptance internal target' }))
+    expect(screen.getByRole('dialog', { name: 'Set the acceptance target' })).toBeInTheDocument()
+
+    const dt = screen.getByRole('region', { name: 'DT Delivery' })
+    await userEvent.click(within(dt).getByRole('button', { name: 'Set the DT Delivery internal target' }))
+    const form = screen.getByRole('dialog', { name: 'Set the DT internal target' })
+    await userEvent.type(within(form).getByLabelText('Target (drive tests this month)'), '160')
+    await userEvent.click(within(form).getByRole('button', { name: 'Save target' }))
+    await waitFor(() =>
+      expect(api.put).toHaveBeenCalledWith('/pip/internal-target', expect.objectContaining({ stream: 'DT', target_count: 160 })),
+    )
+  })
+
+  it('switches to the year and drops the by-today line', async () => {
+    signedInAs('PM')
+    serveOverview()
+    show()
+
+    await screen.findByRole('region', { name: 'DT Delivery' })
+    serveOverview(overview({ period: 'year', day_of_month: null }))
+    await userEvent.click(screen.getByRole('button', { name: 'Year' }))
+    await waitFor(() =>
+      expect(api.get.mock.calls.filter(([url]) => url === '/pip/overview').at(-1)[1].params)
+        .toMatchObject({ period: 'year' }),
+    )
+    await waitFor(() => expect(screen.queryByText('By today 19 (+2)')).toBeNull())
+    expect(screen.getAllByText('This period').length).toBe(2)
+  })
+})
+
+describe('the PM export', () => {
+  it('downloads the period on the page, both streams', async () => {
+    signedInAs('PM')
+    serveOverview()
+    const blobUrl = vi.fn(() => 'blob:x')
+    globalThis.URL.createObjectURL = blobUrl
+    globalThis.URL.revokeObjectURL = vi.fn()
+    show()
+
+    await screen.findByRole('region', { name: 'DT Delivery' })
+    api.get.mockImplementationOnce(() => Promise.resolve({ data: new Blob(['x']), headers: {} }))
+    await userEvent.click(screen.getByRole('button', { name: /Export Excel/ }))
+    await waitFor(() =>
+      expect(api.get).toHaveBeenCalledWith('/pip/scorecard.xlsx', {
+        params: { period: 'month', year: expect.any(Number), month: expect.any(Number) },
+        responseType: 'blob',
+      }),
+    )
+  })
+})
+
+describe('links from the Action Center', () => {
+  it('opens the PM on that month, with that plan’s drawer', async () => {
+    signedInAs('PM')
+    serveOverview()
+    show('/monthly-plan?year=1405&month=8&stream=ACCEPTANCE&contractor=1')
+
+    await screen.findByRole('dialog', { name: 'Plan decision' })
+    expect(api.get).toHaveBeenCalledWith('/pip/queue', { params: { year: 1405, month: 8, stream: 'ACCEPTANCE' } })
+    expect(api.get.mock.calls.find(([url]) => url === '/pip/overview')[1].params)
+      .toMatchObject({ period: 'month', year: 1405, month: 8 })
+  })
+
+  it('opens a contractor on the month the item is about', async () => {
+    signedInAs('Contractor')
+    serve({ my: context() })
+    show('/monthly-plan?year=1405&month=6')
+
+    await screen.findByText('Planning مهر 1405')
+    const asked = api.get.mock.calls.filter(([url]) => url === '/pip/my').map(([, c]) => c.params)
+    expect(asked[0]).toMatchObject({ year: 1405, month: 6 })
   })
 })

@@ -1,6 +1,7 @@
 import { LineChart, Scale, TrendingUp, Waypoints, Zap } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import api from '../../api/client'
+import { useAuth } from '../../context/AuthContext'
 import { APPROVED, CRA, ICT, IDLE, PENDING, PLANNED, REJECTED, WASH } from './acceptanceTheme'
 import ApprovalFlowSankey from './ApprovalFlowSankey'
 import { mergeMonthlySeries } from './acceptancePlan'
@@ -43,30 +44,43 @@ function CardHead({ icon: Icon, title, sub, action }) {
 }
 
 /**
- * Everything on the Overview tab that reads /acceptance/trends and
- * /drive-test/trend: the plan-vs-actual line chart, the approval-flow
- * Sankey, monthly velocity bars, the ICT/CRA comparison and the two mini
- * per-authority progress charts.
+ * Everything on the Overview tab that reads /acceptance/trends: the plan-vs-
+ * actual chart, the approval-flow Sankey, monthly velocity bars, the ICT/CRA
+ * comparison and the two mini per-authority progress charts.
  *
  * A section of its own — not folded into the page component — because it
- * owns a second load (`/acceptance/trends`) and a third (`/drive-test/trend`)
- * that the page's single `/acceptance/overview` load has no reason to know
- * about. Both are programme-wide: the page carries no filters any more, so
- * neither call takes parameters beyond the month window.
+ * owns loads the page's single `/acceptance/overview` load has no reason to
+ * know about.
  *
- * The dashed "Planned" line on the three progress charts is the acceptance
- * target a PM sets on the Monthly Plan page, as /acceptance/trends returns it
- * month by month — never a ramp drawn here. Where no month has a target, the
- * line and its legend entry are left out rather than drawn from a made-up
- * number.
+ * PLAN VS ACTUAL is plan against actual approvals (villages fully accepted).
+ * The plan is the server's, never a ramp drawn here:
+ *
+ * - Staff, all contractors: MTN's internal target (set by the PM on the
+ *   Monthly Plan page) and the contractors' approved Acceptance PIPs summed.
+ * - Staff, one contractor picked: that contractor's approved Acceptance PIP,
+ *   against that contractor's approvals. The filter reloads this chart only;
+ *   the other widgets stay programme-wide.
+ * - A contractor: its own approved PIP against its own approvals, and no
+ *   filter. The server never sends a contractor MTN's target.
+ *
+ * A plan line with no figures in the window is left out, legend and all,
+ * rather than drawn from a made-up number.
  */
 export default function AcceptancePlanSection({ total, analysis, kpis }) {
+  const { user } = useAuth()
+  const isContractor = user?.role?.name === 'Contractor'
+
   const [trends, setTrends] = useState(null)
   const [trendsError, setTrendsError] = useState(false)
-  const [dtTrend, setDtTrend] = useState(null)
 
   const [planMode, setPlanMode] = useState('cumulative')
   const [velocityMode, setVelocityMode] = useState('monthly')
+
+  // The Plan vs actual chart's own contractor filter (staff only). '' is all.
+  const [contractors, setContractors] = useState([])
+  const [contractorId, setContractorId] = useState('')
+  const [planTrends, setPlanTrends] = useState(null)
+  const [planError, setPlanError] = useState(false)
 
   useEffect(() => {
     setTrendsError(false)
@@ -77,13 +91,36 @@ export default function AcceptancePlanSection({ total, analysis, kpis }) {
   }, [])
 
   useEffect(() => {
-    api.get('/drive-test/trend', { params: { months: MONTHS } }).then((r) => setDtTrend(r.data)).catch(() => setDtTrend({ months: [] }))
-  }, [])
+    if (isContractor) return
+    // Acceptance is counted against the drive-test contractor of each site,
+    // so those are the contractors there is anything to filter to.
+    api
+      .get('/reference/contractors')
+      .then((r) => setContractors((r.data || []).filter((c) => c.type === 'drive_test')))
+      .catch(() => setContractors([]))
+  }, [isContractor])
 
-  const months = useMemo(
-    () => mergeMonthlySeries(trends?.months, dtTrend?.months),
-    [trends, dtTrend]
+  useEffect(() => {
+    if (!contractorId) return undefined
+    let live = true
+    setPlanTrends(null)
+    setPlanError(false)
+    api
+      .get('/acceptance/trends', { params: { months: MONTHS, contractor_id: Number(contractorId) } })
+      .then((r) => live && setPlanTrends(r.data))
+      .catch(() => live && setPlanError(true))
+    return () => {
+      live = false
+    }
+  }, [contractorId])
+
+  const months = useMemo(() => mergeMonthlySeries(trends?.months), [trends])
+  const planMonths = useMemo(
+    () => (contractorId ? mergeMonthlySeries(planTrends?.months) : months),
+    [contractorId, planTrends, months]
   )
+  const planFailed = contractorId ? planError : trendsError
+  const pickedName = contractors.find((c) => String(c.id) === contractorId)?.name
 
   // Whether any month in the window has a stored target. Without one there is
   // no plan to draw, and a legend entry for a line that is not there would be
@@ -92,12 +129,37 @@ export default function AcceptancePlanSection({ total, analysis, kpis }) {
   const plannedSeries = (value) =>
     hasTarget ? [{ key: 'planned', label: 'Planned (target)', color: PLANNED, dashed: true, value }] : []
 
-  const monthlyTarget = (m, i) => {
-    if (m.target == null) return null
-    const prev = months[i - 1]
-    if (!prev || prev.target == null) return null
-    return m.target - prev.target
-  }
+  // One contractor's view (a contractor, or staff filtered to one): the plan
+  // is that contractor's PIP. Otherwise MTN's target and the PIPs summed.
+  const oneContractor = isContractor || Boolean(contractorId)
+  const cumulative = planMode === 'cumulative'
+  const has = (key) => planMonths.some((m) => m[key] != null)
+  const planSeries = oneContractor
+    ? has('target_monthly')
+      ? [{
+          key: 'pip', label: isContractor ? 'Your PIP' : 'Contractor PIP', color: PENDING, dashed: true,
+          value: (m) => (cumulative ? m.target : m.target_monthly),
+        }]
+      : []
+    : [
+        ...(has('target_monthly')
+          ? [{ key: 'internal', label: 'MTN internal target', color: PLANNED, dashed: true, value: (m) => (cumulative ? m.target : m.target_monthly) }]
+          : []),
+        ...(has('pip_monthly')
+          ? [{ key: 'pip', label: 'Contractors’ PIP', color: PENDING, dashed: true, value: (m) => (cumulative ? m.pip : m.pip_monthly) }]
+          : []),
+      ]
+  const planNote = isContractor
+    ? planSeries.length
+      ? 'The plan line is your approved Acceptance PIP.'
+      : 'No approved Acceptance PIP yet.'
+    : contractorId
+      ? planSeries.length
+        ? `The plan line is ${pickedName ?? 'this contractor'}’s approved Acceptance PIP.`
+        : `${pickedName ?? 'This contractor'} has no approved Acceptance PIP in this window.`
+      : planSeries.length
+        ? 'MTN internal target is set by the PM on the Monthly Plan page; Contractors’ PIP is every contractor’s approved Acceptance PIP.'
+        : 'No acceptance target set yet. A PM sets it on the Monthly Plan page.'
 
   const sankeyNodes = useMemo(() => {
     const fully = analysis.villages_both_approved ?? 0
@@ -132,6 +194,7 @@ export default function AcceptancePlanSection({ total, analysis, kpis }) {
   ]
 
   const hasMonths = months.length > 0
+  const hasPlanMonths = planMonths.length > 0
 
   return (
     <>
@@ -140,43 +203,51 @@ export default function AcceptancePlanSection({ total, analysis, kpis }) {
           <CardHead
             icon={LineChart}
             title="Plan vs actual progress"
-            sub="Planned target, villages added and fully accepted, month by month"
+            sub="Plan against villages fully accepted (ICT + CRA), month by month"
             action={
-              <ModeToggle
-                value={planMode}
-                onChange={setPlanMode}
-                options={[{ value: 'monthly', label: 'Monthly' }, { value: 'cumulative', label: 'Cumulative' }]}
-              />
+              <div className="row" style={{ gap: 8 }}>
+                {!isContractor && (
+                  <select
+                    className="input"
+                    value={contractorId}
+                    onChange={(e) => setContractorId(e.target.value)}
+                    aria-label="Contractor"
+                    style={{ width: 'auto', minWidth: 150, fontSize: 12.5, padding: '4px 8px' }}
+                  >
+                    <option value="">All contractors</option>
+                    {contractors.map((c) => (
+                      <option key={c.id} value={String(c.id)}>{c.name}</option>
+                    ))}
+                  </select>
+                )}
+                <ModeToggle
+                  value={planMode}
+                  onChange={setPlanMode}
+                  options={[{ value: 'monthly', label: 'Monthly' }, { value: 'cumulative', label: 'Cumulative' }]}
+                />
+              </div>
             }
           />
           <div style={{ padding: '8px 20px 18px' }}>
-            {trendsError ? (
+            {planFailed ? (
               <div className="empty">Could not load the plan/actual trend.</div>
-            ) : !hasMonths ? (
+            ) : !hasPlanMonths ? (
               <div className="empty">Loading trend…</div>
             ) : (
               <TrendLineChart
-                ariaLabel="Plan versus actual progress, by Shamsi month"
-                months={months}
+                ariaLabel="Plan versus actual approvals, by Shamsi month"
+                months={planMonths}
                 series={[
-                  ...plannedSeries((m, i) => (planMode === 'cumulative' ? m.target : monthlyTarget(m, i))),
+                  ...planSeries,
                   {
-                    key: 'added', label: 'Added villages (actual)', color: ICT, area: true,
-                    value: (m) => (planMode === 'cumulative' ? m.added_cumulative : m.added_new),
-                  },
-                  {
-                    key: 'accepted', label: 'Fully accepted (ICT + CRA)', color: APPROVED, area: true,
-                    value: (m) => (planMode === 'cumulative' ? m.fully_accepted_cumulative : m.fully_accepted_new),
+                    key: 'accepted', label: 'Fully accepted (actual)', color: APPROVED, area: true,
+                    value: (m) => (cumulative ? m.fully_accepted_cumulative : m.fully_accepted_new),
                   },
                 ]}
               />
             )}
-            {hasMonths && (
-              <div className="dim" style={{ fontSize: 12.5, marginTop: 10 }}>
-                {hasTarget
-                  ? 'The target line is the acceptance target set on the Monthly Plan page.'
-                  : 'No acceptance target set yet. A PM sets it on the Monthly Plan page.'}
-              </div>
+            {hasPlanMonths && !planFailed && (
+              <div className="dim" style={{ fontSize: 12.5, marginTop: 10 }}>{planNote}</div>
             )}
           </div>
         </div>

@@ -62,7 +62,7 @@ export default function AcceptanceTargetCard({ plan, onSaved }) {
           <div className="dt-kpi-v">
             <span className="dt-kpi-figure tnum">{fmtCount(current.target_count)}</span>
           </div>
-          <div className="dt-kpi-sub">{current.label || 'Cumulative target'}</div>
+          <div className="dt-kpi-sub">{current.label || 'Villages this month'}</div>
           {delta != null ? (
             <div
               className="row"
@@ -97,11 +97,18 @@ export default function AcceptanceTargetCard({ plan, onSaved }) {
   )
 }
 
-/** The PM's own inline form: which Shamsi month, how many villages, why. */
-function SetTargetForm({ defaultValue, onClose, onSaved }) {
+/**
+ * The PM's own inline form: which Shamsi month, how many, why.
+ *
+ * One form for both MTN internal targets: `stream` ACCEPTANCE (villages,
+ * saved through PUT /acceptance/plan as it always was) or DT (drive tests,
+ * PUT /pip/internal-target). Both are monthly amounts.
+ */
+export function SetTargetForm({ defaultValue, onClose, onSaved, stream = 'ACCEPTANCE', initialPeriod }) {
   const toast = useToast()
   const running = currentShamsiPeriod()
-  const [period, setPeriod] = useState(running || { year: 0, month: 0 })
+  const unit = stream === 'DT' ? 'drive tests' : 'villages'
+  const [period, setPeriod] = useState(initialPeriod || running || { year: 0, month: 0 })
   const [count, setCount] = useState(defaultValue != null ? String(defaultValue) : '')
   const [note, setNote] = useState('')
   const [busy, setBusy] = useState(false)
@@ -119,17 +126,27 @@ function SetTargetForm({ defaultValue, onClose, onSaved }) {
       return
     }
     if (value === undefined) {
-      toast.error('That is not a number of villages', 'Enter a whole number.')
+      toast.error(`That is not a number of ${unit}`, 'Enter a whole number.')
       return
     }
     setBusy(true)
     try {
-      await api.put('/acceptance/plan', {
-        shamsi_year: period.year,
-        shamsi_month: period.month,
-        target_count: value,
-        note: note.trim() || undefined,
-      })
+      if (stream === 'DT') {
+        await api.put('/pip/internal-target', {
+          stream,
+          year: period.year,
+          month: period.month,
+          target_count: value,
+          note: note.trim() || undefined,
+        })
+      } else {
+        await api.put('/acceptance/plan', {
+          shamsi_year: period.year,
+          shamsi_month: period.month,
+          target_count: value,
+          note: note.trim() || undefined,
+        })
+      }
       toast.success('Target set', `Saved for ${period.year}/${period.month}.`)
       onSaved?.()
     } catch (err) {
@@ -147,14 +164,14 @@ function SetTargetForm({ defaultValue, onClose, onSaved }) {
         padding: 14, boxShadow: 'var(--shadow-1, 0 8px 24px rgba(20,35,60,0.14))',
       }}
       role="dialog"
-      aria-label="Set the acceptance target"
+      aria-label={stream === 'DT' ? 'Set the DT internal target' : 'Set the acceptance target'}
     >
       <div className="field" style={{ margin: 0, marginBottom: 10 }}>
         <label>Shamsi month</label>
         <PeriodPicker period={period} onChange={setPeriod} disabled={busy} />
       </div>
       <div className="field" style={{ margin: 0, marginBottom: 10 }}>
-        <label htmlFor="acc-plan-target">Target (villages)</label>
+        <label htmlFor="acc-plan-target">Target ({unit} this month)</label>
         <input
           id="acc-plan-target"
           className="input"

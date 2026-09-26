@@ -44,6 +44,9 @@ from app.core.deps import (
 from app.models.monthly_plan import STATUS_APPROVED, ContractorMonthlyPlan
 from app.models.reference import Contractor, User
 from app.schemas import (
+    InternalTargetOut,
+    InternalTargetPeriod,
+    InternalTargetWrite,
     MonthlyPlanContext,
     MonthlyPlanHistoryRow,
     MonthlyPlanOut,
@@ -57,11 +60,13 @@ from app.schemas import (
     PlanningMonth,
     PlanRevision,
     PlanRevisionsOut,
+    PipOverviewOut,
     PlanStream,
     ScorecardOut,
 )
+from app.services import acceptance_plan as internal_targets
 from app.services import monthly_plan as plans
-from app.services import pip_export
+from app.services import pip_export, pip_overview
 from app.services.audit import record_audit
 from app.services.drive_test_analytics import DriveTestAnalytics
 
@@ -401,6 +406,35 @@ def queue(
     )
 
 
+#: Who may read the overview: the staff roles the Monthly Plan page is open to
+#: (``MONTHLY_PLAN_ROLES`` less Contractor). Not Admin, whom the page does not
+#: serve, and never a contractor: the response carries MTN's internal target
+#: and every company's numbers.
+OVERVIEW_READERS = (PM, COORDINATOR, REGIONAL, VIEWER)
+require_overview_reader = require_roles(*OVERVIEW_READERS)
+
+
+@router.get("/overview", response_model=PipOverviewOut)
+def overview(
+    period: str = Query("month", description="month, year or since_start"),
+    year: int | None = Query(None, description="Shamsi year; the running month if omitted"),
+    month: int | None = Query(None, ge=1, le=12),
+    db: Session = Depends(get_db),
+    user: User = Depends(require_overview_reader),
+) -> PipOverviewOut:
+    """The PM's Monthly Plan page: DT and Acceptance side by side, one read.
+
+    KPIs, an All-contractors row, one row per contractor (non-filers
+    included), a 12-month trend, and what needs attention now. See
+    ``services/pip_overview.py`` for how each figure is made.
+    """
+    try:
+        data = pip_overview.overview(db, user, period=period, year=year, month=month)
+    except (pip_overview.OverviewError, plans.PlanError) as exc:
+        raise HTTPException(400, str(exc)) from None
+    return PipOverviewOut(**data)
+
+
 def _load_plan(plan_id: int, db: Session) -> ContractorMonthlyPlan:
     plan = db.get(ContractorMonthlyPlan, plan_id)
     if plan is None:
@@ -516,14 +550,107 @@ def scorecard(
     return ScorecardOut(**DriveTestAnalytics(db, user).scorecard(_periods(months, year)))
 
 
+def _revision_counts(
+    db: Session, user: User, periods: list[tuple[int, int]]
+) -> dict[str, dict[tuple[int, int, int], int]]:
+    """Revision requests per stream, keyed by (contractor, year, month).
+
+    A revision is a version the contractor asked for with a reason; a plan
+    returned and handed in again is not one. Narrowed to the caller's own
+    company in the query for a contractor account.
+    """
+    from sqlalchemy import func, select, tuple_
+
+    stmt = (
+        select(
+            ContractorMonthlyPlan.stream,
+            ContractorMonthlyPlan.contractor_id,
+            ContractorMonthlyPlan.shamsi_year,
+            ContractorMonthlyPlan.shamsi_month,
+            func.count(),
+        )
+        .where(
+            ContractorMonthlyPlan.revision_reason.is_not(None),
+            tuple_(ContractorMonthlyPlan.shamsi_year, ContractorMonthlyPlan.shamsi_month).in_(periods),
+        )
+        .group_by(
+            ContractorMonthlyPlan.stream,
+            ContractorMonthlyPlan.contractor_id,
+            ContractorMonthlyPlan.shamsi_year,
+            ContractorMonthlyPlan.shamsi_month,
+        )
+    )
+    if user.role.name == CONTRACTOR:
+        stmt = stmt.where(ContractorMonthlyPlan.contractor_id == (user.contractor_id or -1))
+    out: dict[str, dict[tuple[int, int, int], int]] = {"DT": {}, "ACCEPTANCE": {}}
+    for stream, cid, y, m, n in db.execute(stmt).all():
+        out.setdefault(stream, {})[(cid, y, m)] = n
+    return out
+
+
+def _plan_export(db: Session, user: User, period: str, year: int | None, month: int | None) -> Response:
+    """Both streams for the page's period: "DT Delivery" and "Acceptance"."""
+    from app.services import acceptance_plan as targets
+
+    today = jalali.tehran_today()
+    ry, rm, _ = jalali.to_shamsi_date(today)
+    if (year is None) != (month is None):
+        # Year view sends a year alone; the month is then irrelevant.
+        if period == "year" and year is not None:
+            month = 1
+        else:
+            raise HTTPException(400, "Give both year and month, or neither")
+    if year is None:
+        year, month = ry, rm
+    _guard(lambda: plans.validate_period(year, month))
+    try:
+        periods = pip_overview.period_months(db, period, year, month, (ry, rm))
+    except pip_overview.OverviewError as exc:
+        raise HTTPException(400, str(exc)) from None
+
+    dt = DriveTestAnalytics(db, user).scorecard(periods)
+    acc = targets.acceptance_scorecard(db, user, periods)
+    internal = None
+    if user.role.name != CONTRACTOR:
+        # MTN's own number, staff only. A contractor's file never carries it.
+        internal = {
+            stream: {
+                (y, m): (t.target_count if (t := targets.get_current_target(db, y, m, stream)) else None)
+                for y, m in periods
+            }
+            for stream in ("DT", "ACCEPTANCE")
+        }
+    content = pip_export.plan_workbook(
+        dt, acc, revisions=_revision_counts(db, user, periods), internal=internal
+    )
+    stamp = (jalali.format_shamsi(date.today()) or "").replace("/", "-")
+    return Response(
+        content=content,
+        media_type=XLSX_MEDIA_TYPE,
+        headers={
+            "Content-Disposition": f'attachment; filename="pip-plan-{period}-{stamp}.xlsx"'
+        },
+    )
+
+
 @router.get("/scorecard.xlsx")
 def scorecard_export(
     months: int = Query(12, ge=1, le=36),
     year: int | None = Query(None),
+    period: str | None = Query(
+        None, description="month, year or since_start: the Monthly Plan export, both streams"
+    ),
+    month: int | None = Query(None, ge=1, le=12),
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> Response:
     """The same figures as a workbook, scoped identically.
+
+    With ``period`` (the Monthly Plan page's Month / Year / Since start), the
+    file follows that period and carries both streams: a "DT Delivery" and an
+    "Acceptance" sheet, a row per contractor per month, a total per month and
+    a grand total, and -- for staff only -- MTN's internal PIP per month.
+    Without it, the older scorecard workbook below, unchanged.
 
     Same service call as the screen, so the file cannot report something the
     page does not -- and same scoping, so a contractor downloads their own
@@ -533,6 +660,8 @@ def scorecard_export(
     column: a spreadsheet has room, and the columns that let a reader check
     that the balances close are the ones worth exporting.
     """
+    if period is not None:
+        return _plan_export(db, user, period, year, month)
     data = DriveTestAnalytics(db, user).scorecard(_periods(months, year))
     stamp = (jalali.format_shamsi(date.today()) or "").replace("/", "-")
     return Response(
@@ -619,3 +748,118 @@ def revisions(
             for p in rows
         ],
     )
+
+
+# ---------------------------------------------------------------------------
+# MTN internal target: the PM's own number per stream, not a contractor's PIP
+# ---------------------------------------------------------------------------
+def _target_period(target, names: dict[int, str]) -> InternalTargetPeriod:
+    return InternalTargetPeriod(
+        stream=target.stream,
+        shamsi_year=target.shamsi_year,
+        shamsi_month=target.shamsi_month,
+        shamsi_month_name=jalali.month_name(target.shamsi_month),
+        version=target.version,
+        target_count=target.target_count,
+        set_by=names.get(target.set_by),
+        set_at=target.set_at,
+        note=target.note,
+    )
+
+
+@router.get("/internal-target", response_model=InternalTargetOut)
+def internal_target(
+    stream: PlanStream = Query(..., description="DT or ACCEPTANCE"),
+    year: int | None = Query(None, description="Shamsi year; the running month if omitted"),
+    month: int | None = Query(None, ge=1, le=12),
+    months: int = Query(12, ge=1, le=internal_targets.MAX_HISTORY_MONTHS),
+    db: Session = Depends(get_db),
+    user: User = Depends(require_queue_reader),
+) -> InternalTargetOut:
+    """One stream's MTN internal target for a month, the month before, and history.
+
+    Staff only, for both streams: this is what MTN commits to management, set
+    against the contractors' own PIPs, and no contractor reads it here.
+    (``GET /acceptance/plan`` keeps its own, older read rule for the
+    Acceptance target; it is unchanged.)
+
+    ``DT`` is a monthly amount; ``ACCEPTANCE`` is cumulative.
+    """
+    if (year is None) != (month is None):
+        raise HTTPException(400, "Give both year and month, or neither")
+    if year is None:
+        year, month = jalali.current_shamsi_period()
+    _guard(lambda: plans.validate_period(year, month))
+
+    current = internal_targets.get_current_target(db, year, month, stream)
+    prev_year, prev_month = jalali.previous_period(year, month)
+    previous = internal_targets.get_current_target(db, prev_year, prev_month, stream)
+    history = internal_targets.recent_targets(
+        db, upto_year=year, upto_month=month, months=months, stream=stream
+    )
+    names = plans.user_names(
+        db, {t.set_by for t in [current, previous, *history] if t is not None}
+    )
+    return InternalTargetOut(
+        stream=stream,
+        shamsi_year=year,
+        shamsi_month=month,
+        shamsi_month_name=jalali.month_name(month),
+        current=_target_period(current, names) if current is not None else None,
+        previous=_target_period(previous, names) if previous is not None else None,
+        history=[_target_period(t, names) for t in history],
+    )
+
+
+@router.put("/internal-target", response_model=InternalTargetPeriod)
+def set_internal_target(
+    payload: InternalTargetWrite,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_pm),
+) -> InternalTargetPeriod:
+    """Set one stream's MTN internal target for one Shamsi month.
+
+    PM only; Admin gets 403, like every other operational decision on this
+    router. Always appends a new version -- the number a month was measured
+    against is never rewritten.
+    """
+    before = internal_targets.get_current_target(
+        db, payload.shamsi_year, payload.shamsi_month, payload.stream
+    )
+    try:
+        target = internal_targets.set_target(
+            db,
+            year=payload.shamsi_year,
+            month=payload.shamsi_month,
+            target_count=payload.target_count,
+            user=user,
+            note=payload.note,
+            stream=payload.stream,
+        )
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from None
+
+    record_audit(
+        db,
+        user_id=user.id,
+        action=audit_actions.CREATED,
+        module="PIP",
+        entity_type="AcceptanceMonthlyTarget",
+        entity_id=target.id,
+        old_value=(
+            {"target_count": before.target_count, "version": before.version}
+            if before is not None
+            else None
+        ),
+        new_value={
+            "stream": target.stream,
+            "shamsi_year": target.shamsi_year,
+            "shamsi_month": target.shamsi_month,
+            "target_count": target.target_count,
+            "version": target.version,
+        },
+        reason=target.note,
+    )
+    db.commit()
+    db.refresh(target)
+    return _target_period(target, plans.user_names(db, {target.set_by}))

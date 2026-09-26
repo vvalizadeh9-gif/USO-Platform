@@ -797,7 +797,7 @@ class ActionItem(BaseModel):
     exactly one entity via ``url`` so clicking it goes straight there."""
 
     id: str
-    category: str  # drive_test | assignment | cpm | health_check | event
+    category: str  # drive_test | assignment | cpm | health_check | plan | event
     label: str
     subtitle: str | None = None
     url: str
@@ -1739,7 +1739,7 @@ class AcceptanceSiteList(BaseModel):
 
 # ----- Acceptance plan: the PM's monthly target, and the trend against it -----
 class AcceptancePlanPeriod(BaseModel):
-    """One version of the programme's cumulative acceptance target."""
+    """One version of MTN's monthly internal acceptance target."""
 
     shamsi_year: int
     shamsi_month: int
@@ -1775,6 +1775,14 @@ class AcceptanceTrendMonth(BaseModel):
     ict_cumulative: int
     cra_cumulative: int
     fully_accepted_cumulative: int
+    #: The plan: MTN's internal target for staff, the contractor's own
+    #: approved Acceptance PIP for a contractor. None where there is none.
+    target_monthly: int | None = None
+    target_cumulative: int | None = None
+    #: The contractors' approved Acceptance PIPs (summed, or one contractor's).
+    pip_monthly: int | None = None
+    pip_cumulative: int | None = None
+    #: Same as ``target_cumulative``; kept for the dashboard that reads it.
     target_count: int | None
 
 
@@ -2159,6 +2167,158 @@ class PlanRevisionsOut(BaseModel):
     shamsi_month: int
     shamsi_month_name: str
     revisions: list[PlanRevision]
+
+
+# ----- /pip/overview: the PM's Monthly Plan page, both streams -----
+class HitCount(BaseModel):
+    """Closed months where Delivered >= PIP, out of months that had a PIP."""
+
+    hit: int
+    of: int
+
+
+class OverviewKpis(BaseModel):
+    assignment: int | None = None
+    internal_pip: int | None = None
+    contractor_pip: int | None = None
+    gap_vs_internal: int | None = None
+    delivered: int
+    achievement_percent: float | None = None
+    expected_by_today: int | None = None
+    pace_diff: int | None = None
+
+
+class OverviewAllContractors(BaseModel):
+    assignment: int | None = None
+    pip: int | None = None
+    delivered: int
+    diff: int | None = None
+    plans_approved: int
+    plans_total: int
+    hit_last_6: HitCount
+
+
+class OverviewRow(BaseModel):
+    contractor_id: int
+    name: str | None = None
+    assignment: int | None = None
+    pip: int | None = None
+    delivered: int
+    diff: int | None = None
+    #: approved | awaiting_approval | returned | revision_requested | not_submitted
+    status: str
+    pip_above_assignment: bool | None = None
+    hit_last_6: HitCount
+    plan_id: int | None = None
+    plan_status: str | None = None
+    committed_count: int | None = None
+    version: int | None = None
+    in_force_count: int | None = None
+    in_force_version: int | None = None
+    revision_from: int | None = None
+    revision_to: int | None = None
+    revision_reason: str | None = None
+    revision_comment: str | None = None
+    return_comment: str | None = None
+    is_late: bool = False
+
+
+class OverviewTrendPoint(BaseModel):
+    shamsi_year: int
+    shamsi_month: int
+    shamsi_month_name: str
+    pip: int | None = None
+    delivered: int
+    hit: bool
+    in_progress: bool
+
+
+class OverviewStream(BaseModel):
+    stream: PlanStream
+    kpis: OverviewKpis
+    all_contractors: OverviewAllContractors
+    rows: list[OverviewRow]
+    trend: list[OverviewTrendPoint]
+
+
+class OverviewAttention(BaseModel):
+    contractor_id: int
+    name: str
+    stream: PlanStream
+    #: not_submitted | awaiting_approval | revision_requested | pip_above_assignment
+    kind: str
+    label: str
+    shamsi_year: int
+    shamsi_month: int
+    plan_id: int | None = None
+
+
+class OverviewMonth(BaseModel):
+    shamsi_year: int
+    shamsi_month: int
+    shamsi_month_name: str
+
+
+class PipOverviewOut(BaseModel):
+    period: Literal["month", "year", "since_start"]
+    shamsi_year: int
+    shamsi_month: int
+    shamsi_month_name: str
+    months: list[OverviewMonth]
+    running_year: int
+    running_month: int
+    #: Today's day in the selected month; None unless it is the running month.
+    day_of_month: int | None = None
+    days_in_month: int
+    revision_window_open: bool
+    revisions_close_on: str | None = None
+    dt: OverviewStream
+    acceptance: OverviewStream
+    needs_attention: list[OverviewAttention]
+
+
+#: A sanity ceiling on an internal target, well above any real programme
+#: figure (the cumulative acceptance target counts every village ever
+#: accepted), so a typo'd extra digits is refused rather than stored.
+MAX_INTERNAL_TARGET = 1_000_000
+
+
+class InternalTargetPeriod(BaseModel):
+    """One version of one stream's MTN internal target.
+
+    ``target_count`` is cumulative for ``ACCEPTANCE`` and a monthly amount for
+    ``DT`` -- see ``models/acceptance_plan.py``.
+    """
+
+    stream: PlanStream
+    shamsi_year: int
+    shamsi_month: int
+    shamsi_month_name: str
+    version: int
+    target_count: int
+    set_by: str | None = None
+    set_at: datetime | None = None
+    note: str | None = None
+
+
+class InternalTargetOut(BaseModel):
+    stream: PlanStream
+    shamsi_year: int
+    shamsi_month: int
+    shamsi_month_name: str
+    current: InternalTargetPeriod | None
+    previous: InternalTargetPeriod | None
+    history: list[InternalTargetPeriod]
+
+
+class InternalTargetWrite(BaseModel):
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    stream: PlanStream
+    shamsi_year: int = Field(alias="year", ge=MIN_SHAMSI_YEAR, le=MAX_SHAMSI_YEAR)
+    shamsi_month: int = Field(alias="month", ge=1, le=12)
+    target_count: int = Field(ge=0, le=MAX_INTERNAL_TARGET, strict=True)
+    note: str | None = Field(default=None, max_length=MAX_RETURN_COMMENT)
 
 
 class MonthlyPlanWrite(BaseModel):
