@@ -2161,6 +2161,50 @@ class PlanRevisionsOut(BaseModel):
     revisions: list[PlanRevision]
 
 
+#: A sanity ceiling on an internal target, well above any real programme
+#: figure (the cumulative acceptance target counts every village ever
+#: accepted), so a typo'd extra digits is refused rather than stored.
+MAX_INTERNAL_TARGET = 1_000_000
+
+
+class InternalTargetPeriod(BaseModel):
+    """One version of one stream's MTN internal target.
+
+    ``target_count`` is cumulative for ``ACCEPTANCE`` and a monthly amount for
+    ``DT`` -- see ``models/acceptance_plan.py``.
+    """
+
+    stream: PlanStream
+    shamsi_year: int
+    shamsi_month: int
+    shamsi_month_name: str
+    version: int
+    target_count: int
+    set_by: str | None = None
+    set_at: datetime | None = None
+    note: str | None = None
+
+
+class InternalTargetOut(BaseModel):
+    stream: PlanStream
+    shamsi_year: int
+    shamsi_month: int
+    shamsi_month_name: str
+    current: InternalTargetPeriod | None
+    previous: InternalTargetPeriod | None
+    history: list[InternalTargetPeriod]
+
+
+class InternalTargetWrite(BaseModel):
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    stream: PlanStream
+    shamsi_year: int = Field(alias="year", ge=MIN_SHAMSI_YEAR, le=MAX_SHAMSI_YEAR)
+    shamsi_month: int = Field(alias="month", ge=1, le=12)
+    target_count: int = Field(ge=0, le=MAX_INTERNAL_TARGET, strict=True)
+    note: str | None = Field(default=None, max_length=MAX_RETURN_COMMENT)
+
+
 class MonthlyPlanWrite(BaseModel):
     """Save or submit this month's plan.
 

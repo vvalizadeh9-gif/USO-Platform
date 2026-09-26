@@ -333,3 +333,67 @@ def test_baseline_refuses_to_drop_the_database(engine):
             command.downgrade(cfg, "base")
 
     assert "users" in sa.inspect(engine).get_table_names()
+
+
+def _downgrade(engine, revision: str) -> None:
+    from alembic import command
+    from alembic.config import Config
+
+    from tests.conftest import BACKEND_DIR
+
+    cfg = Config(str(BACKEND_DIR / "alembic.ini"))
+    cfg.set_main_option("script_location", str(BACKEND_DIR / "alembic"))
+    with engine.begin() as conn:
+        cfg.attributes["connection"] = conn
+        command.downgrade(cfg, revision)
+
+
+def test_internal_target_stream_backfills_and_round_trips(engine):
+    """c4f9a2e7d318: existing targets become ACCEPTANCE, unchanged otherwise;
+    the downgrade refuses while a DT target exists, and round-trips without."""
+    _wipe(engine)
+    _upgrade(engine, "b3e8d1f5a927")
+    seed = [(1405, 6, 1, False, 1000), (1405, 6, 2, True, 1100), (1405, 7, 1, True, 1250)]
+    with engine.begin() as conn:
+        for year, month, version, current, count in seed:
+            conn.execute(
+                sa.text(
+                    "INSERT INTO acceptance_monthly_targets "
+                    "(shamsi_year, shamsi_month, version, is_current, target_count) "
+                    "VALUES (:y, :m, :v, :c, :n)"
+                ),
+                {"y": year, "m": month, "v": version, "c": current, "n": count},
+            )
+
+    _upgrade(engine)
+    select_all = (
+        "SELECT stream, shamsi_year, shamsi_month, version, is_current, target_count "
+        "FROM acceptance_monthly_targets ORDER BY id"
+    )
+    with engine.begin() as conn:
+        rows = conn.execute(sa.text(select_all)).fetchall()
+    assert [tuple(r) for r in rows] == [("ACCEPTANCE", *s) for s in seed]
+
+    with engine.begin() as conn:
+        conn.execute(sa.text(
+            "INSERT INTO acceptance_monthly_targets "
+            "(stream, shamsi_year, shamsi_month, version, is_current, target_count) "
+            "VALUES ('DT', 1405, 7, 1, true, 140)"
+        ))
+    with pytest.raises(RuntimeError, match="Refusing to downgrade"):
+        _downgrade(engine, "b3e8d1f5a927")
+
+    with engine.begin() as conn:
+        conn.execute(sa.text("DELETE FROM acceptance_monthly_targets WHERE stream = 'DT'"))
+    _downgrade(engine, "b3e8d1f5a927")
+    columns = {c["name"] for c in sa.inspect(engine).get_columns("acceptance_monthly_targets")}
+    assert "stream" not in columns
+    with engine.begin() as conn:
+        assert conn.execute(
+            sa.text("SELECT COUNT(*) FROM acceptance_monthly_targets")
+        ).scalar_one() == len(seed)
+
+    _upgrade(engine)
+    with engine.begin() as conn:
+        rows = conn.execute(sa.text(select_all)).fetchall()
+    assert [tuple(r) for r in rows] == [("ACCEPTANCE", *s) for s in seed]

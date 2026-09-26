@@ -44,6 +44,9 @@ from app.core.deps import (
 from app.models.monthly_plan import STATUS_APPROVED, ContractorMonthlyPlan
 from app.models.reference import Contractor, User
 from app.schemas import (
+    InternalTargetOut,
+    InternalTargetPeriod,
+    InternalTargetWrite,
     MonthlyPlanContext,
     MonthlyPlanHistoryRow,
     MonthlyPlanOut,
@@ -60,6 +63,7 @@ from app.schemas import (
     PlanStream,
     ScorecardOut,
 )
+from app.services import acceptance_plan as internal_targets
 from app.services import monthly_plan as plans
 from app.services import pip_export
 from app.services.audit import record_audit
@@ -619,3 +623,118 @@ def revisions(
             for p in rows
         ],
     )
+
+
+# ---------------------------------------------------------------------------
+# MTN internal target: the PM's own number per stream, not a contractor's PIP
+# ---------------------------------------------------------------------------
+def _target_period(target, names: dict[int, str]) -> InternalTargetPeriod:
+    return InternalTargetPeriod(
+        stream=target.stream,
+        shamsi_year=target.shamsi_year,
+        shamsi_month=target.shamsi_month,
+        shamsi_month_name=jalali.month_name(target.shamsi_month),
+        version=target.version,
+        target_count=target.target_count,
+        set_by=names.get(target.set_by),
+        set_at=target.set_at,
+        note=target.note,
+    )
+
+
+@router.get("/internal-target", response_model=InternalTargetOut)
+def internal_target(
+    stream: PlanStream = Query(..., description="DT or ACCEPTANCE"),
+    year: int | None = Query(None, description="Shamsi year; the running month if omitted"),
+    month: int | None = Query(None, ge=1, le=12),
+    months: int = Query(12, ge=1, le=internal_targets.MAX_HISTORY_MONTHS),
+    db: Session = Depends(get_db),
+    user: User = Depends(require_queue_reader),
+) -> InternalTargetOut:
+    """One stream's MTN internal target for a month, the month before, and history.
+
+    Staff only, for both streams: this is what MTN commits to management, set
+    against the contractors' own PIPs, and no contractor reads it here.
+    (``GET /acceptance/plan`` keeps its own, older read rule for the
+    Acceptance target; it is unchanged.)
+
+    ``DT`` is a monthly amount; ``ACCEPTANCE`` is cumulative.
+    """
+    if (year is None) != (month is None):
+        raise HTTPException(400, "Give both year and month, or neither")
+    if year is None:
+        year, month = jalali.current_shamsi_period()
+    _guard(lambda: plans.validate_period(year, month))
+
+    current = internal_targets.get_current_target(db, year, month, stream)
+    prev_year, prev_month = jalali.previous_period(year, month)
+    previous = internal_targets.get_current_target(db, prev_year, prev_month, stream)
+    history = internal_targets.recent_targets(
+        db, upto_year=year, upto_month=month, months=months, stream=stream
+    )
+    names = plans.user_names(
+        db, {t.set_by for t in [current, previous, *history] if t is not None}
+    )
+    return InternalTargetOut(
+        stream=stream,
+        shamsi_year=year,
+        shamsi_month=month,
+        shamsi_month_name=jalali.month_name(month),
+        current=_target_period(current, names) if current is not None else None,
+        previous=_target_period(previous, names) if previous is not None else None,
+        history=[_target_period(t, names) for t in history],
+    )
+
+
+@router.put("/internal-target", response_model=InternalTargetPeriod)
+def set_internal_target(
+    payload: InternalTargetWrite,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_pm),
+) -> InternalTargetPeriod:
+    """Set one stream's MTN internal target for one Shamsi month.
+
+    PM only; Admin gets 403, like every other operational decision on this
+    router. Always appends a new version -- the number a month was measured
+    against is never rewritten.
+    """
+    before = internal_targets.get_current_target(
+        db, payload.shamsi_year, payload.shamsi_month, payload.stream
+    )
+    try:
+        target = internal_targets.set_target(
+            db,
+            year=payload.shamsi_year,
+            month=payload.shamsi_month,
+            target_count=payload.target_count,
+            user=user,
+            note=payload.note,
+            stream=payload.stream,
+        )
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from None
+
+    record_audit(
+        db,
+        user_id=user.id,
+        action=audit_actions.CREATED,
+        module="PIP",
+        entity_type="AcceptanceMonthlyTarget",
+        entity_id=target.id,
+        old_value=(
+            {"target_count": before.target_count, "version": before.version}
+            if before is not None
+            else None
+        ),
+        new_value={
+            "stream": target.stream,
+            "shamsi_year": target.shamsi_year,
+            "shamsi_month": target.shamsi_month,
+            "target_count": target.target_count,
+            "version": target.version,
+        },
+        reason=target.note,
+    )
+    db.commit()
+    db.refresh(target)
+    return _target_period(target, plans.user_names(db, {target.set_by}))

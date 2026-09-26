@@ -1,5 +1,10 @@
 """Acceptance plan: the PM's monthly target, and the trend it is measured against.
 
+The target table also carries a second, separate number: the PM's DT
+"MTN internal PIP" (``stream="DT"``), read and written through the same three
+functions with ``stream`` set. Every function defaults to ``ACCEPTANCE``, so the
+Acceptance Dashboard and ``AcceptanceTarget.jsx`` behave exactly as before.
+
 Two responsibilities live here because they are two sides of one dashboard
 widget: a target a PM sets (``set_target`` / ``get_current_target`` /
 ``recent_targets``), and the actual monthly pace of acceptance to plot it
@@ -27,7 +32,11 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core import jalali
-from app.models.acceptance_plan import AcceptanceMonthlyTarget
+from app.models.acceptance_plan import (
+    STREAM_ACCEPTANCE,
+    TARGET_STREAMS,
+    AcceptanceMonthlyTarget,
+)
 from app.models.reference import User
 from app.services import acceptance_universe
 from app.services import acceptance_workflow as flow
@@ -44,12 +53,23 @@ MAX_HISTORY_MONTHS = 36
 # ---------------------------------------------------------------------------
 # Plan CRUD
 # ---------------------------------------------------------------------------
+def _check_stream(stream: str) -> None:
+    if stream not in TARGET_STREAMS:
+        raise ValueError(f"Unknown stream {stream!r}")
+
+
 def get_current_target(
-    db: Session, year: int, month: int
+    db: Session, year: int, month: int, stream: str = STREAM_ACCEPTANCE
 ) -> AcceptanceMonthlyTarget | None:
-    """The ``is_current=True`` row for this Shamsi month, or None."""
+    """The ``is_current=True`` row for this stream and Shamsi month, or None.
+
+    *stream* defaults to ``ACCEPTANCE`` so every caller that predates the DT
+    target reads exactly what it always read.
+    """
+    _check_stream(stream)
     return db.execute(
         select(AcceptanceMonthlyTarget).where(
+            AcceptanceMonthlyTarget.stream == stream,
             AcceptanceMonthlyTarget.shamsi_year == year,
             AcceptanceMonthlyTarget.shamsi_month == month,
             AcceptanceMonthlyTarget.is_current.is_(True),
@@ -57,10 +77,11 @@ def get_current_target(
     ).scalar_one_or_none()
 
 
-def _next_version(db: Session, year: int, month: int) -> int:
+def _next_version(db: Session, year: int, month: int, stream: str) -> int:
     highest = (
         db.query(AcceptanceMonthlyTarget.version)
         .filter(
+            AcceptanceMonthlyTarget.stream == stream,
             AcceptanceMonthlyTarget.shamsi_year == year,
             AcceptanceMonthlyTarget.shamsi_month == month,
         )
@@ -79,27 +100,34 @@ def set_target(
     target_count: int,
     user: User,
     note: str | None = None,
+    stream: str = STREAM_ACCEPTANCE,
 ) -> AcceptanceMonthlyTarget:
-    """Set this month's cumulative acceptance target. Caller commits.
+    """Set one stream's MTN internal target for one month. Caller commits.
 
-    Always appends: an existing current row for the period is flipped to
-    ``is_current=False`` in the same call, and the new one is inserted at
-    ``version = previous + 1``. There is no separate "revise" entry point the
-    way ``ContractorMonthlyPlan`` has one, because there is no workflow state
-    to distinguish a first target from a later change -- a PM may set this
-    month's number as often as the programme's plan actually changes.
+    ``ACCEPTANCE`` (the default) is the cumulative acceptance target; ``DT``
+    is a monthly drive-test amount -- see ``models/acceptance_plan.py``.
+
+    Always appends: an existing current row for the stream and period is
+    flipped to ``is_current=False`` in the same call, and the new one is
+    inserted at ``version = previous + 1``. There is no separate "revise"
+    entry point the way ``ContractorMonthlyPlan`` has one, because there is
+    no workflow state to distinguish a first target from a later change -- a
+    PM may set this month's number as often as the programme's plan
+    actually changes.
     """
+    _check_stream(stream)
     if target_count < 0:
         raise ValueError("The target count cannot be negative")
 
-    existing = get_current_target(db, year, month)
+    existing = get_current_target(db, year, month, stream)
     if existing is not None:
         existing.is_current = False
 
     target = AcceptanceMonthlyTarget(
+        stream=stream,
         shamsi_year=year,
         shamsi_month=month,
-        version=_next_version(db, year, month),
+        version=_next_version(db, year, month, stream),
         is_current=True,
         target_count=target_count,
         set_by=user.id,
@@ -112,9 +140,14 @@ def set_target(
 
 
 def recent_targets(
-    db: Session, *, upto_year: int, upto_month: int, months: int = 12
+    db: Session,
+    *,
+    upto_year: int,
+    upto_month: int,
+    months: int = 12,
+    stream: str = STREAM_ACCEPTANCE,
 ) -> list[AcceptanceMonthlyTarget]:
-    """The current-version targets for the *months* periods ending here.
+    """One stream's current-version targets for the *months* periods ending here.
 
     Oldest first, and periods with no target set are skipped rather than
     synthesized as placeholder rows -- a month nobody set a target for has no
@@ -130,7 +163,7 @@ def recent_targets(
 
     out: list[AcceptanceMonthlyTarget] = []
     for y, m in periods:
-        target = get_current_target(db, y, m)
+        target = get_current_target(db, y, m, stream)
         if target is not None:
             out.append(target)
     return out
