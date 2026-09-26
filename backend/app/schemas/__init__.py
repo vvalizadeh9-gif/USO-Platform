@@ -1589,6 +1589,10 @@ class AcceptanceKpis(BaseModel):
     # funnel the other three cards are steps of. Defaulted so a cached or
     # hand-built payload without it still validates.
     total_onair_villages: int = 0
+    # The on-air figure split by launch: راه اندازی دائم / راه اندازی موقت.
+    # The two always sum to ``total_onair_villages``.
+    total_onair_permanent: int = 0
+    total_onair_temporary: int = 0
     total_dt_done_villages: int
     total_ict_approval: int
     # "Remained" is rejected + pending, kept as-is for the consumers that read

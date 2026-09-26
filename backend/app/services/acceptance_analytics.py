@@ -134,7 +134,7 @@ class _Row:
     """
 
     __slots__ = ("village_name", "site_id", "site_code", "province_id",
-                 "onair", "unit")
+                 "onair", "stage", "unit")
 
     def __init__(
         self,
@@ -144,12 +144,16 @@ class _Row:
         province_id: int | None,
         onair: bool,
         unit: "_Unit | None",
+        stage: str | None = None,
     ) -> None:
         self.village_name = village_name
         self.site_id = site_id
         self.site_code = site_code
         self.province_id = province_id
         self.onair = onair
+        # The normalised last completed stage, kept so the on-air figure can
+        # be split into its permanent and temporary launches.
+        self.stage = stage
         self.unit = unit
 
     @property
@@ -241,6 +245,7 @@ class AcceptanceAnalytics:
             # on air — they differ only in what they count on them, villages
             # here and sites there.
             onair = C.is_onair_stage(wi.last_stage)
+            stage = C.normalize_stage(wi.last_stage)
             for village in wi.villages:
                 if village.deleted_at is not None:
                     continue
@@ -269,6 +274,7 @@ class AcceptanceAnalytics:
                         province_id,
                         onair,
                         unit,
+                        stage,
                     )
                 )
 
@@ -288,6 +294,7 @@ class AcceptanceAnalytics:
         total = len(units)
         ict = _verdict_counts(v.ict for v in units)
         cra = _verdict_counts(v.cra for v in units)
+        onair = [r for r in self._load_rows() if r.onair]
         return {
             # The head of the funnel: every هدف village on a live site,
             # whether or not its drive test is finished. It is the only figure
@@ -295,7 +302,17 @@ class AcceptanceAnalytics:
             # is what makes the rest legible — a programme with 1,000 villages
             # approved out of 1,200 drive-tested reads very differently when
             # 4,000 are on air.
-            "total_onair_villages": sum(1 for r in self._load_rows() if r.onair),
+            "total_onair_villages": len(onair),
+            # The same figure split by launch. Every on-air row is exactly one
+            # of the two -- ``is_onair_stage`` admits nothing else -- so the
+            # halves always add back up to the whole. A طراحی or blank stage
+            # is not on air and sits in neither.
+            "total_onair_permanent": sum(
+                1 for r in onair if r.stage == C.STAGE_PERM_ONAIR
+            ),
+            "total_onair_temporary": sum(
+                1 for r in onair if r.stage == C.STAGE_TEMP_ONAIR
+            ),
             "total_dt_done_villages": total,
             "total_ict_approval": ict[APPROVED],
             "total_ict_remained": total - ict[APPROVED],
