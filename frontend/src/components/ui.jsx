@@ -14,6 +14,8 @@ const STATUS_CLASS = {
   // Coordinator approval is now terminal — an approved DT is a completed DT.
   'DT Done': 'pill-green',
   Returned: 'pill-amber',
+  RevisionRequested: 'pill-violet',
+  RevisionReturned: 'pill-amber',
   'Returned by Contractor': 'pill-amber',
   Assigned: 'pill-violet',
   Rejected: 'pill-red',
