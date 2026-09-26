@@ -76,11 +76,13 @@ export default function PmPlan({ canDecide, canSetTarget }) {
 
   async function exportExcel() {
     try {
-      // Until the export follows the page's period (Prompt 7), it is the
-      // scorecard's own: a whole year in Year view, the last 12 months
-      // otherwise.
-      const params = view === 'year' ? { year: period.year } : { months: 12 }
-      await downloadXlsx('/pip/scorecard.xlsx', params, 'pip-scorecard.xlsx')
+      // The period on the page, both streams: a "DT Delivery" and an
+      // "Acceptance" sheet (the MTN internal PIP rows are the server's to add
+      // for staff).
+      const params = { period: view }
+      if (view === 'year') params.year = period.year
+      if (view === 'month') Object.assign(params, { year: period.year, month: period.month })
+      await downloadXlsx('/pip/scorecard.xlsx', params, 'pip-plan.xlsx')
     } catch {
       toast.error('Could not build the file', 'Please try again.')
     }

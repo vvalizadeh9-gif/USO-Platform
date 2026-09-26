@@ -126,11 +126,11 @@ def world(client):
     _item(a, RUNNING, done=RUNNING)
     _item(a, RUNNING)
 
-    def _plan(contractor, stream, period, version, status, count, current=True):
+    def _plan(contractor, stream, period, version, status, count, current=True, reason=None):
         db.add(ContractorMonthlyPlan(
             contractor_id=contractor.id, stream=stream, shamsi_year=period[0],
             shamsi_month=period[1], version=version, is_current=current,
-            committed_count=count, status=status,
+            committed_count=count, status=status, revision_reason=reason,
             submitted_at=_at(period, 1),
         ))
 
@@ -142,7 +142,7 @@ def world(client):
     # Beta approved 3, then asked to revise to 2; Gamma nothing.
     _plan(a, "DT", RUNNING, 1, "Approved", 5)
     _plan(b, "DT", RUNNING, 1, "Approved", 3, current=False)
-    _plan(b, "DT", RUNNING, 2, "RevisionRequested", 2)
+    _plan(b, "DT", RUNNING, 2, "RevisionRequested", 2, reason="SITES_BLOCKED")
     # Running month, Acceptance: Alpha returned.
     _plan(a, "ACCEPTANCE", RUNNING, 1, "Returned", 9)
     # Planning month, Acceptance: Beta submitted 7.
@@ -373,3 +373,79 @@ def test_not_submitted_waits_for_the_deadline(client, world, monkeypatch):
 def test_the_revision_window_closes_after_day_15(client, world, monkeypatch):
     _on_day(monkeypatch, 16)
     assert _get(client, world)["revision_window_open"] is False
+
+
+# ---------------------------------------------------------------------------
+# The Monthly Plan export (Prompt 7): both streams, the page's period
+# ---------------------------------------------------------------------------
+def _book(client, world, params, who="pm"):
+    from io import BytesIO
+
+    from openpyxl import load_workbook
+
+    r = client.get(
+        "/api/v1/pip/scorecard.xlsx", headers=world["actors"][who], params=params
+    )
+    assert r.status_code == 200, r.text
+    assert "spreadsheetml" in r.headers["content-type"]
+    return load_workbook(BytesIO(r.content))
+
+
+def _cells(ws):
+    return [[c.value for c in row] for row in ws.iter_rows()]
+
+
+def test_export_has_both_sheets_and_their_headers(client, world, monkeypatch):
+    _on_day(monkeypatch, 10)
+    wb = _book(client, world, {"period": "month"})
+    assert wb.sheetnames == ["DT Delivery", "Acceptance"]
+    assert _cells(wb["DT Delivery"])[0] == [
+        "Contractor", "Shamsi month", "Assignment", "PIP", "Revisions",
+        "Delivered", "+/−", "Achievement %",
+    ]
+    assert _cells(wb["Acceptance"])[0] == [
+        "Contractor", "Shamsi month", "PIP", "Revisions", "Delivered", "+/−", "Achievement %",
+    ]
+
+
+def test_export_rows_totals_and_persian_month(client, world, monkeypatch):
+    _on_day(monkeypatch, 10)
+    rows = _cells(_book(client, world, {"period": "month"})["DT Delivery"])
+    label = f"{jalali.month_name(RUNNING[1])} {RUNNING[0]}"
+    alpha = next(r for r in rows if r[0] == "Alpha Ov")
+    assert alpha[1] == label                       # Persian month name + year
+    assert alpha[2:8] == [2, 5, 0, 1, -4, 20.0]
+    beta = next(r for r in rows if r[0] == "Beta Ov")
+    assert beta[4] == 1                            # one revision request
+    total = next(r for r in rows if r[0] == f"Total — {label}")
+    assert total[3] == 8 and total[5] == 1         # 5 + 3 PIP, 1 delivered
+    internal = next(r for r in rows if r[0] == "MTN internal PIP")
+    assert internal[3] == 10
+
+
+def test_export_period_percent_is_totals_not_an_average(client, world, monkeypatch):
+    _on_day(monkeypatch, 10)
+    rows = _cells(_book(client, world, {"period": "year", "year": 1406})["DT Delivery"])
+    grand = next(r for r in rows if r[0] == "Grand total")
+    # PIP 4 + 1 + 8 = 13, delivered 2: 15.4%, not the mean of the months.
+    assert grand[3] == 13 and grand[5] == 2
+    assert grand[7] == 15.4
+    # Assignment over the period: 1 held from 1406/2 + 2 new = 3 for Alpha,
+    # none for the others -- not a sum of monthly balances.
+    assert grand[2] == 3
+    months = {r[1] for r in rows if r[0] == "Alpha Ov"}
+    assert {f"{jalali.month_name(m)} 1406" for m in (1, 2, 3)} <= months
+
+
+def test_export_never_gives_a_contractor_the_internal_pip(client, world, monkeypatch):
+    _on_day(monkeypatch, 10)
+    wb = _book(client, world, {"period": "month"}, who="contractor")
+    text = [v for ws in wb.worksheets for row in _cells(ws) for v in row if v is not None]
+    assert "MTN internal PIP" not in text
+    assert "Beta Ov" not in text and "Gamma Ov" not in text
+    assert "Alpha Ov" in text
+
+
+def test_export_without_a_period_is_the_old_workbook(client, world, monkeypatch):
+    _on_day(monkeypatch, 10)
+    assert _book(client, world, {"months": 3}).sheetnames == ["Summary", "Contractors"]

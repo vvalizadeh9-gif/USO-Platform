@@ -1070,3 +1070,24 @@ describe('the PM split screen', () => {
     expect(screen.getAllByText('This period').length).toBe(2)
   })
 })
+
+describe('the PM export', () => {
+  it('downloads the period on the page, both streams', async () => {
+    signedInAs('PM')
+    serveOverview()
+    const blobUrl = vi.fn(() => 'blob:x')
+    globalThis.URL.createObjectURL = blobUrl
+    globalThis.URL.revokeObjectURL = vi.fn()
+    show()
+
+    await screen.findByRole('region', { name: 'DT Delivery' })
+    api.get.mockImplementationOnce(() => Promise.resolve({ data: new Blob(['x']), headers: {} }))
+    await userEvent.click(screen.getByRole('button', { name: /Export Excel/ }))
+    await waitFor(() =>
+      expect(api.get).toHaveBeenCalledWith('/pip/scorecard.xlsx', {
+        params: { period: 'month', year: expect.any(Number), month: expect.any(Number) },
+        responseType: 'blob',
+      }),
+    )
+  })
+})

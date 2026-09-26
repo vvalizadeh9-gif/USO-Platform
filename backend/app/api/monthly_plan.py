@@ -550,14 +550,107 @@ def scorecard(
     return ScorecardOut(**DriveTestAnalytics(db, user).scorecard(_periods(months, year)))
 
 
+def _revision_counts(
+    db: Session, user: User, periods: list[tuple[int, int]]
+) -> dict[str, dict[tuple[int, int, int], int]]:
+    """Revision requests per stream, keyed by (contractor, year, month).
+
+    A revision is a version the contractor asked for with a reason; a plan
+    returned and handed in again is not one. Narrowed to the caller's own
+    company in the query for a contractor account.
+    """
+    from sqlalchemy import func, select, tuple_
+
+    stmt = (
+        select(
+            ContractorMonthlyPlan.stream,
+            ContractorMonthlyPlan.contractor_id,
+            ContractorMonthlyPlan.shamsi_year,
+            ContractorMonthlyPlan.shamsi_month,
+            func.count(),
+        )
+        .where(
+            ContractorMonthlyPlan.revision_reason.is_not(None),
+            tuple_(ContractorMonthlyPlan.shamsi_year, ContractorMonthlyPlan.shamsi_month).in_(periods),
+        )
+        .group_by(
+            ContractorMonthlyPlan.stream,
+            ContractorMonthlyPlan.contractor_id,
+            ContractorMonthlyPlan.shamsi_year,
+            ContractorMonthlyPlan.shamsi_month,
+        )
+    )
+    if user.role.name == CONTRACTOR:
+        stmt = stmt.where(ContractorMonthlyPlan.contractor_id == (user.contractor_id or -1))
+    out: dict[str, dict[tuple[int, int, int], int]] = {"DT": {}, "ACCEPTANCE": {}}
+    for stream, cid, y, m, n in db.execute(stmt).all():
+        out.setdefault(stream, {})[(cid, y, m)] = n
+    return out
+
+
+def _plan_export(db: Session, user: User, period: str, year: int | None, month: int | None) -> Response:
+    """Both streams for the page's period: "DT Delivery" and "Acceptance"."""
+    from app.services import acceptance_plan as targets
+
+    today = jalali.tehran_today()
+    ry, rm, _ = jalali.to_shamsi_date(today)
+    if (year is None) != (month is None):
+        # Year view sends a year alone; the month is then irrelevant.
+        if period == "year" and year is not None:
+            month = 1
+        else:
+            raise HTTPException(400, "Give both year and month, or neither")
+    if year is None:
+        year, month = ry, rm
+    _guard(lambda: plans.validate_period(year, month))
+    try:
+        periods = pip_overview.period_months(db, period, year, month, (ry, rm))
+    except pip_overview.OverviewError as exc:
+        raise HTTPException(400, str(exc)) from None
+
+    dt = DriveTestAnalytics(db, user).scorecard(periods)
+    acc = targets.acceptance_scorecard(db, user, periods)
+    internal = None
+    if user.role.name != CONTRACTOR:
+        # MTN's own number, staff only. A contractor's file never carries it.
+        internal = {
+            stream: {
+                (y, m): (t.target_count if (t := targets.get_current_target(db, y, m, stream)) else None)
+                for y, m in periods
+            }
+            for stream in ("DT", "ACCEPTANCE")
+        }
+    content = pip_export.plan_workbook(
+        dt, acc, revisions=_revision_counts(db, user, periods), internal=internal
+    )
+    stamp = (jalali.format_shamsi(date.today()) or "").replace("/", "-")
+    return Response(
+        content=content,
+        media_type=XLSX_MEDIA_TYPE,
+        headers={
+            "Content-Disposition": f'attachment; filename="pip-plan-{period}-{stamp}.xlsx"'
+        },
+    )
+
+
 @router.get("/scorecard.xlsx")
 def scorecard_export(
     months: int = Query(12, ge=1, le=36),
     year: int | None = Query(None),
+    period: str | None = Query(
+        None, description="month, year or since_start: the Monthly Plan export, both streams"
+    ),
+    month: int | None = Query(None, ge=1, le=12),
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> Response:
     """The same figures as a workbook, scoped identically.
+
+    With ``period`` (the Monthly Plan page's Month / Year / Since start), the
+    file follows that period and carries both streams: a "DT Delivery" and an
+    "Acceptance" sheet, a row per contractor per month, a total per month and
+    a grand total, and -- for staff only -- MTN's internal PIP per month.
+    Without it, the older scorecard workbook below, unchanged.
 
     Same service call as the screen, so the file cannot report something the
     page does not -- and same scoping, so a contractor downloads their own
@@ -567,6 +660,8 @@ def scorecard_export(
     column: a spreadsheet has room, and the columns that let a reader check
     that the balances close are the ones worth exporting.
     """
+    if period is not None:
+        return _plan_export(db, user, period, year, month)
     data = DriveTestAnalytics(db, user).scorecard(_periods(months, year))
     stamp = (jalali.format_shamsi(date.today()) or "").replace("/", "-")
     return Response(
