@@ -12,10 +12,13 @@ import { Loading, StatusPill } from '../../components/ui'
  * column. Read top to bottom the panel is the argument the two of them had
  * about the number.
  *
+ * One stream at a time (DT or Acceptance): the two are separate plans with
+ * separate version histories.
+ *
  * Nothing here is reconstructed. The plan table keeps a row per version — that
  * is what the append-on-revision rule is for — and this reads them.
  */
-export default function Revisions({ period, isContractor, onClose }) {
+export default function Revisions({ period, stream = 'DT', isContractor, onClose }) {
   const [data, setData] = useState(null)
   const [failed, setFailed] = useState(false)
 
@@ -27,6 +30,7 @@ export default function Revisions({ period, isContractor, onClose }) {
         params: {
           year: period.year,
           month: period.month,
+          stream,
           // Sent only by a staff account. A contractor's own id is read off
           // their session by the server, which ignores this parameter for
           // them — so the contractor screen cannot name a company at all.
@@ -35,7 +39,7 @@ export default function Revisions({ period, isContractor, onClose }) {
       })
       .then((r) => setData(r.data))
       .catch(() => setFailed(true))
-  }, [period, isContractor])
+  }, [period, stream, isContractor])
 
   return (
     <motion.div
@@ -48,7 +52,7 @@ export default function Revisions({ period, isContractor, onClose }) {
         <b style={{ fontFamily: 'var(--font-display)', fontSize: 14.5 }}>Revision history</b>
         {data && (
           <span className="dim text-data" style={{ fontSize: 13 }}>
-            {data.contractor_name} · {data.shamsi_month_name} {data.shamsi_year}
+            {data.contractor_name} · {data.stream === 'ACCEPTANCE' ? 'Acceptance' : 'DT'} · {data.shamsi_month_name} {data.shamsi_year}
           </span>
         )}
         <div className="spacer" />
