@@ -10,16 +10,30 @@ import useChartWidth from './useChartWidth'
 // container (useChartWidth), so these are the sizes they render at — the
 // page's small-print step, and never below it.
 const AXIS_FONT = 11.5
-// Roughly how wide one character of an axis label is at AXIS_FONT, used only
-// to decide how many month labels fit side by side. Deliberately generous:
-// the cost of over-estimating is a skipped label, the cost of under-
-// estimating is two labels printed over each other.
+// Roughly how wide one character of an axis label is at AXIS_FONT — the
+// fallback where text cannot be measured (the tests' jsdom has no canvas).
+// Deliberately generous: over-estimating costs a skipped label,
+// under-estimating prints two labels over each other.
 const AXIS_CHAR_PX = 7.2
+
+let measureCtx
+/** The rendered width of `text` at AXIS_FONT in the page's own font. */
+function textWidth(text) {
+  if (measureCtx === undefined) {
+    try {
+      measureCtx = document.createElement('canvas').getContext('2d')
+    } catch {
+      measureCtx = null
+    }
+  }
+  if (!measureCtx) return text.length * AXIS_CHAR_PX
+  measureCtx.font = `${AXIS_FONT}px ${getComputedStyle(document.body).fontFamily}`
+  return measureCtx.measureText(text).width
+}
 
 /** The widest month label, in pixels, plus a little air either side. */
 function labelWidth(months) {
-  const longest = months.reduce((w, m) => Math.max(w, String(m.label ?? '').length), 0)
-  return longest * AXIS_CHAR_PX + 10
+  return months.reduce((w, m) => Math.max(w, textWidth(String(m.label ?? ''))), 0) + 12
 }
 
 /** Print every `n`th month label, `n` just large enough that none collide. */

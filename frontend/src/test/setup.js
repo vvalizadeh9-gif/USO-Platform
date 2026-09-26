@@ -33,3 +33,9 @@ if (!window.matchMedia) {
     dispatchEvent: () => false,
   })
 }
+
+// jsdom has no canvas: getContext exists but logs "Not implemented" and
+// returns null. The Acceptance charts measure their axis labels with a 2D
+// context and fall back to an estimate when there is none, so answer null
+// quietly -- the same answer, without the noise in every run.
+HTMLCanvasElement.prototype.getContext = () => null

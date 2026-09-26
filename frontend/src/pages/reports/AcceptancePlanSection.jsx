@@ -1,7 +1,7 @@
 import { LineChart, Scale, TrendingUp, Waypoints, Zap } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import api from '../../api/client'
-import { APPROVED, CRA, ICT, PENDING, PLANNED, REJECTED, WASH } from './acceptanceTheme'
+import { APPROVED, CRA, ICT, IDLE, PENDING, PLANNED, REJECTED, WASH } from './acceptanceTheme'
 import ApprovalFlowSankey from './ApprovalFlowSankey'
 import PlanTargetCard from './PlanTargetCard'
 import { mergeMonthlySeries } from './acceptancePlan'
@@ -110,7 +110,7 @@ export default function AcceptancePlanSection({ total, analysis, kpis }) {
       { key: 'fully', label: 'Fully accepted (ICT + CRA)', value: fully, color: APPROVED, wash: WASH[APPROVED] },
       { key: 'ict', label: 'ICT approved, CRA pending', value: ictOnly, color: ICT, wash: WASH[ICT] },
       { key: 'cra', label: 'CRA approved, ICT pending', value: craOnly, color: CRA, wash: WASH[CRA] },
-      { key: 'none', label: 'Not started (no approval yet)', value: notStarted, color: REJECTED, wash: WASH[REJECTED] },
+      { key: 'none', label: 'Not started (no approval yet)', value: notStarted, color: IDLE, wash: WASH[IDLE] },
     ]
   }, [analysis, total])
 
@@ -279,9 +279,5 @@ export default function AcceptancePlanSection({ total, analysis, kpis }) {
   )
 }
 
-// "Not started" takes the mockup's red, matching the approved design.
-// Worth knowing if this is ever revisited: elsewhere on this platform red
-// means a refusal, and a village nobody has filed for is an absence of
-// activity rather than a rejection — the "Never filed" tile under the KPI
-// band gives that same population IDLE. The design calls for red here, so
-// red it is; IDLE is the alternative if that ever changes.
+// "Not started" is grey, not red: red on this page means a refusal, and a
+// village nobody has approved yet is an absence of activity, not a rejection.

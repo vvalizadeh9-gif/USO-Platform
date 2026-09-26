@@ -1,10 +1,9 @@
 import { useEffect, useState } from 'react'
-import { CheckCircle2, Clock, RadioTower, Target } from 'lucide-react'
 import api from '../../api/client'
 import { Loading, PageHead } from '../../components/ui'
 import AcceptancePlanSection from './AcceptancePlanSection'
 import { AcceptanceDrillProvider, DrillFigure } from './AcceptanceDrillPanel'
-import { APPROVED, ICT, PENDING, REJECTED } from './acceptanceTheme'
+import InfoTip from '../drivetest/InfoTip'
 import { fmtCount } from './kpiTheme'
 
 /**
@@ -70,157 +69,104 @@ export default function AcceptanceDashboard() {
  * The whole page below the head: the four KPI cards and the plan-and-trend
  * widgets.
  *
- * The KPI band borrows the Drive Test dashboard's card system wholesale
- * (`drivetest/KpiBand.jsx`, `.dt-kpi-*` in app.css) rather than keeping a
- * second, nearly-identical set of KPI cards alive: same 4-column grid, same
- * compact padding, same 3px accent edge and inline icon chip. Only the
- * accent hues differ, and those come from this page's own palette — see the
- * `data-kpi="acc-*"` blocks beside the drive test ones.
+ * The KPI band sits on the Drive Test dashboard's card shell
+ * (`.dt-kpi-card` in app.css), and every card is built the same way: colour
+ * dot + title → figure → one context line → progress bar → a foot row with a
+ * label on the left and a value on the right. No icon tiles, and no
+ * breakdown row on any card — the band is four numbers and what each is a
+ * share of.
+ *
+ * Colour carries one meaning each: green is fully accepted and nothing else,
+ * amber is still outstanding, and red is kept for a refusal (the ICT/CRA
+ * comparison below). On air and DT done are denominators, not states, so
+ * they take neutrals.
  */
 function Overview({ data }) {
   const { kpis, analysis } = data
-  // The head of the funnel: every target village on a live site, drive test
-  // finished or not. Everything after it is a share of something narrower.
+  // The head of the funnel: every هدف village on a live site, drive test
+  // finished or not, split by how it was launched. Everything after it is a
+  // share of something narrower.
   const onair = kpis.total_onair_villages ?? 0
+  const permanent = kpis.total_onair_permanent ?? 0
+  const temporary = kpis.total_onair_temporary ?? 0
   const total = kpis.total_dt_done_villages
   const accepted = analysis.villages_accepted ?? analysis.villages_both_approved ?? 0
   const remaining = total - accepted
-  // The two halves of remaining. Taken from the server, which partitions the
-  // same population the Approved card is counted against, rather than derived
-  // here from a second figure that could disagree — with a defensive fallback
-  // so an older payload still adds up on screen.
-  const rejected = analysis.villages_rejected ?? 0
-  const remained = analysis.villages_remained ?? Math.max(0, remaining - rejected)
+  // On-air villages whose drive test is not finished. Floored at zero: the
+  // DT-done universe is not filtered on launch status, so on a data set where
+  // it outgrows the on-air count this reads "0", never a negative.
+  const notTested = Math.max(0, onair - total)
 
   const pct = (part, whole) => (whole ? Math.round((part / whole) * 100) : 0)
   const donePct = pct(total, onair)
   const acceptedPct = pct(accepted, total)
   const remainingPct = pct(remaining, total)
 
-  // The two ways a village can still be outstanding, and they need different
-  // people: a refusal is the programme's to answer, a wait is the province
-  // office's to chase. They sit inside the Remaining card because they are
-  // that number split, not two more numbers beside it.
-  const parts = [
-    {
-      key: 'rejected',
-      metric: 'rejected',
-      label: 'Rejected',
-      color: REJECTED,
-      value: rejected,
-    },
-    {
-      key: 'remained',
-      metric: 'remained',
-      label: 'Remained',
-      color: PENDING,
-      value: remained,
-    },
-  ]
-
   return (
     <>
       <section className="dt-kpi-band" aria-label="Acceptance totals">
-        <div className="dt-kpi-card" data-kpi="acc-onair">
-          <div className="dt-kpi-hd">
-            <span className="dt-kpi-ic" aria-hidden="true">
-              <RadioTower size={13} strokeWidth={2.2} />
-            </span>
-            <span className="dt-kpi-title">On air villages</span>
-          </div>
-          <div className="dt-kpi-v">
-            <DrillFigure
-              metric="onair"
-              label="On air villages"
-              value={onair}
-              className="dt-kpi-figure tnum"
-            />
-          </div>
-          <div className="dt-kpi-sub">Target villages on live sites</div>
-        </div>
-
-        <div className="dt-kpi-card" data-kpi="acc-total">
-          <div className="dt-kpi-hd">
-            <span className="dt-kpi-ic" aria-hidden="true">
-              <Target size={13} strokeWidth={2.2} />
-            </span>
-            <span className="dt-kpi-title">DT done</span>
-          </div>
-          <div className="dt-kpi-v">
-            <DrillFigure
-              metric="dt_done"
-              label="DT done villages"
-              value={total}
-              className="dt-kpi-figure tnum"
-            />
-          </div>
-          <div className="dt-kpi-sub">{donePct}% of {fmtCount(onair)}</div>
-          <ShareBar pct={donePct} color={ICT} />
-        </div>
-
-        <div className="dt-kpi-card" data-kpi="acc-approved">
-          <div className="dt-kpi-hd">
-            <span className="dt-kpi-ic" aria-hidden="true">
-              <CheckCircle2 size={13} strokeWidth={2.2} />
-            </span>
-            <span className="dt-kpi-title">Approved</span>
-          </div>
-          <div className="dt-kpi-v">
-            <DrillFigure
-              metric="approved"
-              label="Approved villages"
-              value={accepted}
-              className="dt-kpi-figure tnum"
-            />
-          </div>
-          <div className="dt-kpi-sub">{acceptedPct}% of {fmtCount(total)}</div>
-          <ShareBar pct={acceptedPct} color={APPROVED} />
-        </div>
-
-        <div className="dt-kpi-card" data-kpi="acc-remaining">
-          <div className="dt-kpi-hd">
-            <span className="dt-kpi-ic" aria-hidden="true">
-              <Clock size={13} strokeWidth={2.2} />
-            </span>
-            <span className="dt-kpi-title">Remaining</span>
-          </div>
-          <div className="dt-kpi-v">
-            <DrillFigure
-              metric="remaining"
-              label="Remaining villages"
-              value={remaining}
-              className="dt-kpi-figure tnum"
-            />
-          </div>
-          <div className="dt-kpi-sub">{remainingPct}% of {fmtCount(total)}</div>
-          <ShareBar pct={remainingPct} color={REJECTED} />
-          {/* Both halves are named in words and figures, never by colour
-              alone: red and amber are not separable under deuteranopia, and
-              this is the one card whose two parts a reader must tell apart. */}
-          <ul className="dt-status-list">
-            {parts.map((p) => (
-              <li key={p.key}>
-                <DrillFigure
-                  metric={p.metric}
-                  label={`${p.label} villages`}
-                  value={p.value}
-                  className="dt-status-row"
-                >
-                  <span className="dt-status-name">{p.label}</span>
-                  <span className="dt-status-figs">
-                    <span
-                      className="dt-kpi-part-dot"
-                      style={{ background: p.color }}
-                      aria-hidden="true"
-                    />
-                    <span className="dt-status-num tnum">{fmtCount(p.value)}</span>
-                    <span className="dt-status-pct tnum">{pct(p.value, remaining)}%</span>
-                  </span>
-                </DrillFigure>
-              </li>
-            ))}
-          </ul>
-        </div>
+        <KpiCard
+          kpi="acc-onair"
+          title="Total on-air villages"
+          tip="هدف villages that are on air — راه اندازی دائم or موقت. Villages not yet on air are outside this count."
+          metric="onair"
+          drillLabel="On-air villages"
+          value={onair}
+          context="هدف · راه اندازی دائم + موقت"
+          bar={[
+            { pct: pct(permanent, onair), color: 'var(--text-muted)' },
+            { pct: pct(temporary, onair), color: 'var(--dt-notstarted)' },
+          ]}
+          // Each Persian label is isolated (<bdi>) so the bidi algorithm
+          // cannot move the figure to the other side of it: label, then
+          // value, like the other three cards' feet.
+          foot={[
+            <><bdi>دائم</bdi> <b className="tnum">{fmtCount(permanent)}</b></>,
+            <><bdi>موقت</bdi> <b className="tnum">{fmtCount(temporary)}</b></>,
+          ]}
+        />
+        <KpiCard
+          kpi="acc-total"
+          title="Total DT done villages"
+          tip="هدف villages with a completed drive test. Every other figure on this page is measured against this number."
+          metric="dt_done"
+          drillLabel="DT done villages"
+          value={total}
+          context="Drive test complete"
+          bar={[{ pct: donePct, color: 'var(--kpi-accent)' }]}
+          foot={[
+            `${donePct}% of on-air`,
+            <><b className="tnum">{fmtCount(notTested)}</b> not tested</>,
+          ]}
+        />
+        <KpiCard
+          kpi="acc-approved"
+          title="Fully accepted"
+          tip="Villages approved by both ICT and CRA on every requested technology."
+          metric="approved"
+          drillLabel="Fully accepted villages"
+          value={accepted}
+          context="ICT and CRA both approved"
+          bar={[{ pct: acceptedPct, color: 'var(--kpi-accent)' }]}
+          foot={[
+            `${acceptedPct}% of DT done`,
+            <><b className="tnum">{fmtCount(accepted)}</b> of {fmtCount(total)}</>,
+          ]}
+        />
+        <KpiCard
+          kpi="acc-remaining"
+          title="Remaining"
+          tip="DT-done villages still missing ICT approval, CRA approval, or both."
+          metric="remaining"
+          drillLabel="Remaining villages"
+          value={remaining}
+          context="Missing ICT, CRA or both"
+          bar={[{ pct: remainingPct, color: 'var(--kpi-accent)' }]}
+          foot={[
+            `${remainingPct}% of DT done`,
+            <><b className="tnum">{fmtCount(remaining)}</b> of {fmtCount(total)}</>,
+          ]}
+        />
       </section>
 
       <AcceptancePlanSection total={total} analysis={analysis} kpis={kpis} />
@@ -228,12 +174,40 @@ function Overview({ data }) {
   )
 }
 
-/** A KPI card's share track: `pct` in the card's own colour, the rest the
- * band's neutral. Decorative — the line above it says the same in words. */
-function ShareBar({ pct, color }) {
+/**
+ * One card of the band. Every card is the same five rows, in the same order,
+ * so a reader who has learned one has learned all four.
+ *
+ * `bar` is one or more segments, each a share of the track; the rest of the
+ * track is the band's neutral. It is decorative — the foot row says the same
+ * in words and figures — so it is hidden from assistive technology.
+ */
+function KpiCard({ kpi, title, tip, metric, drillLabel, value, context, bar, foot }) {
   return (
-    <div className="dt-kpi-split" role="presentation" aria-hidden="true">
-      <i style={{ width: `${Math.max(pct, 0.5)}%`, background: color }} />
+    <div className="dt-kpi-card" data-kpi={kpi}>
+      <div className="dt-kpi-hd">
+        <span className="dt-kpi-dot" aria-hidden="true" />
+        <span className="dt-kpi-title">{title}</span>
+        <InfoTip label={`About ${title}`}>{tip}</InfoTip>
+      </div>
+      <div className="dt-kpi-v">
+        <DrillFigure
+          metric={metric}
+          label={drillLabel}
+          value={value}
+          className="dt-kpi-figure tnum"
+        />
+      </div>
+      <div className="dt-kpi-sub">{context}</div>
+      <div className="dt-kpi-split" role="presentation" aria-hidden="true">
+        {bar.map((seg, i) => (
+          <i key={i} style={{ width: `${seg.pct}%`, background: seg.color }} />
+        ))}
+      </div>
+      <div className="acc-kpi-foot">
+        <span>{foot[0]}</span>
+        <span>{foot[1]}</span>
+      </div>
     </div>
   )
 }

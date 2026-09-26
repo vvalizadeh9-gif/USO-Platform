@@ -55,6 +55,8 @@
   --red-dim: rgba(217, 65, 65, 0.11);
   --violet: #6d5bd0;          /* assignment */
   --violet-dim: rgba(109, 91, 208, 0.12);
+  --blue: #3b82f6;            /* ICT, on the Acceptance Dashboard */
+  --blue-dim: rgba(59, 130, 246, 0.12);
 
   /* ---- Drive Test dashboard: colour that means a state, and nothing else.
      Three hues, one per state where something is *happening* to an on-air
@@ -1610,19 +1612,18 @@ tbody tr:last-child td { border-bottom: none; }
    two unrelated meanings to one hue.
 
    The four are one funnel read left to right — on air, drive-test done,
-   approved, remaining — so their hues are ordered too. On air takes the
-   neutral for the same reason the drive test band's does: it is the
-   denominator everything after it is a share of, not a state something is
-   in. Drive-test done keeps the coverage teal it has always had. */
+   fully accepted, remaining. On air and drive-test done are denominators,
+   not states anything is in, so they take the two neutrals: the darker for
+   on air (whose bar splits it into دائم and موقت), the lighter for DT done.
+   Green means fully accepted and nothing else; Remaining is amber, because
+   red on this page is kept for a refusal. */
 .dt-kpi-card[data-kpi="acc-onair"] {
-  --kpi-accent: var(--dt-notstarted);
-  --kpi-tint: rgba(138, 149, 166, 0.07);
-  --kpi-ic: var(--dt-notstarted-wash);
+  --kpi-accent: var(--text-muted);
+  --kpi-tint: rgba(78, 90, 85, 0.05);
 }
 .dt-kpi-card[data-kpi="acc-total"] {
-  --kpi-accent: var(--signal);
-  --kpi-tint: rgba(14, 163, 148, 0.07);
-  --kpi-ic: var(--signal-glow);
+  --kpi-accent: var(--dt-notstarted);
+  --kpi-tint: rgba(138, 149, 166, 0.07);
 }
 /* The monthly target, which is no longer in the band at all — it heads the
    plan section below, where it is read against the line it sets. It keeps the
@@ -1643,10 +1644,31 @@ tbody tr:last-child td { border-bottom: none; }
   --kpi-ic: var(--green-dim);
 }
 .dt-kpi-card[data-kpi="acc-remaining"] {
-  --kpi-accent: var(--red);
-  --kpi-tint: rgba(217, 65, 65, 0.06);
-  --kpi-ic: var(--red-dim);
+  --kpi-accent: var(--amber);
+  --kpi-tint: rgba(199, 125, 0, 0.06);
 }
+
+/* The Acceptance band's card rows: a colour dot where the drive test band has
+   an icon tile, the figure in its state colour where it is a state (fully
+   accepted, remaining), the bar pushed to the bottom so the four line up
+   across the band however long their context lines run, and a foot row of
+   label left, value right. The card anchors its info note. */
+.acc-page .dt-kpi-card { position: relative; }
+.dt-kpi-dot {
+  inline-size: 8px; block-size: 8px; border-radius: 3px; flex: none;
+  background: var(--kpi-accent);
+}
+.acc-page .dt-kpi-hd .dt-info { margin-inline-start: auto; }
+.acc-page .dt-kpi-card[data-kpi="acc-approved"] .dt-kpi-figure,
+.acc-page .dt-kpi-card[data-kpi="acc-remaining"] .dt-kpi-figure { color: var(--kpi-accent); }
+.acc-page .dt-kpi-sub { margin-block-end: 12px; }
+.acc-page .dt-kpi-split { margin-block-start: auto; }
+.acc-kpi-foot {
+  display: flex; justify-content: space-between; align-items: baseline; gap: 10px;
+  margin-block-start: 8px;
+  font-size: 12.5px; color: var(--text-dim);
+}
+.acc-kpi-foot b { font-weight: 600; color: var(--text-muted); }
 
 /* ---------- the Acceptance Dashboard's type ramp ----
    Six steps and nothing between them: page title 26, KPI figure 31, card
@@ -1733,27 +1755,6 @@ a.dt-status-row:focus-visible {
   font-size: 11.5px; color: var(--text-dim); margin-block-start: 2px;
 }
 
-/* ---------- the two halves of Remaining, inside its own card ----
-   A refusal somebody has to answer, and a wait somebody has to chase. They
-   borrow the pending-status card's part list (`.dt-status-*` below) rather
-   than a layout of their own, because they are the same object: a figure
-   split into named parts, each opening the sites behind it. Two columns, not
-   the three that list defaults to. */
-.dt-kpi-card[data-kpi="acc-remaining"] .dt-status-list {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-/* The part rows here are buttons, not links — there is no separate page for
-   these two figures to address, only the panel. Typed against the element so
-   the box survives `.drill`'s own border/padding reset further down. */
-button.dt-status-row {
-  border: 0; background: none; font: inherit; text-align: start;
-  cursor: pointer; padding: 3px 4px;
-}
-button.dt-status-row:hover { background: var(--surface-2); }
-button.dt-status-row:focus-visible {
-  outline: 2px solid var(--kpi-accent); outline-offset: 2px;
-}
-
 /* The strip of outstanding tiles that used to sit under this band —
    `.acc-remaining-strip` and its `.acc-tile-*` parts — is gone. It split
    Remaining three ways (needs an answer / with an authority / never filed)
@@ -1796,11 +1797,7 @@ button.dt-status-row:focus-visible {
    side by side, and the container query drops them back to rows. It is the
    card's own width that decides, not the viewport's: the band reflows to two
    and then one column, so the same viewport can give this card either. */
-/* The Acceptance band's Remaining card carries the same part list (its two
-   halves, refused and waiting), so it takes the same container name and gets
-   the same fallback to rows when it is too narrow for its columns. */
-.dt-kpi-card[data-kpi="status"],
-.dt-kpi-card[data-kpi="acc-remaining"] { container: kpi-status / inline-size; }
+.dt-kpi-card[data-kpi="status"] { container: kpi-status / inline-size; }
 .dt-status-list {
   list-style: none; margin: 0; padding: 0;
   display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px;
@@ -1836,18 +1833,10 @@ a.dt-status-row:hover { background: var(--surface-2); }
    `display: contents` lifts the figures into the row's own grid so the swatch
    can lead the line the way a legend does, without a second copy of it. */
 @container kpi-status (max-width: 239px) {
-  .dt-status-list,
-  /* Restated at the Acceptance card's own specificity: its two-column rule
-     above is more specific than a bare `.dt-status-list`, so without this the
-     halves would keep their columns at a width where they no longer fit. */
-  .dt-kpi-card[data-kpi="acc-remaining"] .dt-status-list {
+  .dt-status-list {
     grid-template-columns: minmax(0, 1fr); gap: 1px;
   }
-  /* The button form is listed beside the link form for the same reason as
-     above: it carries an element in its selector, so a bare class here would
-     lose to it and leave the padding at the wide layout's value. */
-  .dt-status-row,
-  button.dt-status-row {
+  .dt-status-row {
     display: grid; grid-template-columns: 8px minmax(0, 1fr) auto 4ch;
     align-items: center; column-gap: 8px; padding: 2px 4px;
   }
