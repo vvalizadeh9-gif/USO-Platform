@@ -41,14 +41,12 @@ from __future__ import annotations
 
 from collections import defaultdict
 
-from sqlalchemy import select
-from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.orm import Session
 
 from app.models.reference import Province
-from app.models.workitem import Village, WorkItem
+from app.services import acceptance_universe
 from app.services import acceptance_workflow as flow
 from app.services import cpm_columns as C
-from app.services.visibility import apply_work_item_scope
 
 _DT_DONE = "Done"
 APPROVED = flow.APPROVED
@@ -213,13 +211,8 @@ class AcceptanceAnalytics:
         if self._rows is not None:
             return self._rows
 
-        stmt = select(WorkItem).where(WorkItem.deleted_at.is_(None))
-        stmt = apply_work_item_scope(stmt, self._user, self._db)
-        stmt = stmt.options(
-            selectinload(WorkItem.site),
-            selectinload(WorkItem.villages).selectinload(Village.acceptances),
-        )
-        work_items = self._db.execute(stmt).scalars().all()
+        # Plain columns, not ORM objects: see ``acceptance_universe`` for why.
+        work_items = acceptance_universe.load(self._db, self._user)
 
         rows: list[_Row] = []
         # Every هدف village, drive-tested or not. Acceptance cannot start until
@@ -227,9 +220,9 @@ class AcceptanceAnalytics:
         # universe is a share of — the funnel the province table now shows.
         village_totals: dict[int | None, int] = defaultdict(int)
         for wi in work_items:
-            site_id = wi.site.id if wi.site else None
-            site_code = wi.site.site_code if wi.site else None
-            province_id = wi.site.province_id if wi.site else None
+            site_id = wi.site_id
+            site_code = wi.site_code
+            province_id = wi.province_id
             if self._province_ids is not None and province_id not in self._province_ids:
                 continue
             if (

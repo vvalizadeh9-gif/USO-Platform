@@ -24,15 +24,14 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 from sqlalchemy import select
-from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.orm import Session
 
 from app.core import jalali
 from app.models.acceptance_plan import AcceptanceMonthlyTarget
 from app.models.reference import User
-from app.models.workitem import Village, WorkItem
+from app.services import acceptance_universe
 from app.services import acceptance_workflow as flow
 from app.services import cpm_columns as C
-from app.services.visibility import apply_work_item_scope
 
 _DT_DONE = "Done"
 
@@ -146,7 +145,7 @@ def _load_scoped_villages(
     *,
     province_ids: set[int] | None,
     contractor_id: int | None,
-) -> list[Village]:
+) -> list:
     """The DT-Done, pure-هدف villages this user (and these filters) may see.
 
     The same universe ``AcceptanceAnalytics._load_units`` builds -- same
@@ -155,19 +154,13 @@ def _load_scoped_villages(
     is request-scoped and coupled to resolving ids the API layer has already
     resolved by the time this is called. This is the reusable core of that
     loading logic, at the level of "given a scoped list of WorkItem/Village".
-    """
-    stmt = select(WorkItem).where(WorkItem.deleted_at.is_(None))
-    stmt = apply_work_item_scope(stmt, user, db)
-    stmt = stmt.options(
-        selectinload(WorkItem.site),
-        selectinload(WorkItem.villages).selectinload(Village.acceptances),
-    )
-    work_items = db.execute(stmt).scalars().all()
 
-    villages: list[Village] = []
-    for wi in work_items:
-        province_id = wi.site.province_id if wi.site else None
-        if province_ids is not None and province_id not in province_ids:
+    Read through ``acceptance_universe`` -- plain columns, not ORM objects --
+    for the reason that module gives.
+    """
+    villages: list = []
+    for wi in acceptance_universe.load(db, user):
+        if province_ids is not None and wi.province_id not in province_ids:
             continue
         if contractor_id is not None and wi.dt_sc_contractor_id != contractor_id:
             continue

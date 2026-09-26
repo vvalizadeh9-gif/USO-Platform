@@ -1,10 +1,10 @@
 // Data-only helpers behind the Acceptance Dashboard's plan-and-trend
 // widgets. Nothing here touches the DOM or the network — it only shapes
-// what /acceptance/trends and /drivetest/trend hand back into the one
+// what /acceptance/trends and /drive-test/trend hand back into the one
 // month-keyed series the charts read.
 //
 // The two endpoints are read separately (see AcceptanceDashboard.jsx) and
-// merged here defensively: /drivetest/trend reads a different table than
+// merged here defensively: /drive-test/trend reads a different table than
 // /acceptance/trends (the monthly snapshot ledger, not live work items) and
 // is not guaranteed to return the same months, in the same order, or even
 // the same count. Every lookup below is by (shamsi_year, shamsi_month), never
@@ -21,7 +21,7 @@ export function monthKey(year, month) {
  * target as-is, plus the drive-test "added villages" figure looked up from
  * `dtMonths` by month key.
  *
- * `added_cumulative` is /drivetest/trend's own running total for that month
+ * `added_cumulative` is /drive-test/trend's own running total for that month
  * (`dt_done`), not re-derived here. `added_new` is the month-over-month step
  * between two *consecutive, both-present* cumulative readings — left `null`
  * across any gap (an uncaptured month, or a month missing from the window)
