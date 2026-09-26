@@ -62,7 +62,7 @@ export default function AcceptanceTargetCard({ plan, onSaved }) {
           <div className="dt-kpi-v">
             <span className="dt-kpi-figure tnum">{fmtCount(current.target_count)}</span>
           </div>
-          <div className="dt-kpi-sub">{current.label || 'Cumulative target'}</div>
+          <div className="dt-kpi-sub">{current.label || 'Villages this month'}</div>
           {delta != null ? (
             <div
               className="row"

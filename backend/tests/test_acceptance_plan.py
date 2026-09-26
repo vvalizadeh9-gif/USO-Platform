@@ -12,6 +12,8 @@ Covers:
   authority's ``_new``, and a village cleared by both on different dates
   counts as fully accepted in the *later* month.
 * Cumulative totals in the trend accumulate correctly across months.
+* The target is a monthly amount; the trend returns it per month and its
+  running total.
 
 Run with:  cd backend && pytest tests/test_acceptance_plan.py -q
 """
@@ -277,7 +279,9 @@ def test_trend_buckets_by_authority_verdict_date_and_accumulates(client, actors)
     assert mid_row["ict_new"] == 1
     assert mid_row["cra_new"] == 0
     assert mid_row["fully_accepted_new"] == 0
-    assert mid_row["target_count"] == 2
+    # The target is a monthly amount, and the cumulative plan grows by it.
+    assert mid_row["target_monthly"] == 2
+    assert mid_row["target_cumulative"] - old_row["target_cumulative"] == 2
 
     # p_new: village B's CRA clears here -- this is where it becomes fully
     # accepted, not p_old where its ICT cleared.
@@ -298,10 +302,14 @@ def test_trend_buckets_by_authority_verdict_date_and_accumulates(client, actors)
     assert mid_row["fully_accepted_cumulative"] == 1
     assert new_row["fully_accepted_cumulative"] == 2
 
-    # A period with no target set carries no figure, rather than a synthetic
-    # zero.
-    assert old_row["target_count"] is None
-    assert new_row["target_count"] is None
+    # A period with no target set carries no monthly figure, rather than a
+    # synthetic zero; the cumulative plan carries forward unchanged through it.
+    assert old_row["target_monthly"] is None
+    assert new_row["target_monthly"] is None
+    assert new_row["target_cumulative"] == mid_row["target_cumulative"]
+    # The name the dashboard reads today is the cumulative plan.
+    for row in (old_row, mid_row, new_row):
+        assert row["target_count"] == row["target_cumulative"]
 
 
 def test_trend_cumulative_is_not_truncated_by_the_window(client, actors):

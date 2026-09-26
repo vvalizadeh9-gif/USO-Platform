@@ -348,40 +348,59 @@ def _downgrade(engine, revision: str) -> None:
         command.downgrade(cfg, revision)
 
 
-def test_internal_target_stream_backfills_and_round_trips(engine):
-    """c4f9a2e7d318: existing targets become ACCEPTANCE, unchanged otherwise;
-    the downgrade refuses while a DT target exists, and round-trips without."""
+def test_internal_target_converts_to_monthly_and_round_trips(engine):
+    """c4f9a2e7d318: existing targets become ACCEPTANCE and monthly amounts,
+    with the original cumulative kept in the note; the downgrade refuses
+    while a DT target exists, and otherwise restores every number exactly."""
     _wipe(engine)
     _upgrade(engine, "b3e8d1f5a927")
-    seed = [(1405, 6, 1, False, 1000), (1405, 6, 2, True, 1100), (1405, 7, 1, True, 1250)]
+    # (year, month, version, is_current, cumulative, note)
+    seed = [
+        (1405, 6, 1, False, 1000, None),
+        (1405, 6, 2, True, 1100, "raised"),
+        (1405, 7, 1, True, 1250, None),
+        (1405, 8, 1, True, 1200, None),   # lower than the month before
+    ]
     with engine.begin() as conn:
-        for year, month, version, current, count in seed:
+        for year, month, version, current, count, note in seed:
             conn.execute(
                 sa.text(
                     "INSERT INTO acceptance_monthly_targets "
-                    "(shamsi_year, shamsi_month, version, is_current, target_count) "
-                    "VALUES (:y, :m, :v, :c, :n)"
+                    "(shamsi_year, shamsi_month, version, is_current, target_count, note) "
+                    "VALUES (:y, :m, :v, :c, :n, :note)"
                 ),
-                {"y": year, "m": month, "v": version, "c": current, "n": count},
+                {"y": year, "m": month, "v": version, "c": current, "n": count, "note": note},
             )
 
-    _upgrade(engine)
-    select_all = (
-        "SELECT stream, shamsi_year, shamsi_month, version, is_current, target_count "
-        "FROM acceptance_monthly_targets ORDER BY id"
-    )
-    with engine.begin() as conn:
-        rows = conn.execute(sa.text(select_all)).fetchall()
-    assert [tuple(r) for r in rows] == [("ACCEPTANCE", *s) for s in seed]
+    def _all():
+        with engine.begin() as conn:
+            return [
+                tuple(r)
+                for r in conn.execute(sa.text(
+                    "SELECT stream, shamsi_year, shamsi_month, version, target_count, note "
+                    "FROM acceptance_monthly_targets ORDER BY id"
+                ))
+            ]
 
+    _upgrade(engine)
+    rows = _all()
+    assert [r[0] for r in rows] == ["ACCEPTANCE"] * 4
+    assert [r[4] for r in rows] == [1000, 1100, 150, 0]
+    assert "no earlier month" in rows[0][5]
+    assert rows[1][5].startswith("raised [Converted from cumulative target 1100")
+    assert rows[2][5] == "[Converted from cumulative target 1250]"
+    assert "was higher (1250), set to 0" in rows[3][5]
+
+    # A target set after the upgrade is monthly already.
     with engine.begin() as conn:
         conn.execute(sa.text(
             "INSERT INTO acceptance_monthly_targets "
             "(stream, shamsi_year, shamsi_month, version, is_current, target_count) "
-            "VALUES ('DT', 1405, 7, 1, true, 140)"
+            "VALUES ('ACCEPTANCE', 1405, 9, 1, true, 40), ('DT', 1405, 7, 1, true, 140)"
         ))
     with pytest.raises(RuntimeError, match="Refusing to downgrade"):
         _downgrade(engine, "b3e8d1f5a927")
+    assert len(_all()) == 6 and _all()[2][4] == 150   # untouched
 
     with engine.begin() as conn:
         conn.execute(sa.text("DELETE FROM acceptance_monthly_targets WHERE stream = 'DT'"))
@@ -389,11 +408,20 @@ def test_internal_target_stream_backfills_and_round_trips(engine):
     columns = {c["name"] for c in sa.inspect(engine).get_columns("acceptance_monthly_targets")}
     assert "stream" not in columns
     with engine.begin() as conn:
-        assert conn.execute(
-            sa.text("SELECT COUNT(*) FROM acceptance_monthly_targets")
-        ).scalar_one() == len(seed)
+        restored = [
+            tuple(r)
+            for r in conn.execute(sa.text(
+                "SELECT shamsi_year, shamsi_month, version, target_count, note "
+                "FROM acceptance_monthly_targets ORDER BY id"
+            ))
+        ]
+    assert restored == [
+        (1405, 6, 1, 1000, None),
+        (1405, 6, 2, 1100, "raised"),
+        (1405, 7, 1, 1250, None),
+        (1405, 8, 1, 1200, None),
+        (1405, 9, 1, 1240, None),   # 1200 before it + 40
+    ]
 
     _upgrade(engine)
-    with engine.begin() as conn:
-        rows = conn.execute(sa.text(select_all)).fetchall()
-    assert [tuple(r) for r in rows] == [("ACCEPTANCE", *s) for s in seed]
+    assert [r[4] for r in _all()] == [1000, 1100, 150, 0, 40]

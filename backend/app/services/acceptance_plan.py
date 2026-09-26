@@ -2,8 +2,12 @@
 
 The target table also carries a second, separate number: the PM's DT
 "MTN internal PIP" (``stream="DT"``), read and written through the same three
-functions with ``stream`` set. Every function defaults to ``ACCEPTANCE``, so the
-Acceptance Dashboard and ``AcceptanceTarget.jsx`` behave exactly as before.
+functions with ``stream`` set. Every function defaults to ``ACCEPTANCE``.
+Both streams are monthly amounts; see ``models/acceptance_plan.py``.
+
+**A contractor never sees the MTN target.** In the trend, a contractor (or a
+staff view filtered to one contractor) gets that contractor's own approved
+Acceptance PIP as the plan line instead.
 
 Two responsibilities live here because they are two sides of one dashboard
 widget: a target a PM sets (``set_target`` / ``get_current_target`` /
@@ -26,6 +30,7 @@ month-by-month pace, not a single snapshot.
 """
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import datetime, timezone
 
 from sqlalchemy import select
@@ -37,10 +42,12 @@ from app.models.acceptance_plan import (
     TARGET_STREAMS,
     AcceptanceMonthlyTarget,
 )
+from app.models.monthly_plan import STATUS_APPROVED, ContractorMonthlyPlan
 from app.models.reference import User
 from app.services import acceptance_universe
 from app.services import acceptance_workflow as flow
 from app.services import cpm_columns as C
+from app.core.deps import CONTRACTOR
 
 _DT_DONE = "Done"
 
@@ -104,8 +111,8 @@ def set_target(
 ) -> AcceptanceMonthlyTarget:
     """Set one stream's MTN internal target for one month. Caller commits.
 
-    ``ACCEPTANCE`` (the default) is the cumulative acceptance target; ``DT``
-    is a monthly drive-test amount -- see ``models/acceptance_plan.py``.
+    A monthly amount for both streams: villages to be fully accepted in that
+    month (``ACCEPTANCE``, the default), or drive tests (``DT``).
 
     Always appends: an existing current row for the stream and period is
     flipped to ``is_current=False`` in the same call, and the new one is
@@ -170,6 +177,89 @@ def recent_targets(
 
 
 # ---------------------------------------------------------------------------
+# The plan line: MTN's target for staff, a contractor's own PIP otherwise
+# ---------------------------------------------------------------------------
+def _internal_monthly_targets(db: Session) -> dict[tuple[int, int], int]:
+    """Every month's current ACCEPTANCE internal target, all history."""
+    rows = db.execute(
+        select(
+            AcceptanceMonthlyTarget.shamsi_year,
+            AcceptanceMonthlyTarget.shamsi_month,
+            AcceptanceMonthlyTarget.target_count,
+        ).where(
+            AcceptanceMonthlyTarget.stream == STREAM_ACCEPTANCE,
+            AcceptanceMonthlyTarget.is_current.is_(True),
+        )
+    ).all()
+    return {(y, m): count for y, m, count in rows}
+
+
+def _contractor_monthly_pips(
+    db: Session, contractor_id: int
+) -> dict[tuple[int, int], int]:
+    """One contractor's approved Acceptance PIP in force, per month, all history.
+
+    Narrowed to the contractor in the query. "In force" is the highest
+    approved version, the same rule as ``monthly_plan.in_force_plan``:
+    ordered ascending, so the highest version is the one left in the dict.
+    """
+    rows = db.execute(
+        select(
+            ContractorMonthlyPlan.shamsi_year,
+            ContractorMonthlyPlan.shamsi_month,
+            ContractorMonthlyPlan.committed_count,
+        )
+        .where(
+            ContractorMonthlyPlan.contractor_id == contractor_id,
+            ContractorMonthlyPlan.stream == STREAM_ACCEPTANCE,
+            ContractorMonthlyPlan.status == STATUS_APPROVED,
+        )
+        .order_by(ContractorMonthlyPlan.version)
+    ).all()
+    return {(y, m): count or 0 for y, m, count in rows}
+
+
+def plan_contractor(user: User, contractor_id: int | None) -> int | None:
+    """Whose PIP is the plan line, or None for MTN's internal target.
+
+    A contractor account is always its own contractor, whatever it asked
+    for -- so a contractor never reaches the internal target, nor another
+    company's PIP. Staff get a contractor's PIP when they filtered to one.
+    """
+    if user.role.name == CONTRACTOR:
+        # -1 matches no contractor: an account with no company has no plan,
+        # and must still not fall through to the internal target.
+        return user.contractor_id if user.contractor_id is not None else -1
+    return contractor_id
+
+
+def _cumulative_plan(
+    monthly: dict[tuple[int, int], int],
+    actual_cumulative_before: Callable[[tuple[int, int]], int],
+) -> dict[tuple[int, int], int]:
+    """The plan's running total, for every month from its first planned one.
+
+    Anchored on reality: it starts from the villages actually fully accepted
+    before the first planned month, then adds each month's plan (0 for a
+    month inside the run that has none). So the cumulative plan line and the
+    cumulative actual line start from the same point, and the gap between
+    them is exactly what the plan promised and was not delivered.
+    """
+    if not monthly:
+        return {}
+    first = min(monthly)
+    last = max(max(monthly), jalali.current_shamsi_period())
+    out: dict[tuple[int, int], int] = {}
+    running = actual_cumulative_before(first)
+    period = first
+    while period <= last:
+        running += monthly.get(period, 0)
+        out[period] = running
+        period = jalali.next_period(*period)
+    return out
+
+
+# ---------------------------------------------------------------------------
 # Monthly approval trend
 # ---------------------------------------------------------------------------
 def _load_scoped_villages(
@@ -226,7 +316,16 @@ def monthly_approval_trend(
     contractor_id: int | None,
     months: int = 9,
 ) -> list[dict]:
-    """Per-Shamsi-month counts of villages newly ICT/CRA/fully approved.
+    """Per-Shamsi-month counts of villages newly ICT/CRA/fully approved,
+    with the plan they are measured against.
+
+    The plan is MTN's monthly internal target for staff, and the approved
+    Acceptance PIP of one contractor when the caller is that contractor (or
+    staff filtered to it) -- see ``plan_contractor``. ``target_monthly`` is
+    the month's plan; ``target_cumulative`` its running total, anchored on
+    what was actually accepted before the first planned month
+    (``_cumulative_plan``). ``target_count`` repeats the cumulative figure
+    for the dashboard that reads that name today.
 
     For each qualifying village, ``authority_verdict_date`` says which month
     ICT cleared it and which month CRA cleared it (None if not yet approved
@@ -286,12 +385,23 @@ def monthly_approval_trend(
     upto_year, upto_month = jalali.current_shamsi_period()
     window = _trailing_periods(upto_year, upto_month, months)
 
-    targets = {
-        (t.shamsi_year, t.shamsi_month): t.target_count
-        for t in recent_targets(
-            db, upto_year=upto_year, upto_month=upto_month, months=months
-        )
-    }
+    # The plan line: MTN's monthly target, or one contractor's own PIP.
+    whose = plan_contractor(user, contractor_id)
+    monthly_plan = (
+        _internal_monthly_targets(db)
+        if whose is None
+        else _contractor_monthly_pips(db, whose)
+    )
+
+    def _actual_before(period: tuple[int, int]) -> int:
+        total = 0
+        for p in all_periods:
+            if p >= period:
+                break
+            total = cumulative[p]["fully_accepted_new"]
+        return total
+
+    cumulative_plan = _cumulative_plan(monthly_plan, _actual_before)
 
     out: list[dict] = []
     # The running cumulative total as of just before the window starts, so a
@@ -319,7 +429,12 @@ def monthly_approval_trend(
                 "ict_cumulative": carried["ict_new"],
                 "cra_cumulative": carried["cra_new"],
                 "fully_accepted_cumulative": carried["fully_accepted_new"],
-                "target_count": targets.get(period),
+                "target_monthly": monthly_plan.get(period),
+                "target_cumulative": cumulative_plan.get(period),
+                # The name the dashboard reads today: the cumulative plan, so
+                # its Cumulative view is right and its Monthly view (which
+                # differences consecutive months) gives the monthly plan.
+                "target_count": cumulative_plan.get(period),
             }
         )
     return out

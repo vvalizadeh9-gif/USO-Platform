@@ -1739,7 +1739,7 @@ class AcceptanceSiteList(BaseModel):
 
 # ----- Acceptance plan: the PM's monthly target, and the trend against it -----
 class AcceptancePlanPeriod(BaseModel):
-    """One version of the programme's cumulative acceptance target."""
+    """One version of MTN's monthly internal acceptance target."""
 
     shamsi_year: int
     shamsi_month: int
@@ -1775,6 +1775,11 @@ class AcceptanceTrendMonth(BaseModel):
     ict_cumulative: int
     cra_cumulative: int
     fully_accepted_cumulative: int
+    #: The plan: MTN's internal target for staff, the contractor's own
+    #: approved Acceptance PIP for a contractor. None where there is none.
+    target_monthly: int | None = None
+    target_cumulative: int | None = None
+    #: Same as ``target_cumulative``; kept for the dashboard that reads it.
     target_count: int | None
 
 

@@ -13,6 +13,11 @@ The rules being checked:
   target never reaches ``/acceptance/plan`` or the acceptance trend.
 * Every existing service caller that passes no stream still reads
   ``ACCEPTANCE``.
+* A contractor never sees the MTN target: ``/acceptance/plan`` is 403, and
+  its trend's plan line is its own approved Acceptance PIP. Staff filtered to
+  one contractor see that contractor's PIP the same way.
+* The cumulative plan starts from what was actually accepted before the first
+  planned month and adds each month's plan.
 
 Run with:  cd backend && pytest tests/test_internal_target.py -q
 """
@@ -277,7 +282,7 @@ def test_acceptance_plan_is_shared_and_dt_stays_out_of_it(client, actors):
         m for m in trend["months"]
         if (m["shamsi_year"], m["shamsi_month"]) == period
     )
-    assert running["target_count"] == 777
+    assert running["target_monthly"] == 777
 
     # And the Acceptance target reads the same through the new endpoint.
     got = _get(client, actors["pm"], "ACCEPTANCE", period).json()
@@ -295,3 +300,98 @@ def test_service_defaults_to_acceptance(client, actors):
         assert acceptance_plan.get_current_target(db, *period, "DT").target_count == 12
     finally:
         db.close()
+
+
+# ---------------------------------------------------------------------------
+# A contractor sees only its own plan
+# ---------------------------------------------------------------------------
+def _contractor_id():
+    from app.models.reference import Contractor
+
+    db = SessionLocal()
+    try:
+        return db.query(Contractor).filter_by(name="Target Reader Co").one().id
+    finally:
+        db.close()
+
+
+def _approve_acceptance_pip(contractor_id, period, count, version=1):
+    from app.models.monthly_plan import ContractorMonthlyPlan
+
+    db = SessionLocal()
+    db.add(
+        ContractorMonthlyPlan(
+            contractor_id=contractor_id,
+            stream="ACCEPTANCE",
+            shamsi_year=period[0],
+            shamsi_month=period[1],
+            version=version,
+            is_current=True,
+            committed_count=count,
+            status="Approved",
+        )
+    )
+    db.commit()
+    db.close()
+
+
+def test_contractor_cannot_read_acceptance_plan(client, actors):
+    r = client.get(f"{ACC}/plan", headers=actors["contractor"])
+    assert r.status_code == 403
+    assert client.get(f"{ACC}/plan", headers=actors["coordinator"]).status_code == 200
+
+
+def test_contractor_trend_shows_its_own_pip_not_the_internal_target(client, actors):
+    period = _back(7)
+    assert _put(client, actors["pm"], "ACCEPTANCE", period, 500).status_code == 200
+    cid = _contractor_id()
+    _approve_acceptance_pip(cid, period, 9)
+
+    def _row(headers, extra=""):
+        r = client.get(f"{ACC}/trends?months=12{extra}", headers=headers)
+        assert r.status_code == 200, r.text
+        return next(
+            m for m in r.json()["months"]
+            if (m["shamsi_year"], m["shamsi_month"]) == period
+        )
+
+    mine = _row(actors["contractor"])
+    assert mine["target_monthly"] == 9
+
+    # Asking for someone else changes nothing for a contractor.
+    assert _row(actors["contractor"], "&contractor_id=999999")["target_monthly"] == 9
+
+    # Staff see MTN's target, and the contractor's PIP only when filtered.
+    assert _row(actors["coordinator"])["target_monthly"] == 500
+    assert _row(actors["coordinator"], f"&contractor_id={cid}")["target_monthly"] == 9
+
+
+def test_contractor_trend_uses_the_highest_approved_version(client, actors):
+    period = _back(8)
+    cid = _contractor_id()
+    _approve_acceptance_pip(cid, period, 20, version=1)
+    _approve_acceptance_pip(cid, period, 15, version=2)
+    r = client.get(f"{ACC}/trends?months=12", headers=actors["contractor"])
+    row = next(
+        m for m in r.json()["months"]
+        if (m["shamsi_year"], m["shamsi_month"]) == period
+    )
+    assert row["target_monthly"] == 15
+
+
+# ---------------------------------------------------------------------------
+# The cumulative plan
+# ---------------------------------------------------------------------------
+def test_cumulative_plan_is_anchored_on_actual_and_adds_each_month():
+    from app.services.acceptance_plan import _cumulative_plan
+
+    first = (1403, 11)
+    monthly = {first: 10, (1403, 12): 5, (1404, 2): 7}  # nothing in 1404/1
+    before = {first: 40}
+    out = _cumulative_plan(monthly, lambda p: before[p])
+    assert out[(1403, 11)] == 50
+    assert out[(1403, 12)] == 55
+    assert out[(1404, 1)] == 55     # a month with no plan adds nothing
+    assert out[(1404, 2)] == 62
+    assert (1403, 10) not in out    # nothing before the first planned month
+    assert _cumulative_plan({}, lambda p: 0) == {}

@@ -1,29 +1,28 @@
-"""Acceptance monthly target: the PM's programme-wide village-acceptance plan.
+"""MTN internal target: the PM's own monthly number, per stream.
 
-A PM sets, once per Shamsi month, how many villages the programme should have
-fully accepted -- ICT **and** CRA, cumulatively, by the end of that month.
-Coordinators across every province work toward that single number; it is not
-attributed to a contractor, a province or a technology, because full
-acceptance is the one thing every one of them shares responsibility for.
+A PM sets, once per Shamsi month and per stream, what MTN commits to
+management for that month:
 
-This is deliberately a different shape from ``ContractorMonthlyPlan`` in
-``monthly_plan.py``, even though the two tables sit side by side and share a
-name pattern. That one is a per-contractor *drive-test volume commitment*,
-submitted by a contractor and approved by a PM every month. This one is a
-programme-wide *acceptance target*, set unilaterally by a PM with nobody to
-submit it and nobody to approve it -- there is no workflow here, only a
-number and who set it.
+* ``ACCEPTANCE`` -- villages to become fully accepted (ICT **and** CRA) in
+  that month;
+* ``DT`` -- drive tests to be delivered in that month.
 
-Two shape decisions are worth stating, because each is the reason a more
-obvious design was not used:
+Both are **monthly amounts**, the same unit as a contractor's PIP and as
+Delivered, so "internal target vs actual" and "internal target vs the
+contractors' PIPs" are direct comparisons. A cumulative view (the plan's
+running total) is derived when read, never stored.
 
-**Cumulative, not a monthly delta.** ``target_count`` means "by the end of
-this month, this many villages total should be fully accepted" rather than
-"this many new villages this month". A programme target is almost always
-phrased that way -- "1,200 villages accepted by the end of مهر" -- and a
-cumulative figure is also the one that can be plotted directly against the
-cumulative acceptance trend this feature computes, with no further
-arithmetic on either side.
+This is deliberately a different table from ``ContractorMonthlyPlan`` in
+``monthly_plan.py``. That one is a contractor's own commitment, submitted by
+the contractor and approved by a PM. This one is MTN's internal number, set
+unilaterally by a PM with nobody to submit it and nobody to approve it --
+there is no workflow here, only a number and who set it. **It is staff-only:
+no contractor ever reads it.** A contractor measures itself against its own
+approved PIP instead.
+
+Until revision ``c4f9a2e7d318`` the Acceptance target was cumulative
+("1,200 villages accepted by the end of مهر"); that migration converted the
+stored rows to monthly amounts and records the original in each row's note.
 
 **Append-only, exactly like ``ContractorMonthlyPlan``.** Setting a new target
 for a month that already has one does not edit the row: it inserts a new row
@@ -69,21 +68,7 @@ __all__ = [
 
 
 class AcceptanceMonthlyTarget(Base):
-    """One version of one stream's MTN internal target for one Shamsi month.
-
-    **The two streams do not mean the same thing by ``target_count``**, and
-    this is deliberate:
-
-    * ``ACCEPTANCE`` -- the original target, unchanged: *cumulative*, villages
-      fully accepted by the end of the month, all-time. The Acceptance
-      Dashboard plots it against the cumulative trend.
-    * ``DT`` -- a *monthly* amount: drive tests the programme commits to
-      management for that month alone, the same unit as a contractor's DT
-      PIP and the DT scorecard's monthly Delivered.
-
-    Neither is a contractor's PIP. This is MTN's own internal number, set by
-    the PM with no submit/approve workflow.
-    """
+    """One version of one stream's MTN internal target for one Shamsi month."""
 
     __tablename__ = "acceptance_monthly_targets"
     __table_args__ = (
@@ -123,9 +108,8 @@ class AcceptanceMonthlyTarget(Base):
     #: ``services/acceptance_plan.py`` is what keeps that true.
     is_current: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
-    #: ACCEPTANCE: cumulative villages fully accepted by the end of this
-    #: month. DT: drive tests in this month alone. See the class docstring.
-    #: Validated
+    #: This month alone: villages fully accepted (ACCEPTANCE) or drive tests
+    #: delivered (DT). Validated
     #: non-negative at the service/schema layer, matching how
     #: ``committed_count`` is handled on ``ContractorMonthlyPlan``.
     target_count: Mapped[int] = mapped_column(Integer, nullable=False)
