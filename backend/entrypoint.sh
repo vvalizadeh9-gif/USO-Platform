@@ -14,5 +14,17 @@ echo "[entrypoint] Applying database migrations..."
 alembic upgrade head
 echo "[entrypoint] Migrations applied."
 
-echo "[entrypoint] Starting API server..."
+# Seeding also runs here, once, for the same reason. Every worker process seeds
+# again on start-up (app/main.py), and on a brand-new database several doing it
+# at the same moment would race to insert the same roles and provinces. Once
+# this has run they all find everything present and write nothing.
+echo "[entrypoint] Seeding reference data..."
+python -c "from app.core.bootstrap import init_db; init_db()"
+echo "[entrypoint] Reference data present."
+
+# Worker processes: WEB_CONCURRENCY, which uvicorn reads itself (set in
+# docker-compose.yml). One process runs one request's Python at a time, so a
+# single worker made every page wait behind whatever heavy request was ahead
+# of it. Each worker costs memory, and the container's limit covers them all.
+echo "[entrypoint] Starting API server with ${WEB_CONCURRENCY:-1} worker(s)..."
 exec uvicorn app.main:app --host 0.0.0.0 --port 8000 "$@"

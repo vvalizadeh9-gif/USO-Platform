@@ -3,6 +3,7 @@ import { KeyRound, LogOut, Menu, Settings } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { DATA_CHANGED_EVENT } from '../lib/dataChanged'
 import { DRIVE_TEST_PROJECT, NAV, REPORTS, navItemVisible } from '../lib/nav'
 import api from '../api/client'
 
@@ -142,19 +143,12 @@ export default function Layout() {
     }
   }, [roleName])
 
-  // On route change: the queue counts move whenever an action does (assign,
-  // review, approve), and the next screen someone opens should already show
-  // it caught up.
-  useEffect(() => {
-    if (mustChangePassword) return
-    loadQueueBadges()
-  }, [location.pathname, mustChangePassword, loadQueueBadges])
-
-  // Load the pending-action count once on mount and refresh it on a light
-  // interval — NOT on every navigation. Re-fetching on each route change
-  // added a network round-trip to every click and made pages feel slow. The
-  // HC/DT/contractor counts ride this same interval rather than a timer of
-  // their own.
+  // Load every badge once on mount, refresh on a light interval, and refresh
+  // straight after any write -- NOT on every navigation. The counts move when
+  // an action does (assign, review, approve), and every action is a write, so
+  // DATA_CHANGED_EVENT is the moment they can have changed. Re-reading them on
+  // each route change instead cost a server-side count on every click, which
+  // was most of why pages took seconds to open.
   useEffect(() => {
     // An account that must change its password is refused by every endpoint
     // but three, this one included. Polling it would produce a 403 every
@@ -162,9 +156,12 @@ export default function Layout() {
     if (mustChangePassword) return undefined
 
     let active = true
+    let pending = null
     const load = () => {
       api
-        .get('/action-center/summary')
+        // Counters only: the badge reads nothing else, and the item feed
+        // costs the server a walk over every work item in scope.
+        .get('/action-center/summary', { params: { items: false } })
         .then((r) => {
           // The counters, and only the counters: the badge should say how many
           // pieces of work are waiting, and one queue holding thirty sites is
@@ -179,11 +176,19 @@ export default function Layout() {
         .catch(() => {})
       loadQueueBadges()
     }
+    // A bulk action can write several times in a row; answer the burst once.
+    const onDataChanged = () => {
+      clearTimeout(pending)
+      pending = setTimeout(load, 300)
+    }
     load()
     const id = setInterval(load, 60000)
+    window.addEventListener(DATA_CHANGED_EVENT, onDataChanged)
     return () => {
       active = false
       clearInterval(id)
+      clearTimeout(pending)
+      window.removeEventListener(DATA_CHANGED_EVENT, onDataChanged)
     }
   }, [mustChangePassword, loadQueueBadges])
 

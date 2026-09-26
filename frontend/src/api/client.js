@@ -3,6 +3,7 @@
 // logic lives in one place (DRY).
 import axios from 'axios'
 import { isPasswordChangeRequired } from '../lib/apiError'
+import { DATA_CHANGED_EVENT } from '../lib/dataChanged'
 
 const api = axios.create({ baseURL: '/api/v1' })
 
@@ -15,8 +16,16 @@ api.interceptors.request.use((config) => {
   return config
 })
 
+const READ_METHODS = new Set(['get', 'head', 'options'])
+
 api.interceptors.response.use(
-  (res) => res,
+  (res) => {
+    const method = (res.config?.method || 'get').toLowerCase()
+    if (!READ_METHODS.has(method)) {
+      window.dispatchEvent(new Event(DATA_CHANGED_EVENT))
+    }
+    return res
+  },
   (err) => {
     if (err.response?.status === 401 && localStorage.getItem('uep_token')) {
       localStorage.removeItem('uep_token')

@@ -11,6 +11,8 @@ import os
 import tempfile
 from pathlib import Path
 
+import pytest
+
 # Mark this process as a development machine before anything imports the
 # settings. Production refuses to start on the default JWT secret, the default
 # admin password or a wildcard CORS list; the test suite deliberately uses all
@@ -52,6 +54,21 @@ def sample_cpm_path() -> str | None:
     if _BUNDLED_SAMPLE.exists():
         return str(_BUNDLED_SAMPLE)
     return None
+
+
+@pytest.fixture(autouse=True)
+def _fresh_count_cache():
+    """Start every test with no remembered queue counts.
+
+    The cache is emptied by commits made through a session, but a test module
+    rebuilding the schema, or writing through a bare connection, does neither
+    -- and user ids repeat from one module to the next, so a count remembered
+    from the previous test could otherwise answer for this one.
+    """
+    from app.core import count_cache
+
+    count_cache.clear()
+    yield
 
 
 def create_schema() -> None:

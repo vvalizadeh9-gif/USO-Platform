@@ -25,9 +25,10 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
+from app.core import count_cache
 from app.models.health_check import HcAssignment, HcRemediation, HcTask
 from app.models.reference import Contractor, User
 from app.models.workitem import Assignment, DriveTest, Site, WorkItem
@@ -507,12 +508,40 @@ def contractor_dt_submitted(db: Session, user: User) -> list[dict]:
 
 
 def contractor_dt_counts(db: Session, user: User) -> dict[str, int]:
-    """Counted by running the same two functions the tabs use -- see ``counts``
-    above for why: a badge that disagrees with its list is worse than none."""
-    return {
-        "todo": len(contractor_dt_todo(db, user)),
-        "submitted": len(contractor_dt_submitted(db, user)),
-    }
+    """How many rows the two My Drive Tests tabs hold, for the badges.
+
+    Answered from bare columns rather than by building both lists, for the
+    reason ``counts`` gives below. The conditions are the lists' own, one for
+    one, and ``tests/test_queue_count_parity.py`` holds the two together.
+    """
+    return _cached(("contractor_dt", user), lambda: _contractor_dt_counts(db, user))
+
+
+def _contractor_dt_counts(db: Session, user: User) -> dict[str, int]:
+    if user.contractor_id is None:
+        return {"todo": 0, "submitted": 0}
+
+    scoped = visible_work_item_ids(user, db)
+    assignments = _active_assignments(db, scoped)
+    latest_dt = _active_drive_test_by_work_item(db, user)
+
+    # ``_own_active_assignment``: the latest active assignment is this
+    # company's. Every scoped id is in ``assignments`` or has none at all, so
+    # walking the assignments walks exactly the sites that can qualify.
+    own = [
+        wi_id
+        for wi_id, rows in assignments.items()
+        if rows[-1].contractor_id == user.contractor_id
+    ]
+    todo = sum(
+        1 for wi_id in own if _owes_drive_test(assignments[wi_id], latest_dt.get(wi_id))
+    )
+    submitted = 0
+    if own:
+        submitted = db.execute(
+            _submitted_drive_tests_count().where(DriveTest.work_item_id.in_(own))
+        ).scalar_one()
+    return {"todo": todo, "submitted": submitted}
 
 
 # --------------------------------------------------------------------------
@@ -521,37 +550,194 @@ def contractor_dt_counts(db: Session, user: User) -> dict[str, int]:
 def counts(db: Session, user: User) -> dict[str, int]:
     """How many items each queue currently holds, for this user.
 
-    Counted by running the same reads the screens use rather than by separate
-    ``COUNT(*)`` queries, so a badge can never disagree with the list behind
-    it — which would be worse than no badge, because a queue reading 3 that
-    opens empty teaches people to stop trusting the numbers.
-    """
-    from app.services.health_check import get_basket
+    These badges are read far more often than the lists behind them: the
+    sidebar, the Health Check and Drive Test tabs and the Action Center all
+    ask, usually for the same click. Building every list in full to take its
+    length loaded each in-scope work item with its sites, tasks, assignments
+    and -- through eager relationships -- every task's technologies and
+    remediations, several times per click, and that was most of the time a
+    page took to open.
 
-    # One scan, shared by the two queues that walk every work item. Counted by
-    # running the same reads the screens use rather than by separate COUNT
-    # queries, so a badge can never disagree with the list behind it -- which
-    # would be worse than no badge, because a queue reading 3 that opens empty
-    # teaches people to stop trusting the numbers.
-    work_items = scoped_work_items(db, user)
-    basket = get_basket(db, user, work_items)
+    So each count is answered from the few columns its condition reads, by
+    the same condition the list applies. A badge disagreeing with the list
+    behind it would be worse than no badge -- a queue reading 3 that opens
+    empty teaches people to stop trusting the numbers -- which is why the two
+    are held together by ``tests/test_queue_count_parity.py`` rather than by
+    sharing code: any change to a list's condition has to be made here too,
+    and that test is what says so.
+
+    Cached for a few seconds per user (see ``app.core.count_cache``), and the
+    cache is emptied by every commit, so an action shows in the next read.
+    """
+    return _cached(("hc", user), lambda: _counts(db, user))
+
+
+def _counts(db: Session, user: User) -> dict[str, int]:
+    scoped = visible_work_item_ids(user, db)
+
+    # --- HC Pool: every on-air site whose drive test is not Done --------
+    from app.services import cpm_columns as C
+    from app.services.health_check import work_item_ids_in_open_hc
+
+    busy = work_item_ids_in_open_hc(db)
+    pool = pool_assignable = 0
+    for wi_id, last_stage, dt_status in db.execute(
+        select(WorkItem.id, WorkItem.last_stage, WorkItem.dt_status).where(
+            WorkItem.id.in_(scoped)
+        )
+    ):
+        if C.normalize_stage(last_stage) not in C.ONAIR_STAGES:
+            continue
+        if C.normalize_dt_status(dt_status) in C.DT_STATUS_EXCLUDED_FROM_HC:
+            continue
+        pool += 1
+        # Every pool state but "In health check" is assignable (see
+        # HC_ASSIGNABLE_STATES), and that state is exactly "in ``busy``".
+        if wi_id not in busy:
+            pool_assignable += 1
+
+    # --- HC In Progress: pending sites of every assignment in scope -------
+    # ``in_progress`` lists an assignment once any in-scope site of it is
+    # pending, then counts *all* of its pending sites -- so this does too.
+    visible_assignments = select(HcTask.hc_assignment_id).where(
+        HcTask.work_item_id.in_(scoped), HcTask.completed_at.is_(None)
+    )
+    in_progress_sites = db.execute(
+        select(func.count(HcTask.id)).where(
+            HcTask.hc_assignment_id.in_(visible_assignments),
+            HcTask.completed_at.is_(None),
+        )
+    ).scalar_one()
+
+    # --- Remediation board and re-route decisions -----------------------
+    open_fixes = select(func.count(HcRemediation.id)).where(
+        HcRemediation.closed_at.is_(None),
+        HcRemediation.work_item_id.in_(scoped),
+    )
+    remediation = db.execute(open_fixes).scalar_one()
+    reroute_count = db.execute(
+        open_fixes.where(HcRemediation.reroute_to_category_id.isnot(None))
+    ).scalar_one()
+
+    # --- Drive-test assignment and in-progress ---------------------------
+    assignments = _active_assignments(db, scoped)
+    latest_task = _latest_completed_task_facts(db, scoped)
+    latest_dt = _active_drive_test_by_work_item(db, user)
+
+    dt_assignment_count = 0
+    for wi_id, task in latest_task.items():
+        if task.overall_result != "Ready" or task.reviewed_at is None:
+            continue
+        # ``dt_assignment`` takes the *first* active assignment, not the
+        # latest -- kept as it is, so the badge and the list cannot differ.
+        active = assignments.get(wi_id, [None])[0]
+        if active is not None and active.returned_at is None:
+            continue
+        dt_assignment_count += 1
+
+    dt_in_progress_count = sum(
+        1
+        for wi_id, rows in assignments.items()
+        if _owes_drive_test(rows, latest_dt.get(wi_id))
+    )
+
+    # --- Drive-test review -------------------------------------------------
+    dt_review_count = db.execute(
+        _submitted_drive_tests_count().where(DriveTest.work_item_id.in_(scoped))
+    ).scalar_one()
 
     return {
         # The pool quantity: every on-air site whose drive test is not Done.
-        "pool": len(basket),
+        "pool": pool,
         # The slice of it a Coordinator can raise a check for right now. The
         # pool figure answers "how much work is there"; the nav's attention
         # badge asks "how much can I do something about", and since the pool
         # started carrying sites that are mid-check those are two numbers.
-        "pool_assignable": sum(1 for b in basket if b["assignable"]),
-        "in_progress": sum(r["sites_pending"] for r in in_progress(db, user)),
+        "pool_assignable": pool_assignable,
+        "in_progress": in_progress_sites,
         "hc_review": _hc_review_count(db, user),
-        "remediation": len(remediations(db, user)),
-        "reroutes": len(reroutes(db, user)),
-        "dt_assignment": len(dt_assignment(db, user, work_items)),
-        "dt_in_progress": len(dt_in_progress(db, user, work_items)),
-        "dt_review": len(dt_review(db, user)),
+        "remediation": remediation,
+        "reroutes": reroute_count,
+        "dt_assignment": dt_assignment_count,
+        "dt_in_progress": dt_in_progress_count,
+        "dt_review": dt_review_count,
     }
+
+
+def _cached(kind: tuple[str, User], compute) -> dict[str, int]:
+    """One user's counts, shared by every read of them for a few seconds.
+
+    Keyed on everything the scope rules read from the user, so a change of
+    role, contractor or grant (each a commit, which empties the cache anyway)
+    can never be answered from another scope's numbers.
+    """
+    name, user = kind
+    key = (name, user.id, user.role_id, user.contractor_id)
+    return count_cache.get_or_compute(key, compute)
+
+
+def _active_assignments(db: Session, scoped) -> dict[int, list]:
+    """Each in-scope site's active drive-test assignments, oldest id first.
+
+    Oldest-first so ``[0]`` is what ``next(a for a in wi.assignments if
+    a.is_active)`` finds and ``[-1]`` is what ``_latest_active`` picks.
+    """
+    out: dict[int, list] = {}
+    for row in db.execute(
+        select(
+            Assignment.id,
+            Assignment.work_item_id,
+            Assignment.contractor_id,
+            Assignment.returned_at,
+        )
+        .where(Assignment.is_active.is_(True), Assignment.work_item_id.in_(scoped))
+        .order_by(Assignment.id.asc())
+    ):
+        out.setdefault(row.work_item_id, []).append(row)
+    return out
+
+
+def _latest_completed_task_facts(db: Session, scoped) -> dict[int, object]:
+    """Each in-scope site's latest completed HC task, as bare columns.
+
+    "Latest" as ``dt_assignment`` picks it: the greatest ``completed_at``,
+    the first in id order on a tie.
+    """
+    latest: dict[int, object] = {}
+    for row in db.execute(
+        select(
+            HcTask.id,
+            HcTask.work_item_id,
+            HcTask.completed_at,
+            HcTask.overall_result,
+            HcTask.reviewed_at,
+        )
+        .where(HcTask.completed_at.isnot(None), HcTask.work_item_id.in_(scoped))
+        .order_by(HcTask.id.asc())
+    ):
+        seen = latest.get(row.work_item_id)
+        if seen is None or _aware(row.completed_at) > _aware(seen.completed_at):
+            latest[row.work_item_id] = row
+    return latest
+
+
+def _owes_drive_test(assignments: list, dt) -> bool:
+    """``dt_in_progress``'s condition, for one site."""
+    assignment = assignments[-1] if assignments else None
+    if assignment is None or assignment.returned_at is not None:
+        return False
+    return dt is None or dt.status not in ("Submitted", "Approved")
+
+
+def _submitted_drive_tests_count():
+    """``dt_review``'s rows, counted -- joins kept, since they can drop rows."""
+    return (
+        select(func.count(DriveTest.id))
+        .select_from(DriveTest)
+        .join(WorkItem, DriveTest.work_item_id == WorkItem.id)
+        .join(Site, WorkItem.site_id == Site.id)
+        .where(DriveTest.is_active.is_(True), DriveTest.status == "Submitted")
+    )
 
 
 def _hc_review_count(db: Session, user: User) -> int:

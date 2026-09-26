@@ -59,6 +59,12 @@ services:
     restart: unless-stopped
     env_file:
       - .env
+    environment:
+      # How many backend processes serve requests. With one, a slow request
+      # held up every other user's page behind it. Each process uses roughly
+      # 150-250 MB, and they share the mem_limit below: raise that limit
+      # before raising this. Override in .env.
+      WEB_CONCURRENCY: ${WEB_CONCURRENCY:-2}
     depends_on:
       db:
         # Waits for the healthcheck above to pass, not merely for the container

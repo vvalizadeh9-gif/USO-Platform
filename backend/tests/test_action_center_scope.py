@@ -278,6 +278,20 @@ def test_pm_gets_a_counter_for_each_stage_they_clear(client):
     assert returned["url"] == "/work-items?stage=Returned%20by%20Contractor"
 
 
+def test_the_counters_can_be_asked_for_without_the_feed(client):
+    """The sidebar and the Action Center page ask with ``items=false``: same
+    counters, and no item feed built for nobody to read."""
+    pm = _headers(client, "pm")
+    full = client.get("/api/v1/action-center/summary", headers=pm).json()
+    lean = client.get(
+        "/api/v1/action-center/summary?items=false", headers=pm
+    ).json()
+
+    assert full["items"], "the default still carries the feed for older clients"
+    assert lean["items"] == []
+    assert lean["counters"] == full["counters"]
+
+
 def test_these_counters_belong_to_the_pm_alone(client):
     """A coordinator does not assign work, so the number is not theirs."""
     coord = _headers(client, "coord")
