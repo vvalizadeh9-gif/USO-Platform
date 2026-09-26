@@ -1,5 +1,5 @@
 """Action Center and reference data endpoints."""
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -42,7 +42,12 @@ def action_center(
 
 @router.get("/action-center/summary", response_model=ActionCenterOut)
 def action_center_summary(
-    db: Session = Depends(get_db), user: User = Depends(get_current_user)
+    items: bool = Query(
+        True,
+        description="Also build the item feed. Pass false for the counters alone.",
+    ),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
 ) -> ActionCenterOut:
     """Counts first, then the items behind them.
 
@@ -50,10 +55,15 @@ def action_center_summary(
     exists exactly as long as its condition does, and is never written to a
     table or dismissed. The counters come from the same reads the queue
     screens use, so a badge cannot disagree with the list behind it.
+
+    ``items=false`` skips the feed. The sidebar badge and the Action Center
+    page read the counters and nothing else, and building the feed walks
+    every work item in scope -- on a timer, for every signed-in user. It stays
+    on by default because an older client may still read it.
     """
     return ActionCenterOut(
         counters=action_center_service.counters(db, user),
-        items=action_center_service.build(db, user),
+        items=action_center_service.build(db, user) if items else [],
     )
 
 

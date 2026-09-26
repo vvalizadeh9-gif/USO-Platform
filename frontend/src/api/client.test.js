@@ -27,7 +27,7 @@ vi.mock('axios', () => ({
 await import('./client')
 
 const attachToken = requestHandlers[0]
-const { err: onError } = responseHandlers[0]
+const { ok: onSuccess, err: onError } = responseHandlers[0]
 
 beforeEach(() => {
   localStorage.clear()
@@ -152,5 +152,29 @@ describe('when the account owes a password change', () => {
       onError({ response: { status: 403, data: { detail: 'You may not do that' } } }),
     ).rejects.toBeDefined()
     expect(window.location.href).toBe('/')
+  })
+})
+
+describe('announcing writes', () => {
+  // The sidebar badges refresh on this event rather than on every page change.
+  function heard(method) {
+    const listener = vi.fn()
+    window.addEventListener('uep:data-changed', listener)
+    onSuccess({ config: { method }, data: {} })
+    window.removeEventListener('uep:data-changed', listener)
+    return listener.mock.calls.length
+  }
+
+  it.each(['post', 'put', 'patch', 'delete'])('announces a successful %s', (method) => {
+    expect(heard(method)).toBe(1)
+  })
+
+  it.each(['get', 'head', 'options'])('stays quiet on a %s, which changes nothing', (method) => {
+    expect(heard(method)).toBe(0)
+  })
+
+  it('hands the response through unchanged', () => {
+    const res = { config: { method: 'post' }, data: { id: 7 } }
+    expect(onSuccess(res)).toBe(res)
   })
 })

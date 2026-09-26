@@ -43,7 +43,8 @@ export default function ActionCenter() {
 
   useEffect(() => {
     api
-      .get('/action-center/summary')
+      // Counters only -- the page shows nothing else (see above).
+      .get('/action-center/summary', { params: { items: false } })
       .then((r) => setCounters(r.data.counters || []))
       .catch(() => setCounters([]))
   }, [])

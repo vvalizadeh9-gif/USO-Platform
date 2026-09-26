@@ -6,8 +6,8 @@
 // platform, so an unguarded heading would give both of them a label pointing
 // at empty space.
 import { act, render, screen } from '@testing-library/react'
-import { MemoryRouter } from 'react-router-dom'
-import { describe, expect, it, vi } from 'vitest'
+import { Link, MemoryRouter } from 'react-router-dom'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const HC_QUEUE_COUNTS = {
   // pool is every on-air site whose drive test is not Done — a programme
@@ -167,5 +167,62 @@ describe('sidebar badges sum the tab counts they cover (D2-D4)', () => {
   it('shows no badge on My Health Check, which has no count endpoint', async () => {
     await sidebarAs('Contractor')
     expect(badgeNear('My Health Check')).toBeUndefined()
+  })
+})
+
+describe('when the badges are re-read', () => {
+  // Counting a queue is the most expensive read the sidebar makes. It used to
+  // happen on every page change, which put it in front of every click.
+  const countCalls = () =>
+    mockApi.get.mock.calls.filter(([url]) => url === '/hc/queues/counts').length
+
+  beforeEach(() => mockApi.get.mockClear())
+
+  it('asks for the Action Center counters without the item feed', async () => {
+    await sidebarAs('PM')
+    expect(mockApi.get).toHaveBeenCalledWith(
+      '/action-center/summary',
+      { params: { items: false } },
+    )
+  })
+
+  it('does not re-read them on navigation', async () => {
+    mockAuth.current = {
+      user: { full_name: 'A Person', role: { name: 'PM' } },
+      logout: () => {},
+      isAdmin: false,
+      mustChangePassword: false,
+    }
+    render(
+      <MemoryRouter initialEntries={['/work-items']}>
+        <Layout />
+        <Link to="/health-check">go</Link>
+      </MemoryRouter>,
+    )
+    await act(async () => {})
+    const before = countCalls()
+
+    await act(async () => { screen.getByText('go').click() })
+
+    expect(countCalls()).toBe(before)
+  })
+
+  it('re-reads them after a write', async () => {
+    vi.useFakeTimers()
+    try {
+      await sidebarAs('PM')
+      const before = countCalls()
+
+      await act(async () => {
+        window.dispatchEvent(new Event('uep:data-changed'))
+        window.dispatchEvent(new Event('uep:data-changed'))
+        vi.advanceTimersByTime(300)
+      })
+
+      // Twice announced, once read: a burst of writes is answered once.
+      expect(countCalls()).toBe(before + 1)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })
