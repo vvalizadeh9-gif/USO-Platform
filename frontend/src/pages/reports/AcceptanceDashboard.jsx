@@ -7,7 +7,7 @@ import InfoTip from '../drivetest/InfoTip'
 import { fmtCount } from './kpiTheme'
 
 /**
- * Reports → Acceptance Dashboard: where ICT/CRA status is *read*.
+ * Acceptance → Dashboard: where ICT/CRA status is *read*.
  *
  * This is the reporting half of what used to be one Acceptance page with tabs.
  * The other half — actually filing and validating letters — is My Work. They
@@ -56,7 +56,7 @@ export default function AcceptanceDashboard() {
     // panel included, which is why the provider sits inside it.
     <div className="acc-page">
       <AcceptanceDrillProvider>
-        <PageHead eyebrow="Reports" title="Acceptance Dashboard" />
+        <PageHead eyebrow="Acceptance" title="Dashboard" />
         <Overview data={data} />
       </AcceptanceDrillProvider>
     </div>

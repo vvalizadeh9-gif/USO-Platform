@@ -6,7 +6,7 @@ import { EmptyState, Loading, PageHead } from '../../components/ui'
 import { importStamp } from './kpiTheme'
 
 /**
- * Reports → KPI & Performance → Mapping. PM only, on the server as well.
+ * Performance → Roles Performance → Mapping. PM only, on the server as well.
  *
  * Two different edits live here and the screen keeps them apart, because the
  * table is effective-dated and conflating them would put a handover in the
@@ -44,7 +44,7 @@ export default function KpiMapping() {
   if (error) {
     return (
       <>
-        <PageHead eyebrow="KPI &amp; Performance" title="Province mapping" />
+        <PageHead eyebrow="Roles Performance" title="Province mapping" />
         <div className="card card-pad"><EmptyState title="Not available" hint={error} /></div>
       </>
     )
@@ -54,7 +54,7 @@ export default function KpiMapping() {
   return (
     <div className="kpi">
       <PageHead
-        eyebrow="KPI &amp; Performance"
+        eyebrow="Roles Performance"
         title="Province mapping"
         subtitle={`Last CPM import · ${importStamp(data.last_cpm_import)}`}
         actions={

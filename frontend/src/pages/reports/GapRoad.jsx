@@ -16,7 +16,7 @@ import {
 } from './gapRoad'
 
 /**
- * Reports → Gap & Performance.
+ * Performance → Lifecycle Gaps (page once titled "Gap & Performance").
  *
  * The acceptance pipeline drawn as a road with four barriers — ICT approval,
  * CRA approval, Mojri tracker registration, depreciation — and, for the
@@ -101,7 +101,7 @@ export default function GapRoad() {
   if (error && !data) {
     return (
       <>
-        <PageHead eyebrow="Reports" title="Gap &amp; Performance" />
+        <PageHead eyebrow="Performance" title="Lifecycle Gaps" />
         <div className="card card-pad">
           <EmptyState title="Nothing to show" hint={error} />
         </div>
@@ -112,8 +112,8 @@ export default function GapRoad() {
   return (
     <div className="kpi gap">
       <PageHead
-        eyebrow="Reports"
-        title="Gap &amp; Performance"
+        eyebrow="Performance"
+        title="Lifecycle Gaps"
         subtitle={`Last CPM import · ${importStamp(data?.last_cpm_import)}`}
       />
 

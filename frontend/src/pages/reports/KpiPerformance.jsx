@@ -20,7 +20,7 @@ import {
 } from './kpiTheme'
 
 /**
- * Reports → KPI & Performance.
+ * Performance → Roles Performance (page once titled "KPI & Performance").
  *
  * Delivery and acceptance progress for one owner — a regional manager, a PSO
  * coordinator, a contractor or a CRA region — always beside the country
@@ -146,7 +146,7 @@ export default function KpiPerformance() {
   if (error && !data) {
     return (
       <>
-        <PageHead eyebrow="Reports" title="KPI &amp; Performance" />
+        <PageHead eyebrow="Performance" title="Roles Performance" />
         <div className="card card-pad">
           <EmptyState title="Nothing to show" hint={error} />
         </div>
@@ -157,8 +157,8 @@ export default function KpiPerformance() {
   return (
     <div className="kpi">
       <PageHead
-        eyebrow="Reports"
-        title="KPI &amp; Performance"
+        eyebrow="Performance"
+        title="Roles Performance"
         subtitle={`Last CPM import · ${importStamp(data?.last_cpm_import)}`}
         actions={
           <div className="row" style={{ gap: 8 }}>

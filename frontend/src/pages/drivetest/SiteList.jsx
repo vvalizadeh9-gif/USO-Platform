@@ -318,7 +318,7 @@ export default function SiteList() {
   return (
     <>
       <PageHead
-        eyebrow="Drive Test Project"
+        eyebrow="Drive Test"
         title={title}
         subtitle={scope}
         actions={
