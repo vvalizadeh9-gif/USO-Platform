@@ -309,7 +309,28 @@ def _load_scoped_villages(
     Read through ``acceptance_universe`` -- plain columns, not ORM objects --
     for the reason that module gives.
     """
-    villages: list = []
+    return [
+        village
+        for _, village in _scoped_village_pairs(
+            db, user, province_ids=province_ids, contractor_id=contractor_id
+        )
+    ]
+
+
+def _scoped_village_pairs(
+    db: Session,
+    user: User,
+    *,
+    province_ids: set[int] | None,
+    contractor_id: int | None,
+) -> list[tuple]:
+    """``_load_scoped_villages``, with each village's work item beside it.
+
+    The one place the qualifying universe is decided (scope, province and
+    contractor narrowing, DT done, pure هدف, not deleted); the per-contractor
+    count needs the work item to know whose village it is.
+    """
+    pairs: list[tuple] = []
     for wi in acceptance_universe.load(db, user):
         if province_ids is not None and wi.province_id not in province_ids:
             continue
@@ -322,8 +343,22 @@ def _load_scoped_villages(
                 continue
             if not C.is_pure_target(village.target_classification):
                 continue
-            villages.append(village)
-    return villages
+            pairs.append((wi, village))
+    return pairs
+
+
+def fully_accepted_period(village) -> tuple[int, int] | None:
+    """The Shamsi month a village became fully accepted, or None if it has not.
+
+    The later of its ICT and CRA verdict dates -- the month the *second*
+    authority cleared it. The one definition of acceptance "Delivered"; the
+    trend and the per-contractor count both read it from here.
+    """
+    ict_date = flow.authority_verdict_date(village, "ICT")
+    cra_date = flow.authority_verdict_date(village, "CRA")
+    if ict_date is None or cra_date is None:
+        return None
+    return jalali.to_shamsi(max(ict_date, cra_date))
 
 
 def _trailing_periods(upto_year: int, upto_month: int, months: int) -> list[tuple[int, int]]:
@@ -401,8 +436,9 @@ def monthly_approval_trend(
             _bump(jalali.to_shamsi(ict_date), "ict_new")
         if cra_date is not None:
             _bump(jalali.to_shamsi(cra_date), "cra_new")
-        if ict_date is not None and cra_date is not None:
-            _bump(jalali.to_shamsi(max(ict_date, cra_date)), "fully_accepted_new")
+        full = fully_accepted_period(village)
+        if full is not None:
+            _bump(full, "fully_accepted_new")
 
     # Walk the whole history chronologically to build the running totals,
     # from the earliest month any approval landed in.
@@ -478,3 +514,128 @@ def monthly_approval_trend(
             }
         )
     return out
+
+
+# ---------------------------------------------------------------------------
+# Acceptance scorecard: PIP against Delivered, per contractor per month
+# ---------------------------------------------------------------------------
+def _percent(num: int, den: int) -> float | None:
+    return round(100.0 * num / den, 1) if den else None
+
+
+def _acceptance_universe(
+    db: Session, year: int, month: int, own: int | None
+) -> dict[int, str]:
+    """Contractors expected to have an Acceptance plan this month.
+
+    The same rule as the DT scorecard's and the PM queue's: every active
+    contractor, plus an inactive one that filed for the month. Narrowed to the
+    caller's own company in the query for a contractor account.
+    """
+    from app.models.reference import Contractor
+
+    with_a_plan = select(ContractorMonthlyPlan.contractor_id).where(
+        ContractorMonthlyPlan.stream == STREAM_ACCEPTANCE,
+        ContractorMonthlyPlan.shamsi_year == year,
+        ContractorMonthlyPlan.shamsi_month == month,
+    )
+    stmt = select(Contractor.id, Contractor.name).where(
+        Contractor.active.is_(True) | Contractor.id.in_(with_a_plan)
+    )
+    if own is not None:
+        stmt = stmt.where(Contractor.id == own)
+    return {cid: name for cid, name in db.execute(stmt).all()}
+
+
+def acceptance_scorecard(
+    db: Session, user: User, periods: list[tuple[int, int]]
+) -> dict:
+    """Acceptance PIP against Delivered, per contractor, for several months.
+
+    The Acceptance counterpart of ``DriveTestAnalytics.scorecard`` and the
+    same shape, so a reader can treat both streams alike. **Delivered** is
+    villages fully accepted in that month (``fully_accepted_period``), counted
+    against the site's drive-test contractor, over the same universe the
+    Acceptance Dashboard counts (``_scoped_village_pairs``: DT done, pure
+    هدف). Villages are not de-duplicated -- two villages on one site are two.
+    Acceptance has no Assignment, so ``assignment`` is ``None`` throughout.
+
+    A contractor account gets only its own figures: its villages, its PIP and
+    its row, each narrowed before anything is counted.
+    """
+    from app.services.monthly_plan import approved_pip_in_force
+
+    # A contractor account is its own company; one with no company matches
+    # nothing (-1), and must never fall through to the staff view.
+    own = None
+    if user.role.name == CONTRACTOR:
+        own = user.contractor_id if user.contractor_id is not None else -1
+    wanted = {period: i for i, period in enumerate(periods)}
+    delivered: dict[tuple[int, int], int] = {}
+    for wi, village in _scoped_village_pairs(
+        db, user, province_ids=None, contractor_id=own
+    ):
+        cid = wi.dt_sc_contractor_id
+        if cid is None:
+            continue
+        period = fully_accepted_period(village)
+        if period in wanted:
+            key = (wanted[period], cid)
+            delivered[key] = delivered.get(key, 0) + 1
+
+    from app.models.reference import Contractor
+
+    months = []
+    for i, (year, month) in enumerate(periods):
+        pip = approved_pip_in_force(
+            db, year, month, STREAM_ACCEPTANCE, contractor_id=own
+        )
+        universe = _acceptance_universe(db, year, month, own)
+        ids = set(universe) | set(pip) | {cid for (idx, cid) in delivered if idx == i}
+        names = dict(universe)
+        missing = [cid for cid in ids if cid not in names]
+        if missing:
+            names.update(
+                dict(db.execute(
+                    select(Contractor.id, Contractor.name).where(Contractor.id.in_(missing))
+                ).all())
+            )
+        rows = []
+        for cid in ids:
+            done = delivered.get((i, cid), 0)
+            rows.append(
+                {
+                    "contractor_id": cid,
+                    "name": names.get(cid),
+                    "assignment": None,
+                    # None, never 0: no approved plan is not a plan of zero.
+                    "pip": pip.get(cid),
+                    "delivered": done,
+                    "achievement_percent": _percent(done, pip.get(cid) or 0),
+                }
+            )
+        rows.sort(key=lambda r: r["name"] or "")
+        total_pip = sum(r["pip"] or 0 for r in rows)
+        total_delivered = sum(r["delivered"] for r in rows)
+        months.append(
+            {
+                "shamsi_year": year,
+                "shamsi_month": month,
+                "shamsi_month_name": jalali.month_name(month),
+                "assignment": None,
+                "pip": total_pip,
+                "delivered": total_delivered,
+                "achievement_percent": _percent(total_delivered, total_pip),
+                "committed_contractors": sum(1 for r in rows if r["pip"] is not None),
+                "uncommitted_contractors": sum(
+                    1 for cid in universe if pip.get(cid) is None
+                ),
+                "rows": rows,
+            }
+        )
+    return {
+        "months": months,
+        "summable": ["delivered", "pip"],
+        "balances": [],
+        "is_contractor": own is not None,
+    }
