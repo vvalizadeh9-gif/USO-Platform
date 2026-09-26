@@ -3,6 +3,7 @@ import { ArrowLeft, Eye, EyeOff, LifeBuoy, RefreshCw } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import api from '../api/client'
+import BrandMark from '../components/BrandMark'
 import { useAuth } from '../context/AuthContext'
 
 const SUPPORT_EMAIL = 'vahid.val@mtnirancell.ir'
@@ -75,7 +76,7 @@ export default function Login() {
         transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
       >
         <div className="brand">
-          <div className="brand-mark"><span>U</span></div>
+          <BrandMark />
           <div className="brand-text">
             <b>USO Platform</b>
             <small>Enterprise Operations</small>
