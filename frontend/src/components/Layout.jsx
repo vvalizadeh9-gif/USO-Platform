@@ -3,6 +3,7 @@ import { KeyRound, LogOut, Menu, Settings } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import BrandMark from './BrandMark'
 import { DATA_CHANGED_EVENT } from '../lib/dataChanged'
 import { DRIVE_TEST_PROJECT, NAV, REPORTS, navItemVisible } from '../lib/nav'
 import api from '../api/client'
@@ -43,7 +44,7 @@ function NavSection({ label, items, roleName, badges }) {
             end={item.end}
             className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
           >
-            <item.icon size={17} strokeWidth={2} />
+            <item.icon size={18} strokeWidth={1.75} />
             <span>{item.label}</span>
             {count > 0 && <span className="badge">{count}</span>}
           </NavLink>
@@ -80,7 +81,7 @@ function SidebarNav({ user, isAdmin, badges }) {
             to="/admin"
             className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
           >
-            <Settings size={17} strokeWidth={2} />
+            <Settings size={18} strokeWidth={1.75} />
             <span>Admin Console</span>
           </NavLink>
         </>
@@ -91,7 +92,7 @@ function SidebarNav({ user, isAdmin, badges }) {
         to="/change-password"
         className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
       >
-        <KeyRound size={17} strokeWidth={2} />
+        <KeyRound size={18} strokeWidth={1.75} />
         <span>Change password</span>
       </NavLink>
     </>
@@ -203,7 +204,7 @@ export default function Layout() {
     <div className="app-shell">
       <aside className={`sidebar ${open ? 'open' : ''}`}>
         <div className="brand">
-          <div className="brand-mark"><span>U</span></div>
+          <BrandMark />
           <div className="brand-text">
             <b>USO Platform</b>
             <small>Enterprise Operations</small>
