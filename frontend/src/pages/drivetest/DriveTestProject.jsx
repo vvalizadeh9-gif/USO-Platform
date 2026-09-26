@@ -205,8 +205,8 @@ export default function DriveTestProject() {
   return (
     <DrillProvider>
       <PageHead
-        eyebrow="Drive Test Project"
-        title="Drive Test Overview"
+        eyebrow="Drive Test"
+        title="Dashboard"
         subtitle={subtitle}
       />
 

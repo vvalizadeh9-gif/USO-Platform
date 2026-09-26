@@ -18,7 +18,7 @@ const PAGE_SIZE = 50
  * One screen, two panes: a queue of villages on the left, the village being
  * worked on the right. It replaces a page of tabs that showed status, because
  * status is a reporting question and this is not a reporting screen — status
- * lives in Reports → Acceptance Dashboard.
+ * lives in Acceptance → Dashboard.
  *
  * The same component serves a contractor filing letters and a coordinator
  * validating them. Only the buckets and the form differ; the layout is

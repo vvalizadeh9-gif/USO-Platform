@@ -37,8 +37,8 @@ export default function MyHealthCheck() {
   return (
     <>
       <PageHead
-        eyebrow="Field Team"
-        title="My Health Check Assignments"
+        eyebrow="Drive Test"
+        title="My Health Check"
         subtitle="Submit Ready / Not Ready per technology, in-app or by bulk Excel upload."
       />
 

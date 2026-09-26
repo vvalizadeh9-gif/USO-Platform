@@ -1582,7 +1582,7 @@ describe('failure and freshness', () => {
     })
     draw()
 
-    expect(await screen.findByText('Drive Test Overview')).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { level: 1, name: 'Dashboard' })).toBeInTheDocument()
     const card = await section('PIP this month')
     expect(await within(card).findByText(/Couldn’t load PIP this month/)).toBeInTheDocument()
     expect(within(card).getByRole('button', { name: /Retry/ })).toBeInTheDocument()
@@ -1640,7 +1640,7 @@ describe('failure and freshness', () => {
     serve(planDelivery(), older)
     draw()
 
-    expect(await screen.findByText('Drive Test Overview')).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { level: 1, name: 'Dashboard' })).toBeInTheDocument()
     await waitFor(() => expect(screen.queryByText('Ongoing breakdown')).not.toBeInTheDocument())
     expect(screen.queryByText('Province breakdown')).not.toBeInTheDocument()
     // The band above them is untouched by their absence.
@@ -1653,7 +1653,7 @@ describe('the province filter', () => {
     serve()
     draw('/reports/drive-test?province=7')
 
-    await screen.findByText('Drive Test Overview')
+    await screen.findByRole('heading', { level: 1, name: 'Dashboard' })
     await waitFor(() =>
       expect(api.get).toHaveBeenCalledWith('/drive-test/overview', {
         params: { province_id: 7 },
@@ -2205,7 +2205,7 @@ describe('the trend section', () => {
     serve(planDelivery(), overview, trend({ latest_flows: null }))
     draw()
 
-    await screen.findByText('Drive Test Overview')
+    await screen.findByRole('heading', { level: 1, name: 'Dashboard' })
     await waitFor(() => expect(screen.queryByText('What moved')).not.toBeInTheDocument())
   })
 })

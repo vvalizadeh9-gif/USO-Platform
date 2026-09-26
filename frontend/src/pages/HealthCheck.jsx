@@ -104,7 +104,7 @@ export default function HealthCheck() {
   return (
     <>
       <PageHead
-        eyebrow="Drive Test Project"
+        eyebrow="Drive Test"
         title="Health Check"
         subtitle="Everything about the health check: assign it, follow it, confirm Ready sites, route problems to the right team, and look back in History."
       />
