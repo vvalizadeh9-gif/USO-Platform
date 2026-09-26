@@ -1,10 +1,11 @@
 // What the sidebar offers each role.
 //
 // The interesting property is not which links appear — the role lists say
-// that — but that a section heading never appears over nothing. Admin sees no
-// Planning item at all, and a category owner sees one screen in the whole
-// platform, so an unguarded heading would give both of them a label pointing
-// at empty space.
+// that — but that a section heading never appears over nothing, and that
+// grouping the sidebar by project moved links without adding or removing one
+// for anybody. Admin and the category owners see no Performance or Month-end
+// item at all, so an unguarded heading would give them a label pointing at
+// empty space.
 import { act, fireEvent, render, screen } from '@testing-library/react'
 import { Link, MemoryRouter, useLocation } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -51,93 +52,229 @@ async function sidebarAs(roleName) {
   await act(async () => {})
 }
 
-/** The nav links under a heading, in order, or null if the heading is absent. */
-function itemsUnder(label) {
-  const heading = screen.queryByText(label)
-  if (!heading) return null
-  const names = []
-  for (let el = heading.nextElementSibling; el; el = el.nextElementSibling) {
-    if (el.classList.contains('nav-section-label')) break
-    // The label span, not the whole link -- a badge, when one is shown, is a
-    // second span inside the same link and must not be read as part of the name.
-    names.push(el.querySelector('span').textContent.trim())
-  }
-  return names
+/** The section headings, in order, as written (the capitals are CSS). */
+function headings() {
+  return [...document.querySelectorAll('.sidebar .nav-section-label')].map((el) =>
+    el.textContent.trim(),
+  )
 }
 
-describe('the Planning section', () => {
-  // Renamed from "Drive Test Project" (Prompt 2): item-for-item the same
-  // group, in the same order, under a new heading among the sidebar's three
-  // — Operations / Planning / Follow-up.
-  it('shows a PM the whole project in the order the work happens', async () => {
+/** The nav labels under a heading, in order, or null if the heading is absent. */
+function itemsUnder(label) {
+  const heading = headings().includes(label)
+    ? [...document.querySelectorAll('.sidebar .nav-section-label')].find(
+        (el) => el.textContent.trim() === label,
+      )
+    : null
+  if (!heading) return null
+  // The label span, not the whole link -- a badge or a step number, when one
+  // is shown, is another span inside the same link.
+  return [...heading.parentElement.querySelectorAll('a .nav-label')].map((el) =>
+    el.textContent.trim(),
+  )
+}
+
+/** Every sidebar section, heading by heading, with its items. */
+function sidebarLayout() {
+  return Object.fromEntries(headings().map((h) => [h, itemsUnder(h)]))
+}
+
+/** Every URL the sidebar's nav links to. */
+function navHrefs() {
+  return [...document.querySelectorAll('.sidebar-nav a')]
+    .map((a) => a.getAttribute('href'))
+    .sort()
+}
+
+const SIDEBAR_BY_ROLE = {
+  PM: {
+    Today: ['Action Center'],
+    'Drive Test': ['Dashboard', 'Monthly Plan', 'Health Check', 'Drive Test', 'Work Items'],
+    Acceptance: ['Dashboard', 'My Work'],
+    Performance: ['Roles Performance', 'Lifecycle Gaps'],
+    'Month-end': ['Mojri Tracker'],
+  },
+  Coordinator: {
+    Today: ['Action Center'],
+    'Drive Test': ['Dashboard', 'Monthly Plan', 'Health Check', 'Drive Test', 'Work Items'],
+    Acceptance: ['Dashboard', 'My Work'],
+    Performance: ['Roles Performance', 'Lifecycle Gaps'],
+  },
+  Contractor: {
+    Today: ['Action Center'],
+    'Drive Test': ['Dashboard', 'Monthly Plan', 'My Health Check', 'My Drive Tests', 'Work Items'],
+    Acceptance: ['Dashboard', 'My Work'],
+    Performance: ['Roles Performance', 'Lifecycle Gaps'],
+  },
+  Viewer: {
+    Today: ['Action Center'],
+    'Drive Test': ['Dashboard', 'Monthly Plan', 'Work Items'],
+    Acceptance: ['Dashboard', 'My Work'],
+  },
+  RegionalManager: {
+    Today: ['Action Center'],
+    'Drive Test': ['Dashboard', 'Monthly Plan', 'Work Items'],
+    Acceptance: ['Dashboard', 'My Work'],
+    Performance: ['Roles Performance', 'Lifecycle Gaps'],
+  },
+  Admin: {
+    Today: ['Action Center'],
+    'Drive Test': ['Dashboard'],
+    Acceptance: ['Dashboard'],
+    Administration: ['Admin Console'],
+  },
+  CpgPower: {
+    Today: ['My Fix Queue', 'Action Center'],
+    'Drive Test': ['Dashboard', 'Work Items'],
+    Acceptance: ['Dashboard', 'My Work'],
+  },
+}
+
+// The links each role was offered before the sidebar was grouped by project
+// (Operations / Planning / Follow-up), written out from the old lists. The
+// regrouping moves links; it must not add or remove one for anybody.
+const EVERYONE = ['/action-center', '/reports/drive-test', '/reports/acceptance']
+const WORKERS = [...EVERYONE, '/work-items', '/my-work']
+const KPI = ['/reports/kpi', '/reports/gaps']
+const STAFF_LIFECYCLE = ['/monthly-plan', '/health-check', '/drive-test']
+const LINKS_BEFORE = {
+  PM: [...WORKERS, ...KPI, ...STAFF_LIFECYCLE, '/mojri-tracker'],
+  Coordinator: [...WORKERS, ...KPI, ...STAFF_LIFECYCLE],
+  Contractor: [...WORKERS, ...KPI, '/monthly-plan', '/my-health-check', '/my-drive-tests'],
+  Viewer: [...WORKERS, '/monthly-plan'],
+  RegionalManager: [...WORKERS, ...KPI, '/monthly-plan'],
+  Admin: [...EVERYONE, '/admin'],
+  CpgPower: [...WORKERS, '/my-fix-queue'],
+}
+
+describe('the sidebar, grouped by project', () => {
+  it.each(Object.keys(SIDEBAR_BY_ROLE))(
+    'shows %s these headings, in this order, with these items',
+    async (roleName) => {
+      await sidebarAs(roleName)
+      expect(headings()).toEqual(Object.keys(SIDEBAR_BY_ROLE[roleName]))
+      expect(sidebarLayout()).toEqual(SIDEBAR_BY_ROLE[roleName])
+    },
+  )
+
+  it.each(Object.keys(LINKS_BEFORE))(
+    'offers %s exactly the links it offered before the regrouping',
+    async (roleName) => {
+      await sidebarAs(roleName)
+      expect(navHrefs()).toEqual([...LINKS_BEFORE[roleName]].sort())
+    },
+  )
+
+  it('files My Work under Acceptance', async () => {
     await sidebarAs('PM')
-    expect(itemsUnder('Planning')).toEqual([
-      'Monthly Plan',
-      'Health Check',
-      'Drive Test',
-    ])
+    expect(itemsUnder('Acceptance')).toContain('My Work')
+    expect(itemsUnder('Today')).not.toContain('My Work')
   })
 
-  it('shows a Coordinator the same four screens', async () => {
-    await sidebarAs('Coordinator')
-    expect(itemsUnder('Planning')).toEqual([
-      'Monthly Plan',
-      'Health Check',
-      'Drive Test',
-    ])
-  })
-
-  it('shows a contractor only their own three screens', async () => {
-    await sidebarAs('Contractor')
-    expect(itemsUnder('Planning')).toEqual([
-      'Monthly Plan',
-      'My Health Check',
-      'My Drive Tests',
-    ])
-  })
-
-  it('does not offer a contractor the Drive Test work screen', async () => {
-    await sidebarAs('Contractor')
-    expect(screen.queryByText('Drive Test')).toBeNull()
+  it('has no "Operations", "Planning" or "Follow-up" heading any more', async () => {
+    await sidebarAs('PM')
+    for (const old of ['Operations', 'Planning', 'Follow-up']) {
+      expect(headings()).not.toContain(old)
+    }
   })
 })
 
 describe('a heading is never shown over nothing', () => {
   it.each(['Admin', 'CpgPower', 'NwgPlanning'])(
-    '%s sees no empty Planning heading',
+    '%s sees no Performance or Month-end heading',
     async (roleName) => {
       await sidebarAs(roleName)
-      expect(screen.queryByText('Planning')).toBeNull()
+      expect(headings()).not.toContain('Performance')
+      expect(headings()).not.toContain('Month-end')
     },
   )
 
-  it('leaves a category owner with the ungrouped items and nothing else', async () => {
-    await sidebarAs('CpgPower')
-    expect(itemsUnder('Operations')).toEqual([
-      'Work Items',
-      'My Fix Queue',
-      'Action Center',
-      'My Work',
-    ])
-    expect(screen.queryByText('Follow-up')).not.toBeNull()
-  })
+  it.each(['Coordinator', 'Contractor', 'Viewer', 'RegionalManager'])(
+    'shows %s no Month-end heading (Mojri Tracker is PM only)',
+    async (roleName) => {
+      await sidebarAs(roleName)
+      expect(headings()).not.toContain('Month-end')
+    },
+  )
 })
 
 describe('My Fix Queue stays at the top', () => {
   // A category owner has exactly one screen. Filing it under a heading about
   // the drive test project would put their whole job behind a label about
   // someone else's process.
-  it('is an ungrouped item, not part of the project section', async () => {
-    await sidebarAs('CpgPower')
-    expect(itemsUnder('Operations')).toContain('My Fix Queue')
+  it.each(['CpgPower', 'NwgPlanning', 'HuaweiCleanup'])(
+    'is the first item in the sidebar for %s',
+    async (roleName) => {
+      await sidebarAs(roleName)
+      expect(headings()[0]).toBe('Today')
+      expect(itemsUnder('Today')[0]).toBe('My Fix Queue')
+    },
+  )
+
+  it('is not offered to anyone else', async () => {
+    await sidebarAs('PM')
+    expect(screen.queryByText('My Fix Queue')).toBeNull()
+  })
+})
+
+describe('the lifecycle step rail', () => {
+  /** [number, label] for each step circle, in order. */
+  function steps() {
+    return [...document.querySelectorAll('.nav-steps a')].map((a) => [
+      a.querySelector('.step-num').textContent,
+      a.querySelector('.nav-label').textContent,
+    ])
+  }
+  const line = () => document.querySelector('.nav-steps-line')
+
+  it('numbers a PM’s three steps 1, 2, 3', async () => {
+    await sidebarAs('PM')
+    expect(steps()).toEqual([
+      ['1', 'Monthly Plan'],
+      ['2', 'Health Check'],
+      ['3', 'Drive Test'],
+    ])
+    expect(line()).not.toBeNull()
+  })
+
+  it('numbers a contractor’s own three steps 1, 2, 3', async () => {
+    await sidebarAs('Contractor')
+    expect(steps()).toEqual([
+      ['1', 'Monthly Plan'],
+      ['2', 'My Health Check'],
+      ['3', 'My Drive Tests'],
+    ])
+  })
+
+  it('numbers a lone visible step 1 and draws no line', async () => {
+    await sidebarAs('Viewer')
+    expect(steps()).toEqual([['1', 'Monthly Plan']])
+    expect(line()).toBeNull()
+  })
+
+  it('draws no rail at all when no step is visible', async () => {
+    await sidebarAs('Admin')
+    expect(document.querySelector('.nav-steps')).toBeNull()
+  })
+
+  it('does not offer a contractor the staff Drive Test screen', async () => {
+    await sidebarAs('Contractor')
+    expect(document.querySelector('.sidebar-nav a[href="/drive-test"]')).toBeNull()
   })
 })
 
 describe('sidebar badges sum the tab counts they cover (D2-D4)', () => {
   // A sidebar badge that disagrees with the tabs behind it is worse than no
   // badge -- these read the same counts endpoint the tabs themselves use.
+  // By URL, not by text: "Drive Test" is both a heading and a link now.
+  const HREF = {
+    'Health Check': '/health-check',
+    'Drive Test': '/drive-test',
+    'My Drive Tests': '/my-drive-tests',
+    'My Health Check': '/my-health-check',
+  }
   function badgeNear(label) {
-    const link = screen.getByText(label).closest('a')
+    const link = document.querySelector(`.sidebar-nav a[href="${HREF[label]}"]`)
     return link.querySelector('.badge')?.textContent
   }
 

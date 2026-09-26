@@ -5,7 +5,7 @@ import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-do
 import { useAuth } from '../context/AuthContext'
 import BrandMark from './BrandMark'
 import { DATA_CHANGED_EVENT } from '../lib/dataChanged'
-import { DRIVE_TEST_PROJECT, NAV, REPORTS, navItemVisible } from '../lib/nav'
+import { NAV_SECTIONS, navItemVisible } from '../lib/nav'
 import { roleLabel } from '../lib/roles'
 import api from '../api/client'
 
@@ -22,36 +22,72 @@ function pageKey(pathname) {
   return section === 'reports' ? `reports/${sub}` : section
 }
 
+function NavItem({ item, count, children }) {
+  return (
+    <NavLink
+      to={item.to}
+      end={item.end}
+      className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
+    >
+      {children}
+      <span className="nav-label">{item.label}</span>
+      {count > 0 && <span className="badge">{count}</span>}
+    </NavLink>
+  )
+}
+
+/**
+ * The drive test lifecycle as a numbered rail: a circle per step, joined by a
+ * line, in place of icons. Numbered from the steps this person can see, so a
+ * contractor and a PM both read 1, 2, 3; with a single step there is nothing
+ * to join, so no line.
+ */
+function StepRail({ steps, badges }) {
+  return (
+    <div className="nav-steps">
+      {steps.length > 1 && <span className="nav-steps-line" aria-hidden="true" />}
+      {steps.map((item, i) => (
+        <NavItem key={item.to} item={item} count={item.key ? badges[item.key] : undefined}>
+          <span className="step-num" aria-hidden="true">{i + 1}</span>
+        </NavItem>
+      ))}
+    </div>
+  )
+}
+
 /**
  * One labelled group of nav items.
  *
- * Renders nothing at all — heading included — when this user can see none of
+ * Renders nothing at all -- heading included -- when this user can see none of
  * them. A heading over an empty space is a claim that something is there, and
- * Admin and the category owners see most of these groups empty.
+ * Admin and the category owners see several of these groups empty.
  */
 function NavSection({ label, items, roleName, badges }) {
   const visible = items.filter((item) => navItemVisible(item, roleName))
   if (visible.length === 0) return null
 
+  // Consecutive lifecycle steps are drawn together as one rail.
+  const runs = []
+  for (const item of visible) {
+    const last = runs[runs.length - 1]
+    if (item.step && last?.steps) last.steps.push(item)
+    else runs.push(item.step ? { steps: [item] } : item)
+  }
+
+  const id = `nav-section-${label.toLowerCase().replace(/[^a-z]+/g, '-')}`
   return (
-    <>
-      <div className="nav-section-label">{label}</div>
-      {visible.map((item) => {
-        const count = item.key ? badges[item.key] : undefined
-        return (
-          <NavLink
-            key={item.to}
-            to={item.to}
-            end={item.end}
-            className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
-          >
-            <item.icon size={18} strokeWidth={1.75} />
-            <span>{item.label}</span>
-            {count > 0 && <span className="badge">{count}</span>}
-          </NavLink>
-        )
-      })}
-    </>
+    <div className="nav-section" role="group" aria-labelledby={id}>
+      <div className="nav-section-label" id={id}>{label}</div>
+      {runs.map((run) =>
+        run.steps ? (
+          <StepRail key={run.steps[0].to} steps={run.steps} badges={badges} />
+        ) : (
+          <NavItem key={run.to} item={run} count={run.key ? badges[run.key] : undefined}>
+            <run.icon size={18} strokeWidth={1.75} aria-hidden="true" />
+          </NavItem>
+        ),
+      )}
+    </div>
   )
 }
 
@@ -62,32 +98,30 @@ function SidebarNav({ user, isAdmin, badges }) {
   const roleName = user?.role?.name
 
   return (
-    <>
-      <NavSection
-        label="Operations"
-        items={NAV}
-        roleName={roleName}
-        badges={badges}
-      />
-      {/* Renamed from "Drive Test Project" and "Reports": three headings
-          instead of five, item-for-item the same groups in the same order —
-          this only relabels which heading each existing group sits under. */}
-      <NavSection label="Planning" items={DRIVE_TEST_PROJECT} roleName={roleName} badges={badges} />
-      <NavSection label="Follow-up" items={REPORTS} roleName={roleName} badges={badges} />
+    <nav className="sidebar-nav" aria-label="Main">
+      {NAV_SECTIONS.map((section) => (
+        <NavSection
+          key={section.label}
+          label={section.label}
+          items={section.items}
+          roleName={roleName}
+          badges={badges}
+        />
+      ))}
 
       {isAdmin && (
-        <>
-          <div className="nav-section-label">Administration</div>
+        <div className="nav-section" role="group" aria-labelledby="nav-section-administration">
+          <div className="nav-section-label" id="nav-section-administration">Administration</div>
           <NavLink
             to="/admin"
             className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
           >
-            <Settings size={18} strokeWidth={1.75} />
-            <span>Admin Console</span>
+            <Settings size={18} strokeWidth={1.75} aria-hidden="true" />
+            <span className="nav-label">Admin Console</span>
           </NavLink>
-        </>
+        </div>
       )}
-    </>
+    </nav>
   )
 }
 

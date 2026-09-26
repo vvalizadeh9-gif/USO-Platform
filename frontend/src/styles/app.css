@@ -288,6 +288,20 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
 .sidebar .brand-text b { color: var(--nav-text-strong); }
 .sidebar .brand-text small { color: var(--nav-dim); }
 
+/* The nav scrolls on its own when a short window cannot fit it, so the brand
+   and the account button stay put. It reaches out over the sidebar's side
+   padding and pads it back, so the selection bar on the inline-start edge and
+   the focus ring are not clipped by the scroll box. */
+.sidebar-nav {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  margin-inline: -14px;
+  padding-inline: 14px;
+  padding-bottom: 8px;
+}
+.nav-section { display: flex; flex-direction: column; gap: 4px; }
+
 .nav-section-label {
   font-size: 11px;
   font-weight: 600;
@@ -320,7 +334,7 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
    background, the heavier label, the accent icon and the bar on the
    inline-start edge. */
 .nav-item.active { background: var(--nav-active); }
-.nav-item.active span:not(.badge) { color: var(--nav-active-text); font-weight: 600; }
+.nav-item.active .nav-label { color: var(--nav-active-text); font-weight: 600; }
 .nav-item.active svg { color: var(--nav-accent); }
 .nav-item.active::before {
   content: '';
@@ -332,6 +346,51 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
   border-start-end-radius: 3px;
   border-end-end-radius: 3px;
 }
+/* The drive test lifecycle: numbered circles in place of icons, joined by a
+   line that runs behind them from the first circle's centre to the last's.
+   The 20px circle takes an 18px slot (-1px each side) so step labels line up
+   with the icon items' labels; its centre is 10px item padding + 9px. */
+.nav-steps {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.nav-steps-line {
+  position: absolute;
+  inset-inline-start: 18px;
+  top: 18px;
+  bottom: 18px;
+  width: 2px;
+  background: #C9D3CF;
+  z-index: 1;
+  pointer-events: none;
+}
+.step-num {
+  position: relative;
+  z-index: 2;
+  box-sizing: border-box;
+  width: 20px;
+  height: 20px;
+  margin-inline: -1px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  border: 2px solid #7E8A85;
+  border-radius: 50%;
+  background: var(--nav-bg);
+  color: var(--nav-text);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.nav-item.active .step-num {
+  background: var(--nav-accent);
+  border-color: var(--nav-accent);
+  color: #fff;
+}
+
 .nav-item .badge {
   margin-inline-start: auto;
   display: inline-flex;
