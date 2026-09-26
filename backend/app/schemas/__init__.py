@@ -1779,6 +1779,9 @@ class AcceptanceTrendMonth(BaseModel):
     #: approved Acceptance PIP for a contractor. None where there is none.
     target_monthly: int | None = None
     target_cumulative: int | None = None
+    #: The contractors' approved Acceptance PIPs (summed, or one contractor's).
+    pip_monthly: int | None = None
+    pip_cumulative: int | None = None
     #: Same as ``target_cumulative``; kept for the dashboard that reads it.
     target_count: int | None
 

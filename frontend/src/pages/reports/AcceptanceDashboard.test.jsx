@@ -76,13 +76,15 @@ const trends = (over = {}) => ({
       shamsi_year: 1405, shamsi_month: 5, label: 'مرداد',
       ict_new: 40, cra_new: 30, fully_accepted_new: 20,
       ict_cumulative: 100, cra_cumulative: 80, fully_accepted_cumulative: 60,
-      target_count: 2860,
+      target_count: 2860, target_monthly: 150,
+      pip_monthly: 140, pip_cumulative: 2850,
     },
     {
       shamsi_year: 1405, shamsi_month: 6, label: 'شهریور',
       ict_new: 45, cra_new: 35, fully_accepted_new: 25,
       ict_cumulative: 145, cra_cumulative: 115, fully_accepted_cumulative: 85,
-      target_count: 3200,
+      target_count: 3200, target_monthly: 340,
+      pip_monthly: 310, pip_cumulative: 3160,
     },
   ],
   ...over,
@@ -111,6 +113,13 @@ const sites = (over = {}) => ({
   ],
   ...over,
 })
+
+/** Shaped from app/schemas: ContractorOut. Only drive-test ones are filterable. */
+const contractors = [
+  { id: 11, name: 'Alpha DT', type: 'drive_test', active: true },
+  { id: 12, name: 'Beta DT', type: 'drive_test', active: true },
+  { id: 13, name: 'Site Builder', type: 'site', active: true },
+]
 
 const page = () =>
   render(
@@ -142,6 +151,7 @@ beforeEach(() => {
     if (url === '/acceptance/trends') return Promise.resolve({ data: trends() })
     if (url === '/drive-test/trend') return Promise.resolve({ data: dtTrend() })
     if (url === '/acceptance/sites') return Promise.resolve({ data: sites() })
+    if (url === '/reference/contractors') return Promise.resolve({ data: contractors })
     return Promise.resolve({ data: [] })
   })
 })
@@ -357,17 +367,29 @@ describe('the acceptance target', () => {
     expect(api.get.mock.calls.map(([url]) => url)).not.toContain('/acceptance/plan')
   })
 
-  it('draws the Planned line from the stored targets, and says where they are set', async () => {
+  it('draws MTN’s target and the contractors’ PIP against approvals, and says where they come from', async () => {
     page()
     const heading = await screen.findByText('Plan vs actual progress')
     const card = heading.closest('.card')
 
-    expect((await within(card).findAllByText('Planned (target)')).length).toBeGreaterThan(0)
-    // The latest month's stored target, 3,200, is what the readout shows.
+    expect((await within(card).findAllByText('MTN internal target')).length).toBeGreaterThan(0)
+    expect(within(card).getAllByText('Contractors’ PIP').length).toBeGreaterThan(0)
+    expect(within(card).getAllByText('Fully accepted (actual)').length).toBeGreaterThan(0)
+    expect(within(card).queryByText('Added villages (actual)')).toBeNull()
+    // Cumulative by default: the latest month's running totals.
     expect(within(card).getByText('3,200')).toBeInTheDocument()
-    expect(
-      within(card).getByText('The target line is the acceptance target set on the Monthly Plan page.')
-    ).toBeInTheDocument()
+    expect(within(card).getByText('3,160')).toBeInTheDocument()
+    expect(within(card).getByText(/MTN internal target is set by the PM on the Monthly Plan page/)).toBeInTheDocument()
+  })
+
+  it('shows the monthly plan figures, not differences of the running total, in Monthly mode', async () => {
+    const user = userEvent.setup()
+    page()
+    const card = (await screen.findByText('Plan vs actual progress')).closest('.card')
+    await within(card).findAllByText('MTN internal target')
+    await user.click(within(card).getByRole('button', { name: 'Monthly' }))
+    expect(within(card).getByText('340')).toBeInTheDocument()
+    expect(within(card).getByText('310')).toBeInTheDocument()
   })
 
   it('leaves the line and its legend entry out when no target is stored', async () => {
@@ -375,7 +397,13 @@ describe('the acceptance target', () => {
       if (url === '/acceptance/overview') return Promise.resolve({ data: overview() })
       if (url === '/acceptance/trends') {
         const t = trends()
-        return Promise.resolve({ data: { months: t.months.map((m) => ({ ...m, target_count: null })) } })
+        return Promise.resolve({
+          data: {
+            months: t.months.map((m) => ({
+              ...m, target_count: null, target_monthly: null, pip_monthly: null, pip_cumulative: null,
+            })),
+          },
+        })
       }
       if (url === '/drive-test/trend') return Promise.resolve({ data: dtTrend() })
       return Promise.resolve({ data: [] })
@@ -385,8 +413,10 @@ describe('the acceptance target', () => {
 
     // Not on the plan chart and not on the ICT/CRA progress charts: no ramp
     // drawn as a stand-in, and no legend entry for a line that is not there.
-    await screen.findByText('Added villages (actual)')
+    await screen.findAllByText('Fully accepted (actual)')
     expect(screen.queryByText('Planned (target)')).toBeNull()
+    expect(screen.queryByText('MTN internal target')).toBeNull()
+    expect(screen.queryByText('Contractors’ PIP')).toBeNull()
     expect(screen.queryByText(/Planned \(target\):/)).toBeNull()
     expect(
       screen.getByText('No acceptance target set yet. A PM sets it on the Monthly Plan page.')
@@ -463,7 +493,7 @@ describe('the plan-and-trend widgets', () => {
 })
 
 describe('what the simplification pass removed', () => {
-  it('has no filter bar and asks for no reference lists', async () => {
+  it('has no page filter bar; the only filter is Plan vs actual’s own contractor pick', async () => {
     page()
     await screen.findByText('Total on-air villages')
 
@@ -472,7 +502,11 @@ describe('what the simplification pass removed', () => {
     const urls = api.get.mock.calls.map(([url]) => url)
     expect(urls).not.toContain('/reference/regional-managers')
     expect(urls).not.toContain('/reference/coordinators')
-    expect(urls).not.toContain('/reference/contractors')
+    // The contractor list feeds one chart's filter, and nothing else.
+    const card = (await screen.findByText('Plan vs actual progress')).closest('.card')
+    const filters = screen.getAllByRole('combobox')
+    expect(filters).toHaveLength(1)
+    expect(card.contains(filters[0])).toBe(true)
   })
 
   it('has no tab strip, because Overview is the only thing left', async () => {
@@ -514,5 +548,72 @@ describe('what the simplification pass removed', () => {
     // removed on purpose. The band says what the page counts.
     expect(screen.queryByText(/ICT and CRA approval across your provinces/i)).toBeNull()
     expect(document.querySelector('.page-head p')).toBeNull()
+  })
+})
+
+describe('the plan vs actual contractor filter', () => {
+  const contractorTrend = {
+    months: [
+      {
+        shamsi_year: 1405, shamsi_month: 5, label: 'مرداد',
+        ict_new: 4, cra_new: 3, fully_accepted_new: 2,
+        ict_cumulative: 10, cra_cumulative: 8, fully_accepted_cumulative: 6,
+        target_count: 7, target_monthly: 7, pip_monthly: 7, pip_cumulative: 7,
+      },
+      {
+        shamsi_year: 1405, shamsi_month: 6, label: 'شهریور',
+        ict_new: 5, cra_new: 4, fully_accepted_new: 3,
+        ict_cumulative: 15, cra_cumulative: 12, fully_accepted_cumulative: 9,
+        target_count: 19, target_monthly: 12, pip_monthly: 12, pip_cumulative: 19,
+      },
+    ],
+  }
+
+  it('lists the drive-test contractors, and picking one reloads only this chart with that contractor', async () => {
+    const user = userEvent.setup()
+    api.get.mockImplementation((url, config) => {
+      if (url === '/acceptance/overview') return Promise.resolve({ data: overview() })
+      if (url === '/acceptance/trends') {
+        return Promise.resolve({ data: config?.params?.contractor_id === 12 ? contractorTrend : trends() })
+      }
+      if (url === '/reference/contractors') return Promise.resolve({ data: contractors })
+      return Promise.resolve({ data: [] })
+    })
+    page()
+    const card = (await screen.findByText('Plan vs actual progress')).closest('.card')
+    const select = within(card).getByRole('combobox', { name: 'Contractor' })
+    await within(select).findByRole('option', { name: 'Beta DT' })
+    expect(within(select).queryByRole('option', { name: 'Site Builder' })).toBeNull()
+
+    await user.selectOptions(select, '12')
+
+    await waitFor(() =>
+      expect(api.get).toHaveBeenCalledWith('/acceptance/trends', { params: { months: 9, contractor_id: 12 } })
+    )
+    expect((await within(card).findAllByText('Contractor PIP')).length).toBeGreaterThan(0)
+    expect(within(card).queryByText('MTN internal target')).toBeNull()
+    expect(within(card).getByText('19')).toBeInTheDocument()
+    expect(within(card).getByText('The plan line is Beta DT’s approved Acceptance PIP.')).toBeInTheDocument()
+    // The other widgets stayed on the programme-wide load.
+    const programmeCalls = api.get.mock.calls.filter(
+      ([url, config]) => url === '/acceptance/trends' && !config.params.contractor_id
+    )
+    expect(programmeCalls).toHaveLength(1)
+  })
+
+  it('gives a contractor no filter, and shows its own PIP as the plan', async () => {
+    signedInAs('Contractor')
+    api.get.mockImplementation((url) => {
+      if (url === '/acceptance/overview') return Promise.resolve({ data: overview() })
+      if (url === '/acceptance/trends') return Promise.resolve({ data: contractorTrend })
+      return Promise.resolve({ data: [] })
+    })
+    page()
+    const card = (await screen.findByText('Plan vs actual progress')).closest('.card')
+    expect((await within(card).findAllByText('Your PIP')).length).toBeGreaterThan(0)
+    expect(within(card).queryByRole('combobox', { name: 'Contractor' })).toBeNull()
+    expect(within(card).queryByText('MTN internal target')).toBeNull()
+    expect(within(card).getByText('The plan line is your approved Acceptance PIP.')).toBeInTheDocument()
+    expect(api.get.mock.calls.map(([url]) => url)).not.toContain('/reference/contractors')
   })
 })

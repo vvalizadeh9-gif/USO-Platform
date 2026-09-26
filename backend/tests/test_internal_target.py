@@ -395,3 +395,39 @@ def test_cumulative_plan_is_anchored_on_actual_and_adds_each_month():
     assert out[(1404, 2)] == 62
     assert (1403, 10) not in out    # nothing before the first planned month
     assert _cumulative_plan({}, lambda p: 0) == {}
+
+
+def test_staff_trend_sums_every_contractors_pip(client, actors):
+    from app.models.reference import Contractor
+
+    period = _back(9)
+    db = SessionLocal()
+    other = Contractor(name="Second PIP Co", type="drive_test", active=True)
+    db.add(other)
+    db.commit()
+    other_id = other.id
+    db.close()
+
+    cid = _contractor_id()
+    _approve_acceptance_pip(cid, period, 30, version=1)
+    _approve_acceptance_pip(cid, period, 25, version=2)   # revised: counts once, at 25
+    _approve_acceptance_pip(other_id, period, 12)
+    assert _put(client, actors["pm"], "ACCEPTANCE", period, 60).status_code == 200
+
+    def _row(headers, extra=""):
+        r = client.get(f"{ACC}/trends?months=12{extra}", headers=headers)
+        return next(
+            m for m in r.json()["months"]
+            if (m["shamsi_year"], m["shamsi_month"]) == period
+        )
+
+    staff = _row(actors["coordinator"])
+    assert staff["target_monthly"] == 60
+    assert staff["pip_monthly"] == 37
+
+    one = _row(actors["coordinator"], f"&contractor_id={other_id}")
+    assert one["target_monthly"] == one["pip_monthly"] == 12
+
+    # A contractor gets only its own, in both fields.
+    mine = _row(actors["contractor"])
+    assert mine["target_monthly"] == mine["pip_monthly"] == 25

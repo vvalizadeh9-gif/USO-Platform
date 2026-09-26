@@ -219,6 +219,34 @@ def _contractor_monthly_pips(
     return {(y, m): count or 0 for y, m, count in rows}
 
 
+def _all_contractor_monthly_pips(db: Session) -> dict[tuple[int, int], int]:
+    """Every contractor's approved Acceptance PIP in force, summed per month.
+
+    Folded per contractor first (highest approved version wins), then summed,
+    so a revised plan is counted once, at its approved number.
+    """
+    rows = db.execute(
+        select(
+            ContractorMonthlyPlan.contractor_id,
+            ContractorMonthlyPlan.shamsi_year,
+            ContractorMonthlyPlan.shamsi_month,
+            ContractorMonthlyPlan.committed_count,
+        )
+        .where(
+            ContractorMonthlyPlan.stream == STREAM_ACCEPTANCE,
+            ContractorMonthlyPlan.status == STATUS_APPROVED,
+        )
+        .order_by(ContractorMonthlyPlan.version)
+    ).all()
+    in_force: dict[tuple[int, int, int], int] = {}
+    for cid, y, m, count in rows:
+        in_force[(cid, y, m)] = count or 0
+    out: dict[tuple[int, int], int] = {}
+    for (_, y, m), count in in_force.items():
+        out[(y, m)] = out.get((y, m), 0) + count
+    return out
+
+
 def plan_contractor(user: User, contractor_id: int | None) -> int | None:
     """Whose PIP is the plan line, or None for MTN's internal target.
 
@@ -327,6 +355,10 @@ def monthly_approval_trend(
     (``_cumulative_plan``). ``target_count`` repeats the cumulative figure
     for the dashboard that reads that name today.
 
+    ``pip_monthly`` / ``pip_cumulative`` are the contractors' approved
+    Acceptance PIPs: every contractor's summed for an unfiltered staff view,
+    the one contractor's otherwise (then equal to the target figures).
+
     For each qualifying village, ``authority_verdict_date`` says which month
     ICT cleared it and which month CRA cleared it (None if not yet approved
     by that authority). A village counts as "fully accepted" in whichever
@@ -403,6 +435,12 @@ def monthly_approval_trend(
 
     cumulative_plan = _cumulative_plan(monthly_plan, _actual_before)
 
+    # The contractors' own commitment: the one contractor's PIP when the plan
+    # is already that, otherwise every contractor's PIP summed -- so staff
+    # see MTN's target and what the contractors signed up to side by side.
+    monthly_pip = monthly_plan if whose is not None else _all_contractor_monthly_pips(db)
+    cumulative_pip = _cumulative_plan(monthly_pip, _actual_before)
+
     out: list[dict] = []
     # The running cumulative total as of just before the window starts, so a
     # period inside the window that itself has no new approvals still shows
@@ -431,6 +469,8 @@ def monthly_approval_trend(
                 "fully_accepted_cumulative": carried["fully_accepted_new"],
                 "target_monthly": monthly_plan.get(period),
                 "target_cumulative": cumulative_plan.get(period),
+                "pip_monthly": monthly_pip.get(period),
+                "pip_cumulative": cumulative_pip.get(period),
                 # The name the dashboard reads today: the cumulative plan, so
                 # its Cumulative view is right and its Monthly view (which
                 # differences consecutive months) gives the monthly plan.
