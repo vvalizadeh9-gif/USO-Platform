@@ -1,10 +1,10 @@
 // The Acceptance Dashboard: what its figures say, and what they open.
 //
 // The page makes one promise that is easy to break and hard to notice: every
-// quantity opens the sites behind it. There are six of them — four KPI cards
-// and the two halves of Remaining inside the last one — and each is asserted
-// here against the metric it is supposed to ask the server for, because a
-// figure wired to the wrong metric opens a list that looks right and is not.
+// quantity opens the sites behind it. There are four of them — the KPI cards —
+// and each is asserted here against the metric it is supposed to ask the
+// server for, because a figure wired to the wrong metric opens a list that
+// looks right and is not.
 //
 // The band is also a funnel, read left to right: on air → DT done → approved
 // → remaining. The order is asserted, because a card inserted into the middle
@@ -29,9 +29,8 @@ vi.mock('react-router-dom', async (importOriginal) => ({
   useNavigate: () => navigate,
 }))
 
-// Signed in as a Viewer by default — someone who can see the dashboard but
-// not the PM-only "+ Set target" control. Individual tests override this
-// with `signedInAs`.
+// Signed in as a Viewer by default. Individual tests override this with
+// `signedInAs` — a PM, to show the set-target control is not here any more.
 const mockAuth = vi.hoisted(() => ({ current: { user: { full_name: 'Someone', role: { name: 'Viewer' } } } }))
 vi.mock('../../context/AuthContext', () => ({
   useAuth: () => mockAuth.current,
@@ -47,6 +46,7 @@ const AcceptanceDashboard = (await import('./AcceptanceDashboard')).default
 const overview = (over = {}) => ({
   kpis: {
     total_onair_villages: 300,
+    total_onair_permanent: 260, total_onair_temporary: 40,
     total_dt_done_villages: 120,
     total_ict_approval: 88, total_ict_remained: 32,
     total_ict_rejected: 9, total_ict_pending: 23,
@@ -66,20 +66,6 @@ const overview = (over = {}) => ({
   // no longer draws a province table. Kept in the fixture so a payload that
   // carries it cannot make the page throw.
   provinces: [{ name: 'Kerman', province_id: 7, total: 120 }],
-  ...over,
-})
-
-/** Shaped from app/schemas: AcceptancePlanResponse. */
-const plan = (over = {}) => ({
-  current: {
-    shamsi_year: 1405, shamsi_month: 6, label: 'شهریور 1405',
-    target_count: 3200, set_by: 'PM One', set_at: '2026-08-20T00:00:00Z', note: null,
-  },
-  previous: {
-    shamsi_year: 1405, shamsi_month: 5, label: 'مرداد 1405',
-    target_count: 2860, set_by: 'PM One', set_at: '2026-07-20T00:00:00Z', note: null,
-  },
-  history: [],
   ...over,
 })
 
@@ -144,18 +130,15 @@ const page = () =>
 const kpiCard = async (title) =>
   (await screen.findByText(title, { selector: '.dt-kpi-title' })).closest('.dt-kpi-card')
 
-/** One half of the Remaining card, by the name printed on it. */
-const remainingPart = (card, name) =>
-  [...card.querySelectorAll('.dt-status-row')].find(
-    (node) => node.querySelector('.dt-status-name').textContent === name
-  )
+/** A card's foot row, as its two halves' text. */
+const foot = (card) =>
+  [...card.querySelector('.acc-kpi-foot').children].map((n) => n.textContent)
 
 beforeEach(() => {
   vi.clearAllMocks()
   signedInAs('Viewer')
   api.get.mockImplementation((url) => {
     if (url === '/acceptance/overview') return Promise.resolve({ data: overview() })
-    if (url === '/acceptance/plan') return Promise.resolve({ data: plan() })
     if (url === '/acceptance/trends') return Promise.resolve({ data: trends() })
     if (url === '/drivetest/trend') return Promise.resolve({ data: dtTrend() })
     if (url === '/acceptance/sites') return Promise.resolve({ data: sites() })
@@ -181,38 +164,93 @@ describe('the KPI band', () => {
   it('reads the four headline figures off /acceptance/overview', async () => {
     page()
 
-    expect(within(await kpiCard('On air villages')).getByText('300')).toBeInTheDocument()
-    // 120 of 300 on-air villages are drive-tested — the only percentage on
-    // the page whose denominator is not the DT-done universe.
-    const done = await kpiCard('DT done')
-    expect(within(done).getByText('120')).toBeInTheDocument()
-    expect(within(done).getByText('40% of 300')).toBeInTheDocument()
-    // 70 of 120 approved leaves 50 remaining — derived here, never taken
-    // from a second server figure that could disagree with it.
-    const approved = await kpiCard('Approved')
-    expect(within(approved).getByText('70')).toBeInTheDocument()
-    expect(within(approved).getByText('58% of 120')).toBeInTheDocument()
+    // 300 on air: 260 launched permanently, 40 temporarily.
+    const onair = await kpiCard('Total on-air villages')
+    expect(onair.querySelector('.dt-kpi-figure')).toHaveTextContent('300')
+    expect(within(onair).getByText('هدف · راه اندازی دائم + موقت')).toBeInTheDocument()
+    expect(foot(onair)).toEqual(['دائم 260', 'موقت 40'])
+    // 120 of 300 on-air villages are drive-tested, 180 are not — the only
+    // percentage on the page whose denominator is not the DT-done universe.
+    const done = await kpiCard('Total DT done villages')
+    expect(done.querySelector('.dt-kpi-figure')).toHaveTextContent('120')
+    expect(within(done).getByText('Drive test complete')).toBeInTheDocument()
+    expect(foot(done)).toEqual(['40% of on-air', '180 not tested'])
+    // 70 of 120 fully accepted leaves 50 remaining — derived here, never
+    // taken from a second server figure that could disagree with it.
+    const accepted = await kpiCard('Fully accepted')
+    expect(accepted.querySelector('.dt-kpi-figure')).toHaveTextContent('70')
+    expect(within(accepted).getByText('ICT and CRA both approved')).toBeInTheDocument()
+    expect(foot(accepted)).toEqual(['58% of DT done', '70 of 120'])
     const remaining = await kpiCard('Remaining')
-    expect(within(remaining).getByText('50')).toBeInTheDocument()
-    expect(within(remaining).getByText('42% of 120')).toBeInTheDocument()
+    expect(remaining.querySelector('.dt-kpi-figure')).toHaveTextContent('50')
+    expect(within(remaining).getByText('Missing ICT, CRA or both')).toBeInTheDocument()
+    expect(foot(remaining)).toEqual(['42% of DT done', '50 of 120'])
+  })
+
+  it('splits the on-air bar into its permanent and temporary shares', async () => {
+    page()
+
+    const onair = await kpiCard('Total on-air villages')
+    const segments = [...onair.querySelectorAll('.dt-kpi-split > i')].map((n) => n.style.width)
+    expect(segments).toEqual(['87%', '13%'])
+  })
+
+  it('never shows a negative not-tested count', async () => {
+    api.get.mockImplementation((url) => {
+      if (url === '/acceptance/overview') {
+        const data = overview()
+        return Promise.resolve({ data: { ...data, kpis: { ...data.kpis, total_onair_villages: 100 } } })
+      }
+      return Promise.resolve({ data: { months: [] } })
+    })
+    page()
+
+    expect(foot(await kpiCard('Total DT done villages'))[1]).toBe('0 not tested')
   })
 
   it('is a funnel read left to right, with nothing wedged into it', async () => {
     page()
-    await screen.findByText('On air villages')
+    await screen.findByText('Total on-air villages')
 
     const band = screen.getByLabelText('Acceptance totals')
     expect([...band.querySelectorAll('.dt-kpi-title')].map((n) => n.textContent)).toEqual([
-      'On air villages', 'DT done', 'Approved', 'Remaining',
+      'Total on-air villages', 'Total DT done villages', 'Fully accepted', 'Remaining',
     ])
     // The monthly plan target used to be the second card. It is a promise,
-    // not a step of the funnel, and it now heads the plan section instead.
+    // not a step of the funnel.
     expect(within(band).queryByText('Monthly plan')).toBeNull()
+  })
+
+  it('builds every card the same way: dot, title, figure, context, bar, foot', async () => {
+    page()
+    await screen.findByText('Total on-air villages')
+
+    for (const card of screen.getByLabelText('Acceptance totals').querySelectorAll('.dt-kpi-card')) {
+      expect(card.querySelector('.dt-kpi-dot')).not.toBeNull()
+      expect(card.querySelector('.dt-kpi-ic')).toBeNull()
+      expect(card.querySelector('.dt-kpi-figure')).not.toBeNull()
+      expect(card.querySelector('.dt-kpi-sub')).not.toBeNull()
+      expect(card.querySelector('.dt-kpi-split')).not.toBeNull()
+      expect(card.querySelector('.acc-kpi-foot').children).toHaveLength(2)
+    }
+    // The Remaining card no longer splits itself into rejected and waiting.
+    expect(document.querySelector('.dt-status-list')).toBeNull()
+  })
+
+  it('explains each card in a note, in the agreed wording', async () => {
+    const user = userEvent.setup()
+    page()
+    await screen.findByText('Total on-air villages')
+
+    await user.click(screen.getByRole('button', { name: 'About Remaining' }))
+    expect(
+      screen.getByText('DT-done villages still missing ICT approval, CRA approval, or both.')
+    ).toBeVisible()
   })
 
   it('asks for the overview with no filter parameters', async () => {
     page()
-    await screen.findByText('On air villages')
+    await screen.findByText('Total on-air villages')
 
     const call = api.get.mock.calls.find(([url]) => url === '/acceptance/overview')
     expect(call).toBeDefined()
@@ -226,54 +264,11 @@ describe('the KPI band', () => {
   it('navigates nowhere when a figure is clicked — the panel opens in place', async () => {
     const user = userEvent.setup()
     page()
-    await screen.findByText('On air villages')
+    await screen.findByText('Total on-air villages')
 
-    await user.click(screen.getByRole('button', { name: /Approved villages: 70 villages/i }))
+    await user.click(screen.getByRole('button', { name: /Fully accepted villages: 70 villages/i }))
 
     expect(navigate).not.toHaveBeenCalled()
-  })
-})
-
-describe('the two halves of Remaining', () => {
-  it('names both, inside the Remaining card, with their share of it', async () => {
-    page()
-
-    const remaining = await kpiCard('Remaining')
-    const parts = remaining.querySelectorAll('.dt-status-row')
-    expect(parts).toHaveLength(2)
-    expect([...parts].map((n) => n.querySelector('.dt-status-name').textContent)).toEqual([
-      'Rejected', 'Remained',
-    ])
-    // 18 and 32 out of the 50 remaining — the two sum to the card's figure,
-    // and their shares to its whole.
-    const rejected = remainingPart(remaining, 'Rejected')
-    expect(rejected.querySelector('.dt-status-num').textContent).toBe('18')
-    expect(rejected.querySelector('.dt-status-pct').textContent).toBe('36%')
-    const remained = remainingPart(remaining, 'Remained')
-    expect(remained.querySelector('.dt-status-num').textContent).toBe('32')
-    expect(remained.querySelector('.dt-status-pct').textContent).toBe('64%')
-  })
-
-  it('falls back to the difference when an older payload carries no split', async () => {
-    const { villages_rejected: _r, villages_remained: _m, ...rest } = overview().analysis
-    api.get.mockImplementation((url) => {
-      if (url === '/acceptance/overview') {
-        return Promise.resolve({ data: { ...overview(), analysis: rest } })
-      }
-      if (url === '/acceptance/plan') return Promise.resolve({ data: plan() })
-      if (url === '/acceptance/trends') return Promise.resolve({ data: trends() })
-      if (url === '/drivetest/trend') return Promise.resolve({ data: dtTrend() })
-      return Promise.resolve({ data: [] })
-    })
-    page()
-
-    const remaining = await kpiCard('Remaining')
-    // Nothing is fabricated: rejected reads 0 and the whole 50 sits in the
-    // half that is still waiting, so the card still adds up on screen.
-    const numberOn = (name) =>
-      remainingPart(remaining, name).querySelector('.dt-status-num').textContent
-    expect(numberOn('Rejected')).toBe('0')
-    expect(numberOn('Remained')).toBe('50')
   })
 })
 
@@ -282,16 +277,14 @@ describe('the sites behind a figure', () => {
   // metric: a figure wired to the wrong one opens a list that looks right,
   // has a plausible length and answers a different question.
   it.each([
-    ['On air villages', 300, 'onair'],
+    ['On-air villages', 300, 'onair'],
     ['DT done villages', 120, 'dt_done'],
-    ['Approved villages', 70, 'approved'],
+    ['Fully accepted villages', 70, 'approved'],
     ['Remaining villages', 50, 'remaining'],
-    ['Rejected villages', 18, 'rejected'],
-    ['Remained villages', 32, 'remained'],
   ])('opens %s with its own metric', async (label, count, metric) => {
     const user = userEvent.setup()
     page()
-    await screen.findByText('On air villages')
+    await screen.findByText('Total on-air villages')
 
     expect(screen.queryByTestId('acc-drill')).not.toBeInTheDocument()
     await user.click(
@@ -305,9 +298,9 @@ describe('the sites behind a figure', () => {
   it('lists the site ids, with the server’s count and an export', async () => {
     const user = userEvent.setup()
     page()
-    await screen.findByText('On air villages')
+    await screen.findByText('Total on-air villages')
 
-    await user.click(screen.getByRole('button', { name: /Approved villages: 70 villages/i }))
+    await user.click(screen.getByRole('button', { name: /Fully accepted villages: 70 villages/i }))
     const node = await panel()
 
     // The count is the server's `total` — the figure that opened the panel —
@@ -321,9 +314,9 @@ describe('the sites behind a figure', () => {
   it('closes on Escape', async () => {
     const user = userEvent.setup()
     page()
-    await screen.findByText('On air villages')
+    await screen.findByText('Total on-air villages')
 
-    await user.click(screen.getByRole('button', { name: /Approved villages: 70 villages/i }))
+    await user.click(screen.getByRole('button', { name: /Fully accepted villages: 70 villages/i }))
     await panel()
     await user.keyboard('{Escape}')
 
@@ -334,7 +327,6 @@ describe('the sites behind a figure', () => {
     const user = userEvent.setup()
     api.get.mockImplementation((url) => {
       if (url === '/acceptance/overview') return Promise.resolve({ data: overview() })
-      if (url === '/acceptance/plan') return Promise.resolve({ data: plan() })
       if (url === '/acceptance/trends') return Promise.resolve({ data: trends() })
       if (url === '/drivetest/trend') return Promise.resolve({ data: dtTrend() })
       if (url === '/acceptance/sites') {
@@ -343,67 +335,69 @@ describe('the sites behind a figure', () => {
       return Promise.resolve({ data: [] })
     })
     page()
-    await screen.findByText('On air villages')
+    await screen.findByText('Total on-air villages')
 
-    await user.click(screen.getByRole('button', { name: /Approved villages: 70 villages/i }))
+    await user.click(screen.getByRole('button', { name: /Fully accepted villages: 70 villages/i }))
 
     expect(await screen.findByRole('alert')).toHaveTextContent('metric must be one of: onair')
   })
 })
 
-describe('the monthly plan target, now heading the plan section', () => {
-  it('shows the current target and its delta from last month', async () => {
+describe('the acceptance target', () => {
+  it('is not on this page any more, and is not asked for', async () => {
+    signedInAs('PM')
     page()
-    await screen.findByText('On air villages')
+    await screen.findByText('Total on-air villages')
 
-    // Scoped to the card itself: 3,200 is also this fixture's latest
-    // month's plan target, which the trend charts' hover readouts
-    // legitimately repeat elsewhere on the page.
-    const card = await kpiCard('Monthly plan')
-    // Out of the funnel, into the section whose chart it sets the line for.
-    expect(card.closest('.acc-plan-row')).not.toBeNull()
-    expect(card.closest('[aria-label="Acceptance totals"]')).toBeNull()
-    expect(within(card).getByText('3,200')).toBeInTheDocument()
-    expect(within(card).getByText(/\+340 from مرداد 1405/)).toBeInTheDocument()
+    // It is set on the Monthly Plan page now. The card, and the PM's control
+    // with it, are gone from here, and so is the read that fed them.
+    expect(screen.queryByText('Monthly plan')).toBeNull()
+    expect(screen.queryByText('Acceptance target')).toBeNull()
+    expect(screen.queryByRole('button', { name: /Set this month’s acceptance target/ })).toBeNull()
+    expect(api.get.mock.calls.map(([url]) => url)).not.toContain('/acceptance/plan')
   })
 
-  it('shows an explicit empty state rather than a fabricated 0 when no target is set', async () => {
+  it('draws the Planned line from the stored targets, and says where they are set', async () => {
+    page()
+    const heading = await screen.findByText('Plan vs actual progress')
+    const card = heading.closest('.card')
+
+    expect((await within(card).findAllByText('Planned (target)')).length).toBeGreaterThan(0)
+    // The latest month's stored target, 3,200, is what the readout shows.
+    expect(within(card).getByText('3,200')).toBeInTheDocument()
+    expect(
+      within(card).getByText('The target line is the acceptance target set on the Monthly Plan page.')
+    ).toBeInTheDocument()
+  })
+
+  it('leaves the line and its legend entry out when no target is stored', async () => {
     api.get.mockImplementation((url) => {
       if (url === '/acceptance/overview') return Promise.resolve({ data: overview() })
-      if (url === '/acceptance/plan') return Promise.resolve({ data: { current: null, previous: null, history: [] } })
-      if (url === '/acceptance/trends') return Promise.resolve({ data: trends() })
+      if (url === '/acceptance/trends') {
+        const t = trends()
+        return Promise.resolve({ data: { months: t.months.map((m) => ({ ...m, target_count: null })) } })
+      }
       if (url === '/drivetest/trend') return Promise.resolve({ data: dtTrend() })
       return Promise.resolve({ data: [] })
     })
     page()
-    await screen.findByText('On air villages')
+    await screen.findByText('Plan vs actual progress')
 
-    const card = await kpiCard('Monthly plan')
-    expect(within(card).getByText('Not set yet')).toBeInTheDocument()
-    expect(within(card).queryByText(/^3,200$/)).toBeNull()
-  })
-
-  it('does not offer the set-target control to a Viewer', async () => {
-    signedInAs('Viewer')
-    page()
-    await screen.findByText('On air villages')
-
-    expect(screen.queryByRole('button', { name: /Set this month’s acceptance target/ })).toBeNull()
-  })
-
-  it('offers the set-target control to a PM', async () => {
-    signedInAs('PM')
-    page()
-    await screen.findByText('On air villages')
-
-    expect(screen.getByRole('button', { name: /Set this month’s acceptance target/ })).toBeInTheDocument()
+    // Not on the plan chart and not on the ICT/CRA progress charts: no ramp
+    // drawn as a stand-in, and no legend entry for a line that is not there.
+    await screen.findByText('Added villages (actual)')
+    expect(screen.queryByText('Planned (target)')).toBeNull()
+    expect(screen.queryByText(/Planned \(target\):/)).toBeNull()
+    expect(
+      screen.getByText('No acceptance target set yet. A PM sets it on the Monthly Plan page.')
+    ).toBeInTheDocument()
   })
 })
 
 describe('the plan-and-trend widgets', () => {
   it('renders all six, and nothing else', async () => {
     page()
-    await screen.findByText('On air villages')
+    await screen.findByText('Total on-air villages')
 
     for (const title of [
       'Plan vs actual progress',
@@ -419,7 +413,7 @@ describe('the plan-and-trend widgets', () => {
 
   it('draws the approval-flow Sankey from the overview payload alone, with no fabricated "not started" figure', async () => {
     page()
-    await screen.findByText('On air villages')
+    await screen.findByText('Total on-air villages')
 
     // total (120) - fully accepted (70) - ICT-only (18) - CRA-only (5) = 27
     expect(await screen.findByText('27')).toBeInTheDocument()
@@ -429,14 +423,13 @@ describe('the plan-and-trend widgets', () => {
   it('does not crash when /acceptance/trends or /drivetest/trend fail', async () => {
     api.get.mockImplementation((url) => {
       if (url === '/acceptance/overview') return Promise.resolve({ data: overview() })
-      if (url === '/acceptance/plan') return Promise.resolve({ data: plan() })
       if (url === '/acceptance/trends') return Promise.reject(new Error('boom'))
       if (url === '/drivetest/trend') return Promise.reject(new Error('boom'))
       return Promise.resolve({ data: [] })
     })
     page()
 
-    await screen.findByText('On air villages')
+    await screen.findByText('Total on-air villages')
     expect(await screen.findByText('Plan vs actual progress')).toBeInTheDocument()
     expect(await screen.findByText(/Could not load the plan\/actual trend\./)).toBeInTheDocument()
   })
@@ -444,7 +437,7 @@ describe('the plan-and-trend widgets', () => {
   it('toggles the velocity chart between monthly and cumulative figures', async () => {
     const user = userEvent.setup()
     page()
-    await screen.findByText('On air villages')
+    await screen.findByText('Total on-air villages')
     await screen.findByText('Monthly approval velocity')
 
     // Two Monthly/Cumulative segmented controls exist (plan-vs-actual and
@@ -472,7 +465,7 @@ describe('the plan-and-trend widgets', () => {
 describe('what the simplification pass removed', () => {
   it('has no filter bar and asks for no reference lists', async () => {
     page()
-    await screen.findByText('On air villages')
+    await screen.findByText('Total on-air villages')
 
     expect(screen.queryByLabelText(/Regional manager/i)).toBeNull()
     expect(screen.queryByRole('button', { name: 'Apply' })).toBeNull()
@@ -484,7 +477,7 @@ describe('what the simplification pass removed', () => {
 
   it('has no tab strip, because Overview is the only thing left', async () => {
     page()
-    await screen.findByText('On air villages')
+    await screen.findByText('Total on-air villages')
 
     expect(document.querySelector('.tabs')).toBeNull()
     expect(screen.queryByRole('button', { name: /Province Status/ })).toBeNull()
@@ -492,7 +485,7 @@ describe('what the simplification pass removed', () => {
 
   it('has no province table, authority cards, approval gap or outstanding list', async () => {
     page()
-    await screen.findByText('On air villages')
+    await screen.findByText('Total on-air villages')
 
     expect(document.querySelector('table.grouped')).toBeNull()
     expect(screen.queryByText('Authority performance')).toBeNull()
@@ -502,12 +495,11 @@ describe('what the simplification pass removed', () => {
 
   it('has no strip of outstanding tiles under the band', async () => {
     page()
-    await screen.findByText('On air villages')
+    await screen.findByText('Total on-air villages')
 
-    // It split Remaining three ways directly beneath a card that now splits
-    // the same number two ways. One figure divided two different ways on one
-    // screen is a screen people stop trusting; My Work still holds the four
-    // queue buckets, which is where that split is acted on.
+    // It split Remaining three ways (needs an answer / with an authority /
+    // never filed). My Work still holds the four queue buckets, which is
+    // where that split is acted on.
     expect(document.querySelector('.acc-remaining-strip')).toBeNull()
     expect(screen.queryByText('Needs an answer')).toBeNull()
     expect(screen.queryByText('With an authority')).toBeNull()
@@ -516,7 +508,7 @@ describe('what the simplification pass removed', () => {
 
   it('no longer explains itself in a subtitle under the title', async () => {
     page()
-    await screen.findByText('On air villages')
+    await screen.findByText('Total on-air villages')
 
     // "ICT and CRA approval across your provinces, village by village" —
     // removed on purpose. The band says what the page counts.

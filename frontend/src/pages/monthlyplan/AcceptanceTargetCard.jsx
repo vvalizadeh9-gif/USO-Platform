@@ -5,9 +5,9 @@ import { useAuth } from '../../context/AuthContext'
 import { useToast } from '../../context/ToastContext'
 import { canSetAcceptancePlan } from '../../lib/roles'
 import { currentShamsiPeriod } from '../../lib/shamsi'
-import PeriodPicker from '../monthlyplan/PeriodPicker'
-import { fmtCount } from './kpiTheme'
-import { planDeltaTone } from './acceptancePlan'
+import { planDeltaTone } from '../reports/acceptancePlan'
+import { fmtCount } from '../reports/kpiTheme'
+import PeriodPicker from './PeriodPicker'
 
 /**
  * This month's programme-wide acceptance target, and — for a PM only — the
@@ -17,16 +17,16 @@ import { planDeltaTone } from './acceptancePlan'
  * fabricated: a programme with no target yet shows an explicit "not set"
  * state rather than a 0 that would read as a real, very bad, target.
  *
- * It keeps the `.dt-kpi-card` shell (the drive test dashboard's KPI system —
- * see app.css), with the PM's control riding at the end of the header row
- * rather than in a corner of its own. It is no longer *in* the KPI band: that
- * band is a funnel of what has happened — on air, drive-test done, approved,
- * remaining — and a target is what was promised, which is a different
- * question and was breaking the funnel's reading order from the second card
- * onwards. It now heads AcceptancePlanSection, beside the plan-vs-actual
- * chart whose target line it sets.
+ * It lives on the Monthly Plan page, beside the other monthly commitments a
+ * PM sets, and not on the Acceptance Dashboard: that page reports what has
+ * happened, and a target is what was promised. The dashboard still reads it
+ * — its Plan vs Actual chart draws the dashed "Planned" line from these same
+ * stored targets, month by month (/acceptance/trends).
+ *
+ * It keeps the `.dt-kpi-card` shell, with the PM's control riding at the end
+ * of the header row rather than in a corner of its own.
  */
-export default function PlanTargetCard({ plan, onSaved }) {
+export default function AcceptanceTargetCard({ plan, onSaved }) {
   const { user } = useAuth()
   const [open, setOpen] = useState(false)
   const canSet = canSetAcceptancePlan(user)
@@ -42,7 +42,7 @@ export default function PlanTargetCard({ plan, onSaved }) {
         <span className="dt-kpi-ic" aria-hidden="true">
           <Flag size={13} strokeWidth={2.2} />
         </span>
-        <span className="dt-kpi-title">Monthly plan</span>
+        <span className="dt-kpi-title">Acceptance target</span>
         {canSet && (
           <button
             type="button"
@@ -50,7 +50,7 @@ export default function PlanTargetCard({ plan, onSaved }) {
             onClick={() => setOpen((o) => !o)}
             aria-expanded={open}
             aria-label={open ? 'Close set-target form' : 'Set this month’s acceptance target'}
-            style={{ marginInlineStart: 'auto', flexShrink: 0, padding: '2px 7px', fontSize: 11 }}
+            style={{ marginInlineStart: 'auto', flexShrink: 0, padding: '2px 7px', fontSize: 11.5 }}
           >
             {open ? <X size={13} /> : '+ Set target'}
           </button>
