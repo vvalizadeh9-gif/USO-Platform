@@ -1,8 +1,8 @@
-"""Download the three web fonts and build a self-hosted stylesheet.
+"""Download the web fonts and build a self-hosted stylesheet.
 
     python3 scripts/fetch-fonts.py
 
-The interface used to load Space Grotesk, Inter and Vazirmatn from Google
+The interface used to load its fonts (today Inter and Vazirmatn) from Google
 Fonts. That is a problem for a server with no route to the public internet --
 the fonts simply never arrive, and Vazirmatn is the Farsi face, so Farsi text
 is what suffers. It also made every page load wait on a third party, and told
@@ -28,7 +28,6 @@ OUT_CSS = Path("/home/user/USO-Platform/frontend/src/styles/fonts.css")
 UA = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 
 FAMILIES = [
-    ("Space Grotesk", "Space+Grotesk:wght@400;500;600;700"),
     ("Inter", "Inter:wght@400;450;500;600"),
     ("Vazirmatn", "Vazirmatn:wght@400;500;600;700"),
 ]

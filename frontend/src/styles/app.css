@@ -1,9 +1,9 @@
 /* ===================================================================
-   USO Enterprise Platform — Design System (Light)
-   Direction: a bright operations control surface. Pale slate canvas,
-   crisp white panels, ink text, signal-teal primary (RF/coverage),
-   amber for pending, green for approved, red for problems. Geometric
-   display face + neutral body, tabular figures for dense data.
+   USO Enterprise Platform — Design System "Cobalt"
+   Cool blue-grey canvas, white cards, one cobalt accent with a supporting
+   teal, dark readable text. Inter for Latin and figures (tabular),
+   Vazirmatn for Farsi. Status colour is always an ink on its own soft
+   fill, and always carries a text label.
    =================================================================== */
 
 /* Fonts are served from this application, not from Google. See fonts.css for
@@ -12,27 +12,106 @@
 @import url('./fonts.css');
 
 :root {
-  /* Base surfaces */
-  --bg: #eef1f6;
-  --surface-1: #ffffff;
-  --surface-2: #F4F5F3;
-  --surface-3: #E6EAE7;
-  --border: #D4D9D6;
-  --border-soft: #E3E7E4;
+  /* ---- Cobalt: surfaces ----
+     A cool blue-grey canvas, white cards on it, and one step of subtle fill
+     for tiles and callouts. Nothing else sits between them. */
+  --bg: #EEF2F7;
+  --surface: #FFFFFF;
+  --surface-subtle: #F6F8FB;
+  --border: #DDE3EC;          /* card outlines */
+  --divider: #EDF1F6;         /* table rows, hairlines inside a card */
+  --track: #E4E9F1;           /* the unfilled part of a bar or meter */
+  --control-border: #C8D1DE;  /* inputs and other controls */
 
-  /* Text */
-  --text: #141A18;
-  --text-muted: #4E5A55;
-  /* Darkened from the #6E7A75 the design brief specified: that value measures
-     4.46:1 on --surface-1 and 4.08:1 on --surface-2, both under the 4.5:1 AA
-     floor this token exists to clear. Same hue, ~8 units darker per channel,
-     measured at 5.09:1 / 4.66:1. */
-  --text-dim: #66726D;
+  /* ---- Text ----
+     Measured on --surface: primary 17.0:1, secondary 7.6:1, tertiary 5.4:1
+     (4.8:1 on --bg), link 7.4:1. */
+  --text: #141B2B;
+  --text-secondary: #475569;
+  --text-tertiary: #5F6B7E;
+  --text-on-accent: #FFFFFF;
+  --text-link: #2451C0;
 
-  /* Signal accents */
-  --signal: #0ea394;          /* primary — coverage teal */
-  --signal-strong: #0b8477;
-  --signal-glow: rgba(14, 163, 148, 0.14);
+  /* ---- Accent: one cobalt, plus one supporting teal ----
+     White on --accent is 5.7:1; --accent-ink on white is 9.5:1. */
+  --accent: #2F5FD0;
+  --accent-ink: #1D3F99;
+  --accent-soft: #E3EAFB;
+  --accent-wash: #F2F6FE;
+  --accent-track: #D3DEF7;
+  --support: #0E7C86;
+  --support-soft: #DDF2F3;
+
+  /* ---- Status: an ink on its own soft fill, always with a label ----
+     Every ink clears 4.5:1 on white and on its soft fill (lowest: success,
+     4.6:1 on --success-soft). Under a deuteranope simulation (Viénot) the
+     CIEDE2000 distance done↔ongoing is 46.0 and ongoing↔problem 60.8, but
+     DONE AND PROBLEM MEASURE 11.4: green and red stay the pair a red-green
+     reader separates by lightness and label, not hue. That is why every
+     status keeps its text label and every chart keeps its legend. */
+  --success-ink: #1D7A4B;
+  --success-soft: #E2F3E9;
+  --ongoing-ink: #6A45C2;
+  --ongoing-soft: #EEE8FB;
+  --pending-ink: #8A5600;
+  --pending-soft: #FCF0D9;
+  --danger-ink: #B42F2A;
+  --danger-soft: #FBE6E4;
+  --neutral-ink: #5F6B7E;
+  --neutral-soft: #EDF1F6;
+
+  /* ---- Banners: background, border, text, icon ---- */
+  --banner-info-bg: #EAF0FC;
+  --banner-info-border: #C5D5F5;
+  --banner-info-text: #1D3F99;
+  --banner-info-icon: #2F5FD0;
+  --banner-warning-bg: #FCF0D9;
+  --banner-warning-border: #F0D8A6;
+  --banner-warning-text: #5C3B00;
+  --banner-warning-icon: #9A5F00;
+  --banner-error-bg: #FBE6E4;
+  --banner-error-border: #F0C3BF;
+  --banner-error-text: #6E1F18;
+  --banner-error-icon: #B42F2A;
+  --banner-success-bg: #E2F3E9;
+  --banner-success-border: #B7DDC6;
+  --banner-success-text: #134A2F;
+  --banner-success-icon: #1D7A4B;
+
+  /* ---- Legacy aliases ----
+     The names the pages were written against, pointed at Cobalt so nothing
+     breaks while pages move over one at a time. */
+  --surface-1: var(--surface);             /* legacy alias — remove in cleanup */
+  --surface-2: var(--surface-subtle);      /* legacy alias — remove in cleanup */
+  --surface-3: var(--track);               /* legacy alias — remove in cleanup */
+  --border-soft: var(--divider);           /* legacy alias — remove in cleanup */
+  --text-muted: var(--text-secondary);     /* legacy alias — remove in cleanup */
+  --text-dim: var(--text-tertiary);        /* legacy alias — remove in cleanup */
+  --signal: var(--accent);                 /* legacy alias — remove in cleanup */
+  --signal-strong: var(--accent-ink);      /* legacy alias — remove in cleanup */
+  --signal-glow: var(--accent-soft);       /* legacy alias — remove in cleanup */
+  --green: var(--success-ink);             /* legacy alias — remove in cleanup */
+  --green-dim: var(--success-soft);        /* legacy alias — remove in cleanup */
+  --amber: var(--pending-ink);             /* legacy alias — remove in cleanup */
+  --amber-dim: var(--pending-soft);        /* legacy alias — remove in cleanup */
+  --red: var(--danger-ink);                /* legacy alias — remove in cleanup */
+  --red-dim: var(--danger-soft);           /* legacy alias — remove in cleanup */
+  --violet: var(--ongoing-ink);            /* legacy alias — remove in cleanup */
+  --violet-dim: var(--ongoing-soft);       /* legacy alias — remove in cleanup */
+  --dt-done: var(--success-ink);           /* legacy alias — remove in cleanup */
+  --dt-ongoing: var(--ongoing-ink);        /* legacy alias — remove in cleanup */
+  --dt-problem: var(--danger-ink);         /* legacy alias — remove in cleanup */
+  --dt-notstarted: var(--neutral-ink);     /* legacy alias — remove in cleanup */
+  --dt-done-wash: var(--success-soft);     /* legacy alias — remove in cleanup */
+  --dt-ongoing-wash: var(--ongoing-soft);  /* legacy alias — remove in cleanup */
+  --dt-problem-wash: var(--danger-soft);   /* legacy alias — remove in cleanup */
+  --dt-notstarted-wash: var(--neutral-soft); /* legacy alias — remove in cleanup */
+  --dt-track: var(--track);                /* legacy alias — remove in cleanup */
+
+  /* ICT blue on the Acceptance Dashboard. Not a Cobalt token and not a
+     status; left as it was until that page is migrated. */
+  --blue: #3b82f6;
+  --blue-dim: rgba(59, 130, 246, 0.12);
 
   /* The sidebar's own palette: light, a solid white panel one step up from
      the page (#EEF1F6, 1.13:1 -- no bright/dark jump between the two). Kept
@@ -55,113 +134,47 @@
   --nav-accent: #0B8477;
   --nav-badge-bg: #0B7F73;
 
-  --amber: #c77d00;           /* pending / waiting */
-  --amber-dim: rgba(199, 125, 0, 0.12);
-  --green: #17915a;           /* approved */
-  --green-dim: rgba(23, 145, 90, 0.12);
-  --red: #d94141;             /* rejected / problematic */
-  --red-dim: rgba(217, 65, 65, 0.11);
-  --violet: #6d5bd0;          /* assignment */
-  --violet-dim: rgba(109, 91, 208, 0.12);
-  --blue: #3b82f6;            /* ICT, on the Acceptance Dashboard */
-  --blue-dim: rgba(59, 130, 246, 0.12);
+  /* The one ordinal ramp on the Drive Test page: the ongoing age bands, an
+     ordered scale rather than a set of names. One hue -- the Ongoing violet
+     #6A45C2, hue angle -53° in CIELAB, held on every step -- light to dark,
+     with even lightness steps and the light end clearing white at 2.09:1.
+     L* 73.1, 65.1, 57.0, 49.0, 41.0, 33.1: six steps 8.0 apart. Chroma
+     rises from 40 to 72 toward the dark end so the light steps read as
+     tints of the ongoing colour rather than a second, brighter lilac.
+     Even steps are the whole point of a ramp -- a bunched pair reads as one
+     band, and these bands are meant to be ranked at a glance. Nominal
+     categories (contractors, provinces) get a flat colour instead. */
+  --dt-age-1: #C2A7EE;
+  --dt-age-2: #AE8FE3;
+  --dt-age-3: #9977D7;
+  --dt-age-4: #8460CC;
+  --dt-age-5: #6D49C1;
+  --dt-age-6: #5737A8;
 
-  /* ---- Drive Test dashboard: colour that means a state, and nothing else.
-     Three hues, one per state where something is *happening* to an on-air
-     site, reserved for that meaning everywhere on that page.
-
-     SOFTENED DELIBERATELY, on the product owner's call: the previous trio
-     (#17915a / #3b6fd4 / #cf3b3b) read as too saturated on a 1920x1200
-     office display, which is the screen this dashboard is actually read on.
-     What that cost and what it bought is measured below rather than
-     asserted, because the trade is real in both directions.
-
-     BOUGHT: all three now clear 4.5:1 as text on --surface-1 — done 4.85,
-     ongoing 5.37, problem 4.71. The old green was 4.01 and had been failing
-     that bar since it was chosen; softening it is what fixed it.
-
-     COST: separability under deuteranopia falls across the board. Measured
-     as CIEDE2000 over a Vienot deuteranope simulation, the two pairs that
-     sit adjacent on the segmented bar go done↔ongoing 18.5 -> 10.6 and
-     ongoing↔problem 21.0 -> 14.1. Both still clear the ~10 a categorical
-     set needs, but the worst adjacent pair now sits near that line rather
-     than comfortably above it, and it is the number to re-measure before
-     anyone softens these again.
-
-     GREEN AND BRICK ARE NOT SEPARABLE UNDER DEUTERANOPIA, and were not
-     before either: that pair measures 2.8 -> 5.1, which is to say
-     indistinguishable in both palettes. It is not an adjacent pair on the
-     bar, which is why the original validation did not report it. THIS IS
-     THE REASON EVERY CHART ON THIS PAGE KEEPS A LEGEND AND A TEXT LABEL.
-     Colour is the fast read here; it is never the only one. A chart on this
-     page that drops its legend has a red-green reader guessing between a
-     finished site and a broken one.
-
-     Amber stays out. The 3.4 ΔE figure the previous note gave for amber
-     against the old red does not reproduce under the method above (it
-     measures ~19), so the rejection no longer rests on it — it rests on the
-     line above: with green and brick already indistinguishable to a
-     deuteranope, a third warm hue is the one thing this palette cannot
-     afford. The brand teal is absent for a different reason: it is the
-     nav-active and primary-button colour, so a data series wearing it reads
-     as the selected thing.
-
-     The fourth state, not-started, takes the neutral rather than a fourth
-     hue. Nothing has happened to those sites, and the three-hue rule is
-     worth more than the distinctness a new hue would buy: a grey segment
-     reads as absence beside three that read as activity, and it keeps the
-     colour vocabulary at three things a reader has to learn. It is the same
-     neutral as the chart furniture, one step darker so it holds its own as a
-     segment rather than reading as an unfilled track. */
-  --dt-done: #1E7A55;
-  --dt-ongoing: #3F4FB0;
-  --dt-problem: #B23A30;
-  --dt-notstarted: #8a95a6;
-  --dt-done-wash: rgba(30, 122, 85, 0.12);
-  --dt-ongoing-wash: rgba(63, 79, 176, 0.11);
-  --dt-problem-wash: rgba(178, 58, 48, 0.11);
-  --dt-notstarted-wash: rgba(138, 149, 166, 0.13);
-
-  /* The one ordinal ramp on that page: the ongoing age bands, which are an
-     ordered scale rather than a set of names. One hue, light to dark,
-     monotone in lightness with every step at least 0.06 apart and the light
-     end clearing the surface at 2.09:1. Nominal categories — contractors,
-     provinces — get a flat colour instead; shading those by size would
-     colour a bar by the length it already has.
-
-     Re-cut onto the softened ongoing hue above, keeping that discipline
-     exactly: L* runs 73.1 -> 33.4 in six steps of 7.8-8.0 each, the light
-     end still clears the surface at 2.09:1, and the dark end is the agreed
-     #414A86. Even steps are the whole point of a ramp — a bunched pair
-     reads as one band, and these bands are an ordered scale a reader is
-     meant to rank at a glance. */
-  --dt-age-1: #AFB0DB;
-  --dt-age-2: #999AC9;
-  --dt-age-3: #8385B8;
-  --dt-age-4: #6D71A7;
-  --dt-age-5: #575D96;
-  --dt-age-6: #414A86;
-
-  /* Chart furniture. Everything that is not a state is a step of the neutral
-     ramp: the unfilled part of a track, and the ghost bar a commitment is
-     drawn as. */
-  --dt-track: #e7ecf3;
+  /* Chart furniture: the ghost bar a commitment is drawn as. */
   --dt-ghost: rgba(85, 99, 122, 0.17);
   --dt-gap: 10px;
 
-  /* Type */
-  --font-display: 'Space Grotesk', 'Vazirmatn', sans-serif;
+  /* ---- Type ----
+     Inter for Latin text and figures (tabular), Vazirmatn for Farsi. One
+     family for headings and body: the hierarchy is carried by size and
+     weight, not by a second face. */
+  --font-display: 'Inter', 'Vazirmatn', sans-serif;
   --font-body: 'Inter', 'Vazirmatn', sans-serif;
   --font-farsi: 'Vazirmatn', 'Inter', sans-serif;
 
-  /* Geometry */
-  --radius: 12px;
-  --radius-sm: 8px;
-  --radius-lg: 18px;
+  /* ---- Shape ----
+     6 buttons and inputs, 8 tiles and banners, 10 cards and dialogs. */
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius: 10px;
+  --radius-lg: 10px;
 
-  --shadow-1: 0 1px 2px rgba(20, 35, 60, 0.06);
-  --shadow-2: 0 12px 34px rgba(20, 35, 60, 0.12);
-  --shadow-glow: 0 0 0 1px var(--signal-glow), 0 10px 30px rgba(20, 35, 60, 0.1);
+  /* ---- Depth: two levels only ----
+     A card is a border plus a faint shadow; menus, dialogs and drawers are
+     raised. */
+  --shadow-1: 0 1px 2px rgba(20, 27, 43, 0.04);
+  --shadow-2: 0 8px 24px rgba(20, 27, 43, 0.14), 0 0 0 1px rgba(20, 27, 43, 0.06);
 }
 
 * {
@@ -178,25 +191,10 @@ body {
   font-family: var(--font-body);
   background: var(--bg);
   color: var(--text);
-  font-size: 14px;
-  line-height: 1.5;
+  font-size: 15px;
+  line-height: 22px;
   -webkit-font-smoothing: antialiased;
   font-feature-settings: 'tnum' 1, 'cv01' 1;
-}
-
-/* Ambient grid texture on the app background */
-body::before {
-  content: '';
-  position: fixed;
-  inset: 0;
-  background-image:
-    linear-gradient(rgba(20, 35, 60, 0.035) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(20, 35, 60, 0.035) 1px, transparent 1px);
-  background-size: 44px 44px;
-  opacity: 1;
-  mask-image: radial-gradient(ellipse at 50% 0%, black, transparent 78%);
-  pointer-events: none;
-  z-index: 0;
 }
 
 h1, h2, h3, h4 {
@@ -551,12 +549,6 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
   overflow: hidden;
   box-shadow: var(--shadow-1);
 }
-.stat::after {
-  content: '';
-  position: absolute; right: -30px; top: -30px;
-  width: 90px; height: 90px; border-radius: 50%;
-  background: radial-gradient(circle, var(--accent-glow, var(--signal-glow)), transparent 70%);
-}
 .stat .label {
   font-size: 12px; color: var(--text-muted); font-weight: 500;
   display: flex; align-items: center; gap: 7px;
@@ -582,10 +574,10 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
 .btn:hover { background: var(--surface-2); border-color: #c6d0de; }
 .btn:active { transform: translateY(1px); }
 .btn-primary {
-  background: linear-gradient(180deg, var(--signal), var(--signal-strong));
-  color: #ffffff; border: none; font-weight: 600;
+  background: var(--accent);
+  color: var(--text-on-accent); border: none; font-weight: 600;
 }
-.btn-primary:hover { box-shadow: 0 6px 18px var(--signal-glow); }
+.btn-primary:hover { background: var(--accent-ink); }
 .btn-ghost { background: transparent; border-color: transparent; color: var(--text-muted); }
 .btn-ghost:hover { background: var(--surface-2); color: var(--text); }
 .btn-sm { padding: 6px 11px; font-size: 12.5px; }
