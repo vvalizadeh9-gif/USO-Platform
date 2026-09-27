@@ -56,6 +56,7 @@ from app.schemas import (
     MonthlyPlanRevisionRequest,
     MonthlyPlanWrite,
     MonthStanding,
+    MyMonthStanding,
     PlanMonthPoint,
     PlanningMonth,
     PlanRevision,
@@ -132,8 +133,9 @@ def my_plan(
     Three blocks, one request, because they are one screen: ``planning`` is
     the month being filed for, ``current_month`` is where the running month
     stands, and ``history`` is the six months behind it. The numeric ones come
-    from ``DriveTestAnalytics.scorecard``, which is what the Drive Test
-    dashboard reads, so neither screen can report a figure the other does not.
+    from the scorecard of the stream asked for -- ``DriveTestAnalytics.scorecard``
+    for DT, ``acceptance_plan.acceptance_scorecard`` for Acceptance -- which is
+    what the dashboards read, so no two screens can report different figures.
 
     Returns ``plan: null`` rather than a 404 when nothing has been started.
     Not having filed yet is the normal state on day one of the month, and it is
@@ -148,9 +150,9 @@ def my_plan(
 
     # The six months behind the planning month, the running one last. One
     # scorecard call answers both this and ``current_month`` below — the
-    # figures come from the service the Drive Test dashboard reads, so the two
+    # figures come from the service the stream's dashboard reads, so the two
     # screens cannot disagree about a contractor's month.
-    months = plans.recent_months(db, user, contractor_id)
+    months = plans.recent_months(db, user, contractor_id, stream=stream)
     running = months[-1]
 
     return MonthlyPlanContext(
@@ -191,10 +193,13 @@ def my_plan(
             revision_comment=plan.revision_comment if plan is not None else None,
             revision_open=plans.revision_window_open(year, month),
         ),
-        current_month=MonthStanding(
+        current_month=MyMonthStanding(
             **{k: v for k, v in running.items() if k != "in_progress"},
             pace_pct=plans.pace_percent(
                 running["shamsi_year"], running["shamsi_month"]
+            ),
+            expected_by_today=plans.expected_by_today(
+                running["pip"], running["shamsi_year"], running["shamsi_month"]
             ),
         ),
         history=[
