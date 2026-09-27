@@ -41,7 +41,7 @@ def gap_map(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> dict:
-    """ICT approval by province and CRA approval by CRA region, on hex cells
-    binned from the CPM site coordinates. PM sees the country; every other
-    role sees only their own sites."""
+    """ICT and CRA figures for every province (by its CPM province) and every
+    CRA region, for the coverage map. PM sees the country; every other role
+    sees only the villages that roll up to their own key."""
     return gaps.coverage_map(db, user)

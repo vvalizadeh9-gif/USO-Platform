@@ -432,12 +432,7 @@ function WorkedExample({ rows, stretch, scoped }) {
   return <p className="gap-example">{sentence}</p>
 }
 
-/**
- * The owner list. Also the coverage map's region breakdown, where the share
- * column is each province's share of its region rather than of the country
- * (`shareLabel`) and there is no Pareto line.
- */
-export function OwnerList({ rows, lensLabel, scoped, shareLabel = '% of gap', pareto = true }) {
+function OwnerList({ rows, lensLabel, scoped }) {
   if (rows.length === 0) {
     return (
       <EmptyState
@@ -458,7 +453,7 @@ export function OwnerList({ rows, lensLabel, scoped, shareLabel = '% of gap', pa
             <th scope="col">{lensLabel}</th>
             <th scope="col">Share of this gap</th>
             <th scope="col">Stopped</th>
-            <th scope="col">{shareLabel}</th>
+            <th scope="col">% of gap</th>
             <th scope="col">Own rate</th>
           </tr>
         </thead>
@@ -468,7 +463,7 @@ export function OwnerList({ rows, lensLabel, scoped, shareLabel = '% of gap', pa
               key={row.name}
               row={row}
               scale={scale}
-              pareto={pareto && index === paretoAt && !scoped && rows.length > 1}
+              pareto={index === paretoAt && !scoped && rows.length > 1}
               count={index + 1}
             />
           ))}

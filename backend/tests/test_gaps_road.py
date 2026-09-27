@@ -53,18 +53,6 @@ BETA = "DT-Beta"
 
 ON_AIR = "راه_اندازی_دائم"
 
-# Where each seeded site sits, for the coverage map. Each is near its
-# province's capital, far enough apart that no two share a hex. The site with
-# no province has coordinates too: it must still be left off the map, because
-# it has no province shape to join.
-SITE_COORDS = {
-    "S-TEH": (35.69, 51.39),
-    "S-MAZ": (36.56, 53.06),
-    "S-ARD": (38.25, 48.29),
-    "S-ZAN": (36.67, 48.48),
-    "S-UNK": (32.00, 54.00),
-}
-
 # Who owns what, from app/core/province_directory.py, which seeds
 # province_mapping on startup:
 #
@@ -159,12 +147,9 @@ def _seed() -> None:
         db.flush()
 
         def site(code, province_name):
-            lat, lon = SITE_COORDS[code]
             row = Site(
                 site_code=code,
                 province_id=provinces[province_name].id if province_name else None,
-                latitude=lat,
-                longitude=lon,
             )
             db.add(row)
             db.flush()
@@ -599,10 +584,10 @@ def test_a_lens_or_stretch_that_does_not_exist_is_refused(client, actors, params
 
 # ----- The coverage map ----------------------------------------------------
 #
-# The same figures drawn on hex cells binned from the CPM site coordinates.
-# What has to hold: every province and region is either drawn or named as
-# undrawn (never silently missing), the numbers are the road's numbers, and a
-# non-PM's map is their own sites only.
+# Every province by its CPM province, every CRA region by the mapping. What
+# has to hold: all 31 and all 9 come back for a PM, the numbers are the road's
+# numbers, a region is the sum of its provinces, and a non-PM's map is their
+# own villages only.
 
 from app.core.province_directory import PROVINCE_DIRECTORY  # noqa: E402
 
@@ -613,127 +598,112 @@ def _map(client, headers):
     return response.json()
 
 
-def _without(rows, *keys):
-    return [{k: v for k, v in row.items() if k not in keys} for row in rows]
+def _named(rows, name):
+    return next(row for row in rows if row["name"] == name)
 
 
-def test_every_province_is_drawn_or_named_as_undrawn(client, actors):
-    """All 31 provinces, each accounted for exactly once.
-
-    The seed locates sites in four provinces. The other 27 have no site, so no
-    shape -- and must be named in ``provinces_without_shape`` rather than just
-    missing from the map, which would read as "no gap there".
-    """
+def test_pm_gets_every_province_and_every_region(client, actors):
+    """All 31 provinces and all 9 regions, keyed by the Persian name the map
+    asset is keyed by -- including the 27 with no villages in the seed, which
+    read zero rather than disappearing from the map."""
     payload = _map(client, actors["pm"])
-    drawn = {cell["province"] for cell in payload["cells"]}
-    undrawn = set(payload["data_quality"]["provinces_without_shape"])
+    owned = [row for row in payload["provinces"] if row["attribution"] == gaps.OWNED]
+    assert {row["key"] for row in owned} == {row.fa for row in PROVINCE_DIRECTORY}
+    assert len(owned) == 31
 
-    assert drawn == {"Tehran", "Mazandaran", "Ardabil", "Zanjan"}
-    assert not drawn & undrawn
-    assert drawn | undrawn == {row.en for row in PROVINCE_DIRECTORY}
-    assert len(drawn | undrawn) == 31
+    regions = [row for row in payload["regions"] if row["attribution"] == gaps.OWNED]
+    assert {row["name"] for row in regions} == {r.cra_region for r in PROVINCE_DIRECTORY}
+    assert len(regions) == 9
+    assert sum(len(row["provinces"]) for row in regions) == 31
 
-
-def test_every_cra_region_is_drawn_or_named_as_undrawn(client, actors):
-    payload = _map(client, actors["pm"])
-    drawn = {cell["region"] for cell in payload["cells"]}
-    undrawn = set(payload["data_quality"]["regions_without_shape"])
-
-    assert drawn == {"North", "Azar", "North West"}
-    assert drawn | undrawn == {row.cra_region for row in PROVINCE_DIRECTORY}
-    assert len(drawn | undrawn) == 9
+    qom = _named(payload["provinces"], "Qom")
+    assert qom["ict"] == {"stopped": 0, "reached": 0, "rate": None, "low_sample": True}
 
 
-def test_a_region_is_the_hexes_of_its_provinces(client, actors):
-    """The dissolve is a regrouping: a hex's region is its province's region,
-    never decided separately, so a region shape cannot cut a province."""
-    region_of = {row.en: row.cra_region for row in PROVINCE_DIRECTORY}
-    for cell in _map(client, actors["pm"])["cells"]:
-        assert cell["region"] == region_of[cell["province"]], cell
-
-
-def test_a_site_with_no_province_is_not_drawn(client, actors):
-    """S-UNK has coordinates but no province. It has no shape to join; its
-    villages are the "Unknown province" row, which is listed, not mapped."""
-    payload = _map(client, actors["pm"])
-    assert gaps.hex_of(*SITE_COORDS["S-UNK"]) not in {
-        (cell["q"], cell["r"]) for cell in payload["cells"]
-    }
-    unknown = next(
-        row for row in payload["ict"]["provinces"] if row["name"] == "Unknown province"
-    )
-    assert unknown["attribution"] == gaps.UNKNOWN_PROVINCE
-    assert unknown["stopped"] == 3
+def test_each_province_carries_its_mapping_region(client, actors):
+    region_of = {row.fa: row.cra_region for row in PROVINCE_DIRECTORY}
+    for row in _map(client, actors["pm"])["provinces"]:
+        if row["key"] is not None:
+            assert row["region"] == region_of[row["key"]], row["name"]
 
 
 def test_the_map_numbers_are_the_road_numbers(client, actors):
-    """Click a province or a region on the map and the figures must be the
-    ones the road tab shows for it: the same fold of the same grid."""
+    """A province or region on the map reads exactly what the road tab shows
+    for it: the same fold of the same grid."""
     payload = _map(client, actors["pm"])
+    for lens, rows in (("province", payload["provinces"]), ("region", payload["regions"])):
+        road = _road(client, actors["pm"], lens=lens)
+        for key in ("ict", "cra"):
+            for owner in _stretch(road, key)["owners"]:
+                row = _named(rows, owner["name"])
+                figures = {k: owner[k] for k in ("stopped", "reached", "rate", "low_sample")}
+                assert row[key] == figures, (lens, key, owner["name"])
 
-    road_ict = _stretch(_road(client, actors["pm"], lens="province"), "ict")["owners"]
-    assert payload["ict"]["provinces"] == road_ict
 
-    road_cra = _stretch(_road(client, actors["pm"], lens="region"), "cra")["owners"]
-    assert _without(payload["cra"]["regions"], "members") == road_cra
+def test_a_region_is_the_sum_of_its_provinces(client, actors):
+    payload = _map(client, actors["pm"])
+    by_key = {row["key"]: row for row in payload["provinces"]}
+    # The real nine. The "Unknown province" row has no provinces by definition.
+    for region in (r for r in payload["regions"] if r["attribution"] == gaps.OWNED):
+        for stretch in ("ict", "cra"):
+            for counter in ("stopped", "reached"):
+                members = sum(by_key[fa][stretch][counter] for fa in region["provinces"])
+                assert members == region[stretch][counter], (region["name"], stretch)
 
 
-def test_a_regions_members_add_up_to_the_region(client, actors):
-    for region in _map(client, actors["pm"])["cra"]["regions"]:
-        for counter in ("stopped", "reached"):
-            members = sum(member[counter] for member in region["members"])
-            assert members == region[counter], (region["name"], counter)
+def test_the_total_is_the_country_and_the_rows_add_up_to_it(client, actors):
+    payload = _map(client, actors["pm"])
+    assert payload["total"]["ict"]["stopped"] == COUNTRY_ICT_STOPPED
+    assert payload["total"]["cra"]["reached"] == COUNTRY_CRA_REACHED
+    for rows in (payload["provinces"], payload["regions"]):
+        assert sum(r["ict"]["stopped"] for r in rows) == COUNTRY_ICT_STOPPED
+        assert sum(r["cra"]["stopped"] for r in rows) == COUNTRY_CRA_STOPPED
 
-    north = next(
-        r for r in _map(client, actors["pm"])["cra"]["regions"] if r["name"] == "North"
-    )
-    # Tehran: 6 + 4 ICT-approved, 2 + 4 stopped. Mazandaran: 8 reached, 5 stopped.
-    assert {m["name"]: (m["stopped"], m["reached"]) for m in north["members"]} == {
-        "Tehran": (6, 10),
-        "Mazandaran": (5, 8),
-    }
+
+def test_villages_with_no_province_are_a_row_not_a_shape(client, actors):
+    """They have no province to colour, so their row has no key -- the page
+    lists it under the table instead of dropping three villages."""
+    unknown = _named(_map(client, actors["pm"])["provinces"], "Unknown province")
+    assert unknown["key"] is None
+    assert unknown["attribution"] == gaps.UNKNOWN_PROVINCE
+    assert unknown["ict"]["stopped"] == 3
 
 
 def test_low_sample_is_the_kpi_pages_threshold(client, actors):
-    """Fewer than ten reached and the row is flagged, on the map and the road
-    alike -- one threshold, not a second one invented for the map."""
     payload = _map(client, actors["pm"])
     assert payload["low_sample_threshold"] == gaps.kpi.LOW_SAMPLE_DT_DONE == 10
-    flags = {row["name"]: row["low_sample"] for row in payload["ict"]["provinces"]}
-    # Tehran reached 14, Ardabil 6, Zanjan nothing.
-    assert flags["Tehran"] is False
-    assert flags["Ardabil"] is True
-    assert flags["Zanjan"] is True
+    # Tehran reached 14 on ICT, Ardabil 6.
+    assert _named(payload["provinces"], "Tehran")["ict"]["low_sample"] is False
+    assert _named(payload["provinces"], "Ardabil")["ict"]["low_sample"] is True
 
 
 @pytest.mark.parametrize(
-    "actor,provinces,drawn",
+    "actor,provinces,regions",
     [
         # Hossein coordinates Ardabil only.
-        ("coordinator", {"Ardabil"}, {"Ardabil"}),
+        ("coordinator", {"Ardabil"}, {"Azar"}),
         # Pirayesh manages Ardabil and Zanjan.
-        ("rm", {"Ardabil", "Zanjan"}, {"Ardabil", "Zanjan"}),
-        # DT-Alpha works Tehran, Ardabil and the site with no province -- which
-        # is listed as a row but has no shape.
-        ("contractor", {"Tehran", "Ardabil", "Unknown province"}, {"Tehran", "Ardabil"}),
+        ("rm", {"Ardabil", "Zanjan"}, {"Azar", "North West"}),
+        # DT-Alpha works Tehran, Ardabil and the site with no province.
+        (
+            "contractor",
+            {"Tehran", "Ardabil", "Unknown province"},
+            {"North", "Azar", "Unknown province"},
+        ),
     ],
 )
-def test_a_non_pm_sees_only_their_own_sites(client, actors, actor, provinces, drawn):
+def test_a_non_pm_sees_only_their_own(client, actors, actor, provinces, regions):
     payload = _map(client, actors[actor])
     assert payload["scoped"] is True
-    assert {row["name"] for row in payload["ict"]["provinces"]} == provinces
-    assert {cell["province"] for cell in payload["cells"]} == drawn
-    # Their scope, not the country's: nothing is "undrawn" that they own.
-    assert payload["data_quality"]["provinces_without_shape"] == []
+    assert {row["name"] for row in payload["provinces"]} == provinces
+    assert {row["name"] for row in payload["regions"]} == regions
 
 
 def test_a_contractors_figures_are_their_work_items_only(client, actors):
-    """Tehran has two work items: DT-Alpha's (10 villages, 4 ICT stopped) and
-    one with no contractor (4 villages, none stopped). DT-Alpha's Tehran is the
-    first one alone."""
-    rows = _map(client, actors["contractor"])["ict"]["provinces"]
-    tehran = next(row for row in rows if row["name"] == "Tehran")
-    assert (tehran["stopped"], tehran["reached"]) == (4, 10)
+    """Tehran has DT-Alpha's work item (10 villages, 4 ICT stopped) and one
+    with no contractor (4 villages). DT-Alpha's Tehran is the first alone."""
+    tehran = _named(_map(client, actors["contractor"])["provinces"], "Tehran")
+    assert (tehran["ict"]["stopped"], tehran["ict"]["reached"]) == (4, 10)
 
 
 def test_admin_is_refused_the_map(client, actors):
@@ -741,39 +711,25 @@ def test_admin_is_refused_the_map(client, actors):
     assert response.status_code == 403
 
 
-def test_a_hex_goes_to_the_province_with_most_sites_in_it():
-    """And a tie to the name that sorts first, so the map is stable; sites
-    off the edge of Iran are counted, not drawn."""
-    here = (35.69, 51.39)
-    sites = [
-        (1, *here, TEHRAN, ALPHA),
-        (2, *here, TEHRAN, ALPHA),
-        (3, *here, MAZANDARAN, ALPHA),
-        # The same site again under a second contractor: counted once.
-        (3, *here, MAZANDARAN, BETA),
-        # Latitude and longitude swapped: off the map, and counted.
-        (4, 51.39, 35.69, TEHRAN, ALPHA),
-        (5, None, None, TEHRAN, ALPHA),
-    ]
-    mapping = {TEHRAN: {gaps.kpi.LENS_REGION: "North"}}
-    cells, unlocated = gaps._cells(sites, lambda _p, _c: True, mapping)
-    assert unlocated == 2
-    assert cells == [
-        {
-            "q": gaps.hex_of(*here)[0],
-            "r": gaps.hex_of(*here)[1],
-            "province": "Tehran",
-            "region": "North",
-            "sites": 3,
-        }
-    ]
+def test_the_map_asset_has_every_province_and_region_and_nothing_else():
+    """``iranMap.json`` is built once by ``scripts/build-iran-map.py`` and
+    committed. It must be keyed by exactly the 31 Persian names the API sends,
+    carry each province's directory region, and hold exactly the nine regions.
+    A mismatch means the asset and province_directory.py have drifted, and a
+    province would silently draw with no figures."""
+    import json
+    from pathlib import Path
 
-    tie = [(1, *here, TEHRAN, ALPHA), (2, *here, MAZANDARAN, ALPHA)]
-    cells, _ = gaps._cells(tie, lambda _p, _c: True, mapping)
-    # One site each: the tie goes to the Persian name that sorts first.
-    assert cells[0]["province"] == gaps.kpi.province_label(min(TEHRAN, MAZANDARAN))
-
-
-def test_neighbouring_points_share_a_hex_and_distant_ones_do_not():
-    assert gaps.hex_of(35.69, 51.39) == gaps.hex_of(35.70, 51.40)
-    assert gaps.hex_of(35.69, 51.39) != gaps.hex_of(36.56, 53.06)
+    asset = json.loads(
+        (
+            Path(__file__).resolve().parents[2]
+            / "frontend/src/pages/reports/iranMap.json"
+        ).read_text(encoding="utf-8")
+    )
+    assert {fa: p["region"] for fa, p in asset["provinces"].items()} == {
+        row.fa: row.cra_region for row in PROVINCE_DIRECTORY
+    }
+    assert set(asset["regions"]) == {row.cra_region for row in PROVINCE_DIRECTORY}
+    assert len(asset["provinces"]) == 31 and len(asset["regions"]) == 9
+    for shape in [*asset["provinces"].values(), *asset["regions"].values()]:
+        assert shape["path"].startswith("M") and len(shape["label"]) == 2

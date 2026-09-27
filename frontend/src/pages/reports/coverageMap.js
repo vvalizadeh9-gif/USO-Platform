@@ -1,170 +1,92 @@
-// Coverage map: the arithmetic and geometry the map does in the browser.
+// Coverage map: the arithmetic the map does in the browser.
 //
-// Everything is derived from one `/gaps/map` response. The server sends hex
-// cells as axial (q, r) coordinates, each tagged with the province and CRA
-// region that own it; this file turns them into SVG paths, and turns the
-// figures into colours. Kept out of the component so each rule can be tested
-// on its own.
-
-/** How many colour bands the legend has. Both maps share them. */
-export const BAND_COUNT = 5
+// Everything is derived from one `/gaps/map` response and the committed map
+// asset (`iranMap.json`, built by `scripts/build-iran-map.py`). The two are
+// joined on the province's Persian name -- the CPM province, exactly as the
+// `provinces` table stores it -- never on a translated or fuzzy-matched name.
+// Kept out of the component so each rule can be tested on its own.
 
 /**
- * Worst to best. Red where approval is lowest, teal where it is highest: the
- * KPI page's "worse" and "better" shades, so a colour means the same thing on
- * this page as on that one. The middle is pale amber rather than grey, so it
- * cannot be mistaken for the hatch or for a blank area.
+ * The six approval bands, worst to best. Fixed, not fitted to the data, so a
+ * colour means the same approval rate on both maps, in the table, and from
+ * one month to the next.
+ *
+ * `ink` is the label colour that stays readable on each fill.
  */
-export const BAND_COLOURS = ['#E4877F', '#F4B9B3', '#F3DFA6', '#9FDDD2', '#5CC4B3']
+export const BANDS = [
+  { below: 25, label: '< 25%', fill: '#8B2323', ink: '#FFFFFF' },
+  { below: 40, label: '25–40%', fill: '#C0522E', ink: '#FFFFFF' },
+  { below: 55, label: '40–55%', fill: '#E0A030', ink: '#3A2A08' },
+  { below: 70, label: '55–70%', fill: '#9DC75B', ink: '#1F3310' },
+  { below: 85, label: '70–85%', fill: '#2E9E82', ink: '#FFFFFF' },
+  { below: Infinity, label: '85%+', fill: '#0A6B5E', ink: '#FFFFFF' },
+]
 
 /**
- * The approval rate: the share of what reached a stretch that got past it.
+ * The approval rate on one stretch: the share of what reached it that got
+ * past it. ICT: ICT-approved over drive-test-done. CRA: CRA-approved over
+ * ICT-approved.
  *
  * The server sends the stop rate; approval is its complement, worked from the
  * two counts rather than from the rounded rate so it is exact.
  */
-export function approvalRate(row) {
-  if (!row || !row.reached) return null
-  return ((row.reached - row.stopped) * 100) / row.reached
-}
-
-/** A row the map can colour: a real owner, enough villages, something reached. */
-export function comparable(row) {
-  return row.attribution === 'owned' && !row.low_sample && approvalRate(row) != null
+export function approvalRate(figures) {
+  if (!figures || !figures.reached) return null
+  return ((figures.reached - figures.stopped) * 100) / figures.reached
 }
 
 /**
- * The shared colour bands, from the rows both maps will colour.
- *
- * Low-sample rows are left out before the range is taken. Three villages all
- * approved is 100%, and letting it set the top of the scale would squeeze
- * every province that has a real sample into the bottom bands.
- *
- * The range is rounded out to whole multiples of five so the legend reads
- * "55–65%" rather than "57.3–64.9%". Returns null when nothing is comparable.
+ * The band a stretch's figures fall in, or null when they are not compared:
+ * nothing reached, or fewer than the low-sample threshold. Null is drawn as
+ * the hatch.
  */
-export function bands(rows) {
-  const rates = rows.filter(comparable).map(approvalRate)
-  if (rates.length === 0) return null
-  const lo = Math.floor(Math.min(...rates) / 5) * 5
-  let hi = Math.ceil(Math.max(...rates) / 5) * 5
-  if (hi <= lo) hi = lo + 5
-  const step = (hi - lo) / BAND_COUNT
-  return {
-    lo,
-    hi,
-    step,
-    edges: Array.from({ length: BAND_COUNT + 1 }, (_, i) => lo + i * step),
+export function bandOf(figures) {
+  const rate = approvalRate(figures)
+  if (rate == null || figures.low_sample) return null
+  return BANDS.find((band) => rate < band.below)
+}
+
+/** "70%" on the map, where there is room for two or three characters. */
+export function wholePct(rate) {
+  return rate == null ? '—' : `${Math.round(rate)}%`
+}
+
+/** "70.4%" in the table and the detail panel. */
+export function onePct(rate) {
+  return rate == null ? '—' : `${rate.toFixed(1)}%`
+}
+
+/**
+ * Provinces whose live mapping region differs from the region the map asset
+ * was built with.
+ *
+ * The region borders are dissolved once, offline, from the directory's
+ * grouping. If a province is moved to another region in the mapping screen,
+ * the figures follow the move at once and the border does not, so the page
+ * says so rather than drawing a border that no longer matches the table.
+ */
+export function regionDrift(provinces, asset) {
+  return provinces
+    .filter((row) => row.key && asset.provinces[row.key] && row.region)
+    .filter((row) => asset.provinces[row.key].region !== row.region)
+    .map((row) => ({ name: row.name, now: row.region, drawn: asset.provinces[row.key].region }))
+}
+
+/**
+ * The region report, worst CRA approval first -- the order the mockup reads
+ * in, so the region to call is at the top. Regions nobody owns (no province,
+ * no mapping) go last whatever their figures, and a region with nothing to
+ * compare sorts after every region that has.
+ */
+export function reportOrder(regions) {
+  const rank = (row) => {
+    if (row.attribution !== 'owned') return [2, 0, row.name]
+    const rate = approvalRate(row.cra)
+    return rate == null ? [1, 0, row.name] : [0, rate, row.name]
   }
-}
-
-/** Which band a rate falls in, 0 (worst) to BAND_COUNT - 1 (best). */
-export function bandOf(rate, scale) {
-  if (rate == null || !scale) return null
-  const index = Math.floor((rate - scale.lo) / scale.step)
-  return Math.max(0, Math.min(BAND_COUNT - 1, index))
-}
-
-/** The fill for one row: a band colour, or null for the hatch. */
-export function fillOf(row, scale) {
-  if (!row || !comparable(row)) return null
-  return BAND_COLOURS[bandOf(approvalRate(row), scale)]
-}
-
-/* ---------------------------------------------------------------------------
-   Hex geometry. Pointy-top, axial coordinates -- the inverse of `hex_of` in
-   `services/gaps.py`, which is what put each site in its hex. The two must
-   stay pointy-top and axial together.
-   --------------------------------------------------------------------------- */
-
-/** Hex circumradius in SVG units. The viewBox scales it to fit. */
-export const HEX = 10
-const SQRT3 = Math.sqrt(3)
-
-/**
- * The neighbour across each edge. Edge i runs from corner i to corner i + 1
- * and faces 60·i degrees (screen coordinates, y down).
- */
-const NEIGHBOURS = [
-  [1, 0],
-  [0, 1],
-  [-1, 1],
-  [-1, 0],
-  [0, -1],
-  [1, -1],
-]
-
-export function centre(q, r) {
-  return [HEX * SQRT3 * (q + r / 2), HEX * 1.5 * r]
-}
-
-export function corners(q, r) {
-  const [cx, cy] = centre(q, r)
-  return Array.from({ length: 6 }, (_, i) => {
-    const angle = ((60 * i - 30) * Math.PI) / 180
-    return [cx + HEX * Math.cos(angle), cy + HEX * Math.sin(angle)]
+  return [...regions].sort((a, b) => {
+    const [ga, ra, na] = rank(a)
+    const [gb, rb, nb] = rank(b)
+    return ga - gb || ra - rb || na.localeCompare(nb)
   })
-}
-
-const pt = ([x, y]) => `${x.toFixed(2)},${y.toFixed(2)}`
-
-/** One path covering every hex in a shape: one subpath per hex. */
-export function fillPath(cells) {
-  return cells
-    .map((cell) => `M${corners(cell.q, cell.r).map(pt).join('L')}Z`)
-    .join('')
-}
-
-/**
- * The outlines between shapes: every hex edge whose neighbour belongs to a
- * different shape, or to none.
- *
- * This is what makes nine regions read as nine shapes rather than a few
- * hundred hexes. Edges inside a shape are never drawn, so the region's
- * provinces dissolve into it.
- */
-export function borderPath(cells, keyOf) {
-  const owner = new Map(cells.map((cell) => [`${cell.q},${cell.r}`, keyOf(cell)]))
-  const parts = []
-  for (const cell of cells) {
-    const mine = keyOf(cell)
-    const points = corners(cell.q, cell.r)
-    NEIGHBOURS.forEach(([dq, dr], i) => {
-      if (owner.get(`${cell.q + dq},${cell.r + dr}`) === mine) return
-      parts.push(`M${pt(points[i])}L${pt(points[(i + 1) % 6])}`)
-    })
-  }
-  return parts.join('')
-}
-
-/** A viewBox that fits every cell with a margin, or null for no cells. */
-export function viewBox(cells) {
-  if (cells.length === 0) return null
-  let minX = Infinity
-  let minY = Infinity
-  let maxX = -Infinity
-  let maxY = -Infinity
-  for (const cell of cells) {
-    const [x, y] = centre(cell.q, cell.r)
-    minX = Math.min(minX, x)
-    minY = Math.min(minY, y)
-    maxX = Math.max(maxX, x)
-    maxY = Math.max(maxY, y)
-  }
-  const pad = HEX * 2
-  return [minX - pad, minY - pad, maxX - minX + 2 * pad, maxY - minY + 2 * pad]
-    .map((value) => value.toFixed(1))
-    .join(' ')
-}
-
-/** Cells grouped by a key, in first-seen order; cells with no key are dropped. */
-export function groupCells(cells, keyOf) {
-  const groups = new Map()
-  for (const cell of cells) {
-    const key = keyOf(cell)
-    if (key == null) continue
-    if (!groups.has(key)) groups.set(key, [])
-    groups.get(key).push(cell)
-  }
-  return groups
 }
