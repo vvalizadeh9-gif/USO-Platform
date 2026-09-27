@@ -1,6 +1,6 @@
 """Gap & Performance endpoints.
 
-One route, read-only. Permission and scope are the KPI page's, called rather
+Two routes, both read-only. Permission and scope are the KPI page's, called rather
 than copied: Admin is refused, a non-PM is confined to their own lens and their
 own key, and asking for somebody else's is a 403 rather than an empty list.
 See ``services/gaps.py`` and ``services/kpi.py``.
@@ -34,3 +34,14 @@ def gap_road(
     """Who is stopped on each stretch of the acceptance road, and the country
     total the owner rows add up to."""
     return gaps.road(db, user, lens, stretch)
+
+
+@router.get("/map")
+def gap_map(
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> dict:
+    """ICT approval by province and CRA approval by CRA region, on hex cells
+    binned from the CPM site coordinates. PM sees the country; every other
+    role sees only their own sites."""
+    return gaps.coverage_map(db, user)

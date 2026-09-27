@@ -4,6 +4,7 @@ import api from '../../api/client'
 import { useAuth } from '../../context/AuthContext'
 import { EmptyState, PageHead } from '../../components/ui'
 import { fmtCount, fmtPct, importStamp } from './kpiTheme'
+import CoverageMap from './CoverageMap'
 import {
   ATTRIBUTION_NOTES,
   PARETO_AT,
@@ -53,6 +54,7 @@ export default function GapRoad() {
 
   const [lens, setLens] = useState(null)
   const [selected, setSelected] = useState('ict')
+  const [tab, setTab] = useState('road')
   const [data, setData] = useState(null)
   const [error, setError] = useState('')
 
@@ -117,9 +119,26 @@ export default function GapRoad() {
         subtitle={`Last CPM import · ${importStamp(data?.last_cpm_import)}`}
       />
 
+      <div className="tabs" role="tablist" aria-label="Gap views">
+        {TABS.map((item) => (
+          <button
+            key={item.key}
+            type="button"
+            role="tab"
+            aria-selected={tab === item.key}
+            className={`tab ${tab === item.key ? 'active' : ''}`}
+            onClick={() => setTab(item.key)}
+          >
+            {item.label}
+          </button>
+        ))}
+      </div>
+
       {error && data && <div className="kpi-error">{error}</div>}
 
-      {!data ? (
+      {tab === 'map' ? (
+        <CoverageMap />
+      ) : !data ? (
         <Skeleton />
       ) : (
         <>
@@ -177,6 +196,15 @@ export default function GapRoad() {
     </div>
   )
 }
+
+/**
+ * Two views of the same figures. The coverage map replaces the per-authority
+ * map tabs of the design preview: ICT and CRA side by side on one tab.
+ */
+const TABS = [
+  { key: 'road', label: 'The road' },
+  { key: 'map', label: 'Coverage map' },
+]
 
 function readError(err, fallback) {
   const detail = err?.response?.data?.detail
@@ -404,7 +432,12 @@ function WorkedExample({ rows, stretch, scoped }) {
   return <p className="gap-example">{sentence}</p>
 }
 
-function OwnerList({ rows, lensLabel, scoped }) {
+/**
+ * The owner list. Also the coverage map's region breakdown, where the share
+ * column is each province's share of its region rather than of the country
+ * (`shareLabel`) and there is no Pareto line.
+ */
+export function OwnerList({ rows, lensLabel, scoped, shareLabel = '% of gap', pareto = true }) {
   if (rows.length === 0) {
     return (
       <EmptyState
@@ -425,7 +458,7 @@ function OwnerList({ rows, lensLabel, scoped }) {
             <th scope="col">{lensLabel}</th>
             <th scope="col">Share of this gap</th>
             <th scope="col">Stopped</th>
-            <th scope="col">% of gap</th>
+            <th scope="col">{shareLabel}</th>
             <th scope="col">Own rate</th>
           </tr>
         </thead>
@@ -435,7 +468,7 @@ function OwnerList({ rows, lensLabel, scoped }) {
               key={row.name}
               row={row}
               scale={scale}
-              pareto={index === paretoAt && !scoped && rows.length > 1}
+              pareto={pareto && index === paretoAt && !scoped && rows.length > 1}
               count={index + 1}
             />
           ))}
@@ -501,7 +534,7 @@ function Checksum({ rows, stretch, plural, scoped }) {
   )
 }
 
-function Skeleton() {
+export function Skeleton() {
   return (
     <div className="kpi-skeleton" aria-hidden="true">
       {Array.from({ length: 5 }, (_, index) => (

@@ -76,6 +76,7 @@ an owner's share of the national gap -- cannot be computed without it.
 """
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, fields
 
 from fastapi import HTTPException
@@ -276,13 +277,7 @@ def _grid(db: Session) -> dict[tuple[str | None, str | None], Cell]:
         .join(Site, WorkItem.site_id == Site.id)
         .outerjoin(Province, Site.province_id == Province.id)
         .outerjoin(Contractor, WorkItem.dt_sc_contractor_id == Contractor.id)
-        .where(
-            Village.deleted_at.is_(None),
-            WorkItem.deleted_at.is_(None),
-            # The same هدف rule as every other report: only pure target
-            # villages are part of the obligation.
-            Village.target_classification.in_(targets or [""]),
-        )
+        .where(*_obligation(targets))
         .group_by(Province.name, Contractor.name)
     )
 
@@ -301,6 +296,20 @@ def _grid(db: Session) -> dict[tuple[str | None, str | None], Cell]:
             no_contractor=(villages or 0) if contractor is None else 0,
         )
     return grid
+
+
+def _obligation(targets: list[str]) -> tuple:
+    """Which villages count: live, on a live work item, and pure target.
+
+    The same هدف rule as every other report. Shared by :func:`_grid` and the
+    coverage map's site query, so the map cannot draw a site whose villages
+    the figures beside it do not count.
+    """
+    return (
+        Village.deleted_at.is_(None),
+        WorkItem.deleted_at.is_(None),
+        Village.target_classification.in_(targets or [""]),
+    )
 
 
 def _mapping(db: Session) -> dict[str, dict[str, str]]:
@@ -405,12 +414,16 @@ def _rows(owners: dict[tuple[str, str], Cell], stretch: Stretch, only: str | Non
     for (name, attribution), cell in owners.items():
         if only is not None and name.casefold() != only.casefold():
             continue
+        figures = _figures(cell, stretch)
         rows.append(
             {
                 "name": name,
                 "attribution": attribution,
                 "villages": cell.villages,
-                **_figures(cell, stretch),
+                **figures,
+                # The KPI page's threshold, not a second one: fewer than ten
+                # villages reached and the row is shown but not compared.
+                "low_sample": figures["reached"] < kpi.LOW_SAMPLE_DT_DONE,
             }
         )
     # Name breaks the tie so the order is stable between two loads of the same
@@ -502,4 +515,198 @@ def road(db: Session, user, lens: str | None, stretch: str | None) -> dict:
             for spec in wanted
         ],
         "data_quality": _data_quality(country_cell, grid, mapping),
+    }
+
+
+# ----- Coverage map -------------------------------------------------------
+#
+# The same figures, drawn on Iran: ICT approval by province, CRA approval by
+# CRA region. Two rules shape it.
+#
+# **The shapes come from CPM, not from a boundary file.** Every site carries
+# the latitude and longitude the CPM workbook gave it. Sites are binned into a
+# hex grid and each hex goes to the province that has the most sites in it;
+# a province's shape is its hexes, and a CRA region's shape is the hexes of its
+# provinces -- the dissolve is a regrouping, not geometry. So the map is keyed
+# by the same ``provinces`` row the figures are, there is no second list of
+# province names to drift out of step with the 31, and no third-party boundary
+# data (or its licence, or its view of a disputed border) ships with the page.
+# What it draws is where the programme's sites are, which is what a coverage
+# map is.
+#
+# **Scope is the road's rule, applied to sites.** A PM sees the country. Anyone
+# else is confined by :func:`kpi.resolve_scope` to their own lens and key, and
+# a cell of the grid -- and a site -- is theirs when it rolls up to that key
+# under their lens, exactly as the road decides which owner row they may see.
+# Their map is their sites and their figures, nobody else's.
+
+#: Hex circumradius, in degrees of latitude: about 24 km. Fine enough that Qom
+#: and Alborz get hexes of their own beside Tehran, coarse enough that one
+#: province's sites join up into a shape rather than a scatter of dots.
+HEX_RADIUS_DEG = 0.22
+#: Longitude is squeezed by cos(latitude), taken at Iran's middle, so a hex is
+#: about as wide on the ground as it is tall.
+_LON_SCALE = math.cos(math.radians(32.5))
+#: A coordinate outside this box is a data-entry error -- latitude and
+#: longitude swapped, or a zero -- not a site in Iran. It is counted, not drawn.
+_LAT_RANGE = (24.0, 40.5)
+_LON_RANGE = (43.5, 64.0)
+
+
+def hex_of(lat: float, lon: float) -> tuple[int, int]:
+    """The axial (q, r) of the pointy-top hex a coordinate falls in.
+
+    North is up: y runs down the screen, so it is minus the latitude. The page
+    turns (q, r) back into a hexagon with the inverse of this, so the two
+    must stay pointy-top and axial together.
+    """
+    x = lon * _LON_SCALE / HEX_RADIUS_DEG
+    y = -lat / HEX_RADIUS_DEG
+    q = math.sqrt(3) / 3 * x - y / 3
+    r = 2 / 3 * y
+    s = -q - r
+    rq, rr, rs = round(q), round(r), round(s)
+    dq, dr, ds = abs(rq - q), abs(rr - r), abs(rs - s)
+    if dq > dr and dq > ds:
+        rq = -rr - rs
+    elif dr > ds:
+        rr = -rq - rs
+    return rq, rr
+
+
+def _in_iran(lat: float | None, lon: float | None) -> bool:
+    return (
+        lat is not None
+        and lon is not None
+        and _LAT_RANGE[0] <= lat <= _LAT_RANGE[1]
+        and _LON_RANGE[0] <= lon <= _LON_RANGE[1]
+    )
+
+
+def _sites(db: Session):
+    """Every site with a counted village, once per DT SC contractor on it.
+
+    Per contractor because the contractor lens scopes by work item, and one
+    site can carry work items from two contractors.
+    """
+    stmt = (
+        select(Site.id, Site.latitude, Site.longitude, Province.name, Contractor.name)
+        .select_from(Village)
+        .join(WorkItem, Village.work_item_id == WorkItem.id)
+        .join(Site, WorkItem.site_id == Site.id)
+        .outerjoin(Province, Site.province_id == Province.id)
+        .outerjoin(Contractor, WorkItem.dt_sc_contractor_id == Contractor.id)
+        .where(*_obligation(kpi.target_values(db)))
+        .distinct()
+    )
+    return db.execute(stmt).all()
+
+
+def _cells(sites, in_scope, mapping) -> tuple[list[dict], int]:
+    """The hex grid: which province (and so which region) owns each hex.
+
+    A hex goes to the province with the most sites in it; a tie goes to the
+    name that sorts first, so two loads of the same data draw the same map.
+    Sites with no province are left off -- they have no shape to join, and
+    they are already the "Unknown province" row.
+    """
+    seen: set[int] = set()
+    unlocated: set[int] = set()
+    counts: dict[tuple[int, int], dict[str, int]] = {}
+    for site_id, lat, lon, province_fa, contractor in sites:
+        if site_id in seen or not in_scope(province_fa, contractor):
+            continue
+        seen.add(site_id)
+        if province_fa is None:
+            continue
+        if not _in_iran(lat, lon):
+            unlocated.add(site_id)
+            continue
+        per = counts.setdefault(hex_of(lat, lon), {})
+        per[province_fa] = per.get(province_fa, 0) + 1
+
+    cells = []
+    for (q, r), per in sorted(counts.items()):
+        province_fa = min(per, key=lambda name: (-per[name], name))
+        owners = mapping.get(province_fa)
+        cells.append(
+            {
+                "q": q,
+                "r": r,
+                "province": kpi.province_label(province_fa),
+                "region": owners[kpi.LENS_REGION] if owners else None,
+                "sites": sum(per.values()),
+            }
+        )
+    return cells, len(unlocated)
+
+
+def coverage_map(db: Session, user) -> dict:
+    """ICT approval by province and CRA approval by CRA region, with the hex
+    cells to draw them on. Reads only."""
+    kpi.require_kpi_access(user)
+
+    is_pm = user.role.name == kpi.PM
+    scope = None if is_pm else kpi.resolve_scope(db, user, None, None)
+
+    grid = _grid(db)
+    mapping = _mapping(db)
+
+    def in_scope(province_fa: str | None, contractor: str | None) -> bool:
+        if scope is None:
+            return True
+        name, _ = _owner(scope.lens, province_fa, contractor, mapping)
+        return name.casefold() == scope.key.casefold()
+
+    mine = {key: cell for key, cell in grid.items() if in_scope(*key)}
+    ict, cra = _BY_KEY[STRETCH_ICT], _BY_KEY[STRETCH_CRA]
+
+    def province_of(province_fa, contractor):
+        return _owner(LENS_PROVINCE, province_fa, contractor, mapping)
+
+    def region_of(province_fa, contractor):
+        return _owner(kpi.LENS_REGION, province_fa, contractor, mapping)
+
+    provinces = _rows(_fold(mine, province_of), ict, None)
+    regions = _rows(_fold(mine, region_of), cra, None)
+
+    # Each region's provinces, on the CRA stretch: the same cells folded by
+    # (region, province), so a region's members add up to the region.
+    members: dict[str, dict[tuple[str, str], Cell]] = {}
+    for (region, _attr, province, attribution), cell in _fold(
+        mine, lambda p, c: (*region_of(p, c), *province_of(p, c))
+    ).items():
+        members.setdefault(region, {})[(province, attribution)] = cell
+    for row in regions:
+        row["members"] = _rows(members.get(row["name"], {}), cra, None)
+
+    cells, unlocated = _cells(_sites(db), in_scope, mapping)
+
+    # Every province and region the figures name must have a shape. PM's list
+    # is the whole programme -- every province and region in the mapping, the
+    # system of record -- so a province with no located site is named rather
+    # than silently missing from the map.
+    if is_pm:
+        want_provinces = {kpi.province_label(fa) for fa in mapping}
+        want_regions = {owners[kpi.LENS_REGION] for owners in mapping.values()}
+    else:
+        want_provinces = {r["name"] for r in provinces if r["attribution"] == OWNED}
+        want_regions = {r["name"] for r in regions if r["attribution"] == OWNED}
+    drawn_provinces = {cell["province"] for cell in cells}
+    drawn_regions = {cell["region"] for cell in cells if cell["region"]}
+
+    return {
+        "scoped": not is_pm,
+        "lens_label": None if is_pm else LENS_LABELS[scope.lens],
+        "key": None if is_pm else scope.key,
+        "last_cpm_import": kpi.last_cpm_import(db),
+        "low_sample_threshold": kpi.LOW_SAMPLE_DT_DONE,
+        "ict": {"label": ict.label, "provinces": provinces},
+        "cra": {"label": cra.label, "regions": regions},
+        "cells": cells,
+        "data_quality": {
+            "sites_without_location": unlocated,
+            "provinces_without_shape": sorted(want_provinces - drawn_provinces),
+            "regions_without_shape": sorted(want_regions - drawn_regions),
+        },
     }
