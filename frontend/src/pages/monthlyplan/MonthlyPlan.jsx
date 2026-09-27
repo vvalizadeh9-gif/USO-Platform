@@ -11,7 +11,8 @@ import PmPlan from './PmPlan'
 /**
  * The monthly plan (PIP), which is two screens wearing one name.
  *
- * A contractor sees their own form. Everyone else sees the PM's split screen
+ * A contractor sees their own company's plan, both streams side by side
+ * (ContractorPlan). Everyone else sees the PM's split screen
  * (PmPlan): DT Delivery and Acceptance side by side, with decisions made in a
  * drawer, and only the PM can make one.
  *
@@ -35,33 +36,25 @@ export default function MonthlyPlan() {
 function ContractorMonthlyPlan() {
   // Opens on the month being planned, which is the month *after* this one: a
   // plan is filed during the month before the month it covers. The running
-  // month is on the screen as figures (and its revision block), not as the
-  // month picked. Not stored: it is a default the picker can change.
-  // An Action Center link (?year&month) opens the month it is about.
+  // month is on the screen as figures (the KPI cards and trend), and one
+  // click back in the picker. Not stored: it is a default the picker can
+  // change. An Action Center link (?year&month) opens the month it is about.
   const [params] = useSearchParams()
   const [period, setPeriod] = useState(() => {
     const year = Number(params.get('year'))
     const month = Number(params.get('month'))
     return year && month >= 1 && month <= 12 ? { year, month } : planningPeriod()
   })
-  const complete = Boolean(period?.year && period?.month)
 
-  return (
-    <>
-      <PageHead
-        eyebrow="Operations"
-        title="Monthly Plan"
-        subtitle="The drive tests and acceptances you commit to for next month, and how the month now running is going. The PM approves each number, or sends it back with a comment."
-        actions={<PeriodPicker period={period} onChange={setPeriod} />}
-      />
-      {complete ? (
-        <ContractorPlan period={period} />
-      ) : (
-        // Reached when the browser could not name today's Shamsi month (see
-        // lib/shamsi), or when someone clears one of the selects. Asking is
-        // better than opening on a month nobody chose.
+  if (!period?.year || !period?.month) {
+    // Reached when the browser could not name today's Shamsi month (see
+    // lib/shamsi). Asking is better than opening on a month nobody chose.
+    return (
+      <>
+        <PageHead title="Monthly Plan" actions={<PeriodPicker period={period} onChange={setPeriod} />} />
         <EmptyState title="Pick a month" hint="Choose the Shamsi year and month above." />
-      )}
-    </>
-  )
+      </>
+    )
+  }
+  return <ContractorPlan period={period} onPeriodChange={setPeriod} />
 }

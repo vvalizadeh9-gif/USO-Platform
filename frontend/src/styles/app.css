@@ -3584,3 +3584,131 @@ a.lifecycle-step:focus-visible { outline: 2px solid var(--signal); outline-offse
 .mp-drawer-decide { margin-top: 14px; display: flex; flex-direction: column; gap: 8px; }
 .mp-drawer-decide .field span { font-size: 12px; color: var(--text-muted); }
 .mp-status .pill::before { display: none; }
+
+/* ---------- Monthly Plan: the contractor's screen (ContractorPlan) ----------
+   Own company, both streams side by side. Sized to fit 1440x900 without a
+   page scroll and to scroll normally below it. Nothing here is under 12px;
+   captions are #5B5E66 (>= 4.5:1 on white and on #F7F6F2), and a "behind"
+   line is #9A4A07 rather than the chart's orange, which is too light for
+   text. Logical properties throughout. */
+.cp-page { display: flex; flex-direction: column; gap: 10px; }
+.cp-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.cp-head-left { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.cp-title { font-family: var(--font-display); font-size: 24px; font-weight: 600; }
+.cp-company {
+  font-size: 13px; font-weight: 600; color: var(--text);
+  background: #F7F6F2; border: 1px solid var(--border);
+  border-radius: 999px; padding-block: 4px; padding-inline: 12px;
+}
+.cp-picker { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.cp-picker-row { display: flex; align-items: center; gap: 4px; }
+.cp-picker-label { font-family: var(--font-farsi); font-size: 15px; font-weight: 600; min-width: 104px; text-align: center; }
+.cp-arrow { min-height: 40px; min-width: 40px; justify-content: center; padding: 0; }
+.cp-caption { font-size: 12px; color: #5B5E66; }
+.cp-fa { font-family: var(--font-farsi); }
+
+.cp-updates { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
+.cp-update {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-size: 13px; color: var(--text);
+  background: var(--surface-1); border: 1px solid var(--border);
+  border-radius: 999px; padding-block: 5px; padding-inline: 12px;
+  max-width: 100%;
+}
+.cp-update > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cp-update i { width: 8px; height: 8px; border-radius: 50%; flex: 0 0 auto; }
+
+.cp-halves { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; align-items: start; }
+@media (max-width: 1100px) { .cp-halves { grid-template-columns: minmax(0, 1fr); } }
+.cp-half { padding-block: 12px; padding-inline: 16px; border-block-start: 4px solid var(--cp-accent); min-width: 0; }
+.cp-half-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.cp-half-head h2 { font-family: var(--font-display); font-size: 18px; font-weight: 600; color: var(--cp-accent); }
+
+.cp-kpis { display: grid; gap: 8px; margin-block-start: 8px; }
+.cp-kpis-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.cp-kpis-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.cp-kpi { background: #F7F6F2; border-radius: var(--radius-sm); padding-block: 8px; padding-inline: 10px; min-width: 0; }
+.cp-kpi-label { font-size: 13px; color: #5B5E66; font-weight: 500; }
+.cp-kpi-value {
+  font-family: var(--font-display); font-size: 28px; font-weight: 600;
+  line-height: 1.15; font-variant-numeric: tabular-nums;
+}
+.cp-kpi-sub { font-size: 12px; color: #5B5E66; line-height: 1.35; }
+.cp-behind { color: #9A4A07; font-weight: 600; }
+
+.cp-block { margin-block-start: 12px; padding-block-start: 10px; border-block-start: 1px solid var(--border); }
+.cp-block-title { font-size: 14px; font-weight: 600; color: var(--text); margin-block-end: 6px; }
+
+.cp-bar-wrap { display: flex; flex-direction: column; gap: 4px; }
+.cp-bar-text { font-size: 14px; color: var(--text); }
+.cp-bar-text b { font-family: var(--font-display); font-size: 16px; font-weight: 600; }
+.cp-bar { position: relative; height: 16px; border-radius: 4px; background: var(--surface-2); }
+.cp-bar-band {
+  position: absolute; inset-block: 0; inset-inline-start: 0; border-radius: 4px;
+  background: color-mix(in srgb, var(--cp-accent) 14%, white);
+}
+.cp-bar-fill { position: absolute; inset-block: 3px; inset-inline-start: 0; border-radius: 3px; background: var(--cp-accent); }
+.cp-bar-today {
+  position: absolute; inset-block: -4px; width: 0;
+  border-inline-start: 2px dashed var(--text);
+  transform: translateX(-1px);
+}
+.cp-bar-pip {
+  position: absolute; inset-block: -5px; width: 3px; border-radius: 2px;
+  background: var(--text); transform: translateX(-1.5px);
+}
+.cp-legend { display: flex; flex-wrap: wrap; gap: 12px; font-size: 12px; color: #5B5E66; }
+.cp-legend span { display: inline-flex; align-items: center; gap: 5px; }
+.cp-legend i { display: inline-block; width: 12px; height: 10px; border-radius: 2px; }
+.cp-legend .cp-key-fill { background: var(--cp-accent); }
+.cp-legend .cp-key-band { background: color-mix(in srgb, var(--cp-accent) 14%, white); box-shadow: inset 0 0 0 1px var(--border); }
+.cp-legend .cp-key-pip { width: 3px; height: 12px; background: var(--text); }
+.cp-legend .cp-key-today { width: 0; height: 12px; border-radius: 0; border-inline-start: 2px dashed var(--text); }
+.cp-legend .cp-key-line { width: 14px; height: 0; border-radius: 0; border-block-start: 2px solid var(--text); }
+
+.cp-state { display: flex; flex-direction: column; gap: 6px; margin-block-start: 10px; }
+.cp-state-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.cp-state-note { font-size: 13px; color: #5B5E66; }
+.cp-state-num { font-family: var(--font-display); font-size: 20px; font-weight: 600; }
+.cp-field { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--text); font-weight: 500; }
+.cp-input { min-height: 40px; font-size: 14px; max-width: 220px; }
+.cp-error { font-size: 13px; color: #B42318; }
+.cp-note {
+  background: var(--amber-dim); border-inline-start: 3px solid var(--amber);
+  border-radius: 6px; padding-block: 6px; padding-inline: 10px;
+}
+.cp-note-who { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: #9A4A07; }
+.cp-note-msg { font-size: 14px; color: var(--text); font-family: var(--font-farsi); unicode-bidi: plaintext; }
+.cp-btn { min-height: 40px; }
+.cp-btn-lg { min-height: 44px; font-size: 14px; align-self: flex-start; }
+.cp-rev { display: flex; flex-direction: column; gap: 8px; }
+.cp-rev-grid { display: flex; gap: 10px; flex-wrap: wrap; }
+.cp-rev .cp-input { max-width: none; }
+.cp-rev-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+.cp-versions { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.cp-version {
+  display: grid; grid-template-columns: 32px 44px minmax(0, 1fr) auto; gap: 8px;
+  align-items: baseline; font-size: 13px; color: var(--text);
+}
+.cp-version-v { color: #5B5E66; }
+.cp-version-n { font-weight: 600; }
+.cp-version-why { color: #5B5E66; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; unicode-bidi: plaintext; }
+.cp-version-when { color: #5B5E66; white-space: nowrap; }
+
+.cp-trend { margin-block-start: 12px; padding-block-start: 10px; border-block-start: 1px solid var(--border); }
+.cp-trend-chart { position: relative; display: flex; }
+.cp-trend-col { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; align-items: center; }
+.cp-trend-val { height: 20px; font-size: 12px; color: var(--text); white-space: nowrap; }
+.cp-trend-area { height: 88px; width: 100%; display: flex; align-items: flex-end; justify-content: center; }
+.cp-trend-bar { width: 60%; max-width: 40px; border-radius: 3px 3px 0 0; min-height: 1px; }
+.cp-trend-month { font-family: var(--font-farsi); font-size: 13px; color: var(--text); margin-block-start: 4px; }
+.cp-trend-line {
+  position: absolute; inset-inline: 0; inset-block-start: 20px; height: 88px; width: 100%;
+  overflow: visible; pointer-events: none;
+}
+.cp-trend-line polyline, .cp-trend-line line { fill: none; stroke: var(--text); stroke-width: 2; }
+.cp-trend .cp-legend { margin-block-start: 6px; }
+@media (max-width: 520px) { .cp-kpis-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+.cp-submit { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
