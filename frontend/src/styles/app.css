@@ -521,11 +521,11 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
   gap: 20px;
 }
 .page-head .eyebrow {
-  font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase;
-  color: var(--signal-strong); font-weight: 600; margin-bottom: 6px;
+  font-size: 13px; line-height: 18px; font-weight: 600;
+  color: var(--text-link); margin-bottom: 4px;
 }
-.page-head h1 { font-size: 27px; }
-.page-head p { color: var(--text-muted); margin-top: 5px; max-width: 60ch; }
+.page-head h1 { font-size: 28px; line-height: 36px; font-weight: 600; letter-spacing: -0.01em; }
+.page-head p { color: var(--text-secondary); font-size: 14px; line-height: 20px; margin-top: 4px; max-width: 60ch; }
 
 /* ---------- Cards ---------- */
 .card {
@@ -563,25 +563,37 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
 .stat .sub { font-size: 12px; color: var(--text-dim); margin-top: 2px; }
 
 /* ---------- Buttons ---------- */
+/* Primary (.btn-primary), secondary (.btn), subtle (.btn-ghost), danger
+   (.btn-danger). One primary per screen. */
 .btn {
-  display: inline-flex; align-items: center; gap: 8px;
-  padding: 9px 16px; border-radius: var(--radius-sm);
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  min-height: 36px; padding: 0 16px; border-radius: var(--radius-sm);
   border: 1px solid var(--border);
-  background: var(--surface-1); color: var(--text);
-  font-weight: 500; font-size: 13.5px;
+  background: var(--surface); color: var(--text);
+  font-weight: 600; font-size: 14px; line-height: 20px;
   transition: transform 0.12s, background 0.15s, border-color 0.15s, box-shadow 0.15s;
 }
-.btn:hover { background: var(--surface-2); border-color: #c6d0de; }
+.btn:hover { background: var(--surface-subtle); border-color: var(--control-border); }
+.btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .btn:active { transform: translateY(1px); }
 .btn-primary {
   background: var(--accent);
   color: var(--text-on-accent); border: none; font-weight: 600;
 }
 .btn-primary:hover { background: var(--accent-ink); }
-.btn-ghost { background: transparent; border-color: transparent; color: var(--text-muted); }
-.btn-ghost:hover { background: var(--surface-2); color: var(--text); }
-.btn-sm { padding: 6px 11px; font-size: 12.5px; }
-.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-ghost { background: transparent; border-color: transparent; color: var(--text-link); padding: 0 12px; }
+.btn-ghost:hover { background: var(--accent-wash); border-color: transparent; color: var(--accent-ink); }
+/* White on --danger-ink 6.2:1; on the hover shade 7.6:1. */
+.btn-danger { background: var(--danger-ink); color: var(--text-on-accent); border: none; }
+.btn-danger:hover { background: #962621; }
+.btn-sm { min-height: 30px; padding: 0 12px; font-size: 13px; }
+.btn:disabled,
+.btn:disabled:hover {
+  background: var(--track); border-color: transparent; color: var(--text-tertiary);
+  cursor: not-allowed;
+}
+.btn-ghost:disabled,
+.btn-ghost:disabled:hover { background: transparent; }
 
 /* ---------- Tables ---------- */
 .table-wrap {
@@ -612,10 +624,11 @@ tbody tr:last-child td { border-bottom: none; }
 .dt-mini-table tbody td { padding: 6px 10px; font-size: 13px; }
 
 /* ---------- Status pills ---------- */
+/* An ink on its own soft fill, with a dot, and always the word. */
 .pill {
   display: inline-flex; align-items: center; gap: 6px;
-  padding: 3px 10px; border-radius: 20px;
-  font-size: 12px; font-weight: 500; white-space: nowrap;
+  min-height: 24px; padding: 0 10px; border-radius: 12px;
+  font-size: 12px; line-height: 16px; font-weight: 600; white-space: nowrap;
 }
 .pill::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
 .pill-green { background: var(--green-dim); color: var(--green); }
@@ -623,7 +636,7 @@ tbody tr:last-child td { border-bottom: none; }
 .pill-red { background: var(--red-dim); color: var(--red); }
 .pill-cyan { background: var(--signal-glow); color: var(--signal-strong); }
 .pill-violet { background: var(--violet-dim); color: var(--violet); }
-.pill-dim { background: var(--surface-3); color: var(--text-muted); }
+.pill-dim { background: var(--neutral-soft); color: var(--neutral-ink); }
 
 /* ---------- Forms ---------- */
 .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 15px; }
@@ -725,6 +738,118 @@ tbody tr:last-child td { border-bottom: none; }
 }
 .tab:hover { color: var(--text); }
 .tab.active { color: var(--signal-strong); border-bottom-color: var(--signal); }
+
+/* ---------- Cobalt components (components/ui.jsx) ---------- */
+
+/* Tabs: quiet labels, the selected one heavier with a short accent bar. */
+.ui-tabs { display: flex; gap: 4px; flex-wrap: wrap; }
+.ui-tab {
+  position: relative;
+  height: 38px; padding: 0 14px;
+  border: none; border-radius: var(--radius-sm);
+  background: transparent; color: var(--text-secondary);
+  font-size: 14px; line-height: 20px; font-weight: 500;
+}
+.ui-tab:hover { color: var(--text); background: rgba(20, 27, 43, 0.04); }
+.ui-tab[aria-selected='true'] { color: var(--text); font-weight: 600; }
+.ui-tab[aria-selected='true']::after {
+  content: '';
+  position: absolute;
+  inset-inline-start: 50%; bottom: 2px;
+  width: 20px; height: 3px; margin-inline-start: -10px;
+  border-radius: 2px;
+  background: var(--accent);
+}
+.ui-tab:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+/* Segmented control: pressed buttons in a track. */
+.ui-seg {
+  display: inline-flex; flex-wrap: wrap; gap: 2px;
+  padding: 3px; border-radius: var(--radius-md);
+  background: var(--bg);
+}
+.ui-seg-option {
+  height: 32px; padding: 0 14px;
+  border: none; border-radius: var(--radius-sm);
+  background: transparent; color: var(--text-secondary);
+  font-size: 14px; line-height: 20px; font-weight: 500; white-space: nowrap;
+}
+.ui-seg-option:hover { color: var(--text); }
+.ui-seg-option[aria-pressed='true'] {
+  background: var(--surface); color: var(--text); font-weight: 600;
+  box-shadow: 0 1px 2px rgba(20, 27, 43, 0.12);
+}
+.ui-seg-option:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+/* Card: border plus the faint shadow, 10px corners, optional header. */
+.ui-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-1);
+  padding: 20px 24px 24px;
+  display: flex; flex-direction: column; gap: 16px;
+}
+.ui-card-head { display: flex; align-items: flex-start; gap: 14px; }
+.ui-card-chip {
+  width: 36px; height: 36px; flex-shrink: 0;
+  border-radius: 9px;
+  display: grid; place-items: center;
+}
+.ui-chip-accent { background: var(--accent-soft); color: var(--accent); }
+.ui-chip-support { background: var(--support-soft); color: var(--support); }
+.ui-card-titles { flex: 1; min-width: 0; }
+.ui-card-title { font-size: 17px; line-height: 24px; font-weight: 600; letter-spacing: 0; }
+.ui-card-desc { margin-top: 2px; color: var(--text-secondary); font-size: 14px; line-height: 21px; max-width: 760px; }
+.ui-card-actions { display: flex; align-items: center; gap: 8px; margin-inline-start: auto; }
+
+/* Banner: a message about the page, tinted by tone, always in words too. */
+.banner {
+  display: flex; align-items: flex-start; gap: 12px;
+  padding: 12px 16px;
+  border: 1px solid; border-radius: var(--radius-md);
+  font-size: 14px; line-height: 21px;
+}
+.banner-icon { flex-shrink: 0; margin-top: 1px; }
+.banner-body { flex: 1; min-width: 0; }
+.banner-title { font-weight: 600; }
+.banner-info { background: var(--banner-info-bg); border-color: var(--banner-info-border); color: var(--banner-info-text); }
+.banner-info .banner-icon { color: var(--banner-info-icon); }
+.banner-warning { background: var(--banner-warning-bg); border-color: var(--banner-warning-border); color: var(--banner-warning-text); }
+.banner-warning .banner-icon { color: var(--banner-warning-icon); }
+.banner-error { background: var(--banner-error-bg); border-color: var(--banner-error-border); color: var(--banner-error-text); }
+.banner-error .banner-icon { color: var(--banner-error-icon); }
+.banner-success { background: var(--banner-success-bg); border-color: var(--banner-success-border); color: var(--banner-success-text); }
+.banner-success .banner-icon { color: var(--banner-success-icon); }
+
+/* Tables: .table is comfortable (52px rows), .table-compact dense (40px).
+   Headers are sentence case, tertiary, 12/600; rows are divided by hairlines. */
+.table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.table th {
+  text-align: start;
+  font-size: 12px; line-height: 16px; font-weight: 600;
+  text-transform: none; letter-spacing: 0;
+  color: var(--text-tertiary);
+  background: transparent;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+}
+.table td,
+.table tbody th {
+  height: 52px;
+  padding: 6px 12px;
+  font-size: 14px; line-height: 20px;
+  color: var(--text);
+  border-bottom: 1px solid var(--divider);
+  vertical-align: middle;
+}
+.table tbody th { text-align: start; font-weight: 500; text-transform: none; letter-spacing: 0; background: transparent; }
+.table tbody tr:hover { background: var(--surface-subtle); }
+.table tbody tr:last-child td,
+.table tbody tr:last-child th { border-bottom: none; }
+.table .num { text-align: end; }
+.table-compact td,
+.table-compact tbody th { height: 40px; padding-block: 4px; }
 
 /* A tab's own count. Grey by default; the active tab's count is a filled
    pill (white on dark teal) so it reads as "this is the one you're on and
@@ -1191,7 +1316,7 @@ tbody tr:last-child td { border-bottom: none; }
 
 /* A pill small enough to ride inside a queue row without setting the
    row's height. */
-.pill-xs { font-size: 10.5px; padding: 2px 7px; }
+.pill-xs { font-size: 10.5px; padding: 2px 7px; min-height: 0; }
 .pill-xs::before { width: 5px; height: 5px; }
 
 /* ---- right: the village ---- */
@@ -1350,16 +1475,26 @@ tbody tr:last-child td { border-bottom: none; }
   border-radius: 0 0 var(--radius) var(--radius);
 }
 
-/* ---- drawer / modal shells shared by history and the bulk letter ---- */
+/* ---- Dialog and drawer shells ----
+   One backdrop value for every dialog and drawer, and a z-index scale:
+     --z-drawer (the scrim under it one below), --z-modal above that, so a
+     confirm step opened from a drawer lands on top of the drawer. */
+:root {
+  --z-scrim: 60;
+  --z-drawer: 61;
+  --z-modal-scrim: 70;
+  --z-modal: 71;
+  --scrim: rgba(20, 27, 43, 0.40);
+}
 .drawer {
   position: fixed;
-  top: 0; right: 0;
+  top: 0; inset-inline-end: 0;
   height: 100vh;
   width: min(560px, 100vw);
   background: var(--bg);
-  border-left: 1px solid var(--border);
+  border-inline-start: 1px solid var(--border);
   box-shadow: var(--shadow-2);
-  z-index: 61;
+  z-index: var(--z-drawer);
   display: flex;
   flex-direction: column;
 }
@@ -1368,12 +1503,21 @@ tbody tr:last-child td { border-bottom: none; }
   align-items: center;
   gap: 12px;
   padding: 16px 20px;
-  background: var(--surface-1);
+  background: var(--surface);
   border-bottom: 1px solid var(--border);
 }
 .drawer .body, .modal .body { overflow-y: auto; padding: 20px; }
+.modal-title { font-size: 17px; line-height: 24px; font-weight: 600; }
+.modal-foot {
+  display: flex; justify-content: flex-end; gap: 8px;
+  padding: 14px 20px;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+}
+.modal-message { color: var(--text-secondary); font-size: 14px; line-height: 21px; }
 
-.scrim { position: fixed; inset: 0; background: rgba(20, 35, 60, .34); z-index: 60; }
+.scrim { position: fixed; inset: 0; background: var(--scrim); z-index: var(--z-scrim); }
+.scrim.scrim-modal { z-index: var(--z-modal-scrim); }
 
 /* Centring lives on the wrapper, not the panel: framer-motion animates the
    panel's transform, which would overwrite a translate(-50%, -50%) and leave
@@ -1384,22 +1528,27 @@ tbody tr:last-child td { border-bottom: none; }
   display: grid;
   place-items: center;
   padding: 16px;
-  z-index: 61;
+  z-index: var(--z-drawer);
   pointer-events: none;
 }
+.modal-wrap.modal-wrap-top { z-index: var(--z-modal); }
 
 .modal {
   pointer-events: auto;
   width: min(760px, calc(100vw - 32px));
   max-height: min(760px, calc(100vh - 48px));
   background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius);
   box-shadow: var(--shadow-2);
   display: flex;
   flex-direction: column;
   overflow: hidden;
 }
+.modal:focus { outline: none; }
+.modal.modal-sm { width: min(440px, calc(100vw - 32px)); background: var(--surface); }
+.modal.modal-sm header { border-bottom: none; padding-bottom: 4px; }
+.modal.modal-sm .body { padding-top: 4px; }
+.modal.modal-sm .modal-foot { border-top: none; padding-top: 4px; }
 
 .check-row {
   display: flex;
