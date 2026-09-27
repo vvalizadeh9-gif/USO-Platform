@@ -254,6 +254,24 @@ describe('the lens picker', () => {
     )
   })
 
+  it('says which lens is on through aria-pressed', async () => {
+    mock({ lenses: { selectable: true, options: {} }, road: payload() })
+    draw()
+
+    const group = await screen.findByRole('group', { name: 'Lens' })
+    const pressed = within(group)
+      .getAllByRole('button')
+      .map((button) => [button.textContent, button.getAttribute('aria-pressed')])
+    // The server answered for the coordinator lens, so that is the one on.
+    expect(pressed).toEqual([
+      ['Regional Manager', 'false'],
+      ['PSO Coordinator', 'true'],
+      ['Contractor', 'false'],
+      ['CRA Region', 'false'],
+      ['Province', 'false'],
+    ])
+  })
+
   it('does not render for a role the server confines to its own scope', async () => {
     authUser.current = { role: { name: 'Coordinator' } }
     const scoped = payload({

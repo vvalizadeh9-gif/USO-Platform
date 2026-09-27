@@ -1,8 +1,15 @@
 import { useEffect, useMemo, useState } from 'react'
-import { AlertTriangle, Info } from 'lucide-react'
+import { AlertTriangle, Check, Construction, Users } from 'lucide-react'
 import api from '../../api/client'
 import { useAuth } from '../../context/AuthContext'
-import { EmptyState, PageHead } from '../../components/ui'
+import {
+  Banner,
+  Card,
+  EmptyState,
+  PageHead,
+  SegmentedControl,
+  Tabs,
+} from '../../components/ui'
 import { fmtCount, fmtPct, importStamp } from './kpiTheme'
 import CoverageMap from './CoverageMap'
 import {
@@ -104,37 +111,24 @@ export default function GapRoad() {
     return (
       <>
         <PageHead eyebrow="Performance" title="Lifecycle Gaps" />
-        <div className="card card-pad">
+        <Card>
           <EmptyState title="Nothing to show" hint={error} />
-        </div>
+        </Card>
       </>
     )
   }
 
   return (
-    <div className="kpi gap">
+    <div className="gap-page">
       <PageHead
         eyebrow="Performance"
         title="Lifecycle Gaps"
         subtitle={`Last CPM import · ${importStamp(data?.last_cpm_import)}`}
       />
 
-      <div className="tabs" role="tablist" aria-label="Gap views">
-        {TABS.map((item) => (
-          <button
-            key={item.key}
-            type="button"
-            role="tab"
-            aria-selected={tab === item.key}
-            className={`tab ${tab === item.key ? 'active' : ''}`}
-            onClick={() => setTab(item.key)}
-          >
-            {item.label}
-          </button>
-        ))}
-      </div>
+      <Tabs tabs={TABS} value={tab} onChange={setTab} label="Gap views" className="gap-tabs" />
 
-      {error && data && <div className="kpi-error">{error}</div>}
+      {error && data && <Banner tone="error">{error}</Banner>}
 
       {tab === 'map' ? (
         <CoverageMap />
@@ -151,22 +145,31 @@ export default function GapRoad() {
 
           <DataQuality quality={data.data_quality} />
 
-          <section className="card card-pad kpi-card">
-            <h3 className="kpi-card-title">
-              Stopped before {stretch ? stretchShort(stretch) : '…'}
-            </h3>
-
-            {isPm && (
-              <LensPills lenses={data.lenses} lens={data.lens} onLens={setLens} />
-            )}
-
+          <Card
+            icon={Users}
+            tone="support"
+            className="gap-owners-card"
+            title={`Stopped before ${stretch ? stretchShort(stretch) : '…'}`}
+            description="Who is behind the selected barrier"
+            actions={
+              // The lens picker sits directly above the list it controls,
+              // never in the page head: it changes the rows, not the page.
+              isPm && (
+                <SegmentedControl
+                  label="Lens"
+                  options={data.lenses}
+                  value={data.lens}
+                  onChange={setLens}
+                />
+              )
+            }
+          >
             {!isPm && (
-              <p className="kpi-banner">
-                <Info size={16} aria-hidden="true" />
+              <Banner tone="info">
                 Showing your own scope only — {data.lens_label}{' '}
                 <strong>{data.key}</strong>. The country total beside it is the
                 whole country.
-              </p>
+              </Banner>
             )}
 
             {stretch && !stretch.available ? (
@@ -190,7 +193,7 @@ export default function GapRoad() {
                 />
               </>
             )}
-          </section>
+          </Card>
         </>
       )}
     </div>
@@ -237,7 +240,7 @@ const TEXT = {
 }
 //: The queue sits in its own band between the figure and the footnote, so it
 //  never lies under a number.
-const QUEUE = { top: LANE.top + 68, height: 16 }
+const QUEUE = { top: LANE.top + 70, height: 10 }
 
 function Road({ stretches, villages, selected, onSelect }) {
   const worst = stretches.reduce(
@@ -246,17 +249,19 @@ function Road({ stretches, villages, selected, onSelect }) {
   )
 
   return (
-    <section className="card card-pad kpi-card gap-road-card">
-      <header className="gap-road-head">
-        <h3 className="kpi-card-title">The road</h3>
-        <p className="kpi-note">
+    <Card
+      icon={Construction}
+      tone="accent"
+      title="The road"
+      description={
+        <>
           {fmtCount(villages)} target villages travel these four stretches in
           order. A village is <strong>stopped</strong> on a stretch when it
           reached the stretch&apos;s start and not its end. Select a barrier to
           see who is behind it.
-        </p>
-      </header>
-
+        </>
+      }
+    >
       <svg
         className="gap-road"
         viewBox={`0 0 ${LANE.width} ${LANE.height}`}
@@ -285,7 +290,7 @@ function Road({ stretches, villages, selected, onSelect }) {
           />
         ))}
       </svg>
-    </section>
+    </Card>
   )
 }
 
@@ -330,6 +335,19 @@ function Barrier({ stretch, index, worst, selected, onSelect }) {
         className="gap-band"
       />
 
+      {/* The queue's track: the room a queue as long as the worst one would
+          take, so a short queue reads as short against it. */}
+      {stretch.available && (
+        <rect
+          x={post - (SEGMENT - 54) - 6}
+          y={QUEUE.top}
+          width={SEGMENT - 54}
+          height={QUEUE.height}
+          className="gap-queue-track"
+          rx="5"
+        />
+      )}
+
       {/* The queue waiting behind this barrier. */}
       {stretch.available && stretch.country.stopped > 0 && (
         <rect
@@ -338,7 +356,7 @@ function Barrier({ stretch, index, worst, selected, onSelect }) {
           width={queue}
           height={QUEUE.height}
           className="gap-queue"
-          rx="8"
+          rx="5"
         />
       )}
 
@@ -365,24 +383,6 @@ function Barrier({ stretch, index, worst, selected, onSelect }) {
 }
 
 /* ------------------------------------------------------------------------- */
-
-function LensPills({ lenses, lens, onLens }) {
-  return (
-    <div className="kpi-segmented gap-lens" role="group" aria-label="Lens">
-      {lenses.map((item) => (
-        <button
-          key={item.key}
-          type="button"
-          className={`kpi-seg ${lens === item.key ? 'active' : ''}`}
-          aria-pressed={lens === item.key}
-          onClick={() => onLens(item.key)}
-        >
-          {item.label}
-        </button>
-      ))}
-    </div>
-  )
-}
 
 /**
  * What the page will not hide about its own inputs.
@@ -415,21 +415,18 @@ function DataQuality({ quality }) {
   if (notes.length === 0) return null
 
   return (
-    <div className="kpi-banner warn gap-quality">
-      <AlertTriangle size={16} aria-hidden="true" />
-      <span>
-        {notes.map((note) => (
-          <span key={note}>{note} </span>
-        ))}
-      </span>
-    </div>
+    <Banner tone="warning" title="Data quality.">
+      {notes.map((note) => (
+        <span key={note}>{note} </span>
+      ))}
+    </Banner>
   )
 }
 
 function WorkedExample({ rows, stretch, scoped }) {
   const sentence = workedExample(rows, stretch, { scoped })
   if (!sentence) return null
-  return <p className="gap-example">{sentence}</p>
+  return <p className="gap-worked">{sentence}</p>
 }
 
 function OwnerList({ rows, lensLabel, scoped }) {
@@ -446,15 +443,15 @@ function OwnerList({ rows, lensLabel, scoped }) {
   const paretoAt = rows.findIndex((row) => row.pareto)
 
   return (
-    <div className="kpi-table-wrap">
-      <table className="kpi-table gap-table">
+    <div className="gap-owners-wrap">
+      <table className="table gap-owners">
         <thead>
           <tr>
             <th scope="col">{lensLabel}</th>
             <th scope="col">Share of this gap</th>
-            <th scope="col">Stopped</th>
-            <th scope="col">% of gap</th>
-            <th scope="col">Own rate</th>
+            <th scope="col" className="num">Stopped</th>
+            <th scope="col" className="num">% of gap</th>
+            <th scope="col" className="num">Own rate</th>
           </tr>
         </thead>
         <tbody>
@@ -480,23 +477,25 @@ function Row({ row, scale, pareto, count }) {
     <>
       <tr className={row.attribution === 'owned' ? '' : 'gap-unowned'}>
         <th scope="row">
-          <span className="kpi-province">{row.name}</span>
-          {note && (
-            <span className="kpi-region" title={note}>
-              {note}
-            </span>
-          )}
+          <span className="gap-owner">
+            <span className="gap-owner-name" dir="auto">{row.name}</span>
+            {note && (
+              <span className="gap-owner-note" title={note}>
+                {note}
+              </span>
+            )}
+          </span>
         </th>
         <td>
-          <div className="gap-bar">
-            <div className="gap-bar-fill" style={{ width: `${width}%` }} />
+          <div className="gap-share">
+            <div className="gap-share-fill" style={{ width: `${width}%` }} />
           </div>
         </td>
-        <td className="kpi-plain">{fmtCount(row.stopped)}</td>
-        <td className="kpi-plain">{fmtPct(row.shareOfGap)}</td>
-        <td className="kpi-plain">
-          {fmtPct(row.rate)}
-          <em>{rateFraction(row)}</em>
+        <td className="num gap-stopped">{fmtCount(row.stopped)}</td>
+        <td className="num">{fmtPct(row.shareOfGap)}</td>
+        <td className="num">
+          <span className="gap-rate">{fmtPct(row.rate)}</span>
+          <span className="gap-frac">{rateFraction(row)}</span>
         </td>
       </tr>
       {pareto && (
@@ -524,7 +523,13 @@ function Checksum({ rows, stretch, plural, scoped }) {
   return (
     <p className={`gap-checksum ${result.ok ? '' : 'bad'}`} data-testid="gap-checksum">
       {result.ok ? null : <AlertTriangle size={15} aria-hidden="true" />}
-      {result.text}
+      <span>{result.text}</span>
+      {result.ok && !result.scoped && (
+        <span className="gap-checksum-pill">
+          <Check size={12} strokeWidth={3} aria-hidden="true" />
+          Matches the country figure
+        </span>
+      )}
     </p>
   )
 }
