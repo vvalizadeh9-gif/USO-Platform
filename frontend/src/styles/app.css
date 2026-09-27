@@ -1,9 +1,9 @@
 /* ===================================================================
-   USO Enterprise Platform — Design System (Light)
-   Direction: a bright operations control surface. Pale slate canvas,
-   crisp white panels, ink text, signal-teal primary (RF/coverage),
-   amber for pending, green for approved, red for problems. Geometric
-   display face + neutral body, tabular figures for dense data.
+   USO Enterprise Platform — Design System "Cobalt"
+   Cool blue-grey canvas, white cards, one cobalt accent with a supporting
+   teal, dark readable text. Inter for Latin and figures (tabular),
+   Vazirmatn for Farsi. Status colour is always an ink on its own soft
+   fill, and always carries a text label.
    =================================================================== */
 
 /* Fonts are served from this application, not from Google. See fonts.css for
@@ -12,156 +12,174 @@
 @import url('./fonts.css');
 
 :root {
-  /* Base surfaces */
-  --bg: #eef1f6;
-  --surface-1: #ffffff;
-  --surface-2: #F4F5F3;
-  --surface-3: #E6EAE7;
-  --border: #D4D9D6;
-  --border-soft: #E3E7E4;
+  /* ---- Cobalt: surfaces ----
+     A cool blue-grey canvas, white cards on it, and one step of subtle fill
+     for tiles and callouts. Nothing else sits between them. */
+  --bg: #EEF2F7;
+  --surface: #FFFFFF;
+  --surface-subtle: #F6F8FB;
+  --border: #DDE3EC;          /* card outlines */
+  --divider: #EDF1F6;         /* table rows, hairlines inside a card */
+  --track: #E4E9F1;           /* the unfilled part of a bar or meter */
+  --control-border: #C8D1DE;  /* inputs and other controls */
 
-  /* Text */
-  --text: #141A18;
-  --text-muted: #4E5A55;
-  /* Darkened from the #6E7A75 the design brief specified: that value measures
-     4.46:1 on --surface-1 and 4.08:1 on --surface-2, both under the 4.5:1 AA
-     floor this token exists to clear. Same hue, ~8 units darker per channel,
-     measured at 5.09:1 / 4.66:1. */
-  --text-dim: #66726D;
+  /* ---- Text ----
+     Measured on --surface: primary 17.0:1, secondary 7.6:1, tertiary 5.4:1
+     (4.8:1 on --bg), link 7.4:1. */
+  --text: #141B2B;
+  --text-secondary: #475569;
+  --text-tertiary: #5F6B7E;
+  --text-on-accent: #FFFFFF;
+  --text-link: #2451C0;
 
-  /* Signal accents */
-  --signal: #0ea394;          /* primary — coverage teal */
-  --signal-strong: #0b8477;
-  --signal-glow: rgba(14, 163, 148, 0.14);
+  /* ---- Accent: one cobalt, plus one supporting teal ----
+     White on --accent is 5.7:1; --accent-ink on white is 9.5:1. */
+  --accent: #2F5FD0;
+  --accent-ink: #1D3F99;
+  --accent-soft: #E3EAFB;
+  --accent-wash: #F2F6FE;
+  --accent-track: #D3DEF7;
+  --support: #0E7C86;
+  --support-soft: #DDF2F3;
 
-  /* The sidebar's own palette: light, a solid white panel one step up from
-     the page (#EEF1F6, 1.13:1 -- no bright/dark jump between the two). Kept
-     as its own tokens, independent of the surface tokens above, so the rest
-     of the app can keep changing without moving the nav by accident.
-     Contrast, measured against --nav-bg unless stated:
-       --nav-text 10.6:1, on --nav-hover 9.7:1; --nav-icon 5.0:1;
-       --nav-dim 5.9:1; --nav-active-text on --nav-active 5.9:1;
-       --nav-accent on --nav-active 3.8:1 (icon and bar -- non-text, 3:1
-       floor); white on --nav-badge-bg 4.9:1. */
-  --nav-bg: #FFFFFF;
-  --nav-edge: #D4D9D6;
-  --nav-text: #36413D;
-  --nav-icon: #66726D;
-  --nav-text-strong: #141A18;
-  --nav-dim: #5B6762;
-  --nav-hover: #F2F5F4;
-  --nav-active: #D9EFEA;
-  --nav-active-text: #0A6359;
-  --nav-accent: #0B8477;
-  --nav-badge-bg: #0B7F73;
+  /* ---- Status: an ink on its own soft fill, always with a label ----
+     Every ink clears 4.5:1 on white and on its soft fill (lowest: success,
+     4.6:1 on --success-soft). Under a deuteranope simulation (Viénot) the
+     CIEDE2000 distance done↔ongoing is 46.0 and ongoing↔problem 60.8, but
+     DONE AND PROBLEM MEASURE 11.4: green and red stay the pair a red-green
+     reader separates by lightness and label, not hue. That is why every
+     status keeps its text label and every chart keeps its legend. */
+  --success-ink: #1D7A4B;
+  --success-soft: #E2F3E9;
+  --ongoing-ink: #6A45C2;
+  --ongoing-soft: #EEE8FB;
+  --pending-ink: #8A5600;
+  --pending-soft: #FCF0D9;
+  --danger-ink: #B42F2A;
+  --danger-soft: #FBE6E4;
+  --neutral-ink: #5F6B7E;
+  --neutral-soft: #EDF1F6;
 
-  --amber: #c77d00;           /* pending / waiting */
-  --amber-dim: rgba(199, 125, 0, 0.12);
-  --green: #17915a;           /* approved */
-  --green-dim: rgba(23, 145, 90, 0.12);
-  --red: #d94141;             /* rejected / problematic */
-  --red-dim: rgba(217, 65, 65, 0.11);
-  --violet: #6d5bd0;          /* assignment */
-  --violet-dim: rgba(109, 91, 208, 0.12);
-  --blue: #3b82f6;            /* ICT, on the Acceptance Dashboard */
+  /* ---- Banners: background, border, text, icon ---- */
+  --banner-info-bg: #EAF0FC;
+  --banner-info-border: #C5D5F5;
+  --banner-info-text: #1D3F99;
+  --banner-info-icon: #2F5FD0;
+  --banner-warning-bg: #FCF0D9;
+  --banner-warning-border: #F0D8A6;
+  --banner-warning-text: #5C3B00;
+  --banner-warning-icon: #9A5F00;
+  --banner-error-bg: #FBE6E4;
+  --banner-error-border: #F0C3BF;
+  --banner-error-text: #6E1F18;
+  --banner-error-icon: #B42F2A;
+  --banner-success-bg: #E2F3E9;
+  --banner-success-border: #B7DDC6;
+  --banner-success-text: #134A2F;
+  --banner-success-icon: #1D7A4B;
+
+  /* ---- Legacy aliases ----
+     The names the pages were written against, pointed at Cobalt so nothing
+     breaks while pages move over one at a time. */
+  --surface-1: var(--surface);             /* legacy alias — remove in cleanup */
+  --surface-2: var(--surface-subtle);      /* legacy alias — remove in cleanup */
+  --surface-3: var(--track);               /* legacy alias — remove in cleanup */
+  --border-soft: var(--divider);           /* legacy alias — remove in cleanup */
+  --text-muted: var(--text-secondary);     /* legacy alias — remove in cleanup */
+  --text-dim: var(--text-tertiary);        /* legacy alias — remove in cleanup */
+  --signal: var(--accent);                 /* legacy alias — remove in cleanup */
+  --signal-strong: var(--accent-ink);      /* legacy alias — remove in cleanup */
+  --signal-glow: var(--accent-soft);       /* legacy alias — remove in cleanup */
+  --green: var(--success-ink);             /* legacy alias — remove in cleanup */
+  --green-dim: var(--success-soft);        /* legacy alias — remove in cleanup */
+  --amber: var(--pending-ink);             /* legacy alias — remove in cleanup */
+  --amber-dim: var(--pending-soft);        /* legacy alias — remove in cleanup */
+  --red: var(--danger-ink);                /* legacy alias — remove in cleanup */
+  --red-dim: var(--danger-soft);           /* legacy alias — remove in cleanup */
+  --violet: var(--ongoing-ink);            /* legacy alias — remove in cleanup */
+  --violet-dim: var(--ongoing-soft);       /* legacy alias — remove in cleanup */
+  --dt-done: var(--success-ink);           /* legacy alias — remove in cleanup */
+  --dt-ongoing: var(--ongoing-ink);        /* legacy alias — remove in cleanup */
+  --dt-problem: var(--danger-ink);         /* legacy alias — remove in cleanup */
+  --dt-notstarted: var(--neutral-ink);     /* legacy alias — remove in cleanup */
+  --dt-done-wash: var(--success-soft);     /* legacy alias — remove in cleanup */
+  --dt-ongoing-wash: var(--ongoing-soft);  /* legacy alias — remove in cleanup */
+  --dt-problem-wash: var(--danger-soft);   /* legacy alias — remove in cleanup */
+  --dt-notstarted-wash: var(--neutral-soft); /* legacy alias — remove in cleanup */
+  --dt-track: var(--track);                /* legacy alias — remove in cleanup */
+
+  /* ICT blue on the Acceptance Dashboard. Not a Cobalt token and not a
+     status; left as it was until that page is migrated. */
+  --blue: #3b82f6;
   --blue-dim: rgba(59, 130, 246, 0.12);
 
-  /* ---- Drive Test dashboard: colour that means a state, and nothing else.
-     Three hues, one per state where something is *happening* to an on-air
-     site, reserved for that meaning everywhere on that page.
+  /* The sidebar's own palette. The sidebar sits straight on the canvas
+     (--bg, no border); the selected item is a white tile lifted off it.
+     Kept as its own tokens so the rest of the app can keep changing without
+     moving the nav by accident. Contrast, measured against --nav-bg unless
+     stated:
+       --nav-text 15.3:1, on --nav-hover 14.1:1; --nav-dim 4.8:1;
+       --nav-active-text on --nav-active 9.4:1; --nav-accent on
+       --nav-active 5.7:1 (icon and bar); white on --nav-badge-bg 5.7:1.
+       Section icon tints on --nav-bg: accent 5.1:1, support teal 4.4:1,
+       month-end amber 4.7:1, tertiary 4.8:1 (non-text, 3:1 floor). */
+  --nav-bg: var(--bg);
+  --nav-edge: var(--border);
+  --nav-text: var(--text);
+  --nav-icon: var(--text-tertiary);
+  --nav-text-strong: var(--text);
+  --nav-dim: var(--text-tertiary);
+  --nav-hover: var(--track);
+  --nav-active: var(--surface);
+  --nav-active-text: var(--accent-ink);
+  --nav-accent: var(--accent);
+  --nav-badge-bg: var(--accent);
+  --nav-tone-accent: var(--accent);
+  --nav-tone-support: var(--support);
+  --nav-tone-monthend: #9A5F00;
+  --nav-tone-tertiary: var(--text-tertiary);
 
-     SOFTENED DELIBERATELY, on the product owner's call: the previous trio
-     (#17915a / #3b6fd4 / #cf3b3b) read as too saturated on a 1920x1200
-     office display, which is the screen this dashboard is actually read on.
-     What that cost and what it bought is measured below rather than
-     asserted, because the trade is real in both directions.
+  /* The one ordinal ramp on the Drive Test page: the ongoing age bands, an
+     ordered scale rather than a set of names. One hue -- the Ongoing violet
+     #6A45C2, hue angle -53° in CIELAB, held on every step -- light to dark,
+     with even lightness steps and the light end clearing white at 2.09:1.
+     L* 73.1, 65.1, 57.0, 49.0, 41.0, 33.1: six steps 8.0 apart. Chroma
+     rises from 40 to 72 toward the dark end so the light steps read as
+     tints of the ongoing colour rather than a second, brighter lilac.
+     Even steps are the whole point of a ramp -- a bunched pair reads as one
+     band, and these bands are meant to be ranked at a glance. Nominal
+     categories (contractors, provinces) get a flat colour instead. */
+  --dt-age-1: #C2A7EE;
+  --dt-age-2: #AE8FE3;
+  --dt-age-3: #9977D7;
+  --dt-age-4: #8460CC;
+  --dt-age-5: #6D49C1;
+  --dt-age-6: #5737A8;
 
-     BOUGHT: all three now clear 4.5:1 as text on --surface-1 — done 4.85,
-     ongoing 5.37, problem 4.71. The old green was 4.01 and had been failing
-     that bar since it was chosen; softening it is what fixed it.
-
-     COST: separability under deuteranopia falls across the board. Measured
-     as CIEDE2000 over a Vienot deuteranope simulation, the two pairs that
-     sit adjacent on the segmented bar go done↔ongoing 18.5 -> 10.6 and
-     ongoing↔problem 21.0 -> 14.1. Both still clear the ~10 a categorical
-     set needs, but the worst adjacent pair now sits near that line rather
-     than comfortably above it, and it is the number to re-measure before
-     anyone softens these again.
-
-     GREEN AND BRICK ARE NOT SEPARABLE UNDER DEUTERANOPIA, and were not
-     before either: that pair measures 2.8 -> 5.1, which is to say
-     indistinguishable in both palettes. It is not an adjacent pair on the
-     bar, which is why the original validation did not report it. THIS IS
-     THE REASON EVERY CHART ON THIS PAGE KEEPS A LEGEND AND A TEXT LABEL.
-     Colour is the fast read here; it is never the only one. A chart on this
-     page that drops its legend has a red-green reader guessing between a
-     finished site and a broken one.
-
-     Amber stays out. The 3.4 ΔE figure the previous note gave for amber
-     against the old red does not reproduce under the method above (it
-     measures ~19), so the rejection no longer rests on it — it rests on the
-     line above: with green and brick already indistinguishable to a
-     deuteranope, a third warm hue is the one thing this palette cannot
-     afford. The brand teal is absent for a different reason: it is the
-     nav-active and primary-button colour, so a data series wearing it reads
-     as the selected thing.
-
-     The fourth state, not-started, takes the neutral rather than a fourth
-     hue. Nothing has happened to those sites, and the three-hue rule is
-     worth more than the distinctness a new hue would buy: a grey segment
-     reads as absence beside three that read as activity, and it keeps the
-     colour vocabulary at three things a reader has to learn. It is the same
-     neutral as the chart furniture, one step darker so it holds its own as a
-     segment rather than reading as an unfilled track. */
-  --dt-done: #1E7A55;
-  --dt-ongoing: #3F4FB0;
-  --dt-problem: #B23A30;
-  --dt-notstarted: #8a95a6;
-  --dt-done-wash: rgba(30, 122, 85, 0.12);
-  --dt-ongoing-wash: rgba(63, 79, 176, 0.11);
-  --dt-problem-wash: rgba(178, 58, 48, 0.11);
-  --dt-notstarted-wash: rgba(138, 149, 166, 0.13);
-
-  /* The one ordinal ramp on that page: the ongoing age bands, which are an
-     ordered scale rather than a set of names. One hue, light to dark,
-     monotone in lightness with every step at least 0.06 apart and the light
-     end clearing the surface at 2.09:1. Nominal categories — contractors,
-     provinces — get a flat colour instead; shading those by size would
-     colour a bar by the length it already has.
-
-     Re-cut onto the softened ongoing hue above, keeping that discipline
-     exactly: L* runs 73.1 -> 33.4 in six steps of 7.8-8.0 each, the light
-     end still clears the surface at 2.09:1, and the dark end is the agreed
-     #414A86. Even steps are the whole point of a ramp — a bunched pair
-     reads as one band, and these bands are an ordered scale a reader is
-     meant to rank at a glance. */
-  --dt-age-1: #AFB0DB;
-  --dt-age-2: #999AC9;
-  --dt-age-3: #8385B8;
-  --dt-age-4: #6D71A7;
-  --dt-age-5: #575D96;
-  --dt-age-6: #414A86;
-
-  /* Chart furniture. Everything that is not a state is a step of the neutral
-     ramp: the unfilled part of a track, and the ghost bar a commitment is
-     drawn as. */
-  --dt-track: #e7ecf3;
+  /* Chart furniture: the ghost bar a commitment is drawn as. */
   --dt-ghost: rgba(85, 99, 122, 0.17);
   --dt-gap: 10px;
 
-  /* Type */
-  --font-display: 'Space Grotesk', 'Vazirmatn', sans-serif;
+  /* ---- Type ----
+     Inter for Latin text and figures (tabular), Vazirmatn for Farsi. One
+     family for headings and body: the hierarchy is carried by size and
+     weight, not by a second face. */
+  --font-display: 'Inter', 'Vazirmatn', sans-serif;
   --font-body: 'Inter', 'Vazirmatn', sans-serif;
   --font-farsi: 'Vazirmatn', 'Inter', sans-serif;
 
-  /* Geometry */
-  --radius: 12px;
-  --radius-sm: 8px;
-  --radius-lg: 18px;
+  /* ---- Shape ----
+     6 buttons and inputs, 8 tiles and banners, 10 cards and dialogs. */
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius: 10px;
+  --radius-lg: 10px;
 
-  --shadow-1: 0 1px 2px rgba(20, 35, 60, 0.06);
-  --shadow-2: 0 12px 34px rgba(20, 35, 60, 0.12);
-  --shadow-glow: 0 0 0 1px var(--signal-glow), 0 10px 30px rgba(20, 35, 60, 0.1);
+  /* ---- Depth: two levels only ----
+     A card is a border plus a faint shadow; menus, dialogs and drawers are
+     raised. */
+  --shadow-1: 0 1px 2px rgba(20, 27, 43, 0.04);
+  --shadow-2: 0 8px 24px rgba(20, 27, 43, 0.14), 0 0 0 1px rgba(20, 27, 43, 0.06);
 }
 
 * {
@@ -178,25 +196,10 @@ body {
   font-family: var(--font-body);
   background: var(--bg);
   color: var(--text);
-  font-size: 14px;
-  line-height: 1.5;
+  font-size: 15px;
+  line-height: 22px;
   -webkit-font-smoothing: antialiased;
   font-feature-settings: 'tnum' 1, 'cv01' 1;
-}
-
-/* Ambient grid texture on the app background */
-body::before {
-  content: '';
-  position: fixed;
-  inset: 0;
-  background-image:
-    linear-gradient(rgba(20, 35, 60, 0.035) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(20, 35, 60, 0.035) 1px, transparent 1px);
-  background-size: 44px 44px;
-  opacity: 1;
-  mask-image: radial-gradient(ellipse at 50% 0%, black, transparent 78%);
-  pointer-events: none;
-  z-index: 0;
 }
 
 h1, h2, h3, h4 {
@@ -239,7 +242,7 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
 /* ---------- Layout shell ---------- */
 .app-shell {
   display: grid;
-  grid-template-columns: 240px 1fr;
+  grid-template-columns: 264px 1fr;
   min-height: 100vh;
   position: relative;
   z-index: 1;
@@ -253,11 +256,10 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
    reasoned through. */
 .sidebar {
   background: var(--nav-bg);
-  border-inline-end: 1px solid var(--nav-edge);
-  padding: 22px 14px;
+  padding: 20px 12px;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
   position: sticky;
   top: 0;
   height: 100vh;
@@ -267,8 +269,8 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
 .brand {
   display: flex;
   align-items: center;
-  gap: 11px;
-  padding: 6px 10px 20px;
+  gap: 12px;
+  padding: 4px 12px 20px;
 }
 /* The mark is an inline SVG (BrandMark.jsx) that paints its own tile. */
 .brand-mark {
@@ -276,17 +278,18 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
   width: 34px; height: 34px;
   flex-shrink: 0;
 }
+.brand-text { line-height: 18px; }
 .brand-text b {
   font-family: var(--font-display);
   font-size: 15px;
+  font-weight: 700;
   display: block;
-  letter-spacing: -0.02em;
 }
-.brand-text small { color: var(--text-dim); font-size: 11px; letter-spacing: 0.04em; }
+.brand-text small { color: var(--text-secondary); font-size: 12px; }
 /* `.brand` is shared with the login card, which keeps the app's own text
    tokens; only the sidebar's copy takes the nav palette. */
 .sidebar .brand-text b { color: var(--nav-text-strong); }
-.sidebar .brand-text small { color: var(--nav-dim); }
+.sidebar .brand-text small { color: var(--text-secondary); }
 
 /* The nav scrolls on its own when a short window cannot fit it, so the brand
    and the account button stay put. It reaches out over the sidebar's side
@@ -296,73 +299,80 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
-  margin-inline: -14px;
-  padding-inline: 14px;
+  margin-inline: -12px;
+  padding-inline: 12px;
   padding-bottom: 8px;
 }
-.nav-section { display: flex; flex-direction: column; gap: 4px; }
+.nav-section { display: flex; flex-direction: column; gap: 2px; }
 
 .nav-section-label {
-  font-size: 11px;
+  font-size: 12px;
+  line-height: 16px;
   font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
   color: var(--nav-dim);
-  padding: 18px 10px 8px;
+  padding: 18px 12px 6px;
 }
 
 .nav-item {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 8px 10px;
-  border-radius: 8px;
+  gap: 12px;
+  height: 38px;
+  padding: 0 12px;
+  border-radius: 6px;
   color: var(--nav-text);
-  font-weight: 500;
+  font-weight: 400;
   font-size: 14px;
   line-height: 20px;
   transition: background 0.16s, color 0.16s;
   position: relative;
 }
 .nav-item svg { color: var(--nav-icon); flex-shrink: 0; }
+/* Icons are tinted by the section they sit in. */
+.nav-section[data-tone='accent'] .nav-item svg { color: var(--nav-tone-accent); }
+.nav-section[data-tone='support'] .nav-item svg { color: var(--nav-tone-support); }
+.nav-section[data-tone='monthend'] .nav-item svg { color: var(--nav-tone-monthend); }
+.nav-section[data-tone='tertiary'] .nav-item svg { color: var(--nav-tone-tertiary); }
 .nav-item:hover { background: var(--nav-hover); }
 .nav-item:focus-visible {
   outline: 2px solid var(--nav-accent);
   outline-offset: 1px;
 }
-/* Selected: four cues, so it never rests on colour alone -- the tinted
-   background, the heavier label, the accent icon and the bar on the
-   inline-start edge. */
-.nav-item.active { background: var(--nav-active); }
+/* Selected: four cues, so it never rests on colour alone -- the white tile
+   lifted off the canvas, the heavier label, the accent icon and the bar on
+   the inline-start edge. */
+.nav-item.active {
+  background: var(--nav-active);
+  box-shadow: 0 1px 2px rgba(20, 27, 43, 0.08);
+}
 .nav-item.active .nav-label { color: var(--nav-active-text); font-weight: 600; }
-.nav-item.active svg { color: var(--nav-accent); }
+.nav-section .nav-item.active svg { color: var(--nav-accent); }
 .nav-item.active::before {
   content: '';
   position: absolute;
-  inset-inline-start: -14px; top: 50%;
+  inset-inline-start: 0; top: 50%;
   transform: translateY(-50%);
-  width: 3px; height: 20px;
+  width: 3px; height: 16px;
   background: var(--nav-accent);
-  border-start-end-radius: 3px;
-  border-end-end-radius: 3px;
+  border-radius: 2px;
 }
 /* The drive test lifecycle: numbered circles in place of icons, joined by a
    line that runs behind them from the first circle's centre to the last's.
    The 20px circle takes an 18px slot (-1px each side) so step labels line up
-   with the icon items' labels; its centre is 10px item padding + 9px. */
+   with the icon items' labels; its centre is 12px item padding + 9px. */
 .nav-steps {
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
 }
 .nav-steps-line {
   position: absolute;
-  inset-inline-start: 18px;
-  top: 18px;
-  bottom: 18px;
+  inset-inline-start: 20px;
+  top: 19px;
+  bottom: 19px;
   width: 2px;
-  background: #C9D3CF;
+  background: var(--control-border);
   z-index: 1;
   pointer-events: none;
 }
@@ -376,10 +386,10 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
   flex-shrink: 0;
   display: grid;
   place-items: center;
-  border: 2px solid #7E8A85;
+  border: 1px solid var(--border);
   border-radius: 50%;
-  background: var(--nav-bg);
-  color: var(--nav-text);
+  background: var(--surface);
+  color: var(--text-secondary);
   font-size: 11px;
   font-weight: 600;
   line-height: 1;
@@ -398,35 +408,33 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
   justify-content: center;
   box-sizing: border-box;
   min-width: 20px;
-  height: 18px;
+  height: 20px;
   padding: 0 6px;
   background: var(--nav-badge-bg);
   color: #fff;
   font-size: 11px;
   font-weight: 600;
   line-height: 1;
-  border-radius: 9px;
+  border-radius: 10px;
   font-variant-numeric: tabular-nums;
 }
 
 .sidebar-footer {
   margin-top: auto;
-  padding: 12px;
-  border-top: 1px solid var(--nav-edge);
+  padding-top: 12px;
 }
 .user-chip { display: flex; align-items: center; gap: 10px; }
-/* Initials in --nav-active-text, not --nav-accent: the accent measures
-   3.8:1 on --nav-active, under the 4.5:1 text floor; this is 5.9:1. */
+/* Initials in --accent-ink on --accent-soft: 7.8:1. */
 .user-avatar {
-  width: 32px; height: 32px; border-radius: 8px;
-  background: var(--nav-active);
+  width: 32px; height: 32px; border-radius: 50%;
+  background: var(--accent-soft);
   display: grid; place-items: center;
-  font-family: var(--font-display); font-weight: 600; font-size: 13px;
-  color: var(--nav-active-text);
+  font-family: var(--font-display); font-weight: 700; font-size: 12px;
+  color: var(--accent-ink);
 }
 .user-chip .who { flex: 1; min-width: 0; }
-.user-chip .who b { font-size: 13px; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--nav-text-strong); }
-.user-chip .who small { color: var(--nav-dim); font-size: 11px; }
+.user-chip .who b { font-size: 14px; font-weight: 600; line-height: 18px; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--nav-text-strong); }
+.user-chip .who small { color: var(--text-secondary); font-size: 12px; line-height: 18px; }
 .logout-btn {
   background: transparent; border: none; color: var(--nav-dim);
   padding: 6px; border-radius: 6px; display: grid; place-items: center;
@@ -441,14 +449,14 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
 /* The account button: the chip itself, made a real button that opens the
    account menu above it. */
 .account { position: relative; }
+/* A white card at the foot of the sidebar. */
 .account-button {
   width: 100%;
-  background: transparent;
+  background: var(--surface);
   border: none;
   border-radius: 8px;
-  padding: 6px;
-  margin: -6px;
-  box-sizing: content-box;
+  padding: 10px 12px;
+  box-shadow: 0 1px 2px rgba(20, 27, 43, 0.06);
   text-align: start;
   font: inherit;
   color: inherit;
@@ -456,7 +464,7 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
   transition: background 0.15s;
 }
 .account-button:hover,
-.account-button[aria-expanded='true'] { background: var(--nav-hover); }
+.account-button[aria-expanded='true'] { background: var(--surface-subtle); }
 .account-button:focus-visible {
   outline: 2px solid var(--nav-accent);
   outline-offset: 1px;
@@ -467,13 +475,13 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
 
 .account-menu {
   position: absolute;
-  inset-inline: -6px;
-  bottom: calc(100% + 12px);
+  inset-inline: 0;
+  bottom: calc(100% + 8px);
   z-index: 50;
-  background: var(--nav-bg);
+  background: var(--surface);
   border: 1px solid var(--nav-edge);
   border-radius: 10px;
-  box-shadow: 0 8px 24px rgba(20, 26, 24, 0.12);
+  box-shadow: var(--shadow-2);
   padding: 4px;
 }
 .account-menu-item {
@@ -523,11 +531,11 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
   gap: 20px;
 }
 .page-head .eyebrow {
-  font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase;
-  color: var(--signal-strong); font-weight: 600; margin-bottom: 6px;
+  font-size: 13px; line-height: 18px; font-weight: 600;
+  color: var(--text-link); margin-bottom: 4px;
 }
-.page-head h1 { font-size: 27px; }
-.page-head p { color: var(--text-muted); margin-top: 5px; max-width: 60ch; }
+.page-head h1 { font-size: 28px; line-height: 36px; font-weight: 600; letter-spacing: -0.01em; }
+.page-head p { color: var(--text-secondary); font-size: 14px; line-height: 20px; margin-top: 4px; max-width: 60ch; }
 
 /* ---------- Cards ---------- */
 .card {
@@ -551,12 +559,6 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
   overflow: hidden;
   box-shadow: var(--shadow-1);
 }
-.stat::after {
-  content: '';
-  position: absolute; right: -30px; top: -30px;
-  width: 90px; height: 90px; border-radius: 50%;
-  background: radial-gradient(circle, var(--accent-glow, var(--signal-glow)), transparent 70%);
-}
 .stat .label {
   font-size: 12px; color: var(--text-muted); font-weight: 500;
   display: flex; align-items: center; gap: 7px;
@@ -571,25 +573,37 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
 .stat .sub { font-size: 12px; color: var(--text-dim); margin-top: 2px; }
 
 /* ---------- Buttons ---------- */
+/* Primary (.btn-primary), secondary (.btn), subtle (.btn-ghost), danger
+   (.btn-danger). One primary per screen. */
 .btn {
-  display: inline-flex; align-items: center; gap: 8px;
-  padding: 9px 16px; border-radius: var(--radius-sm);
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  min-height: 36px; padding: 0 16px; border-radius: var(--radius-sm);
   border: 1px solid var(--border);
-  background: var(--surface-1); color: var(--text);
-  font-weight: 500; font-size: 13.5px;
+  background: var(--surface); color: var(--text);
+  font-weight: 600; font-size: 14px; line-height: 20px;
   transition: transform 0.12s, background 0.15s, border-color 0.15s, box-shadow 0.15s;
 }
-.btn:hover { background: var(--surface-2); border-color: #c6d0de; }
+.btn:hover { background: var(--surface-subtle); border-color: var(--control-border); }
+.btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .btn:active { transform: translateY(1px); }
 .btn-primary {
-  background: linear-gradient(180deg, var(--signal), var(--signal-strong));
-  color: #ffffff; border: none; font-weight: 600;
+  background: var(--accent);
+  color: var(--text-on-accent); border: none; font-weight: 600;
 }
-.btn-primary:hover { box-shadow: 0 6px 18px var(--signal-glow); }
-.btn-ghost { background: transparent; border-color: transparent; color: var(--text-muted); }
-.btn-ghost:hover { background: var(--surface-2); color: var(--text); }
-.btn-sm { padding: 6px 11px; font-size: 12.5px; }
-.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-primary:hover { background: var(--accent-ink); }
+.btn-ghost { background: transparent; border-color: transparent; color: var(--text-link); padding: 0 12px; }
+.btn-ghost:hover { background: var(--accent-wash); border-color: transparent; color: var(--accent-ink); }
+/* White on --danger-ink 6.2:1; on the hover shade 7.6:1. */
+.btn-danger { background: var(--danger-ink); color: var(--text-on-accent); border: none; }
+.btn-danger:hover { background: #962621; }
+.btn-sm { min-height: 30px; padding: 0 12px; font-size: 13px; }
+.btn:disabled,
+.btn:disabled:hover {
+  background: var(--track); border-color: transparent; color: var(--text-tertiary);
+  cursor: not-allowed;
+}
+.btn-ghost:disabled,
+.btn-ghost:disabled:hover { background: transparent; }
 
 /* ---------- Tables ---------- */
 .table-wrap {
@@ -620,10 +634,11 @@ tbody tr:last-child td { border-bottom: none; }
 .dt-mini-table tbody td { padding: 6px 10px; font-size: 13px; }
 
 /* ---------- Status pills ---------- */
+/* An ink on its own soft fill, with a dot, and always the word. */
 .pill {
   display: inline-flex; align-items: center; gap: 6px;
-  padding: 3px 10px; border-radius: 20px;
-  font-size: 12px; font-weight: 500; white-space: nowrap;
+  min-height: 24px; padding: 0 10px; border-radius: 12px;
+  font-size: 12px; line-height: 16px; font-weight: 600; white-space: nowrap;
 }
 .pill::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
 .pill-green { background: var(--green-dim); color: var(--green); }
@@ -631,7 +646,7 @@ tbody tr:last-child td { border-bottom: none; }
 .pill-red { background: var(--red-dim); color: var(--red); }
 .pill-cyan { background: var(--signal-glow); color: var(--signal-strong); }
 .pill-violet { background: var(--violet-dim); color: var(--violet); }
-.pill-dim { background: var(--surface-3); color: var(--text-muted); }
+.pill-dim { background: var(--neutral-soft); color: var(--neutral-ink); }
 
 /* ---------- Forms ---------- */
 .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 15px; }
@@ -734,6 +749,118 @@ tbody tr:last-child td { border-bottom: none; }
 .tab:hover { color: var(--text); }
 .tab.active { color: var(--signal-strong); border-bottom-color: var(--signal); }
 
+/* ---------- Cobalt components (components/ui.jsx) ---------- */
+
+/* Tabs: quiet labels, the selected one heavier with a short accent bar. */
+.ui-tabs { display: flex; gap: 4px; flex-wrap: wrap; }
+.ui-tab {
+  position: relative;
+  height: 38px; padding: 0 14px;
+  border: none; border-radius: var(--radius-sm);
+  background: transparent; color: var(--text-secondary);
+  font-size: 14px; line-height: 20px; font-weight: 500;
+}
+.ui-tab:hover { color: var(--text); background: rgba(20, 27, 43, 0.04); }
+.ui-tab[aria-selected='true'] { color: var(--text); font-weight: 600; }
+.ui-tab[aria-selected='true']::after {
+  content: '';
+  position: absolute;
+  inset-inline-start: 50%; bottom: 2px;
+  width: 20px; height: 3px; margin-inline-start: -10px;
+  border-radius: 2px;
+  background: var(--accent);
+}
+.ui-tab:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+/* Segmented control: pressed buttons in a track. */
+.ui-seg {
+  display: inline-flex; flex-wrap: wrap; gap: 2px;
+  padding: 3px; border-radius: var(--radius-md);
+  background: var(--bg);
+}
+.ui-seg-option {
+  height: 32px; padding: 0 14px;
+  border: none; border-radius: var(--radius-sm);
+  background: transparent; color: var(--text-secondary);
+  font-size: 14px; line-height: 20px; font-weight: 500; white-space: nowrap;
+}
+.ui-seg-option:hover { color: var(--text); }
+.ui-seg-option[aria-pressed='true'] {
+  background: var(--surface); color: var(--text); font-weight: 600;
+  box-shadow: 0 1px 2px rgba(20, 27, 43, 0.12);
+}
+.ui-seg-option:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+/* Card: border plus the faint shadow, 10px corners, optional header. */
+.ui-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-1);
+  padding: 20px 24px 24px;
+  display: flex; flex-direction: column; gap: 16px;
+}
+.ui-card-head { display: flex; align-items: flex-start; gap: 14px; }
+.ui-card-chip {
+  width: 36px; height: 36px; flex-shrink: 0;
+  border-radius: 9px;
+  display: grid; place-items: center;
+}
+.ui-chip-accent { background: var(--accent-soft); color: var(--accent); }
+.ui-chip-support { background: var(--support-soft); color: var(--support); }
+.ui-card-titles { flex: 1; min-width: 0; }
+.ui-card-title { font-size: 17px; line-height: 24px; font-weight: 600; letter-spacing: 0; }
+.ui-card-desc { margin-top: 2px; color: var(--text-secondary); font-size: 14px; line-height: 21px; max-width: 760px; }
+.ui-card-actions { display: flex; align-items: center; gap: 8px; margin-inline-start: auto; }
+
+/* Banner: a message about the page, tinted by tone, always in words too. */
+.banner {
+  display: flex; align-items: flex-start; gap: 12px;
+  padding: 12px 16px;
+  border: 1px solid; border-radius: var(--radius-md);
+  font-size: 14px; line-height: 21px;
+}
+.banner-icon { flex-shrink: 0; margin-top: 1px; }
+.banner-body { flex: 1; min-width: 0; }
+.banner-title { font-weight: 600; }
+.banner-info { background: var(--banner-info-bg); border-color: var(--banner-info-border); color: var(--banner-info-text); }
+.banner-info .banner-icon { color: var(--banner-info-icon); }
+.banner-warning { background: var(--banner-warning-bg); border-color: var(--banner-warning-border); color: var(--banner-warning-text); }
+.banner-warning .banner-icon { color: var(--banner-warning-icon); }
+.banner-error { background: var(--banner-error-bg); border-color: var(--banner-error-border); color: var(--banner-error-text); }
+.banner-error .banner-icon { color: var(--banner-error-icon); }
+.banner-success { background: var(--banner-success-bg); border-color: var(--banner-success-border); color: var(--banner-success-text); }
+.banner-success .banner-icon { color: var(--banner-success-icon); }
+
+/* Tables: .table is comfortable (52px rows), .table-compact dense (40px).
+   Headers are sentence case, tertiary, 12/600; rows are divided by hairlines. */
+.table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.table th {
+  text-align: start;
+  font-size: 12px; line-height: 16px; font-weight: 600;
+  text-transform: none; letter-spacing: 0;
+  color: var(--text-tertiary);
+  background: transparent;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+}
+.table td,
+.table tbody th {
+  height: 52px;
+  padding: 6px 12px;
+  font-size: 14px; line-height: 20px;
+  color: var(--text);
+  border-bottom: 1px solid var(--divider);
+  vertical-align: middle;
+}
+.table tbody th { text-align: start; font-weight: 500; text-transform: none; letter-spacing: 0; background: transparent; }
+.table tbody tr:hover { background: var(--surface-subtle); }
+.table tbody tr:last-child td,
+.table tbody tr:last-child th { border-bottom: none; }
+.table .num { text-align: end; }
+.table-compact td,
+.table-compact tbody th { height: 40px; padding-block: 4px; }
+
 /* A tab's own count. Grey by default; the active tab's count is a filled
    pill (white on dark teal) so it reads as "this is the one you're on and
    here's how many are waiting", not just a number among several. */
@@ -802,7 +929,7 @@ tbody tr:last-child td { border-bottom: none; }
 @media (max-width: 860px) {
   .app-shell { grid-template-columns: 1fr; }
   .sidebar {
-    position: fixed; z-index: 40; width: 240px;
+    position: fixed; z-index: 40; width: 264px;
     transform: translateX(-100%); transition: transform 0.25s;
   }
   .sidebar.open { transform: translateX(0); }
@@ -1199,7 +1326,7 @@ tbody tr:last-child td { border-bottom: none; }
 
 /* A pill small enough to ride inside a queue row without setting the
    row's height. */
-.pill-xs { font-size: 10.5px; padding: 2px 7px; }
+.pill-xs { font-size: 10.5px; padding: 2px 7px; min-height: 0; }
 .pill-xs::before { width: 5px; height: 5px; }
 
 /* ---- right: the village ---- */
@@ -1358,16 +1485,26 @@ tbody tr:last-child td { border-bottom: none; }
   border-radius: 0 0 var(--radius) var(--radius);
 }
 
-/* ---- drawer / modal shells shared by history and the bulk letter ---- */
+/* ---- Dialog and drawer shells ----
+   One backdrop value for every dialog and drawer, and a z-index scale:
+     --z-drawer (the scrim under it one below), --z-modal above that, so a
+     confirm step opened from a drawer lands on top of the drawer. */
+:root {
+  --z-scrim: 60;
+  --z-drawer: 61;
+  --z-modal-scrim: 70;
+  --z-modal: 71;
+  --scrim: rgba(20, 27, 43, 0.40);
+}
 .drawer {
   position: fixed;
-  top: 0; right: 0;
+  top: 0; inset-inline-end: 0;
   height: 100vh;
   width: min(560px, 100vw);
   background: var(--bg);
-  border-left: 1px solid var(--border);
+  border-inline-start: 1px solid var(--border);
   box-shadow: var(--shadow-2);
-  z-index: 61;
+  z-index: var(--z-drawer);
   display: flex;
   flex-direction: column;
 }
@@ -1376,12 +1513,21 @@ tbody tr:last-child td { border-bottom: none; }
   align-items: center;
   gap: 12px;
   padding: 16px 20px;
-  background: var(--surface-1);
+  background: var(--surface);
   border-bottom: 1px solid var(--border);
 }
 .drawer .body, .modal .body { overflow-y: auto; padding: 20px; }
+.modal-title { font-size: 17px; line-height: 24px; font-weight: 600; }
+.modal-foot {
+  display: flex; justify-content: flex-end; gap: 8px;
+  padding: 14px 20px;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+}
+.modal-message { color: var(--text-secondary); font-size: 14px; line-height: 21px; }
 
-.scrim { position: fixed; inset: 0; background: rgba(20, 35, 60, .34); z-index: 60; }
+.scrim { position: fixed; inset: 0; background: var(--scrim); z-index: var(--z-scrim); }
+.scrim.scrim-modal { z-index: var(--z-modal-scrim); }
 
 /* Centring lives on the wrapper, not the panel: framer-motion animates the
    panel's transform, which would overwrite a translate(-50%, -50%) and leave
@@ -1392,22 +1538,27 @@ tbody tr:last-child td { border-bottom: none; }
   display: grid;
   place-items: center;
   padding: 16px;
-  z-index: 61;
+  z-index: var(--z-drawer);
   pointer-events: none;
 }
+.modal-wrap.modal-wrap-top { z-index: var(--z-modal); }
 
 .modal {
   pointer-events: auto;
   width: min(760px, calc(100vw - 32px));
   max-height: min(760px, calc(100vh - 48px));
   background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius);
   box-shadow: var(--shadow-2);
   display: flex;
   flex-direction: column;
   overflow: hidden;
 }
+.modal:focus { outline: none; }
+.modal.modal-sm { width: min(440px, calc(100vw - 32px)); background: var(--surface); }
+.modal.modal-sm header { border-bottom: none; padding-bottom: 4px; }
+.modal.modal-sm .body { padding-top: 4px; }
+.modal.modal-sm .modal-foot { border-top: none; padding-top: 4px; }
 
 .check-row {
   display: flex;
@@ -3401,91 +3552,139 @@ a.lifecycle-step:focus-visible { outline: 2px solid var(--signal); outline-offse
 }
 
 /* ---------------------------------------------------------------------------
-   Gap & Performance (Reports → /reports/gaps)
+   Lifecycle Gaps (Performance → /reports/gaps)
 
-   The road is hand-built SVG and takes its colours from the tokens above, with
-   two exceptions that are stated here rather than tokenised: the queue fill and
-   the selected band. Both encode "this is where the programme is stopped",
-   which is a meaning no other screen has, so a shared token would invite reuse
-   where the meaning does not carry.
-
-   The page reuses the .kpi-* classes for its head, pills, cards and table,
-   because it is the same kind of screen read by the same people — a second
-   visual language for one more report would say the two pages are unrelated.
+   Built on the shared Cobalt components (PageHead, Tabs, Card, Banner,
+   SegmentedControl, .table). What is left here is the road -- hand-built
+   SVG, coloured from the tokens -- and the owner list's own cells.
    --------------------------------------------------------------------------- */
-.gap-road-head { margin-bottom: 4px; }
-.gap-road-head .kpi-note { margin: 4px 0 12px; }
+.gap-page { display: flex; flex-direction: column; gap: 20px; }
+.gap-page .page-head { margin-bottom: 0; }
+.gap-tabs { margin-top: -4px; }
 
 .gap-road { width: 100%; height: auto; display: block; overflow: visible; }
 
-.gap-lane { fill: var(--surface-3); }
+.gap-lane { fill: var(--surface-subtle); }
 
 /* Every barrier is one click target covering its whole stretch. */
 .gap-barrier { cursor: pointer; }
 .gap-barrier:focus { outline: none; }
-.gap-barrier:focus-visible .gap-band { stroke: var(--signal-strong); stroke-width: 2; }
+.gap-barrier:focus-visible .gap-band { stroke: var(--accent); stroke-width: 2; }
 
 .gap-band { fill: transparent; }
-.gap-barrier:hover .gap-band { fill: rgba(14, 163, 148, 0.06); }
-/* The selected stretch: a tinted band AND a taller post (see Barrier). Colour
-   alone would be the first thing to go on the display this is read on. */
-.gap-barrier.selected .gap-band { fill: rgba(14, 163, 148, 0.13); }
+.gap-barrier:hover .gap-band { fill: var(--accent-wash); }
+/* The selected stretch: a tinted band, an accent barrier AND a taller post
+   (see Barrier). Colour alone would be the first thing to go on the display
+   this is read on. */
+.gap-barrier.selected .gap-band { fill: var(--accent-wash); stroke: var(--accent-track); stroke-width: 1; }
 
-.gap-queue { fill: #F4B9B3; }
-.gap-barrier.selected .gap-queue { fill: #E4877F; }
+/* The queue: slate on the neutral track, accent on its own track when its
+   barrier is selected. #6B788D is 4.5:1 on white. */
+.gap-queue-track { fill: var(--track); }
+.gap-queue { fill: #6B788D; }
+.gap-barrier.selected .gap-queue-track { fill: var(--accent-track); }
+.gap-barrier.selected .gap-queue { fill: var(--accent); }
 
-.gap-post { fill: var(--text); }
-.gap-boom { fill: var(--text); }
+.gap-post, .gap-boom { fill: var(--neutral-ink); }
+.gap-barrier.selected .gap-post,
+.gap-barrier.selected .gap-boom { fill: var(--accent); }
 .gap-barrier.pending .gap-post,
-.gap-barrier.pending .gap-boom { fill: var(--text-dim); }
+.gap-barrier.pending .gap-boom { fill: var(--control-border); }
 .gap-barrier.pending .gap-label,
-.gap-barrier.pending .gap-figure { fill: var(--text-dim); }
+.gap-barrier.pending .gap-figure { fill: var(--text-tertiary); }
 
 .gap-label {
-  font-family: var(--font-body); font-size: 12.5px; font-weight: 600;
-  fill: var(--text-muted);
+  font-family: var(--font-body); font-size: 13px; font-weight: 600;
+  fill: var(--text-secondary);
 }
+.gap-barrier.selected .gap-label { fill: var(--accent-ink); }
 .gap-figure {
-  font-family: var(--font-display); font-size: 25px; font-weight: 700;
+  font-family: var(--font-body); font-size: 30px; font-weight: 600;
+  letter-spacing: -0.01em; font-variant-numeric: tabular-nums;
   fill: var(--text);
 }
-.gap-sub { font-family: var(--font-body); font-size: 11.5px; fill: var(--text-muted); }
+.gap-sub {
+  font-family: var(--font-body); font-size: 12px;
+  font-variant-numeric: tabular-nums; fill: var(--text-secondary);
+}
 
-/* The lens picker sits directly above the list it controls, never in the page
-   head: it changes the rows, not the page. */
-.gap-lens { margin-bottom: 12px; }
+/* The owner list. The lens control rides in the card header and wraps under
+   the title when the row is narrow. */
+.gap-owners-card .ui-card-head { flex-wrap: wrap; }
 
-.gap-quality span { line-height: 1.55; }
+.gap-worked {
+  background: var(--surface-subtle); border-radius: var(--radius-md);
+  padding: 12px 16px;
+  font-size: 14px; line-height: 21px; color: var(--text-secondary);
+}
 
+.gap-owners-wrap { overflow-x: auto; }
+/* Fixed columns, so a long "why nobody owns this" note wraps inside the
+   name column instead of squeezing a rate off its fraction. */
+.gap-owners { table-layout: fixed; min-width: 720px; }
+.gap-owners thead th:nth-child(1) { width: 32%; }
+.gap-owners thead th:nth-child(2) { width: 26%; }
+.gap-owners thead th:nth-child(3),
+.gap-owners thead th:nth-child(4) { width: 12%; }
+.gap-owners thead th:nth-child(5) { width: 18%; }
+.gap-owners td.num { white-space: nowrap; }
+.gap-owner { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+.gap-owner-name { font-family: var(--font-farsi); font-size: 15px; font-weight: 500; }
+.gap-unowned .gap-owner-name { font-family: var(--font-body); font-size: 14px; font-style: italic; font-weight: 400; color: var(--text-secondary); }
+/* The neutral pill that says why a row belongs to nobody. */
+.gap-owner-note {
+  display: inline-block; max-width: 100%;
+  padding: 0 8px; border-radius: 10px;
+  background: var(--neutral-soft); color: var(--text-secondary);
+  font-size: 12px; line-height: 20px; font-weight: 500;
+}
+
+/* The share bar: a thin accent bar on the divider track, scaled to the
+   widest row. */
+.gap-share {
+  height: 6px; min-width: 80px; border-radius: 3px;
+  background: var(--divider); overflow: hidden;
+}
+.gap-share-fill { height: 100%; background: var(--accent); border-radius: 3px; }
+
+.gap-stopped { font-weight: 600; }
+.gap-rate { display: block; }
+/* A rate never appears without its fraction. */
+.gap-frac { display: block; font-size: 12px; line-height: 16px; color: var(--text-tertiary); }
+
+/* The 80% line: a wash row with a 2px accent rule under it. */
+.gap-owners tr.gap-pareto td {
+  height: auto;
+  padding: 6px 12px;
+  background: var(--accent-wash);
+  border-bottom: 2px solid var(--accent);
+  color: var(--accent-ink); font-size: 12px; line-height: 16px; font-weight: 600;
+}
+.gap-owners tr.gap-pareto:hover { background: transparent; }
+
+.gap-checksum {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+  font-size: 13px; line-height: 20px; color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+.gap-checksum-pill {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 0 8px; border-radius: 10px;
+  background: var(--success-soft); color: var(--success-ink);
+  font-size: 12px; line-height: 20px; font-weight: 600;
+}
+.gap-checksum.bad {
+  align-items: flex-start;
+  padding: 10px 14px; border-radius: var(--radius-md);
+  background: var(--danger-soft); color: var(--danger-ink); font-weight: 600;
+}
+
+/* Kept for Mojri Import, which borrows this page's worked-example line. */
 .gap-example {
   background: var(--surface-2); border-radius: var(--radius-sm);
   padding: 10px 14px; margin: 0 0 12px;
   font-size: 13px; line-height: 1.6; color: var(--text-muted);
 }
-
-.gap-table td .gap-bar {
-  height: 12px; min-width: 80px; border-radius: 999px;
-  background: var(--surface-3); overflow: hidden;
-}
-.gap-table td .gap-bar-fill { height: 100%; background: var(--signal); border-radius: 999px; }
-
-.gap-table tr.gap-unowned th .kpi-province { color: var(--text-muted); font-style: italic; }
-
-.gap-table tr.gap-pareto td {
-  border-top: 2px dashed var(--signal-strong);
-  color: var(--signal-strong); font-size: 12px; font-weight: 600;
-  padding-top: 6px; padding-bottom: 6px; background: var(--surface-2);
-}
-
-.gap-checksum {
-  display: flex; align-items: flex-start; gap: 8px;
-  margin: 12px 0 0; padding: 10px 14px;
-  border-radius: var(--radius-sm);
-  background: var(--surface-2); color: var(--text-muted);
-  font-size: 13px; line-height: 1.6;
-  font-variant-numeric: tabular-nums;
-}
-.gap-checksum.bad { background: var(--red-dim); color: var(--red); font-weight: 600; }
 
 /* Coverage map: the legend strip, ICT by province beside CRA by region
    (stacked when narrow), and the CRA region report under them. */
