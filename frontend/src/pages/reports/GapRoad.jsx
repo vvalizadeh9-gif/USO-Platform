@@ -4,6 +4,7 @@ import api from '../../api/client'
 import { useAuth } from '../../context/AuthContext'
 import { EmptyState, PageHead } from '../../components/ui'
 import { fmtCount, fmtPct, importStamp } from './kpiTheme'
+import CoverageMap from './CoverageMap'
 import {
   ATTRIBUTION_NOTES,
   PARETO_AT,
@@ -53,6 +54,7 @@ export default function GapRoad() {
 
   const [lens, setLens] = useState(null)
   const [selected, setSelected] = useState('ict')
+  const [tab, setTab] = useState('road')
   const [data, setData] = useState(null)
   const [error, setError] = useState('')
 
@@ -117,9 +119,26 @@ export default function GapRoad() {
         subtitle={`Last CPM import · ${importStamp(data?.last_cpm_import)}`}
       />
 
+      <div className="tabs" role="tablist" aria-label="Gap views">
+        {TABS.map((item) => (
+          <button
+            key={item.key}
+            type="button"
+            role="tab"
+            aria-selected={tab === item.key}
+            className={`tab ${tab === item.key ? 'active' : ''}`}
+            onClick={() => setTab(item.key)}
+          >
+            {item.label}
+          </button>
+        ))}
+      </div>
+
       {error && data && <div className="kpi-error">{error}</div>}
 
-      {!data ? (
+      {tab === 'map' ? (
+        <CoverageMap />
+      ) : !data ? (
         <Skeleton />
       ) : (
         <>
@@ -177,6 +196,15 @@ export default function GapRoad() {
     </div>
   )
 }
+
+/**
+ * Two views of the same figures. The coverage map replaces the per-authority
+ * map tabs of the design preview: ICT and CRA side by side on one tab.
+ */
+const TABS = [
+  { key: 'road', label: 'The road' },
+  { key: 'map', label: 'Coverage map' },
+]
 
 function readError(err, fallback) {
   const detail = err?.response?.data?.detail
@@ -501,7 +529,7 @@ function Checksum({ rows, stretch, plural, scoped }) {
   )
 }
 
-function Skeleton() {
+export function Skeleton() {
   return (
     <div className="kpi-skeleton" aria-hidden="true">
       {Array.from({ length: 5 }, (_, index) => (

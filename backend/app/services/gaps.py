@@ -391,6 +391,16 @@ def _figures(cell: Cell, stretch: Stretch) -> dict:
     return {"stopped": stopped, "reached": reached, "rate": kpi.pct(stopped, reached)}
 
 
+def _scored(cell: Cell, stretch: Stretch) -> dict:
+    """:func:`_figures` plus the low-sample flag.
+
+    The KPI page's threshold, not a second one: fewer than ten villages
+    reached the stretch and the row is shown but not compared.
+    """
+    figures = _figures(cell, stretch)
+    return {**figures, "low_sample": figures["reached"] < kpi.LOW_SAMPLE_DT_DONE}
+
+
 def _rows(owners: dict[tuple[str, str], Cell], stretch: Stretch, only: str | None):
     """The owner rows for one stretch, biggest gap first.
 
@@ -410,7 +420,7 @@ def _rows(owners: dict[tuple[str, str], Cell], stretch: Stretch, only: str | Non
                 "name": name,
                 "attribution": attribution,
                 "villages": cell.villages,
-                **_figures(cell, stretch),
+                **_scored(cell, stretch),
             }
         )
     # Name breaks the tie so the order is stable between two loads of the same
@@ -502,4 +512,108 @@ def road(db: Session, user, lens: str | None, stretch: str | None) -> dict:
             for spec in wanted
         ],
         "data_quality": _data_quality(country_cell, grid, mapping),
+    }
+
+
+# ----- Coverage map -------------------------------------------------------
+#
+# The same figures, drawn on Iran: ICT approval by province, CRA approval by
+# CRA region.
+#
+# A village's province is the one its site carries from CPM -- the same
+# ``provinces`` row every figure on this page is grouped by. Nothing is placed
+# by coordinates. Each province row is keyed by that Persian name, which is
+# what the page's map asset (``frontend/src/pages/reports/iranMap.json``, built
+# by ``scripts/build-iran-map.py``) is keyed by too, so the join is the same
+# string on both sides.
+#
+# CRA regions are the nine of ``province_mapping``: a region's figures are
+# the fold of its provinces' cells, so a region can never disagree with the
+# provinces inside it.
+#
+# Scope is the road's rule: PM sees the country; anyone else only the cells
+# that roll up to their own key under their own lens.
+
+
+def coverage_map(db: Session, user) -> dict:
+    """Every province and CRA region, with ICT and CRA figures. Reads only."""
+    kpi.require_kpi_access(user)
+
+    is_pm = user.role.name == kpi.PM
+    scope = None if is_pm else kpi.resolve_scope(db, user, None, None)
+
+    grid = _grid(db)
+    mapping = _mapping(db)
+
+    def in_scope(province_fa: str | None, contractor: str | None) -> bool:
+        if scope is None:
+            return True
+        name, _ = _owner(scope.lens, province_fa, contractor, mapping)
+        return name.casefold() == scope.key.casefold()
+
+    mine = {key: cell for key, cell in grid.items() if in_scope(*key)}
+    ict, cra = _BY_KEY[STRETCH_ICT], _BY_KEY[STRETCH_CRA]
+
+    def both(cell: Cell) -> dict:
+        return {"ict": _scored(cell, ict), "cra": _scored(cell, cra)}
+
+    by_province = _fold(mine, lambda province_fa, _c: province_fa)
+    # PM's map is the whole programme: every province in the mapping has a row,
+    # reading zero if nothing there has reached a stretch yet, so the map has no
+    # blank province that might be read as "no gap".
+    wanted = set(by_province) | (set(mapping) if is_pm else set())
+
+    provinces = []
+    for province_fa in sorted(wanted, key=lambda fa: (fa is None, fa or "")):
+        name, attribution = _owner(LENS_PROVINCE, province_fa, None, mapping)
+        owners = mapping.get(province_fa) if province_fa else None
+        provinces.append(
+            {
+                "key": province_fa,
+                "name": name,
+                "attribution": attribution,
+                "region": owners[kpi.LENS_REGION] if owners else None,
+                "villages": by_province.get(province_fa, Cell()).villages,
+                **both(by_province.get(province_fa, Cell())),
+            }
+        )
+
+    by_region = _fold(
+        mine, lambda province_fa, contractor: _owner(
+            kpi.LENS_REGION, province_fa, contractor, mapping
+        )
+    )
+    region_keys = set(by_region)
+    if is_pm:
+        region_keys |= {(owners[kpi.LENS_REGION], OWNED) for owners in mapping.values()}
+
+    regions = []
+    for name, attribution in sorted(region_keys, key=lambda key: (key[1] != OWNED, key[0])):
+        cell = by_region.get((name, attribution), Cell())
+        members = [
+            row["key"]
+            for row in provinces
+            if row["key"] is not None and row["region"] == name
+        ]
+        regions.append(
+            {
+                "name": name,
+                "attribution": attribution,
+                "provinces": members,
+                "villages": cell.villages,
+                **both(cell),
+            }
+        )
+
+    total = _fold(mine, lambda _p, _c: (_COUNTRY, OWNED)).get((_COUNTRY, OWNED), Cell())
+
+    return {
+        "scoped": not is_pm,
+        "lens_label": None if is_pm else LENS_LABELS[scope.lens],
+        "key": None if is_pm else scope.key,
+        "last_cpm_import": kpi.last_cpm_import(db),
+        "low_sample_threshold": kpi.LOW_SAMPLE_DT_DONE,
+        "provinces": provinces,
+        "regions": regions,
+        "total": {"villages": total.villages, **both(total)},
     }

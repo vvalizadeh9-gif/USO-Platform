@@ -356,4 +356,15 @@ describe('what the page will not hide', () => {
     draw()
     expect(await screen.findByText('Not your scope')).toBeInTheDocument()
   })
+
+  it('opens the coverage map on its own tab, from /gaps/map', async () => {
+    mock({ lenses: { selectable: true, options: {} }, road: payload() })
+    draw()
+    await screen.findByTestId('gap-checksum')
+    expect(screen.getByRole('tab', { name: 'The road' })).toHaveAttribute('aria-selected', 'true')
+
+    await userEvent.click(screen.getByRole('tab', { name: 'Coverage map' }))
+    expect(api.get).toHaveBeenCalledWith('/gaps/map')
+    expect(screen.queryByTestId('gap-checksum')).toBeNull()
+  })
 })
