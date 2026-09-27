@@ -55,6 +55,17 @@ function StepRail({ steps, badges }) {
   )
 }
 
+// Each section tints its icons: Today in the accent, the three project
+// sections in the supporting teal, Month-end in amber. Colour only -- which
+// items a section holds is NAV_SECTIONS' business.
+const SECTION_TONE = {
+  Today: 'accent',
+  'Drive Test': 'support',
+  Acceptance: 'support',
+  Performance: 'support',
+  'Month-end': 'monthend',
+}
+
 /**
  * One labelled group of nav items.
  *
@@ -76,7 +87,7 @@ function NavSection({ label, items, roleName, badges }) {
 
   const id = `nav-section-${label.toLowerCase().replace(/[^a-z]+/g, '-')}`
   return (
-    <div className="nav-section" role="group" aria-labelledby={id}>
+    <div className="nav-section" role="group" aria-labelledby={id} data-tone={SECTION_TONE[label]}>
       <div className="nav-section-label" id={id}>{label}</div>
       {runs.map((run) =>
         run.steps ? (
@@ -110,7 +121,12 @@ function SidebarNav({ user, isAdmin, badges }) {
       ))}
 
       {isAdmin && (
-        <div className="nav-section" role="group" aria-labelledby="nav-section-administration">
+        <div
+          className="nav-section"
+          role="group"
+          aria-labelledby="nav-section-administration"
+          data-tone="tertiary"
+        >
           <div className="nav-section-label" id="nav-section-administration">Administration</div>
           <NavLink
             to="/admin"

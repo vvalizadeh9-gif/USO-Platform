@@ -113,26 +113,31 @@
   --blue: #3b82f6;
   --blue-dim: rgba(59, 130, 246, 0.12);
 
-  /* The sidebar's own palette: light, a solid white panel one step up from
-     the page (#EEF1F6, 1.13:1 -- no bright/dark jump between the two). Kept
-     as its own tokens, independent of the surface tokens above, so the rest
-     of the app can keep changing without moving the nav by accident.
-     Contrast, measured against --nav-bg unless stated:
-       --nav-text 10.6:1, on --nav-hover 9.7:1; --nav-icon 5.0:1;
-       --nav-dim 5.9:1; --nav-active-text on --nav-active 5.9:1;
-       --nav-accent on --nav-active 3.8:1 (icon and bar -- non-text, 3:1
-       floor); white on --nav-badge-bg 4.9:1. */
-  --nav-bg: #FFFFFF;
-  --nav-edge: #D4D9D6;
-  --nav-text: #36413D;
-  --nav-icon: #66726D;
-  --nav-text-strong: #141A18;
-  --nav-dim: #5B6762;
-  --nav-hover: #F2F5F4;
-  --nav-active: #D9EFEA;
-  --nav-active-text: #0A6359;
-  --nav-accent: #0B8477;
-  --nav-badge-bg: #0B7F73;
+  /* The sidebar's own palette. The sidebar sits straight on the canvas
+     (--bg, no border); the selected item is a white tile lifted off it.
+     Kept as its own tokens so the rest of the app can keep changing without
+     moving the nav by accident. Contrast, measured against --nav-bg unless
+     stated:
+       --nav-text 15.3:1, on --nav-hover 14.1:1; --nav-dim 4.8:1;
+       --nav-active-text on --nav-active 9.4:1; --nav-accent on
+       --nav-active 5.7:1 (icon and bar); white on --nav-badge-bg 5.7:1.
+       Section icon tints on --nav-bg: accent 5.1:1, support teal 4.4:1,
+       month-end amber 4.7:1, tertiary 4.8:1 (non-text, 3:1 floor). */
+  --nav-bg: var(--bg);
+  --nav-edge: var(--border);
+  --nav-text: var(--text);
+  --nav-icon: var(--text-tertiary);
+  --nav-text-strong: var(--text);
+  --nav-dim: var(--text-tertiary);
+  --nav-hover: var(--track);
+  --nav-active: var(--surface);
+  --nav-active-text: var(--accent-ink);
+  --nav-accent: var(--accent);
+  --nav-badge-bg: var(--accent);
+  --nav-tone-accent: var(--accent);
+  --nav-tone-support: var(--support);
+  --nav-tone-monthend: #9A5F00;
+  --nav-tone-tertiary: var(--text-tertiary);
 
   /* The one ordinal ramp on the Drive Test page: the ongoing age bands, an
      ordered scale rather than a set of names. One hue -- the Ongoing violet
@@ -237,7 +242,7 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
 /* ---------- Layout shell ---------- */
 .app-shell {
   display: grid;
-  grid-template-columns: 240px 1fr;
+  grid-template-columns: 264px 1fr;
   min-height: 100vh;
   position: relative;
   z-index: 1;
@@ -251,11 +256,10 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
    reasoned through. */
 .sidebar {
   background: var(--nav-bg);
-  border-inline-end: 1px solid var(--nav-edge);
-  padding: 22px 14px;
+  padding: 20px 12px;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
   position: sticky;
   top: 0;
   height: 100vh;
@@ -265,8 +269,8 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
 .brand {
   display: flex;
   align-items: center;
-  gap: 11px;
-  padding: 6px 10px 20px;
+  gap: 12px;
+  padding: 4px 12px 20px;
 }
 /* The mark is an inline SVG (BrandMark.jsx) that paints its own tile. */
 .brand-mark {
@@ -274,17 +278,18 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
   width: 34px; height: 34px;
   flex-shrink: 0;
 }
+.brand-text { line-height: 18px; }
 .brand-text b {
   font-family: var(--font-display);
   font-size: 15px;
+  font-weight: 700;
   display: block;
-  letter-spacing: -0.02em;
 }
-.brand-text small { color: var(--text-dim); font-size: 11px; letter-spacing: 0.04em; }
+.brand-text small { color: var(--text-secondary); font-size: 12px; }
 /* `.brand` is shared with the login card, which keeps the app's own text
    tokens; only the sidebar's copy takes the nav palette. */
 .sidebar .brand-text b { color: var(--nav-text-strong); }
-.sidebar .brand-text small { color: var(--nav-dim); }
+.sidebar .brand-text small { color: var(--text-secondary); }
 
 /* The nav scrolls on its own when a short window cannot fit it, so the brand
    and the account button stay put. It reaches out over the sidebar's side
@@ -294,73 +299,80 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
-  margin-inline: -14px;
-  padding-inline: 14px;
+  margin-inline: -12px;
+  padding-inline: 12px;
   padding-bottom: 8px;
 }
-.nav-section { display: flex; flex-direction: column; gap: 4px; }
+.nav-section { display: flex; flex-direction: column; gap: 2px; }
 
 .nav-section-label {
-  font-size: 11px;
+  font-size: 12px;
+  line-height: 16px;
   font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
   color: var(--nav-dim);
-  padding: 18px 10px 8px;
+  padding: 18px 12px 6px;
 }
 
 .nav-item {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 8px 10px;
-  border-radius: 8px;
+  gap: 12px;
+  height: 38px;
+  padding: 0 12px;
+  border-radius: 6px;
   color: var(--nav-text);
-  font-weight: 500;
+  font-weight: 400;
   font-size: 14px;
   line-height: 20px;
   transition: background 0.16s, color 0.16s;
   position: relative;
 }
 .nav-item svg { color: var(--nav-icon); flex-shrink: 0; }
+/* Icons are tinted by the section they sit in. */
+.nav-section[data-tone='accent'] .nav-item svg { color: var(--nav-tone-accent); }
+.nav-section[data-tone='support'] .nav-item svg { color: var(--nav-tone-support); }
+.nav-section[data-tone='monthend'] .nav-item svg { color: var(--nav-tone-monthend); }
+.nav-section[data-tone='tertiary'] .nav-item svg { color: var(--nav-tone-tertiary); }
 .nav-item:hover { background: var(--nav-hover); }
 .nav-item:focus-visible {
   outline: 2px solid var(--nav-accent);
   outline-offset: 1px;
 }
-/* Selected: four cues, so it never rests on colour alone -- the tinted
-   background, the heavier label, the accent icon and the bar on the
-   inline-start edge. */
-.nav-item.active { background: var(--nav-active); }
+/* Selected: four cues, so it never rests on colour alone -- the white tile
+   lifted off the canvas, the heavier label, the accent icon and the bar on
+   the inline-start edge. */
+.nav-item.active {
+  background: var(--nav-active);
+  box-shadow: 0 1px 2px rgba(20, 27, 43, 0.08);
+}
 .nav-item.active .nav-label { color: var(--nav-active-text); font-weight: 600; }
-.nav-item.active svg { color: var(--nav-accent); }
+.nav-section .nav-item.active svg { color: var(--nav-accent); }
 .nav-item.active::before {
   content: '';
   position: absolute;
-  inset-inline-start: -14px; top: 50%;
+  inset-inline-start: 0; top: 50%;
   transform: translateY(-50%);
-  width: 3px; height: 20px;
+  width: 3px; height: 16px;
   background: var(--nav-accent);
-  border-start-end-radius: 3px;
-  border-end-end-radius: 3px;
+  border-radius: 2px;
 }
 /* The drive test lifecycle: numbered circles in place of icons, joined by a
    line that runs behind them from the first circle's centre to the last's.
    The 20px circle takes an 18px slot (-1px each side) so step labels line up
-   with the icon items' labels; its centre is 10px item padding + 9px. */
+   with the icon items' labels; its centre is 12px item padding + 9px. */
 .nav-steps {
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
 }
 .nav-steps-line {
   position: absolute;
-  inset-inline-start: 18px;
-  top: 18px;
-  bottom: 18px;
+  inset-inline-start: 20px;
+  top: 19px;
+  bottom: 19px;
   width: 2px;
-  background: #C9D3CF;
+  background: var(--control-border);
   z-index: 1;
   pointer-events: none;
 }
@@ -374,10 +386,10 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
   flex-shrink: 0;
   display: grid;
   place-items: center;
-  border: 2px solid #7E8A85;
+  border: 1px solid var(--border);
   border-radius: 50%;
-  background: var(--nav-bg);
-  color: var(--nav-text);
+  background: var(--surface);
+  color: var(--text-secondary);
   font-size: 11px;
   font-weight: 600;
   line-height: 1;
@@ -396,35 +408,33 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
   justify-content: center;
   box-sizing: border-box;
   min-width: 20px;
-  height: 18px;
+  height: 20px;
   padding: 0 6px;
   background: var(--nav-badge-bg);
   color: #fff;
   font-size: 11px;
   font-weight: 600;
   line-height: 1;
-  border-radius: 9px;
+  border-radius: 10px;
   font-variant-numeric: tabular-nums;
 }
 
 .sidebar-footer {
   margin-top: auto;
-  padding: 12px;
-  border-top: 1px solid var(--nav-edge);
+  padding-top: 12px;
 }
 .user-chip { display: flex; align-items: center; gap: 10px; }
-/* Initials in --nav-active-text, not --nav-accent: the accent measures
-   3.8:1 on --nav-active, under the 4.5:1 text floor; this is 5.9:1. */
+/* Initials in --accent-ink on --accent-soft: 7.8:1. */
 .user-avatar {
-  width: 32px; height: 32px; border-radius: 8px;
-  background: var(--nav-active);
+  width: 32px; height: 32px; border-radius: 50%;
+  background: var(--accent-soft);
   display: grid; place-items: center;
-  font-family: var(--font-display); font-weight: 600; font-size: 13px;
-  color: var(--nav-active-text);
+  font-family: var(--font-display); font-weight: 700; font-size: 12px;
+  color: var(--accent-ink);
 }
 .user-chip .who { flex: 1; min-width: 0; }
-.user-chip .who b { font-size: 13px; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--nav-text-strong); }
-.user-chip .who small { color: var(--nav-dim); font-size: 11px; }
+.user-chip .who b { font-size: 14px; font-weight: 600; line-height: 18px; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--nav-text-strong); }
+.user-chip .who small { color: var(--text-secondary); font-size: 12px; line-height: 18px; }
 .logout-btn {
   background: transparent; border: none; color: var(--nav-dim);
   padding: 6px; border-radius: 6px; display: grid; place-items: center;
@@ -439,14 +449,14 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
 /* The account button: the chip itself, made a real button that opens the
    account menu above it. */
 .account { position: relative; }
+/* A white card at the foot of the sidebar. */
 .account-button {
   width: 100%;
-  background: transparent;
+  background: var(--surface);
   border: none;
   border-radius: 8px;
-  padding: 6px;
-  margin: -6px;
-  box-sizing: content-box;
+  padding: 10px 12px;
+  box-shadow: 0 1px 2px rgba(20, 27, 43, 0.06);
   text-align: start;
   font: inherit;
   color: inherit;
@@ -454,7 +464,7 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
   transition: background 0.15s;
 }
 .account-button:hover,
-.account-button[aria-expanded='true'] { background: var(--nav-hover); }
+.account-button[aria-expanded='true'] { background: var(--surface-subtle); }
 .account-button:focus-visible {
   outline: 2px solid var(--nav-accent);
   outline-offset: 1px;
@@ -465,13 +475,13 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
 
 .account-menu {
   position: absolute;
-  inset-inline: -6px;
-  bottom: calc(100% + 12px);
+  inset-inline: 0;
+  bottom: calc(100% + 8px);
   z-index: 50;
-  background: var(--nav-bg);
+  background: var(--surface);
   border: 1px solid var(--nav-edge);
   border-radius: 10px;
-  box-shadow: 0 8px 24px rgba(20, 26, 24, 0.12);
+  box-shadow: var(--shadow-2);
   padding: 4px;
 }
 .account-menu-item {
@@ -919,7 +929,7 @@ tbody tr:last-child td { border-bottom: none; }
 @media (max-width: 860px) {
   .app-shell { grid-template-columns: 1fr; }
   .sidebar {
-    position: fixed; z-index: 40; width: 240px;
+    position: fixed; z-index: 40; width: 264px;
     transform: translateX(-100%); transition: transform 0.25s;
   }
   .sidebar.open { transform: translateX(0); }
