@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { shamsiMonthName } from '../../../lib/shamsi'
 import { count } from '../format'
-import { CUMULATIVE, flowView, netChanges } from './flowView'
+import { LAST_12, flowView, flowViewName, netChanges } from './flowView'
 import { FadeArea } from './primitives'
 
 /**
@@ -99,9 +99,10 @@ export function FlowLegend() {
   )
 }
 
-export default function FlowChart({ data, scope = CUMULATIVE }) {
-  const { selected, cumulative, points, months, floor, ceiling, ticks } = flowView(data, scope)
-  const shown = cumulative ? 'every month since Farvardin 1404' : String(selected)
+export default function FlowChart({ data, scope = LAST_12 }) {
+  const view = flowView(data, scope)
+  const { yearMarks, points, months, floor, ceiling, ticks } = view
+  const shown = flowViewName(view)
   const n = months.length
   // points[0] is the balance the year opened on; points[j + 1] is month j.
   const drawn = points.slice(1)
@@ -180,9 +181,10 @@ export default function FlowChart({ data, scope = CUMULATIVE }) {
                   style={{ left: `${((n - 1) / n) * 100}%`, width: `${100 / n}%` }}
                 />
               )}
-              {/* The cumulative view spans years: a dashed line where each new
-                  year starts, and its label at the top of the plot beside it. */}
-              {cumulative &&
+              {/* A window that spans years (cumulative, last 12 months): a
+                  dashed line where each new year starts, and its label at
+                  the top of the plot beside it. */}
+              {yearMarks &&
                 months.map(
                   (m, j) =>
                     (j === 0 || m.month === 1) && (
@@ -349,7 +351,7 @@ function useWidth(ref) {
 
 /** The plot's height on a wide page: whatever keeps the whole Overview on
  * one screen, between these two. */
-const FIT_MIN = 240
+const FIT_MIN = 180
 const FIT_MAX = 440
 /** Page width (the bench's, like the layout's container queries) from which
  * the plot fits the screen; below it the CSS's fixed 260px applies. */

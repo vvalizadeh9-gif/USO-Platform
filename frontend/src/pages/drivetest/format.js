@@ -44,6 +44,15 @@ export function percent(value) {
   return `${Math.round(value)}%`
 }
 
+/** A KPI card's share of on air: one decimal, dropped when it is zero
+ * (70.4%, 40%). On a card the share is the headline's companion, read
+ * against last month's -- a whole number hides a month's movement at
+ * programme scale, where 0.4% is a dozen sites. */
+export function kpiPercent(value) {
+  if (value == null) return '—'
+  return `${Number(value).toLocaleString('en-US', { maximumFractionDigits: 1 })}%`
+}
+
 // ---------------------------------------------------------------------------
 // Direction and colour
 // ---------------------------------------------------------------------------

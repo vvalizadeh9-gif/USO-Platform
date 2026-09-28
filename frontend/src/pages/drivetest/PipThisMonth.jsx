@@ -68,21 +68,15 @@ export default function PipThisMonth({ state, onRetry, scoped, provinceName }) {
           whole programme, not per province.
         </InfoTip>
       }
-      actions={
-        canOpenPlan && (
-          <Link to="/monthly-plan" className="btn btn-ghost dt-pip-open">
-            Monthly plan
-            <ArrowRight size={14} strokeWidth={2} aria-hidden="true" />
-          </Link>
-        )
-      }
     >
-      {(data) => <PipTiles data={data} scoped={scoped} provinceName={provinceName} />}
+      {(data) => (
+        <PipTiles data={data} scoped={scoped} provinceName={provinceName} canOpenPlan={canOpenPlan} />
+      )}
     </Section>
   )
 }
 
-function PipTiles({ data, scoped, provinceName }) {
+function PipTiles({ data, scoped, provinceName, canOpenPlan }) {
   const pct = data.achievement_percent
   const committed = pct != null
   const remaining = committed ? Math.max(0, data.pip - data.actual) : null
@@ -144,6 +138,7 @@ function PipTiles({ data, scoped, provinceName }) {
               />
             )}
           </span>
+          {pace && <PacePill actual={data.actual} expected={(data.pip * pace.percent) / 100} />}
         </div>
       )}
 
@@ -152,6 +147,17 @@ function PipTiles({ data, scoped, provinceName }) {
         {committed ? '.' : ', so nothing is committed and nothing is scored.'}
         {programme != null && (
           <> Programme average {achievement(programme)} across all contractors.</>
+        )}
+        {/* On the note's line rather than in the header, where it took a
+            row of its own beside the title in a 380px column. */}
+        {canOpenPlan && (
+          <>
+            {' '}
+            <Link to="/monthly-plan" className="dt-pip-open">
+              Monthly plan
+              <ArrowRight size={14} strokeWidth={2} aria-hidden="true" />
+            </Link>
+          </>
         )}
       </p>
     </>
@@ -172,5 +178,18 @@ function PipTile({ label, value, tone, href }) {
         )}
       </dd>
     </div>
+  )
+}
+
+/** Delivery against where an even pace through the month would have it by
+ * today -- the tick on the bar, said in words. A status, so it is an ink on
+ * its soft fill with the word: Ahead, Behind, or On pace. */
+export function PacePill({ actual, expected }) {
+  const diff = actual - Math.round(expected)
+  if (diff === 0) return <span className="pill pill-dim dt-pace-pill">On pace</span>
+  return diff > 0 ? (
+    <span className="pill pill-green dt-pace-pill tnum">Ahead +{count(diff)}</span>
+  ) : (
+    <span className="pill pill-red dt-pace-pill tnum">Behind −{count(-diff)}</span>
   )
 }

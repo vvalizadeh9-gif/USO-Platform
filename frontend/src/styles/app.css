@@ -1999,41 +1999,53 @@ a.stepper-step:focus-visible { outline: 2px solid var(--accent); outline-offset:
   font-size: 12px; color: var(--text-muted); font-weight: 500;
 }
 
-/* ---------- toolbar (on the page title's row) ---------- */
-
-.dt-toolbar {
-  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+/* ---------- the header's scope and actions (Toolbar.jsx) ----------
+   The province scope is a button in the PageBar's context slot; a narrowed
+   page shows the province's name and a clear button beside it. */
+.dt-scope { position: relative; display: flex; align-items: center; gap: 6px; }
+.dt-scope-btn {
+  display: inline-flex; align-items: center; gap: 8px;
+  height: 36px; padding: 0 10px 0 12px;
+  border: 1px solid var(--control-border); border-radius: var(--radius-sm);
+  background: var(--surface); color: var(--text);
+  font-size: var(--fs-control); line-height: var(--lh-control); font-weight: 500; white-space: nowrap;
 }
-.dt-toolbar-right { display: flex; align-items: center; gap: 8px; margin-left: auto; }
-/* The scope the page is showing. A chip when it is narrowed, a word when it
-   is not -- so the row keeps its height either way and the toolbar does not
-   jump when a filter is applied or cleared. */
-.dt-scope { display: flex; align-items: center; min-height: 32px; }
-.dt-scope-chip {
-  display: flex; align-items: center; gap: 8px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  padding: 4px 4px 4px 12px;
-  font-size: 15px; line-height: 22px; font-weight: 500;
-  color: var(--text);
-  box-shadow: var(--shadow-1);
+.dt-scope-btn svg { color: var(--text-secondary); flex: none; }
+.dt-scope-btn:hover { background: var(--surface-subtle); }
+.dt-scope-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.dt-scope-btn.is-scoped { border-color: var(--accent); background: var(--accent-wash); color: var(--accent-ink); }
+.dt-scope-btn .dt-farsi { font-size: var(--fs-body); line-height: var(--lh-body); }
+.dt-scope-menu {
+  position: absolute; z-index: 50; inset-block-start: calc(100% + 6px); inset-inline-start: 0;
+  min-width: 220px; max-height: 360px; overflow-y: auto; padding: 6px;
+  background: var(--surface); border-radius: var(--radius-md); box-shadow: var(--shadow-2);
 }
-.dt-scope-chip svg { color: var(--text-dim); flex: none; }
-/* Why this card's figures did not narrow with the rest of the page. */
-.dt-scope-note {
-  margin: 0 0 12px; font-size: 13px; line-height: 18px; color: var(--text-secondary);
+.dt-scope-option {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  width: 100%; min-height: 36px; padding: 0 10px; border: 0; border-radius: var(--radius-sm);
+  background: none; color: var(--text); text-align: start;
+  font-size: var(--fs-control); line-height: var(--lh-control);
 }
+.dt-scope-option .dt-farsi { font-size: var(--fs-body); line-height: var(--lh-body); }
+.dt-scope-option:hover, .dt-scope-option:focus-visible { background: var(--accent-wash); outline: none; }
+.dt-scope-option[aria-checked='true'] { color: var(--accent-ink); font-weight: 600; }
 .dt-clear {
   display: grid; place-items: center;
-  width: 24px; height: 24px; border: 0; border-radius: 50%;
+  width: 28px; height: 28px; border: 0; border-radius: 50%;
   background: var(--track); color: var(--text-secondary);
 }
 .dt-clear:hover { background: var(--danger-soft); color: var(--danger-ink); }
 .dt-clear:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
-.dt-freshness {
-  font-size: 13px; line-height: 18px; color: var(--text-tertiary); font-variant-numeric: tabular-nums;
+/* Why this card's figures did not narrow with the rest of the page. */
+.dt-scope-note {
+  margin: 0 0 12px; font-size: var(--fs-meta); line-height: var(--lh-meta); color: var(--text-secondary);
 }
+.dt-freshness {
+  display: inline-flex; align-items: center; gap: 8px; margin-inline-end: 4px;
+  font-size: var(--fs-meta); line-height: var(--lh-meta); color: var(--text-tertiary); font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.dt-freshness-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--success-ink); flex: none; }
 .dt-spin { animation: spin 0.9s linear infinite; }
 
 /* ---------- the bench ---------- */
@@ -2369,14 +2381,6 @@ a.dt-status-row:hover { background: var(--surface-2); }
   .dt-kpi-band { grid-template-columns: 1fr; }
 }
 
-/* ---------- alert strip ----------
-   The Cobalt warning Banner (components/ui.jsx); this is only the layout
-   inside it: the message on the left, the one action on the right. */
-.dt-alert-row { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
-.dt-alert-body { flex: 1 1 auto; min-width: 0; }
-.dt-alert-main { font-weight: 600; display: block; }
-.dt-alert-secondary { display: block; margin-top: 2px; }
-.dt-alert-cta { flex: none; }
 
 
 .dt-delta {
@@ -2755,6 +2759,9 @@ a.dt-contractor-name:hover { text-decoration: underline; text-decoration-color: 
 .dt-wf-balance .dt-wf-bar { background: var(--dt-muted); }
 .dt-wf-up .dt-wf-bar { background: var(--dt-pending-bar); border-radius: 3px; }
 .dt-wf-down .dt-wf-bar { background: var(--accent); border-radius: 3px; }
+/* Where the month ended is the figure the card is about: ink, not the
+   reference neutral the opening balance is drawn in. */
+.dt-wf-col[data-step='closing'] .dt-wf-bar { background: var(--text); }
 /* The connector leaves the top of the previous bar and meets this one: it
    starts at the previous bar's inline end (20% in from its column's edge,
    plus the gap) and stops at this bar's start. A broken chain is a broken
@@ -3013,7 +3020,7 @@ a.dt-contractor-name:hover { text-decoration: underline; text-decoration-color: 
 }
 .dt-flow-plot { position: relative; height: 260px; margin-block: 8px; }
 /* From 980px of page the plot's height is set by the chart itself, to fit
-   the Overview on one screen (240-440px); see useFitHeight in FlowChart. */
+   the Overview on one screen (180-440px); see useFitHeight in FlowChart. */
 .dt-flow-grid, .dt-flow-baseline {
   position: absolute; inset-inline: 0; height: 0;
   border-top: 1px solid var(--divider);
@@ -3225,32 +3232,12 @@ a.dt-contractor-name:hover { text-decoration: underline; text-decoration-color: 
   --dt-gap-shrank: #1D7A4B; --dt-gap-grew: #B42F2A;
   --dt-gap-shrank-soft: #E2F3E9; --dt-gap-grew-soft: #FBE6E4;
 }
-/* The header: one 48px row -- "Drive Test / Dashboard", the three views as
-   a segmented control, then the scope, freshness and the actions pushed
-   right. It wraps rather than overflows on a narrow page. */
-.dt-head {
-  display: flex; align-items: center; flex-wrap: wrap; gap: 8px 20px;
-  min-height: 48px; margin-bottom: 16px;
-}
-.dt-head-title { display: flex; align-items: baseline; gap: 8px; white-space: nowrap; }
-.dt-head-crumb, .dt-head-sep { font-size: 14px; line-height: 20px; color: var(--text-tertiary); }
-.dt-head h1 { font-size: 22px; line-height: 28px; font-weight: 600; letter-spacing: -0.01em; }
-.dt-head .dt-view-tabs {
-  flex-wrap: nowrap; gap: 2px; padding: 3px;
-  border-radius: var(--radius-md); background: var(--track);
-}
-.dt-head .ui-tab { height: 32px; white-space: nowrap; }
-.dt-head .ui-tab:hover { background: transparent; }
-.dt-head .ui-tab[aria-selected='true'] {
-  background: var(--surface);
-  box-shadow: 0 1px 2px rgba(20, 27, 43, 0.12);
-}
-.dt-head .ui-tab[aria-selected='true']::after { display: none; }
-.dt-head .dt-toolbar { flex: 1 1 auto; justify-content: flex-end; min-width: 0; }
-.dt-head .dt-toolbar-right { margin-left: 0; }
 .dt-icon-btn { width: 36px; height: 36px; padding: 0; }
 /* The two compact cards beside the trend take Cobalt's compact padding. */
-.dt-page .dt-stack > .dt-section { padding: 16px 20px 20px; gap: 12px; }
+.dt-page .dt-stack > .dt-section { padding: 16px 20px; gap: 10px; }
+.dt-page .dt-wf { padding-block-start: 8px; }
+.dt-page .dt-pip-tile { padding-block: 6px; }
+.dt-page .dt-pip-rate, .dt-page .dt-pip-note { margin-block-start: 10px; }
 /* Tighter rows in the breakdown bars. */
 /* ---------- the Breakdowns tab ----------
    Header: chip, title, then the total in ink beside it. The view switch is
@@ -3266,11 +3253,11 @@ a.dt-contractor-name:hover { text-decoration: underline; text-decoration-color: 
 .dt-page .dt-bar-label.dt-farsi { font-size: 15px; line-height: 22px; }
 .dt-page .dt-muted .dt-bar-label { font-weight: 400; }
 .dt-page .dt-breakdown-foot { margin-block-start: 12px; }
-.dt-page .dt-kpi-band { gap: 16px; }
-/* Pending status names three states side by side; a slightly wider column
+.dt-page .dt-kpi-band { gap: 12px; }
+/* Pending by status names three states side by side; a slightly wider column
    keeps "Problematic" whole. Only where the band is one row of four. */
 @media (min-width: 1101px) {
-  .dt-page .dt-kpi-band { grid-template-columns: 1fr 1fr 1fr 1.3fr; }
+  .dt-page .dt-kpi-band { grid-template-columns: 1fr 1fr 1fr 1.25fr; }
 }
 .dt-page .dt-kpi-card {
   position: relative;
@@ -3278,38 +3265,46 @@ a.dt-contractor-name:hover { text-decoration: underline; text-decoration-color: 
   border: 1px solid var(--border);
   border-radius: var(--radius);
   box-shadow: var(--shadow-1);
-  padding: 12px 18px;
-  gap: 8px;
+  padding: 20px;
+  gap: 12px;
   --kpi-accent: var(--accent);
 }
 /* Icon chips are neutral -- never a status colour, never cobalt. */
 .dt-page .dt-kpi-hd { flex-wrap: wrap; gap: 4px 10px; margin-block-end: 0; min-width: 0; }
 .dt-page .dt-kpi-title { white-space: nowrap; }
 .dt-page .dt-kpi-ic {
-  inline-size: 28px; block-size: 28px; border-radius: 7px; flex: none;
+  inline-size: 36px; block-size: 36px; border-radius: 9px; flex: none;
   color: var(--text-secondary); background: var(--neutral-soft);
 }
-.dt-page .dt-kpi-title { font-size: 13px; line-height: 18px; font-weight: 600; color: var(--text-secondary); }
+.dt-page .dt-kpi-title { font-size: var(--fs-title); line-height: var(--lh-title); font-weight: 600; color: var(--text); }
 .dt-page .dt-kpi-v { gap: 8px; }
+/* The On air sparkline takes the card's floor, where the others have a bar. */
+.dt-page .dt-kpi-spark { margin-block-start: auto; }
+/* "+64 vs last month" ends the figure's line: neutral, the number in ink. */
+.dt-page .dt-kpi-v > .dt-delta { margin-inline-start: auto; align-self: center; white-space: nowrap; }
 .dt-page .dt-kpi-figure {
-  font-family: inherit; font-size: 28px; line-height: 34px; font-weight: 600;
+  font-family: inherit; font-size: var(--fs-figure); line-height: var(--lh-figure); font-weight: 600;
   letter-spacing: -0.01em; font-variant-numeric: tabular-nums; color: var(--text);
 }
 .dt-page a.dt-kpi-figure { text-decoration-color: var(--dt-muted); text-underline-offset: 6px; }
-.dt-page .dt-kpi-pct { font-size: 14px; line-height: 20px; font-weight: 600; color: var(--text-secondary); }
-.dt-page .dt-kpi-split { block-size: 6px; border-radius: 3px; margin-block-start: 0; background: var(--track); }
+.dt-page .dt-kpi-pct { font-size: var(--fs-control); line-height: var(--lh-control); font-weight: 600; color: var(--text-secondary); }
+.dt-page .dt-kpi-split { block-size: 8px; border-radius: 4px; margin-block-start: 0; background: var(--track); }
+/* A bar and its share, on the card's floor. */
+.dt-page .dt-kpi-meter { display: flex; align-items: center; gap: 10px; margin-block-start: auto; }
+.dt-page .dt-kpi-meter .dt-kpi-split { flex: 1 1 auto; }
+.dt-page .dt-kpi-card[data-kpi="status"] > .dt-kpi-split { margin-block-start: auto; }
 /* "+42 vs last month": in the label row, right-aligned, so the card loses a
    line. Neutral, the number in bold ink. Its direction is in `data-tone` and
    a visually hidden word, not in a colour. */
-.dt-page .dt-kpi-hd > .dt-delta {
-  margin-inline-start: auto; padding-block-start: 0; white-space: nowrap;
-  font-size: 12px; line-height: 16px; color: var(--text-secondary);
+.dt-page .dt-kpi-v > .dt-delta {
+  flex-direction: column; align-items: flex-end; gap: 0;
+  font-size: var(--fs-meta); line-height: var(--lh-meta); color: var(--text-secondary);
 }
 .dt-page .dt-delta-pill b {
   padding: 0; background: none; border-radius: 0;
-  font-size: 12px; font-weight: 700; color: var(--text);
+  font-size: var(--fs-meta); font-weight: 700; color: var(--text);
 }
-.dt-page .dt-delta-since { color: var(--text-secondary); font-size: 12px; }
+.dt-page .dt-delta-since { color: var(--text-secondary); font-size: var(--fs-meta); }
 .dt-page .dt-status-list { gap: 8px; padding-block-start: 0; }
 .dt-page .dt-status-row { padding: 2px 4px; row-gap: 0; }
 .dt-page a.dt-status-row:hover { background: var(--surface-subtle); }
@@ -3317,13 +3312,15 @@ a.dt-contractor-name:hover { text-decoration: underline; text-decoration-color: 
   display: flex; align-items: center; gap: 6px;
   font-size: 13px; line-height: 16px; color: var(--text-secondary); overflow-wrap: normal;
 }
-.dt-page .dt-status-num { font-family: inherit; font-size: 17px; line-height: 22px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.dt-page .dt-status-num { font-family: inherit; font-size: var(--fs-heading); line-height: var(--lh-heading); font-weight: 600; font-variant-numeric: tabular-nums; }
 .dt-page .dt-status-pct { font-size: 12px; color: var(--text-tertiary); font-variant-numeric: tabular-nums; }
 @container kpi-status (max-width: 271px) {
-  /* The swatch is inside the label here, so the row has three tracks. */
-  .dt-page .dt-status-row { grid-template-columns: minmax(0, 1fr) auto 4ch; }
-  .dt-page .dt-status-name { font-size: 13px; }
-  .dt-page .dt-status-num { font-size: 14px; }
+  /* The swatch is inside the label here, so the row has three tracks, and
+     the rows are tight enough that the card stays the band's height. */
+  .dt-page .dt-status-list { gap: 0; }
+  .dt-page .dt-status-row { grid-template-columns: minmax(0, 1fr) auto 4ch; padding-block: 0; }
+  .dt-page .dt-status-name { font-size: var(--fs-meta); }
+  .dt-page .dt-status-num { font-size: var(--fs-control); line-height: var(--lh-control); }
 }
 
 /* The two tables and the breakdown table sit inside a card, so they drop
@@ -3350,6 +3347,32 @@ a.dt-contractor-name:hover { text-decoration: underline; text-decoration-color: 
 .dt-page .dt-info-line + .dt-info-line { margin-block-start: 8px; }
 .dt-page .dt-empty { padding: 32px 24px; color: var(--text-tertiary); font-size: 14px; line-height: 20px; }
 .dt-page .dt-note { font-size: 13px; line-height: 18px; color: var(--text-tertiary); margin: 12px 0 0; }
+/* The dashboard is laid out to fit one screen at 1280x800 and up. If a
+   payload ever makes it taller, its body scrolls inside the frame rather than
+   being clipped -- the document itself still never scrolls. */
+.dt-page .page-body { overflow-y: auto; }
+.dt-pip-open {
+  display: inline-flex; align-items: center; gap: 4px; white-space: nowrap;
+  color: var(--text-link); font-weight: 600;
+}
+.dt-pip-open:hover { text-decoration: underline; }
+.dt-pip-open:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 2px; }
+/* The trend card's header holds the title, the info icon and four period
+   options on one line at 1280: compact options, and a legend that fits one
+   line. */
+.dt-trend-section .ui-seg-option { height: 30px; padding: 0 8px; }
+/* A short office screen (1280x800): the same layout, with the padding and
+   gaps trimmed so the Overview still fits without its body scrolling. The
+   type does not change. */
+@media (max-height: 820px) {
+  .dt-page .page-body { padding-block: 16px; }
+  .dt-page .dt-kpi-card { padding: 14px 20px; gap: 8px; }
+  .dt-page .dt-kpi-ic { inline-size: 32px; block-size: 32px; }
+  .dt-page .dt-stack > .dt-section { padding: 12px 20px; gap: 8px; }
+  .dt-page .dt-wf-plot { block-size: 60px; min-block-size: 60px; }
+  .dt-page .dt-trend-section { padding-block: 16px; gap: 10px; }
+}
+.dt-trend-section .dt-flow-legend { gap: 4px 12px; }
 
 /* ---------- responsive ---------- */
 @media (max-width: 1080px) {
@@ -3363,7 +3386,6 @@ a.dt-contractor-name:hover { text-decoration: underline; text-decoration-color: 
      override was, so the override is gone rather than left to widen them. */
   .dt-bar-link { grid-template-columns: 110px 1fr 42px; }
   .dt-bar-share, .dt-bar-go { display: none; }
-  .dt-toolbar-right { margin-left: 0; width: 100%; }
   .dt-section { padding: 16px; }
 }
 

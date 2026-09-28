@@ -112,17 +112,36 @@ export function flowYears(data) {
   return Array.from(new Set(data.months.map((m) => m.year))).sort((a, b) => a - b)
 }
 
-/** The chart's default view: every month since Farvardin 1404, as running
- * totals from the opening balance. */
+/** Every month since Farvardin 1404, as running totals from the opening
+ * balance. What any scope the payload cannot serve falls back to. */
 export const CUMULATIVE = 'cumulative'
+
+/** The chart's default view: the last twelve months, as a window onto the
+ * same running totals -- not a count restarted twelve months ago. */
+export const LAST_12 = 'last12'
+const LAST_12_MONTHS = 12
+
+/** Where a scope's window starts and ends in `data.months` (end exclusive),
+ * and whether it is the cumulative view. */
+function windowOf(data, scope, years) {
+  if (scope === LAST_12) {
+    return { selected: LAST_12, first: Math.max(0, data.months.length - LAST_12_MONTHS), end: data.months.length }
+  }
+  if (years.includes(scope)) {
+    const first = data.months.findIndex((m) => m.year === scope)
+    return { selected: scope, first, end: first + data.months.filter((m) => m.year === scope).length }
+  }
+  return { selected: CUMULATIVE, first: 0, end: data.months.length }
+}
 
 /** Everything one view of the chart draws from.
  *
- * `scope` is `CUMULATIVE` or a Shamsi year. Cumulative -- also what anything
- * else falls back to: no choice yet, or a year the payload does not have --
+ * `scope` is `LAST_12`, `CUMULATIVE` or a Shamsi year. Cumulative -- also
+ * what anything else falls back to: a year the payload does not have --
  * draws every month the payload covers, Farvardin 1404 to now. A year draws
  * one column per month of that year: twelve for a finished year, Farvardin
- * to now for the current one.
+ * to now for the current one. Last 12 draws the twelve most recent months
+ * (all of them, when there are fewer).
  *
  * THE LINES CARRY THE RUNNING TOTAL; THEY DO NOT RESET. In every view each
  * point is the programme's real running total at that month's end, carried
@@ -140,15 +159,14 @@ export const CUMULATIVE = 'cumulative'
  * The scale is fitted to BOTH lines, so neither can leave the plot whichever
  * of the two is higher.
  */
-export function flowView(data, scope = CUMULATIVE) {
+export function flowView(data, scope = LAST_12) {
   const years = flowYears(data)
-  const cumulative = !years.includes(scope)
-  const selected = cumulative ? CUMULATIVE : scope
+  const { selected, first, end } = windowOf(data, scope, years)
+  const cumulative = selected === CUMULATIVE
+  // A window that can cross a year change marks where each year starts; a
+  // single year does not need to.
+  const yearMarks = !years.includes(selected)
   const all = cumulativePoints(data)
-  const first = cumulative ? 0 : data.months.findIndex((m) => m.year === selected)
-  const end = cumulative
-    ? data.months.length
-    : first + data.months.filter((m) => m.year === selected).length
   // all[i + 1] is the running total after data.months[i], so all[first] is
   // where the view opened.
   const points = all.slice(first, end + 1)
@@ -159,15 +177,23 @@ export function flowView(data, scope = CUMULATIVE) {
   // up on the DT-done side. The larger of the two rather than their sum,
   // because a site can be missing both dates and be counted on both sides.
   const notPlaced = Math.max(data.not_placed?.on_air ?? 0, data.not_placed?.dt_done ?? 0)
-  return { years, selected, cumulative, points, months, floor, ceiling, ticks, notPlaced }
+  return { years, selected, cumulative, yearMarks, points, months, floor, ceiling, ticks, notPlaced }
+}
+
+/** The view in words, for the chart's accessible name and the info note. */
+export function flowViewName({ selected }) {
+  if (selected === CUMULATIVE) return 'every month since Farvardin 1404'
+  if (selected === LAST_12) return 'the last 12 months'
+  return String(selected)
 }
 
 /** The notes behind the card's info icon, for the view on screen. */
-export function flowNotes(data, scope = CUMULATIVE) {
-  const { selected, cumulative, floor, notPlaced } = flowView(data, scope)
+export function flowNotes(data, scope = LAST_12) {
+  const view = flowView(data, scope)
+  const { floor, notPlaced } = view
   const notes = [
     'Sites on air against drive tests done, and what each month did to the backlog.',
-    `${cumulative ? 'Showing every month since Farvardin 1404.' : `Showing ${selected}, month by month.`} ` +
+    `${view.cumulative ? 'Showing every month since Farvardin 1404.' : `Showing ${flowViewName(view)}, month by month.`} ` +
       'The lines are the programme’s running totals, carried ' +
       'from the opening balance on 1 Farvardin 1404, so the gap is the real backlog at each ' +
       'month’s end.' +

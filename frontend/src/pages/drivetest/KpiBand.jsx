@@ -1,7 +1,7 @@
 import { motion, useReducedMotion } from 'framer-motion'
 import {
   CheckCircle2,
-  Clock,
+  Hourglass,
   Minus,
   PieChart,
   RadioTower,
@@ -9,7 +9,7 @@ import {
   TrendingUp,
 } from 'lucide-react'
 import { KPI_DIRECTION, STATE_COLOR } from './constants'
-import { count, deltaTone, percent, share, TONE_COLOR } from './format'
+import { count, deltaTone, kpiPercent, share, TONE_COLOR } from './format'
 import {
   doneLink,
   notStartedLink,
@@ -18,7 +18,7 @@ import {
   problematicLink,
   remainingLink,
 } from './links'
-import { AnimatedNumber } from './charts/primitives'
+import { AnimatedNumber, Sparkline } from './charts/primitives'
 import { DrillLink } from './DrillPanel'
 
 /** The month-over-month change on a KPI card, or beside a chart figure.
@@ -106,7 +106,23 @@ function SplitBar({ segments, label }) {
   )
 }
 
-export default function KpiBand({ kpis, provinceId }) {
+/** The shortest series the On air sparkline is drawn from. A line from four
+ * points is mostly the accident of where the series starts. */
+const SPARK_MIN_POINTS = 7
+
+/** A KPI card's header: the neutral icon chip and the title. */
+function KpiHead({ icon: Icon, title }) {
+  return (
+    <div className="dt-kpi-hd">
+      <span className="dt-kpi-ic" aria-hidden="true">
+        <Icon size={20} strokeWidth={1.9} />
+      </span>
+      <span className="dt-kpi-title">{title}</span>
+    </div>
+  )
+}
+
+export default function KpiBand({ kpis, provinceId, onAirSeries }) {
   const scope = provinceId == null ? undefined : { provinceId }
 
   const onair = kpis.total_onair.value
@@ -151,7 +167,7 @@ export default function KpiBand({ kpis, provinceId }) {
 
   // Named parts only, so the bar's accessible name says which states are in
   // it rather than reading out three numbers where one of them is zero.
-  const stackLabel = `Pending status: ${parts
+  const stackLabel = `Pending by status: ${parts
     .filter((p) => p.value > 0)
     .map((p) => `${p.label} ${count(p.value)}`)
     .join(', ')}`
@@ -163,13 +179,7 @@ export default function KpiBand({ kpis, provinceId }) {
           was the same number, so it filled the track every time and told a
           reader nothing they could not see from the figure above it. */}
       <div className="dt-kpi-card" data-kpi="onair">
-        <div className="dt-kpi-hd">
-          <span className="dt-kpi-ic" aria-hidden="true">
-            <RadioTower size={16} strokeWidth={1.9} />
-          </span>
-          <span className="dt-kpi-title">On air</span>
-          <DeltaChip pill delta={kpis.total_onair.delta} direction={KPI_DIRECTION.total_onair} />
-        </div>
+        <KpiHead icon={RadioTower} title="On air" />
         <div className="dt-kpi-v">
           <DrillLink
             to={onairLink(scope)}
@@ -178,22 +188,26 @@ export default function KpiBand({ kpis, provinceId }) {
           >
             <AnimatedNumber value={onair} />
           </DrillLink>
+          <DeltaChip pill delta={kpis.total_onair.delta} direction={KPI_DIRECTION.total_onair} />
         </div>
+        {/* The last twelve months of the running total, in the reference
+            neutral: the same series as the trend chart below. */}
+        {onAirSeries?.length >= SPARK_MIN_POINTS && (
+          <div className="dt-kpi-spark">
+            <Sparkline
+              fluid
+              points={onAirSeries}
+              color="var(--dt-muted)"
+              height={28}
+              label={`On air over the last ${onAirSeries.length} months`}
+            />
+          </div>
+        )}
       </div>
 
       {/* Card 2: Total DT Done */}
       <div className="dt-kpi-card" data-kpi="done">
-        <div className="dt-kpi-hd">
-          <span className="dt-kpi-ic" aria-hidden="true">
-            <CheckCircle2 size={16} strokeWidth={1.9} />
-          </span>
-          <span className="dt-kpi-title">DT done</span>
-          <DeltaChip
-            pill
-            delta={kpis.total_dt_done.delta}
-            direction={KPI_DIRECTION.total_dt_done}
-          />
-        </div>
+        <KpiHead icon={CheckCircle2} title="DT done" />
         <div className="dt-kpi-v">
           <DrillLink
             to={doneLink(scope)}
@@ -202,37 +216,33 @@ export default function KpiBand({ kpis, provinceId }) {
           >
             <AnimatedNumber value={done} />
           </DrillLink>
-          {/* The share is stated next to the figure, as the agreed layout
-              has it. "of on-air" is what it is a share *of*, and a bare
-              percentage beside a count is ambiguous without it, so the
-              denominator stays in the accessible name. */}
-          <span className="dt-kpi-pct tnum" aria-label={`${percent(donePct)} of on-air`}>
-            {percent(donePct)}
+          <DeltaChip
+            pill
+            delta={kpis.total_dt_done.delta}
+            direction={KPI_DIRECTION.total_dt_done}
+          />
+        </div>
+        {/* The share sits at the end of its bar. "of on-air" is what it is
+            a share *of*; a bare percentage is ambiguous without it, so the
+            denominator stays in the accessible name. */}
+        <div className="dt-kpi-meter">
+          <SplitBar
+            segments={[
+              // The "done" series is the accent, on the plain track.
+              { key: 'done', pct: donePct, color: 'var(--accent)' },
+            ]}
+          />
+          <span className="dt-kpi-pct tnum" aria-label={`${kpiPercent(donePct)} of on-air`}>
+            {kpiPercent(donePct)}
           </span>
         </div>
-        <SplitBar
-          segments={[
-            // The "done" series is the accent, on the plain track.
-            { key: 'done', pct: donePct, color: 'var(--accent)' },
-          ]}
-        />
       </div>
 
       {/* Card 3: Total Pending. The bar mirrors DT done's — same two ratios,
           the other way round — so the pair reads as one split across two
           cards rather than as two unrelated measurements. */}
       <div className="dt-kpi-card" data-kpi="pending">
-        <div className="dt-kpi-hd">
-          <span className="dt-kpi-ic" aria-hidden="true">
-            <Clock size={16} strokeWidth={1.9} />
-          </span>
-          <span className="dt-kpi-title">Pending</span>
-          <DeltaChip
-            pill
-            delta={kpis.total_remaining.delta}
-            direction={KPI_DIRECTION.total_remaining}
-          />
-        </div>
+        <KpiHead icon={Hourglass} title="Pending" />
         <div className="dt-kpi-v">
           <DrillLink
             to={remainingLink(scope)}
@@ -241,16 +251,23 @@ export default function KpiBand({ kpis, provinceId }) {
           >
             <AnimatedNumber value={pending} />
           </DrillLink>
-          <span className="dt-kpi-pct tnum" aria-label={`${percent(pendingPct)} of on-air`}>
-            {percent(pendingPct)}
+          <DeltaChip
+            pill
+            delta={kpis.total_remaining.delta}
+            direction={KPI_DIRECTION.total_remaining}
+          />
+        </div>
+        <div className="dt-kpi-meter">
+          <SplitBar
+            segments={[
+              // A darker neutral, not red: the bar is a share, not a status.
+              { key: 'pending', pct: pendingPct, color: 'var(--dt-pending-bar)' },
+            ]}
+          />
+          <span className="dt-kpi-pct tnum" aria-label={`${kpiPercent(pendingPct)} of on-air`}>
+            {kpiPercent(pendingPct)}
           </span>
         </div>
-        <SplitBar
-          segments={[
-            // A darker neutral, not red: the bar is a share, not a status.
-            { key: 'pending', pct: pendingPct, color: 'var(--dt-pending-bar)' },
-          ]}
-        />
       </div>
 
       {/* Card 4: Pending status.
@@ -265,12 +282,7 @@ export default function KpiBand({ kpis, provinceId }) {
           cards takes the height of its tallest, so three cards carried a dead
           strip through their middles to make room for this one. */}
       <div className="dt-kpi-card" data-kpi="status">
-        <div className="dt-kpi-hd">
-          <span className="dt-kpi-ic" aria-hidden="true">
-            <PieChart size={16} strokeWidth={1.9} />
-          </span>
-          <span className="dt-kpi-title">Pending status</span>
-        </div>
+        <KpiHead icon={PieChart} title="Pending by status" />
         <SplitBar
           label={stackLabel}
           segments={parts.map((p) => ({
