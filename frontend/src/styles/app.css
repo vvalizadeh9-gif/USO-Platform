@@ -2939,7 +2939,6 @@ a.dt-contractor-name:hover { text-decoration: underline; text-decoration-color: 
    the title row. The tabs sit closer to the view they switch than to the
    title or the gap alert above them. */
 .dt-view { display: grid; gap: var(--dt-gap); min-width: 0; }
-.dt-view-tabs { margin-block-end: -8px; }
 
 /* ---------- Cobalt, scoped to this page ----------
    The KPI card classes below are shared with the Acceptance Dashboard and
@@ -2952,10 +2951,32 @@ a.dt-contractor-name:hover { text-decoration: underline; text-decoration-color: 
    "reference" colour here: the On-aired series, balances, Not started.
    --dt-pending-bar is the darker neutral for Pending and folded rows. */
 .dt-page { --dt-gap: 20px; --dt-muted: #8391A7; --dt-pending-bar: #6B788D; }
-/* The title row carries the toolbar (see DriveTestProject); the tabs sit
-   16px under it. */
-.dt-page .page-head { margin-bottom: 16px; }
-.dt-page .page-head > .row { flex: 0 1 auto; min-width: 0; }
+/* The header: one 48px row -- "Drive Test / Dashboard", the three views as
+   a segmented control, then the scope, freshness and the actions pushed
+   right. It wraps rather than overflows on a narrow page. */
+.dt-head {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 8px 20px;
+  min-height: 48px; margin-bottom: 16px;
+}
+.dt-head-title { display: flex; align-items: baseline; gap: 8px; white-space: nowrap; }
+.dt-head-crumb, .dt-head-sep { font-size: 14px; line-height: 20px; color: var(--text-tertiary); }
+.dt-head h1 { font-size: 22px; line-height: 28px; font-weight: 600; letter-spacing: -0.01em; }
+.dt-head .dt-view-tabs {
+  flex-wrap: nowrap; gap: 2px; padding: 3px;
+  border-radius: var(--radius-md); background: var(--track);
+}
+.dt-head .ui-tab { height: 32px; white-space: nowrap; }
+.dt-head .ui-tab:hover { background: transparent; }
+.dt-head .ui-tab[aria-selected='true'] {
+  background: var(--surface);
+  box-shadow: 0 1px 2px rgba(20, 27, 43, 0.12);
+}
+.dt-head .ui-tab[aria-selected='true']::after { display: none; }
+.dt-head .dt-toolbar { flex: 1 1 auto; justify-content: flex-end; min-width: 0; }
+.dt-head .dt-toolbar-right { margin-left: 0; }
+.dt-head .btn.dt-scope-all { gap: 6px; padding: 0 12px; font-weight: 500; color: var(--text); }
+.dt-head .btn.dt-scope-all svg { color: var(--text-tertiary); }
+.dt-icon-btn { width: 36px; height: 36px; padding: 0; }
 /* The two compact cards beside the trend take Cobalt's compact padding. */
 .dt-page .dt-stack > .dt-section { padding: 16px 20px 20px; gap: 12px; }
 /* A wider side column: its two cards keep their headers on one line, and

@@ -10,7 +10,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import api from '../../api/client'
 import { describeBlobError, filenameFrom, saveBlob } from '../../lib/download'
-import { Banner, PageHead, Tabs } from '../../components/ui'
+import { Banner, Tabs } from '../../components/ui'
 import { useToast } from '../../context/ToastContext'
 import AlertStrip from './AlertStrip'
 import BreakdownCard, { BreakdownTabs } from './BreakdownCard'
@@ -38,7 +38,7 @@ const ONGOING_TABS = [
   { key: 'age', label: 'How long' },
 ]
 
-/** The page's three views, as tabs directly under the title row. The view
+/** The page's three views, as a segmented control in the title row. The view
  * lives in the address (`?tab=breakdowns`, `?tab=contractors-provinces`), so a
  * link or a bookmark opens it and Back returns to the one before; Overview is
  * the default and carries no param. The KPI band belongs to Overview: each
@@ -252,25 +252,38 @@ export default function DriveTestProject() {
   return (
     <DrillProvider>
       <div className="dt-page">
-        {/* One row: the title on the left, the scope, freshness and the two
-            actions on the right. No subtitle: the scope chip names the
-            province the page is narrowed to. */}
-        <PageHead
-          eyebrow="Drive Test"
-          title="Dashboard"
-          actions={
-            <Toolbar
-              provinceId={provinceId}
-              provinceName={provinceName}
-              onClearProvince={() => setProvince(null)}
-              onRefresh={refresh}
-              refreshing={refreshing}
-              generatedAt={data?.generated_at}
-              onExport={exportWorkbook}
-              exporting={exporting}
-            />
-          }
-        />
+        {/* One 48px row: the breadcrumb and title, the three views as a
+            segmented control beside it, then the scope, freshness and the
+            two actions pushed right. The header is shared by all three tabs,
+            so switching views never moves it. No subtitle: the scope button
+            names the province the page is narrowed to. */}
+        <header className="dt-head">
+          <div className="dt-head-title">
+            <span className="dt-head-crumb">Drive Test</span>
+            <span className="dt-head-sep" aria-hidden="true">
+              /
+            </span>
+            <h1>Dashboard</h1>
+          </div>
+          <Tabs
+            className="dt-view-tabs"
+            label="Dashboard view"
+            tabs={VIEW_TABS}
+            value={view}
+            onChange={setView}
+          />
+          <Toolbar
+            provinceId={provinceId}
+            provinceName={provinceName}
+            onClearProvince={() => setProvince(null)}
+            onPickProvince={scrollToProvinces}
+            onRefresh={refresh}
+            refreshing={refreshing}
+            generatedAt={data?.generated_at}
+            onExport={exportWorkbook}
+            exporting={exporting}
+          />
+        </header>
 
         <div className="dt-bench">
           {overview.error ? (
@@ -294,14 +307,6 @@ export default function DriveTestProject() {
               />
             )
           )}
-
-          <Tabs
-            className="dt-view-tabs"
-            label="Dashboard view"
-            tabs={VIEW_TABS}
-            value={view}
-            onChange={setView}
-          />
 
           {view === OVERVIEW ? (
             <div className="dt-view" role="tabpanel" aria-label="Overview">

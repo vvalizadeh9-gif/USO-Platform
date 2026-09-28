@@ -1612,9 +1612,27 @@ describe('the toolbar', () => {
     for (const name of [/saved views/i, /vendor/i, /date range/i]) {
       expect(screen.queryByRole('button', { name })).not.toBeInTheDocument()
     }
-    // The two that do work are still there.
-    expect(screen.getByRole('button', { name: /refresh the dashboard/i })).toBeInTheDocument()
+    // The ones that do work are still there.
+    expect(screen.getByRole('button', { name: /^refresh$/i })).toHaveAttribute(
+      'title',
+      'Refresh the dashboard',
+    )
     expect(screen.getByRole('button', { name: /export/i })).toBeInTheDocument()
+  })
+
+  it('opens the province table from "All provinces", where the filter is set', async () => {
+    serve()
+    draw()
+
+    await screen.findByLabelText('Programme totals')
+    await userEvent.click(screen.getByRole('button', { name: 'All provinces' }))
+    expect(screen.getByRole('tab', { name: 'Contractors & provinces' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    )
+    expect(
+      await screen.findByRole('heading', { name: 'Drive Test progress by province' }),
+    ).toBeInTheDocument()
   })
 })
 
@@ -3031,16 +3049,16 @@ describe('the three views', () => {
   const TAB = 'Contractors & provinces'
   const viewTabs = () => screen.getAllByRole('tab', { name: /^(Overview|Breakdowns|Contractors & provinces)$/ })
 
-  it('offers three tabs, in order, directly under the title row', async () => {
+  it('offers three tabs, in order, in the title row', async () => {
     serve()
     draw()
 
     await screen.findByRole('tab', { name: 'Overview' })
     expect(viewTabs().map((t) => t.textContent)).toEqual(['Overview', 'Breakdowns', TAB])
-    // Nothing between the title row and the tabs but the alert, when there is one.
+    // The tabs share the header row with the title, so switching views never moves them.
     const tablist = screen.getByRole('tablist', { name: 'Dashboard view' })
-    const head = screen.getByRole('heading', { level: 1, name: 'Dashboard' }).closest('.page-head')
-    expect(head.compareDocumentPosition(tablist) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    const head = screen.getByRole('heading', { level: 1, name: 'Dashboard' }).closest('.dt-head')
+    expect(head).toContainElement(tablist)
     const band = await screen.findByLabelText('Programme totals')
     expect(tablist.compareDocumentPosition(band) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })
