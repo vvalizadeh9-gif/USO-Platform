@@ -204,7 +204,7 @@ export default function ContractorPlan({ period }) {
               {open.some((s) => ANSWERING.includes(planning[s.key].planning.status)) ? 'Resubmit' : 'Submit'}
             </button>
             {open.length < STREAMS.length && (
-              <span className="dim" style={{ fontSize: 12.5 }}>
+              <span className="dim" style={{ fontSize: 'var(--fs-meta)' }}>
                 Hands in your {open.map((s) => s.name).join(' and ')} PIP only; the other is with the PM already.
               </span>
             )}
@@ -302,7 +302,7 @@ function PlanRow({ stream, planning, value, onChange, busy, onHistory }) {
             <div className="pip-note-msg">{planning.return_comment}</div>
           </div>
         ) : (
-          <div className="dim mt-8" style={{ fontSize: 12.5 }}>
+          <div className="dim mt-8" style={{ fontSize: 'var(--fs-meta)' }}>
             Returned earlier: “{planning.return_comment}”
           </div>
         )

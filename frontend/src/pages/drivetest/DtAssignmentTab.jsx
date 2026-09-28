@@ -147,9 +147,9 @@ export default function DtAssignmentTab({ onCountChange }) {
           />
         </div>
         <div className="row between" style={{ marginTop: 8 }}>
-          <span className="dim" style={{ fontSize: 11.5 }}>Sorted: waiting longest first</span>
+          <span className="dim" style={{ fontSize: 'var(--fs-caption)' }}>Sorted: waiting longest first</span>
           {(query.trim() || provinceSel.size > 0) && (
-            <span className="dim" style={{ fontSize: 11.5 }}>
+            <span className="dim" style={{ fontSize: 'var(--fs-caption)' }}>
               {filtered.length} of {rows.length}
             </span>
           )}
@@ -208,14 +208,14 @@ export default function DtAssignmentTab({ onCountChange }) {
               <td>
                 <div className="row" style={{ gap: 5 }}>
                   {r.requested_technologies.map((t) => (
-                    <span key={t} className="pill pill-dim" style={{ fontSize: 11.5 }}>{t}</span>
+                    <span key={t} className="pill pill-dim" style={{ fontSize: 'var(--fs-caption)' }}>{t}</span>
                   ))}
                 </div>
               </td>
               <td>
                 {/* Only a site that needed more than one pass says so. */}
                 {r.rounds_taken > 1 ? (
-                  <span className="pill pill-cyan" style={{ fontSize: 11.5 }}>
+                  <span className="pill pill-cyan" style={{ fontSize: 'var(--fs-caption)' }}>
                     {r.rounds_taken} rounds
                   </span>
                 ) : (
@@ -228,7 +228,7 @@ export default function DtAssignmentTab({ onCountChange }) {
                 {r.returned_reason && (
                   <span
                     className="pill pill-amber"
-                    style={{ marginLeft: 6, fontSize: 11 }}
+                    style={{ marginLeft: 6, fontSize: 'var(--fs-caption)' }}
                     title={r.returned_reason}
                   >
                     Handed back

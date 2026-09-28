@@ -53,7 +53,7 @@ function BasketBadge({ count }) {
         borderRadius: 11,
         background: count > 0 ? 'var(--red)' : 'var(--surface-3)',
         color: count > 0 ? '#fff' : 'var(--text-dim)',
-        fontSize: 12.5,
+        fontSize: 'var(--fs-meta)',
         fontWeight: 700,
         lineHeight: 1,
       }}
@@ -180,7 +180,7 @@ export default function HcBasketTab({ onCountChange } = {}) {
           {/* What the figure counts, said next to it. It is every on-air site
               whose drive test is not Done — not the subset that can be
               assigned this minute, which is the second number. */}
-          <span className="dim" style={{ fontSize: 12.5 }}>
+          <span className="dim" style={{ fontSize: 'var(--fs-meta)' }}>
             on-air site{basket.length === 1 ? '' : 's'} without a completed drive test
             {' · '}
             {basket.filter((b) => b.assignable).length} ready to assign
@@ -205,9 +205,9 @@ export default function HcBasketTab({ onCountChange } = {}) {
           />
         </div>
         <div className="row between" style={{ marginTop: 8 }}>
-          <span className="dim" style={{ fontSize: 11.5 }}>Sorted: waiting longest first</span>
+          <span className="dim" style={{ fontSize: 'var(--fs-caption)' }}>Sorted: waiting longest first</span>
           {(query.trim() || provinceSel.size > 0) && (
-            <span className="dim" style={{ fontSize: 11.5 }}>
+            <span className="dim" style={{ fontSize: 'var(--fs-caption)' }}>
               {filtered.length} of {basket.length}
             </span>
           )}
@@ -281,7 +281,7 @@ export default function HcBasketTab({ onCountChange } = {}) {
                   <td>
                     <div className="row" style={{ gap: 5 }}>
                       {b.requested_technologies.map((t) => (
-                        <span key={t} className="pill pill-dim" style={{ fontSize: 11.5 }}>{t}</span>
+                        <span key={t} className="pill pill-dim" style={{ fontSize: 'var(--fs-caption)' }}>{t}</span>
                       ))}
                     </div>
                   </td>
@@ -289,7 +289,7 @@ export default function HcBasketTab({ onCountChange } = {}) {
                       both belong here — only a Done drive test takes a site
                       out — and a blank column is a drive test not started. */}
                   <td>
-                    <span className="dim" style={{ fontSize: 12.5 }}>
+                    <span className="dim" style={{ fontSize: 'var(--fs-meta)' }}>
                       {b.dt_status || 'Not started'}
                     </span>
                   </td>
@@ -301,7 +301,7 @@ export default function HcBasketTab({ onCountChange } = {}) {
                     {b.hc_state === 'Ready for re-check' && b.round_no > 1 ? (
                       <span
                         className="pill pill-cyan"
-                        style={{ fontSize: 11.5 }}
+                        style={{ fontSize: 'var(--fs-caption)' }}
                         title={`Round ${b.round_no} — returned after its fixes were closed`}
                       >
                         {b.returning_reason || `Round ${b.round_no}`}
@@ -309,13 +309,13 @@ export default function HcBasketTab({ onCountChange } = {}) {
                     ) : STATE_PILL[b.hc_state] ? (
                       <span
                         className={`pill ${STATE_PILL[b.hc_state].cls}`}
-                        style={{ fontSize: 11.5 }}
+                        style={{ fontSize: 'var(--fs-caption)' }}
                         title={STATE_PILL[b.hc_state].title}
                       >
                         {b.hc_state}
                       </span>
                     ) : (
-                      <span className="dim" style={{ fontSize: 12.5 }}>{b.hc_state}</span>
+                      <span className="dim" style={{ fontSize: 'var(--fs-meta)' }}>{b.hc_state}</span>
                     )}
                   </td>
                   <td><WaitingPill days={b.days_waiting} /></td>

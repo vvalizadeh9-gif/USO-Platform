@@ -983,6 +983,11 @@ a.stepper-step:focus-visible { outline: 2px solid var(--accent); outline-offset:
 }
 .stepper-step.is-current { background: var(--accent-wash); color: var(--accent-ink); font-weight: 600; box-shadow: inset 0 0 0 1px var(--accent-track); }
 .stepper-step.is-current .stepper-num { background: var(--accent); border-color: var(--accent); color: var(--text-on-accent); }
+/* A narrower header keeps the current step's name and numbers the rest. */
+@media (max-width: 1360px) {
+  .stepper-step:not(.is-current) .stepper-label { display: none; }
+  .stepper-step:not(.is-current) { padding: 0 5px; }
+}
 
 /* Segmented control: pressed buttons in a track. */
 .ui-seg {
@@ -1025,6 +1030,40 @@ a.stepper-step:focus-visible { outline: 2px solid var(--accent); outline-offset:
 .ui-card-title { font-size: 17px; line-height: 24px; font-weight: 600; letter-spacing: 0; }
 .ui-card-desc { margin-top: 2px; color: var(--text-secondary); font-size: 14px; line-height: 21px; max-width: 760px; }
 .ui-card-actions { display: flex; align-items: center; gap: 8px; margin-inline-start: auto; }
+
+/* KPI card (ui.jsx): a neutral 36px chip and a 15/22 title, then the 30/38
+   figure with a note at the end of its line, then the card's floor. */
+.kpi-card {
+  display: flex; flex-direction: column; gap: 12px; min-width: 0;
+  padding: 20px; background: var(--surface);
+  border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow-1);
+}
+.kpi-card-head { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.kpi-card-chip {
+  display: grid; place-items: center; width: 36px; height: 36px; flex: none;
+  border-radius: 9px; background: var(--neutral-soft); color: var(--text-secondary);
+}
+.kpi-card-title { font-size: var(--fs-title); line-height: var(--lh-title); font-weight: 600; color: var(--text); white-space: nowrap; }
+.kpi-card-badge { margin-inline-start: auto; }
+.kpi-card-line { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.kpi-card-figure { font-size: var(--fs-figure); line-height: var(--lh-figure); font-weight: 600; letter-spacing: -0.01em; color: var(--text); }
+.kpi-card-aside {
+  margin-inline-start: auto; text-align: end;
+  font-size: var(--fs-meta); line-height: var(--lh-meta); color: var(--text-secondary);
+}
+.kpi-card-aside b { color: var(--text); font-weight: 700; }
+.kpi-card-meter { display: flex; align-items: center; gap: 10px; margin-top: auto; }
+.kpi-card-meter .meter { flex: 1 1 auto; }
+.kpi-card-pct { font-size: var(--fs-control); line-height: var(--lh-control); font-weight: 600; color: var(--text-secondary); }
+
+/* Meter (ui.jsx): an accent share on the plain track, 8px, with an optional
+   2px ink tick for "expected by today". */
+.meter { position: relative; display: inline-block; height: 8px; border-radius: 4px; background: var(--track); }
+.meter-fill { position: absolute; inset-block: 0; inset-inline-start: 0; border-radius: 4px; background: var(--accent); }
+.meter-tick {
+  position: absolute; top: -3px; bottom: -3px; width: 2px; margin-inline-start: -1px;
+  border-radius: 1px; background: var(--text);
+}
 
 /* Banner: a message about the page, tinted by tone, always in words too. */
 .banner {
@@ -3739,11 +3778,10 @@ a.lifecycle-step:focus-visible { outline: 2px solid var(--signal); outline-offse
   display: flex;
   align-items: center;
   gap: 5px;
-  font-size: 10.5px;
+  font-size: var(--fs-caption);
+  line-height: var(--lh-caption);
   font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--text-dim);
+  color: var(--text-secondary);
   padding-right: 2px;
   cursor: help;
 }
@@ -4279,13 +4317,31 @@ a.lifecycle-step:focus-visible { outline: 2px solid var(--signal); outline-offse
 /* ---------- Monthly Plan: the PM's two tabs (PmPlan / PipTab / StreamPanel) ----------
    Built to fit 1440x900 with the sidebar: tight rows, small type for the
    secondary lines, and a single plan's history in a drawer. */
-.mp-page { display: flex; flex-direction: column; gap: 10px; }
-.mp-head-right { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
-.mp-picker { display: flex; flex-direction: column; align-items: center; }
-.mp-picker-label { font-family: var(--font-farsi); font-weight: 600; font-size: 15px; min-width: 104px; text-align: center; }
-.mp-picker-sub { font-size: 11.5px; color: var(--text-dim); }
-
-.mp-page .page-head { margin-bottom: 0; }
+/* ---------- Monthly Plan (PM): the header's controls ----------
+   The plan clock (two 13/18 lines), the month picker as one control, and
+   Export. The Plans tab is a long board: its body scrolls inside the frame;
+   PIP vs Achieved is laid out to fit. */
+.mp-page .page-body { overflow-y: auto; }
+.mp-clock {
+  display: flex; flex-direction: column; align-items: flex-end; margin-inline-end: 8px;
+  font-size: var(--fs-meta); line-height: var(--lh-meta); color: var(--text-secondary); white-space: nowrap;
+}
+.mp-clock span:first-child { color: var(--text); font-weight: 600; }
+.mp-picker {
+  display: inline-flex; align-items: center; height: 36px;
+  border: 1px solid var(--control-border); border-radius: var(--radius-sm); background: var(--surface);
+}
+.mp-picker-step {
+  display: grid; place-items: center; width: 32px; height: 100%;
+  border: 0; background: none; color: var(--text-secondary);
+}
+.mp-picker-step:hover:not(:disabled) { background: var(--surface-subtle); color: var(--text); }
+.mp-picker-step:disabled { color: var(--text-tertiary); opacity: 0.5; cursor: default; }
+.mp-picker-step:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.mp-picker-label {
+  min-width: 104px; padding: 0 4px; text-align: center; white-space: nowrap;
+  font-family: var(--font-farsi); font-size: var(--fs-body); line-height: var(--lh-body); font-weight: 600;
+}
 /* The Plans tab's count of decisions waiting on the PM. */
 .mp-badge {
   display: inline-grid; place-items: center;
@@ -4394,66 +4450,73 @@ a.lifecycle-step:focus-visible { outline: 2px solid var(--signal); outline-offse
 .pl-revision-title { font-size: 15px; font-weight: 600; color: var(--text); }
 .pl-revision-note { font-size: 14px; color: var(--text-secondary); font-family: var(--font-farsi); }
 /* The drawer's figures (DecisionDrawer). */
-.mp-kpi-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.03em; color: var(--text-dim); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mp-kpi-label { font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--text-tertiary); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mp-kpi-value { font-family: var(--font-display); font-size: 20px; font-weight: 700; line-height: 1.2; }
 
 /* ---------- Monthly Plan: the PIP vs Achieved tab (PipTab) ----------
-   One stream at a time: KPI cards, the contractor table, seven months. */
-.mp-tabrow { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; border-bottom: 1px solid var(--divider); }
-.mp-tabrow .mp-tabs { border-bottom: 0; }
-.pv-tab { display: flex; flex-direction: column; gap: 14px; }
-.pv-kpis { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 14px; }
+   One stream at a time: four KPI cards, then the contractors beside the last
+   seven months, filling the rest of the screen. The table scrolls inside its
+   card; the totals row is sticky at its foot. */
+.pv-tab { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: 16px; }
+.pv-kpis { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 12px; flex: none; }
 @media (max-width: 900px) { .pv-kpis { grid-auto-flow: row; } }
-.pv-kpi {
-  position: relative; min-width: 0;
-  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
-  box-shadow: var(--shadow-1); padding: 12px 16px;
+.pv-internal { position: relative; }
+.pv-unset { font-size: var(--fs-heading); line-height: var(--lh-heading); color: var(--text-tertiary); font-weight: 500; }
+.pv-body {
+  flex: 1 1 auto; min-height: 0;
+  display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 16px;
 }
-.pv-kpi-label { font-size: 13px; font-weight: 600; color: var(--text-secondary); }
-.pv-kpi-line { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
-.pv-kpi-value { font-size: 28px; line-height: 36px; font-weight: 600; color: var(--text); }
-.pv-kpi-note { font-size: 13px; color: var(--text-secondary); }
-.pv-unset { font-size: 16px; color: var(--text-tertiary); font-weight: 500; }
-.pv-warn { color: var(--pending-ink); font-weight: 600; }
-.pv-link { position: absolute; top: 12px; inset-inline-end: 14px; border: 0; background: none; padding: 0; font: inherit; font-size: 13px; font-weight: 600; color: var(--text-link); cursor: pointer; }
-.pv-link:hover { text-decoration: underline; }
-
-.pv-card.ui-card { padding: 12px 20px 14px; gap: 10px; }
-.pv-card-title { font-size: 13px; font-weight: 600; color: var(--text-secondary); }
-.pv-table-wrap { overflow-x: auto; }
-.pv-table th, .pv-table td { white-space: nowrap; }
+@media (max-width: 1100px) { .pv-body { grid-template-columns: minmax(0, 1fr); } }
+.pv-card.ui-card, .pv-trend-card.ui-card { padding: 16px 20px; gap: 12px; min-height: 0; }
+.pv-trend-card { overflow-y: auto; }
 .pv-table tbody th, .pv-table tfoot th { font-weight: 600; }
-.pv-name { border: 0; background: none; padding: 0; font: inherit; font-weight: 600; color: var(--text); font-family: var(--font-farsi); cursor: pointer; text-align: start; }
+.pv-name {
+  display: block; border: 0; background: none; padding: 0; text-align: start; cursor: pointer;
+  font-family: var(--font-farsi); font-size: var(--fs-body); line-height: var(--lh-body); font-weight: 600; color: var(--text);
+}
 .pv-name:hover { color: var(--accent-ink); text-decoration: underline; }
 .pv-name:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 2px; }
-.pv-noplan, .pv-delivered-plain { color: var(--text-tertiary); }
-.pv-total th, .pv-total td { background: var(--surface-subtle); height: 40px; padding-block: 4px; font-weight: 600; border-top: 1px solid var(--border); }
-.pv-bar-cell { display: flex; align-items: center; gap: 10px; }
-.pv-bar { position: relative; flex: 1 1 auto; max-width: 260px; min-width: 120px; height: 10px; border-radius: 5px; background: var(--track); }
-.pv-bar i { position: absolute; top: 0; bottom: 0; }
-.pv-bar-fill { left: 0; background: var(--accent); border-radius: 5px; }
-.pv-bar-tick { width: 2px; top: -3px !important; bottom: -3px !important; background: var(--text); border-radius: 1px; transform: translateX(-1px); }
-.pv-bar-text { font-size: 13px; color: var(--text-secondary); }
+.pv-sub {
+  display: block; font-size: var(--fs-meta); line-height: var(--lh-meta); font-weight: 400; color: var(--text-tertiary);
+}
+.pv-none { color: var(--text-tertiary); }
+.pv-total th, .pv-total td {
+  position: sticky; bottom: 0; background: var(--surface-subtle);
+  font-weight: 600; border-top: 1px solid var(--border);
+}
+.pv-progress { display: inline-flex; align-items: center; gap: 10px; }
+.pv-meter { width: 110px; }
+.pv-pct { min-width: 4ch; font-size: var(--fs-meta); line-height: var(--lh-meta); color: var(--text-secondary); }
 
-.pv-trend-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
-.pv-legend { display: flex; gap: 14px; font-size: 12px; color: var(--text-secondary); }
-.pv-legend span { display: inline-flex; align-items: center; gap: 5px; }
-.pv-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; }
-.pv-key-met { background: #2F5FD0; }
-.pv-key-below { background: #6B788D; }
-.pv-legend .pv-key-pip { width: 12px; height: 2px; background: var(--text); border-radius: 1px; }
-.pv-trend { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 12px; height: 150px; }
-.pv-col { display: flex; flex-direction: column; align-items: center; min-width: 0; }
-.pv-col-plot { position: relative; flex: 1; width: 44%; max-width: 56px; }
-.pv-col-bar { position: absolute; left: 0; right: 0; bottom: 0; border-radius: 3px 3px 0 0; }
-.pv-col-met { background: #2F5FD0; }
-.pv-col-below { background: #6B788D; }
-.pv-col-noplan { background: var(--track); }
-.pv-col-running { background: var(--accent-track); box-shadow: inset 0 0 0 1px var(--accent); }
-.pv-col-pip { position: absolute; left: -6px; right: -6px; height: 2px; background: var(--text); border-radius: 1px; }
-.pv-col-name { margin-top: 4px; font-family: var(--font-farsi); font-size: 12px; font-weight: 600; color: var(--text); white-space: nowrap; }
-.pv-col[data-kind='running'] .pv-col-name { color: var(--accent-ink); }
-.pv-col-num { font-size: 12px; color: var(--text-tertiary); white-space: nowrap; }
+/* The last seven months, one row each: Farsi name, the bar, the figures. */
+.pv-trend { list-style: none; display: flex; flex-direction: column; gap: 6px; }
+.pv-trend-row {
+  display: grid; grid-template-columns: 72px minmax(0, 1fr) auto; align-items: center; gap: 12px;
+  min-height: 32px;
+}
+.pv-trend-name { font-family: var(--font-farsi); font-size: var(--fs-body); line-height: var(--lh-body); font-weight: 500; color: var(--text); white-space: nowrap; }
+.pv-trend-row[data-kind='running'] .pv-trend-name { color: var(--accent-ink); font-weight: 600; }
+.pv-trend-track { position: relative; height: 12px; border-radius: 3px; background: var(--track); }
+.pv-trend-bar { position: absolute; inset-block: 0; inset-inline-start: 0; border-radius: 3px; }
+.pv-trend-met { background: var(--accent); }
+.pv-trend-below { background: var(--dt-pending-bar); }
+.pv-trend-noplan { background: var(--dt-muted); }
+.pv-trend-running { background: var(--accent-soft); box-shadow: inset 0 0 0 1px var(--accent); }
+.pv-trend-pip {
+  position: absolute; top: -4px; bottom: -4px; width: 2px; margin-inline-start: -1px;
+  border-radius: 1px; background: var(--text);
+}
+.pv-trend-num { font-size: var(--fs-meta); line-height: var(--lh-meta); color: var(--text-secondary); white-space: nowrap; }
+.pv-legend {
+  display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: auto;
+  font-size: var(--fs-meta); line-height: var(--lh-meta); color: var(--text-secondary);
+}
+.pv-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.pv-legend i { display: inline-block; width: 12px; height: 10px; border-radius: 2px; }
+.pv-key-met { background: var(--accent); }
+.pv-key-below { background: var(--dt-pending-bar); }
+.pv-key-running { background: var(--accent-soft); box-shadow: inset 0 0 0 1px var(--accent); }
+.pv-legend .pv-key-pip { width: 2px; height: 14px; background: var(--text); border-radius: 1px; }
 
 .mp-drawer-scrim { position: fixed; inset: 0; background: rgba(20, 26, 24, 0.18); z-index: 60; }
 .mp-drawer {

@@ -12,7 +12,9 @@ import { NAV_BY_PATH, navItemVisible } from '../lib/nav'
  * for links: a step is a link only if the sidebar would offer this person
  * that screen (lib/nav), and a step they cannot open stays as plain text, so
  * the process reads the same to everyone. The current step is marked in the
- * accent wash with a filled number, and `aria-current="step"`.
+ * accent wash with a filled number, and `aria-current="step"`. On a
+ * narrower header the other steps collapse to their numbers (CSS); each
+ * keeps its name as its accessible label and tooltip.
  */
 export default function ProcessStepper({ current }) {
   const { user } = useAuth()
@@ -36,9 +38,11 @@ export default function ProcessStepper({ current }) {
               {isCurrent ? (
                 <span className="stepper-step is-current" aria-current="step">{body}</span>
               ) : reachable ? (
-                <Link className="stepper-step" to={step.to} title={step.hint}>{body}</Link>
+                <Link className="stepper-step" to={step.to} title={`${step.label} · ${step.hint}`} aria-label={step.label}>
+                  {body}
+                </Link>
               ) : (
-                <span className="stepper-step is-muted">{body}</span>
+                <span className="stepper-step is-muted" title={step.label}>{body}</span>
               )}
             </li>
           )

@@ -113,9 +113,9 @@ export default function DtInProgressTab({ onCountChange }) {
           </select>
         </div>
         <div className="row between" style={{ marginTop: 8 }}>
-          <span className="dim" style={{ fontSize: 11.5 }}>Sorted: waiting longest first</span>
+          <span className="dim" style={{ fontSize: 'var(--fs-caption)' }}>Sorted: waiting longest first</span>
           {(query.trim() || provinceSel.size > 0 || contractorFilter) && (
-            <span className="dim" style={{ fontSize: 11.5 }}>
+            <span className="dim" style={{ fontSize: 'var(--fs-caption)' }}>
               {filtered.length} of {rows.length}
             </span>
           )}
@@ -153,13 +153,13 @@ export default function DtInProgressTab({ onCountChange }) {
                       queue exists. */}
                   <span
                     className={`pill ${sentBack ? 'pill-red' : 'pill-dim'}`}
-                    style={{ fontSize: 11.5 }}
+                    style={{ fontSize: 'var(--fs-caption)' }}
                     title={sentBack ? r.sent_back_comment || undefined : undefined}
                   >
                     {sentBack ? 'Sent back' : 'With contractor'}
                   </span>
                   {sentBack && r.sent_back_comment && (
-                    <div className="dim" style={{ fontSize: 11.5, marginTop: 4, maxWidth: 360 }}>
+                    <div className="dim" style={{ fontSize: 'var(--fs-caption)', marginTop: 4, maxWidth: 360 }}>
                       {r.sent_back_comment}
                     </div>
                   )}

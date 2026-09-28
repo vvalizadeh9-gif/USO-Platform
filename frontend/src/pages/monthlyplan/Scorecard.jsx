@@ -96,7 +96,7 @@ export default function Scorecard({ canSeeAllContractors }) {
       <motion.div variants={fadeUp} className="card mt-16">
         <div style={{ padding: '18px 20px 4px' }}>
           <h3 style={{ fontSize: 15 }}>Commitment against delivery</h3>
-          <div className="dim" style={{ fontSize: 12.5, marginTop: 3 }}>
+          <div className="dim" style={{ fontSize: 'var(--fs-meta)', marginTop: 3 }}>
             Each month: what was available to work on, what was delivered, and the
             approved plan as the target.
           </div>
@@ -107,7 +107,7 @@ export default function Scorecard({ canSeeAllContractors }) {
       <motion.div variants={fadeUp} className="card mt-16">
         <div style={{ padding: '18px 20px 14px' }}>
           <h3 style={{ fontSize: 15 }}>Month by month</h3>
-          <div className="dim" style={{ fontSize: 12.5, marginTop: 3 }}>
+          <div className="dim" style={{ fontSize: 'var(--fs-meta)', marginTop: 3 }}>
             {canSeeAllContractors
               ? 'Open a month to see every subcontractor in it.'
               : 'Your own figures. No other company appears here.'}
@@ -192,7 +192,7 @@ function RangePicker({ range, onChange, months }) {
           {option.label}
         </button>
       ))}
-      <span className="dim" style={{ fontSize: 12.5, marginInlineStart: 4 }}>
+      <span className="dim" style={{ fontSize: 'var(--fs-meta)', marginInlineStart: 4 }}>
         {months[0].shamsi_month_name} {months[0].shamsi_year} —{' '}
         {months[months.length - 1].shamsi_month_name}{' '}
         {months[months.length - 1].shamsi_year}
@@ -216,7 +216,7 @@ function Funnel({ current }) {
     <div className="card card-pad">
       <div className="row wrap" style={{ gap: 10, marginBottom: 14 }}>
         <h3 style={{ fontSize: 15 }}>Where the shortfall is</h3>
-        <span className="dim" style={{ fontSize: 12.5 }}>
+        <span className="dim" style={{ fontSize: 'var(--fs-meta)' }}>
           {current.shamsi_month_name} {current.shamsi_year}
         </span>
       </div>
@@ -229,7 +229,7 @@ function Funnel({ current }) {
         <FunnelStep label="Delivered" value={current.delivered} />
       </div>
 
-      <p className="muted" style={{ fontSize: 12.5, marginTop: 12, lineHeight: 1.6 }}>
+      <p className="muted" style={{ fontSize: 'var(--fs-meta)', marginTop: 12, lineHeight: 1.6 }}>
         {explain(current, achievement, coverage, execution)}
       </p>
     </div>
@@ -270,7 +270,7 @@ function FunnelStep({ label, value }) {
         padding: '13px 16px',
       }}
     >
-      <div className="dim" style={{ fontSize: 11.5, fontWeight: 500 }}>{label}</div>
+      <div className="dim" style={{ fontSize: 'var(--fs-caption)', fontWeight: 500 }}>{label}</div>
       <div className="tnum" style={{ fontFamily: 'var(--font-display)', fontSize: 24, fontWeight: 600, marginTop: 4 }}>
         {value}
       </div>
@@ -287,7 +287,7 @@ function FunnelRate({ label, value, tone }) {
       <b style={{ fontFamily: 'var(--font-display)', fontSize: 15, color: value == null ? 'var(--text-dim)' : tone }}>
         {fmt(value)}
       </b>
-      <small style={{ fontSize: 10.5, letterSpacing: '0.05em', textTransform: 'uppercase', color: 'var(--text-dim)', fontWeight: 600 }}>
+      <small style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-tertiary)', fontWeight: 600 }}>
         {label}
       </small>
     </div>
@@ -494,7 +494,7 @@ function MonthGrid({
         </table>
       </div>
 
-      <div className="dim" style={{ fontSize: 11.5, padding: '12px 20px 18px', lineHeight: 1.6 }}>
+      <div className="dim" style={{ fontSize: 'var(--fs-caption)', padding: '12px 20px 18px', lineHeight: 1.6 }}>
         {balances.includes('available') && (
           <>
             <b>Available</b> is what the subcontractor could work on that month: what they
@@ -519,7 +519,7 @@ function MonthRows({ month, open, expandable, onToggle, onRevisions, isContracto
             <button
               type="button"
               className="btn btn-ghost btn-sm"
-              style={{ padding: 0, gap: 7, fontFamily: 'var(--font-farsi)', fontSize: 14.5, fontWeight: 500 }}
+              style={{ padding: 0, gap: 7, fontFamily: 'var(--font-farsi)', fontSize: 'var(--fs-body)', fontWeight: 500 }}
               aria-expanded={open}
               onClick={onToggle}
             >

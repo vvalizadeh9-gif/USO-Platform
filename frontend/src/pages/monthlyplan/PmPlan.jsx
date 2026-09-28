@@ -1,7 +1,9 @@
 import { ChevronLeft, ChevronRight, Download } from 'lucide-react'
 import { useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { PageHead, SegmentedControl, Tabs } from '../../components/ui'
+import PageFrame from '../../components/PageFrame'
+import ProcessStepper from '../../components/ProcessStepper'
+import { PageBar, SegmentedControl, Tabs } from '../../components/ui'
 import { useToast } from '../../context/ToastContext'
 import { currentShamsiPeriod, nextPeriod, previousPeriod, shamsiMonthName } from '../../lib/shamsi'
 import DecisionDrawer from './DecisionDrawer'
@@ -138,38 +140,43 @@ export default function PmPlan({ canDecide, canSetTarget, canSeeInternal }) {
     { key: 'pip', label: 'PIP vs Achieved' },
   ]
 
-  return (
-    <div className="mp-page">
-      <PageHead
-        eyebrow="Month-end"
-        title="Monthly Plan"
-        actions={
-          <div className="mp-head-right">
-            <MonthPicker
-              label={pickerLabel}
-              disabled={pickerView === 'since_start'}
-              onStep={step}
-              sub={
-                pickerView === 'month' && data?.day_of_month != null
-                  ? `Day ${data.day_of_month} of ${data.days_in_month} · ${
-                      data.revision_window_open ? 'revisions until day 15' : 'revisions closed'
-                    }`
-                  : null
-              }
-            />
-            {onPip && <SegmentedControl options={VIEWS} value={view} onChange={setView} label="Period" />}
-            <button type="button" className="btn btn-sm" onClick={exportExcel}>
-              <Download size={14} /> Export Excel
-            </button>
-          </div>
-        }
-      />
-
-      <div className="mp-tabrow">
-        <Tabs tabs={tabs} value={tab} onChange={selectTab} label="Monthly plan views" className="mp-tabs" />
-        {onPip && <SegmentedControl options={STREAM_OPTIONS} value={pipStream.key} onChange={selectStream} label="Stream" />}
+  const clock =
+    pickerView === 'month' && data?.day_of_month != null ? (
+      <div className="mp-clock" data-testid="mp-clock">
+        <span className="tnum">Day {data.day_of_month} of {data.days_in_month}</span>
+        <span>{data.revision_window_open ? 'Revisions open until day 15' : 'Revisions closed'}</span>
       </div>
+    ) : null
 
+  return (
+    <PageFrame
+      className="mp-page"
+      bar={
+        <PageBar
+          eyebrow="Drive Test"
+          title="Monthly Plan"
+          context={<ProcessStepper current="plan" />}
+          actions={
+            <>
+              {clock}
+              <MonthPicker label={pickerLabel} disabled={pickerView === 'since_start'} onStep={step} />
+              <button type="button" className="btn" onClick={exportExcel}>
+                <Download size={16} aria-hidden="true" /> Export Excel
+              </button>
+            </>
+          }
+          tabs={<Tabs tabs={tabs} value={tab} onChange={selectTab} label="Monthly plan views" />}
+          tabsRight={
+            onPip && (
+              <>
+                <SegmentedControl options={STREAM_OPTIONS} value={pipStream.key} onChange={selectStream} label="Stream" />
+                <SegmentedControl options={VIEWS} value={view} onChange={setView} label="Period" />
+              </>
+            )
+          }
+        />
+      }
+    >
       {onPip ? (
         <PipTab
           data={overview.data}
@@ -203,23 +210,21 @@ export default function PmPlan({ canDecide, canSetTarget, canSeeInternal }) {
           onDecided={reloadAll}
         />
       )}
-    </div>
+    </PageFrame>
   )
 }
 
-function MonthPicker({ label, sub, disabled, onStep }) {
+/** ‹ month › -- one control: the period on the page, stepped either way. */
+function MonthPicker({ label, disabled, onStep }) {
   return (
-    <div className="mp-picker">
-      <div className="row" style={{ gap: 4 }}>
-        <button type="button" className="btn btn-ghost btn-sm" aria-label="Previous" disabled={disabled} onClick={() => onStep(-1)}>
-          <ChevronLeft size={15} />
-        </button>
-        <span className="mp-picker-label" data-testid="mp-period">{label}</span>
-        <button type="button" className="btn btn-ghost btn-sm" aria-label="Next" disabled={disabled} onClick={() => onStep(1)}>
-          <ChevronRight size={15} />
-        </button>
-      </div>
-      {sub && <div className="mp-picker-sub">{sub}</div>}
+    <div className="mp-picker" role="group" aria-label="Month">
+      <button type="button" className="mp-picker-step" aria-label="Previous" disabled={disabled} onClick={() => onStep(-1)}>
+        <ChevronLeft size={16} aria-hidden="true" />
+      </button>
+      <span className="mp-picker-label" data-testid="mp-period">{label}</span>
+      <button type="button" className="mp-picker-step" aria-label="Next" disabled={disabled} onClick={() => onStep(1)}>
+        <ChevronRight size={16} aria-hidden="true" />
+      </button>
     </div>
   )
 }

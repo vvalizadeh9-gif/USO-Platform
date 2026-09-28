@@ -151,9 +151,9 @@ export default function DtReviewTab({ onCountChange }) {
           </select>
         </div>
         <div className="row between" style={{ marginTop: 8 }}>
-          <span className="dim" style={{ fontSize: 11.5 }}>Sorted: waiting longest first</span>
+          <span className="dim" style={{ fontSize: 'var(--fs-caption)' }}>Sorted: waiting longest first</span>
           {(query.trim() || provinceSel.size > 0 || contractorFilter) && (
-            <span className="dim" style={{ fontSize: 11.5 }}>
+            <span className="dim" style={{ fontSize: 'var(--fs-caption)' }}>
               {filtered.length} of {rows.length}
             </span>
           )}
@@ -189,7 +189,7 @@ export default function DtReviewTab({ onCountChange }) {
 
               <div className="row wrap" style={{ gap: 8, marginTop: 12 }}>
                 {r.evidence.length === 0 ? (
-                  <span className="dim" style={{ fontSize: 12.5 }}>
+                  <span className="dim" style={{ fontSize: 'var(--fs-meta)' }}>
                     No report attached — approve only if you have seen it elsewhere.
                   </span>
                 ) : (
@@ -271,7 +271,7 @@ export default function DtReviewTab({ onCountChange }) {
 function Field({ label, value }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-      <span className="dim" style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.3 }}>
+      <span className="dim" style={{ fontSize: 'var(--fs-caption)', textTransform: 'uppercase', letterSpacing: 0.3 }}>
         {label}
       </span>
       <span className="tnum" style={{ fontWeight: 500 }}>

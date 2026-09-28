@@ -289,7 +289,7 @@ export default function HcResultsTab({ highlightTaskId, onCountChange } = {}) {
                       <td className="text-data">{r.site_type}</td>
                       <td>
                         {r.round_no > 1 ? (
-                          <span className="pill pill-cyan" style={{ fontSize: 11.5 }}>
+                          <span className="pill pill-cyan" style={{ fontSize: 'var(--fs-caption)' }}>
                             #{r.round_no}
                           </span>
                         ) : (
@@ -299,7 +299,7 @@ export default function HcResultsTab({ highlightTaskId, onCountChange } = {}) {
                       <td>
                         <div className="row" style={{ gap: 5 }}>
                           {(r.requested_technologies || []).map((t) => (
-                            <span key={t} className="pill pill-dim" style={{ fontSize: 11.5 }}>{t}</span>
+                            <span key={t} className="pill pill-dim" style={{ fontSize: 'var(--fs-caption)' }}>{t}</span>
                           ))}
                         </div>
                       </td>
@@ -318,7 +318,7 @@ export default function HcResultsTab({ highlightTaskId, onCountChange } = {}) {
                         <CategoryCell row={r} canReview={canReview} categories={categories} onConfirmReady={reviewTask} onSelectCategory={requestNotReadyReview} />
                       </td>
                       <td className="text-data">{r.contractor_name || '—'}</td>
-                      <td className="dim" style={{ fontSize: 12.5 }}>{r.assignment_code}</td>
+                      <td className="dim" style={{ fontSize: 'var(--fs-meta)' }}>{r.assignment_code}</td>
                     </tr>
                     {isOpen && (
                       <tr>
@@ -363,7 +363,7 @@ function CategoryCell({ row, canReview, categories, onConfirmReady, onSelectCate
   if (row.overall_result === 'Ready') {
     if (row.reviewed) {
       return (
-        <span className="row" style={{ gap: 4, color: 'var(--green)', fontSize: 12.5 }}>
+        <span className="row" style={{ gap: 4, color: 'var(--green)', fontSize: 'var(--fs-meta)' }}>
           <ShieldCheck size={14} /> Confirmed
         </span>
       )

@@ -114,12 +114,12 @@ export default function RemediationTab({ onCountChange }) {
               <td>
                 <span className="tnum">{r.days_open}d</span>
                 {r.days_late > 0 && (
-                  <span className="pill pill-red" style={{ marginLeft: 6, fontSize: 11 }}>
+                  <span className="pill pill-red" style={{ marginLeft: 6, fontSize: 'var(--fs-caption)' }}>
                     {r.days_late}d late
                   </span>
                 )}
                 {r.reroute_pending && (
-                  <span className="pill pill-amber" style={{ marginLeft: 6, fontSize: 11 }}>
+                  <span className="pill pill-amber" style={{ marginLeft: 6, fontSize: 'var(--fs-caption)' }}>
                     Disputed
                   </span>
                 )}

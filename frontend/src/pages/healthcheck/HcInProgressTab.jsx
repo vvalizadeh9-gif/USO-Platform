@@ -76,7 +76,7 @@ export default function HcInProgressTab({ onCountChange }) {
                   </td>
                   <td style={{ fontWeight: 500 }}>{a.code}</td>
                   <td className="text-data">{a.contractor_name || '—'}</td>
-                  <td className="dim" style={{ fontSize: 12.5 }}>{fmt(a.assigned_at)}</td>
+                  <td className="dim" style={{ fontSize: 'var(--fs-meta)' }}>{fmt(a.assigned_at)}</td>
                   <td className="tnum">
                     {a.sites_submitted}/{a.sites_total}
                   </td>
@@ -87,7 +87,7 @@ export default function HcInProgressTab({ onCountChange }) {
                     >
                       {a.days_outstanding} day{a.days_outstanding === 1 ? '' : 's'}
                     </span>
-                    <span className="dim" style={{ marginLeft: 8, fontSize: 12.5 }}>
+                    <span className="dim" style={{ marginLeft: 8, fontSize: 'var(--fs-meta)' }}>
                       {a.sites_pending} site{a.sites_pending === 1 ? '' : 's'} pending
                     </span>
                   </td>
@@ -101,7 +101,7 @@ export default function HcInProgressTab({ onCountChange }) {
                       </div>
                       <div className="row wrap" style={{ gap: 6 }}>
                         {a.pending_sites.filter(Boolean).map((code) => (
-                          <span key={code} className="pill pill-dim text-data" style={{ fontSize: 11.5 }}>
+                          <span key={code} className="pill pill-dim text-data" style={{ fontSize: 'var(--fs-caption)' }}>
                             {code}
                           </span>
                         ))}

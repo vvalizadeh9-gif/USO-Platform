@@ -83,7 +83,7 @@ export default function ReroutesTab({ onCountChange }) {
                   onOpen={(id, code) => setHistory({ id, code })}
                 />
                 <span className="dim" style={{ fontSize: 13 }}>{r.province}</span>
-                <span className="dim" style={{ fontSize: 12.5 }}>
+                <span className="dim" style={{ fontSize: 'var(--fs-meta)' }}>
                   open {r.days_open} day{r.days_open === 1 ? '' : 's'}
                 </span>
               </div>
@@ -94,7 +94,7 @@ export default function ReroutesTab({ onCountChange }) {
                 <span className="pill pill-amber">{r.to_category}</span>
               </div>
 
-              <p className="muted" style={{ fontSize: 13.5, marginTop: 10, maxWidth: '70ch' }}>
+              <p className="muted" style={{ fontSize: 'var(--fs-control)', marginTop: 10, maxWidth: '70ch' }}>
                 {r.reason || 'No reason was given.'}
               </p>
               <div className="dim" style={{ fontSize: 12, marginTop: 4 }}>

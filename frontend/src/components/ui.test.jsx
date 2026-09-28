@@ -11,6 +11,8 @@ import {
   Card,
   ConfirmDialog,
   Drawer,
+  KpiCard,
+  Meter,
   Modal,
   PageBar,
   PageHead,
@@ -376,5 +378,36 @@ describe('PageBar', () => {
     expect(container.querySelector('.page-bar-context')).toBeNull()
     expect(container.querySelector('.page-bar-actions')).toBeNull()
     expect(container.querySelector('.page-bar-tabs')).toBeNull()
+  })
+})
+
+describe('KpiCard', () => {
+  it('is a region named by its title, with the figure, its note and the badge', () => {
+    render(
+      <KpiCard icon={Users} title="MTN target" figure="345" aside="Edit" badge={<span>Internal</span>}>
+        <span>floor</span>
+      </KpiCard>,
+    )
+    const card = screen.getByRole('region', { name: 'MTN target' })
+    expect(card.querySelector('.kpi-card-figure')).toHaveTextContent('345')
+    expect(card.querySelector('.kpi-card-aside')).toHaveTextContent('Edit')
+    expect(card.querySelector('.kpi-card-badge')).toHaveTextContent('Internal')
+    expect(card.querySelector('.kpi-card-chip')).toHaveAttribute('aria-hidden', 'true')
+    expect(card).toHaveTextContent('floor')
+  })
+})
+
+describe('Meter', () => {
+  it('caps the fill at the track and places the tick', () => {
+    render(<Meter value={130} tick={40} label="Delivered 130%" />)
+    const meter = screen.getByRole('img', { name: 'Delivered 130%' })
+    expect(meter.querySelector('.meter-fill')).toHaveStyle({ width: '100%' })
+    expect(screen.getByTestId('meter-tick')).toHaveStyle({ left: '40%' })
+  })
+
+  it('draws no tick without one, and hides itself without a label', () => {
+    const { container } = render(<Meter value={20} />)
+    expect(screen.queryByTestId('meter-tick')).toBeNull()
+    expect(container.querySelector('.meter')).toHaveAttribute('aria-hidden', 'true')
   })
 })

@@ -311,6 +311,52 @@ export function Card({
   )
 }
 
+/**
+ * One card of a KPI band: a neutral 36px icon chip and the title (15/22),
+ * with `badge` at the far end of that row; the figure (30/38) with `aside`
+ * at the end of its line; then `children` on the card's floor -- a bar, a
+ * sparkline. Named by its title for assistive technology.
+ */
+export function KpiCard({ icon: Icon, title, figure, aside, badge, className = '', children, ...rest }) {
+  const titleId = useId()
+  return (
+    <section className={`kpi-card ${className}`.trim()} aria-labelledby={titleId} {...rest}>
+      <div className="kpi-card-head">
+        {Icon && (
+          <span className="kpi-card-chip" aria-hidden="true">
+            <Icon size={20} strokeWidth={1.9} />
+          </span>
+        )}
+        <span className="kpi-card-title" id={titleId}>{title}</span>
+        {badge && <span className="kpi-card-badge">{badge}</span>}
+      </div>
+      <div className="kpi-card-line">
+        <span className="kpi-card-figure tnum">{figure}</span>
+        {aside && <span className="kpi-card-aside">{aside}</span>}
+      </div>
+      {children}
+    </section>
+  )
+}
+
+/**
+ * A share of a whole on the plain track, with an optional 2px ink tick
+ * (where an even pace would have it by today). `value` and `tick` are 0-100;
+ * the fill is capped at the track.
+ */
+export function Meter({ value, tick, label, className = '' }) {
+  const at = (v) => `${Math.max(0, Math.min(100, v))}%`
+  return (
+    <span
+      className={`meter ${className}`.trim()}
+      {...(label ? { role: 'img', 'aria-label': label } : { 'aria-hidden': true })}
+    >
+      <i className="meter-fill" style={{ width: at(value) }} />
+      {tick != null && <i className="meter-tick" data-testid="meter-tick" style={{ left: at(tick) }} />}
+    </span>
+  )
+}
+
 const BANNER_ICON = {
   info: Info,
   warning: AlertTriangle,
