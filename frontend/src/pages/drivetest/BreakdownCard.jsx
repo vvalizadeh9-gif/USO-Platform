@@ -40,7 +40,7 @@ import RankedBars from './charts/RankedBars'
  */
 export function BreakdownTabs({ idBase, tabs, tab, onTab }) {
   return (
-    <div className="dt-seg" role="tablist" aria-label="Break down by">
+    <div className="ui-seg" role="tablist" aria-label="Break down by">
       {tabs.map((t) => (
         <button
           key={t.key}
@@ -49,7 +49,7 @@ export function BreakdownTabs({ idBase, tabs, tab, onTab }) {
           id={`${idBase}-tab-${t.key}`}
           aria-selected={tab === t.key}
           aria-controls={`${idBase}-panel`}
-          className={tab === t.key ? 'is-on' : undefined}
+          className="ui-seg-option"
           onClick={() => onTab(t.key)}
         >
           {t.label}
@@ -94,22 +94,22 @@ export default function BreakdownCard({ idBase, tab, views, total }) {
             is the second view, for checking the total, not the first. */}
         <div className="dt-breakdown-foot">
           {view.note ? <p className="dt-note">{view.note}</p> : <span />}
-          <div className="dt-seg dt-seg-sm" role="group" aria-label="Chart or table">
+          <div className="ui-seg dt-seg-sm" role="group" aria-label="Chart or table">
             <button
               type="button"
-              className={asTable ? undefined : 'is-on'}
+              className="ui-seg-option"
               aria-pressed={!asTable}
               onClick={() => setAsTable(false)}
             >
-              <BarChart3 size={12} aria-hidden="true" /> Chart
+              <BarChart3 size={14} aria-hidden="true" /> Chart
             </button>
             <button
               type="button"
-              className={asTable ? 'is-on' : undefined}
+              className="ui-seg-option"
               aria-pressed={asTable}
               onClick={() => setAsTable(true)}
             >
-              <Table2 size={12} aria-hidden="true" /> Table
+              <Table2 size={14} aria-hidden="true" /> Table
             </button>
           </div>
         </div>
@@ -131,7 +131,7 @@ function BreakdownTable({ points, total, unit }) {
 
   return (
     <div className="table-wrap scroll-x">
-      <table className="dt-mini-table">
+      <table className="table table-compact dt-mini-table">
         <thead>
           <tr>
             <th scope="col">{unit}</th>

@@ -107,7 +107,7 @@ export default function ProvinceList({ rows, provinces, onProvince, search = '' 
   return (
     <>
       <div className="table-wrap">
-        <table>
+        <table className="table table-compact">
           <thead>
             <tr>
               {COLUMNS.map((col) => (

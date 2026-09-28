@@ -56,7 +56,7 @@ function DeltaChip({ delta, direction = 'up', small, pill }) {
 
   const Icon = delta === 0 ? Minus : delta > 0 ? TrendingUp : TrendingDown
   return (
-    <span className="dt-delta" style={{ color, fontSize: small ? 11.5 : 12.5 }}>
+    <span className="dt-delta" style={{ color, fontSize: small ? 12 : 14 }}>
       <Icon size={small ? 12 : 14} strokeWidth={2.2} aria-hidden="true" />
       {delta > 0 ? '+' : ''}
       {count(delta)}
@@ -160,7 +160,7 @@ export default function KpiBand({ kpis, provinceId }) {
       <div className="dt-kpi-card" data-kpi="onair">
         <div className="dt-kpi-hd">
           <span className="dt-kpi-ic" aria-hidden="true">
-            <RadioTower size={13} strokeWidth={2.2} />
+            <RadioTower size={20} strokeWidth={1.9} />
           </span>
           <span className="dt-kpi-title">On air</span>
         </div>
@@ -180,7 +180,7 @@ export default function KpiBand({ kpis, provinceId }) {
       <div className="dt-kpi-card" data-kpi="done">
         <div className="dt-kpi-hd">
           <span className="dt-kpi-ic" aria-hidden="true">
-            <CheckCircle2 size={13} strokeWidth={2.2} />
+            <CheckCircle2 size={20} strokeWidth={1.9} />
           </span>
           <span className="dt-kpi-title">DT done</span>
         </div>
@@ -219,7 +219,7 @@ export default function KpiBand({ kpis, provinceId }) {
       <div className="dt-kpi-card" data-kpi="pending">
         <div className="dt-kpi-hd">
           <span className="dt-kpi-ic" aria-hidden="true">
-            <AlertCircle size={13} strokeWidth={2.2} />
+            <AlertCircle size={20} strokeWidth={1.9} />
           </span>
           <span className="dt-kpi-title">Pending</span>
         </div>
@@ -262,7 +262,7 @@ export default function KpiBand({ kpis, provinceId }) {
       <div className="dt-kpi-card" data-kpi="status">
         <div className="dt-kpi-hd">
           <span className="dt-kpi-ic" aria-hidden="true">
-            <PieChart size={13} strokeWidth={2.2} />
+            <PieChart size={20} strokeWidth={1.9} />
           </span>
           <span className="dt-kpi-title">Pending status</span>
         </div>

@@ -208,7 +208,7 @@ export default function ContractorScorecard({ rows, plan, provinceId }) {
   return (
     <>
       <div className="table-wrap">
-        <table>
+        <table className="table table-compact">
           <thead>
             <tr>
               <th scope="col" className="dt-col-rank">

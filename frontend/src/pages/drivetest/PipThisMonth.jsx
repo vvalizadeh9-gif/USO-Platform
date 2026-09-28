@@ -1,3 +1,4 @@
+import { Target } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import { MONTHLY_PLAN_ROLES } from '../../lib/roles'
@@ -53,6 +54,8 @@ export default function PipThisMonth({ state, onRetry, scoped, provinceName }) {
   return (
     <Section
       title="PIP this month"
+      icon={Target}
+      tone="support"
       subtitle={state.data?.month_label}
       inline
       state={state}
@@ -68,7 +71,7 @@ export default function PipThisMonth({ state, onRetry, scoped, provinceName }) {
       }
       actions={
         canOpenPlan && (
-          <Link to="/monthly-plan" className="btn btn-sm dt-pip-open">
+          <Link to="/monthly-plan" className="btn btn-ghost dt-pip-open">
             Monthly plan
           </Link>
         )

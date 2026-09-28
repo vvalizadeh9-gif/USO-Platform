@@ -59,20 +59,20 @@ export default function Toolbar({
             the province table and cleared from the chip on the left. */}
         <button
           type="button"
-          className="btn btn-sm"
+          className="btn"
           onClick={onRefresh}
           disabled={refreshing}
           aria-label="Refresh the dashboard"
         >
           <RefreshCw
-            size={13}
+            size={16}
             aria-hidden="true"
             className={refreshing ? 'dt-spin' : undefined}
           />
           {refreshing ? 'Refreshing…' : 'Refresh'}
         </button>
-        <button type="button" className="btn btn-sm" onClick={onExport} disabled={exporting}>
-          <Download size={13} aria-hidden="true" />
+        <button type="button" className="btn" onClick={onExport} disabled={exporting}>
+          <Download size={16} aria-hidden="true" />
           {exporting ? 'Preparing…' : 'Export'}
         </button>
       </div>

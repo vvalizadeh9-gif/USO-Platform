@@ -24,14 +24,14 @@ export default function FlowViewControl({ years, scope, onScope }) {
     { key: 'all', label: `${years[0]}–${years[years.length - 1]}` },
   ]
   return (
-    <div className="dt-seg" role="tablist" aria-label="Years shown">
+    <div className="ui-seg" role="tablist" aria-label="Years shown">
       {options.map((o) => (
         <button
           key={o.key}
           type="button"
           role="tab"
           aria-selected={scope === o.key}
-          className={scope === o.key ? 'is-on' : undefined}
+          className="ui-seg-option"
           onClick={() => onScope(o.key)}
         >
           {o.label}

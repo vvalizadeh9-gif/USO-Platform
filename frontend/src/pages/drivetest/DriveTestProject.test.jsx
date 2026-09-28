@@ -395,7 +395,7 @@ describe('breakdown chrome', () => {
     const tabs = within(card.querySelector('.dt-section-head')).getByRole('tablist', {
       name: 'Break down by',
     })
-    expect(tabs).toHaveClass('dt-seg')
+    expect(tabs).toHaveClass('ui-seg')
   })
 })
 
@@ -2790,5 +2790,100 @@ describe('the drill-through panel', () => {
 
     const node = await screen.findByTestId('dt-drill')
     expect(await within(node).findByText(/age_band applies to the ongoing bucket only/)).toBeInTheDocument()
+  })
+})
+
+describe('Cobalt chrome', () => {
+  // The page's look moved onto the shared Cobalt components. What is worth
+  // pinning is that the messages kept their meaning when they changed shape:
+  // a failure is still announced, a growing gap is still news, and the new
+  // icon chips are decoration a screen reader does not have to wade through.
+
+  it('announces a whole-page failure as an error banner with a way to retry', async () => {
+    api.get.mockImplementation((url) => {
+      if (url === '/drive-test/overview') return Promise.reject(new Error('boom'))
+      if (url === '/drive-test/trend') return Promise.resolve({ data: trend() })
+      if (url === '/drive-test/flow') return Promise.resolve({ data: flow() })
+      return Promise.resolve({ data: planDelivery() })
+    })
+    draw()
+
+    const text = await screen.findByText(/Could not load the Drive Test figures/)
+    const banner = text.closest('.banner')
+    expect(banner).toHaveClass('banner-error')
+    expect(banner).toHaveAttribute('role', 'alert')
+    expect(within(banner).getByRole('button', { name: 'Try again' })).toBeInTheDocument()
+  })
+
+  it('draws a failed section as an error banner that still announces itself', async () => {
+    api.get.mockImplementation((url) => {
+      if (url === '/drive-test/overview') return Promise.resolve({ data: overview })
+      if (url === '/drive-test/trend') return Promise.resolve({ data: trend() })
+      return Promise.reject(new Error('boom'))
+    })
+    draw()
+
+    const card = await section('PIP this month')
+    const failed = await within(card).findByRole('alert')
+    expect(failed).toHaveClass('banner', 'banner-error')
+    expect(within(failed).getByRole('button', { name: /Retry/ })).toBeInTheDocument()
+  })
+
+  it('raises a growing gap as a warning banner, still announced on arrival', async () => {
+    const grew = {
+      ...overview,
+      kpis: { ...overview.kpis, total_remaining: kpi(60, 7) },
+    }
+    serve(planDelivery(), grew)
+    draw()
+
+    const text = await screen.findByText('Gap increased by 7 sites this month')
+    const banner = text.closest('.banner')
+    expect(banner).toHaveClass('banner-warning')
+    expect(banner).toHaveAttribute('role', 'alert')
+    expect(within(banner).getByRole('button', { name: /View province details/ })).toBeInTheDocument()
+  })
+
+  it('shows no gap banner when the gap shrank', async () => {
+    serve(planDelivery(), {
+      ...overview,
+      kpis: { ...overview.kpis, total_remaining: kpi(60, -3) },
+    })
+    draw()
+
+    await screen.findByLabelText('Programme totals')
+    expect(screen.queryByText(/Gap increased/)).not.toBeInTheDocument()
+  })
+
+  it('gives every card an icon chip that is hidden from assistive technology', async () => {
+    serve()
+    draw()
+
+    for (const title of [
+      'Where this is going',
+      'What moved',
+      'PIP this month',
+      'Ongoing breakdown',
+      'Problematic breakdown',
+      'Contractor scorecard',
+      'Drive Test Progress by Province',
+    ]) {
+      const card = await section(title)
+      const chip = card.querySelector('.dt-section-head .ui-card-chip')
+      expect(chip, title).not.toBeNull()
+      expect(chip).toHaveAttribute('aria-hidden', 'true')
+    }
+  })
+
+  it('marks the selected breakdown view with aria-selected on a segmented tab', async () => {
+    serve()
+    draw()
+
+    const card = await section('Ongoing breakdown')
+    const tabs = within(card.querySelector('.dt-section-head')).getAllByRole('tab')
+    expect(tabs.every((t) => t.classList.contains('ui-seg-option'))).toBe(true)
+    await userEvent.click(within(card).getByRole('tab', { name: 'Province' }))
+    expect(within(card).getByRole('tab', { name: 'Province' })).toHaveAttribute('aria-selected', 'true')
+    expect(within(card).getByRole('tab', { name: 'Contractor' })).toHaveAttribute('aria-selected', 'false')
   })
 })
