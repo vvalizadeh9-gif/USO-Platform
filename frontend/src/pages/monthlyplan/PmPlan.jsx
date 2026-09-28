@@ -10,6 +10,7 @@ import PlansTab from './PlansTab'
 import { countWaiting } from './planBoard'
 import useOverview from './useOverview'
 import usePlanBoard from './usePlanBoard'
+import { PIP_STREAMS } from './streams'
 import { downloadXlsx } from './xlsx'
 
 const VIEWS = [
@@ -18,9 +19,17 @@ const VIEWS = [
   { key: 'since_start', label: 'Since start' },
 ]
 
+const STREAM_OPTIONS = Object.values(PIP_STREAMS).map((s) => ({ key: s.key, label: s.title }))
+
 /** ?tab=plans is the Plans tab; anything else, or nothing, is PIP vs Achieved. */
 function tabFromParams(params) {
   return params.get('tab') === 'plans' ? 'plans' : 'pip'
+}
+
+/** ?stream=acceptance (any case, so an Action Center link's ACCEPTANCE
+ * counts too) is Acceptance; anything else is DT Delivery. */
+function streamFromParams(params) {
+  return params.get('stream')?.toLowerCase() === 'acceptance' ? PIP_STREAMS.acceptance : PIP_STREAMS.dt
 }
 
 /**
@@ -30,7 +39,8 @@ function tabFromParams(params) {
  *   month), decided per stream (PlansTab). Its label carries, for the PM, the number of
  *   decisions waiting on them.
  * * **PIP vs Achieved** (the default) -- the month now running, or a year, or
- *   everything since the start: GET /pip/overview.
+ *   everything since the start, one stream at a time (?stream=acceptance):
+ *   GET /pip/overview, drawn by PipTab.
  *
  * Each tab keeps its own month, held here so it survives a tab switch. An
  * Action Center link (?year&month[&stream&contractor]) opens that month on
@@ -44,6 +54,7 @@ export default function PmPlan({ canDecide, canSetTarget, canSeeInternal }) {
   const toast = useToast()
   const [params, setParams] = useSearchParams()
   const tab = tabFromParams(params)
+  const pipStream = streamFromParams(params)
   const [linked] = useState(() => linkedTarget(params))
   const [running] = useState(() => currentShamsiPeriod())
 
@@ -70,6 +81,14 @@ export default function PmPlan({ canDecide, canSetTarget, canSeeInternal }) {
     if (next === 'plans') nextParams.set('tab', 'plans')
     else nextParams.delete('tab')
     setParams(nextParams)
+  }
+
+  // A view of the same page rather than a place: replaces the entry.
+  function selectStream(key) {
+    const nextParams = new URLSearchParams(params)
+    if (key === 'acceptance') nextParams.set('stream', 'acceptance')
+    else nextParams.delete('stream')
+    setParams(nextParams, { replace: true })
   }
 
   const onPip = tab === 'pip'
@@ -146,15 +165,20 @@ export default function PmPlan({ canDecide, canSetTarget, canSeeInternal }) {
         }
       />
 
-      <Tabs tabs={tabs} value={tab} onChange={selectTab} label="Monthly plan views" className="mp-tabs" />
+      <div className="mp-tabrow">
+        <Tabs tabs={tabs} value={tab} onChange={selectTab} label="Monthly plan views" className="mp-tabs" />
+        {onPip && <SegmentedControl options={STREAM_OPTIONS} value={pipStream.key} onChange={selectStream} label="Stream" />}
+      </div>
 
       {onPip ? (
         <PipTab
           data={overview.data}
           failed={overview.failed}
+          meta={pipStream}
           view={view}
           period={pipPeriod}
           canSetTarget={canSetTarget}
+          canSeeInternal={canSeeInternal}
           onTargetSaved={overview.reload}
           onOpen={setDrawer}
         />

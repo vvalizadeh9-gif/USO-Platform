@@ -275,6 +275,22 @@ def test_kpis_and_the_internal_target(client, world, monkeypatch):
     assert data["acceptance"]["kpis"]["assignment"] is None
 
 
+def test_each_contractor_has_its_own_pace_in_the_month_view(client, world, monkeypatch):
+    _on_day(monkeypatch, 10)
+    days = jalali.days_in_month(*RUNNING)
+    dt = _get(client, world)["dt"]
+    a = _row(dt, world["ids"]["a"])
+    assert a["expected_by_today"] == round(5 * 10 / days)
+    assert a["pace_diff"] == a["delivered"] - a["expected_by_today"]
+    # Gamma has no PIP, so nothing is expected of them.
+    gamma = _row(dt, world["ids"]["c"])
+    assert gamma["expected_by_today"] is None and gamma["pace_diff"] is None
+    # A year has no "by today".
+    year = _get(client, world, "?period=year&year=1406&month=3")["dt"]
+    assert all(r["expected_by_today"] is None for r in year["rows"])
+    assert year["kpis"]["expected_by_today"] is None
+
+
 def test_all_contractors_equals_the_sum_of_the_rows(client, world, monkeypatch):
     _on_day(monkeypatch, 10)
     for view in ("", "?period=year&year=1406&month=3"):
