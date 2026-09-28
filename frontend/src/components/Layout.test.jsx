@@ -408,7 +408,7 @@ describe('the account menu at the foot of the sidebar', () => {
   })
 
   it('carries the full name and role in a title, for when the card cuts them short', async () => {
-    // The sidebar is 224px, so a long name or role ends in an ellipsis; the
+    // The sidebar is 216px, so a long name or role ends in an ellipsis; the
     // title is where the whole of it can still be read.
     await renderAs('CpgRolloutPM')
     const button = screen.getByRole('button', { name: /Sara Karimi/ })

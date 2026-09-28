@@ -122,7 +122,7 @@
        --nav-active-text on --nav-active 9.4:1; --nav-accent on
        --nav-active 5.7:1 (icon and bar); white on --nav-badge-bg 5.7:1.
        Section icon tints on --nav-bg: accent 5.1:1, support teal 4.4:1,
-       month-end amber 4.7:1, tertiary 4.8:1 (non-text, 3:1 floor). */
+       month-end (now tertiary) 4.8:1, tertiary 4.8:1 (non-text, 3:1 floor). */
   --nav-bg: var(--bg);
   --nav-edge: var(--border);
   --nav-text: var(--text);
@@ -136,7 +136,7 @@
   --nav-badge-bg: var(--accent);
   --nav-tone-accent: var(--accent);
   --nav-tone-support: var(--support);
-  --nav-tone-monthend: #9A5F00;
+  --nav-tone-monthend: var(--text-tertiary); /* was amber #9A5F00: no yellow in the frame */
   --nav-tone-tertiary: var(--text-tertiary);
 
   /* The one ordinal ramp on the Drive Test page: the ongoing age bands, an
@@ -240,15 +240,17 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
 ::-webkit-scrollbar-thumb:hover { background: #b9c4d6; }
 
 /* ---------- Layout shell ---------- */
-/* Sidebar 224px (Cobalt spec, was 264): a lighter frame, and 40px more
-   content width on laptop screens. Measured at 224: the widest nav item
-   (step number or icon, label, three-digit badge, padding) needs 197px of its
-   200px box. .main is capped at 1,280px, so from a 1,544px window up the
-   narrower sidebar changes nothing; from 1,504px down it gives the page the
-   full 40px. */
+/* Sidebar 216px (PM decision, 28 Sep 2026; was 264, then 224): a lighter
+   frame, and 48px more content width than 264 on laptop screens. Its nav box
+   is 192px (216 less 12px padding each side). NOT YET SAFE: measured with a
+   three-digit badge, "My Drive Tests" needs 198.5px (201px when active) and
+   the active "Action Center" 192.6px, so both wrap -- see the branch's
+   commit message. .main is capped at 1,280px,
+   so on windows wider than about 1,500px the narrower sidebar changes
+   nothing; it only gives room on laptops. */
 .app-shell {
   display: grid;
-  grid-template-columns: 224px 1fr;
+  grid-template-columns: 216px 1fr;
   min-height: 100vh;
   position: relative;
   z-index: 1;
@@ -275,9 +277,14 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
 .brand {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   padding: 4px 12px 20px;
 }
+/* In the 216px sidebar: tighter, and "USO Platform" / "Enterprise
+   Operations" each stay on one line. */
+.sidebar .brand { padding: 4px 8px 16px; }
+.sidebar .brand-text b,
+.sidebar .brand-text small { white-space: nowrap; }
 /* The mark is an inline SVG (BrandMark.jsx) that paints its own tile. */
 .brand-mark {
   display: block;
@@ -938,7 +945,7 @@ tbody tr:last-child td { border-bottom: none; }
 @media (max-width: 860px) {
   .app-shell { grid-template-columns: 1fr; }
   .sidebar {
-    position: fixed; z-index: 40; width: 224px;
+    position: fixed; z-index: 40; width: 216px;
     transform: translateX(-100%); transition: transform 0.25s;
   }
   .sidebar.open { transform: translateX(0); }
