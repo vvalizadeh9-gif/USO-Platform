@@ -407,6 +407,18 @@ describe('the account menu at the foot of the sidebar', () => {
     expect(screen.queryByRole('menu')).toBeNull()
   })
 
+  it('carries the full name and role in a title, for when the card cuts them short', async () => {
+    // The sidebar is 224px, so a long name or role ends in an ellipsis; the
+    // title is where the whole of it can still be read.
+    await renderAs('CpgRolloutPM')
+    const button = screen.getByRole('button', { name: /Sara Karimi/ })
+    expect(button.querySelector('.who b')).toHaveAttribute('title', 'Sara Karimi')
+    expect(button.querySelector('.who small')).toHaveAttribute(
+      'title',
+      'CPG Rollout Project Manager (On-Site)',
+    )
+  })
+
   it('opens with Change password and Log out', async () => {
     await renderAs('PM')
     fireEvent.click(accountButton())

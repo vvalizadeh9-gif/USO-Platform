@@ -267,8 +267,12 @@ describe('the KPI band', () => {
     // The filter bar went; both endpoints are programme-wide now, and the
     // params they are given must not quietly come back as empty strings.
     expect(call[1]).toBeUndefined()
-    const trendCall = api.get.mock.calls.find(([url]) => url === '/acceptance/trends')
-    expect(trendCall[1].params).toEqual({ months: 9 })
+    // The trends request is made by the plan section in its own effect, so it
+    // can land after the overview's figures are on screen. Wait for it rather
+    // than racing it (it lost on a loaded CI runner).
+    await waitFor(() =>
+      expect(api.get).toHaveBeenCalledWith('/acceptance/trends', { params: { months: 9 } }),
+    )
   })
 
   it('navigates nowhere when a figure is clicked — the panel opens in place', async () => {
