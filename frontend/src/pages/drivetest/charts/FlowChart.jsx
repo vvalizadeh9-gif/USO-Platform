@@ -1,9 +1,7 @@
 import { motion, useReducedMotion } from 'framer-motion'
-import { useId, useState } from 'react'
+import { useState } from 'react'
 import { shamsiMonthName } from '../../../lib/shamsi'
-import { STATE_COLOR } from '../constants'
-import { count, share } from '../format'
-import { DeltaChip } from '../KpiBand'
+import { count, deltaTone, share } from '../format'
 import { flowView, labelledMonths, netChanges } from './flowView'
 import { DrawPath, FadeArea } from './primitives'
 
@@ -27,12 +25,17 @@ import { DrawPath, FadeArea } from './primitives'
  * today's numbers. The selected year's own activity -- how much it put on
  * air and drive-tested -- is added to the stat line.
  *
- * NO GRIDLINES, NO AXIS, NO HATCH. The figures a reader would check a
- * y-axis against -- On-aired, DT done, Gap, Coverage -- are already named in
- * the stat line above the chart, in numerals rather than a ruler a reader has
- * to interpolate against. What is left to draw is the shape: two lines and
- * the gap between them, which a soft gradient reads as a shadow the second
- * line casts rather than a ribbon that has to be decoded against a legend.
+ * NO AXIS, NO HATCH. The figures a reader would check a y-axis against --
+ * On-aired, DT done, Gap, Coverage -- are already named in the stat line
+ * above the chart, in numerals rather than a ruler a reader has to
+ * interpolate against. What is left to draw is the shape: two lines and the
+ * gap between them, over three faint unlabelled gridlines.
+ *
+ * COBALT COLOURS. DT done is the "done" series, so it takes the accent; On-
+ * aired is the reference series and takes the muted neutral; the gap between
+ * them is the accent's soft fill. Every figure is ink. The net-change strip
+ * is neutral pills with their sign kept -- which way a month moved the
+ * backlog is in the sign and in `data-tone`, not in green and red.
  *
  * THE PAGE CHOOSES THE YEARS. Which years are on screen is a prop, because
  * the card header carries both the control that switches them and the info
@@ -46,11 +49,14 @@ import { DrawPath, FadeArea } from './primitives'
  */
 
 const VIEW_W = 740
-const VIEW_H = 318
 
 const PAD_L = 16
 const MAIN_TOP = 16
-const MAIN_H = 228
+// The plot's height in viewBox units. The chart scales with its column, and
+// at 1920 wide the column draws the 740-unit canvas at about 0.9, so 290 is
+// a plot about 260px tall there. With the KPI band in the Overview and the
+// breakdowns on their own tab, that still leaves the Overview on one screen.
+const MAIN_H = 290
 const MAIN_W = 700
 const PLOT_RIGHT = PAD_L + MAIN_W
 const MAIN_AXIS_Y = MAIN_TOP + MAIN_H + 20
@@ -58,10 +64,18 @@ const MAIN_AXIS_Y = MAIN_TOP + MAIN_H + 20
 /** The net-change strip, under the month labels and the year captions. */
 const STRIP_TOP = MAIN_AXIS_Y + 26
 const STRIP_H = 20
+const VIEW_H = STRIP_TOP + STRIP_H + 8
+
+/** The two series. DT done is the "done" series (the accent); On-aired is the
+ * reference it is read against (the muted neutral). */
+const SERIES_COLOR = { onAir: 'var(--dt-muted)', dtDone: 'var(--accent)' }
+
+/** What a change in the gap means, in words, for a screen reader: the figure
+ * itself is ink. A falling gap is the good direction. */
+const GAP_WORD = { good: 'better', bad: 'worse', flat: 'no change' }
 
 export default function FlowChart({ data, scope = 'all' }) {
   const reduced = useReducedMotion()
-  const base = useId()
   const { selected, isAll, multiYear, points, months, ceiling, floor, yearActivity } = flowView(
     data,
     scope,
@@ -147,7 +161,10 @@ export default function FlowChart({ data, scope = 'all' }) {
             {/* "Previous month", not "last month": in a past year's view the
                 last step is that year's Esfand against its Bahman. */}
             <span className="dt-flowtile-label">vs previous month</span>
-            <DeltaChip delta={gapDelta} direction="down" small />
+            <span className="dt-flowtile-figure tnum" data-tone={deltaTone(gapDelta, 'down') ?? 'flat'}>
+              {gapDelta === 0 ? '±0' : `${gapDelta > 0 ? '+' : ''}${count(gapDelta)}`}
+            </span>
+            <span className="dt-sr-only">{GAP_WORD[deltaTone(gapDelta, 'down') ?? 'flat']}</span>
           </li>
         )}
         <li className="dt-flowtile">
@@ -166,11 +183,11 @@ export default function FlowChart({ data, scope = 'all' }) {
 
       <ul className="dt-flow-legend">
         <li className="dt-flow-legend-item">
-          <i className="dt-flow-legend-dot" style={{ background: STATE_COLOR.ongoing }} />
+          <i className="dt-flow-legend-line" style={{ background: SERIES_COLOR.onAir }} />
           On-aired
         </li>
         <li className="dt-flow-legend-item">
-          <i className="dt-flow-legend-dot" style={{ background: STATE_COLOR.done }} />
+          <i className="dt-flow-legend-line" style={{ background: SERIES_COLOR.dtDone }} />
           DT done
         </li>
         <li className="dt-flow-legend-item dt-flow-legend-item-muted">
@@ -179,7 +196,7 @@ export default function FlowChart({ data, scope = 'all' }) {
         </li>
         <li className="dt-flow-legend-item dt-flow-legend-item-muted">
           <i className="dt-flow-legend-pill" />
-          Change in pending, per month — green shrank, red grew
+          Change in pending, per month
         </li>
       </ul>
 
@@ -199,22 +216,21 @@ export default function FlowChart({ data, scope = 'all' }) {
           viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
           className={`dt-flowchart-svg${densePills ? ' dt-flow-dense' : ''}`}
         >
-          <defs>
-            {/* A soft shadow rather than a textured ribbon: the two lines and
-                the space between them are the whole chart now, so the gap
-                can read as a shadow one line casts on the other instead of a
-                ribbon that needs decoding against a legend. */}
-            <linearGradient id={`${base}-gap-gradient`} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="var(--dt-problem)" stopOpacity="0.12" />
-              <stop offset="100%" stopColor="var(--dt-problem)" stopOpacity="0.03" />
-            </linearGradient>
-          </defs>
+          {/* Three faint gridlines, unlabelled -- the figures are in the stat
+              line -- and the baseline where the months sit. */}
+          {[0.25, 0.5, 0.75].map((f) => (
+            <line
+              key={f}
+              x1={PAD_L}
+              x2={PLOT_RIGHT}
+              y1={MAIN_TOP + MAIN_H * f}
+              y2={MAIN_TOP + MAIN_H * f}
+              className="dt-gridline"
+            />
+          ))}
+          <line x1={PAD_L} x2={PLOT_RIGHT} y1={MAIN_TOP + MAIN_H} y2={MAIN_TOP + MAIN_H} className="dt-baseline" />
 
-          {/* One hairline baseline, at the foot of the plot -- not a ruler,
-              just where the months sit. */}
-          <line x1={PAD_L} x2={PLOT_RIGHT} y1={MAIN_TOP + MAIN_H} y2={MAIN_TOP + MAIN_H} className="dt-gridline" />
-
-          {areaPath && <FadeArea d={areaPath} fill={`url(#${base}-gap-gradient)`} />}
+          {areaPath && <FadeArea d={areaPath} fill="var(--accent-soft)" />}
 
           {/* Year boundaries, wherever the drawn window spans more than one --
               not just the all-years view any more, since a capped year can
@@ -248,33 +264,29 @@ export default function FlowChart({ data, scope = 'all' }) {
             />
           )}
 
-          {[
-            { key: 'onAir', color: STATE_COLOR.ongoing },
-            { key: 'dtDone', color: STATE_COLOR.done },
-          ].map((s) => (
-            <g key={s.key}>
-              <DrawPath d={solidLineFor(s.key)} stroke={s.color} strokeWidth={2} />
-              {openTail && <DrawPath d={dashedLineFor(s.key)} stroke={s.color} strokeWidth={2} dashed />}
-              {points.map((p, i) => {
-                const isLastOpen = openTail && i === n - 1
-                return (
-                  <motion.circle
-                    key={`d-${s.key}-${i}`}
-                    data-testid={isLastOpen ? 'dt-flow-open-dot' : undefined}
-                    cx={x(i)}
-                    cy={y(p[s.key])}
-                    r={isLastOpen ? 4 : 3}
-                    fill={isLastOpen ? 'var(--surface-1)' : s.color}
-                    stroke={s.color}
-                    strokeWidth={isLastOpen ? 2 : 0}
-                    initial={reduced ? false : { scale: 0, opacity: 0 }}
-                    animate={{ scale: 1, opacity: 1 }}
-                    transition={{ delay: 0.5 + i * 0.02, duration: 0.3 }}
-                  />
-                )
-              })}
-            </g>
-          ))}
+          {['onAir', 'dtDone'].map((key) => {
+            const color = SERIES_COLOR[key]
+            return (
+              <g key={key}>
+                <DrawPath d={solidLineFor(key)} stroke={color} strokeWidth={2.5} />
+                {openTail && <DrawPath d={dashedLineFor(key)} stroke={color} strokeWidth={2.5} dashed />}
+                {/* One dot, at the end of the line: white, ringed in the
+                    line's colour. The months are in the labels and the strip. */}
+                <motion.circle
+                  data-testid={openTail ? 'dt-flow-open-dot' : 'dt-flow-end-dot'}
+                  cx={x(n - 1)}
+                  cy={y(points[n - 1][key])}
+                  r={4}
+                  fill="var(--surface)"
+                  stroke={color}
+                  strokeWidth={2}
+                  initial={reduced ? false : { scale: 0, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  transition={{ delay: 0.6, duration: 0.3 }}
+                />
+              </g>
+            )
+          })}
 
           {/* Month names: every third step in the cumulative view, the year
               on a second line under each Farvardin -- see labelledMonths for
@@ -357,17 +369,17 @@ export default function FlowChart({ data, scope = 'all' }) {
             {shamsiMonthName(activeMonth.month)} {activeMonth.year}
           </span>
           <span className="dt-readout-item">
-            <i style={{ background: STATE_COLOR.ongoing }} />
+            <i style={{ background: SERIES_COLOR.onAir }} />
             On-aired this month
             <b className="tnum">{count(activeMonth.on_aired)}</b>
           </span>
           <span className="dt-readout-item">
-            <i style={{ background: STATE_COLOR.done }} />
+            <i style={{ background: SERIES_COLOR.dtDone }} />
             DT done this month
             <b className="tnum">{count(activeMonth.dt_done)}</b>
           </span>
           <span className="dt-readout-item">
-            <i style={{ background: 'var(--dt-problem)' }} />
+            <i className="dt-readout-gap" />
             Gap this month
             <b className="tnum">{count(activeMonth.on_aired - activeMonth.dt_done)}</b>
           </span>

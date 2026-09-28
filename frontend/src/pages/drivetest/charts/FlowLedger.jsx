@@ -1,5 +1,4 @@
 import { motion, useReducedMotion } from 'framer-motion'
-import { STATE_COLOR } from '../constants'
 import { count } from '../format'
 import { flowScale } from './flowScale'
 
@@ -51,20 +50,15 @@ export default function FlowLedger({ flows, monthLabel }) {
    * the previous step finished and where this one leaves it. That is the
    * only difference between them, and it is what makes the chart a
    * waterfall rather than four columns side by side. Balances are the
-   * neutral: they are where the backlog stood, not something happening to
-   * it. The two movements take the hue of what moved it — indigo for sites
-   * arriving, green for drive tests finished. */
+   * muted neutral: they are where the backlog stood, not something happening
+   * to it. New on air is the darker neutral and drive tests done the accent
+   * (the "done" series, as everywhere on this page). Every figure is ink. */
   const bars = [
     { key: 'opening', label: 'Opened at', kind: 'balance', top: opening, bottom: floor, figure: count(opening) },
     { key: 'arrived', label: 'New on air', kind: 'up', top: afterArrivals, bottom: opening, figure: `+${count(arrived)}` },
     { key: 'completed', label: 'Drive tests done', kind: 'down', top: afterArrivals, bottom: closing, figure: `−${count(completed)}` },
     { key: 'closing', label: 'Closed at', kind: 'balance', top: closing, bottom: floor, figure: count(closing) },
   ]
-  const figureColor = {
-    balance: 'var(--text)',
-    up: STATE_COLOR.ongoing,
-    down: STATE_COLOR.done,
-  }
   // The level each connector runs at: from the top of the bar before it.
   const linkLevel = [null, opening, afterArrivals, closing]
 
@@ -109,7 +103,7 @@ export default function FlowLedger({ flows, monthLabel }) {
               />
               <span
                 className="dt-flow-figure-text tnum"
-                style={{ bottom: `calc(${at(hi)}% + 3px)`, color: figureColor[bar.kind] }}
+                style={{ bottom: `calc(${at(hi)}% + 3px)` }}
               >
                 {bar.figure}
               </span>

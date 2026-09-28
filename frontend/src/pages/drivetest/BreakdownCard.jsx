@@ -16,13 +16,11 @@ import RankedBars from './charts/RankedBars'
  * meant a screen reader announced four unlabelled buttons and gave no hint
  * that picking one changed the panel below.
  *
- * THE TABS RENDER IN THE CARD HEADER, beside the title and the total, rather
- * than in a control row above the panel. They are the card's question asked
- * three ways, so they belong on the line that asks it; a row of their own
- * read as furniture a reader had to get past before reaching the figures.
- * That is why `BreakdownTabs` is a separate export: `Section` renders it into
- * the header through its `controls` slot while this component renders the
- * panel it drives.
+ * THE TABS SIT ON A ROW OF THEIR OWN, under the card header and left-aligned
+ * (the agreed Cobalt layout): the header carries the title and the total, and
+ * the view switch is the first thing in the body. `BreakdownTabs` is a
+ * separate export so the page places it; this component renders the panel
+ * it drives.
  *
  * A SEGMENTED CONTROL, not underline tabs. Three underline tabs beside a
  * title and a total were wider than a half-width card, so the Problematic
@@ -40,7 +38,7 @@ import RankedBars from './charts/RankedBars'
  */
 export function BreakdownTabs({ idBase, tabs, tab, onTab }) {
   return (
-    <div className="dt-seg" role="tablist" aria-label="Break down by">
+    <div className="ui-seg dt-breakdown-views" role="tablist" aria-label="Break down by">
       {tabs.map((t) => (
         <button
           key={t.key}
@@ -49,7 +47,7 @@ export function BreakdownTabs({ idBase, tabs, tab, onTab }) {
           id={`${idBase}-tab-${t.key}`}
           aria-selected={tab === t.key}
           aria-controls={`${idBase}-panel`}
-          className={tab === t.key ? 'is-on' : undefined}
+          className="ui-seg-option"
           onClick={() => onTab(t.key)}
         >
           {t.label}
@@ -94,22 +92,22 @@ export default function BreakdownCard({ idBase, tab, views, total }) {
             is the second view, for checking the total, not the first. */}
         <div className="dt-breakdown-foot">
           {view.note ? <p className="dt-note">{view.note}</p> : <span />}
-          <div className="dt-seg dt-seg-sm" role="group" aria-label="Chart or table">
+          <div className="ui-seg dt-seg-sm" role="group" aria-label="Chart or table">
             <button
               type="button"
-              className={asTable ? undefined : 'is-on'}
+              className="ui-seg-option"
               aria-pressed={!asTable}
               onClick={() => setAsTable(false)}
             >
-              <BarChart3 size={12} aria-hidden="true" /> Chart
+              <BarChart3 size={14} aria-hidden="true" /> Chart
             </button>
             <button
               type="button"
-              className={asTable ? 'is-on' : undefined}
+              className="ui-seg-option"
               aria-pressed={asTable}
               onClick={() => setAsTable(true)}
             >
-              <Table2 size={12} aria-hidden="true" /> Table
+              <Table2 size={14} aria-hidden="true" /> Table
             </button>
           </div>
         </div>
@@ -131,7 +129,7 @@ function BreakdownTable({ points, total, unit }) {
 
   return (
     <div className="table-wrap scroll-x">
-      <table className="dt-mini-table">
+      <table className="table table-compact dt-mini-table">
         <thead>
           <tr>
             <th scope="col">{unit}</th>

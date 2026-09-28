@@ -92,21 +92,6 @@ function assignmentOf(row) {
   return (row.done ?? 0) + (row.ongoing ?? 0)
 }
 
-/** Which band a completion rate falls in, for the pill's colour. Same
- * thresholds `format.progressColor` uses elsewhere on this page. */
-function completionBand(value) {
-  if (value >= 70) return 'good'
-  if (value >= 30) return 'mid'
-  return 'bad'
-}
-
-/** Which band a this-month achievement rate falls in. Same thresholds
- * `format.bandColor` uses for the bullet chart this figure comes from. */
-function achievementBand(value) {
-  if (value >= 100) return 'good'
-  if (value >= 80) return 'mid'
-  return 'bad'
-}
 
 export default function ContractorScorecard({ rows, plan, provinceId }) {
   const planRows = plan?.rows
@@ -208,7 +193,7 @@ export default function ContractorScorecard({ rows, plan, provinceId }) {
   return (
     <>
       <div className="table-wrap">
-        <table>
+        <table className="table table-compact">
           <thead>
             <tr>
               <th scope="col" className="dt-col-rank">
@@ -251,9 +236,8 @@ export default function ContractorScorecard({ rows, plan, provinceId }) {
                     {unattributed || row.planOnly ? (
                       <span className="dt-rank-badge dt-rank-badge-empty" aria-hidden="true" />
                     ) : (
-                      <span className={`dt-rank-badge${rank === 1 ? ' dt-rank-badge-1' : ''}`}>
-                        {rank}
-                      </span>
+                      // The same neutral circle on every row: no winner's colour.
+                      <span className="dt-rank-badge">{rank}</span>
                     )}
                   </td>
                   <td className="dt-farsi">
@@ -281,15 +265,22 @@ export default function ContractorScorecard({ rows, plan, provinceId }) {
                     </DrillLink>
                   </td>
                   <td style={{ textAlign: 'right' }}>
-                    <span
-                      className={`dt-pill dt-pill-${
-                        unattributed || row.done_percent == null
-                          ? 'dim'
-                          : completionBand(row.done_percent)
-                      }`}
-                    >
-                      {percent(row.done_percent)}
-                    </span>
+                    {/* An accent bar on the track and the rate in ink: how far
+                        a company is through its own book is a share, not a
+                        status, so it is not green, amber or red. */}
+                    {row.done_percent == null ? (
+                      <span className="dt-pip-none">—</span>
+                    ) : (
+                      <span className="dt-rate-cell dt-completion">
+                        <span className="dt-rate-bar" aria-hidden="true">
+                          <span
+                            className="dt-rate-fill"
+                            style={{ width: `${Math.min(row.done_percent, 100)}%` }}
+                          />
+                        </span>
+                        <span className="dt-rate-value tnum">{percent(row.done_percent)}</span>
+                      </span>
+                    )}
                   </td>
                   <PipCells
                     plan={approvedPlan(row)}
@@ -369,11 +360,9 @@ function PipCells({ plan, delivered, href, name }) {
       </td>
       <td className="tnum dt-pip-achieved" style={{ textAlign: 'right' }}>
         {figure ?? <span className="dt-pip-none">—</span>}
-        {plan && (
-          <span className={`dt-pill dt-pill-${achievementBand(plan.achievement_percent)}`}>
-            {achievement(plan.achievement_percent)}
-          </span>
-        )}
+        {/* Plain text: the delivered count in ink, then its rate. No
+            green/amber/red pill -- the rate is a figure, not a status. */}
+        {plan && <span className="dt-pip-rate-text">{achievement(plan.achievement_percent)}</span>}
       </td>
     </>
   )

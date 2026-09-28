@@ -90,8 +90,6 @@ export default function ProvinceList({ rows, provinces, onProvince, search = '' 
   const totalOnair = rows.reduce((sum, r) => sum + (r.onair ?? 0), 0)
   const totalDone = rows.reduce((sum, r) => sum + (r.done ?? 0), 0)
   const average = totalOnair ? (totalDone / totalOnair) * 100 : 0
-  const rateColor = (value) =>
-    value < average ? 'var(--dt-problem)' : 'var(--text)'
 
   const toggleSort = (key) => {
     if (key === 'action') return
@@ -107,7 +105,7 @@ export default function ProvinceList({ rows, provinces, onProvince, search = '' 
   return (
     <>
       <div className="table-wrap">
-        <table>
+        <table className="table table-compact">
           <thead>
             <tr>
               {COLUMNS.map((col) => (
@@ -141,7 +139,7 @@ export default function ProvinceList({ rows, provinces, onProvince, search = '' 
               return (
                 <tr
                   key={row.name}
-                  className={`dt-province-card${hasProblem ? ' dt-row-problem' : ''}`}
+                  className="dt-province-card"
                   role={id ? 'button' : undefined}
                   tabIndex={id ? 0 : undefined}
                   onClick={id ? () => onProvince(id) : undefined}
@@ -169,27 +167,31 @@ export default function ProvinceList({ rows, provinces, onProvince, search = '' 
                   <td className="tnum" style={{ textAlign: 'right' }}>
                     <Cell id={id} href={doneLink} value={row.done} onClick={stop} label={row.name} />
                   </td>
-                  <td className="tnum" style={{ textAlign: 'right' }}>
+                  <td className="tnum dt-gap-cell" style={{ textAlign: 'right' }}>
                     <Cell id={id} href={remainingLink} value={row.remaining} onClick={stop} label={row.name} />
                   </td>
                   <td style={{ textAlign: 'right' }}>
-                    <div className="dt-province-pbar-cell">
-                      <span
-                        className="dt-province-rate tnum"
-                        style={{ color: rateColor(donePct) }}
-                      >
-                        {percent(donePct)}
-                      </span>
-                      <div className="dt-province-pbar">
-                        <div
-                          className="dt-province-pbar-fill"
-                          style={{
-                            width: `${Math.min(donePct, 100)}%`,
-                            background: donePct >= average ? 'var(--dt-done)' : 'var(--dt-problem)',
-                          }}
+                    {/* An accent bar with the programme average marked on it,
+                        and the rate in ink. Below-average is read off the mark,
+                        and said in words for a screen reader, not by turning
+                        the figure red. */}
+                    <span className="dt-rate-cell dt-province-rate-cell">
+                      <span className="dt-rate-bar" aria-hidden="true">
+                        <span
+                          className="dt-rate-fill"
+                          style={{ width: `${Math.min(donePct, 100)}%` }}
                         />
-                      </div>
-                    </div>
+                        <span
+                          className="dt-rate-mark"
+                          data-testid="dt-province-average-mark"
+                          style={{ left: `${Math.min(average, 100)}%` }}
+                        />
+                      </span>
+                      <span className="dt-rate-value dt-province-rate tnum">{percent(donePct)}</span>
+                      {donePct < average && (
+                        <span className="dt-sr-only">below the {percent(average)} average</span>
+                      )}
+                    </span>
                   </td>
                   <td className="tnum" style={{ textAlign: 'right' }}>
                     <Cell id={id} href={ongoingLink} value={row.ongoing} onClick={stop} label={row.name} />
@@ -224,16 +226,19 @@ export default function ProvinceList({ rows, provinces, onProvince, search = '' 
         </table>
       </div>
 
-      {/* The count, the colour key and the fold on one line. The colour key
-          stays on the card rather than behind the info icon: red is on every
-          row, and a key a reader has to go looking for is not a key. */}
+      {/* The count, the key to the mark and the fold on one line. The key
+          stays on the card rather than behind the info icon: the mark is on
+          every row, and a key a reader has to go looking for is not a key. */}
       <div className="dt-table-foot">
         <span>
           {searching
             ? `${count(sorted.length)} of ${count(rows.length)} provinces match`
             : `Showing ${count(visible.length)} of ${count(rows.length)} provinces`}
         </span>
-        <span>Completion rate in red is below the {percent(average)} programme average.</span>
+        <span className="dt-mark-key">
+          <i className="dt-mark-key-swatch" aria-hidden="true" />
+          The mark on each bar is the {percent(average)} programme average
+        </span>
         {!searching && sorted.length > PROVINCE_ROWS && (
           <button type="button" className="dt-link-btn" onClick={() => setShowAll((v) => !v)}>
             {showAll ? 'Show fewer' : 'View all'}

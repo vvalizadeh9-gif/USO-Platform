@@ -1,4 +1,5 @@
-import { AlertTriangle, ArrowRight } from 'lucide-react'
+import { ArrowRight } from 'lucide-react'
+import { Banner } from '../../components/ui'
 import { count } from './format'
 
 export default function AlertStrip({ kpis, provinces, onScrollToProvinces }) {
@@ -15,23 +16,22 @@ export default function AlertStrip({ kpis, provinces, onScrollToProvinces }) {
       ? `DT completion slowed down in ${topGrowing.map((p) => `${p.name} (+${count(p.gap_delta)})`).join(' and ')}`
       : null
 
+  // The Cobalt warning banner. `role="alert"` is kept from the strip this
+  // replaces: a growing gap is news the reader should hear on arrival.
   return (
-    <div className="dt-alert-strip" role="alert">
-      <AlertTriangle size={18} strokeWidth={2} aria-hidden="true" />
-      <div className="dt-alert-body">
-        <span className="dt-alert-main">
-          Gap increased by {count(delta)} sites this month
-        </span>
-        {secondary && <span className="dt-alert-secondary dt-farsi">{secondary}</span>}
+    <Banner tone="warning" role="alert" className="dt-alert-strip">
+      <div className="dt-alert-row">
+        <div className="dt-alert-body">
+          <strong className="dt-alert-main">
+            Gap increased by {count(delta)} sites this month
+          </strong>
+          {secondary && <span className="dt-alert-secondary dt-farsi">{secondary}</span>}
+        </div>
+        <button type="button" className="btn dt-alert-cta" onClick={onScrollToProvinces}>
+          View province details
+          <ArrowRight size={16} strokeWidth={2} aria-hidden="true" />
+        </button>
       </div>
-      <button
-        type="button"
-        className="dt-alert-cta"
-        onClick={onScrollToProvinces}
-      >
-        View province details
-        <ArrowRight size={14} strokeWidth={2} aria-hidden="true" />
-      </button>
-    </div>
+    </Banner>
   )
 }

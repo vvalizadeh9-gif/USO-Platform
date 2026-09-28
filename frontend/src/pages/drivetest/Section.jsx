@@ -22,6 +22,8 @@ export default function Section({
   controls,
   info,
   inline = false,
+  icon: Icon,
+  tone = 'accent',
   state,
   onRetry,
   children,
@@ -30,6 +32,13 @@ export default function Section({
   className = '',
 }) {
   const { data, error, loading } = state
+  // The Cobalt card header's icon chip (see Card in components/ui.jsx):
+  // tinted accent or support, never a status colour.
+  const chip = Icon && (
+    <span className={`ui-card-chip ui-chip-${tone}`} aria-hidden="true">
+      <Icon size={20} strokeWidth={1.9} />
+    </span>
+  )
 
   return (
     <motion.section
@@ -56,6 +65,7 @@ export default function Section({
           InfoTip). It sits in both headers, so any card can carry one. */}
       {controls || inline ? (
         <header className="dt-section-head dt-section-head-inline">
+          {chip}
           <h2 className="dt-section-title">{title}</h2>
           {inline && subtitle && <span className="dt-section-note dt-farsi">{subtitle}</span>}
           {info}
@@ -70,6 +80,7 @@ export default function Section({
         </header>
       ) : (
         <header className="dt-section-head">
+          {chip}
           <div>
             <h2 className="dt-section-title">{title}</h2>
             {subtitle && <p className="dt-section-sub dt-farsi">{subtitle}</p>}
@@ -81,8 +92,8 @@ export default function Section({
 
       <div className="dt-section-body">
         {error ? (
-          <div className="dt-failed" role="alert">
-            <AlertCircle size={17} strokeWidth={2} aria-hidden="true" />
+          <div className="banner banner-error dt-failed" role="alert">
+            <AlertCircle className="banner-icon" size={18} strokeWidth={2} aria-hidden="true" />
             <span>
               {/* Lower-cased to sit in a sentence, except an acronym: "PIP this
                   month" must not become "pip this month". */}
@@ -97,8 +108,8 @@ export default function Section({
               The rest of this page is unaffected.
             </span>
             {onRetry && (
-              <button type="button" className="btn btn-sm" onClick={onRetry}>
-                <RefreshCw size={13} aria-hidden="true" /> Retry
+              <button type="button" className="btn" onClick={onRetry}>
+                <RefreshCw size={16} aria-hidden="true" /> Retry
               </button>
             )}
           </div>
