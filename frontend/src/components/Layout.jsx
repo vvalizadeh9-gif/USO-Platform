@@ -55,14 +55,11 @@ function StepRail({ steps, badges }) {
   )
 }
 
-// Each section tints its icons: Today in the accent, the three project
-// sections in the supporting teal, Month-end in amber. Colour only -- which
-// items a section holds is NAV_SECTIONS' business.
+// Nav icons are neutral; only Month-end keeps a tint, its amber. Cobalt is
+// the selected item's alone (design-system-cobalt.md, "Cobalt means selected
+// or action"). Colour only -- which items a section holds is NAV_SECTIONS'
+// business.
 const SECTION_TONE = {
-  Today: 'accent',
-  'Drive Test': 'support',
-  Acceptance: 'support',
-  Performance: 'support',
   'Month-end': 'monthend',
 }
 

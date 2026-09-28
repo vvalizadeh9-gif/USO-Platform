@@ -23,7 +23,7 @@ const MyWork = lazy(() => import('./pages/mywork/MyWork'))
 const MonthlyPlan = lazy(() => import('./pages/monthlyplan/MonthlyPlan'))
 const AcceptanceDashboard = lazy(() => import('./pages/reports/AcceptanceDashboard'))
 const KpiPerformance = lazy(() => import('./pages/reports/KpiPerformance'))
-const GapRoad = lazy(() => import('./pages/reports/GapRoad'))
+const LifecycleGaps = lazy(() => import('./pages/reports/LifecycleGaps'))
 const MojriImport = lazy(() => import('./pages/mojri/MojriImport'))
 const KpiMapping = lazy(() => import('./pages/reports/KpiMapping'))
 const Admin = lazy(() => import('./pages/Admin'))
@@ -105,7 +105,7 @@ export default function App() {
             path="/reports/gaps"
             element={
               <Protected allowedRoles={KPI_ROLES}>
-                <GapRoad />
+                <LifecycleGaps />
               </Protected>
             }
           />

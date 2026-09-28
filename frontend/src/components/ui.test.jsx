@@ -133,11 +133,10 @@ describe('SegmentedControl', () => {
 })
 
 describe('Card', () => {
-  it('renders the icon chip in its tone, the title, the description, actions and body', () => {
+  it('renders the icon chip, the title, the description, actions and body', () => {
     const { container } = render(
       <Card
         icon={Users}
-        tone="support"
         title="Stopped before CRA"
         description="Who is behind the selected barrier"
         actions={<button type="button">Export</button>}
@@ -145,7 +144,9 @@ describe('Card', () => {
         <p>Body</p>
       </Card>
     )
-    expect(container.querySelector('.ui-card-chip')).toHaveClass('ui-chip-support')
+    // Neutral: one class, no tone. Cobalt is for selection, not decoration.
+    expect(container.querySelector('.ui-card-chip')).toHaveAttribute('class', 'ui-card-chip')
+    expect(container.querySelector('.ui-card-chip')).toHaveAttribute('aria-hidden', 'true')
     expect(screen.getByRole('heading', { level: 2, name: 'Stopped before CRA' })).toBeInTheDocument()
     expect(screen.getByText('Who is behind the selected barrier')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Export' })).toBeInTheDocument()

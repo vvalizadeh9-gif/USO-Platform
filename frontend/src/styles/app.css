@@ -1,9 +1,10 @@
 /* ===================================================================
    USO Enterprise Platform — Design System "Cobalt"
-   Cool blue-grey canvas, white cards, one cobalt accent with a supporting
-   teal, dark readable text. Inter for Latin and figures (tabular),
+   Cool blue-grey canvas, white cards, one cobalt accent for selection and
+   action, dark readable text. Inter for Latin and figures (tabular),
    Vazirmatn for Farsi. Status colour is always an ink on its own soft
-   fill, and always carries a text label.
+   fill, and always carries a text label. The rules behind every token are
+   written out in design-system-cobalt.md at the repository root.
    =================================================================== */
 
 /* Fonts are served from this application, not from Google. See fonts.css for
@@ -32,15 +33,32 @@
   --text-on-accent: #FFFFFF;
   --text-link: #2451C0;
 
-  /* ---- Accent: one cobalt, plus one supporting teal ----
-     White on --accent is 5.7:1; --accent-ink on white is 9.5:1. */
+  /* ---- Accent: one cobalt, for selected and action only ----
+     Never a data colour and never a decorative tint. White on --accent is
+     5.7:1; --accent-ink on white is 9.5:1. (The supporting teal that used to
+     tint icons is retired: it sat too close to --cra. Icon chips are
+     neutral.) */
   --accent: #2F5FD0;
   --accent-ink: #1D3F99;
   --accent-soft: #E3EAFB;
   --accent-wash: #F2F6FE;
   --accent-track: #D3DEF7;
-  --support: #0E7C86;
-  --support-soft: #DDF2F3;
+
+  /* ---- Authorities: ICT and CRA, for data only ----
+     Never a status, never a selection, and never shown without its label.
+     --ict is dark enough to be its own text ink (7.5:1 on white). --cra is
+     3.1:1 on white: graphics only, never text -- CRA words use --cra-ink
+     (6.0:1 on white, 5.2:1 on --cra-soft). The pair passes a colour-vision
+     check against each other and against --accent; against the status
+     colours it sits just under the comfort line, which is why the label is
+     mandatory. */
+  --ict: #8E2F74;
+  --ict-base: #EBD3E4;        /* the faint "base" column behind a gap */
+  --ict-soft: #F5E6F1;        /* chip background */
+  --cra: #23A396;
+  --cra-ink: #0F6F66;
+  --cra-base: #C9EAE5;
+  --cra-soft: #DDF3F0;
 
   /* ---- Status: an ink on its own soft fill, always with a label ----
      Every ink clears 4.5:1 on white and on its soft fill (lowest: success,
@@ -121,8 +139,8 @@
        --nav-text 15.3:1, on --nav-hover 14.1:1; --nav-dim 4.8:1;
        --nav-active-text on --nav-active 9.4:1; --nav-accent on
        --nav-active 5.7:1 (icon and bar); white on --nav-badge-bg 5.7:1.
-       Section icon tints on --nav-bg: accent 5.1:1, support teal 4.4:1,
-       month-end amber 4.7:1, tertiary 4.8:1 (non-text, 3:1 floor). */
+       Icons on --nav-bg: --nav-icon 4.8:1, month-end amber 4.7:1 (non-text,
+       3:1 floor). Only the selected item's icon is cobalt. */
   --nav-bg: var(--bg);
   --nav-edge: var(--border);
   --nav-text: var(--text);
@@ -134,8 +152,6 @@
   --nav-active-text: var(--accent-ink);
   --nav-accent: var(--accent);
   --nav-badge-bg: var(--accent);
-  --nav-tone-accent: var(--accent);
-  --nav-tone-support: var(--support);
   --nav-tone-monthend: #9A5F00;
   --nav-tone-tertiary: var(--text-tertiary);
 
@@ -334,9 +350,8 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
   position: relative;
 }
 .nav-item svg { color: var(--nav-icon); flex-shrink: 0; }
-/* Icons are tinted by the section they sit in. */
-.nav-section[data-tone='accent'] .nav-item svg { color: var(--nav-tone-accent); }
-.nav-section[data-tone='support'] .nav-item svg { color: var(--nav-tone-support); }
+/* Icons are neutral; Month-end keeps its amber. Cobalt is the selected item's
+   alone (below). */
 .nav-section[data-tone='monthend'] .nav-item svg { color: var(--nav-tone-monthend); }
 .nav-section[data-tone='tertiary'] .nav-item svg { color: var(--nav-tone-tertiary); }
 .nav-item:hover { background: var(--nav-hover); }
@@ -811,13 +826,13 @@ tbody tr:last-child td { border-bottom: none; }
   display: flex; flex-direction: column; gap: 16px;
 }
 .ui-card-head { display: flex; align-items: flex-start; gap: 14px; }
+/* Icon chips are neutral: an icon is decoration, and cobalt means selected. */
 .ui-card-chip {
   width: 36px; height: 36px; flex-shrink: 0;
   border-radius: 9px;
   display: grid; place-items: center;
+  background: var(--neutral-soft); color: var(--text-secondary);
 }
-.ui-chip-accent { background: var(--accent-soft); color: var(--accent); }
-.ui-chip-support { background: var(--support-soft); color: var(--support); }
 .ui-card-titles { flex: 1; min-width: 0; }
 .ui-card-title { font-size: 17px; line-height: 24px; font-weight: 600; letter-spacing: 0; }
 .ui-card-desc { margin-top: 2px; color: var(--text-secondary); font-size: 14px; line-height: 21px; max-width: 760px; }
@@ -2978,15 +2993,11 @@ a.dt-contractor-name:hover { text-decoration: underline; text-decoration-color: 
   gap: 12px;
   --kpi-accent: var(--accent);
 }
-/* Icon chips are accent or support tints -- never a status colour. */
-.dt-page .dt-kpi-card[data-kpi="onair"],
-.dt-page .dt-kpi-card[data-kpi="status"] { --kpi-ic-ink: var(--support); --kpi-ic: var(--support-soft); }
-.dt-page .dt-kpi-card[data-kpi="done"],
-.dt-page .dt-kpi-card[data-kpi="pending"] { --kpi-ic-ink: var(--accent); --kpi-ic: var(--accent-soft); }
+/* Icon chips are neutral -- never a status colour, never cobalt. */
 .dt-page .dt-kpi-hd { gap: 12px; margin-block-end: 0; }
 .dt-page .dt-kpi-ic {
   inline-size: 36px; block-size: 36px; border-radius: 9px;
-  color: var(--kpi-ic-ink); background: var(--kpi-ic);
+  color: var(--text-secondary); background: var(--neutral-soft);
 }
 .dt-page .dt-kpi-title { font-size: 13px; line-height: 18px; font-weight: 600; color: var(--text-secondary); }
 .dt-page .dt-kpi-v { gap: 8px; }
@@ -3675,123 +3686,175 @@ a.lifecycle-step:focus-visible { outline: 2px solid var(--signal); outline-offse
    Lifecycle Gaps (Performance → /reports/gaps)
 
    Built on the shared Cobalt components (PageHead, Tabs, Card, Banner,
-   SegmentedControl, .table). What is left here is the road -- hand-built
-   SVG, coloured from the tokens -- and the owner list's own cells.
+   SegmentedControl). What is left here is the chart -- six hand-built HTML
+   columns on one baseline and one scale -- and the details panel beside it.
+   Authority colours (--ict, --cra) are data only; cobalt marks the selected
+   column and nothing else. See design-system-cobalt.md.
    --------------------------------------------------------------------------- */
-.gap-page { display: flex; flex-direction: column; gap: 20px; }
+.gap-page { display: flex; flex-direction: column; gap: 16px; }
 .gap-page .page-head { margin-bottom: 0; }
 .gap-tabs { margin-top: -4px; }
 
-.gap-road { width: 100%; height: auto; display: block; overflow: visible; }
-
-.gap-lane { fill: var(--surface-subtle); }
-
-/* Every barrier is one click target covering its whole stretch. */
-.gap-barrier { cursor: pointer; }
-.gap-barrier:focus { outline: none; }
-.gap-barrier:focus-visible .gap-band { stroke: var(--accent); stroke-width: 2; }
-
-.gap-band { fill: transparent; }
-.gap-barrier:hover .gap-band { fill: var(--accent-wash); }
-/* The selected stretch: a tinted band, an accent barrier AND a taller post
-   (see Barrier). Colour alone would be the first thing to go on the display
-   this is read on. */
-.gap-barrier.selected .gap-band { fill: var(--accent-wash); stroke: var(--accent-track); stroke-width: 1; }
-
-/* The queue: slate on the neutral track, accent on its own track when its
-   barrier is selected. #6B788D is 4.5:1 on white. */
-.gap-queue-track { fill: var(--track); }
-.gap-queue { fill: #6B788D; }
-.gap-barrier.selected .gap-queue-track { fill: var(--accent-track); }
-.gap-barrier.selected .gap-queue { fill: var(--accent); }
-
-.gap-post, .gap-boom { fill: var(--neutral-ink); }
-.gap-barrier.selected .gap-post,
-.gap-barrier.selected .gap-boom { fill: var(--accent); }
-.gap-barrier.pending .gap-post,
-.gap-barrier.pending .gap-boom { fill: var(--control-border); }
-.gap-barrier.pending .gap-label,
-.gap-barrier.pending .gap-figure { fill: var(--text-tertiary); }
-
-.gap-label {
-  font-family: var(--font-body); font-size: 13px; font-weight: 600;
-  fill: var(--text-secondary);
+/* The "1 data note" button: warning banner colours, 36 high. */
+.gap-note-btn {
+  display: inline-flex; align-items: center; gap: 8px;
+  height: 36px; padding: 0 12px; border-radius: var(--radius-md);
+  background: var(--banner-warning-bg); border: 1px solid var(--banner-warning-border);
+  color: var(--banner-warning-text); font-size: 14px; font-weight: 600;
 }
-.gap-barrier.selected .gap-label { fill: var(--accent-ink); }
-.gap-figure {
-  font-family: var(--font-body); font-size: 30px; font-weight: 600;
-  letter-spacing: -0.01em; font-variant-numeric: tabular-nums;
-  fill: var(--text);
+.gap-note-btn svg { color: var(--banner-warning-icon); }
+.gap-note-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* The card header's total, on the right. */
+.gap-card .ui-card-head { align-items: center; }
+.gap-total { display: flex; align-items: baseline; gap: 8px; }
+.gap-total-figure {
+  font-size: 30px; line-height: 38px; font-weight: 600;
+  font-variant-numeric: tabular-nums; color: var(--text);
 }
-.gap-sub {
-  font-family: var(--font-body); font-size: 12px;
-  font-variant-numeric: tabular-nums; fill: var(--text-secondary);
+.gap-total-caption { font-size: 13px; line-height: 18px; color: var(--text-secondary); }
+
+/* Chart and panel side by side; the chart takes what the panel leaves. */
+.gap-body { display: flex; gap: 24px; align-items: stretch; }
+.gap-chart { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 12px; }
+
+.gap-blocks {
+  display: grid; gap: 24px;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+}
+/* A block is a selectable-tile surface. */
+.gap-block {
+  background: var(--surface-subtle); border: 1px solid var(--track);
+  border-radius: var(--radius-md); padding: 16px;
+  display: flex; flex-direction: column; gap: 12px;
+}
+.gap-block-title { font-size: 15px; line-height: 22px; font-weight: 600; }
+.gap-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+/* One column. The figure and caption have fixed heights, so every plot
+   starts and ends at the same place: one baseline across the card. */
+.gap-col {
+  --plot: 200px;
+  display: flex; flex-direction: column; align-items: stretch;
+  padding: 8px 8px 10px; min-width: 0;
+  background: transparent; border: 2px solid transparent;
+  border-bottom: 0; border-radius: var(--radius-md) var(--radius-md) 0 0;
+  color: var(--text); text-align: center; font: inherit;
+}
+.gap-col[data-authority="ict"] { --auth: var(--ict); --auth-base: var(--ict-base); }
+.gap-col[data-authority="cra"] { --auth: var(--cra); --auth-base: var(--cra-base); }
+.gap-col:hover:not(:disabled) { background: var(--accent-wash); }
+.gap-col[aria-pressed="true"] { background: var(--accent-wash); border-color: var(--accent); }
+.gap-col:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.gap-col:disabled { cursor: default; }
+
+.gap-col-figure {
+  font-size: 30px; line-height: 38px; font-weight: 600;
+  font-variant-numeric: tabular-nums; color: var(--text);
+}
+.gap-col-caption {
+  min-height: 32px;
+  font-size: 12px; line-height: 16px; color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+.gap-col-plot {
+  position: relative; height: var(--plot); margin-top: 8px;
+  border-bottom: 1px solid var(--control-border);
+}
+.gap-col-base, .gap-col-bar {
+  position: absolute; bottom: 0; left: 50%; transform: translateX(-50%);
+  border-radius: 6px 6px 0 0;
+}
+.gap-col-base { width: 72%; max-width: 64px; background: var(--auth-base); }
+.gap-col-bar { width: 48%; max-width: 44px; background: var(--auth); }
+/* Chip over label, the same under every column however long the label. */
+.gap-col-foot {
+  display: flex; flex-direction: column; align-items: center;
+  gap: 4px; margin-top: 8px;
+}
+.gap-col-label { font-size: 13px; line-height: 18px; color: var(--text-secondary); }
+
+/* The authority chip: soft fill, authority ink. CRA text is --cra-ink,
+   never --cra. */
+.gap-chip {
+  display: inline-flex; align-items: center; height: 24px; padding: 0 10px;
+  border-radius: 999px; font-size: 12px; font-weight: 600;
+}
+.gap-chip[data-authority="ict"] { background: var(--ict-soft); color: var(--ict); }
+.gap-chip[data-authority="cra"] { background: var(--cra-soft); color: var(--cra-ink); }
+
+.gap-legend {
+  display: flex; flex-wrap: wrap; gap: 6px 18px;
+  font-size: 12px; line-height: 16px; color: var(--text-tertiary);
+}
+.gap-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.gap-swatch { display: inline-block; width: 10px; height: 10px; border-radius: 2px; }
+.gap-swatch[data-authority="ict"] { background: var(--ict); }
+.gap-swatch[data-authority="cra"] { background: var(--cra); }
+.gap-swatch-base { background: linear-gradient(90deg, var(--ict-base) 50%, var(--cra-base) 50%); }
+
+/* The details panel: docked, non-modal, 400 wide. */
+.gap-panel {
+  flex: 0 0 400px; min-width: 0;
+  border-inline-start: 1px solid var(--divider); padding-inline-start: 24px;
+  display: flex; flex-direction: column; gap: 12px;
+}
+.gap-panel-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.gap-panel-caption { font-size: 12px; line-height: 16px; color: var(--text-tertiary); }
+.gap-panel-title { font-size: 17px; line-height: 24px; font-weight: 600; }
+.gap-panel-summary {
+  font-size: 13px; line-height: 18px; color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+.gap-panel-close {
+  width: 32px; height: 32px; padding: 0; flex-shrink: 0;
+  display: inline-grid; place-items: center;
+}
+.gap-panel-lenses { align-self: flex-start; }
+
+.gap-rows { list-style: none; display: flex; flex-direction: column; }
+.gap-rows[data-authority="ict"] { --auth: var(--ict); }
+.gap-rows[data-authority="cra"] { --auth: var(--cra); }
+.gap-row {
+  display: flex; align-items: center; gap: 12px;
+  min-height: 42px; padding: 6px 0;
+  border-bottom: 1px solid var(--divider);
+}
+.gap-row-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.gap-row-name {
+  font-size: 14px; line-height: 20px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.gap-row-name.gap-farsi { font-family: var(--font-farsi); font-size: 15px; }
+.gap-row-bar { display: block; height: 6px; border-radius: 3px; background: var(--track); overflow: hidden; }
+.gap-row-fill { display: block; height: 100%; border-radius: 3px; background: var(--auth); }
+.gap-row-more .gap-row-fill { background: #6B788D; }
+.gap-row-more .gap-row-name { color: var(--text-secondary); }
+.gap-row-rate {
+  font-size: 12px; line-height: 16px; color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+.gap-row-figures { display: flex; flex-direction: column; align-items: flex-end; text-align: end; }
+.gap-row-count { font-size: 14px; line-height: 20px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.gap-row-share {
+  font-size: 12px; line-height: 16px; color: var(--text-secondary);
+  font-variant-numeric: tabular-nums; white-space: nowrap;
 }
 
-/* The owner list. The lens control rides in the card header and wraps under
-   the title when the row is narrow. */
-.gap-owners-card .ui-card-head { flex-wrap: wrap; }
-
-.gap-worked {
-  background: var(--surface-subtle); border-radius: var(--radius-md);
-  padding: 12px 16px;
-  font-size: 14px; line-height: 21px; color: var(--text-secondary);
+/* Narrow screens: the panel drops under the chart. */
+@media (max-width: 900px) {
+  .gap-body { flex-direction: column; }
+  .gap-panel {
+    flex-basis: auto; border-inline-start: 0; padding-inline-start: 0;
+    border-top: 1px solid var(--divider); padding-top: 16px;
+  }
+  .gap-col { --plot: 140px; }
 }
-
-.gap-owners-wrap { overflow-x: auto; }
-/* Fixed columns, so a long "why nobody owns this" note wraps inside the
-   name column instead of squeezing a rate off its fraction. */
-.gap-owners { table-layout: fixed; min-width: 720px; }
-.gap-owners thead th:nth-child(1) { width: 32%; }
-.gap-owners thead th:nth-child(2) { width: 26%; }
-.gap-owners thead th:nth-child(3),
-.gap-owners thead th:nth-child(4) { width: 12%; }
-.gap-owners thead th:nth-child(5) { width: 18%; }
-.gap-owners td.num { white-space: nowrap; }
-.gap-owner { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
-.gap-owner-name { font-family: var(--font-farsi); font-size: 15px; font-weight: 500; }
-.gap-unowned .gap-owner-name { font-family: var(--font-body); font-size: 14px; font-style: italic; font-weight: 400; color: var(--text-secondary); }
-/* The neutral pill that says why a row belongs to nobody. */
-.gap-owner-note {
-  display: inline-block; max-width: 100%;
-  padding: 0 8px; border-radius: 10px;
-  background: var(--neutral-soft); color: var(--text-secondary);
-  font-size: 12px; line-height: 20px; font-weight: 500;
-}
-
-/* The share bar: a thin accent bar on the divider track, scaled to the
-   widest row. */
-.gap-share {
-  height: 6px; min-width: 80px; border-radius: 3px;
-  background: var(--divider); overflow: hidden;
-}
-.gap-share-fill { height: 100%; background: var(--accent); border-radius: 3px; }
-
-.gap-stopped { font-weight: 600; }
-.gap-rate { display: block; }
-/* A rate never appears without its fraction. */
-.gap-frac { display: block; font-size: 12px; line-height: 16px; color: var(--text-tertiary); }
-
-/* The 80% line: a wash row with a 2px accent rule under it. */
-.gap-owners tr.gap-pareto td {
-  height: auto;
-  padding: 6px 12px;
-  background: var(--accent-wash);
-  border-bottom: 2px solid var(--accent);
-  color: var(--accent-ink); font-size: 12px; line-height: 16px; font-weight: 600;
-}
-.gap-owners tr.gap-pareto:hover { background: transparent; }
 
 .gap-checksum {
   display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
   font-size: 13px; line-height: 20px; color: var(--text-secondary);
   font-variant-numeric: tabular-nums;
-}
-.gap-checksum-pill {
-  display: inline-flex; align-items: center; gap: 4px;
-  padding: 0 8px; border-radius: 10px;
-  background: var(--success-soft); color: var(--success-ink);
-  font-size: 12px; line-height: 20px; font-weight: 600;
 }
 .gap-checksum.bad {
   align-items: flex-start;

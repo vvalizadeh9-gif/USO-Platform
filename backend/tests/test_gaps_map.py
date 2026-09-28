@@ -1,26 +1,23 @@
-"""Gap & Performance road view: the numbers, and who may see them.
+"""Lifecycle Gaps coverage map: the numbers, and who may see them.
 
-The most important test in this file is
-:func:`test_every_lens_sums_back_to_the_country_total`. A design preview of this
-page put a country figure of 2,570 next to an owner list adding up to 445,
-because two of the five lenses were built from a different query than the rest.
-That is the bug this endpoint is shaped to make impossible, so the parity check
-runs for every lens against every stretch and, when it fails, says which lens,
-which stretch, and by how much -- a bare ``assert a == b`` here would tell
-whoever broke it almost nothing.
+The map is ICT approval by province and CRA approval by CRA region. What has to
+hold: all 31 provinces and all 9 regions come back for a PM, the figures are
+the hand-worked ones, a region is the sum of its provinces, the rows add up to
+the total, and a non-PM's map is their own villages only.
 
 The dataset below is small and every expected figure is worked out by hand in
 ``_seed``, so an assertion never agrees with whatever the code happened to
-produce. It deliberately contains the four cases that make the sums hard:
+produce. It deliberately contains the cases that make the sums hard:
 
 * a site whose CPM province cell matched none of the 31 (no province, so no
   regional manager, coordinator or CRA region either),
 * a work item with no DT SC contractor,
 * a province whose drive tests are not done, so it has reached nothing,
-* villages CRA-approved with no ICT approval, which the road's ordering says
-  should not exist and which nothing in the platform prevents.
+* villages CRA-approved with no ICT approval.
 
-Run with:  cd backend && pytest tests/test_gaps_road.py -q
+The overview (the Gaps tab) has its own file, ``test_gaps_overview.py``.
+
+Run with:  cd backend && pytest tests/test_gaps_map.py -q
 """
 import os
 import sys
@@ -74,28 +71,6 @@ COUNTRY_ICT_STOPPED = 13
 COUNTRY_CRA_REACHED = 20
 COUNTRY_CRA_STOPPED = 11
 
-# The same 13 villages, regrouped. Each of these lists must add to
-# COUNTRY_ICT_STOPPED -- that is the property the page claims.
-ICT_STOPPED_BY_LENS = {
-    "province": {
-        "Tehran": 4,
-        "Mazandaran": 2,
-        "Ardabil": 4,
-        "Zanjan": 0,
-        "Unknown province": 3,
-    },
-    "contractor": {ALPHA: 11, BETA: 2, "Unassigned": 0},
-    "rm": {"Allahyar": 4, "Nobakht": 2, "Pirayesh": 4, "Unknown province": 3},
-    "coordinator": {"Amir": 6, "Hossein": 4, "Unknown province": 3},
-    "region": {
-        "North": 6,
-        "Azar": 4,
-        "North West": 0,
-        "Unknown province": 3,
-    },
-}
-
-
 @pytest.fixture(scope="module")
 def client():
     if os.path.exists(DB_FILE):
@@ -113,7 +88,7 @@ def _villages(db, work_item_id, count, *, ict_approved=0, cra_approved=0):
 
     The first ``ict_approved`` are ICT-approved and the first ``cra_approved``
     are CRA-approved, so CRA approval is a subset of ICT approval unless a test
-    asks for otherwise -- which is the ordering the road assumes.
+    asks for otherwise.
     """
     from app.models.workitem import Village
 
@@ -131,7 +106,7 @@ def _villages(db, work_item_id, count, *, ict_approved=0, cra_approved=0):
 
 
 def _seed() -> None:
-    """Seven work items, one per situation the road has to place somewhere."""
+    """Seven work items, one per situation the map has to place somewhere."""
     from app.models.reference import Contractor, Province
     from app.models.workitem import Site, WorkItem
 
@@ -178,8 +153,7 @@ def _seed() -> None:
         _villages(db, wi.id, 10, ict_approved=6, cra_approved=4)
 
         # 2. Mazandaran / Beta. 8 DT-done, all ICT approved, 3 CRA approved.
-        #    ICT stopped 0, CRA stopped 5 -- the biggest single gap on the CRA
-        #    stretch, which is what makes the Pareto order worth checking.
+        #    ICT stopped 0, CRA stopped 5.
         wi = work_item(mazandaran_site, beta, dt_done=True)
         _villages(db, wi.id, 8, ict_approved=8, cra_approved=3)
 
@@ -202,8 +176,8 @@ def _seed() -> None:
         _villages(db, wi.id, 4, ict_approved=4)
 
         # 7. Mazandaran, second site type: two villages CRA-approved with no
-        #    ICT approval. The road says ICT precedes CRA; the platform does
-        #    not enforce it, because the two authorities are parallel.
+        #    ICT approval. The two authorities are parallel; on the map these
+        #    count as ICT stopped and have not reached the CRA stretch.
         wi = work_item(mazandaran_site, beta, dt_done=True, site_type="B")
         _villages(db, wi.id, 2, ict_approved=0, cra_approved=2)
 
@@ -289,42 +263,7 @@ def _contractor_account(client, admin_h) -> dict:
     return {"Authorization": f"Bearer {response.json()['access_token']}"}
 
 
-def _road(client, headers, **params):
-    response = client.get("/api/v1/gaps/road", headers=headers, params=params)
-    assert response.status_code == 200, response.text
-    return response.json()
-
-
-def _stretch(payload, key):
-    return next(s for s in payload["stretches"] if s["key"] == key)
-
-
-# ----- The test this endpoint exists to pass ------------------------------
-
-
-def test_every_lens_sums_back_to_the_country_total(client, actors):
-    """Every lens must be a partition of the same villages.
-
-    Five lenses, four stretches, two counters. Any regrouping that loses a
-    village, counts one twice, or is built from a second query shows up here.
-    The failure message names the lens, the stretch, the counter and the size
-    of the discrepancy, because "13 != 10" on its own sends whoever broke it
-    looking in the wrong place.
-    """
-    for lens in gaps.LENSES:
-        payload = _road(client, actors["pm"], lens=lens)
-        for stretch in payload["stretches"]:
-            for counter in ("stopped", "reached"):
-                owners = sum(owner[counter] for owner in stretch["owners"])
-                country = stretch["country"][counter]
-                assert owners == country, (
-                    f"lens {lens!r}, stretch {stretch['key']!r}: the owner rows "
-                    f"{counter} sum to {owners} but the country total says "
-                    f"{country} -- a difference of {country - owners}. Every "
-                    f"lens must be a regrouping of the same villages, so this "
-                    f"means the owner rows and the country figure no longer "
-                    f"come from one query."
-                )
+# ----- Every lens is a partition -----------------------------------------
 
 
 def test_every_lens_partitions_a_grid_with_no_owners_in_it():
@@ -363,82 +302,6 @@ def test_every_lens_partitions_a_grid_with_no_owners_in_it():
         assert sum(cell.villages for cell in folded.values()) == 21, lens
 
 
-# ----- The figures themselves --------------------------------------------
-
-
-def test_the_country_figures_are_the_hand_worked_ones(client, actors):
-    payload = _road(client, actors["pm"], lens="province")
-    assert payload["country_villages"] == COUNTRY_VILLAGES
-
-    ict = _stretch(payload, "ict")["country"]
-    assert ict["reached"] == COUNTRY_ICT_REACHED
-    assert ict["stopped"] == COUNTRY_ICT_STOPPED
-    # 13 / 33 = 39.39…
-    assert ict["rate"] == 39.4
-
-    cra = _stretch(payload, "cra")["country"]
-    assert cra["reached"] == COUNTRY_CRA_REACHED
-    assert cra["stopped"] == COUNTRY_CRA_STOPPED
-    # 11 / 20
-    assert cra["rate"] == 55.0
-
-
-@pytest.mark.parametrize("lens", sorted(ICT_STOPPED_BY_LENS))
-def test_each_lens_reports_the_owners_it_should(client, actors, lens):
-    payload = _road(client, actors["pm"], lens=lens)
-    owners = _stretch(payload, "ict")["owners"]
-    assert {o["name"]: o["stopped"] for o in owners} == ICT_STOPPED_BY_LENS[lens]
-
-
-def test_the_owner_list_is_sorted_by_stopped_descending(client, actors):
-    owners = _stretch(_road(client, actors["pm"], lens="province"), "ict")["owners"]
-    counts = [owner["stopped"] for owner in owners]
-    assert counts == sorted(counts, reverse=True)
-    assert owners[0]["name"] in ("Tehran", "Ardabil")  # both stopped 4
-    assert owners[0]["stopped"] == 4
-
-
-def test_a_rate_is_the_stop_rate_and_carries_its_own_fraction(client, actors):
-    owners = _stretch(_road(client, actors["pm"], lens="province"), "ict")["owners"]
-    ardabil = next(o for o in owners if o["name"] == "Ardabil")
-    assert ardabil["stopped"] == 4
-    assert ardabil["reached"] == 6
-    # 4 of 6 reached, so 66.7% -- and the two counts travel with it, because
-    # the page never shows a rate without the fraction it came from.
-    assert ardabil["rate"] == 66.7
-
-
-def test_an_owner_with_nothing_on_a_stretch_keeps_its_row(client, actors):
-    """Zanjan is on air with no drive test finished: it has reached nothing.
-
-    The row must be there and must read no rate. Dropping it would say "this
-    province has no gap" when the truth is "nothing here has got as far as the
-    stretch yet", and it would also break the sum above.
-    """
-    owners = _stretch(_road(client, actors["pm"], lens="province"), "ict")["owners"]
-    zanjan = next(o for o in owners if o["name"] == "Zanjan")
-    assert (zanjan["stopped"], zanjan["reached"], zanjan["rate"]) == (0, 0, None)
-    assert zanjan["villages"] == 5
-
-
-def test_villages_nobody_owns_are_named_and_flagged(client, actors):
-    """Three villages with no province and four with no contractor are rows of
-    their own, carrying why -- not dropped, and not folded into a real owner."""
-    by_lens = {
-        lens: {
-            owner["name"]: owner["attribution"]
-            for owner in _stretch(_road(client, actors["pm"], lens=lens), "ict")[
-                "owners"
-            ]
-        }
-        for lens in ("province", "rm", "contractor")
-    }
-    assert by_lens["province"]["Unknown province"] == gaps.UNKNOWN_PROVINCE
-    assert by_lens["rm"]["Unknown province"] == gaps.UNKNOWN_PROVINCE
-    assert by_lens["contractor"]["Unassigned"] == gaps.UNASSIGNED
-    assert by_lens["province"]["Tehran"] == gaps.OWNED
-
-
 def test_a_province_with_no_mapping_row_becomes_its_own_row():
     """The ``unmapped`` case, on the function that decides it.
 
@@ -449,145 +312,9 @@ def test_a_province_with_no_mapping_row_becomes_its_own_row():
     assert gaps._owner("province", ARDABIL, None, {}) == ("Ardabil", gaps.OWNED)
 
 
-# ----- What the page must not hide about its own inputs -------------------
-
-
-def test_cra_approved_without_ict_is_counted_and_placed(client, actors):
-    """Two villages are CRA-approved with no ICT approval.
-
-    The road assumes ICT precedes CRA and nothing enforces it, so the count is
-    reported on every load. Those two villages are stopped on the ICT stretch
-    -- which is what they are -- and have not reached the CRA stretch, so they
-    are on the road exactly once rather than counted twice or nowhere.
-    """
-    payload = _road(client, actors["pm"], lens="province")
-    assert payload["data_quality"]["cra_approved_without_ict"] == 2
-
-    owners = _stretch(payload, "ict")["owners"]
-    mazandaran = next(o for o in owners if o["name"] == "Mazandaran")
-    assert mazandaran["stopped"] == 2
-
-    cra_owners = _stretch(payload, "cra")["owners"]
-    cra_mazandaran = next(o for o in cra_owners if o["name"] == "Mazandaran")
-    # 8 ICT-approved reached the CRA stretch; the 2 CRA-without-ICT did not.
-    assert cra_mazandaran["reached"] == 8
-
-
-def test_data_quality_reports_the_three_assumptions(client, actors):
-    quality = _road(client, actors["pm"], lens="province")["data_quality"]
-    assert quality["villages_without_province"] == 3
-    assert quality["villages_without_contractor"] == 4
-    # Startup opens a mapping row for all 31, so nothing is unmapped here.
-    assert quality["unmapped_provinces"] == []
-
-
-# ----- The two stretches that are not built yet ---------------------------
-
-
-@pytest.mark.parametrize("key", ["tracker", "dep"])
-def test_the_tracker_stretches_report_nothing_rather_than_a_guess(client, actors, key):
-    """Both read a table that does not exist yet.
-
-    They are drawn on the road and report zero. Counting every CRA-approved
-    village as "not in the tracker" because there is no tracker to look in
-    would put a confident, large, wrong number on the page.
-    """
-    stretch = _stretch(_road(client, actors["pm"], lens="coordinator"), key)
-    assert stretch["available"] is False
-    assert stretch["owners"] == []
-    assert stretch["country"] == {"stopped": 0, "reached": 0, "rate": None}
-    assert stretch["pending"]
-
-
-# ----- Who may see what --------------------------------------------------
-
-
-def test_admin_is_refused(client, actors):
-    response = client.get(
-        "/api/v1/gaps/road", headers=actors["admin"], params={"lens": "province"}
-    )
-    assert response.status_code == 403
-
-
-@pytest.mark.parametrize(
-    "actor,lens,own",
-    [
-        ("coordinator", "coordinator", "Hossein"),
-        ("rm", "rm", "Pirayesh"),
-        ("contractor", "contractor", ALPHA),
-    ],
-)
-def test_a_non_pm_receives_its_own_row_and_no_other(client, actors, actor, lens, own):
-    payload = _road(client, actors[actor], lens=lens)
-    assert payload["selectable"] is False
-    assert payload["scoped"] is True
-    assert payload["key"] == own
-
-    for stretch in payload["stretches"]:
-        names = [owner["name"] for owner in stretch["owners"]]
-        assert names in ([own], []), names
-
-    # The country total is still there, and is still the whole country: it is
-    # an aggregate of 31 provinces, it identifies nobody, and "% of gap"
-    # cannot be computed without it.
-    assert _stretch(payload, "ict")["country"]["stopped"] == COUNTRY_ICT_STOPPED
-
-
-@pytest.mark.parametrize(
-    "actor,lens",
-    [
-        ("coordinator", "rm"),
-        ("coordinator", "province"),
-        ("rm", "coordinator"),
-        ("contractor", "province"),
-        ("contractor", "region"),
-    ],
-)
-def test_a_non_pm_asking_for_another_lens_is_refused(client, actors, actor, lens):
-    """403 rather than a substitution. A page headed with somebody else's lens
-    and filled with this account's numbers would be believed."""
-    response = client.get(
-        "/api/v1/gaps/road", headers=actors[actor], params={"lens": lens}
-    )
-    assert response.status_code == 403
-
-
-def test_pm_may_switch_every_lens(client, actors):
-    for lens in gaps.LENSES:
-        payload = _road(client, actors["pm"], lens=lens)
-        assert payload["selectable"] is True
-        assert payload["scoped"] is False
-
-
-# ----- The query string --------------------------------------------------
-
-
-def test_one_stretch_can_be_asked_for_on_its_own(client, actors):
-    payload = _road(client, actors["pm"], lens="province", stretch="cra")
-    assert [s["key"] for s in payload["stretches"]] == ["cra"]
-    assert _stretch(payload, "cra")["country"]["stopped"] == COUNTRY_CRA_STOPPED
-
-
-def test_all_four_stretches_come_back_in_road_order(client, actors):
-    payload = _road(client, actors["pm"], lens="province")
-    assert [s["key"] for s in payload["stretches"]] == ["ict", "cra", "tracker", "dep"]
-
-
-@pytest.mark.parametrize(
-    "params",
-    [{"lens": "nonsense"}, {"lens": "province", "stretch": "nonsense"}, {}],
-)
-def test_a_lens_or_stretch_that_does_not_exist_is_refused(client, actors, params):
-    response = client.get("/api/v1/gaps/road", headers=actors["pm"], params=params)
-    assert response.status_code == 422
-
-
 # ----- The coverage map ----------------------------------------------------
 #
-# Every province by its CPM province, every CRA region by the mapping. What
-# has to hold: all 31 and all 9 come back for a PM, the numbers are the road's
-# numbers, a region is the sum of its provinces, and a non-PM's map is their
-# own villages only.
+# Every province by its CPM province, every CRA region by the mapping.
 
 from app.core.province_directory import PROVINCE_DIRECTORY  # noqa: E402
 
@@ -627,17 +354,33 @@ def test_each_province_carries_its_mapping_region(client, actors):
             assert row["region"] == region_of[row["key"]], row["name"]
 
 
-def test_the_map_numbers_are_the_road_numbers(client, actors):
-    """A province or region on the map reads exactly what the road tab shows
-    for it: the same fold of the same grid."""
-    payload = _map(client, actors["pm"])
-    for lens, rows in (("province", payload["provinces"]), ("region", payload["regions"])):
-        road = _road(client, actors["pm"], lens=lens)
-        for key in ("ict", "cra"):
-            for owner in _stretch(road, key)["owners"]:
-                row = _named(rows, owner["name"])
-                figures = {k: owner[k] for k in ("stopped", "reached", "rate", "low_sample")}
-                assert row[key] == figures, (lens, key, owner["name"])
+# Worked out by hand from _seed: (ICT stopped, ICT reached, CRA stopped,
+# CRA reached) per province.
+#   Tehran      WI1 10 DT done, 6 ICT, 4 CRA + WI6 4 DT done, 4 ICT, 0 CRA
+#   Mazandaran  WI2 8 DT done, 8 ICT, 3 CRA  + WI7 2 DT done, 0 ICT, 2 CRA
+#   Ardabil     WI3 6 DT done, 2 ICT, 2 CRA
+#   Zanjan      WI4 drive test not done
+#   Unknown     WI5 3 DT done, nothing approved
+MAP_BY_PROVINCE = {
+    "Tehran": (4, 14, 6, 10),
+    "Mazandaran": (2, 10, 5, 8),
+    "Ardabil": (4, 6, 0, 2),
+    "Zanjan": (0, 0, 0, 0),
+    "Unknown province": (3, 3, 0, 0),
+}
+
+
+def test_the_province_figures_are_the_hand_worked_ones(client, actors):
+    rows = _map(client, actors["pm"])["provinces"]
+    for name, expected in MAP_BY_PROVINCE.items():
+        row = _named(rows, name)
+        got = (
+            row["ict"]["stopped"],
+            row["ict"]["reached"],
+            row["cra"]["stopped"],
+            row["cra"]["reached"],
+        )
+        assert got == expected, name
 
 
 def test_a_region_is_the_sum_of_its_provinces(client, actors):
@@ -653,6 +396,8 @@ def test_a_region_is_the_sum_of_its_provinces(client, actors):
 
 def test_the_total_is_the_country_and_the_rows_add_up_to_it(client, actors):
     payload = _map(client, actors["pm"])
+    assert payload["total"]["villages"] == COUNTRY_VILLAGES
+    assert payload["total"]["ict"]["reached"] == COUNTRY_ICT_REACHED
     assert payload["total"]["ict"]["stopped"] == COUNTRY_ICT_STOPPED
     assert payload["total"]["cra"]["reached"] == COUNTRY_CRA_REACHED
     for rows in (payload["provinces"], payload["regions"]):
