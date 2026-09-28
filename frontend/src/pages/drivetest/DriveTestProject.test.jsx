@@ -878,30 +878,55 @@ describe('the province grid', () => {
     expect(provinces.querySelectorAll('.dt-action-cell')).toHaveLength(0)
   })
 
-  it('reddens a done % that is below the programme average, not below a fixed band', async () => {
-    // The rule changed and the change is the point. A province at 88% is
-    // doing badly in a programme averaging 95% and well in one averaging
-    // 60%; the fixed 70/30 thresholds said the same thing about both.
+  it('marks the programme average on each completion bar, and says which rows fall below it', async () => {
+    // The rule is the programme average, not a fixed band: a province at 88%
+    // is doing badly in a programme averaging 95% and well in one averaging
+    // 60%. Below-average is no longer drawn in red. It is read off a 2px mark
+    // at the average on every bar, and said in words to a screen reader.
     //
     // These four come to 269 done of 770 on air, so the average is 35%.
     serve(planDelivery(), sortable)
     draw(TABLES)
 
     const provinces = await section('Drive Test progress by province')
-    const rate = (name) =>
+    const cell = (name) =>
       within(provinces).getByText(name).closest('.dt-province-card')
-        .querySelector('.dt-province-rate')
+        .querySelector('.dt-province-rate-cell')
+
+    for (const name of ['Yazd', 'Kerman', 'Bushehr', 'Ardabil']) {
+      const mark = within(cell(name)).getByTestId('dt-province-average-mark')
+      expect(parseFloat(mark.style.left)).toBeCloseTo((269 / 770) * 100, 5)
+      // The rate is ink on every row.
+      expect(cell(name).querySelector('.dt-province-rate')).not.toHaveAttribute('style')
+      expect(cell(name).querySelector('.dt-rate-fill')).not.toHaveAttribute(
+        'style',
+        expect.stringContaining('dt-problem'),
+      )
+    }
 
     // Below the average, and the only one that is.
-    expect(rate('Bushehr')).toHaveStyle({ color: 'var(--dt-problem)' })
+    expect(cell('Bushehr')).toHaveTextContent('7%below the 35% average')
+    expect(cell('Bushehr').querySelector('.dt-sr-only')).toHaveTextContent('below the 35% average')
     // Above it -- including Kerman at 50%, which the old fixed bands would
     // have drawn in the in-flight colour for being under 70.
-    expect(rate('Kerman')).toHaveStyle({ color: 'var(--text)' })
-    expect(rate('Yazd')).toHaveStyle({ color: 'var(--text)' })
+    for (const name of ['Kerman', 'Yazd', 'Ardabil']) {
+      expect(cell(name).querySelector('.dt-sr-only')).toBeNull()
+    }
 
-    // And the threshold is stated, because a colour whose rule is not on
-    // screen is one a reader has to guess at.
-    expect(provinces).toHaveTextContent('Completion rate in red is below the 35% programme average')
+    // And the mark is keyed under the table, because a mark whose meaning is
+    // not on screen is one a reader has to guess at.
+    expect(provinces).toHaveTextContent('The mark on each bar is the 35% programme average')
+  })
+
+  it('draws no red rule down a row with problematic sites', async () => {
+    serve(planDelivery(), sortable)
+    draw(TABLES)
+
+    const provinces = await section('Drive Test progress by province')
+    const row = within(provinces).getByText('Ardabil').closest('.dt-province-card')
+    expect(row).not.toHaveClass('dt-row-problem')
+    // The count itself still carries the state: the column names it.
+    expect(within(row).getByText('13')).toHaveClass('dt-cell-link-bad')
   })
 
   it('shows no "Not started" anywhere in the grid, its key or its bars', async () => {
@@ -2567,6 +2592,22 @@ describe('the contractor scorecard', () => {
     expect(within(rowFor('Beta Surveys')).getByText('100%')).toBeInTheDocument()
   })
 
+  it('ranks every row in the same neutral circle and draws completion as an accent bar', async () => {
+    serve()
+    draw(TABLES)
+
+    const card = await section('Contractor scorecard')
+    const badges = [...card.querySelectorAll('.dt-rank-badge:not(.dt-rank-badge-empty)')]
+    expect(badges.map((b) => b.textContent)).toEqual(['1', '2'])
+    expect(badges.every((b) => b.className === 'dt-rank-badge')).toBe(true)
+
+    const row = within(card).getByText('Alfa Drive Tests').closest('.dt-contractor-row')
+    const completion = row.querySelector('.dt-completion')
+    expect(completion.querySelector('.dt-rate-fill')).toHaveStyle({ width: '72.7%' })
+    expect(completion.querySelector('.dt-rate-value')).toHaveTextContent('73%')
+    expect(card.querySelector('.dt-pill')).toBeNull()
+  })
+
   it('reads a dash for plan and achieved where a contractor has no approved PIP', async () => {
     serve(planDelivery({ rows: [], achievement_percent: null }))
     draw(TABLES)
@@ -2591,7 +2632,10 @@ describe('the contractor scorecard', () => {
     const cells = row.querySelectorAll('td')
     expect(cells[cells.length - 3]).toHaveTextContent('4')
     const achieved = row.querySelector('.dt-pip-achieved')
-    expect(achieved.querySelector('.dt-pill')).toHaveTextContent('75%')
+    // Plain text, not a coloured pill: the count, then its rate.
+    expect(achieved.querySelector('.dt-pill')).toBeNull()
+    expect(achieved).toHaveTextContent('375%')
+    expect(achieved.querySelector('.dt-pip-rate-text')).toHaveTextContent('75%')
     expect(within(achieved).getByText('3').closest('a')).toHaveAttribute(
       'href',
       '/drive-test/sites?bucket=delivered&contractor_id=1&year=1405&month=6',
@@ -2620,7 +2664,7 @@ describe('the contractor scorecard', () => {
     expect(cells[cells.length - 3]).toHaveTextContent('10')
     const achieved = row.querySelector('.dt-pip-achieved')
     expect(within(achieved).getByText('1')).toBeInTheDocument()
-    expect(achieved.querySelector('.dt-pill')).toHaveTextContent('10%')
+    expect(achieved.querySelector('.dt-pip-rate-text')).toHaveTextContent('10%')
   })
 
   it('keeps a delivered count with no rate where nothing was approved to score it against', async () => {
@@ -2635,7 +2679,7 @@ describe('the contractor scorecard', () => {
     const row = within(card).getByText('Alfa Drive Tests').closest('.dt-contractor-row')
     const achieved = row.querySelector('.dt-pip-achieved')
     expect(achieved).toHaveTextContent(/^2$/)
-    expect(achieved.querySelector('.dt-pill')).toBeNull()
+    expect(achieved.querySelector('.dt-pip-rate-text')).toBeNull()
   })
 
   it('says the PIP columns are programme-wide when narrowed, and adds no plan-only rows', async () => {

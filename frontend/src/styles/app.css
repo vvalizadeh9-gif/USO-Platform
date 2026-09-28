@@ -2318,9 +2318,6 @@ a.dt-bar-link:hover .dt-bar-go { opacity: 1; transform: translateX(2px); }
   font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums;
   background: var(--neutral-soft); color: var(--text-secondary);
 }
-/* The leader is marked by weight, not by a status colour: green on this page
-   means a finished drive test and nothing else. */
-.dt-rank-badge-1 { background: var(--text); color: var(--text-on-accent); }
 .dt-rank-badge-empty { background: none; }
 .dt-contractor-name {
   font-size: 15px; line-height: 22px; font-weight: 500; color: var(--text); text-decoration: none;
@@ -2362,14 +2359,12 @@ a.dt-contractor-name:hover { text-decoration: underline; text-decoration-color: 
 .dt-province-rate { font-weight: 600; }
 .dt-rank { color: var(--text-tertiary); font-size: 12px; font-weight: 600; width: 32px; }
 
-.dt-row-problem td:first-child { box-shadow: inset 3px 0 0 var(--dt-problem); }
-
 /* Province search, in the card header. */
 .dt-province-search-wrap {
   display: flex; align-items: center; gap: 8px;
-  padding: 0 12px; inline-size: 220px; min-height: 36px;
+  padding: 0 12px; inline-size: 240px; min-height: 36px;
   background: var(--surface); border-radius: var(--radius-sm);
-  border: 1px solid var(--control-border);
+  border: 1px solid var(--dt-muted, var(--control-border));
   transition: border-color 0.15s, box-shadow 0.15s;
 }
 .dt-province-search-wrap:focus-within {
@@ -2382,18 +2377,6 @@ a.dt-contractor-name:hover { text-decoration: underline; text-decoration-color: 
   width: 100%; min-height: 34px;
 }
 .dt-province-search::placeholder { color: var(--text-tertiary); }
-
-/* Province progress bar in DT completion column */
-.dt-province-pbar-cell {
-  display: flex; flex-direction: column; align-items: flex-end; gap: 4px;
-}
-.dt-province-pbar {
-  width: 100%; max-width: 80px; height: 6px;
-  border-radius: 3px; background: var(--track); overflow: hidden;
-}
-.dt-province-pbar-fill {
-  height: 100%; border-radius: 3px; transition: width 0.35s ease;
-}
 
 /* Action column */
 .dt-th-action { width: 32px; }
@@ -2617,14 +2600,41 @@ a.dt-contractor-name:hover { text-decoration: underline; text-decoration-color: 
    under it, which was the one thing making those rows two lines tall. The
    type is unchanged. */
 .dt-tables thead th { padding: 8px 12px; }
-.dt-tables tbody td { padding: 6px 12px; }
-.dt-tables .dt-rank-badge { width: 20px; height: 20px; }
-.dt-tables .dt-pill { padding: 1px 9px; }
-.dt-tables .dt-province-pbar-cell {
-  flex-direction: row; align-items: center; justify-content: flex-end; gap: 8px;
+.dt-tables tbody td { padding: 4px 12px; block-size: 40px; }
+/* A rate cell: an accent bar on the track, then the rate in 14/600 ink.
+   The province table marks the programme average on the bar with a 2px ink
+   tick; the scorecard's bar has none. */
+.dt-rate-cell { display: inline-flex; align-items: center; justify-content: flex-end; gap: 10px; }
+.dt-rate-bar {
+  position: relative; display: block; flex: none;
+  inline-size: 110px; block-size: 6px; border-radius: 3px; background: var(--track);
 }
-.dt-tables .dt-province-pbar { order: -1; width: 56px; flex: none; }
-.dt-tables .dt-province-rate { min-width: 4ch; text-align: end; }
+.dt-province-rate-cell .dt-rate-bar { inline-size: 120px; }
+.dt-rate-fill {
+  display: block; block-size: 100%; border-radius: 3px; background: var(--accent);
+  transition: width 0.35s ease;
+}
+.dt-rate-mark {
+  position: absolute; inset-block: -3px; inline-size: 2px; border-radius: 1px;
+  background: var(--text); transform: translateX(-1px);
+}
+.dt-rate-value {
+  min-inline-size: 4ch; text-align: end;
+  font-size: 14px; line-height: 20px; font-weight: 600; color: var(--text);
+}
+/* The foot's key to that tick. */
+.dt-mark-key { display: inline-flex; align-items: center; gap: 6px; }
+.dt-mark-key-swatch {
+  display: inline-block; inline-size: 2px; block-size: 12px; border-radius: 1px; background: var(--text);
+}
+/* Achieved: the delivered count in 600 ink, then the rate, small and quiet. */
+.dt-pip-achieved { font-weight: 600; color: var(--text); }
+.dt-pip-rate-text {
+  margin-inline-start: 8px; font-size: 12px; font-weight: 400; color: var(--text-tertiary);
+}
+.dt-cell-link-bad { font-weight: 600; }
+/* Gap is the column the table is sorted by and read for. */
+.dt-gap-cell, .dt-gap-cell .dt-cell-link { font-weight: 600; }
 
 /* The count, the colour key and the fold, on one line under a table. */
 .dt-table-foot {
@@ -2757,7 +2767,6 @@ a.dt-contractor-name:hover { text-decoration: underline; text-decoration-color: 
 /* The scorecard's two PIP columns: a dash where nothing was committed, and
    the delivered count followed by its rate where something was. */
 .dt-pip-none { color: var(--text-tertiary); }
-.dt-pip-achieved .dt-pill { margin-inline-start: 8px; }
 
 /* ---------- flow chart: on-aired vs DT done ---------- */
 .dt-flowcard { display: grid; gap: 10px; }
