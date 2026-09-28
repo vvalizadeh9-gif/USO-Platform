@@ -310,14 +310,15 @@ def _regions_for(db: Session, province_names_fa) -> list[str]:
 # single GROUP BY, and it agrees exactly with what the rest of the platform
 # considers on air, DT done and a target village.
 #
-# ``dt_done_values``, ``target_values``, ``count_if`` and ``province_label``
-# carry no leading underscore because ``services/gaps.py`` reads them too. A
-# second reading of "DT done", of "a target village" or of a province's English
-# name is exactly how two reporting screens start disagreeing about the same
-# number, so there is one of each and both pages call it.
+# ``onair_values``, ``dt_done_values``, ``target_values``, ``count_if`` and
+# ``province_label`` carry no leading underscore because ``services/gaps.py``
+# reads them too. A second reading of "on air", of "DT done", of "a target
+# village" or of a province's English name is exactly how two reporting screens
+# start disagreeing about the same number, so there is one of each and both
+# pages call it.
 
 
-def _onair_values(db: Session) -> list[str]:
+def onair_values(db: Session) -> list[str]:
     values = db.execute(select(WorkItem.last_stage).distinct()).scalars().all()
     return [v for v in values if v is not None and C.is_onair_stage(v)]
 
@@ -380,7 +381,7 @@ class Totals:
 
 def _village_aggregate(db: Session, scope: Scope | None) -> dict[str | None, Totals]:
     """Per-province village counts, in one GROUP BY."""
-    onair = _onair_values(db)
+    onair = onair_values(db)
     done = dt_done_values(db)
     targets = target_values(db)
 
@@ -424,7 +425,7 @@ def _village_aggregate(db: Session, scope: Scope | None) -> dict[str | None, Tot
 
 def _work_item_aggregate(db: Session, scope: Scope | None) -> dict[str | None, Totals]:
     """Per-province work-item counts, in one GROUP BY."""
-    onair = _onair_values(db)
+    onair = onair_values(db)
     done = dt_done_values(db)
 
     stmt: Select = (

@@ -84,6 +84,13 @@ from sqlalchemy.orm import Session
 
 from app.core.province_directory import UNKNOWN_PROVINCE_LABEL
 from app.models.kpi import ProvinceMapping
+from app.models.mojri import (
+    IN_TRACKER,
+    NEEDS_LOOK,
+    NOT_IN_TRACKER,
+    MojriImportRun,
+    MojriTrackerStatus,
+)
 from app.models.reference import Contractor, Province
 from app.models.workitem import Site, Village, WorkItem
 from app.services import kpi
@@ -360,17 +367,20 @@ def _owner(
     return owners[lens], OWNED
 
 
-def _fold(grid, key_of) -> dict[tuple[str, str], Cell]:
+def _fold(grid, key_of, empty=Cell) -> dict:
     """Regroup the grid under one key function.
 
     The owner list and the country total both come from here, over the same
     cells. That is the whole structural guarantee: one query, grouped different
     ways, never two independent counts that are supposed to agree.
+
+    ``empty`` is the counter class of the grid being folded: :class:`Cell` for
+    the road and the map, :class:`GapCell` for the overview.
     """
-    out: dict[tuple[str, str], Cell] = {}
+    out: dict = {}
     for (province_fa, contractor), cell in grid.items():
         key = key_of(province_fa, contractor)
-        out.setdefault(key, Cell()).add(cell)
+        out.setdefault(key, empty()).add(cell)
     return out
 
 
@@ -512,6 +522,264 @@ def road(db: Session, user, lens: str | None, stretch: str | None) -> dict:
             for spec in wanted
         ],
         "data_quality": _data_quality(country_cell, grid, mapping),
+    }
+
+
+# ----- Overview: where villages are stuck --------------------------------
+#
+# The Gaps tab's counting, replacing the road above once the new page ships.
+# Three differences from the road, all intended:
+#
+# * **ICT and CRA are parallel jobs.** Neither is counted "after" the other, so
+#   a village CRA-approved without ICT is not an anomaly any more: it is simply
+#   "ICT remained". The road's ``cra_approved_without_ict`` note has no place
+#   here and is not reported.
+# * **The universe is on-air villages only.** هدف, drive test done *and* the
+#   site's ``last_stage`` is temporary or permanent launch -- the same on-air
+#   reading the Acceptance dashboard splits on. The road did not apply the
+#   on-air rule.
+# * **A non-PM's figures are their own.** Totals, every gap and every base are
+#   computed over the cells that roll up to their own key, so the one row they
+#   see adds up to the totals they see.
+#
+# What stays the same: one GROUP BY (:func:`_gap_grid`), every figure a fold of
+# it, every lens a partition that sums back to the total, nobody-owns rows
+# named rather than dropped, and no de-duplication (ARCHITECTURE.md,
+# "Acceptance counting does not deduplicate").
+#
+# "Approved" is the village roll-up (``Village.ict_status == Approved``, i.e.
+# every requested technology approved). Everything else -- Pending, Rejected,
+# not filed -- is not approved.
+#
+# A village with no ``mojri_tracker_status`` row is "not in the tracker", and a
+# ``needs_look`` village is counted as missing too (it is not ``in_tracker``);
+# the needs-look count travels separately so the page can show it later.
+
+
+@dataclass
+class GapCell:
+    """The overview's counters for one (province, contractor) cell.
+
+    Each gap is counted directly in SQL rather than derived by subtraction, so
+    the identities the tests check (``approved + pending = eligible`` and the
+    rest) are evidence, not arithmetic that holds by construction.
+    """
+
+    eligible: int = 0
+    ict_approved: int = 0
+    cra_approved: int = 0
+    pending_ict: int = 0
+    pending_cra: int = 0
+    #: CRA approved, ICT not.
+    ict_remained: int = 0
+    #: ICT approved, CRA not.
+    cra_remained: int = 0
+    #: ICT approved, and Mojri's ICT tracker has it / does not / needs a look.
+    ict_in_tracker: int = 0
+    ict_missing: int = 0
+    ict_needs_look: int = 0
+    cra_in_tracker: int = 0
+    cra_missing: int = 0
+    cra_needs_look: int = 0
+    no_province: int = 0
+
+    def add(self, other: GapCell) -> None:
+        for f in fields(self):
+            setattr(self, f.name, getattr(self, f.name) + getattr(other, f.name))
+
+
+@dataclass(frozen=True)
+class Gap:
+    """One of the six figures: which counter is the gap and which its base.
+
+    ``authority`` is set on the two tracker gaps, which also report Mojri's
+    in-tracker and needs-look counts.
+    """
+
+    key: str
+    count: str
+    base: str
+    authority: str | None = None
+
+
+GAPS: tuple[Gap, ...] = (
+    Gap("pending_ict", count="pending_ict", base="eligible"),
+    Gap("pending_cra", count="pending_cra", base="eligible"),
+    Gap("ict_remained", count="ict_remained", base="cra_approved"),
+    Gap("cra_remained", count="cra_remained", base="ict_approved"),
+    Gap("ict_missing_in_mojri", count="ict_missing", base="ict_approved", authority="ict"),
+    Gap("cra_missing_in_mojri", count="cra_missing", base="cra_approved", authority="cra"),
+)
+GAP_KEYS = tuple(g.key for g in GAPS)
+
+
+def _gap_grid(db: Session) -> dict[tuple[str | None, str | None], GapCell]:
+    """Every overview counter, in one GROUP BY over the eligible universe.
+
+    Grouped by (province, DT SC contractor) for the same reason as
+    :func:`_grid`: each lens is a fold of these cells, never a query of its
+    own. Unscoped; a non-PM's figures are a fold of a subset of these cells.
+    """
+    done = kpi.dt_done_values(db)
+    targets = kpi.target_values(db)
+    onair = kpi.onair_values(db)
+    approved = kpi.APPROVED
+
+    ict_ok = Village.ict_status == approved
+    cra_ok = Village.cra_status == approved
+    ict_not = Village.ict_status != approved
+    cra_not = Village.cra_status != approved
+    # No tracker row reads as "not in the tracker". The table holds one row per
+    # village (unique village_id), so the outer join cannot double a village.
+    ict_tracked = func.coalesce(MojriTrackerStatus.ict_status, NOT_IN_TRACKER)
+    cra_tracked = func.coalesce(MojriTrackerStatus.cra_status, NOT_IN_TRACKER)
+
+    stmt: Select = (
+        select(
+            Province.name,
+            Contractor.name,
+            # From here on, in GapCell's field order.
+            func.count(Village.id),
+            kpi.count_if(ict_ok),
+            kpi.count_if(cra_ok),
+            kpi.count_if(ict_not),
+            kpi.count_if(cra_not),
+            kpi.count_if(and_(cra_ok, ict_not)),
+            kpi.count_if(and_(ict_ok, cra_not)),
+            kpi.count_if(and_(ict_ok, ict_tracked == IN_TRACKER)),
+            kpi.count_if(and_(ict_ok, ict_tracked != IN_TRACKER)),
+            kpi.count_if(and_(ict_ok, ict_tracked == NEEDS_LOOK)),
+            kpi.count_if(and_(cra_ok, cra_tracked == IN_TRACKER)),
+            kpi.count_if(and_(cra_ok, cra_tracked != IN_TRACKER)),
+            kpi.count_if(and_(cra_ok, cra_tracked == NEEDS_LOOK)),
+        )
+        .select_from(Village)
+        .join(WorkItem, Village.work_item_id == WorkItem.id)
+        .join(Site, WorkItem.site_id == Site.id)
+        .outerjoin(Province, Site.province_id == Province.id)
+        .outerjoin(Contractor, WorkItem.dt_sc_contractor_id == Contractor.id)
+        .outerjoin(MojriTrackerStatus, MojriTrackerStatus.village_id == Village.id)
+        .where(
+            Village.deleted_at.is_(None),
+            WorkItem.deleted_at.is_(None),
+            Village.target_classification.in_(targets or [""]),
+            WorkItem.dt_status.in_(done or [""]),
+            WorkItem.last_stage.in_(onair or [""]),
+        )
+        .group_by(Province.name, Contractor.name)
+    )
+
+    grid: dict[tuple[str | None, str | None], GapCell] = {}
+    for province, contractor, *counts in db.execute(stmt):
+        cell = GapCell(*(value or 0 for value in counts))
+        cell.no_province = cell.eligible if province is None else 0
+        grid[(province, contractor)] = cell
+    return grid
+
+
+def last_mojri_import(db: Session):
+    """When Mojri's tracker was last imported, or None if it never was -- in
+    which case the page shows the tracker block empty rather than a guess."""
+    return db.execute(
+        select(func.max(MojriImportRun.created_at))
+    ).scalar_one_or_none()
+
+
+def _gap_rows(owners: dict[tuple[str, str], GapCell], gap: Gap) -> list[dict]:
+    """One gap's owner rows, biggest first, name breaking ties.
+
+    An owner with none in this gap keeps its row, reading zero, so the rows
+    always add up to the gap's total.
+    """
+    rows = [
+        {
+            "name": name,
+            "count": getattr(cell, gap.count),
+            "base": getattr(cell, gap.base),
+            "attribution": attribution,
+        }
+        for (name, attribution), cell in owners.items()
+    ]
+    rows.sort(key=lambda row: (-row["count"], row["name"]))
+    return rows
+
+
+def _gap_figure(cell: GapCell, gap: Gap) -> dict:
+    figure = {"count": getattr(cell, gap.count), "base": getattr(cell, gap.base)}
+    if gap.authority is not None:
+        figure["in_tracker"] = getattr(cell, f"{gap.authority}_in_tracker")
+        figure["needs_look"] = getattr(cell, f"{gap.authority}_needs_look")
+    return figure
+
+
+def overview(db: Session, user, lens: str | None) -> dict:
+    """The Gaps tab: six figures, and who is behind each one under one lens.
+
+    Reads only. PM sees the country under any lens (province by default);
+    every other role sees only their own villages, under their own lens.
+    """
+    kpi.require_kpi_access(user)
+
+    if lens is not None and lens not in LENSES:
+        raise HTTPException(422, f"lens must be one of {', '.join(LENSES)}")
+
+    is_pm = user.role.name == kpi.PM
+    scope = None
+    if is_pm:
+        lens = lens or LENS_PROVINCE
+    else:
+        # The KPI page's rule: the lens and key are the account's own, and
+        # asking for another lens is a 403. Nothing the client sends widens it.
+        scope = kpi.resolve_scope(db, user, lens, None)
+        lens = scope.lens
+
+    grid = _gap_grid(db)
+    mapping = _mapping(db)
+
+    if scope is not None:
+        grid = {
+            (province_fa, contractor): cell
+            for (province_fa, contractor), cell in grid.items()
+            if _owner(scope.lens, province_fa, contractor, mapping)[0].casefold()
+            == scope.key.casefold()
+        }
+
+    owners = _fold(
+        grid,
+        lambda province, contractor: _owner(lens, province, contractor, mapping),
+        GapCell,
+    )
+    if scope is not None and not owners:
+        # Nothing eligible yet: still their own row, reading zero, rather than
+        # an empty list that reads like somebody else's page.
+        owners = {(scope.key, OWNED): GapCell()}
+    total = _fold(grid, lambda _p, _c: (_COUNTRY, OWNED), GapCell).get(
+        (_COUNTRY, OWNED), GapCell()
+    )
+
+    provinces = {province for province, _ in grid if province is not None}
+    return {
+        "last_cpm_import": kpi.last_cpm_import(db),
+        "last_mojri_import": last_mojri_import(db),
+        "scoped": not is_pm,
+        "lens": lens,
+        "key": None if is_pm else scope.key,
+        "lenses": [{"key": key, "label": LENS_LABELS[key]} for key in LENSES]
+        if is_pm
+        else [{"key": lens, "label": LENS_LABELS[lens]}],
+        "totals": {
+            "eligible": total.eligible,
+            "ict_approved": total.ict_approved,
+            "cra_approved": total.cra_approved,
+        },
+        "gaps": {gap.key: _gap_figure(total, gap) for gap in GAPS},
+        "rows": {gap.key: _gap_rows(owners, gap) for gap in GAPS},
+        "data_quality": {
+            "villages_without_province": total.no_province,
+            "unmapped_provinces": sorted(
+                kpi.province_label(name) for name in provinces - set(mapping)
+            ),
+        },
     }
 
 
