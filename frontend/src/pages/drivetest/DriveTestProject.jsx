@@ -316,18 +316,13 @@ export default function DriveTestProject() {
                 data && <KpiBand kpis={data.kpis} provinceId={provinceId} />
               )}
 
-              {/* The trend and the month side by side: the chart takes the wide
-                  column and the month's two short answers -- what moved, and what
-                  was promised -- stack beside it. They used to be a full-width
-                  chart and then a pair of half-width cards under it, and that pair
-                  spent about 370px of height on what, in a month with no approved
-                  PIP, was mostly zeros. The chart gains from it too: it is drawn on
-                  a 740-unit canvas, and full width scaled its 11.5px axis labels up
-                  to about 18px. The column narrows it to roughly its drawn size.
-                  Below about 1080px of page the grid gives up the side column and
-                  the two short cards sit side by side under the chart instead (a
-                  container query on the bench, so it follows the page's width, not
-                  the window's). */}
+              {/* The trend and the month side by side: the chart takes the rest
+                  of the width, and a 380px column beside it holds PIP this month
+                  over What moved. Both short cards stretch, so the column ends on
+                  the chart card's bottom line. When the page is narrower than
+                  980px (a container query on the bench, so it follows the page's
+                  width, not the window's) everything stacks in one column: the
+                  chart, PIP, then What moved. */}
               <div className="dt-grid2">
                 {/* One-line header from the first frame: the control and the info
                     icon arrive with the data, and a header that changed shape as
@@ -377,7 +372,16 @@ export default function DriveTestProject() {
                   }
                 </Section>
 
+                {/* PIP on top, What moved under it: what was promised for the
+                    month in progress, then what the last month did. */}
                 <div className="dt-stack">
+                  <PipThisMonth
+                    state={plan}
+                    onRetry={refresh}
+                    scoped={provinceId != null}
+                    provinceName={provinceName}
+                  />
+
                   {trend.data?.latest_flows && (
                     <Section
                       title="What moved"
@@ -403,13 +407,6 @@ export default function DriveTestProject() {
                       {(t) => <FlowLedger flows={t.latest_flows} monthLabel={t.latest_flows.label} />}
                     </Section>
                   )}
-
-                  <PipThisMonth
-                    state={plan}
-                    onRetry={refresh}
-                    scoped={provinceId != null}
-                    provinceName={provinceName}
-                  />
                 </div>
               </div>
             </div>

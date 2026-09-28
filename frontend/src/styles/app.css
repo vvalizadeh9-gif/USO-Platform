@@ -2664,17 +2664,18 @@ a.dt-contractor-name:hover { text-decoration: underline; text-decoration-color: 
    rather than the window's: the content is capped, and a 1440 window and a
    1920 window give nearly the same page. */
 .dt-bench { container: dt-bench / inline-size; }
-/* Both columns end on one line. Whichever is taller sets the height and the
-   other grows into it with something useful rather than a gap: the waterfall's
-   plot takes the spare height beside a tall chart (a bigger waterfall is more
-   legible, not padding), and an empty chart card centres its one sentence
-   beside a taller column. */
+/* Both columns end on one line. The chart takes the remaining width and the
+   380px column beside it holds PIP this month over What moved; both of those
+   cards stretch, so whichever column is taller sets the height and the other
+   grows into it. The waterfall's plot takes What moved's spare height (a
+   bigger waterfall is more legible, not padding), and an empty chart card
+   centres its one sentence beside a taller column. */
 .dt-grid2 {
   display: grid; gap: var(--dt-gap); align-items: stretch; min-width: 0;
-  grid-template-columns: minmax(0, 2.2fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) 380px;
 }
 .dt-stack { display: flex; flex-direction: column; gap: var(--dt-gap); min-width: 0; }
-.dt-stack > .dt-flow-section { flex: 1 1 auto; }
+.dt-stack > .dt-section { flex: 1 1 auto; }
 .dt-trend-section, .dt-flow-section { display: flex; flex-direction: column; }
 .dt-trend-section > .dt-section-body,
 .dt-flow-section > .dt-section-body {
@@ -2683,14 +2684,9 @@ a.dt-contractor-name:hover { text-decoration: underline; text-decoration-color: 
 .dt-trend-section > .dt-section-body > .dt-empty { margin-block: auto; }
 .dt-flow-section .dt-wf { flex: 1 1 auto; }
 .dt-flow-section .dt-wf-plot { flex: 1 1 auto; min-block-size: 76px; block-size: auto; }
-/* 1000px of page, not more: a 1366 laptop gives about 1070, and the side
-   column is still ~330px there, enough for four tiles and four bars. */
-@container dt-bench (max-width: 1000px) {
+/* Under 980px of page everything is one column: the chart, PIP, What moved. */
+@container dt-bench (max-width: 979px) {
   .dt-grid2 { grid-template-columns: minmax(0, 1fr); }
-  .dt-stack { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
-}
-@container dt-bench (max-width: 700px) {
-  .dt-stack { grid-template-columns: minmax(0, 1fr); }
 }
 
 /* A clause on the heading, on its line: the month a compact card is about. */
@@ -2985,9 +2981,6 @@ a.dt-contractor-name:hover { text-decoration: underline; text-decoration-color: 
 .dt-icon-btn { width: 36px; height: 36px; padding: 0; }
 /* The two compact cards beside the trend take Cobalt's compact padding. */
 .dt-page .dt-stack > .dt-section { padding: 16px 20px 20px; gap: 12px; }
-/* A wider side column: its two cards keep their headers on one line, and
-   the chart, which scales with its column, comes out shorter. */
-.dt-page .dt-grid2 { grid-template-columns: minmax(0, 2fr) minmax(0, 1.3fr); }
 /* Tighter rows in the breakdown bars. */
 /* ---------- the Breakdowns tab ----------
    Header: chip, title, then the total in ink beside it. The view switch is

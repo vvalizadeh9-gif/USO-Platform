@@ -1331,7 +1331,7 @@ describe('the order of the page', () => {
 
     const trend = await section('Where this is going')
     expect(band.compareDocumentPosition(trend) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-    expect(headings()).toEqual(['Where this is going', 'What moved', 'PIP this month'])
+    expect(headings()).toEqual(['Where this is going', 'PIP this month', 'What moved'])
 
     const tabs = screen.getAllByRole('tab', { name: /Overview|Breakdowns|Contractors/ })
     expect(tabs.map((t) => t.textContent)).toEqual([
@@ -1344,17 +1344,18 @@ describe('the order of the page', () => {
     expect(headings()).toEqual(['Ongoing breakdown', 'Problematic breakdown'])
   })
 
-  it('stacks What moved and PIP this month in the column beside the trend', async () => {
+  it('stacks PIP this month over What moved in the column beside the trend', async () => {
     serve()
     draw()
 
     const trend = await section('Where this is going')
     const moved = await section('What moved')
     const pip = await section('PIP this month')
-    // One column, the two short cards together, the trend in the grid beside
-    // it -- not a full-width chart with a half-empty pair under it.
+    // One column, the two short cards together, PIP first, the trend in the
+    // grid beside it -- not a full-width chart with a half-empty pair under it.
     expect(moved.parentElement).toBe(pip.parentElement)
     expect(moved.parentElement).toHaveClass('dt-stack')
+    expect(pip.compareDocumentPosition(moved) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     expect(trend.parentElement).toBe(moved.parentElement.parentElement)
     expect(trend.parentElement).toHaveClass('dt-grid2')
   })
