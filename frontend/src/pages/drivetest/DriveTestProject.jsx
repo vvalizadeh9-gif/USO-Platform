@@ -593,10 +593,10 @@ function SectionTotal({ value, label }) {
 function KpiSkeleton() {
   return (
     <div className="dt-kpi-band dt-kpi-skeleton" aria-hidden="true">
-      <span className="dt-skeleton-row" style={{ height: 148 }} />
-      <span className="dt-skeleton-row" style={{ height: 148, animationDelay: '0.08s' }} />
-      <span className="dt-skeleton-row" style={{ height: 148, animationDelay: '0.16s' }} />
-      <span className="dt-skeleton-row" style={{ height: 148, animationDelay: '0.24s' }} />
+      <span className="dt-skeleton-row" style={{ height: 110 }} />
+      <span className="dt-skeleton-row" style={{ height: 110, animationDelay: '0.08s' }} />
+      <span className="dt-skeleton-row" style={{ height: 110, animationDelay: '0.16s' }} />
+      <span className="dt-skeleton-row" style={{ height: 110, animationDelay: '0.24s' }} />
     </div>
   )
 }
