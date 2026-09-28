@@ -1957,6 +1957,21 @@ class MonthStanding(BaseModel):
     pace_pct: float
 
 
+class MyMonthStanding(MonthStanding):
+    """The contractor's own running month, for either stream.
+
+    Acceptance has no Assignment, so for that stream ``assignment``,
+    ``carried_in`` and ``newly_assigned`` are None. ``expected_by_today`` is
+    the straight-line share of the PIP due by today
+    (``monthly_plan.expected_by_today``), None without a PIP.
+    """
+
+    assignment: int | None = None
+    carried_in: int | None = None
+    newly_assigned: int | None = None
+    expected_by_today: int | None = None
+
+
 class PlanMonthPoint(BaseModel):
     """One month on the contractor's six-month chart.
 
@@ -1969,7 +1984,8 @@ class PlanMonthPoint(BaseModel):
     shamsi_month: int
     shamsi_month_name: str
     label: str
-    assignment: int
+    #: None on the Acceptance stream, which has no Assignment.
+    assignment: int | None = None
     pip: int | None = None
     delivered: int
     #: True on the last entry only — the month still being worked on, whose
@@ -1999,7 +2015,7 @@ class MonthlyPlanContext(BaseModel):
     deadline_gregorian: date
     deadline_passed: bool
     planning: PlanningMonth
-    current_month: MonthStanding
+    current_month: MyMonthStanding
     #: Oldest first, the running month last. Six entries unless the programme
     #: itself is younger than that.
     history: list[PlanMonthPoint] = []

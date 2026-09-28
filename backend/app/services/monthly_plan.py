@@ -475,7 +475,11 @@ def trailing_periods(months: int) -> list[tuple[int, int]]:
 
 
 def recent_months(
-    db: Session, user: User, contractor_id: int, months: int = MONTHS_ON_SCREEN
+    db: Session,
+    user: User,
+    contractor_id: int,
+    months: int = MONTHS_ON_SCREEN,
+    stream: str = STREAM_DT,
 ) -> list[dict]:
     """This contractor's last *months* Shamsi periods, oldest first.
 
@@ -491,11 +495,19 @@ def recent_months(
     The caller is a contractor account, so the scorecard has already narrowed
     itself to their company on the way in; picking their row out below is
     finding the row, not filtering the response.
+
+    *stream* picks the scorecard: the drive-test one for ``DT``, the
+    Acceptance one (``acceptance_plan.acceptance_scorecard``) otherwise.
+    Acceptance has no Assignment, so its entries carry ``assignment: None``
+    and no carried-in / newly-assigned split.
     """
     from app.services.drive_test_analytics import DriveTestAnalytics
 
     months = max(1, min(months, MAX_HISTORY_MONTHS))
     periods = trailing_periods(months)
+
+    if stream != STREAM_DT:
+        return _recent_acceptance_months(db, user, contractor_id, periods)
 
     data = DriveTestAnalytics(db, user).scorecard(periods)
     out = []
@@ -524,6 +536,60 @@ def recent_months(
             }
         )
     return out
+
+
+def _recent_acceptance_months(
+    db: Session, user: User, contractor_id: int, periods: list[tuple[int, int]]
+) -> list[dict]:
+    """``recent_months`` for the Acceptance stream.
+
+    Same entries, from the Acceptance scorecard, which narrows itself to a
+    contractor account's own villages, PIP and row before counting anything.
+    """
+    from app.services.acceptance_plan import acceptance_scorecard
+
+    data = acceptance_scorecard(db, user, periods)
+    out = []
+    for index, entry in enumerate(data["months"]):
+        row = next(
+            (r for r in entry["rows"] if r["contractor_id"] == contractor_id), None
+        )
+        out.append(
+            {
+                "shamsi_year": entry["shamsi_year"],
+                "shamsi_month": entry["shamsi_month"],
+                "shamsi_month_name": entry["shamsi_month_name"],
+                "label": month_label(entry["shamsi_year"], entry["shamsi_month"]),
+                "assignment": None,
+                "carried_in": None,
+                "newly_assigned": None,
+                "pip": row["pip"] if row else None,
+                "delivered": row["delivered"] if row else 0,
+                "in_progress": index == len(data["months"]) - 1,
+            }
+        )
+    return out
+
+
+def expected_by_today(
+    pip: int | None, year: int, month: int, today: date | None = None
+) -> int | None:
+    """Where a straight line from 0 to the PIP stands today, in that month.
+
+    ``round(pip × day ÷ days_in_month)`` for the running month; the whole PIP
+    once the month is over and 0 before it starts. None without a PIP: there
+    is no target to be on pace for. Computed here so the screen and anything
+    else that shows it read the same number.
+    """
+    if pip is None:
+        return None
+    reference = today or date.today()
+    ref_year, ref_month, ref_day = jalali.to_shamsi_date(reference)
+    if (ref_year, ref_month) > (year, month):
+        return pip
+    if (ref_year, ref_month) < (year, month):
+        return 0
+    return round(pip * ref_day / jalali.days_in_month(year, month))
 
 
 def running_month(db: Session, user: User) -> dict:
