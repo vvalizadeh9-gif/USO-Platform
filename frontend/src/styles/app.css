@@ -2526,19 +2526,6 @@ a.dt-contractor-name:hover { text-decoration: underline; text-decoration-color: 
 .dt-trend-down { color: var(--dt-done); }
 .dt-trend-caption-note { color: var(--text-dim); font-size: 11.5px; }
 
-.dt-trend-readout {
-  display: flex; align-items: center; gap: 8px 16px; flex-wrap: wrap;
-  padding: 8px 12px; min-height: 36px;
-  background: var(--surface-subtle); border: 1px solid var(--track);
-  border-radius: var(--radius-md); font-size: 13px; line-height: 18px;
-}
-.dt-readout-month { font-weight: 600; }
-.dt-readout-item { display: inline-flex; align-items: center; gap: 6px; color: var(--text-secondary); }
-.dt-readout-item i { width: 8px; height: 8px; border-radius: 50%; }
-.dt-readout-item i.dt-readout-gap { background: var(--accent-soft); border: 1px solid var(--accent-track); border-radius: 2px; }
-.dt-readout-item b { color: var(--text); font-variant-numeric: tabular-nums; }
-.dt-trend-readout em { color: var(--text-tertiary); font-size: 12px; }
-
 .dt-legend {
   display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
   margin-top: 12px; font-size: 11.5px; color: var(--text-muted);
@@ -2795,43 +2782,26 @@ a.dt-contractor-name:hover { text-decoration: underline; text-decoration-color: 
 /* ---------- flow chart: on-aired vs DT done ---------- */
 .dt-flowcard { display: grid; gap: 10px; }
 
-/* A plain text row, not a card grid: On-aired / DT done / Gap / Coverage
-   were four identical cards competing with the chart underneath them for
-   weight they did not need -- the numbers are the point, not a box around
-   each one. */
-.dt-flowtiles {
-  list-style: none; margin: 0; padding: 0;
-  display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 22px;
-}
-.dt-flowtile {
-  display: inline-flex; align-items: baseline; gap: 6px;
-}
-.dt-flowtile-label {
-  font-size: 13px; line-height: 18px; color: var(--text-secondary); font-weight: 600;
-}
-.dt-flowtile-figure {
-  font-size: 17px; line-height: 24px; font-weight: 600; font-variant-numeric: tabular-nums;
-}
-/* A single year's own activity, beside its running totals: a sentence, not a
-   figure, so it takes the note weight rather than a figure's. */
-.dt-flowtile-note { font-size: 14px; color: var(--text-secondary); font-weight: 500; }
-/* Figures are ink. The series colours are named once, in the legend. */
-.dt-flowtile-figure { color: var(--text); }
-
-/* The legend: the series/lane colours the tiles already carry, named once
-   in one place, so a reader never has to infer identity from hue alone. */
+/* The legend, in the card's title row just before the year switcher: the
+   series named once in one place, so a reader never has to infer identity
+   from hue alone. */
 .dt-flow-legend {
-  list-style: none; margin: 0; padding: 0;
-  display: flex; flex-wrap: wrap; gap: 8px 16px;
+  list-style: none; margin: 0 0 0 auto; padding: 0;
+  display: flex; flex-wrap: wrap; gap: 4px 14px;
   font-size: 13px; line-height: 18px; color: var(--text-secondary);
 }
 .dt-flow-legend-item { display: inline-flex; align-items: center; gap: 6px; }
-.dt-flow-legend-item-muted { color: var(--text-tertiary); }
+.dt-flow-legend + .dt-section-controls { margin-inline-start: 16px; }
 /* A series is a 3px line, as it is drawn; the gap is its fill. */
 .dt-flow-legend-line { width: 16px; height: 3px; border-radius: 2px; flex: none; }
 .dt-flow-legend-swatch {
   width: 14px; height: 10px; border-radius: 2px; flex: none;
   background: var(--accent-soft);
+}
+/* The open month: a hollow dot, as it is drawn. */
+.dt-flow-legend-open {
+  width: 9px; height: 9px; border-radius: 50%; flex: none;
+  background: var(--surface); border: 2px solid var(--dt-muted);
 }
 
 /* The net-change strip: one pill per month under the axis, saying what that
@@ -2852,12 +2822,6 @@ a.dt-contractor-name:hover { text-decoration: underline; text-decoration-color: 
    larger pill label would not fit its pill, so it keeps the smaller size. A
    single year gives each month the room for the larger one. */
 .dt-flow-dense .dt-flow-net-text { font-size: 11px; }
-/* The legend swatch for the strip: a neutral pill, as they are drawn. */
-.dt-flow-legend-pill {
-  width: 18px; height: 10px; border-radius: 999px; flex: none;
-  background: var(--neutral-soft);
-}
-
 /* The chart itself -- two lines, the soft fill between them, one baseline,
    month labels. */
 .dt-flowchart { position: relative; }
@@ -3098,7 +3062,6 @@ a.dt-contractor-name:hover { text-decoration: underline; text-decoration-color: 
      KPI cards used to tighten their padding here, from 20px to 16px. They
      carry 13px/15px at every width now, which is already tighter than that
      override was, so the override is gone rather than left to widen them. */
-  .dt-flowtiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .dt-bar-link { grid-template-columns: 110px 1fr 42px; }
   .dt-bar-share, .dt-bar-go { display: none; }
   .dt-toolbar-right { margin-left: 0; width: 100%; }

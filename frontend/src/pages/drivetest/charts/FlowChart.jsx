@@ -1,7 +1,7 @@
 import { motion, useReducedMotion } from 'framer-motion'
 import { useState } from 'react'
 import { shamsiMonthName } from '../../../lib/shamsi'
-import { count, deltaTone, share } from '../format'
+import { count } from '../format'
 import { flowView, labelledMonths, netChanges } from './flowView'
 import { DrawPath, FadeArea } from './primitives'
 
@@ -20,14 +20,12 @@ import { DrawPath, FadeArea } from './primitives'
  * total, carried from the same opening balance, so the gap is the real
  * backlog at each month's end and coverage can never pass 100%. What changes
  * is where the line ends and the scale's range -- a year in the past does not
- * drag the axis out to fit today's numbers. The selected year's own activity
- * -- how much it put on air and drive-tested -- is added to the stat line.
+ * drag the axis out to fit today's numbers.
  *
- * NO AXIS, NO HATCH. The figures a reader would check a y-axis against --
- * On-aired, DT done, Gap, Coverage -- are already named in the stat line
- * above the chart, in numerals rather than a ruler a reader has to
- * interpolate against. What is left to draw is the shape: two lines and the
- * gap between them, over three faint unlabelled gridlines.
+ * NO FIGURES ROW, NO READOUT. The running totals are on the KPI cards above
+ * and the month's own movement is in the What moved card beside this one, so
+ * the card no longer repeats them. What is left to draw is the shape: two
+ * lines and the gap between them. The key sits in the card's title row.
  *
  * COBALT COLOURS. DT done is the "done" series, so it takes the accent; On-
  * aired is the reference series and takes the muted neutral; the gap between
@@ -41,9 +39,8 @@ import { DrawPath, FadeArea } from './primitives'
  * agree with what is drawn. The arithmetic is in
  * `flowView.js` for the same reason: the chart and the note read one copy.
  *
- * THE READOUT IS NEVER BLANK. It opens on the latest month and returns there
- * when the pointer leaves, so the running totals and "this month" are on
- * screen without anyone having to find them by hovering.
+ * THE CROSSHAIR IS NEVER BLANK. It opens on the latest month and returns
+ * there when the pointer leaves.
  */
 
 const VIEW_W = 740
@@ -68,18 +65,40 @@ const VIEW_H = STRIP_TOP + STRIP_H + 8
  * reference it is read against (the muted neutral). */
 const SERIES_COLOR = { onAir: 'var(--dt-muted)', dtDone: 'var(--accent)' }
 
-/** What a change in the gap means, in words, for a screen reader: the figure
- * itself is ink. A falling gap is the good direction. */
-const GAP_WORD = { good: 'better', bad: 'worse', flat: 'no change' }
+/** The chart's key, for the card's title row: the two series, the gap
+ * between them, and the hollow dot that marks a month still in progress.
+ * Exported because the title row belongs to `Section`, rendered by the page. */
+export function FlowLegend() {
+  return (
+    <ul className="dt-flow-legend" aria-label="Chart key">
+      <li className="dt-flow-legend-item">
+        <i className="dt-flow-legend-line" style={{ background: SERIES_COLOR.onAir }} />
+        On-aired
+      </li>
+      <li className="dt-flow-legend-item">
+        <i className="dt-flow-legend-line" style={{ background: SERIES_COLOR.dtDone }} />
+        DT done
+      </li>
+      <li className="dt-flow-legend-item">
+        <i className="dt-flow-legend-swatch" />
+        Gap
+      </li>
+      <li className="dt-flow-legend-item">
+        <i className="dt-flow-legend-open" />
+        Month in progress
+      </li>
+    </ul>
+  )
+}
 
 export default function FlowChart({ data, scope = null }) {
   const reduced = useReducedMotion()
-  const { selected, multiYear, points, months, ceiling, floor, yearActivity } = flowView(
+  const { selected, multiYear, points, months, ceiling, floor } = flowView(
     data,
     scope,
   )
 
-  // The month the crosshair and readout show. `null` is "the latest", which
+  // The month the crosshair shows. `null` is "the latest", which
   // is where the chart opens and where it returns when the pointer leaves.
   const [hover, setHover] = useState(null)
   const latest = months.length - 1
@@ -91,8 +110,6 @@ export default function FlowChart({ data, scope = null }) {
   const y = (v) => MAIN_TOP + MAIN_H - ((v - floor) / span) * MAIN_H
 
   const last = points[n - 1]
-  const prev = n > 1 ? points[n - 2] : null
-  const gapDelta = prev ? last.gap - prev.gap : null
 
   const openTail = last.isOpen && n > 1
   const solidLineFor = (key) => (openTail ? points.slice(0, -1) : points)
@@ -125,9 +142,6 @@ export default function FlowChart({ data, scope = null }) {
     }
   }
 
-  const activeMonth = months[active]
-  const activePoint = points[active + 1]
-
   // One per month drawn, in the same order as `months`: points[0] is the
   // opening balance, so the step into month j is netChanges()[j].
   const nets = netChanges(points)
@@ -139,65 +153,6 @@ export default function FlowChart({ data, scope = null }) {
 
   return (
     <div className="dt-flowcard">
-      {/* The stat line: the four figures a reader would otherwise check an
-          axis against, in one row rather than a row of tiles. */}
-      <ul className="dt-flowtiles">
-        <li className="dt-flowtile dt-flowtile-ongoing">
-          <span className="dt-flowtile-label">On-aired</span>
-          <span className="dt-flowtile-figure tnum">{count(last.onAir)}</span>
-        </li>
-        <li className="dt-flowtile dt-flowtile-done">
-          <span className="dt-flowtile-label">DT done</span>
-          <span className="dt-flowtile-figure tnum">{count(last.dtDone)}</span>
-        </li>
-        <li className="dt-flowtile dt-flowtile-problem">
-          <span className="dt-flowtile-label">Gap</span>
-          <span className="dt-flowtile-figure tnum">{count(last.gap)}</span>
-        </li>
-        {gapDelta != null && (
-          <li className="dt-flowtile">
-            {/* "Previous month", not "last month": in a past year's view the
-                last step is that year's Esfand against its Bahman. */}
-            <span className="dt-flowtile-label">vs previous month</span>
-            <span className="dt-flowtile-figure tnum" data-tone={deltaTone(gapDelta, 'down') ?? 'flat'}>
-              {gapDelta === 0 ? '±0' : `${gapDelta > 0 ? '+' : ''}${count(gapDelta)}`}
-            </span>
-            <span className="dt-sr-only">{GAP_WORD[deltaTone(gapDelta, 'down') ?? 'flat']}</span>
-          </li>
-        )}
-        <li className="dt-flowtile">
-          <span className="dt-flowtile-label">Coverage</span>
-          <span className="dt-flowtile-figure tnum">{share(last.dtDone, last.onAir)}</span>
-        </li>
-        {yearActivity && (
-          <li className="dt-flowtile dt-flowtile-year" data-testid="dt-flow-year-activity">
-            <span className="dt-flowtile-label">In {selected}</span>
-            <span className="dt-flowtile-note tnum">
-              +{count(yearActivity.onAired)} on air · +{count(yearActivity.dtDone)} done
-            </span>
-          </li>
-        )}
-      </ul>
-
-      <ul className="dt-flow-legend">
-        <li className="dt-flow-legend-item">
-          <i className="dt-flow-legend-line" style={{ background: SERIES_COLOR.onAir }} />
-          On-aired
-        </li>
-        <li className="dt-flow-legend-item">
-          <i className="dt-flow-legend-line" style={{ background: SERIES_COLOR.dtDone }} />
-          DT done
-        </li>
-        <li className="dt-flow-legend-item dt-flow-legend-item-muted">
-          <i className="dt-flow-legend-swatch" />
-          Gap between them
-        </li>
-        <li className="dt-flow-legend-item dt-flow-legend-item-muted">
-          <i className="dt-flow-legend-pill" />
-          Change in pending, per month
-        </li>
-      </ul>
-
       <div
         className="dt-flowchart"
         tabIndex={0}
@@ -325,7 +280,7 @@ export default function FlowChart({ data, scope = null }) {
           {/* What each month did to the backlog, one pill per month under the
               axis. The lines above answer "where are we"; this says outright,
               once per month, whether that month helped or hurt. The pill of
-              the month the readout is on is outlined, so the two read as one. */}
+              the month the crosshair is on is outlined, so the two read as one. */}
           {months.map((m, j) => {
             const net = nets[j]
             const tone = net === 0 ? 'flat' : net < 0 ? 'good' : 'bad'
@@ -361,33 +316,6 @@ export default function FlowChart({ data, scope = null }) {
         </svg>
       </div>
 
-      {activeMonth && activePoint && (
-        <div className="dt-trend-readout" role="status" data-testid="dt-flow-readout">
-          <span className="dt-farsi dt-readout-month">
-            {shamsiMonthName(activeMonth.month)} {activeMonth.year}
-          </span>
-          <span className="dt-readout-item">
-            <i style={{ background: SERIES_COLOR.onAir }} />
-            On-aired this month
-            <b className="tnum">{count(activeMonth.on_aired)}</b>
-          </span>
-          <span className="dt-readout-item">
-            <i style={{ background: SERIES_COLOR.dtDone }} />
-            DT done this month
-            <b className="tnum">{count(activeMonth.dt_done)}</b>
-          </span>
-          <span className="dt-readout-item">
-            <i className="dt-readout-gap" />
-            Gap this month
-            <b className="tnum">{count(activeMonth.on_aired - activeMonth.dt_done)}</b>
-          </span>
-          <span className="dt-readout-item">
-            Running: {count(activePoint.onAir)} on-aired, {count(activePoint.dtDone)} done, gap{' '}
-            <b className="tnum">{count(activePoint.gap)}</b>
-          </span>
-          {activeMonth.is_open && <em>still in progress</em>}
-        </div>
-      )}
     </div>
   )
 }

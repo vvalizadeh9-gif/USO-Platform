@@ -22,7 +22,7 @@ import PipThisMonth from './PipThisMonth'
 import ProvinceList, { ProvinceSearch } from './ProvinceList'
 import Section from './Section'
 import Toolbar from './Toolbar'
-import FlowChart from './charts/FlowChart'
+import FlowChart, { FlowLegend } from './charts/FlowChart'
 import FlowViewControl from './charts/FlowViewControl'
 import { flowHasActivity, flowNotes, flowYears } from './charts/flowView'
 import FlowLedger, { flowNet } from './charts/FlowLedger'
@@ -352,6 +352,7 @@ export default function DriveTestProject() {
                       </InfoTip>
                     )
                   }
+                  actions={flowHasActivity(flow.data) && <FlowLegend />}
                   controls={
                     flowHasActivity(flow.data) && (
                       <FlowViewControl
@@ -364,7 +365,7 @@ export default function DriveTestProject() {
                 >
                   {(f) =>
                     flowHasActivity(f) ? (
-                      // Keyed on the years shown, so switching resets the readout to
+                      // Keyed on the year shown, so switching resets the crosshair to
                       // the latest month of the new view.
                       <FlowChart key={String(flowScope)} data={f} scope={flowScope} />
                     ) : (

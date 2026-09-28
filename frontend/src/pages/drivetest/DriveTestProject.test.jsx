@@ -1906,16 +1906,20 @@ describe('the province filter', () => {
   })
 })
 
-/** A stat tile by its label. Both the tile and the chart's own end-of-line
- * labels carry the series names ("On-aired", "DT done"), so a plain
- * `getByText` is ambiguous -- same fix as the "Plan and delivery" tiles
- * above. */
-function tile(card, label) {
-  return within(card)
-    .getAllByText(label)
-    .map((node) => node.closest('.dt-flowtile'))
-    .find(Boolean)
+/** The running totals the chart ends on, as its accessible label states
+ * them. The card no longer carries a figures row: the chart's label is the
+ * one place it states them. */
+function chartTotals(card) {
+  const label = card.querySelector('.dt-flowchart').getAttribute('aria-label')
+  const [, onAir, dtDone, gap] = label.match(/On-aired (\d+), DT done (\d+), gap (\d+)/)
+  return { onAir: Number(onAir), dtDone: Number(dtDone), gap: Number(gap) }
 }
+
+/** Which month the crosshair is on, as the index of the outlined pill. */
+const activePill = (card) =>
+  within(card)
+    .getAllByTestId('dt-flow-net')
+    .findIndex((p) => p.getAttribute('data-active') === 'true')
 
 describe('the flow chart', () => {
   // Replaces the old trailing-month trend chart in "Where this is going",
@@ -1923,21 +1927,18 @@ describe('the flow chart', () => {
   // applies any more: this card now reads its own endpoint, `/drive-test/flow`,
   // and reads two ways -- cumulative or one year -- rather than over a
   // sliding window.
-  it('draws the chart and its tiles from the cumulative totals by default', async () => {
+  it('draws the chart from the cumulative totals by default', async () => {
     serve()
     draw()
 
     const card = await section('Where this is going')
     // Opening 50/20, plus the 3 not-placed on-air sites that belong to no
     // month and so open with the chart, plus four months of on-aired/dt_done:
-    // 53 + 27 on-aired, 20 + 15 done. The tiles have to read what the KPI
-    // cards above them read, and the cards count not-placed sites too.
-    expect(within(tile(card, 'On-aired')).getByText('80')).toBeInTheDocument()
-    expect(within(tile(card, 'DT done')).getByText('35')).toBeInTheDocument()
-    expect(within(tile(card, 'Gap')).getByText('45')).toBeInTheDocument()
-    expect(within(tile(card, 'Coverage')).getByText('44%')).toBeInTheDocument()
+    // 53 + 27 on-aired, 20 + 15 done. The chart has to end where the KPI
+    // cards above it read, and the cards count not-placed sites too.
+    expect(chartTotals(card)).toEqual({ onAir: 80, dtDone: 35, gap: 45 })
 
-    // No window picker, no legend -- both gone with the chart they belonged to.
+    // No window picker -- gone with the chart it belonged to.
     expect(screen.queryByRole('button', { name: '6m' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '12m' })).not.toBeInTheDocument()
     expect(within(card).queryAllByRole('link')).toHaveLength(0)
@@ -1955,13 +1956,7 @@ describe('the flow chart', () => {
     await userEvent.click(within(card).getByRole('tab', { name: '1405' }))
 
     // Real totals at the end of 1405: 80 on air, 35 done, a gap of 45.
-    expect(within(tile(card, 'On-aired')).getByText('80')).toBeInTheDocument()
-    expect(within(tile(card, 'DT done')).getByText('35')).toBeInTheDocument()
-    expect(within(tile(card, 'Gap')).getByText('45')).toBeInTheDocument()
-    // What 1405 itself did, which the from-zero view was the only way to see.
-    expect(within(card).getByTestId('dt-flow-year-activity')).toHaveTextContent(
-      'In 1405+9 on air · +5 done',
-    )
+    expect(chartTotals(card)).toEqual({ onAir: 80, dtDone: 35, gap: 45 })
     // Every month is still drawn, 1404's included, not just 1405's two.
     expect(
       within(card)
@@ -1985,13 +1980,9 @@ describe('the flow chart', () => {
     // End of 1404: 53 + 10 + 8 on air, 20 + 4 + 6 done. 1404 is the payload's
     // first year, so this is also everything from the opening balance --
     // there is nothing before it to keep.
-    expect(within(tile(card, 'On-aired')).getByText('71')).toBeInTheDocument()
-    expect(within(tile(card, 'DT done')).getByText('30')).toBeInTheDocument()
-    expect(within(tile(card, 'Gap')).getByText('41')).toBeInTheDocument()
-    expect(within(card).getByTestId('dt-flow-year-activity')).toHaveTextContent(
-      '+18 on air · +10 done',
-    )
-    expect(within(card).getByTestId('dt-flow-readout')).toHaveTextContent('اردیبهشت 1404')
+    expect(chartTotals(card)).toEqual({ onAir: 71, dtDone: 30, gap: 41 })
+    // The chart ends on 1404's last month: two months, not four.
+    expect(within(card).getAllByTestId('dt-flow-net')).toHaveLength(2)
   })
 
   it('puts the year control in the card header, opening on the latest year', async () => {
@@ -2009,24 +2000,40 @@ describe('the flow chart', () => {
     )
   })
 
-  it('opens the readout on the latest month rather than leaving it blank', async () => {
+  it('carries no figures row and no readout: the KPI cards and What moved say those', async () => {
     serve()
     draw()
 
     const card = await section('Where this is going')
-    const readout = within(card).getByTestId('dt-flow-readout')
-    expect(readout).toHaveTextContent('اردیبهشت 1405')
-    expect(readout).toHaveTextContent('Running: 80 on-aired, 35 done, gap 45')
-    expect(within(card).getByTestId('dt-flow-crosshair')).toBeInTheDocument()
-    // The latest month's pill is the outlined one, so the three read as one.
-    expect(
-      within(card)
-        .getAllByTestId('dt-flow-net')
-        .map((p) => p.getAttribute('data-active')),
-    ).toEqual([null, null, null, 'true'])
+    expect(card.querySelector('.dt-flowtiles')).toBeNull()
+    expect(within(card).queryByTestId('dt-flow-readout')).toBeNull()
+    expect(within(card).queryByText(/Running:/)).toBeNull()
+    // The key sits in the title row, between the info button and the years.
+    const header = card.querySelector('.dt-section-head')
+    const key = within(header).getByRole('list', { name: 'Chart key' })
+    expect(within(key).getAllByRole('listitem').map((li) => li.textContent)).toEqual([
+      'On-aired',
+      'DT done',
+      'Gap',
+      'Month in progress',
+    ])
+    const info = within(header).getByRole('button', { name: 'How this chart is drawn' })
+    const years = within(header).getByRole('tablist', { name: 'Years shown' })
+    expect(info.compareDocumentPosition(key) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(key.compareDocumentPosition(years) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })
 
-  it('moves the readout with the arrow keys, and back to the latest month when the pointer leaves', async () => {
+  it('opens the crosshair on the latest month rather than leaving it blank', async () => {
+    serve()
+    draw()
+
+    const card = await section('Where this is going')
+    expect(within(card).getByTestId('dt-flow-crosshair')).toBeInTheDocument()
+    // The latest month's pill is the outlined one, so the two read as one.
+    expect(activePill(card)).toBe(3)
+  })
+
+  it('moves the crosshair with the arrow keys, and back to the latest month when the pointer leaves', async () => {
     serve()
     draw()
 
@@ -2034,14 +2041,10 @@ describe('the flow chart', () => {
     const chart = card.querySelector('.dt-flowchart')
     chart.focus()
     await userEvent.keyboard('{ArrowLeft}')
-    // Farvardin 1405: 53 + 10 + 8 + 5 on-aired, 20 + 4 + 6 + 3 done.
-    expect(within(card).getByTestId('dt-flow-readout')).toHaveTextContent('فروردین 1405')
-    expect(within(card).getByTestId('dt-flow-readout')).toHaveTextContent(
-      'Running: 76 on-aired, 33 done, gap 43',
-    )
+    expect(activePill(card)).toBe(2)
 
     fireEvent.mouseLeave(chart)
-    expect(within(card).getByTestId('dt-flow-readout')).toHaveTextContent('اردیبهشت 1405')
+    expect(activePill(card)).toBe(3)
   })
 
   it("keeps the chart's notes behind the header's info icon, not under the chart", async () => {
@@ -2119,11 +2122,11 @@ describe('the flow chart', () => {
       .reduce((total, p) => total + Number(p.querySelector('text').textContent), 0)
 
     // Opening 53 on air (50 plus 3 not placed) / 20 done is a gap of 33; the
-    // chart's Gap tile reads the closing 45. The strip has to account for
+    // chart ends on a gap of 45. The strip has to account for
     // exactly that movement -- folding not-placed sites into the opening
     // balance moves both ends of it by the same amount, so the strip itself
     // does not change.
-    const closingGap = Number(within(tile(card, 'Gap')).getByText('45').textContent)
+    const closingGap = chartTotals(card).gap
     expect(sum).toBe(closingGap - 33)
     expect(sum).toBe(12)
   })
@@ -2179,7 +2182,7 @@ describe('the flow chart', () => {
   it('counts sites whose drive test has no date, not just their on-air date', async () => {
     // The bug this guards: the chart built its running totals from opening +
     // months only, so the backend's not-placed bucket fell out of all four
-    // tiles, and the footnote that should have disclosed it was driven by the
+    // figures, and the footnote that should have disclosed it was driven by the
     // on-air side alone -- silent in exactly the case that reached production,
     // where the undated sites were on the DT-done side. Its DT done and Gap
     // therefore disagreed with the KPI cards directly above it.
@@ -2190,9 +2193,7 @@ describe('the flow chart', () => {
     // Opening 50/20 and four months of 27/15, with the 7 undated drive tests
     // on the done side: 77 on air, 20 + 15 + 7 done, so the gap is 7 smaller
     // than the 42 it would be with them dropped.
-    expect(within(tile(card, 'On-aired')).getByText('77')).toBeInTheDocument()
-    expect(within(tile(card, 'DT done')).getByText('42')).toBeInTheDocument()
-    expect(within(tile(card, 'Gap')).getByText('35')).toBeInTheDocument()
+    expect(chartTotals(card)).toEqual({ onAir: 77, dtDone: 42, gap: 35 })
     expect(
       within(card).getByText(
         /7 sites have no date to place them on the timeline, so they sit in the opening balance/,
