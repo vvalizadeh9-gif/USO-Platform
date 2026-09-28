@@ -81,7 +81,7 @@ export function cumulativePoints(data) {
  * tests finished. Negative means the backlog shrank.
  *
  * DERIVED FROM THE POINTS THE CHART IS ALREADY DRAWING, not recomputed from
- * the payload, which is what makes the month table reconcile to the lines
+ * the payload, which is what makes the row under the plot reconcile to the lines
  * above it rather than merely agree with them most of the time. The sum of
  * these is exactly `last.gap - first.gap`, because each one is the step
  * between two consecutive gap values and the sum telescopes. `points` starts
@@ -112,34 +112,45 @@ export function flowYears(data) {
   return Array.from(new Set(data.months.map((m) => m.year))).sort((a, b) => a - b)
 }
 
+/** The chart's default view: every month since Farvardin 1404, as running
+ * totals from the opening balance. */
+export const CUMULATIVE = 'cumulative'
+
 /** Everything one view of the chart draws from.
  *
- * `scope` is a Shamsi year; anything else -- no choice yet, or a year the
- * payload does not have -- is the latest year. The chart draws one column per
- * month of that year: twelve for a finished year, Farvardin to now for the
- * current one.
+ * `scope` is `CUMULATIVE` or a Shamsi year. Cumulative -- also what anything
+ * else falls back to: no choice yet, or a year the payload does not have --
+ * draws every month the payload covers, Farvardin 1404 to now. A year draws
+ * one column per month of that year: twelve for a finished year, Farvardin
+ * to now for the current one.
  *
- * THE LINES CARRY THE RUNNING TOTAL; THEY DO NOT RESET. Each point is the
- * programme's real running total at that month's end, carried from the
- * opening balance on 1 Farvardin 1404 through every month before it, so the
- * current year's last point is the KPI cards' figure and the gap is always
- * the real backlog. The view this replaces once restarted both counts at zero
- * for a year, which drew a year that finished more drive tests than it
- * brought on air as "coverage 295%" and a negative gap. What the year itself
- * did is in the month table under the chart, one column per month.
+ * THE LINES CARRY THE RUNNING TOTAL; THEY DO NOT RESET. In every view each
+ * point is the programme's real running total at that month's end, carried
+ * from the opening balance on 1 Farvardin 1404 through every month before
+ * it, so the last point is the KPI cards' figure and the gap is always the
+ * real backlog. A year view is a window onto the same lines, not a count
+ * restarted at zero: the view that once did that drew a year that finished
+ * more drive tests than it brought on air as "coverage 295%" and a negative
+ * gap. What each month itself did is under its column and in the hover card.
  *
- * `points[0]` is the balance the year opened on -- not drawn, but it is what
+ * `points[0]` is the balance the view opened on -- not drawn, but it is what
  * the first month's change in the gap is measured from -- and `points[1..]`
  * are the months, in the same order as `months`.
+ *
+ * The scale is fitted to BOTH lines, so neither can leave the plot whichever
+ * of the two is higher.
  */
-export function flowView(data, scope = null) {
+export function flowView(data, scope = CUMULATIVE) {
   const years = flowYears(data)
-  const selected = years.includes(scope) ? scope : years[years.length - 1]
+  const cumulative = !years.includes(scope)
+  const selected = cumulative ? CUMULATIVE : scope
   const all = cumulativePoints(data)
-  const first = data.months.findIndex((m) => m.year === selected)
-  const end = first + data.months.filter((m) => m.year === selected).length
+  const first = cumulative ? 0 : data.months.findIndex((m) => m.year === selected)
+  const end = cumulative
+    ? data.months.length
+    : first + data.months.filter((m) => m.year === selected).length
   // all[i + 1] is the running total after data.months[i], so all[first] is
-  // where the year opened.
+  // where the view opened.
   const points = all.slice(first, end + 1)
   const months = data.months.slice(first, end)
   const { floor, ceiling, step } = fitScale(points.slice(1).flatMap((p) => [p.onAir, p.dtDone]))
@@ -148,20 +159,21 @@ export function flowView(data, scope = null) {
   // up on the DT-done side. The larger of the two rather than their sum,
   // because a site can be missing both dates and be counted on both sides.
   const notPlaced = Math.max(data.not_placed?.on_air ?? 0, data.not_placed?.dt_done ?? 0)
-  return { years, selected, points, months, floor, ceiling, ticks, notPlaced }
+  return { years, selected, cumulative, points, months, floor, ceiling, ticks, notPlaced }
 }
 
 /** The notes behind the card's info icon, for the view on screen. */
-export function flowNotes(data, scope = null) {
-  const { selected, floor, notPlaced } = flowView(data, scope)
+export function flowNotes(data, scope = CUMULATIVE) {
+  const { selected, cumulative, floor, notPlaced } = flowView(data, scope)
   const notes = [
     'Sites on air against drive tests done, and what each month did to the backlog.',
-    `Showing ${selected}, month by month. The lines are the programme’s running totals, carried ` +
+    `${cumulative ? 'Showing every month since Farvardin 1404.' : `Showing ${selected}, month by month.`} ` +
+      'The lines are the programme’s running totals, carried ' +
       'from the opening balance on 1 Farvardin 1404, so the gap is the real backlog at each ' +
       'month’s end.' +
       (floor > 0 ? ` The scale starts at ${count(floor)}, not zero.` : ''),
-    'The table under the chart is each month’s own movement. Gap change is sites on air that ' +
-      'month minus drive tests finished: green shrank the backlog, brick grew it.',
+    'Under each month is its change in the gap: sites on air that month minus drive tests ' +
+      'finished. Green shrank the backlog, brick grew it. Hover or focus a month for its figures.',
   ]
   if (notPlaced > 0) {
     notes.push(

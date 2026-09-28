@@ -24,7 +24,7 @@ import Section from './Section'
 import Toolbar from './Toolbar'
 import FlowChart, { FlowLegend } from './charts/FlowChart'
 import FlowViewControl from './charts/FlowViewControl'
-import { flowHasActivity, flowNotes, flowYears } from './charts/flowView'
+import { CUMULATIVE, flowHasActivity, flowNotes, flowYears } from './charts/flowView'
 import FlowLedger, { flowNet } from './charts/FlowLedger'
 import { flowScale } from './charts/flowScale'
 import { PROVINCE_LIMIT } from './constants'
@@ -86,10 +86,10 @@ export default function DriveTestProject() {
   } = useDashboard()
   const [ongoingTab, setOngoingTab] = useState('contractor')
   const [problematicTab, setProblematicTab] = useState('category')
-  // Which Shamsi year the trend shows; null is the latest year. Held here,
-  // not in the chart, because the card header shows both the control that
-  // switches it and the note that describes the view.
-  const [flowScope, setFlowScope] = useState(null)
+  // Which months the trend shows: every month (cumulative) or one Shamsi
+  // year. Held here, not in the chart, because the card header shows both
+  // the control that switches it and the note that describes the view.
+  const [flowScope, setFlowScope] = useState(CUMULATIVE)
   const [provinceSearch, setProvinceSearch] = useState('')
   const [exporting, setExporting] = useState(false)
   const toast = useToast()
@@ -276,7 +276,6 @@ export default function DriveTestProject() {
             provinceId={provinceId}
             provinceName={provinceName}
             onClearProvince={() => setProvince(null)}
-            onPickProvince={scrollToProvinces}
             onRefresh={refresh}
             refreshing={refreshing}
             generatedAt={data?.generated_at}
@@ -316,18 +315,13 @@ export default function DriveTestProject() {
                 data && <KpiBand kpis={data.kpis} provinceId={provinceId} />
               )}
 
-              {/* The trend and the month side by side: the chart takes the wide
-                  column and the month's two short answers -- what moved, and what
-                  was promised -- stack beside it. They used to be a full-width
-                  chart and then a pair of half-width cards under it, and that pair
-                  spent about 370px of height on what, in a month with no approved
-                  PIP, was mostly zeros. The chart gains from it too: it is drawn on
-                  a 740-unit canvas, and full width scaled its 11.5px axis labels up
-                  to about 18px. The column narrows it to roughly its drawn size.
-                  Below about 1080px of page the grid gives up the side column and
-                  the two short cards sit side by side under the chart instead (a
-                  container query on the bench, so it follows the page's width, not
-                  the window's). */}
+              {/* The trend and the month side by side: the chart takes the rest
+                  of the width, and a 380px column beside it holds PIP this month
+                  over What moved. Both short cards stretch, so the column ends on
+                  the chart card's bottom line. When the page is narrower than
+                  980px (a container query on the bench, so it follows the page's
+                  width, not the window's) everything stacks in one column: the
+                  chart, PIP, then What moved. */}
               <div className="dt-grid2">
                 {/* One-line header from the first frame: the control and the info
                     icon arrive with the data, and a header that changed shape as
@@ -352,7 +346,6 @@ export default function DriveTestProject() {
                       </InfoTip>
                     )
                   }
-                  actions={flowHasActivity(flow.data) && <FlowLegend />}
                   controls={
                     flowHasActivity(flow.data) && (
                       <FlowViewControl
@@ -365,9 +358,13 @@ export default function DriveTestProject() {
                 >
                   {(f) =>
                     flowHasActivity(f) ? (
-                      // Keyed on the year shown, so switching years redraws the
-                      // chart rather than morphing one year's columns into the next.
-                      <FlowChart key={String(flowScope)} data={f} scope={flowScope} />
+                      <>
+                        {/* The key, on its own row directly under the title row. */}
+                        <FlowLegend />
+                        {/* Keyed on the view shown, so switching redraws the chart
+                            rather than morphing one view's columns into the next. */}
+                        <FlowChart key={String(flowScope)} data={f} scope={flowScope} />
+                      </>
                     ) : (
                       <div className="dt-empty">
                         No on-air or drive-test activity has been recorded yet. The chart fills in
@@ -377,7 +374,16 @@ export default function DriveTestProject() {
                   }
                 </Section>
 
+                {/* PIP on top, What moved under it: what was promised for the
+                    month in progress, then what the last month did. */}
                 <div className="dt-stack">
+                  <PipThisMonth
+                    state={plan}
+                    onRetry={refresh}
+                    scoped={provinceId != null}
+                    provinceName={provinceName}
+                  />
+
                   {trend.data?.latest_flows && (
                     <Section
                       title="What moved"
@@ -403,13 +409,6 @@ export default function DriveTestProject() {
                       {(t) => <FlowLedger flows={t.latest_flows} monthLabel={t.latest_flows.label} />}
                     </Section>
                   )}
-
-                  <PipThisMonth
-                    state={plan}
-                    onRetry={refresh}
-                    scoped={provinceId != null}
-                    provinceName={provinceName}
-                  />
                 </div>
               </div>
             </div>
