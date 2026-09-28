@@ -2847,6 +2847,17 @@ a.dt-contractor-name:hover { text-decoration: underline; text-decoration-color: 
 }
 .dt-flow-dot.is-active { width: 12px; height: 12px; }
 
+/* The cumulative view's year boundary, dashed, and each year's label at the
+   top of the plot, 6px right of its first month. */
+.dt-flow-yearline {
+  position: absolute; inset-block: 0; width: 0;
+  border-inline-start: 1px dashed var(--control-border);
+}
+.dt-flow-year {
+  position: absolute; top: 2px; z-index: 1;
+  font-size: 12px; line-height: 16px; font-weight: 600; color: var(--text-tertiary);
+}
+
 /* The rows under the plot: the same gutter, one column per month. */
 .dt-flow-row {
   display: grid; grid-template-columns: repeat(var(--dt-flow-cols), minmax(0, 1fr));
@@ -2858,13 +2869,23 @@ a.dt-contractor-name:hover { text-decoration: underline; text-decoration-color: 
 }
 .dt-flow-month.is-open { font-weight: 600; color: var(--accent-ink); }
 .dt-flow-month.is-active { font-weight: 700; color: var(--text); }
+/* Too narrow for every name on one line: every other one drops 16px. */
+.dt-flow-labels.is-staggered { padding-block-end: 16px; }
+.dt-flow-labels.is-staggered .dt-flow-month:nth-child(even) { transform: translateY(16px); }
 .dt-flow-nets { margin-block-start: 6px; }
-.dt-flow-net { font-size: 13px; line-height: 24px; }
-/* Gap change: green where the backlog shrank, brick where it grew, neutral
-   at zero. The sign is always shown, so colour is never the only signal. */
-.dt-flow-net[data-tone='good'] { color: var(--dt-gap-shrank); font-weight: 600; }
-.dt-flow-net[data-tone='bad'] { color: var(--dt-gap-grew); font-weight: 600; }
-.dt-flow-net[data-tone='flat'] { color: var(--text-tertiary); }
+/* Gap change pills: green where the backlog shrank, brick where it grew,
+   neutral at zero. The sign is always shown, so colour is never the only
+   signal. The month in progress is white with a dashed border in its tone. */
+.dt-flow-net {
+  display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box;
+  height: 24px; min-width: 42px; max-width: calc(100% - 6px); padding: 0 8px;
+  border: 1.5px solid transparent; border-radius: 999px;
+  font-size: 13px; line-height: 16px; font-weight: 600; white-space: nowrap;
+}
+.dt-flow-net[data-tone='good'] { color: var(--dt-gap-shrank); background: var(--dt-gap-shrank-soft); }
+.dt-flow-net[data-tone='bad'] { color: var(--dt-gap-grew); background: var(--dt-gap-grew-soft); }
+.dt-flow-net[data-tone='flat'] { color: var(--text-secondary); background: var(--neutral-soft); }
+.dt-flow-net.is-open { background: var(--surface); border: 1.5px dashed currentColor; }
 
 /* The hover targets: every column, full height, plot and rows together. */
 .dt-flow-hits {
@@ -3007,10 +3028,11 @@ a.dt-contractor-name:hover { text-decoration: underline; text-decoration-color: 
    "reference" colour here: the On-aired series, balances, Not started.
    --dt-pending-bar is the darker neutral for Pending and folded rows. */
 .dt-page { --dt-gap: 16px; --dt-muted: #8391A7; --dt-pending-bar: #6B788D; }
-/* The month table's Gap change colours, from the Cobalt canvas: the backlog
-   shrank (green) or grew (brick). Page-scoped like --dt-muted above. */
+/* A month's gap change, as a pill under the chart and in its hover card:
+   the backlog shrank (green) or grew (brick), ink on a soft fill.
+   Negative-is-green is the platform's rule. Page-scoped like --dt-muted. */
 .dt-page {
-  --dt-gap-shrank: #3A7E5E; --dt-gap-grew: #B05A5A;
+  --dt-gap-shrank: #1D7A4B; --dt-gap-grew: #B42F2A;
   --dt-gap-shrank-soft: #E2F3E9; --dt-gap-grew-soft: #FBE6E4;
 }
 /* The dashboard is sized to one office screen, so it takes the full width

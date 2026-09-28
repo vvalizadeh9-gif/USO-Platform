@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { Fragment, useEffect, useRef, useState } from 'react'
 import { shamsiMonthName } from '../../../lib/shamsi'
 import { count } from '../format'
 import { CUMULATIVE, flowView, netChanges } from './flowView'
@@ -57,7 +57,6 @@ const SERIES_COLOR = { onAir: 'var(--dt-muted)', dtDone: 'var(--accent)' }
 /** Which way a month moved the backlog. Falling is the good direction. */
 const toneOf = (v) => (v < 0 ? 'good' : v > 0 ? 'bad' : 'flat')
 const GAP_WORD = { good: 'shrank', bad: 'grew', flat: 'no change' }
-const signed = (v) => `${v > 0 ? '+' : ''}${count(v)}`
 /** A figure with its sign, and a real minus sign ("−10"), not a hyphen. */
 const withSign = (v) => (v > 0 ? `+${count(v)}` : v < 0 ? `−${count(-v)}` : '0')
 const withMinus = (v) => (v < 0 ? `−${count(-v)}` : count(v))
@@ -130,6 +129,13 @@ export default function FlowChart({ data, scope = CUMULATIVE }) {
           .map((p, i) => `L${x(n - 1 - i)},${yPct(p.dtDone)}`)
           .join(' ')} Z`
 
+  // Month names alternate onto two lines when a column is narrower than
+  // 54px (19 months beside the side column at 1440 wide), rather than
+  // shrinking or overlapping.
+  const plotRef = useRef(null)
+  const plotWidth = useWidth(plotRef)
+  const stagger = plotWidth > 0 && plotWidth / n < STAGGER_BELOW
+
   // The month under the pointer, the keyboard focus or the last tap.
   const [active, setActive] = useState(null)
   const hovered = active != null && active < n ? active : null
@@ -159,7 +165,7 @@ export default function FlowChart({ data, scope = CUMULATIVE }) {
                 </span>
               ))}
             </div>
-            <div className="dt-flow-plot">
+            <div className="dt-flow-plot" ref={plotRef}>
               {ticks.map((t) => (
                 <i
                   key={t}
@@ -173,6 +179,26 @@ export default function FlowChart({ data, scope = CUMULATIVE }) {
                   style={{ left: `${((n - 1) / n) * 100}%`, width: `${100 / n}%` }}
                 />
               )}
+              {/* The cumulative view spans years: a dashed line where each new
+                  year starts, and its label at the top of the plot beside it. */}
+              {cumulative &&
+                months.map(
+                  (m, j) =>
+                    (j === 0 || m.month === 1) && (
+                      <Fragment key={`year-${m.year}`}>
+                        {j > 0 && (
+                          <i className="dt-flow-yearline" style={{ left: `${(j / n) * 100}%` }} />
+                        )}
+                        <span
+                          className="dt-flow-year tnum"
+                          data-testid="dt-flow-year"
+                          style={{ left: `calc(${(j / n) * 100}% + 6px)` }}
+                        >
+                          {m.year}
+                        </span>
+                      </Fragment>
+                    ),
+                )}
               {hovered != null && (
                 <>
                   <i
@@ -235,7 +261,10 @@ export default function FlowChart({ data, scope = CUMULATIVE }) {
           </div>
 
           {/* Each month's name, straight under its dots. */}
-          <div className="dt-flow-row dt-flow-labels" aria-hidden="true">
+          <div
+            className={stagger ? 'dt-flow-row dt-flow-labels is-staggered' : 'dt-flow-row dt-flow-labels'}
+            aria-hidden="true"
+          >
             {months.map((m, j) => (
               <span
                 key={`${m.year}-${m.month}`}
@@ -253,7 +282,8 @@ export default function FlowChart({ data, scope = CUMULATIVE }) {
             ))}
           </div>
 
-          {/* What each month did to the gap, under its name. */}
+          {/* What each month did to the gap, under its name, as a signed pill:
+              green where the backlog shrank, brick where it grew. */}
           <div className="dt-flow-row dt-flow-nets">
             {months.map((m, j) => {
               const tone = toneOf(nets[j])
@@ -264,7 +294,7 @@ export default function FlowChart({ data, scope = CUMULATIVE }) {
                   data-tone={tone}
                   className={m.is_open ? 'dt-flow-net is-open tnum' : 'dt-flow-net tnum'}
                 >
-                  {signed(nets[j])}
+                  {withSign(nets[j])}
                   <span className="dt-sr-only"> ({GAP_WORD[tone]})</span>
                 </span>
               )
@@ -297,6 +327,23 @@ export default function FlowChart({ data, scope = CUMULATIVE }) {
       </div>
     </div>
   )
+}
+
+/** Month names alternate onto two lines below this column width. */
+const STAGGER_BELOW = 54
+
+/** An element's width, kept current as it resizes. Zero until measured (and
+ * always in a test DOM, which has no layout). */
+function useWidth(ref) {
+  const [width, setWidth] = useState(0)
+  useEffect(() => {
+    const el = ref.current
+    if (!el || typeof ResizeObserver === 'undefined') return undefined
+    const ro = new ResizeObserver(([entry]) => setWidth(entry.contentRect.width))
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [ref])
+  return width
 }
 
 /** The hovered month's figures, pinned to the plot's top-left corner: this

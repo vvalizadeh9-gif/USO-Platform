@@ -2114,6 +2114,21 @@ describe('the flow chart', () => {
     expect(monthLabels(card)).toEqual(['فروردین', 'اردیبهشت', 'فروردین', 'اردیبهشت'])
     expect(within(card).getAllByTestId('dt-flow-month')[3]).toHaveClass('is-open')
     expect(gapChanges(card)).toEqual(['+6', '+2', '+2', '+2'])
+    // One pill per month; the open month's is drawn open.
+    expect(within(card).getAllByTestId('dt-flow-net')[3]).toHaveClass('is-open')
+    expect(within(card).getAllByTestId('dt-flow-net')[2]).not.toHaveClass('is-open')
+    // The years sit at the top of the plot, beside each first month, not
+    // under the month names; a dashed line marks where 1405 starts.
+    expect(within(card).getAllByTestId('dt-flow-year').map((y) => y.textContent)).toEqual([
+      '1404',
+      '1405',
+    ])
+    expect(card.querySelector('.dt-flow-plot').contains(within(card).getAllByTestId('dt-flow-year')[0])).toBe(true)
+    expect(card.querySelectorAll('.dt-flow-yearline')).toHaveLength(1)
+    // A single year's view needs no year labels: the switch names it.
+    await userEvent.click(within(card).getByRole('button', { name: '1405' }))
+    expect(within(card).queryAllByTestId('dt-flow-year')).toHaveLength(0)
+    expect(monthLabels(card)).toEqual(['فروردین', 'اردیبهشت'])
     // No per-month figures under the plot: they are in the hover card.
     expect(within(card).queryByTestId('dt-flow-table')).toBeNull()
     expect(within(card).queryByText('New on air')).toBeNull()
@@ -2350,7 +2365,7 @@ describe('the flow chart', () => {
     const card = await section('Where this is going')
     const cells = within(card).getAllByTestId('dt-flow-net')
     expect(cells.map((p) => p.getAttribute('data-tone'))).toEqual(['bad', 'good', 'flat'])
-    expect(gapChanges(card)).toEqual(['+6', '-17', '0'])
+    expect(gapChanges(card)).toEqual(['+6', '−17', '0'])
   })
 
   it('adds the month table up to the movement in the gap across the year', async () => {
@@ -2362,7 +2377,7 @@ describe('the flow chart', () => {
     draw()
 
     const card = await section('Where this is going')
-    const sum = gapChanges(card).reduce((total, v) => total + Number(v), 0)
+    const sum = gapChanges(card).reduce((total, v) => total + num(v), 0)
 
     // Cumulative opens on the opening balance plus the undated sites: 53 on
     // air, 20 done, a gap of 33. The chart ends on 45, so the columns must
@@ -2373,7 +2388,7 @@ describe('the flow chart', () => {
     // And a year on its own: 1405 opened on the gap 1404 closed on (71 on
     // air, 30 done, 41), so its columns add up to 4.
     await userEvent.click(within(card).getByRole('button', { name: '1405' }))
-    expect(gapChanges(card).reduce((total, v) => total + Number(v), 0)).toBe(4)
+    expect(gapChanges(card).reduce((total, v) => total + num(v), 0)).toBe(4)
   })
 
   it('marks the open month as still in progress', async () => {
