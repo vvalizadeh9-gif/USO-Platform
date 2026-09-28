@@ -16,13 +16,11 @@ import RankedBars from './charts/RankedBars'
  * meant a screen reader announced four unlabelled buttons and gave no hint
  * that picking one changed the panel below.
  *
- * THE TABS RENDER IN THE CARD HEADER, beside the title and the total, rather
- * than in a control row above the panel. They are the card's question asked
- * three ways, so they belong on the line that asks it; a row of their own
- * read as furniture a reader had to get past before reaching the figures.
- * That is why `BreakdownTabs` is a separate export: `Section` renders it into
- * the header through its `controls` slot while this component renders the
- * panel it drives.
+ * THE TABS SIT ON A ROW OF THEIR OWN, under the card header and left-aligned
+ * (the agreed Cobalt layout): the header carries the title and the total, and
+ * the view switch is the first thing in the body. `BreakdownTabs` is a
+ * separate export so the page places it; this component renders the panel
+ * it drives.
  *
  * A SEGMENTED CONTROL, not underline tabs. Three underline tabs beside a
  * title and a total were wider than a half-width card, so the Problematic
@@ -40,7 +38,7 @@ import RankedBars from './charts/RankedBars'
  */
 export function BreakdownTabs({ idBase, tabs, tab, onTab }) {
   return (
-    <div className="ui-seg" role="tablist" aria-label="Break down by">
+    <div className="ui-seg dt-breakdown-views" role="tablist" aria-label="Break down by">
       {tabs.map((t) => (
         <button
           key={t.key}

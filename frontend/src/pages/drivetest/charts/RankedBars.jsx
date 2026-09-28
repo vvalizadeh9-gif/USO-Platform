@@ -16,13 +16,19 @@ import { DrillLink } from '../DrillPanel'
  * no scale). And a row with a destination is a link: the whole row, not a
  * small chevron, so the target is the size of the thing you are looking at.
  *
- * `color` takes a function as well as a string, and the difference between
- * the two is a rule, not a convenience. Contractors and provinces are nominal
- * categories: one flat colour for every bar, because shading them by size
- * would colour a bar by the length it already has. Age bands are an ordered
- * scale, so they get a function returning the ramp step — the one place on
- * this page where a bar's colour carries information.
+ * `color` takes a function as well as a string. On the dashboard every bar is
+ * the accent: the bar is a share, and the card's title names the state.
+ *
+ * A folded row ("6 more provinces", `muted`) and an "Uncategorized" row
+ * (`quiet`) are not a category of their own, so they read as one: an italic
+ * name and the darker neutral bar. Only a folded row loses its link -- there
+ * is no one list behind "6 more".
+ *
+ * Farsi names take the 15px Vazirmatn the rest of the page uses for Farsi
+ * data; English names stay at 14px.
  */
+const FARSI = /[\u0600-\u06FF]/
+
 export default function RankedBars({ points, total, color, hrefFor, emptyLabel = 'No data yet' }) {
   const reduced = useReducedMotion()
   if (!points || points.length === 0) {
@@ -36,9 +42,10 @@ export default function RankedBars({ points, total, color, hrefFor, emptyLabel =
     <ul className="dt-bars">
       {points.map((p, i) => {
         const href = p.muted ? null : hrefFor?.(p)
+        const folded = p.muted || p.quiet
         const body = (
           <>
-            <span className="dt-bar-label dt-farsi" title={p.name}>
+            <span className={`dt-bar-label${FARSI.test(p.name) ? ' dt-farsi' : ''}`} title={p.name}>
               {p.name}
             </span>
             <span className="dt-track" aria-hidden="true">
@@ -46,9 +53,8 @@ export default function RankedBars({ points, total, color, hrefFor, emptyLabel =
                 data-testid="dt-bar"
                 className="dt-track-fill"
                 style={{
-                  background: colorAt(p, i),
+                  background: folded ? 'var(--dt-pending-bar)' : colorAt(p, i),
                   width: `${(p.value / widest) * 100}%`,
-                  opacity: p.muted ? 0.45 : 1,
                   transformOrigin: 'left center',
                 }}
                 initial={reduced ? false : { scaleX: 0 }}
@@ -63,7 +69,7 @@ export default function RankedBars({ points, total, color, hrefFor, emptyLabel =
         )
 
         return (
-          <li key={`${p.name}-${i}`} className={`dt-bar-row${p.muted ? ' dt-muted' : ''}`}>
+          <li key={`${p.name}-${i}`} className={`dt-bar-row${folded ? ' dt-muted' : ''}`}>
             {href ? (
               <DrillLink
                 to={href}

@@ -392,15 +392,61 @@ describe('breakdown chrome', () => {
     expect(bars.compareDocumentPosition(toggle) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })
 
-  it('switches views with a segmented control in the header', async () => {
+  it('switches views with a segmented control on its own row under the header', async () => {
     serve()
     draw(BREAKDOWNS)
 
     const card = await section('Problematic breakdown')
-    const tabs = within(card.querySelector('.dt-section-head')).getByRole('tablist', {
-      name: 'Break down by',
-    })
+    const head = card.querySelector('.dt-section-head')
+    expect(within(head).queryByRole('tablist')).toBeNull()
+    const tabs = within(card).getByRole('tablist', { name: 'Break down by' })
     expect(tabs).toHaveClass('ui-seg')
+    // The first thing in the body, above the bars.
+    expect(tabs.parentElement).toHaveClass('dt-section-body')
+    expect(tabs.compareDocumentPosition(card.querySelector('.dt-bars')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
+
+  it('writes the total in ink, not in the state colour', async () => {
+    serve()
+    draw(BREAKDOWNS)
+
+    for (const title of ['Ongoing breakdown', 'Problematic breakdown']) {
+      const total = (await section(title)).querySelector('.dt-section-head .dt-section-total b')
+      expect(total, title).not.toHaveAttribute('style')
+    }
+  })
+
+  it('draws every bar in the accent, and a folded or uncategorized row in the neutral', async () => {
+    serve(planDelivery(), {
+      ...overview,
+      problematic_breakdown: {
+        ...overview.problematic_breakdown,
+        by_category: [
+          { name: 'Power', value: 6, key: 'Power' },
+          { name: 'Uncategorized', value: 4, key: 'Uncategorized' },
+        ],
+      },
+    })
+    draw(BREAKDOWNS)
+
+    const ongoing = await section('Ongoing breakdown')
+    for (const bar of within(ongoing).getAllByTestId('dt-bar')) {
+      expect(bar).toHaveStyle({ background: 'var(--accent)' })
+    }
+    await userEvent.click(within(ongoing).getByRole('tab', { name: 'How long' }))
+    for (const bar of within(ongoing).getAllByTestId('dt-bar')) {
+      expect(bar).toHaveStyle({ background: 'var(--accent)' })
+    }
+
+    const problematic = await section('Problematic breakdown')
+    const uncategorized = within(problematic).getByText('Uncategorized').closest('.dt-bar-row')
+    expect(uncategorized).toHaveClass('dt-muted')
+    expect(within(uncategorized).getByTestId('dt-bar')).toHaveStyle({ background: 'var(--dt-pending-bar)' })
+    // Still a link: there is a list of uncategorized sites behind it.
+    expect(within(uncategorized).getByText('Uncategorized').closest('a')).toHaveAttribute(
+      'href',
+      '/drive-test/sites?bucket=problematic&category=Uncategorized',
+    )
   })
 })
 
@@ -2925,7 +2971,7 @@ describe('Cobalt chrome', () => {
     draw(BREAKDOWNS)
 
     const card = await section('Ongoing breakdown')
-    const tabs = within(card.querySelector('.dt-section-head')).getAllByRole('tab')
+    const tabs = within(card.querySelector('.dt-breakdown-views')).getAllByRole('tab')
     expect(tabs.every((t) => t.classList.contains('ui-seg-option'))).toBe(true)
     await userEvent.click(within(card).getByRole('tab', { name: 'Province' }))
     expect(within(card).getByRole('tab', { name: 'Province' })).toHaveAttribute('aria-selected', 'true')

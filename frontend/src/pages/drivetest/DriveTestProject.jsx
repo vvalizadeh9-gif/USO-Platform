@@ -27,7 +27,7 @@ import FlowViewControl from './charts/FlowViewControl'
 import { flowHasActivity, flowNotes, flowYears } from './charts/flowView'
 import FlowLedger, { flowNet } from './charts/FlowLedger'
 import { flowScale } from './charts/flowScale'
-import { AGE_RAMP, PROVINCE_LIMIT, STATE_COLOR } from './constants'
+import { PROVINCE_LIMIT } from './constants'
 import { count, deltaTone } from './format'
 import { ongoingLink, problematicLink } from './links'
 import { useDashboard } from './useDashboard'
@@ -53,6 +53,11 @@ const VIEW_TABS = [
   { key: RANKINGS, label: 'Contractors & provinces' },
 ]
 const VIEW_KEYS = new Set(VIEW_TABS.map((t) => t.key))
+
+/** Every breakdown bar is the accent, on the track: the bars are a share, and
+ * the card's title names the state. Folded and uncategorized rows take the
+ * darker neutral (see RankedBars). */
+const BAR_COLOR = 'var(--accent)'
 
 const PROBLEMATIC_TABS = [
   { key: 'category', label: 'Category' },
@@ -160,7 +165,7 @@ export default function DriveTestProject() {
       contractor: {
         points: b.by_contractor,
         unit: 'Contractor',
-        color: STATE_COLOR.ongoing,
+        color: BAR_COLOR,
         hrefFor: (p) => {
           const id = contractorIdByName.get(p.name)
           return id == null ? null : ongoingLink({ ...scope, contractorId: id })
@@ -175,7 +180,7 @@ export default function DriveTestProject() {
       province: {
         points: collapse(b.by_province),
         unit: 'Province',
-        color: STATE_COLOR.ongoing,
+        color: BAR_COLOR,
         hrefFor: (p) => {
           const id = provinces.find((x) => x.name === p.name)?.id
           return id ? ongoingLink({ provinceId: id }) : null
@@ -185,7 +190,7 @@ export default function DriveTestProject() {
         points: b.by_age,
         unit: 'Held for',
         hrefFor: (p) => (p.key ? ongoingLink({ ...scope, ageBand: p.key }) : null),
-        color: (_point, i) => AGE_RAMP[Math.min(i, AGE_RAMP.length - 1)],
+        color: BAR_COLOR,
         note:
           b.without_assignment_date > 0
             ? `Measured from the day each site was assigned to a contractor. ` +
@@ -204,9 +209,11 @@ export default function DriveTestProject() {
     const scope = provinceId == null ? {} : { provinceId }
     return {
       category: {
-        points: b.by_category,
+        // "Uncategorized" is the absence of a category, drawn like a folded
+        // row: italic name, neutral bar. It keeps its link.
+        points: b.by_category.map((p) => (p.key === 'Uncategorized' ? { ...p, quiet: true } : p)),
         unit: 'Category',
-        color: STATE_COLOR.problematic,
+        color: BAR_COLOR,
         hrefFor: (p) => problematicLink(p.key ? { ...scope, category: p.key } : scope),
         // One bar reading "Uncategorized, 100%" looks like a finding. It is
         // the absence of one, and says so.
@@ -219,7 +226,7 @@ export default function DriveTestProject() {
         points: b.by_age,
         unit: 'Stuck for',
         hrefFor: (p) => (p.key ? problematicLink({ ...scope, ageBand: p.key }) : null),
-        color: (_point, i) => AGE_RAMP[Math.min(i, AGE_RAMP.length - 1)],
+        color: BAR_COLOR,
         note:
           b.without_problem_date > 0
             ? `Measured from the day each site last became problematic. ` +
@@ -233,7 +240,7 @@ export default function DriveTestProject() {
       province: {
         points: collapse(b.by_province),
         unit: 'Province',
-        color: STATE_COLOR.problematic,
+        color: BAR_COLOR,
         hrefFor: (p) => {
           const id = provinces.find((x) => x.name === p.name)?.id
           return id ? problematicLink({ provinceId: id }) : null
@@ -410,33 +417,29 @@ export default function DriveTestProject() {
                     title="Ongoing breakdown"
                     icon={Hourglass}
                     tone="support"
+                    inline
+                    className="dt-breakdown-section"
                     state={overview}
                     onRetry={refresh}
                     actions={
-                      data && (
-                        <SectionTotal
-                          value={data.ongoing_breakdown.total}
-                          label="ongoing"
-                          color={STATE_COLOR.ongoing}
-                        />
-                      )
-                    }
-                    controls={
-                      <BreakdownTabs
-                        idBase="dt-ongoing"
-                        tabs={ONGOING_TABS}
-                        tab={ongoingTab}
-                        onTab={setOngoingTab}
-                      />
+                      data && <SectionTotal value={data.ongoing_breakdown.total} label="ongoing" />
                     }
                   >
                     {(d) => (
-                      <BreakdownCard
-                        idBase="dt-ongoing"
-                        tab={ongoingTab}
-                        views={ongoingViews}
-                        total={d.ongoing_breakdown.total}
-                      />
+                      <>
+                        <BreakdownTabs
+                          idBase="dt-ongoing"
+                          tabs={ONGOING_TABS}
+                          tab={ongoingTab}
+                          onTab={setOngoingTab}
+                        />
+                        <BreakdownCard
+                          idBase="dt-ongoing"
+                          tab={ongoingTab}
+                          views={ongoingViews}
+                          total={d.ongoing_breakdown.total}
+                        />
+                      </>
                     )}
                   </Section>
                 )}
@@ -446,33 +449,31 @@ export default function DriveTestProject() {
                     title="Problematic breakdown"
                     icon={OctagonAlert}
                     tone="support"
+                    inline
+                    className="dt-breakdown-section"
                     state={overview}
                     onRetry={refresh}
                     actions={
                       data && (
-                        <SectionTotal
-                          value={data.problematic_breakdown.total}
-                          label="problematic"
-                          color={STATE_COLOR.problematic}
-                        />
+                        <SectionTotal value={data.problematic_breakdown.total} label="problematic" />
                       )
-                    }
-                    controls={
-                      <BreakdownTabs
-                        idBase="dt-problematic"
-                        tabs={PROBLEMATIC_TABS}
-                        tab={problematicTab}
-                        onTab={setProblematicTab}
-                      />
                     }
                   >
                     {(d) => (
-                      <BreakdownCard
-                        idBase="dt-problematic"
-                        tab={problematicTab}
-                        views={problematicViews}
-                        total={d.problematic_breakdown.total}
-                      />
+                      <>
+                        <BreakdownTabs
+                          idBase="dt-problematic"
+                          tabs={PROBLEMATIC_TABS}
+                          tab={problematicTab}
+                          onTab={setProblematicTab}
+                        />
+                        <BreakdownCard
+                          idBase="dt-problematic"
+                          tab={problematicTab}
+                          views={problematicViews}
+                          total={d.problematic_breakdown.total}
+                        />
+                      </>
                     )}
                   </Section>
                 )}
@@ -578,11 +579,12 @@ function NetChange({ value }) {
 
 const NET_WORD = { good: 'better', bad: 'worse', flat: 'no change' }
 
-function SectionTotal({ value, label, color }) {
+/** A breakdown's total, in the card header: ink, not the state's colour --
+ * the card's title names the state. */
+function SectionTotal({ value, label }) {
   return (
     <span className="dt-section-total">
-      <i className="dt-section-dot" style={{ background: color }} aria-hidden="true" />
-      <b className="tnum" style={{ color }}>{count(value)}</b>
+      <b className="tnum">{count(value)}</b>
       <span>{label}</span>
     </span>
   )

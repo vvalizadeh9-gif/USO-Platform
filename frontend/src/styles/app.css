@@ -2929,7 +2929,20 @@ a.dt-contractor-name:hover { text-decoration: underline; text-decoration-color: 
    the chart, which scales with its column, comes out shorter. */
 .dt-page .dt-grid2 { grid-template-columns: minmax(0, 2fr) minmax(0, 1.3fr); }
 /* Tighter rows in the breakdown bars. */
-.dt-page .dt-bar-link { padding-block: 3px; }
+/* ---------- the Breakdowns tab ----------
+   Header: chip, title, then the total in ink beside it. The view switch is
+   the first row of the body, left-aligned. Rows are 40px, with a divider
+   between them. */
+.dt-page .dt-breakdown-section .dt-section-actions { margin-inline-start: 4px; }
+.dt-page .dt-breakdown-section .dt-section-total b { font-size: 20px; line-height: 28px; }
+.dt-page .dt-breakdown-views { margin-block-end: 12px; }
+.dt-page .dt-bars { gap: 0; }
+.dt-page .dt-bar-row + .dt-bar-row { border-block-start: 1px solid var(--divider); }
+.dt-page .dt-bar-link { min-block-size: 40px; padding-block: 4px; }
+.dt-page .dt-bar-label { font-size: 14px; line-height: 20px; font-weight: 500; }
+.dt-page .dt-bar-label.dt-farsi { font-size: 15px; line-height: 22px; }
+.dt-page .dt-muted .dt-bar-label { font-weight: 400; }
+.dt-page .dt-breakdown-foot { margin-block-start: 12px; }
 .dt-page .dt-kpi-band { gap: 16px; }
 /* Pending status names three states side by side; a slightly wider column
    keeps "Problematic" whole. Only where the band is one row of four. */
