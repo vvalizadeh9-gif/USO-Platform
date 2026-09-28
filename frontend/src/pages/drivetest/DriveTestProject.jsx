@@ -24,7 +24,7 @@ import Section from './Section'
 import Toolbar from './Toolbar'
 import FlowChart, { FlowLegend } from './charts/FlowChart'
 import FlowViewControl from './charts/FlowViewControl'
-import { flowHasActivity, flowNotes, flowYears } from './charts/flowView'
+import { CUMULATIVE, flowHasActivity, flowNotes, flowYears } from './charts/flowView'
 import FlowLedger, { flowNet } from './charts/FlowLedger'
 import { flowScale } from './charts/flowScale'
 import { PROVINCE_LIMIT } from './constants'
@@ -86,10 +86,10 @@ export default function DriveTestProject() {
   } = useDashboard()
   const [ongoingTab, setOngoingTab] = useState('contractor')
   const [problematicTab, setProblematicTab] = useState('category')
-  // Which Shamsi year the trend shows; null is the latest year. Held here,
-  // not in the chart, because the card header shows both the control that
-  // switches it and the note that describes the view.
-  const [flowScope, setFlowScope] = useState(null)
+  // Which months the trend shows: every month (cumulative) or one Shamsi
+  // year. Held here, not in the chart, because the card header shows both
+  // the control that switches it and the note that describes the view.
+  const [flowScope, setFlowScope] = useState(CUMULATIVE)
   const [provinceSearch, setProvinceSearch] = useState('')
   const [exporting, setExporting] = useState(false)
   const toast = useToast()
@@ -346,7 +346,6 @@ export default function DriveTestProject() {
                       </InfoTip>
                     )
                   }
-                  actions={flowHasActivity(flow.data) && <FlowLegend />}
                   controls={
                     flowHasActivity(flow.data) && (
                       <FlowViewControl
@@ -359,9 +358,13 @@ export default function DriveTestProject() {
                 >
                   {(f) =>
                     flowHasActivity(f) ? (
-                      // Keyed on the year shown, so switching years redraws the
-                      // chart rather than morphing one year's columns into the next.
-                      <FlowChart key={String(flowScope)} data={f} scope={flowScope} />
+                      <>
+                        {/* The key, on its own row directly under the title row. */}
+                        <FlowLegend />
+                        {/* Keyed on the view shown, so switching redraws the chart
+                            rather than morphing one view's columns into the next. */}
+                        <FlowChart key={String(flowScope)} data={f} scope={flowScope} />
+                      </>
                     ) : (
                       <div className="dt-empty">
                         No on-air or drive-test activity has been recorded yet. The chart fills in

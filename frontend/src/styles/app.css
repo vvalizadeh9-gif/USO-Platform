@@ -2777,16 +2777,15 @@ a.dt-contractor-name:hover { text-decoration: underline; text-decoration-color: 
 /* ---------- flow chart: on-aired vs DT done ---------- */
 .dt-flowcard { display: grid; gap: 10px; }
 
-/* The legend, in the card's title row just before the year switcher: the
+/* The legend, on its own row directly under the card's title row: the
    series named once in one place, so a reader never has to infer identity
    from hue alone. */
 .dt-flow-legend {
-  list-style: none; margin: 0 0 0 auto; padding: 0;
+  list-style: none; margin: 0 0 8px; padding: 0;
   display: flex; flex-wrap: wrap; gap: 4px 14px;
   font-size: 13px; line-height: 18px; color: var(--text-secondary);
 }
 .dt-flow-legend-item { display: inline-flex; align-items: center; gap: 6px; }
-.dt-flow-legend + .dt-section-controls { margin-inline-start: 16px; }
 /* A series is a 3px line, as it is drawn; the gap is its fill. */
 .dt-flow-legend-line { width: 16px; height: 3px; border-radius: 2px; flex: none; }
 .dt-flow-legend-swatch {
@@ -2798,6 +2797,13 @@ a.dt-contractor-name:hover { text-decoration: underline; text-decoration-color: 
   width: 9px; height: 9px; border-radius: 50%; flex: none;
   background: var(--surface); border: 2px solid var(--dt-muted);
 }
+/* A month's change in the gap, as the pills under the plot draw it. */
+.dt-flow-legend-pill {
+  font-style: normal; font-size: 12px; line-height: 16px; font-weight: 600;
+  padding: 0 6px; border-radius: 8px; flex: none;
+}
+.dt-flow-legend-pill[data-tone='good'] { color: var(--dt-gap-shrank); background: var(--dt-gap-shrank-soft); }
+.dt-flow-legend-pill[data-tone='bad'] { color: var(--dt-gap-grew); background: var(--dt-gap-grew-soft); }
 
 /* The chart and the month table under it share one grid: a 104px gutter
    (the y-axis labels above, the row names below) and one equal column per
@@ -2944,7 +2950,10 @@ a.dt-contractor-name:hover { text-decoration: underline; text-decoration-color: 
 .dt-page { --dt-gap: 16px; --dt-muted: #8391A7; --dt-pending-bar: #6B788D; }
 /* The month table's Gap change colours, from the Cobalt canvas: the backlog
    shrank (green) or grew (brick). Page-scoped like --dt-muted above. */
-.dt-page { --dt-gap-shrank: #3A7E5E; --dt-gap-grew: #B05A5A; }
+.dt-page {
+  --dt-gap-shrank: #3A7E5E; --dt-gap-grew: #B05A5A;
+  --dt-gap-shrank-soft: #E2F3E9; --dt-gap-grew-soft: #FBE6E4;
+}
 /* The dashboard is sized to one office screen, so it takes the full width
    rather than the app's 1,280px cap, with tighter page padding. It applies to
    all three tabs, so switching views does not move the header. */

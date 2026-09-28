@@ -33,8 +33,15 @@ describe('flowView', () => {
   }
   const totals = (v) => v.points.map((p) => [p.onAir, p.dtDone])
 
-  it('opens on the latest year, its months only, carrying the running total', () => {
+  it('opens on every month, from the opening balance, undated sites included', () => {
     const v = flowView(data)
+    expect(v.cumulative).toBe(true)
+    expect(v.months).toHaveLength(4)
+    expect(totals(v)).toEqual([[53, 20], [63, 24], [71, 30], [76, 33], [80, 35]])
+  })
+
+  it('shows a year on its months only, carrying the running total', () => {
+    const v = flowView(data, 1405)
     expect(v.selected).toBe(1405)
     expect(v.months.map((m) => `${m.year}-${m.month}`)).toEqual(['1405-1', '1405-2'])
     // points[0] is where 1405 opened -- the running total through Esfand
@@ -65,8 +72,32 @@ describe('flowView', () => {
     expect(v.months.map((m) => m.year)).toEqual([1405, 1405])
   })
 
-  it('falls back to the latest year for a year the payload does not have', () => {
-    expect(flowView(data, 1399).selected).toBe(1405)
+  it('falls back to every month for a year the payload does not have', () => {
+    expect(flowView(data, 1399).cumulative).toBe(true)
+  })
+
+  it('fits the scale to both lines, so DT done above On air stays inside the plot', () => {
+    // A year that cleared more than it brought on air -- and a running DT
+    // done above the running On air -- must not push DT done off the top.
+    const ahead = {
+      opening: { on_air: 100, dt_done: 90 },
+      months: [
+        { year: 1404, month: 1, on_aired: 5, dt_done: 40, is_open: false },
+        { year: 1404, month: 2, on_aired: 5, dt_done: 60, is_open: false },
+        { year: 1405, month: 1, on_aired: 2, dt_done: 30, is_open: true },
+      ],
+      not_placed: { on_air: 0, dt_done: 0 },
+    }
+    for (const scope of [1404, 1405, undefined]) {
+      const v = flowView(ahead, scope)
+      for (const p of v.points.slice(1)) {
+        expect(p.dtDone).toBeGreaterThanOrEqual(v.floor)
+        expect(p.dtDone).toBeLessThanOrEqual(v.ceiling)
+        expect(p.onAir).toBeGreaterThanOrEqual(v.floor)
+        expect(p.onAir).toBeLessThanOrEqual(v.ceiling)
+      }
+      expect(v.points.slice(1).some((p) => p.dtDone > p.onAir)).toBe(true)
+    }
   })
 
   it('labels the axis on round steps from the floor to the ceiling', () => {
@@ -79,7 +110,7 @@ describe('flowView', () => {
 
   it("gives each month its own change in the gap, measured from where the year opened", () => {
     // 1405 opened on a gap of 41; +2 and +2 take it to 45.
-    expect(netChanges(flowView(data).points)).toEqual([2, 2])
+    expect(netChanges(flowView(data, 1405).points)).toEqual([2, 2])
   })
 })
 
@@ -94,7 +125,12 @@ describe('flowNotes', () => {
   }
 
   it('states where the running total starts, where the scale starts, and the undated sites', () => {
-    const notes = flowNotes(data)
+    expect(flowNotes(data)).toContain(
+      'Showing every month since Farvardin 1404. The lines are the programme’s running totals, ' +
+        'carried from the opening balance on 1 Farvardin 1404, so the gap is the real backlog at ' +
+        'each month’s end. The scale starts at 900, not zero.',
+    )
+    const notes = flowNotes(data, 1405)
     expect(notes).toContain(
       'Showing 1405, month by month. The lines are the programme’s running totals, carried ' +
         'from the opening balance on 1 Farvardin 1404, so the gap is the real backlog at each ' +

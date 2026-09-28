@@ -1,6 +1,6 @@
 import { shamsiMonthName } from '../../../lib/shamsi'
 import { count } from '../format'
-import { flowView, netChanges } from './flowView'
+import { CUMULATIVE, flowView, netChanges } from './flowView'
 import { FadeArea } from './primitives'
 
 /**
@@ -51,15 +51,15 @@ const toneOf = (v) => (v < 0 ? 'good' : v > 0 ? 'bad' : 'flat')
 const GAP_WORD = { good: 'shrank', bad: 'grew', flat: 'no change' }
 const signed = (v) => `${v > 0 ? '+' : ''}${count(v)}`
 
-/** The chart's key, for the card's title row: the two series, the gap
- * between them, and the hollow dot that marks a month still in progress.
- * Exported because the title row belongs to `Section`, rendered by the page. */
+/** The chart's key, on its own row under the card's title row: the two
+ * series, the gap between them, the hollow dot that marks a month still in
+ * progress, and the two tones of a month's change in the gap. */
 export function FlowLegend() {
   return (
     <ul className="dt-flow-legend" aria-label="Chart key">
       <li className="dt-flow-legend-item">
         <i className="dt-flow-legend-line" style={{ background: SERIES_COLOR.onAir }} />
-        On-aired
+        On air
       </li>
       <li className="dt-flow-legend-item">
         <i className="dt-flow-legend-line" style={{ background: SERIES_COLOR.dtDone }} />
@@ -73,12 +73,25 @@ export function FlowLegend() {
         <i className="dt-flow-legend-open" />
         Month in progress
       </li>
+      <li className="dt-flow-legend-item">
+        <i className="dt-flow-legend-pill" data-tone="good" aria-hidden="true">
+          −
+        </i>
+        Gap shrank
+      </li>
+      <li className="dt-flow-legend-item">
+        <i className="dt-flow-legend-pill" data-tone="bad" aria-hidden="true">
+          +
+        </i>
+        Gap grew
+      </li>
     </ul>
   )
 }
 
-export default function FlowChart({ data, scope = null }) {
-  const { selected, points, months, floor, ceiling, ticks } = flowView(data, scope)
+export default function FlowChart({ data, scope = CUMULATIVE }) {
+  const { selected, cumulative, points, months, floor, ceiling, ticks } = flowView(data, scope)
+  const shown = cumulative ? 'every month since Farvardin 1404' : String(selected)
   const n = months.length
   // points[0] is the balance the year opened on; points[j + 1] is month j.
   const drawn = points.slice(1)
@@ -113,8 +126,8 @@ export default function FlowChart({ data, scope = null }) {
           className="dt-flowchart"
           role="img"
           aria-label={
-            `On-aired vs drive tests done, running totals, ${selected}. ` +
-            `On-aired ${last.onAir}, DT done ${last.dtDone}, gap ${last.gap}.` +
+            `On air vs drive tests done, running totals, ${shown}. ` +
+            `On air ${last.onAir}, DT done ${last.dtDone}, gap ${last.gap}.` +
             (last.isOpen ? ' The latest month is still in progress.' : '')
           }
         >
@@ -188,7 +201,7 @@ export default function FlowChart({ data, scope = null }) {
         {/* Each month's own movement, one column per month, straight under
             its dots: the same 104px gutter and the same column widths. */}
         <table className="dt-flow-table" data-testid="dt-flow-table">
-          <caption className="dt-sr-only">Each month of {selected}: new on air, DT done and the change in the gap</caption>
+          <caption className="dt-sr-only">Each month of {shown}: new on air, DT done and the change in the gap</caption>
           <colgroup>
             <col className="dt-flow-gutter" />
             {months.map((m) => (
@@ -205,7 +218,7 @@ export default function FlowChart({ data, scope = null }) {
                   className={m.is_open ? 'dt-flow-col-open' : undefined}
                 >
                   <span className="dt-flow-month dt-farsi">{shamsiMonthName(m.month)}</span>
-                  {j === 0 && <span className="dt-flow-sub tnum">{m.year}</span>}
+                  {(j === 0 || m.month === 1) && <span className="dt-flow-sub tnum">{m.year}</span>}
                   {m.is_open && <span className="dt-flow-sub">in progress</span>}
                 </th>
               ))}
