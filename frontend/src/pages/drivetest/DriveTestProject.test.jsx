@@ -894,6 +894,10 @@ describe('delta direction', () => {
   // notion of which way good pointed. Three of the six KPIs count work you
   // want to see fall, so a month that cleared 12 sites rendered in alarm red
   // and a month that gained 4 problematic sites rendered reassuring green.
+  //
+  // The change is now drawn neutral (Cobalt: figures are ink), so the
+  // direction is asserted where it still lives: `data-tone` on the number and
+  // the visually hidden word a screen reader hears after it.
   const moving = {
     ...overview,
     kpis: {
@@ -918,7 +922,9 @@ describe('delta direction', () => {
 
     await screen.findByLabelText('Programme totals')
     const chip = within(band()).getByText(/-12/)
-    expect(chip).toHaveStyle({ color: 'var(--dt-done)' })
+    expect(chip).toHaveAttribute('data-tone', 'good')
+    expect(chip.closest('.dt-delta')).toHaveTextContent('-12bettervs last month')
+    expect(chip).not.toHaveAttribute('style')
   })
 
   it('reads a growing backlog as bad news', async () => {
@@ -937,7 +943,9 @@ describe('delta direction', () => {
 
     await screen.findByLabelText('Programme totals')
     const chip = within(band()).getByText(/\+4/)
-    expect(chip).toHaveStyle({ color: 'var(--dt-problem)' })
+    expect(chip).toHaveAttribute('data-tone', 'bad')
+    expect(chip.nextElementSibling).toHaveClass('dt-sr-only')
+    expect(chip.nextElementSibling).toHaveTextContent('worse')
   })
 
   it('still reads rising completions as good news', async () => {
@@ -946,7 +954,8 @@ describe('delta direction', () => {
 
     await screen.findByLabelText('Programme totals')
     const chip = within(band()).getByText(/\+12/)
-    expect(chip).toHaveStyle({ color: 'var(--dt-done)' })
+    expect(chip).toHaveAttribute('data-tone', 'good')
+    expect(chip.nextElementSibling).toHaveTextContent('better')
   })
 
   it('says nothing at all when there is no baseline to compare against', async () => {
@@ -1070,10 +1079,17 @@ describe('the KPI band', () => {
     const doneBar = card(band, 'DT done').querySelector('.dt-kpi-split')
     const pendingBar = card(band, 'Pending').querySelector('.dt-kpi-split')
 
+    // One filled segment each, on the plain track: the rest of the bar is
+    // the track itself, so the two widths are the same split both ways.
     expect(doneBar.querySelector('[data-seg="done"]')).toHaveStyle({ width: '40%' })
-    expect(doneBar.querySelector('[data-seg="rest"]')).toHaveStyle({ width: '60%' })
     expect(pendingBar.querySelector('[data-seg="pending"]')).toHaveStyle({ width: '60%' })
-    expect(pendingBar.querySelector('[data-seg="rest"]')).toHaveStyle({ width: '40%' })
+    expect(doneBar.querySelectorAll('[data-seg]')).toHaveLength(1)
+    expect(pendingBar.querySelectorAll('[data-seg]')).toHaveLength(1)
+    // The "done" series is the accent; pending is the darker neutral, not red.
+    expect(doneBar.querySelector('[data-seg="done"]')).toHaveStyle({ background: 'var(--accent)' })
+    expect(pendingBar.querySelector('[data-seg="pending"]')).toHaveStyle({
+      background: 'var(--dt-pending-bar)',
+    })
   })
 
   it('writes a month that did not move as a grey plus-or-minus zero', async () => {
@@ -1089,7 +1105,8 @@ describe('the KPI band', () => {
 
     const band = await screen.findByLabelText('Programme totals')
     const chip = within(card(band, 'Pending')).getByText('\u00b10')
-    expect(chip).toHaveStyle({ color: 'var(--text-dim)' })
+    expect(chip).toHaveAttribute('data-tone', 'flat')
+    expect(chip.nextElementSibling).toHaveTextContent('no change')
   })
 
   it('stacks one segment per part that has sites', async () => {
@@ -2163,9 +2180,11 @@ describe('the trend section', () => {
     const card = await section('What moved')
     const header = card.querySelector('.dt-section-total')
     // 60 closed against 70 opened: the backlog fell by 10, which is the good
-    // direction, so it is drawn in the done colour.
+    // direction. The figure is ink; the direction is in data-tone and words.
     expect(header).toHaveTextContent('-10')
-    expect(header.querySelector('b')).toHaveStyle({ color: 'var(--dt-done)' })
+    expect(header.querySelector('b')).toHaveAttribute('data-tone', 'good')
+    expect(header.querySelector('b')).not.toHaveAttribute('style')
+    expect(header.querySelector('.dt-sr-only')).toHaveTextContent('better')
   })
 
   it('says which flows are measured and which are derived, behind its info icon', async () => {

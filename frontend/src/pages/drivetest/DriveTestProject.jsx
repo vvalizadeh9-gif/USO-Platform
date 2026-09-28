@@ -28,7 +28,7 @@ import { flowHasActivity, flowNotes, flowYears } from './charts/flowView'
 import FlowLedger, { flowNet } from './charts/FlowLedger'
 import { flowScale } from './charts/flowScale'
 import { AGE_RAMP, PROVINCE_LIMIT, STATE_COLOR } from './constants'
-import { count, deltaTone, TONE_COLOR } from './format'
+import { count, deltaTone } from './format'
 import { ongoingLink, problematicLink } from './links'
 import { useDashboard } from './useDashboard'
 
@@ -559,19 +559,24 @@ export default function DriveTestProject() {
   )
 }
 
+/** The month's net change in the backlog: ink, with its sign. Whether that
+ * was good news is in `data-tone` and a visually hidden word, not a colour. */
 function NetChange({ value }) {
   if (value == null) return null
-  const tone = deltaTone(value, 'down')
+  const tone = deltaTone(value, 'down') ?? 'flat'
   return (
     <span className="dt-section-total">
-      <b className="tnum" style={{ color: tone ? TONE_COLOR[tone] : TONE_COLOR.flat }}>
+      <b className="tnum" data-tone={tone}>
         {value > 0 ? '+' : ''}
         {count(value)}
       </b>
+      <span className="dt-sr-only">{NET_WORD[tone]}</span>
       <span>net</span>
     </span>
   )
 }
+
+const NET_WORD = { good: 'better', bad: 'worse', flat: 'no change' }
 
 function SectionTotal({ value, label, color }) {
   return (

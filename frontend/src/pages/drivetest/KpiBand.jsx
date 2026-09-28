@@ -1,7 +1,7 @@
 import { motion, useReducedMotion } from 'framer-motion'
 import {
-  AlertCircle,
   CheckCircle2,
+  Clock,
   Minus,
   PieChart,
   RadioTower,
@@ -29,11 +29,13 @@ import { DrillLink } from './DrillPanel'
  * `KPI_DIRECTION`, because three of these count work you want to see fall. See
  * `format.deltaTone` for what the dashboard this replaces got backwards.
  *
- * TWO RENDERINGS, ONE RULE. `pill` is the KPI band's: a tinted chip carrying
- * the number, with the comparison spelled out beside it. The default is the
- * inline icon-and-number form, which is what `charts/FlowChart` draws beside
- * the gap figure. They differ in appearance only — the tone, and therefore the
- * meaning, is computed once above the branch.
+ * TWO RENDERINGS, ONE RULE. `pill` is the KPI band's: the signed number in
+ * bold ink with the comparison spelled out beside it, and no colour -- a
+ * period-over-period change is shown neutral with its sign (Cobalt: figures
+ * are ink). The tone is still computed and carried as `data-tone`, and a
+ * visually hidden word says it, so the meaning is still announced. The
+ * default is the inline icon-and-number form, which is what
+ * `charts/FlowChart` draws beside the gap figure.
  */
 function DeltaChip({ delta, direction = 'up', small, pill }) {
   if (delta == null) return null
@@ -46,9 +48,8 @@ function DeltaChip({ delta, direction = 'up', small, pill }) {
   if (pill) {
     return (
       <span className="dt-delta dt-delta-pill">
-        <b style={{ color }} data-tone={tone ?? 'flat'}>
-          {text}
-        </b>
+        <b data-tone={tone ?? 'flat'}>{text}</b>
+        <span className="dt-sr-only">{TONE_WORD[tone ?? 'flat']}</span>
         <span className="dt-delta-since">vs last month</span>
       </span>
     )
@@ -64,6 +65,10 @@ function DeltaChip({ delta, direction = 'up', small, pill }) {
     </span>
   )
 }
+
+/** What the tone of a change means, in words, for a screen reader: the
+ * number itself is drawn in neutral ink. */
+const TONE_WORD = { good: 'better', bad: 'worse', flat: 'no change' }
 
 export { DeltaChip }
 
@@ -139,7 +144,7 @@ export default function KpiBand({ kpis, provinceId }) {
       key: 'not_started',
       label: 'Not started',
       value: notStarted,
-      color: STATE_COLOR.not_started,
+      color: 'var(--dt-muted)',
       href: notStartedLink(scope),
     },
   ]
@@ -202,8 +207,8 @@ export default function KpiBand({ kpis, provinceId }) {
         </div>
         <SplitBar
           segments={[
-            { key: 'done', pct: donePct, color: 'var(--dt-done)' },
-            { key: 'rest', pct: pendingPct, color: 'var(--dt-problem-wash)' },
+            // The "done" series is the accent, on the plain track.
+            { key: 'done', pct: donePct, color: 'var(--accent)' },
           ]}
         />
         <DeltaChip
@@ -219,7 +224,7 @@ export default function KpiBand({ kpis, provinceId }) {
       <div className="dt-kpi-card" data-kpi="pending">
         <div className="dt-kpi-hd">
           <span className="dt-kpi-ic" aria-hidden="true">
-            <AlertCircle size={20} strokeWidth={1.9} />
+            <Clock size={20} strokeWidth={1.9} />
           </span>
           <span className="dt-kpi-title">Pending</span>
         </div>
@@ -237,8 +242,8 @@ export default function KpiBand({ kpis, provinceId }) {
         </div>
         <SplitBar
           segments={[
-            { key: 'pending', pct: pendingPct, color: 'var(--dt-problem)' },
-            { key: 'rest', pct: donePct, color: 'var(--dt-track)' },
+            // A darker neutral, not red: the bar is a share, not a status.
+            { key: 'pending', pct: pendingPct, color: 'var(--dt-pending-bar)' },
           ]}
         />
         <DeltaChip
@@ -277,18 +282,17 @@ export default function KpiBand({ kpis, provinceId }) {
         <ul className="dt-status-list">
           {parts.map((p) => (
             <li key={p.key}>
-              {/* The swatch rides with the figures, not the word: in the
-                  column layout the word gets the column's full width, which
-                  is what keeps "Problematic" whole at the widths where three
-                  columns only just fit. */}
+              {/* The swatch leads the label, as a legend does. */}
               <DrillLink to={p.href} className="dt-status-row">
-                <span className="dt-status-name">{p.label}</span>
-                <span className="dt-status-figs">
+                <span className="dt-status-name">
                   <span
                     className="dt-kpi-part-dot"
                     style={{ background: p.color }}
                     aria-hidden="true"
                   />
+                  {p.label}
+                </span>
+                <span className="dt-status-figs">
                   <span className="dt-status-num tnum">{count(p.value)}</span>
                   <span className="dt-status-pct tnum">{shareOfPending(p.value)}</span>
                 </span>

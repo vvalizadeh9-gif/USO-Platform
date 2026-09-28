@@ -1,4 +1,4 @@
-import { Target } from 'lucide-react'
+import { ArrowRight, Target } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import { MONTHLY_PLAN_ROLES } from '../../lib/roles'
@@ -6,7 +6,7 @@ import { monthProgress } from '../../lib/shamsi'
 import { DrillLink } from './DrillPanel'
 import InfoTip from './InfoTip'
 import Section from './Section'
-import { achievement, bandColor, count } from './format'
+import { achievement, count } from './format'
 import { deliveredLink } from './links'
 
 /**
@@ -73,6 +73,7 @@ export default function PipThisMonth({ state, onRetry, scoped, provinceName }) {
         canOpenPlan && (
           <Link to="/monthly-plan" className="btn btn-ghost dt-pip-open">
             Monthly plan
+            <ArrowRight size={14} strokeWidth={2} aria-hidden="true" />
           </Link>
         )
       }
@@ -120,7 +121,7 @@ function PipTiles({ data, scoped, provinceName }) {
 
       {committed && (
         <div className="dt-pip-rate">
-          <span className="dt-pip-rate-value tnum" style={{ color: bandColor(pct) }}>
+          <span className="dt-pip-rate-value tnum">
             {achievement(pct)}
           </span>
           <span
@@ -133,7 +134,7 @@ function PipTiles({ data, scoped, provinceName }) {
             <span
               data-testid="dt-pip-progress-fill"
               className="dt-plan-progress-fill"
-              style={{ width: `${Math.min(100, pct)}%`, background: bandColor(pct) }}
+              style={{ width: `${Math.min(100, pct)}%` }}
             />
             {pace && (
               <span
