@@ -7,9 +7,10 @@
 // the interface offers, which is what decides whether a person can work.
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, useLocation, useNavigationType } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ToastProvider } from '../../context/ToastContext'
+import { currentShamsiPeriod, nextPeriod, shamsiMonthName } from '../../lib/shamsi'
 
 vi.mock('../../api/client', () => ({
   default: { get: vi.fn(), post: vi.fn(), put: vi.fn() },
@@ -868,7 +869,7 @@ describe('the acceptance target', () => {
   })
 })
 
-// ------------------------------------------------------ the PM split screen
+// ------------------------------------------------------------ the PM page
 //
 // Shaped from app/schemas: PipOverviewOut.
 const hit = (h, of) => ({ hit: h, of })
@@ -923,23 +924,170 @@ const accQueue = queue([
   queueRow({ plan_id: 21, status: 'Submitted', committed_count: 20, in_force_count: null }),
 ], { current_month: {} })
 
-function serveOverview(data = overview()) {
+function serveOverview(data = overview(), { queues } = {}) {
   api.get.mockImplementation((url, config) => {
     if (url === '/pip/overview') return Promise.resolve({ data })
-    if (url === '/pip/queue') return Promise.resolve({ data: { ...accQueue, label: 'آبان 1405', stream: config?.params?.stream } })
+    if (url === '/pip/queue') {
+      const params = config?.params ?? {}
+      if (queues) return Promise.resolve({ data: queues(params) })
+      return Promise.resolve({ data: { ...accQueue, label: 'آبان 1405', stream: params.stream } })
+    }
     if (url === '/pip/revisions') return Promise.resolve({ data: revisionsOut(config?.params) })
+    if (url === '/pip/internal-target') return Promise.resolve({ data: { current: null } })
     return Promise.reject(new Error(`unexpected GET ${url}`))
   })
 }
 
-describe('the PM split screen', () => {
-  it('shows DT Delivery and Acceptance side by side, from one read', async () => {
+// The month the browser calls "now", the same way the page asks for it.
+const RUNNING = currentShamsiPeriod()
+const isRunning = (p) => p.year === RUNNING.year && p.month === RUNNING.month
+
+/** Queues keyed by month (running or planning) and stream. */
+const queuesBy = (table) => (params) => {
+  const rows = table[isRunning(params) ? 'running' : 'planning']?.[params.stream] ?? []
+  return queue(rows, { current_month: {} })
+}
+
+// Two decisions for the planning month (one per stream) and a revision on
+// the running month: three things waiting on the PM.
+const WAITING_QUEUES = queuesBy({
+  planning: {
+    DT: [queueRow(), queueRow({ contractor_id: 2, contractor_name: 'Beta Networks', plan_id: 12, status: 'Approved' })],
+    ACCEPTANCE: [queueRow({ plan_id: 21 })],
+  },
+  running: {
+    DT: [queueRow({ contractor_id: 3, contractor_name: 'Gamma Survey', plan_id: 31, status: 'RevisionRequested', in_force_count: 30 })],
+    ACCEPTANCE: [queueRow({ plan_id: 41, status: 'Approved' })],
+  },
+})
+const NOTHING_WAITING = queuesBy({
+  planning: { DT: [queueRow({ status: 'Approved' })], ACCEPTANCE: [queueRow({ plan_id: 21, status: 'Draft' })] },
+  running: { DT: [queueRow({ status: 'Approved' })], ACCEPTANCE: [] },
+})
+
+/** Where the router is, and whether it got there by a push. */
+function LocationProbe() {
+  const location = useLocation()
+  const type = useNavigationType()
+  return <output data-testid="location">{`${type} ${location.search}`}</output>
+}
+const showWithProbe = (path = '/monthly-plan') =>
+  render(
+    <MemoryRouter initialEntries={[path]}>
+      <ToastProvider><MonthlyPlan /><LocationProbe /></ToastProvider>
+    </MemoryRouter>,
+  )
+
+const tabNames = () => screen.getAllByRole('tab').map((t) => t.textContent)
+const selectedTab = () => screen.getAllByRole('tab').find((t) => t.getAttribute('aria-selected') === 'true')
+
+describe('the PM page: two tabs', () => {
+  it('has Plans then PIP vs Achieved, and opens on PIP vs Achieved', async () => {
+    signedInAs('PM')
+    serveOverview(overview(), { queues: NOTHING_WAITING })
+    show()
+
+    await screen.findByRole('region', { name: 'DT Delivery' })
+    expect(tabNames()).toEqual(['Plans', 'PIP vs Achieved'])
+    expect(selectedTab()).toHaveTextContent('PIP vs Achieved')
+    expect(screen.getByText('Month-end')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Monthly Plan' })).toBeInTheDocument()
+  })
+
+  it('opens the Plans tab from the address, on the month being planned', async () => {
+    signedInAs('PM')
+    serveOverview(overview(), { queues: NOTHING_WAITING })
+    show('/monthly-plan?tab=plans')
+
+    await waitFor(() => expect(selectedTab()).toHaveTextContent('Plans'))
+    const planning = nextPeriod(RUNNING.year, RUNNING.month)
+    expect(screen.getByTestId('mp-period')).toHaveTextContent(`${shamsiMonthName(planning.month)} ${planning.year}`)
+    // The overview belongs to the other tab and is not read for this one.
+    expect(api.get).not.toHaveBeenCalledWith('/pip/overview', expect.anything())
+  })
+
+  it('opens PIP vs Achieved for a tab it does not know', async () => {
+    signedInAs('PM')
+    serveOverview(overview(), { queues: NOTHING_WAITING })
+    show('/monthly-plan?tab=ledger')
+
+    await screen.findByRole('region', { name: 'DT Delivery' })
+    expect(selectedTab()).toHaveTextContent('PIP vs Achieved')
+  })
+
+  it('pushes each tab change into history and keeps each tab’s month', async () => {
+    signedInAs('PM')
+    serveOverview(overview(), { queues: NOTHING_WAITING })
+    showWithProbe()
+
+    await screen.findByRole('region', { name: 'DT Delivery' })
+    await userEvent.click(screen.getByRole('button', { name: 'Previous' }))
+    const pipMonth = screen.getByTestId('mp-period').textContent
+
+    await userEvent.click(screen.getByRole('tab', { name: /Plans/ }))
+    expect(screen.getByTestId('location')).toHaveTextContent('PUSH ?tab=plans')
+    const plansMonth = screen.getByTestId('mp-period').textContent
+    expect(plansMonth).not.toBe(pipMonth)
+
+    await userEvent.click(screen.getByRole('tab', { name: 'PIP vs Achieved' }))
+    expect(screen.getByTestId('location').textContent).toBe('PUSH ')
+    expect(screen.getByTestId('mp-period')).toHaveTextContent(pipMonth)
+  })
+
+  it('counts waiting decisions per stream, plus revisions, on the Plans tab', async () => {
+    signedInAs('PM')
+    serveOverview(overview(), { queues: WAITING_QUEUES })
+    show()
+
+    // DT Alpha and Acceptance Alpha submitted, and Gamma's DT revision.
+    const badge = await screen.findByLabelText('3 waiting')
+    expect(badge).toHaveTextContent('3')
+    expect(within(screen.getByRole('tab', { name: /Plans/ })).getByText('3')).toBe(badge)
+  })
+
+  it('hides the badge when nothing is waiting', async () => {
+    signedInAs('PM')
+    serveOverview(overview(), { queues: NOTHING_WAITING })
+    show()
+
+    await screen.findByRole('region', { name: 'DT Delivery' })
+    await waitFor(() => expect(api.get.mock.calls.filter(([url]) => url === '/pip/queue').length).toBe(4))
+    expect(screen.getByRole('tab', { name: /Plans/ })).toHaveTextContent(/^Plans$/)
+  })
+
+  it.each(['Coordinator', 'Viewer'])('shows a %s no badge, since nothing waits on them', async (role) => {
+    signedInAs(role)
+    serveOverview(overview(), { queues: WAITING_QUEUES })
+    show()
+
+    await screen.findByRole('region', { name: 'DT Delivery' })
+    expect(screen.queryByLabelText(/waiting/)).toBeNull()
+    expect(screen.getByRole('tab', { name: /Plans/ })).toHaveTextContent(/^Plans$/)
+  })
+
+  it('still sends a contractor to their own screen, with no tabs', async () => {
+    signedInAs('Contractor')
+    serve({ my: context() })
+    show('/monthly-plan?tab=plans')
+
+    await screen.findByText('Planning مهر 1405')
+    expect(screen.queryByRole('tablist')).toBeNull()
+    expect(api.get).not.toHaveBeenCalledWith('/pip/queue', expect.anything())
+  })
+})
+
+// An Action Center link to a plan waiting on the PM, which opens its drawer.
+const DRAWER_LINK = '/monthly-plan?year=1405&month=8&stream=ACCEPTANCE&contractor=1'
+
+describe('PIP vs Achieved', () => {
+  it('shows DT Delivery above Acceptance, from one read', async () => {
     signedInAs('PM')
     serveOverview()
     show()
 
     const dt = await screen.findByRole('region', { name: 'DT Delivery' })
     const acc = screen.getByRole('region', { name: 'Acceptance' })
+    expect(dt.compareDocumentPosition(acc) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     expect(within(dt).getByText('Assignment', { selector: '.mp-kpi-label' })).toBeInTheDocument()
     expect(within(acc).queryByText('Assignment')).toBeNull()
     expect(within(dt).getByText('−7 vs internal')).toBeInTheDocument()
@@ -951,9 +1099,10 @@ describe('the PM split screen', () => {
     const reads = api.get.mock.calls.filter(([url]) => url === '/pip/overview')
     expect(reads).toHaveLength(1)
     expect(reads[0][1].params).toMatchObject({ period: 'month' })
-    // The old ledger and queue table are not on the page.
+    // The old ledger and queue table are not on the page, nor the strip.
     expect(api.get).not.toHaveBeenCalledWith('/pip/scorecard', expect.anything())
     expect(document.querySelector('table')).toBeNull()
+    expect(screen.queryByText(/Needs attention/)).toBeNull()
   })
 
   it('renders Not submitted and PIP > assignment', async () => {
@@ -969,30 +1118,11 @@ describe('the PM split screen', () => {
     expect(beta.querySelector('.mp-bar-tick-over')).not.toBeNull()
   })
 
-  it('opens the decision drawer from a Needs attention chip, on that stream and month', async () => {
-    signedInAs('PM')
-    serveOverview()
-    show()
-
-    expect(await screen.findByText('Needs attention · 2')).toBeInTheDocument()
-    await userEvent.click(screen.getByText('Acceptance آبان · 20 awaiting approval'))
-
-    const drawer = await screen.findByRole('dialog', { name: 'Plan decision' })
-    expect(api.get).toHaveBeenCalledWith('/pip/queue', { params: { year: 1405, month: 8, stream: 'ACCEPTANCE' } })
-    expect(await within(drawer).findByRole('button', { name: 'Approve 20' })).toBeInTheDocument()
-    await waitFor(() =>
-      expect(api.get).toHaveBeenCalledWith('/pip/revisions', {
-        params: { year: 1405, month: 8, stream: 'ACCEPTANCE', contractor_id: 1 },
-      }),
-    )
-  })
-
   it('approves through /pip/{id}/approve and reloads the page', async () => {
     signedInAs('PM')
     serveOverview()
-    show()
+    show(DRAWER_LINK)
 
-    await userEvent.click(await screen.findByText('Acceptance آبان · 20 awaiting approval'))
     const drawer = await screen.findByRole('dialog', { name: 'Plan decision' })
     await userEvent.click(await within(drawer).findByRole('button', { name: 'Approve 20' }))
 
@@ -1005,9 +1135,8 @@ describe('the PM split screen', () => {
   it('will not return without a comment', async () => {
     signedInAs('PM')
     serveOverview()
-    show()
+    show(DRAWER_LINK)
 
-    await userEvent.click(await screen.findByText('Acceptance آبان · 20 awaiting approval'))
     const drawer = await screen.findByRole('dialog', { name: 'Plan decision' })
     const ret = await within(drawer).findByRole('button', { name: 'Return' })
     expect(ret).toBeDisabled()
@@ -1017,7 +1146,7 @@ describe('the PM split screen', () => {
   })
 
   it('opens the drawer from a contractor row', async () => {
-    signedInAs('PM')
+    signedInAs('Coordinator')
     serveOverview()
     show()
 
@@ -1030,9 +1159,8 @@ describe('the PM split screen', () => {
   it('shows a non-PM the drawer read-only, with no Approve and no Set link', async () => {
     signedInAs('Coordinator')
     serveOverview()
-    show()
+    show(DRAWER_LINK)
 
-    await userEvent.click(await screen.findByText('Acceptance آبان · 20 awaiting approval'))
     const drawer = await screen.findByRole('dialog', { name: 'Plan decision' })
     expect(await within(drawer).findByText('Waiting on the PM’s decision.')).toBeInTheDocument()
     expect(within(drawer).queryByRole('button', { name: /approve/i })).toBeNull()
@@ -1074,6 +1202,17 @@ describe('the PM split screen', () => {
     )
     await waitFor(() => expect(screen.queryByText('By today 19 (+2)')).toBeNull())
     expect(screen.getAllByText('This period').length).toBe(2)
+  })
+
+  it('offers the Month / Year / Since start switch on this tab only', async () => {
+    signedInAs('PM')
+    serveOverview(overview(), { queues: NOTHING_WAITING })
+    show()
+
+    await screen.findByRole('region', { name: 'DT Delivery' })
+    expect(screen.getByRole('group', { name: 'Period' })).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('tab', { name: /Plans/ }))
+    expect(screen.queryByRole('group', { name: 'Period' })).toBeNull()
   })
 })
 

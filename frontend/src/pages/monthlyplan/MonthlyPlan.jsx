@@ -11,17 +11,17 @@ import PmPlan from './PmPlan'
 /**
  * The monthly plan (PIP), which is two screens wearing one name.
  *
- * A contractor sees their own form. Everyone else sees the PM's split screen
- * (PmPlan): DT Delivery and Acceptance side by side, with decisions made in a
- * drawer, and only the PM can make one.
+ * A contractor sees their own form. Everyone else sees the PM's page
+ * (PmPlan): a Plans tab and a PIP vs Achieved tab, and only the PM can
+ * decide a plan.
  *
  * The role checks here decide what is offered, not what is allowed. Every
  * endpoint behind this screen re-checks the caller, and each panel below
  * handles the 403 that arrives when this disagrees with the server.
  *
- * The old PM screen's queue table, month-by-month ledger, shortfall card and
- * commitment chart are no longer rendered here: the drawer decides, and the
- * ledger is in Export Excel. Their components are kept.
+ * The old PM screen's month-by-month ledger, shortfall card and commitment
+ * chart are no longer rendered here: the ledger is in Export Excel. Their
+ * components are kept.
  */
 export default function MonthlyPlan() {
   const { user } = useAuth()

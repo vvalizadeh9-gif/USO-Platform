@@ -4076,9 +4076,9 @@ a.lifecycle-step:focus-visible { outline: 2px solid var(--signal); outline-offse
 }
 
 
-/* ---------- Monthly Plan: the PM's split screen (PmPlan / StreamPanel) ----------
-   Built to fit 1440x900 with the sidebar and no page scroll: tight rows,
-   small type for the secondary lines, and the decision queue in a drawer. */
+/* ---------- Monthly Plan: the PM's two tabs (PmPlan / PipTab / StreamPanel) ----------
+   Built to fit 1440x900 with the sidebar: tight rows, small type for the
+   secondary lines, and a single plan's history in a drawer. */
 .mp-page { display: flex; flex-direction: column; gap: 10px; }
 .mp-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
 .mp-title { font-size: 24px; }
@@ -4087,20 +4087,17 @@ a.lifecycle-step:focus-visible { outline: 2px solid var(--signal); outline-offse
 .mp-picker-label { font-family: var(--font-farsi); font-weight: 600; font-size: 15px; min-width: 104px; text-align: center; }
 .mp-picker-sub { font-size: 11.5px; color: var(--text-dim); }
 
-.mp-attention { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12.5px; min-height: 28px; }
-.mp-attention-title { font-weight: 600; color: var(--text-muted); margin-inline-end: 4px; }
-.mp-chip {
-  display: inline-flex; align-items: center; gap: 6px;
-  border: 1px solid var(--border); background: var(--surface-1);
-  border-radius: 999px; padding: 3px 10px; font: inherit; font-size: 12px; cursor: pointer;
-  color: var(--text-muted);
+.mp-page .page-head { margin-bottom: 0; }
+.mp-tabs { border-bottom: 1px solid var(--divider); }
+/* The Plans tab's count of decisions waiting on the PM. */
+.mp-badge {
+  display: inline-grid; place-items: center;
+  min-width: 20px; height: 20px; padding: 0 6px; margin-inline-start: 6px;
+  border-radius: 999px; background: var(--accent-soft); color: var(--accent-ink);
+  font-size: 12px; font-weight: 600; line-height: 1;
 }
-.mp-chip:hover { border-color: var(--text-dim); }
-.mp-chip i { width: 8px; height: 8px; border-radius: 50%; flex: 0 0 auto; }
-.mp-chip b { color: var(--text); font-weight: 600; }
 
-.mp-halves { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; align-items: start; }
-@media (max-width: 1100px) { .mp-halves { grid-template-columns: 1fr; } }
+.mp-stack { display: grid; gap: 14px; }
 .mp-half { padding: 12px 14px 12px; min-width: 0; }
 .mp-half-head { display: flex; align-items: baseline; gap: 8px; }
 .mp-half-head h2 { font-size: 16px; }

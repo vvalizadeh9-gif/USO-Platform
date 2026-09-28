@@ -59,7 +59,7 @@ function MiniBar({ delivered, pip }) {
  * Manager, Viewer, Admin -- reads it and gets no decision, because the target
  * is the PM's to set. The server says the same thing and is what enforces it.
  */
-export default function PlanQueue({ period, canDecide }) {
+export default function PlanQueue({ period, canDecide, onDecided }) {
   const toast = useToast()
   const [data, setData] = useState(null)
   const [denied, setDenied] = useState(false)
@@ -135,6 +135,7 @@ export default function PlanQueue({ period, canDecide }) {
       setSelectedId(null)
       setComment('')
       load()
+      onDecided?.()
     } catch (err) {
       toast.error('Could not save', err.response?.data?.detail || 'Please try again.')
     } finally {
