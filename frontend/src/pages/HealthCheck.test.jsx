@@ -6,12 +6,17 @@
 // worth a test: the Action Center URLs the server builds still say
 // ?tab=dt-assign, so the redirect is what keeps those links working — and it
 // is invisible from the backend's side if it breaks.
-import { act, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen } from '@testing-library/react'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 
+const COUNTS = vi.hoisted(() => ({
+  pool: 1012, in_progress: 320, hc_in_progress_late: 4, hc_review: 12, remediation: 9, reroutes: 0,
+}))
 vi.mock('../api/client', () => ({
-  default: { get: vi.fn(() => Promise.resolve({ data: {} })) },
+  default: {
+    get: vi.fn((url) => Promise.resolve({ data: url === '/hc/queues/counts' ? COUNTS : {} })),
+  },
 }))
 
 // The tab bodies each fetch their own queue. This is a test about which tab
@@ -28,9 +33,6 @@ vi.mock('../context/AuthContext', () => ({
   useAuth: () => ({ user: { role: { name: 'Coordinator' } } }),
 }))
 
-vi.mock('../components/LifecycleStrip', () => ({
-  default: () => <nav data-testid="strip" />,
-}))
 
 const HealthCheck = (await import('./HealthCheck')).default
 
@@ -88,25 +90,49 @@ describe('tab keys that only got renamed', () => {
 })
 
 describe('the tab row reads as an order', () => {
+  const tab = (name) => screen.getByRole('tab', { name })
+
   it('puts the fix loop in one group and History at the far end', async () => {
     await landOn('/health-check')
 
-    const group = document.querySelector('.tab-group')
-    expect([...group.querySelectorAll('button')].map((b) => b.textContent.trim())).toEqual([
-      'Remediation',
+    const group = document.querySelector('.ui-tab-group')
+    expect(group).toHaveTextContent('Fix loop')
+    expect([...group.querySelectorAll('[role="tab"]')].map((b) => b.textContent)).toEqual([
+      'Remediation9',
       'Re-routes',
     ])
     // No chevron inside the group: neither queue follows the other.
-    expect(group.querySelector('.tab-sep')).toBeNull()
-
-    const end = document.querySelector('.tab-end')
-    expect(end.textContent.trim()).toBe('History')
+    expect(group.querySelector('.ui-tab-sep')).toBeNull()
+    expect(document.querySelector('.ui-tab-end')).toHaveTextContent('History')
   })
 
   it('separates the steps before the group with a chevron each', async () => {
     await landOn('/health-check')
     // Three steps: the first has no separator, so two chevrons between them,
     // plus one before the fix loop.
-    expect(document.querySelectorAll('.tabs-steps > .tab-step > .tab-sep')).toHaveLength(3)
+    expect(document.querySelectorAll('.ui-tabs > .ui-tab-sep')).toHaveLength(3)
+  })
+
+  it('counts each queue, and puts the late health checks on In Progress', async () => {
+    await landOn('/health-check')
+    expect(tab(/HC Pool/)).toHaveTextContent('1012')
+    const running = tab(/In Progress/)
+    expect(running.querySelector('.ui-tab-count')).toHaveTextContent('320')
+    expect(running.querySelector('.ui-tab-alert')).toHaveTextContent('4 late')
+    // A queue at zero carries no chip.
+    expect(tab('Re-routes').querySelector('.ui-tab-count')).toBeNull()
+  })
+
+  it('sits under a PageBar with the process stepper on step 2', async () => {
+    await landOn('/health-check')
+    expect(screen.getByRole('heading', { level: 1, name: 'Health Check' }).closest('.page-bar')).not.toBeNull()
+    expect(screen.getByText('Health Check', { selector: '.stepper-label' }).closest('[aria-current="step"]')).not.toBeNull()
+  })
+
+  it('switches tabs with the keyboard', async () => {
+    await landOn('/health-check')
+    tab(/HC Pool/).focus()
+    fireEvent.keyDown(tab(/HC Pool/), { key: 'ArrowRight' })
+    expect(screen.getByTestId('tab')).toHaveTextContent('running')
   })
 })

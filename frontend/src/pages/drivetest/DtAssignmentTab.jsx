@@ -1,12 +1,13 @@
 import { Radio, Search } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import api from '../../api/client'
-import BulkActionBar from '../../components/BulkActionBar'
+import AssignDock from '../../components/AssignDock'
 import ProvinceFilter from '../../components/ProvinceFilter'
 import SiteHistoryDrawer, { SiteCodeButton } from '../../components/SiteHistoryDrawer'
 import WaitingPill from '../../components/WaitingPill'
-import { EmptyState, Loading } from '../../components/ui'
+import { Card, EmptyState, Loading } from '../../components/ui'
 import { useToast } from '../../context/ToastContext'
+import { DT_ASSIGNMENT_WAITING } from '../../lib/waiting'
 
 /**
  * Sites cleared for an official drive test and not yet assigned to one.
@@ -29,6 +30,7 @@ export default function DtAssignmentTab({ onCountChange }) {
   const [query, setQuery] = useState('')
   const [provinceSel, setProvinceSel] = useState(() => new Set())
   const [busy, setBusy] = useState(false)
+  const [assigned, setAssigned] = useState(0)
   const [history, setHistory] = useState({ id: null, code: null })
 
   function load() {
@@ -104,6 +106,7 @@ export default function DtAssignmentTab({ onCountChange }) {
         'They move to the contractor’s queue for the drive test.',
       )
       setContractorId('')
+      setAssigned((n) => n + 1)
       load()
     } catch (err) {
       toast.error('Assign failed', err.response?.data?.detail || 'Please try again.')
@@ -114,150 +117,149 @@ export default function DtAssignmentTab({ onCountChange }) {
 
   if (!rows) return <Loading label="Loading sites ready for drive test" />
 
-  if (rows.length === 0) {
-    return (
-      <div className="card card-pad">
-        <EmptyState
-          title="No sites waiting for a drive test"
-          hint="A site appears here once its health check passes and you confirm it."
-        />
-      </div>
-    )
-  }
-
   return (
-    <div className="card" style={{ overflow: 'hidden' }}>
-      <div className="card-pad" style={{ paddingBottom: 12 }}>
-        <div className="row between wrap" style={{ gap: 12 }}>
-          <div style={{ position: 'relative', flex: 1, minWidth: 200 }}>
-            <Search size={15} style={{ position: 'absolute', left: 10, top: 11, color: 'var(--text-dim)' }} />
-            <input
-              className="input"
-              style={{ paddingLeft: 32 }}
-              placeholder="Search site ID…"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-            />
-          </div>
-          <ProvinceFilter
-            options={provinceOptions}
-            selected={provinceSel}
-            onToggle={toggleProvince}
-            onClear={() => setProvinceSel(new Set())}
-          />
-        </div>
-        <div className="row between" style={{ marginTop: 8 }}>
-          <span className="dim" style={{ fontSize: 'var(--fs-caption)' }}>Sorted: waiting longest first</span>
-          {(query.trim() || provinceSel.size > 0) && (
-            <span className="dim" style={{ fontSize: 'var(--fs-caption)' }}>
-              {filtered.length} of {rows.length}
-            </span>
-          )}
-        </div>
-      </div>
-
-      <div style={{ maxHeight: 520, overflowY: 'auto' }}>
-        <table>
-        <thead>
-          <tr>
-            <th style={{ width: 40 }}>
+    <>
+      <Card
+        className="card-fill queue-card"
+        icon={Radio}
+        title="Assignment"
+        description="Sites confirmed Ready by health check. Tick the ones to drive-test, then choose a contractor below."
+        actions={
+          <>
+            <label className="search-box">
+              <Search size={16} aria-hidden="true" />
               <input
-                type="checkbox"
-                checked={allSelected}
-                onChange={() =>
-                  setSelected(
-                    allSelected ? new Set() : new Set(filtered.map((r) => r.work_item_id)),
-                  )
-                }
+                className="input"
+                placeholder="Search site ID…"
+                aria-label="Search site ID"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
               />
-            </th>
-            <th>Site ID</th>
-            <th>Province</th>
-            <th>Requested Tech</th>
-            <th>Rounds</th>
-            <th>HC Contractor</th>
-            <th>Waiting</th>
-          </tr>
-        </thead>
-        <tbody>
-          {filtered.map((r) => (
-            <tr
-              key={r.work_item_id}
-              className={selected.has(r.work_item_id) ? 'row-selected' : ''}
-              onClick={() => toggle(r.work_item_id)}
-              style={{
-                cursor: 'pointer',
-                ...(selected.has(r.work_item_id) ? { background: 'var(--signal-glow)' } : {}),
-              }}
-            >
-              <td onClick={(e) => e.stopPropagation()}>
-                <input
-                  type="checkbox"
-                  checked={selected.has(r.work_item_id)}
-                  onChange={() => toggle(r.work_item_id)}
-                />
-              </td>
-              <td onClick={(e) => e.stopPropagation()}>
-                <SiteCodeButton
-                  workItemId={r.work_item_id}
-                  siteCode={r.site_code}
-                  onOpen={(id, code) => setHistory({ id, code })}
-                />
-              </td>
-              <td className="text-data dim">{r.province || '—'}</td>
-              <td>
-                <div className="row" style={{ gap: 5 }}>
-                  {r.requested_technologies.map((t) => (
-                    <span key={t} className="pill pill-dim" style={{ fontSize: 'var(--fs-caption)' }}>{t}</span>
-                  ))}
-                </div>
-              </td>
-              <td>
-                {/* Only a site that needed more than one pass says so. */}
-                {r.rounds_taken > 1 ? (
-                  <span className="pill pill-cyan" style={{ fontSize: 'var(--fs-caption)' }}>
-                    {r.rounds_taken} rounds
-                  </span>
-                ) : (
-                  <span className="dim tnum">1</span>
-                )}
-              </td>
-              <td className="text-data dim">{r.hc_contractor || '—'}</td>
-              <td>
-                <WaitingPill days={r.days_waiting} />
-                {r.returned_reason && (
-                  <span
-                    className="pill pill-amber"
-                    style={{ marginLeft: 6, fontSize: 'var(--fs-caption)' }}
-                    title={r.returned_reason}
-                  >
-                    Handed back
-                  </span>
-                )}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-        </table>
-      </div>
+            </label>
+            <ProvinceFilter
+              options={provinceOptions}
+              selected={provinceSel}
+              onToggle={toggleProvince}
+              onClear={() => setProvinceSel(new Set())}
+            />
+          </>
+        }
+      >
+        <div className="queue-toolbar">
+          <span className="queue-meta">Sorted: waiting longest first</span>
+          <span className="queue-meta tnum">
+            {query.trim() || provinceSel.size > 0
+              ? `${filtered.length} of ${rows.length} sites ready`
+              : `${rows.length} site${rows.length === 1 ? '' : 's'} ready`}
+          </span>
+        </div>
 
-      <BulkActionBar
-        selectedCount={selected.size}
-        onClear={() => setSelected(new Set())}
-        contractors={contractors}
-        contractorId={contractorId}
-        onSelectContractor={setContractorId}
-        onAssign={assign}
-        busy={busy}
-        primaryLabel={`Assign drive test (${selected.size})`}
-        primaryIcon={Radio}
-      />
+        {rows.length === 0 ? (
+          <EmptyState
+            title="No sites waiting for a drive test"
+            hint="A site appears here once its health check passes and you confirm it."
+          />
+        ) : (
+          <div className="table-scroll">
+            <table className="table table-compact queue-table">
+              <thead>
+                <tr>
+                  <th className="col-check">
+                    <input
+                      type="checkbox"
+                      aria-label="Select every site shown"
+                      checked={allSelected}
+                      onChange={() =>
+                        setSelected(allSelected ? new Set() : new Set(filtered.map((r) => r.work_item_id)))
+                      }
+                    />
+                  </th>
+                  <th>Site ID</th>
+                  <th>Province</th>
+                  <th>Requested tech</th>
+                  <th>Rounds</th>
+                  <th>HC contractor</th>
+                  <th>Waiting</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((r) => (
+                  <tr
+                    key={r.work_item_id}
+                    className={`row-action${selected.has(r.work_item_id) ? ' row-selected' : ''}`}
+                    onClick={() => toggle(r.work_item_id)}
+                  >
+                    <td className="col-check" onClick={(e) => e.stopPropagation()}>
+                      <input
+                        type="checkbox"
+                        aria-label={`Select ${r.site_code || 'site'}`}
+                        checked={selected.has(r.work_item_id)}
+                        onChange={() => toggle(r.work_item_id)}
+                      />
+                    </td>
+                    <td onClick={(e) => e.stopPropagation()}>
+                      <SiteCodeButton
+                        workItemId={r.work_item_id}
+                        siteCode={r.site_code}
+                        onOpen={(id, code) => setHistory({ id, code })}
+                      />
+                    </td>
+                    <td className="text-farsi">{r.province || '—'}</td>
+                    <td>
+                      <span className="tech-chips">
+                        {r.requested_technologies.map((t) => (
+                          <span key={t} className="pill pill-dim">{t}</span>
+                        ))}
+                      </span>
+                    </td>
+                    <td>
+                      {/* Only a site that needed more than one pass says so. */}
+                      {r.rounds_taken > 1 ? (
+                        <span className="pill pill-dim">{r.rounds_taken} rounds</span>
+                      ) : (
+                        <span className="tnum">1</span>
+                      )}
+                    </td>
+                    <td className="text-farsi">{r.hc_contractor || '—'}</td>
+                    <td>
+                      <span className="queue-outstanding">
+                        <WaitingPill days={r.days_waiting} thresholds={DT_ASSIGNMENT_WAITING} />
+                        {r.returned_reason && (
+                          <span className="pill pill-amber" title={r.returned_reason}>
+                            Handed back
+                          </span>
+                        )}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
+
+      {rows.length > 0 && (
+        <AssignDock
+          kind="dt"
+          selectedCount={selected.size}
+          onClear={() => setSelected(new Set())}
+          contractors={contractors}
+          contractorId={contractorId}
+          onSelectContractor={setContractorId}
+          onAssign={assign}
+          busy={busy}
+          actionLabel="Assign drive test"
+          hint="Any contractor can take a site: the health-check one has no privilege."
+          reloadKey={assigned}
+        />
+      )}
 
       <SiteHistoryDrawer
         workItemId={history.id}
         siteCode={history.code}
         onClose={() => setHistory({ id: null, code: null })}
       />
-    </div>
+    </>
   )
 }

@@ -37,6 +37,12 @@ from app.services.tech_parser import parse_technologies
 from app.services.visibility import visible_work_item_ids
 
 
+#: A health check out with a subcontractor for longer than this is late: the
+#: In Progress tab's "N late" chip and the assignment dock's late share both
+#: count past it. One constant, so the badge and the rows cannot disagree.
+HC_LATE_AFTER_DAYS = 14
+
+
 def _now() -> datetime:
     return datetime.now(timezone.utc)
 
@@ -94,6 +100,7 @@ def in_progress(db: Session, user: User) -> list[dict]:
             {
                 "assignment_id": assignment.id,
                 "code": assignment.code,
+                "contractor_id": assignment.contractor_id,
                 "contractor_name": (
                     assignment.contractor.name if assignment.contractor else None
                 ),
@@ -335,6 +342,7 @@ def dt_in_progress(
                 "requested_technologies": parse_technologies(
                     wi.requested_technology
                 ),
+                "contractor_id": assignment.contractor_id,
                 "contractor_name": contractors.get(assignment.contractor_id),
                 "assigned_at": _aware(assignment.assigned_at),
                 "days_since_assigned": _days_since(assignment.assigned_at) or 0,
@@ -608,6 +616,17 @@ def _counts(db: Session, user: User) -> dict[str, int]:
             HcTask.completed_at.is_(None),
         )
     ).scalar_one()
+    # The same assignments ``in_progress`` lists, by the same day arithmetic
+    # (``_days_since``), counted when past the late line.
+    in_progress_late = sum(
+        1
+        for (assigned_at,) in db.execute(
+            select(HcAssignment.assigned_at).where(
+                HcAssignment.id.in_(visible_assignments)
+            )
+        )
+        if (_days_since(assigned_at) or 0) > HC_LATE_AFTER_DAYS
+    )
 
     # --- Remediation board and re-route decisions -----------------------
     open_fixes = select(func.count(HcRemediation.id)).where(
@@ -655,6 +674,7 @@ def _counts(db: Session, user: User) -> dict[str, int]:
         # started carrying sites that are mid-check those are two numbers.
         "pool_assignable": pool_assignable,
         "in_progress": in_progress_sites,
+        "hc_in_progress_late": in_progress_late,
         "hc_review": _hc_review_count(db, user),
         "remediation": remediation,
         "reroutes": reroute_count,

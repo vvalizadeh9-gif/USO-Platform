@@ -598,7 +598,9 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
 /* ---------- A fill page (components/PageFrame.jsx) ----------
    Header, body, dock. The body takes the height left over; a card in it that
    holds a long list is .card-fill, and the list scrolls in .table-scroll
-   under a sticky header. */
+   under a sticky header. A body whose content is taller than the space --
+   a long tab that is not a one-screen design, like HC Review -- scrolls
+   inside the frame rather than being clipped; the document never does. */
 .page-frame {
   flex: 1 1 auto;
   min-height: 0;
@@ -612,6 +614,7 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
   flex-direction: column;
   gap: 16px;
   padding: 20px 32px 24px;
+  overflow-y: auto;
 }
 .page-dock:empty { display: none; }
 .card-fill {
@@ -983,6 +986,12 @@ a.stepper-step:focus-visible { outline: 2px solid var(--accent); outline-offset:
 }
 .stepper-step.is-current { background: var(--accent-wash); color: var(--accent-ink); font-weight: 600; box-shadow: inset 0 0 0 1px var(--accent-track); }
 .stepper-step.is-current .stepper-num { background: var(--accent); border-color: var(--accent); color: var(--text-on-accent); }
+/* A narrower header: tabs drop their icons (the labels carry them), so a
+   process row of six tabs still fits at 1280. */
+@media (max-width: 1360px) {
+  .page-bar .ui-tab > svg { display: none; }
+  .page-bar .ui-tab { padding: 0 10px; }
+}
 /* A narrower header keeps the current step's name and numbers the rest. */
 @media (max-width: 1360px) {
   .stepper-step:not(.is-current) .stepper-label { display: none; }
@@ -1132,24 +1141,133 @@ a.stepper-step:focus-visible { outline: 2px solid var(--accent); outline-offset:
 }
 .badge-active { background: #0b7f73; color: #fff; }
 
-/* The shared bottom bar on a bulk-assign screen (HC Pool, DT Assignment).
-   Sits as the last element of a height-bounded table card, so it is on
-   screen the moment the tab has rows -- no scrolling back up to reach it. */
-.bulk-bar {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 16px;
-  padding: 14px 20px;
-  border-top: 1px solid var(--border);
-  background: var(--surface-1);
+/* ---------- A queue in a fill-height card (HC Pool, HC In Progress, DT
+   Assignment) ----------
+   The card's head carries the filters; a toolbar row (state filter, meta);
+   the table scrolling under a sticky header; a foot row. */
+.queue-card.ui-card { padding: 16px 20px 12px; gap: 12px; }
+.queue-card .ui-card-actions { flex-wrap: nowrap; justify-content: flex-end; }
+.queue-card .ui-card-desc { font-size: var(--fs-meta); line-height: var(--lh-meta); }
+.queue-toolbar { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; flex: none; }
+.queue-meta { font-size: var(--fs-meta); line-height: var(--lh-meta); color: var(--text-tertiary); }
+.queue-foot {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px; flex: none;
+  padding-top: 10px; border-top: 1px solid var(--divider);
+  font-size: var(--fs-meta); line-height: var(--lh-meta); color: var(--text-secondary);
 }
-.bulk-bar-count {
-  display: flex; align-items: center; gap: 10px;
-  font-size: 13px; font-weight: 500; color: var(--text-muted);
-  white-space: nowrap;
+.queue-foot:only-child { border-top: 0; }
+.queue-table .col-check { width: 44px; }
+.queue-table input[type='checkbox'] { width: 16px; height: 16px; accent-color: var(--accent); }
+.queue-site { display: inline-flex; align-items: center; gap: 8px; }
+.queue-code { font-weight: 600; white-space: nowrap; }
+.queue-date { color: var(--text-secondary); }
+select.queue-select { width: auto; min-width: 190px; height: 36px; padding: 0 32px 0 12px; line-height: 20px; }
+.queue-expand {
+  display: grid; place-items: center; width: 28px; height: 28px;
+  border: 0; border-radius: var(--radius-sm); background: none; color: var(--text-secondary);
 }
-.bulk-bar-chips { flex: 1; min-width: 200px; }
+.queue-expand:hover { background: var(--track); color: var(--text); }
+.queue-expand:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.queue-progress { display: inline-flex; align-items: center; gap: 10px; white-space: nowrap; }
+.queue-meter { width: 140px; }
+.queue-outstanding { display: inline-flex; align-items: center; gap: 8px; }
+.queue-outstanding .is-late { color: var(--danger-ink); font-weight: 600; }
+.queue-detail td { background: var(--surface-subtle); padding-block: 10px; height: auto; }
+.queue-detail-label { margin-bottom: 6px; font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--text-tertiary); font-weight: 600; }
+/* Rows: a pointer where a click does something, the accent wash when
+   ticked (selection is the accent), dimmed when counted but not actionable. */
+.table tbody tr.row-action { cursor: pointer; }
+.table tbody tr.row-selected, .table tbody tr.row-selected:hover { background: var(--accent-wash); }
+.table tbody tr.row-muted td { color: var(--text-tertiary); }
+.table tbody tr.row-muted .pill, .table tbody tr.row-muted input { opacity: 0.7; }
+.text-farsi { font-family: var(--font-farsi); font-size: var(--fs-body); line-height: var(--lh-body); }
+.tech-chips { display: inline-flex; flex-wrap: wrap; gap: 4px; }
+.seg-count { margin-inline-start: 4px; font-weight: 500; color: var(--text-tertiary); }
+.ui-seg-option[aria-pressed='true'] .seg-count { color: var(--text-secondary); }
+/* A neutral count beside a card's title. */
+.count-chip {
+  display: inline-flex; align-items: center; justify-content: center; vertical-align: middle;
+  min-width: 24px; height: 22px; padding: 0 8px; margin-inline-start: 6px; border-radius: 11px;
+  background: var(--neutral-soft); color: var(--neutral-ink);
+  font-size: var(--fs-caption); line-height: var(--lh-caption); font-weight: 600;
+}
+.search-box { position: relative; display: inline-flex; align-items: center; }
+.search-box svg { position: absolute; inset-inline-start: 10px; color: var(--text-tertiary); pointer-events: none; }
+.search-box .input { width: 240px; height: 36px; padding-inline-start: 34px; }
+
+/* ---------- The assignment dock (components/AssignDock.jsx) ----------
+   A row pinned to the bottom of the main column: the count, Clear, a hint
+   and the named action; under it every contractor as a tile, a radio group
+   with the open work each already holds. */
+.assign-dock {
+  display: flex; flex-direction: column; gap: 12px;
+  padding: 14px 32px 16px;
+  background: var(--surface); border-top: 1px solid var(--border);
+  box-shadow: 0 -4px 12px rgba(20, 27, 43, 0.05);
+}
+.assign-dock-top { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.assign-dock-count {
+  display: inline-flex; align-items: center; gap: 8px; white-space: nowrap;
+  font-size: var(--fs-control); line-height: var(--lh-control); font-weight: 600; color: var(--text);
+}
+.assign-dock-badge {
+  display: inline-grid; place-items: center; min-width: 28px; height: 24px; padding: 0 8px;
+  border-radius: 12px; background: var(--accent); color: var(--text-on-accent);
+  font-size: var(--fs-caption); font-weight: 600;
+}
+.assign-dock-hint {
+  flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: var(--fs-meta); line-height: var(--lh-meta); color: var(--text-tertiary);
+}
+.assign-dock-name { font-family: var(--font-farsi); }
+.assign-dock-empty { font-size: var(--fs-meta); color: var(--text-tertiary); }
+/* Always one row, the full width: the dock's height does not depend on how
+   many contractors there are. */
+.assign-tiles {
+  display: grid; gap: 10px;
+  grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr);
+}
+.assign-tile {
+  position: relative; display: flex; align-items: center; gap: 10px; min-width: 0;
+  padding: 10px 12px; text-align: start;
+  background: var(--surface); color: var(--text);
+  border: 1px solid var(--border); border-radius: var(--radius);
+  transition: box-shadow 0.14s, border-color 0.14s;
+}
+.assign-tile:hover { box-shadow: var(--shadow-2); border-color: var(--control-border); }
+.assign-tile:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.assign-tile-avatar {
+  display: grid; place-items: center; flex: none; width: 40px; height: 40px; border-radius: 50%;
+  background: var(--neutral-soft); color: var(--text-secondary);
+  font-family: var(--font-farsi); font-size: var(--fs-title); font-weight: 600;
+}
+.assign-tile-body { display: flex; flex-direction: column; gap: 4px; min-width: 0; flex: 1 1 auto; }
+.assign-tile-name {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-family: var(--font-farsi); font-size: var(--fs-title); line-height: var(--lh-title); font-weight: 600;
+}
+.assign-tile-meter { position: relative; display: block; height: 4px; border-radius: 2px; background: var(--track); overflow: hidden; }
+.assign-tile-meter i { position: absolute; inset-block: 0; inset-inline-start: 0; border-radius: 2px; }
+.assign-tile-open { background: var(--dt-muted); }
+.assign-tile-late { background: var(--danger-ink); }
+.assign-tile-load { font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--text-secondary); white-space: nowrap; }
+.assign-tile[aria-checked='true'] {
+  border: 2px solid var(--accent); padding: 9px 11px; background: var(--accent-wash);
+}
+.assign-tile[aria-checked='true'] .assign-tile-avatar { background: var(--accent); color: var(--text-on-accent); }
+.assign-tile[aria-checked='true'] .assign-tile-name { color: var(--accent-ink); }
+.assign-tile[aria-checked='true'] .assign-tile-open { background: var(--accent); }
+.assign-tile-check {
+  position: absolute; top: -8px; inset-inline-end: -8px;
+  display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%;
+  background: var(--accent); color: var(--text-on-accent); box-shadow: 0 0 0 2px var(--surface);
+}
+@media (max-height: 820px) {
+  .assign-dock { padding-block: 10px 12px; gap: 8px; }
+  .assign-tile { padding-block: 6px; }
+  .assign-tile[aria-checked='true'] { padding-block: 5px; }
+  .assign-tile-avatar { width: 36px; height: 36px; }
+}
 
 .empty {
   text-align: center; padding: 54px 20px; color: var(--text-dim);
@@ -1513,11 +1631,12 @@ a.stepper-step:focus-visible { outline: 2px solid var(--accent); outline-offset:
   white-space: nowrap;
   transition: background .14s ease, border-color .14s ease, color .14s ease;
 }
-.queue-filter:hover { background: var(--surface-2); color: var(--text); }
+.queue-filter:hover { background: var(--surface-subtle); color: var(--text); }
+/* Selected is Cobalt's selected state: the accent wash and the accent edge. */
 .queue-filter[aria-pressed="true"] {
-  background: rgba(14, 163, 148, 0.08);
-  border-color: var(--signal);
-  color: var(--signal-strong);
+  background: var(--accent-wash);
+  border-color: var(--accent);
+  color: var(--accent-ink);
 }
 .queue-filter .n { font-variant-numeric: tabular-nums; opacity: .75; margin-left: 4px; }
 
@@ -3389,7 +3508,6 @@ a.dt-contractor-name:hover { text-decoration: underline; text-decoration-color: 
 /* The dashboard is laid out to fit one screen at 1280x800 and up. If a
    payload ever makes it taller, its body scrolls inside the frame rather than
    being clipped -- the document itself still never scrolls. */
-.dt-page .page-body { overflow-y: auto; }
 .dt-pip-open {
   display: inline-flex; align-items: center; gap: 4px; white-space: nowrap;
   color: var(--text-link); font-weight: 600;
@@ -4321,7 +4439,6 @@ a.lifecycle-step:focus-visible { outline: 2px solid var(--signal); outline-offse
    The plan clock (two 13/18 lines), the month picker as one control, and
    Export. The Plans tab is a long board: its body scrolls inside the frame;
    PIP vs Achieved is laid out to fit. */
-.mp-page .page-body { overflow-y: auto; }
 .mp-clock {
   display: flex; flex-direction: column; align-items: flex-end; margin-inline-end: 8px;
   font-size: var(--fs-meta); line-height: var(--lh-meta); color: var(--text-secondary); white-space: nowrap;

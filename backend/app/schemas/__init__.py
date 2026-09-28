@@ -962,6 +962,10 @@ class HcQueueCounts(BaseModel):
     # a Coordinator can act on this minute, and drives the nav badge.
     pool_assignable: int = 0
     in_progress: int = 0
+    # Health-check assignments in ``in_progress`` outstanding longer than
+    # ``hc_queues.HC_LATE_AFTER_DAYS`` -- the "N late" chip on the tab.
+    # Assignments, not sites: "late" is a property of what was handed over.
+    hc_in_progress_late: int = 0
     hc_review: int = 0
     remediation: int = 0
     reroutes: int = 0
@@ -973,6 +977,7 @@ class HcQueueCounts(BaseModel):
 class HcInProgressRow(BaseModel):
     assignment_id: int
     code: str
+    contractor_id: int | None = None
     contractor_name: str | None = None
     assigned_at: datetime | None = None
     days_outstanding: int = 0
@@ -1040,6 +1045,7 @@ class DtInProgressRow(BaseModel):
     site_type: str | None = None
     province: str | None = None
     requested_technologies: list[str] = []
+    contractor_id: int | None = None
     contractor_name: str | None = None
     assigned_at: datetime | None = None
     days_since_assigned: int = 0

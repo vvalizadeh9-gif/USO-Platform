@@ -221,6 +221,74 @@ def test_in_progress_holds_a_site_only_while_it_is_unanswered(client):
     assert not any(code in (r["pending_sites"] or []) for r in rows)
 
 
+def _age_assignment_of(task_id, days):
+    """Backdate the assignment a task belongs to by ``days``."""
+    from datetime import datetime, timedelta, timezone
+
+    from app.core import count_cache
+    from app.models.health_check import HcAssignment, HcTask
+
+    db = SessionLocal()
+    try:
+        task = db.get(HcTask, task_id)
+        assignment = db.get(HcAssignment, task.hc_assignment_id)
+        assignment.assigned_at = datetime.now(timezone.utc) - timedelta(days=days)
+        db.commit()
+        return assignment.id
+    finally:
+        db.close()
+        count_cache.clear()
+
+
+def test_in_progress_rows_name_their_contractor(client):
+    wi_id, code = _fresh_site()
+    task_id = _assign_hc(client, wi_id)
+
+    row = next(r for r in _queue(client, "in-progress") if code in r["pending_sites"])
+    assert row["contractor_id"] == _contractor_id()
+    assert row["contractor_name"]
+    _submit(client, task_id, ok=True)  # leave nothing outstanding behind
+
+
+def test_late_counts_assignments_outstanding_past_fourteen_days(client):
+    """The "N late" chip: assignments, not sites, past the late line."""
+    from app.services.hc_queues import HC_LATE_AFTER_DAYS
+
+    before = _counts(client)["hc_in_progress_late"]
+
+    on_time_wi, _ = _fresh_site()
+    on_time = _assign_hc(client, on_time_wi)
+    _age_assignment_of(on_time, HC_LATE_AFTER_DAYS)  # on the line: not late
+    assert _counts(client)["hc_in_progress_late"] == before
+
+    late_wi, late_code = _fresh_site()
+    late = _assign_hc(client, late_wi)
+    _age_assignment_of(late, HC_LATE_AFTER_DAYS + 1)
+    assert _counts(client)["hc_in_progress_late"] == before + 1
+
+    rows = _queue(client, "in-progress")
+    row = next(r for r in rows if late_code in r["pending_sites"])
+    assert row["days_outstanding"] > HC_LATE_AFTER_DAYS
+    # The badge is the rows past the line, however many sites each holds.
+    assert _counts(client)["hc_in_progress_late"] == sum(
+        1 for r in rows if r["days_outstanding"] > HC_LATE_AFTER_DAYS
+    )
+
+    # Answered, it is no longer outstanding, so no longer late.
+    _submit(client, late, ok=True)
+    assert _counts(client)["hc_in_progress_late"] == before
+    _submit(client, on_time, ok=True)
+
+
+def test_dt_in_progress_rows_name_their_contractor(client):
+    wi_id, code = _fresh_site()
+    _confirm_ready(client, wi_id)
+    _assign_dt(client, wi_id)
+
+    row = _row(_queue(client, "dt-in-progress"), code)
+    assert row["contractor_id"] == _contractor_id()
+
+
 # ---------------- review ----------------
 def test_review_holds_a_result_only_until_it_is_decided(client):
     wi_id, code = _fresh_site()

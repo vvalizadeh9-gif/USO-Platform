@@ -1,5 +1,4 @@
 import {
-  ChevronRight,
   ClipboardList,
   History,
   ListChecks,
@@ -11,8 +10,9 @@ import {
 import { useCallback, useEffect, useState } from 'react'
 import { Navigate, useSearchParams } from 'react-router-dom'
 import api from '../api/client'
-import LifecycleStrip from '../components/LifecycleStrip'
-import { PageHead } from '../components/ui'
+import PageFrame from '../components/PageFrame'
+import ProcessStepper from '../components/ProcessStepper'
+import { PageBar, Tabs } from '../components/ui'
 import { useAuth } from '../context/AuthContext'
 import { canReview } from '../lib/roles'
 import HcBasketTab from './healthcheck/HcBasketTab'
@@ -34,21 +34,23 @@ import ReroutesTab from './healthcheck/ReroutesTab'
 // three parts are ordered differently. The steps run left to right with a
 // chevron between them; the fix loop is one thing with two queues; History is
 // the archive and sits at the far end.
-const STEPS = [
-  { key: 'pool', label: 'HC Pool', icon: ClipboardList, count: 'pool' },
-  { key: 'running', label: 'In Progress', icon: Timer, count: 'in_progress' },
-  { key: 'review', label: 'HC Review', icon: ListChecks, count: 'hc_review' },
-]
-
+//
 // A fix is opened against a category, the owning team closes it, and the site
 // returns to the pool by itself at the next round. Neither queue follows the
-// other, so there is no chevron between them -- they are one loop.
-const FIX_LOOP = [
-  { key: 'remediation', label: 'Remediation', icon: Wrench, count: 'remediation' },
-  { key: 'reroutes', label: 'Re-routes', icon: Shuffle, count: 'reroutes' },
+// other, so the two sit in one group with no chevron between them -- one
+// loop. `late` names the key of the In Progress tab's "N late" chip.
+const TABS = [
+  { key: 'pool', label: 'HC Pool', icon: ClipboardList, count: 'pool' },
+  { key: 'running', label: 'In Progress', icon: Timer, count: 'in_progress', late: 'hc_in_progress_late' },
+  { key: 'review', label: 'HC Review', icon: ListChecks, count: 'hc_review' },
+  { key: 'remediation', label: 'Remediation', icon: Wrench, count: 'remediation', group: 'fix' },
+  { key: 'reroutes', label: 'Re-routes', icon: Shuffle, count: 'reroutes', group: 'fix' },
+  { key: 'history', label: 'History', icon: History, end: true },
 ]
 
-const ARCHIVE = { key: 'history', label: 'History', icon: History }
+const GROUPS = {
+  fix: { label: 'Fix loop', icon: RotateCcw, title: 'Fixed sites return to the HC Pool automatically' },
+}
 
 // Superseded tab keys, kept so links people already hold keep working.
 // ?tab=results was the combined queue-and-archive table; the queue half of it
@@ -100,44 +102,24 @@ export default function HealthCheck() {
     return <Navigate replace to={`/drive-test?${params.toString()}`} />
   }
 
+  const tabs = TABS.map((t) => ({
+    ...t,
+    count: t.count ? counts[t.count] : undefined,
+    alert: t.late && counts[t.late] > 0 ? `${counts[t.late]} late` : undefined,
+  }))
+
   return (
-    <>
-      <PageHead
-        eyebrow="Drive Test"
-        title="Health Check"
-        subtitle="Everything about the health check: assign it, follow it, confirm Ready sites, route problems to the right team, and look back in History."
-      />
-
-      <LifecycleStrip current="hc" />
-
-      <div className="tabs tabs-steps" style={{ flexWrap: 'wrap' }}>
-        {STEPS.map((t, i) => (
-          <div className="tab-step" key={t.key}>
-            {i > 0 && <ChevronRight size={14} className="tab-sep" aria-hidden="true" />}
-            <TabButton t={t} counts={counts} tab={tab} setTab={setTab} />
-          </div>
-        ))}
-
-        <div className="tab-step">
-          <ChevronRight size={14} className="tab-sep" aria-hidden="true" />
-          <div className="tab-group">
-            <span
-              className="tab-group-label"
-              title="Fixed sites return to the HC Pool automatically"
-            >
-              <RotateCcw size={12} /> Fix loop
-            </span>
-            {FIX_LOOP.map((t) => (
-              <TabButton key={t.key} t={t} counts={counts} tab={tab} setTab={setTab} />
-            ))}
-          </div>
-        </div>
-
-        <div className="tab-end">
-          <TabButton t={ARCHIVE} counts={counts} tab={tab} setTab={setTab} />
-        </div>
-      </div>
-
+    <PageFrame
+      className="hc-page"
+      bar={
+        <PageBar
+          eyebrow="Drive Test"
+          title="Health Check"
+          context={<ProcessStepper current="hc" />}
+          tabs={<Tabs steps label="Health check queues" tabs={tabs} groups={GROUPS} value={tab} onChange={setTab} />}
+        />
+      }
+    >
       {/* Opacity only, no exit: the old panel is gone the moment the new
           one mounts, so the page never collapses between them. */}
       <div key={tab} className="tab-panel">
@@ -153,25 +135,6 @@ export default function HealthCheck() {
           {tab === 'reroutes' && <ReroutesTab onCountChange={setCount('reroutes')} />}
           {tab === 'history' && <HcHistoryTab />}
       </div>
-    </>
-  )
-}
-
-/** One tab. Unchanged markup: the row around it is what became ordered. */
-function TabButton({ t, counts, tab, setTab }) {
-  const count = t.count ? counts[t.count] : undefined
-  const isActive = tab === t.key
-  return (
-    <button
-      className={`tab ${isActive ? 'active' : ''}`}
-      onClick={() => setTab(t.key)}
-    >
-      <span className="row" style={{ gap: 8 }}>
-        <t.icon size={15} /> {t.label}
-        {count > 0 && (
-          <span className={`badge tnum ${isActive ? 'badge-active' : ''}`}>{count}</span>
-        )}
-      </span>
-    </button>
+    </PageFrame>
   )
 }
