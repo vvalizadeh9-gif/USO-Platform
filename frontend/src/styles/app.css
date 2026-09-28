@@ -2950,7 +2950,14 @@ a.dt-contractor-name:hover { text-decoration: underline; text-decoration-color: 
    the PM's call, so this page uses its own until that is settled. It is the
    "reference" colour here: the On-aired series, balances, Not started.
    --dt-pending-bar is the darker neutral for Pending and folded rows. */
-.dt-page { --dt-gap: 20px; --dt-muted: #8391A7; --dt-pending-bar: #6B788D; }
+.dt-page { --dt-gap: 16px; --dt-muted: #8391A7; --dt-pending-bar: #6B788D; }
+/* The dashboard is sized to one office screen, so it takes the full width
+   rather than the app's 1,280px cap, with tighter page padding. It applies to
+   all three tabs, so switching views does not move the header. */
+.main:has(.dt-page) { max-width: none; }
+@media (min-width: 861px) {
+  .main:has(.dt-page) { padding: 20px 32px 24px; }
+}
 /* The header: one 48px row -- "Drive Test / Dashboard", the three views as
    a segmented control, then the scope, freshness and the actions pushed
    right. It wraps rather than overflows on a narrow page. */
