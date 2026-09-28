@@ -355,8 +355,18 @@ const FIT_MAX = 440
  * the plot fits the screen; below it the CSS's fixed 260px applies. */
 const FIT_FROM = 980
 
+/** How far the page's content overruns the space it has. On a fill page
+ * (PageFrame) that is the body's content against the body's own height --
+ * the document itself never scrolls; anywhere else, the document against
+ * the window. */
+function overrun(plot) {
+  const body = plot.closest('.page-body')
+  if (body) return body.scrollHeight - body.clientHeight
+  return document.documentElement.scrollHeight - window.innerHeight
+}
+
 /** Size the plot so the page does not scroll: draw it at the tallest, see
- * how far the document overruns the window, and take that off, within
+ * how far the page overruns its space, and take that off, within
  * FIT_MIN..FIT_MAX. Measured once after the first render, again when the web
  * fonts arrive (they change line heights) and on every resize. Written to the
  * element's style, not to React state, so nothing re-renders and a fit can
@@ -374,7 +384,7 @@ function useFitHeight(ref) {
         return
       }
       plot.style.height = `${FIT_MAX}px`
-      const over = document.documentElement.scrollHeight - window.innerHeight
+      const over = overrun(plot)
       plot.style.height = `${Math.max(FIT_MIN, Math.min(FIT_MAX, FIT_MAX - over))}px`
     }
     fit()

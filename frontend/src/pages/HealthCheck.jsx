@@ -1,4 +1,3 @@
-import { AnimatePresence, motion } from 'framer-motion'
 import {
   ChevronRight,
   ClipboardList,
@@ -139,14 +138,9 @@ export default function HealthCheck() {
         </div>
       </div>
 
-      <AnimatePresence mode="wait">
-        <motion.div
-          key={tab}
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -8 }}
-          transition={{ duration: 0.2 }}
-        >
+      {/* Opacity only, no exit: the old panel is gone the moment the new
+          one mounts, so the page never collapses between them. */}
+      <div key={tab} className="tab-panel">
           {tab === 'pool' && <HcBasketTab onCountChange={setCount('pool')} />}
           {tab === 'running' && <HcInProgressTab onCountChange={setCount('in_progress')} />}
           {tab === 'review' && (
@@ -158,8 +152,7 @@ export default function HealthCheck() {
           {tab === 'remediation' && <RemediationTab onCountChange={setCount('remediation')} />}
           {tab === 'reroutes' && <ReroutesTab onCountChange={setCount('reroutes')} />}
           {tab === 'history' && <HcHistoryTab />}
-        </motion.div>
-      </AnimatePresence>
+      </div>
     </>
   )
 }

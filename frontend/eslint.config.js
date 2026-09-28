@@ -26,6 +26,14 @@ export default [
     },
   },
   {
+    // The Playwright layout tests and their config run in Node, not in the
+    // page.
+    files: ['e2e/**/*.{js,mjs}', 'playwright.config.js'],
+    languageOptions: {
+      globals: globals.node,
+    },
+  },
+  {
     files: ['**/*.{js,jsx}'],
     languageOptions: {
       ecmaVersion: 2022,

@@ -1,4 +1,3 @@
-import { AnimatePresence, motion } from 'framer-motion'
 import { ChevronRight, Eye, Radio, Timer } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
@@ -85,19 +84,13 @@ export default function DriveTest() {
         })}
       </div>
 
-      <AnimatePresence mode="wait">
-        <motion.div
-          key={tab}
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -8 }}
-          transition={{ duration: 0.2 }}
-        >
+      {/* Opacity only, no exit: the old panel is gone the moment the new
+          one mounts, so the page never collapses between them. */}
+      <div key={tab} className="tab-panel">
           {tab === 'assignment' && <DtAssignmentTab onCountChange={setCount('dt_assignment')} />}
           {tab === 'in-progress' && <DtInProgressTab onCountChange={setCount('dt_in_progress')} />}
           {tab === 'review' && <DtReviewTab onCountChange={setCount('dt_review')} />}
-        </motion.div>
-      </AnimatePresence>
+      </div>
     </>
   )
 }
