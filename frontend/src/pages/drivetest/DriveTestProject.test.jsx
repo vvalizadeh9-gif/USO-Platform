@@ -1620,21 +1620,6 @@ describe('the toolbar', () => {
     )
     expect(screen.getByRole('button', { name: /export/i })).toBeInTheDocument()
   })
-
-  it('opens the province table from "All provinces", where the filter is set', async () => {
-    serve()
-    draw()
-
-    await screen.findByLabelText('Programme totals')
-    await userEvent.click(screen.getByRole('button', { name: 'All provinces' }))
-    expect(screen.getByRole('tab', { name: 'Contractors & provinces' })).toHaveAttribute(
-      'aria-selected',
-      'true',
-    )
-    expect(
-      await screen.findByRole('heading', { name: 'Drive Test progress by province' }),
-    ).toBeInTheDocument()
-  })
 })
 
 describe('the export button', () => {
@@ -1877,7 +1862,10 @@ describe('the province filter', () => {
     serve()
     draw()
 
-    expect(await screen.findByText('All provinces')).toBeInTheDocument()
+    await screen.findByLabelText('Programme totals')
+    // Un-narrowed, the header says nothing about scope: the old "All
+    // provinces" label did nothing and is gone.
+    expect(screen.queryByText('All provinces')).not.toBeInTheDocument()
     expect(
       screen.queryByRole('button', { name: /Show every province again/ }),
     ).not.toBeInTheDocument()

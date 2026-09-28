@@ -1820,7 +1820,6 @@ tbody tr:last-child td { border-bottom: none; }
    is not -- so the row keeps its height either way and the toolbar does not
    jump when a filter is applied or cleared. */
 .dt-scope { display: flex; align-items: center; min-height: 32px; }
-.dt-scope-all { font-size: 14px; line-height: 20px; color: var(--text-secondary); }
 .dt-scope-chip {
   display: flex; align-items: center; gap: 8px;
   background: var(--surface);
@@ -2976,8 +2975,6 @@ a.dt-contractor-name:hover { text-decoration: underline; text-decoration-color: 
 .dt-head .ui-tab[aria-selected='true']::after { display: none; }
 .dt-head .dt-toolbar { flex: 1 1 auto; justify-content: flex-end; min-width: 0; }
 .dt-head .dt-toolbar-right { margin-left: 0; }
-.dt-head .btn.dt-scope-all { gap: 6px; padding: 0 12px; font-weight: 500; color: var(--text); }
-.dt-head .btn.dt-scope-all svg { color: var(--text-tertiary); }
 .dt-icon-btn { width: 36px; height: 36px; padding: 0; }
 /* The two compact cards beside the trend take Cobalt's compact padding. */
 .dt-page .dt-stack > .dt-section { padding: 16px 20px 20px; gap: 12px; }

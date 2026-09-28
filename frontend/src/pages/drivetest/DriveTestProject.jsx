@@ -276,7 +276,6 @@ export default function DriveTestProject() {
             provinceId={provinceId}
             provinceName={provinceName}
             onClearProvince={() => setProvince(null)}
-            onPickProvince={scrollToProvinces}
             onRefresh={refresh}
             refreshing={refreshing}
             generatedAt={data?.generated_at}

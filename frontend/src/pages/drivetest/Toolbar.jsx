@@ -1,4 +1,4 @@
-import { ChevronDown, Download, MapPin, RefreshCw, X } from 'lucide-react'
+import { Download, MapPin, RefreshCw, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { freshness } from './format'
 
@@ -6,7 +6,6 @@ export default function Toolbar({
   provinceId,
   provinceName,
   onClearProvince,
-  onPickProvince,
   onRefresh,
   refreshing,
   generatedAt,
@@ -19,7 +18,9 @@ export default function Toolbar({
   return (
     <div className="dt-toolbar">
       <div className="dt-scope">
-        {scoped ? (
+        {/* Only when the page is narrowed; un-narrowed, the header says
+            nothing about scope. The filter is set from the province table. */}
+        {scoped && (
           <span className="dt-scope-chip">
             <MapPin size={13} strokeWidth={2} aria-hidden="true" />
             {provinceName ? (
@@ -40,13 +41,6 @@ export default function Toolbar({
               <X size={13} aria-hidden="true" />
             </button>
           </span>
-        ) : (
-          // The province filter is set from the province table, so this opens
-          // it: a control that looks live must do something.
-          <button type="button" className="btn dt-scope-all" onClick={onPickProvince}>
-            All provinces
-            <ChevronDown size={14} aria-hidden="true" />
-          </button>
         )}
       </div>
 
