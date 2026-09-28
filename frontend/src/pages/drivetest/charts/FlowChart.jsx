@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useRef, useState } from 'react'
+import { Fragment, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { shamsiMonthName } from '../../../lib/shamsi'
 import { count } from '../format'
 import { CUMULATIVE, flowView, netChanges } from './flowView'
@@ -135,6 +135,7 @@ export default function FlowChart({ data, scope = CUMULATIVE }) {
   const plotRef = useRef(null)
   const plotWidth = useWidth(plotRef)
   const stagger = plotWidth > 0 && plotWidth / n < STAGGER_BELOW
+  useFitHeight(plotRef)
 
   // The month under the pointer, the keyboard focus or the last tap.
   const [active, setActive] = useState(null)
@@ -344,6 +345,46 @@ function useWidth(ref) {
     return () => ro.disconnect()
   }, [ref])
   return width
+}
+
+/** The plot's height on a wide page: whatever keeps the whole Overview on
+ * one screen, between these two. */
+const FIT_MIN = 240
+const FIT_MAX = 440
+/** Page width (the bench's, like the layout's container queries) from which
+ * the plot fits the screen; below it the CSS's fixed 260px applies. */
+const FIT_FROM = 980
+
+/** Size the plot so the page does not scroll: draw it at the tallest, see
+ * how far the document overruns the window, and take that off, within
+ * FIT_MIN..FIT_MAX. Measured once after the first render, again when the web
+ * fonts arrive (they change line heights) and on every resize. Written to the
+ * element's style, not to React state, so nothing re-renders and a fit can
+ * never trigger another one. */
+function useFitHeight(ref) {
+  useLayoutEffect(() => {
+    const plot = ref.current
+    if (!plot) return undefined
+    let live = true
+    const fit = () => {
+      if (!live) return
+      const bench = plot.closest('.dt-bench') ?? document.documentElement
+      if (bench.clientWidth < FIT_FROM) {
+        plot.style.height = ''
+        return
+      }
+      plot.style.height = `${FIT_MAX}px`
+      const over = document.documentElement.scrollHeight - window.innerHeight
+      plot.style.height = `${Math.max(FIT_MIN, Math.min(FIT_MAX, FIT_MAX - over))}px`
+    }
+    fit()
+    document.fonts?.ready?.then(fit)
+    window.addEventListener('resize', fit)
+    return () => {
+      live = false
+      window.removeEventListener('resize', fit)
+    }
+  }, [ref])
 }
 
 /** The hovered month's figures, pinned to the plot's top-left corner: this

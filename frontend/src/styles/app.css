@@ -2807,11 +2807,14 @@ a.dt-contractor-name:hover { text-decoration: underline; text-decoration-color: 
 
 /* The chart and the rows under it share one grid: a 56px gutter (the y-axis
    labels) and one equal column per month, so each month's name and change
-   sit straight under its dots. Under about 48px a column the chart scrolls
-   sideways rather than squeezing. */
+   sit straight under its dots. Narrow columns stagger their names rather
+   than scroll; only on a phone-width page does the chart keep a 720px
+   minimum and scroll sideways inside its own box, never the page's. */
 .dt-flowcard { --dt-flow-gutter: 56px; }
 .dt-flow-scroll { overflow-x: auto; padding-block-start: 8px; }
-.dt-flow-scroll > * { min-width: calc(var(--dt-flow-gutter) + var(--dt-flow-cols) * 48px); }
+@container dt-bench (max-width: 559px) {
+  .dt-flow-scroll > * { min-width: 720px; }
+}
 .dt-flow-frame { position: relative; }
 .dt-flowchart { position: relative; display: grid; grid-template-columns: var(--dt-flow-gutter) minmax(0, 1fr); }
 .dt-flow-yaxis { position: relative; }
@@ -2820,6 +2823,8 @@ a.dt-contractor-name:hover { text-decoration: underline; text-decoration-color: 
   font-size: 12px; line-height: 16px; color: var(--text-tertiary); white-space: nowrap;
 }
 .dt-flow-plot { position: relative; height: 260px; margin-block: 8px; }
+/* From 980px of page the plot's height is set by the chart itself, to fit
+   the Overview on one screen (240-440px); see useFitHeight in FlowChart. */
 .dt-flow-grid, .dt-flow-baseline {
   position: absolute; inset-inline: 0; height: 0;
   border-top: 1px solid var(--divider);
@@ -2878,7 +2883,7 @@ a.dt-contractor-name:hover { text-decoration: underline; text-decoration-color: 
    signal. The month in progress is white with a dashed border in its tone. */
 .dt-flow-net {
   display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box;
-  height: 24px; min-width: 42px; max-width: calc(100% - 6px); padding: 0 8px;
+  height: 24px; min-width: min(42px, calc(100% - 6px)); max-width: calc(100% - 6px); padding: 0 4px;
   border: 1.5px solid transparent; border-radius: 999px;
   font-size: 13px; line-height: 16px; font-weight: 600; white-space: nowrap;
 }
