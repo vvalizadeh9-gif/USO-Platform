@@ -118,59 +118,50 @@ export function flowYears(data) {
 
 /** Everything one view of the chart draws from.
  *
- * `scope` is 'all' or a Shamsi year. EVERY SCOPE IS THE SAME LEDGER, CAPPED.
- * Picking a year does not crop the chart down to that year's own months --
- * it draws the whole programme from the opening balance on 1 Farvardin 1404,
- * the same as 'all', just stopping at that year's last month instead of
- * running to today. Asking "where do we stand through 1405" must not lop off
- * 1404: every figure is still the real running total, so the gap is always
- * the real backlog and coverage can never pass 100%. The view this replaces
- * restarted both counts at zero for a year, which drew a year that finished
- * more drive tests than it brought on air as "coverage 295%" and a negative
- * gap -- capping keeps that fix and also keeps the years before the one
- * picked on screen, rather than hiding them behind a single opening point.
+ * `scope` is a Shamsi year; anything else -- no choice yet, or a year the
+ * payload does not have -- is the latest year. EVERY YEAR IS THE SAME LEDGER,
+ * CAPPED. Picking a year does not crop the chart down to that year's own
+ * months -- it draws the whole programme from the opening balance on
+ * 1 Farvardin 1404, stopping at that year's last month. Asking "where do we
+ * stand through 1405" must not lop off 1404: every figure is still the real
+ * running total, so the gap is always the real backlog and coverage can never
+ * pass 100%. The view this replaces restarted both counts at zero for a year,
+ * which drew a year that finished more drive tests than it brought on air as
+ * "coverage 295%" and a negative gap.
  *
  * What a capped view could still not say on its own -- how much the selected
  * year itself put on air and drive-tested -- is `yearActivity`, the sums of
  * that year's own months.
  */
-export function flowView(data, scope = 'all') {
+export function flowView(data, scope = null) {
   const years = flowYears(data)
-  const selected = years.includes(scope) ? scope : 'all'
+  const selected = years.includes(scope) ? scope : years[years.length - 1]
   const all = cumulativePoints(data)
-  let points = all
-  let months = data.months
-  let yearActivity = null
-  if (selected !== 'all') {
-    const first = data.months.findIndex((m) => m.year === selected)
-    const inYear = data.months.filter((m) => m.year === selected).length
-    const end = first + inYear
-    // Always from the very start of `data.months` (the opening balance is
-    // point 0), never from `first`: a year caps the ledger, it does not
-    // window onto it. Only years after the one picked are cut off.
-    points = all.slice(0, end + 1)
-    months = data.months.slice(0, end)
-    const yearMonths = data.months.slice(first, end)
-    yearActivity = {
-      onAired: yearMonths.reduce((sum, m) => sum + m.on_aired, 0),
-      dtDone: yearMonths.reduce((sum, m) => sum + m.dt_done, 0),
-    }
+  const first = data.months.findIndex((m) => m.year === selected)
+  const inYear = data.months.filter((m) => m.year === selected).length
+  const end = first + inYear
+  // Always from the very start of `data.months` (the opening balance is
+  // point 0), never from `first`: a year caps the ledger, it does not
+  // window onto it. Only years after the one picked are cut off.
+  const points = all.slice(0, end + 1)
+  const months = data.months.slice(0, end)
+  const yearMonths = data.months.slice(first, end)
+  const yearActivity = {
+    onAired: yearMonths.reduce((sum, m) => sum + m.on_aired, 0),
+    dtDone: yearMonths.reduce((sum, m) => sum + m.dt_done, 0),
   }
   const { floor, ceiling } = fitScale(points.flatMap((p) => [p.onAir, p.dtDone]))
   // Both sides, not just on-air: the bug this count exists to disclose showed
   // up on the DT-done side. The larger of the two rather than their sum,
   // because a site can be missing both dates and be counted on both sides.
   const notPlaced = Math.max(data.not_placed?.on_air ?? 0, data.not_placed?.dt_done ?? 0)
-  // Whether the drawn window itself spans more than one Shamsi year -- which
-  // 'all' always does (the control only appears with 2+ years of data), and
-  // a capped year now does too whenever it is not the payload's first year.
-  // Drives the same layout choices (year captions, wider label spacing) that
-  // used to be keyed on `isAll` alone.
+  // Whether the drawn window itself spans more than one Shamsi year, which a
+  // capped year does whenever it is not the payload's first year. Drives the
+  // layout choices (year captions, wider label spacing).
   const multiYear = new Set(months.map((m) => m.year)).size > 1
   return {
     years,
     selected,
-    isAll: selected === 'all',
     multiYear,
     points,
     months,
@@ -182,15 +173,14 @@ export function flowView(data, scope = 'all') {
 }
 
 /** The notes behind the card's info icon, for the view on screen. */
-export function flowNotes(data, scope = 'all') {
-  const { selected, isAll, floor, notPlaced } = flowView(data, scope)
+export function flowNotes(data, scope = null) {
+  const { selected, floor, notPlaced } = flowView(data, scope)
   const notes = [
     'Sites on air against drive tests done, and what each month did to the backlog.',
-    (isAll
-      ? 'The running total starts from the opening balance on 1 Farvardin 1404.'
-      : `Showing every month from the opening balance on 1 Farvardin 1404 through ${selected}. ` +
-        'These are the programme’s real running totals, so the gap is the real backlog at each ' +
-        'month’s end.') + (floor > 0 ? ` The scale starts at ${count(floor)}, not zero.` : ''),
+    `Showing every month from the opening balance on 1 Farvardin 1404 through ${selected}. ` +
+      'These are the programme’s real running totals, so the gap is the real backlog at each ' +
+      'month’s end.' +
+      (floor > 0 ? ` The scale starts at ${count(floor)}, not zero.` : ''),
     'The pills under the months are what each one did to the backlog — sites on air that ' +
       'month minus drive tests finished — so they add up to the movement in the gap across ' +
       'the chart. Green shrank it, red grew it.',

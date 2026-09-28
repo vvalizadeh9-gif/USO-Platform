@@ -85,16 +85,15 @@ describe('flowView', () => {
   }
   const totals = (v) => v.points.map((p) => [p.onAir, p.dtDone])
 
-  it('shows every year as one running total from the opening balance', () => {
-    const v = flowView(data, 'all')
+  it('opens on the latest year, a running total from the opening balance', () => {
+    const v = flowView(data)
+    expect(v.selected).toBe(1405)
     expect(totals(v)).toEqual([[53, 20], [63, 24], [71, 30], [76, 33], [80, 35]])
-    expect(v.yearActivity).toBeNull()
   })
 
   it('caps at the selected year rather than windowing onto it alone', () => {
-    // 1405 is the payload's last year, so picking it draws exactly the same
-    // points as 'all' -- a year caps the ledger, it does not crop the years
-    // before it off screen. The view this replaces started 1405 at 0/0.
+    // A year caps the ledger, it does not crop the years before it off
+    // screen. The view this replaces started 1405 at 0/0.
     const v = flowView(data, 1405)
     expect(totals(v)).toEqual([[53, 20], [63, 24], [71, 30], [76, 33], [80, 35]])
     expect(v.months.map((m) => `${m.year}-${m.month}`)).toEqual([
@@ -128,8 +127,8 @@ describe('flowView', () => {
     expect(v.yearActivity).toEqual({ onAired: 9, dtDone: 5 })
   })
 
-  it('falls back to every year for a year the payload does not have', () => {
-    expect(flowView(data, 1399).isAll).toBe(true)
+  it('falls back to the latest year for a year the payload does not have', () => {
+    expect(flowView(data, 1399).selected).toBe(1405)
   })
 })
 
@@ -144,10 +143,11 @@ describe('flowNotes', () => {
   }
 
   it('states where the running total starts, where the scale starts, and the undated sites', () => {
-    const notes = flowNotes(data, 'all')
+    const notes = flowNotes(data)
     expect(notes).toContain(
-      'The running total starts from the opening balance on 1 Farvardin 1404. ' +
-        'The scale starts at 850, not zero.',
+      'Showing every month from the opening balance on 1 Farvardin 1404 through 1405. ' +
+        'These are the programme’s real running totals, so the gap is the real backlog at each ' +
+        'month’s end. The scale starts at 850, not zero.',
     )
     expect(notes).toContain(
       '7 sites have no date to place them on the timeline, so they sit in the opening ' +
@@ -157,9 +157,8 @@ describe('flowNotes', () => {
 
   it('says a capped year is still the real running totals, not a restarted count', () => {
     const notes = flowNotes(data, 1405)
-    // 1405 is this fixture's last year, so the points drawn -- and so the
-    // fitted scale -- are identical to 'all': the floor is 850, the same as
-    // the 'all' note above, not the 900 a window onto 1405 alone would fit.
+    // The points drawn start at the opening balance, so the floor is 850,
+    // not the 900 a window onto 1405 alone would fit.
     expect(notes).toContain(
       'Showing every month from the opening balance on 1 Farvardin 1404 through 1405. ' +
         'These are the programme’s real running totals, so the gap is the real backlog at each ' +

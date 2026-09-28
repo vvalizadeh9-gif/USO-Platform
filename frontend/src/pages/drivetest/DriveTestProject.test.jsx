@@ -1943,19 +1943,18 @@ describe('the flow chart', () => {
     expect(within(card).queryAllByRole('link')).toHaveLength(0)
   })
 
-  it('picking the latest year draws the same ledger as every year together', async () => {
+  it('the latest year draws the real running totals, not a restarted count', async () => {
     // The view this replaces restarted both counts at zero for a year, which
     // drew a year that tested more than it put on air as coverage over 100%.
     // A year now caps the ledger rather than windowing onto it, so picking
-    // 1405 -- the payload's last year -- draws exactly what 'all' draws.
+    // 1405 carries 1404 forward.
     serve()
     draw()
 
     const card = await section('Where this is going')
     await userEvent.click(within(card).getByRole('tab', { name: '1405' }))
 
-    // Real totals at the end of 1405: 80 on air, 35 done, a gap of 45 --
-    // the same as every year together, because 1405 is the latest year.
+    // Real totals at the end of 1405: 80 on air, 35 done, a gap of 45.
     expect(within(tile(card, 'On-aired')).getByText('80')).toBeInTheDocument()
     expect(within(tile(card, 'DT done')).getByText('35')).toBeInTheDocument()
     expect(within(tile(card, 'Gap')).getByText('45')).toBeInTheDocument()
@@ -1995,20 +1994,19 @@ describe('the flow chart', () => {
     expect(within(card).getByTestId('dt-flow-readout')).toHaveTextContent('اردیبهشت 1404')
   })
 
-  it('puts the year control in the card header, opening on every year', async () => {
+  it('puts the year control in the card header, opening on the latest year', async () => {
     serve()
     draw()
 
     const card = await section('Where this is going')
     const header = card.querySelector('.dt-section-head')
     const tabs = within(header).getAllByRole('tab').map((t) => t.textContent)
-    expect(tabs).toEqual(['1404', '1405', '1404–1405'])
-    expect(within(header).getByRole('tab', { name: '1404–1405' })).toHaveAttribute(
+    // Two years, no combined option.
+    expect(tabs).toEqual(['1404', '1405'])
+    expect(within(header).getByRole('tab', { name: '1405' })).toHaveAttribute(
       'aria-selected',
       'true',
     )
-    // No year activity on the all-years view: it would repeat the totals.
-    expect(within(card).queryByTestId('dt-flow-year-activity')).toBeNull()
   })
 
   it('opens the readout on the latest month rather than leaving it blank', async () => {
@@ -2053,7 +2051,7 @@ describe('the flow chart', () => {
     const card = await section('Where this is going')
     expect(card.querySelector('.dt-flowcard .dt-note')).toBeNull()
     const note = within(card).getByText(
-      /The running total starts from the opening balance on 1 Farvardin 1404/,
+      /Showing every month from the opening balance on 1 Farvardin 1404 through 1405/,
     )
     // 20..80 fitted with a margin reaches zero, so this view claims no
     // truncated scale -- the note only says so when it is true.

@@ -14,16 +14,14 @@ import { DrawPath, FadeArea } from './primitives'
  * last one. This chart is the trailing shape behind those two totals: every
  * month since the obligation was tracked, on-aired and drive-tested, running.
  *
- * ONE LEDGER, CAPPED BY YEAR. It opens on every year together -- the whole
- * trajectory since the opening balance carried into Farvardin 1404, which is
- * the question the card's title asks -- and a year can be picked to stop the
- * chart there instead. Picking a year does not crop the months before it off
- * screen: every figure is still a real running total, carried from the same
- * opening balance, so the gap is the real backlog at each month's end and
- * coverage can never pass 100%. What changes is where the line ends and the
- * scale's range -- a year in the past does not drag the axis out to fit
- * today's numbers. The selected year's own activity -- how much it put on
- * air and drive-tested -- is added to the stat line.
+ * ONE LEDGER, CAPPED BY YEAR. It opens on the latest year, and a past year
+ * can be picked to stop the chart there instead. Picking a year does not crop
+ * the months before it off screen: every figure is still a real running
+ * total, carried from the same opening balance, so the gap is the real
+ * backlog at each month's end and coverage can never pass 100%. What changes
+ * is where the line ends and the scale's range -- a year in the past does not
+ * drag the axis out to fit today's numbers. The selected year's own activity
+ * -- how much it put on air and drive-tested -- is added to the stat line.
  *
  * NO AXIS, NO HATCH. The figures a reader would check a y-axis against --
  * On-aired, DT done, Gap, Coverage -- are already named in the stat line
@@ -74,9 +72,9 @@ const SERIES_COLOR = { onAir: 'var(--dt-muted)', dtDone: 'var(--accent)' }
  * itself is ink. A falling gap is the good direction. */
 const GAP_WORD = { good: 'better', bad: 'worse', flat: 'no change' }
 
-export default function FlowChart({ data, scope = 'all' }) {
+export default function FlowChart({ data, scope = null }) {
   const reduced = useReducedMotion()
-  const { selected, isAll, multiYear, points, months, ceiling, floor, yearActivity } = flowView(
+  const { selected, multiYear, points, months, ceiling, floor, yearActivity } = flowView(
     data,
     scope,
   )
@@ -207,7 +205,7 @@ export default function FlowChart({ data, scope = 'all' }) {
         onKeyDown={handleKey}
         onMouseLeave={() => setHover(null)}
         aria-label={
-          `On-aired vs drive tests done, running totals, ${isAll ? 'every year' : selected}. ` +
+          `On-aired vs drive tests done, running totals through ${selected}. ` +
           `On-aired ${last.onAir}, DT done ${last.dtDone}, gap ${last.gap}.` +
           (last.isOpen ? ' The latest month is still in progress.' : '')
         }

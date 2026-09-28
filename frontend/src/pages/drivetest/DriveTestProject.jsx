@@ -86,10 +86,10 @@ export default function DriveTestProject() {
   } = useDashboard()
   const [ongoingTab, setOngoingTab] = useState('contractor')
   const [problematicTab, setProblematicTab] = useState('category')
-  // Which years the trend shows: 'all', or one Shamsi year. Held here, not
-  // in the chart, because the card header shows both the control that
+  // Which Shamsi year the trend shows; null is the latest year. Held here,
+  // not in the chart, because the card header shows both the control that
   // switches it and the note that describes the view.
-  const [flowScope, setFlowScope] = useState('all')
+  const [flowScope, setFlowScope] = useState(null)
   const [provinceSearch, setProvinceSearch] = useState('')
   const [exporting, setExporting] = useState(false)
   const toast = useToast()
