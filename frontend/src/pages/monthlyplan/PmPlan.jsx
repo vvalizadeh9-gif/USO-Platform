@@ -6,7 +6,7 @@ import { useToast } from '../../context/ToastContext'
 import { currentShamsiPeriod, nextPeriod, previousPeriod, shamsiMonthName } from '../../lib/shamsi'
 import DecisionDrawer from './DecisionDrawer'
 import PipTab from './PipTab'
-import PlanQueue from './PlanQueue'
+import PlansTab from './PlansTab'
 import { countWaiting } from './planBoard'
 import useOverview from './useOverview'
 import usePlanBoard from './usePlanBoard'
@@ -26,8 +26,8 @@ function tabFromParams(params) {
 /**
  * The PM's side of the Monthly Plan: two tabs under one header.
  *
- * * **Plans** -- the plans handed in for the month being planned (next
- *   month), decided per stream. Its label carries, for the PM, the number of
+ * * **Plans** -- the plans shared for the month being planned (next
+ *   month), decided per stream (PlansTab). Its label carries, for the PM, the number of
  *   decisions waiting on them.
  * * **PIP vs Achieved** (the default) -- the month now running, or a year, or
  *   everything since the start: GET /pip/overview.
@@ -40,7 +40,7 @@ function tabFromParams(params) {
  * behind MONTHLY_PLAN_ROLES, decisions are offered for canDecide only, and
  * the server re-checks both.
  */
-export default function PmPlan({ canDecide, canSetTarget }) {
+export default function PmPlan({ canDecide, canSetTarget, canSeeInternal }) {
   const toast = useToast()
   const [params, setParams] = useSearchParams()
   const tab = tabFromParams(params)
@@ -159,7 +159,16 @@ export default function PmPlan({ canDecide, canSetTarget }) {
           onOpen={setDrawer}
         />
       ) : (
-        <PlanQueue period={plansPeriod} canDecide={canDecide} onDecided={board.reload} />
+        <PlansTab
+          board={board}
+          period={plansPeriod}
+          runningMonthName={
+            board.planning?.DT?.current_month?.shamsi_month_name || (running ? shamsiMonthName(running.month) : '')
+          }
+          canDecide={canDecide}
+          canSeeInternal={canSeeInternal}
+          onDecided={board.reload}
+        />
       )}
 
       {drawer && (

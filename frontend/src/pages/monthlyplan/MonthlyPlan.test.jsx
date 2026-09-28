@@ -924,7 +924,7 @@ const accQueue = queue([
   queueRow({ plan_id: 21, status: 'Submitted', committed_count: 20, in_force_count: null }),
 ], { current_month: {} })
 
-function serveOverview(data = overview(), { queues } = {}) {
+function serveOverview(data = overview(), { queues, internal = {} } = {}) {
   api.get.mockImplementation((url, config) => {
     if (url === '/pip/overview') return Promise.resolve({ data })
     if (url === '/pip/queue') {
@@ -933,7 +933,10 @@ function serveOverview(data = overview(), { queues } = {}) {
       return Promise.resolve({ data: { ...accQueue, label: 'آبان 1405', stream: params.stream } })
     }
     if (url === '/pip/revisions') return Promise.resolve({ data: revisionsOut(config?.params) })
-    if (url === '/pip/internal-target') return Promise.resolve({ data: { current: null } })
+    if (url === '/pip/internal-target') {
+      const count = internal[config?.params?.stream]
+      return Promise.resolve({ data: { current: count == null ? null : { target_count: count } } })
+    }
     return Promise.reject(new Error(`unexpected GET ${url}`))
   })
 }
@@ -1213,6 +1216,217 @@ describe('PIP vs Achieved', () => {
     expect(screen.getByRole('group', { name: 'Period' })).toBeInTheDocument()
     await userEvent.click(screen.getByRole('tab', { name: /Plans/ }))
     expect(screen.queryByRole('group', { name: 'Period' })).toBeNull()
+  })
+})
+
+
+// ------------------------------------------------------------ the Plans tab
+//
+// The month being planned, as usually seen on day four: Alpha has handed in
+// both streams and waits on the PM, Epsilon was sent back, Beta is approved,
+// Gamma has only a Draft (not shared) and Delta has nothing. On the running
+// month Beta asks to revise Acceptance.
+const PLANS_QUEUES = queuesBy({
+  planning: {
+    DT: [
+      queueRow({ contractor_id: 1, contractor_name: 'Alpha Telecom', plan_id: 11, status: 'Submitted', committed_count: 40, assignment: 30 }),
+      queueRow({ contractor_id: 2, contractor_name: 'Beta Networks', plan_id: 12, status: 'Approved', committed_count: 25, in_force_count: 25, assignment: 52 }),
+      queueRow({ contractor_id: 3, contractor_name: 'Gamma Survey', plan_id: 13, status: 'Draft', committed_count: 50, previous_month_committed: 26 }),
+      queueRow({ contractor_id: 4, contractor_name: 'Delta Radio', plan_id: null, status: null, committed_count: null, previous_month_committed: null }),
+      queueRow({ contractor_id: 5, contractor_name: 'Epsilon Link', plan_id: 15, status: 'Returned', committed_count: 20, assignment: 40 }),
+    ],
+    ACCEPTANCE: [
+      queueRow({ contractor_id: 1, contractor_name: 'Alpha Telecom', plan_id: 21, status: 'Submitted', committed_count: 30 }),
+      queueRow({ contractor_id: 2, contractor_name: 'Beta Networks', plan_id: 22, status: 'Approved', committed_count: 18, in_force_count: 18 }),
+      queueRow({ contractor_id: 3, contractor_name: 'Gamma Survey', plan_id: null, status: null, committed_count: null, previous_month_committed: null }),
+      queueRow({ contractor_id: 4, contractor_name: 'Delta Radio', plan_id: null, status: null, committed_count: null }),
+      queueRow({ contractor_id: 5, contractor_name: 'Epsilon Link', plan_id: null, status: null, committed_count: null }),
+    ],
+  },
+  running: {
+    DT: [
+      queueRow({ contractor_id: 1, contractor_name: 'Alpha Telecom', plan_id: 31, status: 'Approved', in_force_count: 35 }),
+      queueRow({ contractor_id: 2, contractor_name: 'Beta Networks', plan_id: 32, status: 'Approved', in_force_count: 44 }),
+    ],
+    ACCEPTANCE: [
+      queueRow({
+        contractor_id: 2, contractor_name: 'Beta Networks', plan_id: 51, status: 'RevisionRequested',
+        committed_count: 15, in_force_count: 20, revision_reason: 'SITES_BLOCKED', revision_comment: 'Two villages flooded.',
+      }),
+    ],
+  },
+})
+
+const showPlans = (role = 'PM', opts = {}) => {
+  signedInAs(role)
+  serveOverview(overview(), { queues: PLANS_QUEUES, internal: { DT: 100 }, ...opts })
+  show('/monthly-plan?tab=plans')
+}
+const sharedRow = async (name) =>
+  within(await screen.findByRole('table', { name: 'Shared plans' })).getByText(name).closest('[role="row"]')
+const cell = (row, stream) => row.querySelector(`[data-stream="${stream}"]`)
+
+describe('the Plans tab', () => {
+  it('splits shared from not shared, with a Draft counted as not shared', async () => {
+    showPlans()
+
+    const notShared = await screen.findByRole('region', { name: 'Not shared yet' })
+    expect(within(notShared).getByText('Gamma Survey')).toBeInTheDocument()
+    expect(within(notShared).getByText('Delta Radio')).toBeInTheDocument()
+    expect(within(notShared).getByText('Last month: DT 26 · Acceptance —')).toBeInTheDocument()
+    expect(within(notShared).queryByRole('button')).toBeNull()
+
+    // Waiting first, then returned, then approved.
+    const rows = within(screen.getByRole('table', { name: 'Shared plans' })).getAllByRole('row').slice(1)
+    expect(rows.map((r) => r.querySelector('.pl-name').textContent)).toEqual(['Alpha Telecom', 'Epsilon Link', 'Beta Networks'])
+
+    const card = screen.getByRole('region', { name: 'Shared their plan' })
+    expect(within(card).getByText('3')).toBeInTheDocument()
+    expect(within(card).getByText('/ 5')).toBeInTheDocument()
+    const word = (id) => card.querySelector(`[data-contractor="${id}"] .pl-person-word`).textContent
+    expect(word(1)).toBe('Waiting')
+    expect(word(2)).toBe('Approved')
+    expect(word(3)).toBe('Not shared')
+    expect(word(5)).toBe('Returned')
+  })
+
+  it('approves one stream’s plan id at a time', async () => {
+    showPlans()
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Approve DT Delivery for Alpha Telecom' }))
+    await waitFor(() => expect(api.post).toHaveBeenCalledWith('/pip/11/approve'))
+    expect(api.post).toHaveBeenCalledTimes(1)
+
+    await userEvent.click(screen.getByRole('button', { name: 'Approve Acceptance for Alpha Telecom' }))
+    await waitFor(() => expect(api.post).toHaveBeenCalledWith('/pip/21/approve'))
+    expect(api.post).toHaveBeenCalledTimes(2)
+  })
+
+  it('will not return a plan until there is a comment, then posts it', async () => {
+    showPlans()
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Return DT Delivery for Alpha Telecom' }))
+    const send = screen.getByRole('button', { name: 'Send' })
+    expect(send).toBeDisabled()
+    await userEvent.type(screen.getByLabelText('What should they change?'), 'Only 30 sites are held.')
+    expect(send).toBeEnabled()
+    await userEvent.click(send)
+    await waitFor(() =>
+      expect(api.post).toHaveBeenCalledWith('/pip/11/return', { comment: 'Only 30 sites are held.' }),
+    )
+  })
+
+  it('shows an approved stream as a status, with no buttons', async () => {
+    showPlans()
+
+    const beta = await sharedRow('Beta Networks')
+    expect(within(cell(beta, 'DT')).getByText('Approved')).toBeInTheDocument()
+    expect(within(cell(beta, 'DT')).queryByRole('button')).toBeNull()
+    expect(within(cell(beta, 'ACCEPTANCE')).queryByRole('button')).toBeNull()
+    const epsilon = await sharedRow('Epsilon Link')
+    expect(within(cell(epsilon, 'DT')).getByText('Returned')).toBeInTheDocument()
+    expect(within(cell(epsilon, 'DT')).queryByRole('button')).toBeNull()
+    expect(cell(epsilon, 'ACCEPTANCE')).toHaveTextContent('—')
+  })
+
+  it('flags a DT number above the sites held, and only then', async () => {
+    showPlans()
+
+    const alpha = await sharedRow('Alpha Telecom')
+    expect(within(cell(alpha, 'DT')).getByText('Above 30 sites held')).toBeInTheDocument()
+    expect(within(cell(alpha, 'DT')).getByText('35 in شهریور')).toBeInTheDocument()
+    expect(screen.getAllByText(/sites held/)).toHaveLength(1)
+  })
+
+  it('compares the shared plans with MTN’s internal PIP', async () => {
+    showPlans()
+
+    const card = await screen.findByRole('region', { name: 'Contractors vs MTN internal' })
+    // 40 (Alpha) + 25 (Beta) + 20 (Epsilon); Gamma's Draft adds nothing.
+    expect(await within(card).findByText('85 of 100 · 15 short')).toBeInTheDocument()
+    expect(within(card).getByText('No internal PIP set')).toBeInTheDocument()
+    expect(within(card).getByText('not shown to contractors')).toBeInTheDocument()
+  })
+
+  it('does not draw the internal PIP card for a role that does not see it', async () => {
+    showPlans('Admin')
+
+    await screen.findByRole('table', { name: 'Shared plans' })
+    expect(screen.queryByRole('region', { name: 'Contractors vs MTN internal' })).toBeNull()
+    expect(api.get).not.toHaveBeenCalledWith('/pip/internal-target', expect.anything())
+  })
+
+  it('gives a coordinator the statuses and no decision', async () => {
+    showPlans('Coordinator')
+
+    const alpha = await sharedRow('Alpha Telecom')
+    expect(within(cell(alpha, 'DT')).getByText('Waiting')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^Approve/ })).toBeNull()
+    expect(screen.queryByRole('button', { name: /^Return/ })).toBeNull()
+  })
+
+  it('shows a waiting revision in its own card, decided through the same endpoints', async () => {
+    showPlans()
+
+    const card = await screen.findByRole('region', { name: /Revision for شهریور · Beta Networks · Acceptance 20 → 15/ })
+    expect(card.querySelector('.pl-revision-note')).toHaveTextContent('Sites blocked — Two villages flooded. · until you decide, 20 counts')
+
+    await userEvent.click(within(card).getByRole('button', { name: /^Return/ }))
+    const send = within(card).getByRole('button', { name: 'Send' })
+    expect(send).toBeDisabled()
+    await userEvent.type(within(card).getByLabelText('What should they change?'), 'Show the flood report.')
+    await userEvent.click(send)
+    await waitFor(() => expect(api.post).toHaveBeenCalledWith('/pip/51/return', { comment: 'Show the flood report.' }))
+
+    await userEvent.click(within(card).getByRole('button', { name: /^Approve/ }))
+    await waitFor(() => expect(api.post).toHaveBeenCalledWith('/pip/51/approve'))
+  })
+
+  it('draws no revision card when none is waiting', async () => {
+    showPlans('PM', { queues: NOTHING_WAITING })
+
+    await screen.findByRole('region', { name: 'Shared their plan' })
+    expect(screen.queryByRole('region', { name: /^Revision for/ })).toBeNull()
+  })
+
+  it('counts the same decisions on the badge and the card, and recounts after one', async () => {
+    showPlans()
+
+    // Alpha's two streams and Beta's revision.
+    expect(await screen.findByLabelText('3 waiting')).toBeInTheDocument()
+    expect(screen.getByText('3 decisions waiting')).toBeInTheDocument()
+
+    // Once approved, the server lists Alpha's DT as Approved.
+    const approvedAlpha = queuesBy({
+      planning: {
+        DT: [queueRow({ contractor_id: 1, contractor_name: 'Alpha Telecom', plan_id: 11, status: 'Approved', in_force_count: 40 })],
+        ACCEPTANCE: [queueRow({ contractor_id: 1, contractor_name: 'Alpha Telecom', plan_id: 21, status: 'Submitted' })],
+      },
+      running: {
+        ACCEPTANCE: [queueRow({ contractor_id: 2, contractor_name: 'Beta Networks', plan_id: 51, status: 'RevisionRequested', in_force_count: 20, committed_count: 15 })],
+      },
+    })
+    serveOverview(overview(), { queues: approvedAlpha })
+    await userEvent.click(screen.getByRole('button', { name: 'Approve DT Delivery for Alpha Telecom' }))
+
+    expect(await screen.findByLabelText('2 waiting')).toBeInTheDocument()
+    expect(screen.getByText('2 decisions waiting')).toBeInTheDocument()
+  })
+
+  it('opens a contractor’s plan history, both streams, read-only', async () => {
+    showPlans()
+
+    await userEvent.click(within(await sharedRow('Beta Networks')).getByRole('button', { name: 'Beta Networks' }))
+    const drawer = await screen.findByRole('dialog', { name: 'Plan history' })
+    const planning = nextPeriod(RUNNING.year, RUNNING.month)
+    for (const stream of ['DT', 'ACCEPTANCE']) {
+      await waitFor(() =>
+        expect(api.get).toHaveBeenCalledWith('/pip/revisions', {
+          params: { year: planning.year, month: planning.month, stream, contractor_id: 2 },
+        }),
+      )
+    }
+    expect(within(drawer).queryByRole('button', { name: /approve|return/i })).toBeNull()
   })
 })
 

@@ -5,3 +5,11 @@ export const STREAM_META = {
   acceptance: { stream: 'ACCEPTANCE', title: 'Acceptance', unit: 'sites accepted', accent: '#6B4FA0', hasAssignment: false },
 }
 export const MISS = '#E3A25B'
+
+/** A revision request's reason, as the PM reads it (services/monthly_plan.py). */
+export const REASON_LABEL = {
+  SITES_BLOCKED: 'Sites blocked',
+  SCOPE_CHANGE: 'Scope change',
+  PERMITS: 'Permits',
+  OTHER: 'Other',
+}

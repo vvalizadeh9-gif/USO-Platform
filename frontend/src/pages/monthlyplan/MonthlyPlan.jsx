@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { EmptyState, PageHead } from '../../components/ui'
 import { useAuth } from '../../context/AuthContext'
-import { canDecidePlans, canSetAcceptancePlan } from '../../lib/roles'
+import { canDecidePlans, canSeeInternalPip, canSetAcceptancePlan } from '../../lib/roles'
 import { planningPeriod } from '../../lib/shamsi'
 import ContractorPlan from './ContractorPlan'
 import PeriodPicker from './PeriodPicker'
@@ -27,7 +27,13 @@ export default function MonthlyPlan() {
   const { user } = useAuth()
   const isContractor = user?.role?.name === 'Contractor'
   if (!isContractor) {
-    return <PmPlan canDecide={canDecidePlans(user)} canSetTarget={canSetAcceptancePlan(user)} />
+    return (
+      <PmPlan
+        canDecide={canDecidePlans(user)}
+        canSetTarget={canSetAcceptancePlan(user)}
+        canSeeInternal={canSeeInternalPip(user)}
+      />
+    )
   }
   return <ContractorMonthlyPlan />
 }
