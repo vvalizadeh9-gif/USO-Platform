@@ -892,6 +892,97 @@ tbody tr:last-child td { border-bottom: none; }
   background: var(--accent);
 }
 .ui-tab:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.ui-tab { display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; flex: none; }
+.ui-tab svg { flex: none; }
+/* A tab's count: neutral, and accent on the selected tab. The alert chip
+   ("4 late") is the one place a tab carries a status colour. */
+.ui-tab-count,
+.ui-tab-alert {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 22px; height: 20px; padding: 0 7px; border-radius: 10px;
+  font-size: var(--fs-caption); line-height: var(--lh-caption); font-weight: 600;
+}
+.ui-tab-count { background: var(--neutral-soft); color: var(--neutral-ink); }
+.ui-tab[aria-selected='true'] .ui-tab-count { background: var(--accent-soft); color: var(--accent-ink); }
+.ui-tab-alert { background: var(--danger-soft); color: var(--danger-ink); }
+.ui-tab-sep { color: var(--text-tertiary); flex: none; align-self: center; }
+/* Tabs that are one thing with several queues (the fix loop): a track wash
+   around them, under a label. No chevron inside it. */
+.ui-tab-group {
+  display: flex; align-items: center; gap: 2px;
+  padding: 0 4px 0 12px; border-radius: var(--radius-md);
+  background: var(--neutral-soft);
+}
+.ui-tab-group-label {
+  display: inline-flex; align-items: center; gap: 6px; padding-inline-end: 4px;
+  font-size: var(--fs-caption); line-height: var(--lh-caption); font-weight: 600;
+  color: var(--text-secondary); white-space: nowrap; cursor: help;
+}
+/* The archive: at the far end, behind a divider. */
+.ui-tab-end { display: flex; align-items: center; gap: 4px; margin-inline-start: auto; }
+.ui-tab-end::before {
+  content: ''; align-self: stretch; width: 1px; margin: 8px 8px 8px 0; background: var(--border);
+}
+
+/* ---------- PageBar (ui.jsx) ----------
+   The one-screen pages' header: 131px in all. Row 1 (min 60px): eyebrow over
+   the title, the context after a divider, the actions at the far end. Row 2
+   (50px): the tabs, and their view controls at the far end. */
+.page-bar {
+  flex: none;
+  padding: 20px 32px 0;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+}
+.page-bar-row { display: flex; align-items: center; gap: 20px; min-height: 60px; min-width: 0; }
+.page-bar-titles { flex: none; }
+.page-bar-eyebrow {
+  font-size: var(--fs-meta); line-height: var(--lh-meta); font-weight: 600; color: var(--text-link);
+}
+.page-bar-title {
+  font-size: var(--fs-display); line-height: var(--lh-display); font-weight: 600;
+  letter-spacing: -0.01em; white-space: nowrap;
+}
+.page-bar-context {
+  display: flex; align-items: center; min-width: 0;
+  padding-inline-start: 20px; border-inline-start: 1px solid var(--border);
+  align-self: stretch; margin-block: 8px;
+}
+.page-bar-actions {
+  display: flex; align-items: center; gap: 8px; margin-inline-start: auto; flex: none;
+}
+.page-bar-tabs {
+  display: flex; align-items: center; gap: 12px;
+  height: 50px; min-width: 0;
+}
+.page-bar-tabs > .ui-tabs { flex-wrap: nowrap; flex: 1 1 auto; min-width: 0; align-items: center; }
+.page-bar-tabs-right { display: flex; align-items: center; gap: 8px; margin-inline-start: auto; flex: none; }
+.page-bar .ui-tab { height: 38px; }
+.page-bar .ui-seg-option { height: 30px; }
+
+/* ---------- ProcessStepper ----------
+   1 › 2 › 3 in the PageBar's context slot. The current step is the accent
+   wash with a filled number; the others are links (or plain text for a
+   screen this person cannot open). */
+.stepper ol { display: flex; align-items: center; gap: 4px; list-style: none; }
+.stepper li { display: flex; align-items: center; gap: 4px; }
+.stepper-sep { color: var(--text-tertiary); flex: none; }
+.stepper-step {
+  display: inline-flex; align-items: center; gap: 8px;
+  height: 32px; padding: 0 10px 0 6px; border-radius: 16px;
+  font-size: var(--fs-control); line-height: var(--lh-control); font-weight: 500;
+  color: var(--text-secondary); white-space: nowrap;
+}
+a.stepper-step:hover { background: var(--track); color: var(--text); }
+a.stepper-step:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.stepper-step.is-muted { color: var(--text-tertiary); }
+.stepper-num {
+  display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%;
+  border: 1px solid var(--control-border); background: var(--surface);
+  font-size: var(--fs-caption); line-height: 1; font-weight: 600;
+}
+.stepper-step.is-current { background: var(--accent-wash); color: var(--accent-ink); font-weight: 600; box-shadow: inset 0 0 0 1px var(--accent-track); }
+.stepper-step.is-current .stepper-num { background: var(--accent); border-color: var(--accent); color: var(--text-on-accent); }
 
 /* Segmented control: pressed buttons in a track. */
 .ui-seg {

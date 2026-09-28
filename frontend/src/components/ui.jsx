@@ -1,8 +1,8 @@
 // Small shared presentational components. Keeping status→style mapping
 // in one place avoids duplicating the logic across every table.
 import { motion } from 'framer-motion'
-import { AlertTriangle, CheckCircle2, Inbox, Info, XCircle } from 'lucide-react'
-import { useEffect, useId, useRef } from 'react'
+import { AlertTriangle, CheckCircle2, ChevronRight, Inbox, Info, XCircle } from 'lucide-react'
+import { Fragment, useEffect, useId, useRef } from 'react'
 
 const STATUS_CLASS = {
   Approved: 'pill-green',
@@ -81,8 +81,23 @@ export const fadeUp = {
  * which is selected. Left/Right move along the row and select as they go
  * (Home/End jump to the ends), and only the selected tab is in the Tab order,
  * so the row is one stop for the keyboard rather than one per tab.
+ *
+ * A tab may also carry:
+ *
+ * * `icon` -- a lucide icon drawn before the label;
+ * * `count` -- a neutral count chip (accent on the selected tab), shown when
+ *   above zero;
+ * * `alert` -- a second chip in danger ink, e.g. "4 late";
+ * * `group` -- the key of an entry in `groups` ({ [key]: { label, icon,
+ *   title } }). Consecutive tabs of one group are drawn together in a
+ *   track-coloured container under the group's label;
+ * * `end` -- pushed to the far end of the row, after a divider. End tabs go
+ *   last in the array, so the keyboard order is the visual one.
+ *
+ * With `steps`, a chevron sits between the parts of the row (not inside a
+ * group, and not before an end tab): the tabs are a process, in order.
  */
-export function Tabs({ tabs, value, onChange, label, className = '' }) {
+export function Tabs({ tabs, value, onChange, label, className = '', steps = false, groups = {} }) {
   const listRef = useRef(null)
 
   const onKeyDown = (event) => {
@@ -98,6 +113,10 @@ export function Tabs({ tabs, value, onChange, label, className = '' }) {
     listRef.current?.querySelectorAll('[role="tab"]')[next]?.focus()
   }
 
+  const renderTab = (tab) => (
+    <TabButton key={tab.key} tab={tab} selected={tab.key === value} onSelect={onChange} />
+  )
+
   return (
     <div
       className={`ui-tabs ${className}`.trim()}
@@ -106,23 +125,107 @@ export function Tabs({ tabs, value, onChange, label, className = '' }) {
       ref={listRef}
       onKeyDown={onKeyDown}
     >
-      {tabs.map((tab) => {
-        const selected = tab.key === value
+      {tabSegments(tabs).map((segment, i) => {
+        const chevron = steps && i > 0 && !segment.end && (
+          <ChevronRight size={14} className="ui-tab-sep" aria-hidden="true" />
+        )
+        if (segment.end) {
+          return (
+            <div key={segment.id} className="ui-tab-end">
+              {segment.tabs.map(renderTab)}
+            </div>
+          )
+        }
+        if (segment.group) {
+          const group = groups[segment.group] || {}
+          const GroupIcon = group.icon
+          return (
+            <Fragment key={segment.id}>
+              {chevron}
+              <div className="ui-tab-group" role="presentation">
+                <span className="ui-tab-group-label" title={group.title}>
+                  {GroupIcon && <GroupIcon size={14} aria-hidden="true" />}
+                  {group.label}
+                </span>
+                {segment.tabs.map(renderTab)}
+              </div>
+            </Fragment>
+          )
+        }
         return (
-          <button
-            key={tab.key}
-            type="button"
-            role="tab"
-            className="ui-tab"
-            aria-selected={selected}
-            tabIndex={selected ? 0 : -1}
-            onClick={() => onChange(tab.key)}
-          >
-            {tab.label}
-          </button>
+          <Fragment key={segment.id}>
+            {chevron}
+            {segment.tabs.map(renderTab)}
+          </Fragment>
         )
       })}
     </div>
+  )
+}
+
+/** The row split into its parts: single tabs, runs of one group, and the
+ * end tabs, in order. */
+function tabSegments(tabs) {
+  const segments = []
+  for (const tab of tabs) {
+    const last = segments[segments.length - 1]
+    if (tab.end) {
+      if (last?.end) last.tabs.push(tab)
+      else segments.push({ id: `end-${tab.key}`, end: true, tabs: [tab] })
+    } else if (tab.group && last?.group === tab.group) {
+      last.tabs.push(tab)
+    } else {
+      segments.push({ id: tab.group ? `group-${tab.key}` : tab.key, group: tab.group, tabs: [tab] })
+    }
+  }
+  return segments
+}
+
+function TabButton({ tab, selected, onSelect }) {
+  const Icon = tab.icon
+  return (
+    <button
+      type="button"
+      role="tab"
+      className="ui-tab"
+      aria-selected={selected}
+      tabIndex={selected ? 0 : -1}
+      onClick={() => onSelect(tab.key)}
+    >
+      {Icon && <Icon size={16} strokeWidth={1.9} aria-hidden="true" />}
+      {tab.label}
+      {tab.count > 0 && <span className="ui-tab-count tnum">{tab.count}</span>}
+      {tab.alert && <span className="ui-tab-alert tnum">{tab.alert}</span>}
+    </button>
+  )
+}
+
+/**
+ * The header of a one-screen page, the same on every page that has one.
+ *
+ * Row 1: the eyebrow over the title, then `context` after a divider (a
+ * process stepper, a scope button), then `actions` pushed to the far end.
+ * Row 2, when there are `tabs`: the page's tabs (normally a `<Tabs>`), then
+ * `tabsRight` -- the controls that act on the tab's view -- at the far end.
+ */
+export function PageBar({ eyebrow, title, context, actions, tabs, tabsRight }) {
+  return (
+    <header className="page-bar">
+      <div className="page-bar-row">
+        <div className="page-bar-titles">
+          {eyebrow && <div className="page-bar-eyebrow">{eyebrow}</div>}
+          <h1 className="page-bar-title">{title}</h1>
+        </div>
+        {context && <div className="page-bar-context">{context}</div>}
+        {actions && <div className="page-bar-actions">{actions}</div>}
+      </div>
+      {(tabs || tabsRight) && (
+        <div className="page-bar-tabs">
+          {tabs}
+          {tabsRight && <div className="page-bar-tabs-right">{tabsRight}</div>}
+        </div>
+      )}
+    </header>
   )
 }
 
