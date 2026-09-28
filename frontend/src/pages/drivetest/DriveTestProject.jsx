@@ -365,8 +365,8 @@ export default function DriveTestProject() {
                 >
                   {(f) =>
                     flowHasActivity(f) ? (
-                      // Keyed on the year shown, so switching resets the crosshair to
-                      // the latest month of the new view.
+                      // Keyed on the year shown, so switching years redraws the
+                      // chart rather than morphing one year's columns into the next.
                       <FlowChart key={String(flowScope)} data={f} scope={flowScope} />
                     ) : (
                       <div className="dt-empty">

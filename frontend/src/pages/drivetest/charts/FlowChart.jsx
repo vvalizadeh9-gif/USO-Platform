@@ -1,69 +1,55 @@
-import { motion, useReducedMotion } from 'framer-motion'
-import { useState } from 'react'
 import { shamsiMonthName } from '../../../lib/shamsi'
 import { count } from '../format'
-import { flowView, labelledMonths, netChanges } from './flowView'
-import { DrawPath, FadeArea } from './primitives'
+import { flowView, netChanges } from './flowView'
+import { FadeArea } from './primitives'
 
 /**
- * Sites on air against drive tests done, read two ways.
+ * Sites on air against drive tests done, one year at a time, with each
+ * month's own movement in a table underneath.
  *
  * WHAT THIS ANSWERS. The KPI band already says how many sites are on air and
  * how many are done, as of right now. It cannot say whether the gap between
  * them has been closing or widening, or whether this month looks like the
- * last one. This chart is the trailing shape behind those two totals: every
- * month since the obligation was tracked, on-aired and drive-tested, running.
+ * last one. This chart is the trailing shape behind those two totals for the
+ * selected year, and the table under it says what each month did.
  *
- * ONE LEDGER, CAPPED BY YEAR. It opens on the latest year, and a past year
- * can be picked to stop the chart there instead. Picking a year does not crop
- * the months before it off screen: every figure is still a real running
- * total, carried from the same opening balance, so the gap is the real
- * backlog at each month's end and coverage can never pass 100%. What changes
- * is where the line ends and the scale's range -- a year in the past does not
- * drag the axis out to fit today's numbers.
+ * ONE COLUMN PER MONTH. Every month of the selected year gets a column -- 12
+ * for a finished year, Farvardin to now for the current one -- with its point
+ * at the column's centre and its name under it. The table below shares the
+ * plot's 104px left gutter and the same columns, so each month's figures sit
+ * straight under its dots. The plot is drawn in columns, not a fixed canvas:
+ * the lines stretch with the card while the labels, dots and figures stay at
+ * their true size.
  *
- * NO FIGURES ROW, NO READOUT. The running totals are on the KPI cards above
- * and the month's own movement is in the What moved card beside this one, so
- * the card no longer repeats them. What is left to draw is the shape: two
- * lines and the gap between them. The key sits in the card's title row.
+ * RUNNING TOTALS, CARRIED. The lines are the programme's real running totals,
+ * carried from the opening balance on 1 Farvardin 1404 (see `flowView`), so
+ * the current year ends on the KPI cards' figures and the gap is the real
+ * backlog. They do not reset to zero on 1 Farvardin.
+ *
+ * THE OPEN MONTH. A month still in progress gets hollow dots, a dashed last
+ * segment and a light column highlight, here and in the table.
  *
  * COBALT COLOURS. DT done is the "done" series, so it takes the accent; On-
  * aired is the reference series and takes the muted neutral; the gap between
- * them is the accent's soft fill. Every figure is ink. The net-change strip
- * is neutral pills with their sign kept -- which way a month moved the
- * backlog is in the sign and in `data-tone`, not in green and red.
+ * them is the accent's soft fill. The table's Gap change is green where the
+ * backlog shrank and brick where it grew, with its sign kept, so the colour is
+ * never the only signal.
  *
- * THE PAGE CHOOSES THE YEARS. Which years are on screen is a prop, because
- * the card header carries both the control that switches them and the info
- * note that describes the view (where its scale starts), and those must
- * agree with what is drawn. The arithmetic is in
- * `flowView.js` for the same reason: the chart and the note read one copy.
- *
- * THE CROSSHAIR IS NEVER BLANK. It opens on the latest month and returns
- * there when the pointer leaves.
+ * THE PAGE CHOOSES THE YEAR. Which year is on screen is a prop, because the
+ * card header carries both the control that switches it and the info note
+ * that describes the view (where its scale starts), and those must agree
+ * with what is drawn. The arithmetic is in `flowView.js` for the same reason:
+ * the chart and the note read one copy.
  */
-
-const VIEW_W = 740
-
-const PAD_L = 16
-const MAIN_TOP = 16
-// The plot's height in viewBox units. The chart scales with its column, and
-// at 1920 wide the column draws the 740-unit canvas at about 0.9, so 290 is
-// a plot about 260px tall there. With the KPI band in the Overview and the
-// breakdowns on their own tab, that still leaves the Overview on one screen.
-const MAIN_H = 290
-const MAIN_W = 700
-const PLOT_RIGHT = PAD_L + MAIN_W
-const MAIN_AXIS_Y = MAIN_TOP + MAIN_H + 20
-
-/** The net-change strip, under the month labels and the year captions. */
-const STRIP_TOP = MAIN_AXIS_Y + 26
-const STRIP_H = 20
-const VIEW_H = STRIP_TOP + STRIP_H + 8
 
 /** The two series. DT done is the "done" series (the accent); On-aired is the
  * reference it is read against (the muted neutral). */
 const SERIES_COLOR = { onAir: 'var(--dt-muted)', dtDone: 'var(--accent)' }
+
+/** Which way a month moved the backlog. Falling is the good direction. */
+const toneOf = (v) => (v < 0 ? 'good' : v > 0 ? 'bad' : 'flat')
+const GAP_WORD = { good: 'shrank', bad: 'grew', flat: 'no change' }
+const signed = (v) => `${v > 0 ? '+' : ''}${count(v)}`
 
 /** The chart's key, for the card's title row: the two series, the gap
  * between them, and the hollow dot that marks a month still in progress.
@@ -92,230 +78,176 @@ export function FlowLegend() {
 }
 
 export default function FlowChart({ data, scope = null }) {
-  const reduced = useReducedMotion()
-  const { selected, multiYear, points, months, ceiling, floor } = flowView(
-    data,
-    scope,
-  )
-
-  // The month the crosshair shows. `null` is "the latest", which
-  // is where the chart opens and where it returns when the pointer leaves.
-  const [hover, setHover] = useState(null)
-  const latest = months.length - 1
-  const active = hover != null && hover <= latest ? hover : latest
-
-  const n = points.length
-  const x = (i) => PAD_L + (MAIN_W * i) / Math.max(n - 1, 1)
-  const span = Math.max(ceiling - floor, 1)
-  const y = (v) => MAIN_TOP + MAIN_H - ((v - floor) / span) * MAIN_H
-
-  const last = points[n - 1]
-
+  const { selected, points, months, floor, ceiling, ticks } = flowView(data, scope)
+  const n = months.length
+  // points[0] is the balance the year opened on; points[j + 1] is month j.
+  const drawn = points.slice(1)
+  const nets = netChanges(points)
+  const last = drawn[n - 1]
   const openTail = last.isOpen && n > 1
-  const solidLineFor = (key) => (openTail ? points.slice(0, -1) : points)
-    .map((p, i) => `${i === 0 ? 'M' : 'L'}${x(i)},${y(p[key])}`)
-    .join(' ')
-  const dashedLineFor = (key) =>
-    `M${x(n - 2)},${y(points[n - 2][key])} L${x(n - 1)},${y(points[n - 1][key])}`
 
-  // A plain computation, not a useMemo: `x`/`y` are cheap closures rebuilt
-  // every render anyway, so memoising against them would never skip work.
+  // The plot's own units: one per month across, 0-100 down. Stretched to
+  // the plot's box, so a point sits at its column's centre at any width.
+  const x = (j) => j + 0.5
+  const span = Math.max(ceiling - floor, 1)
+  const yPct = (v) => 100 - ((v - floor) / span) * 100
+  const xPct = (j) => `${(x(j) / n) * 100}%`
+
+  const lineFor = (key, from, to) =>
+    drawn
+      .slice(from, to)
+      .map((p, i) => `${i === 0 ? 'M' : 'L'}${x(from + i)},${yPct(p[key])}`)
+      .join(' ')
   const areaPath =
     n < 2
       ? ''
-      : `M${x(0)},${y(points[0].onAir)} ${points.map((p, i) => `L${x(i)},${y(p.onAir)}`).join(' ')} ${[...points]
+      : `${lineFor('onAir', 0, n)} ${[...drawn]
           .reverse()
-          .map((p, i) => `L${x(n - 1 - i)},${y(p.dtDone)}`)
+          .map((p, i) => `L${x(n - 1 - i)},${yPct(p.dtDone)}`)
           .join(' ')} Z`
 
-  const labelEvery = multiYear ? 3 : months.length > 8 ? 2 : 1
-  const labelled = labelledMonths(months, labelEvery, multiYear)
-
-  const handleKey = (e) => {
-    if (!months.length) return
-    if (e.key === 'ArrowLeft') {
-      e.preventDefault()
-      setHover(Math.max(0, active - 1))
-    } else if (e.key === 'ArrowRight') {
-      e.preventDefault()
-      setHover(Math.min(latest, active + 1))
-    }
-  }
-
-  // One per month drawn, in the same order as `months`: points[0] is the
-  // opening balance, so the step into month j is netChanges()[j].
-  const nets = netChanges(points)
-  const slotW = MAIN_W / Math.max(n - 1, 1)
-  // See .dt-flow-dense in app.css: the pill label only grows where a month
-  // has the room for it.
-  const densePills = slotW < 44
-  const pillW = Math.min(slotW - 4, densePills ? 42 : 48)
-
   return (
-    <div className="dt-flowcard">
-      <div
-        className="dt-flowchart"
-        tabIndex={0}
-        role="img"
-        onKeyDown={handleKey}
-        onMouseLeave={() => setHover(null)}
-        aria-label={
-          `On-aired vs drive tests done, running totals through ${selected}. ` +
-          `On-aired ${last.onAir}, DT done ${last.dtDone}, gap ${last.gap}.` +
-          (last.isOpen ? ' The latest month is still in progress.' : '')
-        }
-      >
-        <svg
-          viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
-          className={`dt-flowchart-svg${densePills ? ' dt-flow-dense' : ''}`}
+    <div className="dt-flowcard" style={{ '--dt-flow-cols': n }}>
+      <div className="dt-flow-scroll">
+        <div
+          className="dt-flowchart"
+          role="img"
+          aria-label={
+            `On-aired vs drive tests done, running totals, ${selected}. ` +
+            `On-aired ${last.onAir}, DT done ${last.dtDone}, gap ${last.gap}.` +
+            (last.isOpen ? ' The latest month is still in progress.' : '')
+          }
         >
-          {/* Three faint gridlines, unlabelled -- the figures are in the stat
-              line -- and the baseline where the months sit. */}
-          {[0.25, 0.5, 0.75].map((f) => (
-            <line
-              key={f}
-              x1={PAD_L}
-              x2={PLOT_RIGHT}
-              y1={MAIN_TOP + MAIN_H * f}
-              y2={MAIN_TOP + MAIN_H * f}
-              className="dt-gridline"
-            />
-          ))}
-          <line x1={PAD_L} x2={PLOT_RIGHT} y1={MAIN_TOP + MAIN_H} y2={MAIN_TOP + MAIN_H} className="dt-baseline" />
-
-          {areaPath && <FadeArea d={areaPath} fill="var(--accent-soft)" />}
-
-          {/* Year boundaries, wherever the drawn window spans more than one --
-              not just the all-years view any more, since a capped year can
-              too. `months` (the window), not `data.months` (the payload): the
-              window is always a prefix of the payload now, so its own index
-              lines up with `x()` even when it stops short of today. */}
-          {multiYear &&
-            months.map((m, j) =>
-              m.month === 1 && j > 0 ? (
-                <line
-                  key={`yr-${m.year}`}
-                  x1={x(j + 1)}
-                  x2={x(j + 1)}
-                  y1={MAIN_TOP}
-                  y2={MAIN_TOP + MAIN_H}
-                  className="dt-flowchart-yearline"
-                />
-              ) : null,
+          <div className="dt-flow-yaxis" aria-hidden="true">
+            {ticks.map((t) => (
+              <span key={t} className="dt-flow-ytick tnum" style={{ top: `${yPct(t)}%` }}>
+                {count(t)}
+              </span>
+            ))}
+          </div>
+          <div className="dt-flow-plot">
+            {ticks.map((t) => (
+              <i
+                key={t}
+                className={t === floor ? 'dt-flow-baseline' : 'dt-flow-grid'}
+                style={{ top: `${yPct(t)}%` }}
+              />
+            ))}
+            {last.isOpen && (
+              <i
+                className="dt-flow-opencol"
+                style={{ left: `${((n - 1) / n) * 100}%`, width: `${100 / n}%` }}
+              />
             )}
-
-          {/* The crosshair, always on a month: the latest one until a reader
-              points somewhere else. */}
-          {months.length > 0 && (
-            <line
-              data-testid="dt-flow-crosshair"
-              x1={x(active + 1)}
-              x2={x(active + 1)}
-              y1={MAIN_TOP}
-              y2={MAIN_TOP + MAIN_H}
-              className="dt-hover-rule"
-            />
-          )}
-
-          {['onAir', 'dtDone'].map((key) => {
-            const color = SERIES_COLOR[key]
-            return (
-              <g key={key}>
-                <DrawPath d={solidLineFor(key)} stroke={color} strokeWidth={2.5} />
-                {openTail && <DrawPath d={dashedLineFor(key)} stroke={color} strokeWidth={2.5} dashed />}
-                {/* One dot, at the end of the line: white, ringed in the
-                    line's colour. The months are in the labels and the strip. */}
-                <motion.circle
-                  data-testid={openTail ? 'dt-flow-open-dot' : 'dt-flow-end-dot'}
-                  cx={x(n - 1)}
-                  cy={y(points[n - 1][key])}
-                  r={4}
-                  fill="var(--surface)"
-                  stroke={color}
-                  strokeWidth={2}
-                  initial={reduced ? false : { scale: 0, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  transition={{ delay: 0.6, duration: 0.3 }}
-                />
-              </g>
-            )
-          })}
-
-          {/* Month names: every third step in the cumulative view, the year
-              on a second line under each Farvardin -- see labelledMonths for
-              how the latest month is fitted in without a collision. */}
-          {months.map((m, j) =>
-            labelled.has(j) ? (
-              <g key={`x-${j}`} data-testid="dt-flow-month-label">
-                <text
-                  x={x(j + 1)}
-                  y={MAIN_AXIS_Y}
-                  className={`dt-axis-label dt-farsi${m.is_open ? ' dt-axis-current' : ''}`}
-                  textAnchor="middle"
+            <svg
+              className="dt-flowchart-svg"
+              viewBox={`0 0 ${n} 100`}
+              preserveAspectRatio="none"
+              aria-hidden="true"
+            >
+              {areaPath && <FadeArea d={areaPath} fill="var(--accent-soft)" />}
+              {/* Plain paths: the stroke keeps its screen width however the
+                  plot is stretched (non-scaling), which a draw-on animation's
+                  dash would break into pieces. */}
+              {['onAir', 'dtDone'].map((key) => (
+                <g
+                  key={key}
+                  fill="none"
+                  stroke={SERIES_COLOR[key]}
+                  strokeWidth={2.5}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
                 >
-                  {shamsiMonthName(m.month)}
-                </text>
-                {multiYear && m.month === 1 && (
-                  <text x={x(j + 1)} y={MAIN_AXIS_Y + 14} className="dt-axis-label" textAnchor="middle">
-                    {m.year}
-                  </text>
-                )}
-              </g>
-            ) : null,
-          )}
+                  <path d={lineFor(key, 0, openTail ? n - 1 : n)} vectorEffect="non-scaling-stroke" />
+                  {openTail && (
+                    <path
+                      d={lineFor(key, n - 2, n)}
+                      vectorEffect="non-scaling-stroke"
+                      strokeDasharray="5 5"
+                    />
+                  )}
+                </g>
+              ))}
+            </svg>
+            {['onAir', 'dtDone'].map((key) =>
+              drawn.map((p, j) => {
+                const open = p.isOpen
+                return (
+                  <i
+                    key={`${key}-${j}`}
+                    data-testid={open ? 'dt-flow-open-dot' : 'dt-flow-dot'}
+                    className={open ? 'dt-flow-dot dt-flow-dot-open' : 'dt-flow-dot'}
+                    style={{ left: xPct(j), top: `${yPct(p[key])}%`, '--dt-dot': SERIES_COLOR[key] }}
+                  />
+                )
+              }),
+            )}
+          </div>
+        </div>
 
-          {/* Hit areas, one per month, spanning the plot and the pills. */}
-          {months.map((m, j) => (
-            <rect
-              key={`h-${j}`}
-              x={x(j + 1) - slotW / 2}
-              y={MAIN_TOP}
-              width={slotW}
-              height={STRIP_TOP + STRIP_H - MAIN_TOP}
-              fill="transparent"
-              onMouseEnter={() => setHover(j)}
-            />
-          ))}
-
-          {/* What each month did to the backlog, one pill per month under the
-              axis. The lines above answer "where are we"; this says outright,
-              once per month, whether that month helped or hurt. The pill of
-              the month the crosshair is on is outlined, so the two read as one. */}
-          {months.map((m, j) => {
-            const net = nets[j]
-            const tone = net === 0 ? 'flat' : net < 0 ? 'good' : 'bad'
-            return (
-              <g
-                key={`net-${j}`}
-                data-testid="dt-flow-net"
-                data-tone={tone}
-                data-active={j === active || undefined}
-                pointerEvents="none"
-              >
-                <rect
-                  x={x(j + 1) - pillW / 2}
-                  y={STRIP_TOP}
-                  width={pillW}
-                  height={STRIP_H}
-                  rx={STRIP_H / 2}
-                  className={`dt-flow-net-pill dt-flow-net-${tone}`}
-                />
-                <text
-                  x={x(j + 1)}
-                  y={STRIP_TOP + STRIP_H / 2}
-                  className={`dt-flow-net-text dt-flow-net-text-${tone}`}
-                  textAnchor="middle"
-                  dominantBaseline="central"
+        {/* Each month's own movement, one column per month, straight under
+            its dots: the same 104px gutter and the same column widths. */}
+        <table className="dt-flow-table" data-testid="dt-flow-table">
+          <caption className="dt-sr-only">Each month of {selected}: new on air, DT done and the change in the gap</caption>
+          <colgroup>
+            <col className="dt-flow-gutter" />
+            {months.map((m) => (
+              <col key={`${m.year}-${m.month}`} />
+            ))}
+          </colgroup>
+          <thead>
+            <tr>
+              <td />
+              {months.map((m, j) => (
+                <th
+                  key={`${m.year}-${m.month}`}
+                  scope="col"
+                  className={m.is_open ? 'dt-flow-col-open' : undefined}
                 >
-                  {net > 0 ? '+' : ''}
-                  {count(net)}
-                </text>
-              </g>
-            )
-          })}
-        </svg>
+                  <span className="dt-flow-month dt-farsi">{shamsiMonthName(m.month)}</span>
+                  {j === 0 && <span className="dt-flow-sub tnum">{m.year}</span>}
+                  {m.is_open && <span className="dt-flow-sub">in progress</span>}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            <tr data-row="onair">
+              <th scope="row">New on air</th>
+              {months.map((m) => (
+                <td key={`${m.year}-${m.month}`} className={m.is_open ? 'dt-flow-col-open tnum' : 'tnum'}>
+                  {count(m.on_aired)}
+                </td>
+              ))}
+            </tr>
+            <tr data-row="done">
+              <th scope="row">DT done</th>
+              {months.map((m) => (
+                <td key={`${m.year}-${m.month}`} className={m.is_open ? 'dt-flow-col-open tnum' : 'tnum'}>
+                  {count(m.dt_done)}
+                </td>
+              ))}
+            </tr>
+            <tr data-row="gap">
+              <th scope="row">Gap change</th>
+              {months.map((m, j) => {
+                const tone = toneOf(nets[j])
+                return (
+                  <td
+                    key={`${m.year}-${m.month}`}
+                    data-testid="dt-flow-net"
+                    data-tone={tone}
+                    className={m.is_open ? 'dt-flow-col-open tnum' : 'tnum'}
+                  >
+                    {signed(nets[j])}
+                    <span className="dt-sr-only"> ({GAP_WORD[tone]})</span>
+                  </td>
+                )
+              })}
+            </tr>
+          </tbody>
+        </table>
       </div>
-
     </div>
   )
 }

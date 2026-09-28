@@ -2804,33 +2804,65 @@ a.dt-contractor-name:hover { text-decoration: underline; text-decoration-color: 
   background: var(--surface); border: 2px solid var(--dt-muted);
 }
 
-/* The net-change strip: one pill per month under the axis, saying what that
-   month did to the backlog. Neutral, with the sign kept ("+25", "−13"): a
-   period-over-period change is not a status, so it is not green or red. Its
-   direction is in `data-tone` on the pill's group. */
-.dt-flow-net-pill { stroke: none; fill: var(--neutral-soft); }
-.dt-flow-net-text {
-  font-size: 11px; font-weight: 600; fill: var(--text-secondary);
-  font-variant-numeric: tabular-nums;
+/* The chart and the month table under it share one grid: a 104px gutter
+   (the y-axis labels above, the row names below) and one equal column per
+   month, so each month's figures sit straight under its dots. Under about
+   48px a column the pair scrolls sideways rather than squeezing. */
+.dt-flow-scroll { overflow-x: auto; padding-block-start: 8px; }
+.dt-flow-scroll > * { min-width: calc(104px + var(--dt-flow-cols) * 48px); }
+.dt-flowchart { position: relative; display: grid; grid-template-columns: 104px minmax(0, 1fr); }
+.dt-flow-yaxis { position: relative; }
+.dt-flow-ytick {
+  position: absolute; inset-inline-end: 12px; transform: translateY(-50%);
+  font-size: 12px; line-height: 16px; color: var(--text-tertiary); white-space: nowrap;
 }
-/* The pill of the month the readout is on -- the current month until a
-   reader points elsewhere -- white with an accent ring, so the crosshair,
-   the pill and the readout read as one selection. */
-[data-active="true"] > .dt-flow-net-pill { fill: var(--surface); stroke: var(--accent); stroke-width: 1.5; }
-[data-active="true"] > .dt-flow-net-text { fill: var(--accent-ink); }
-/* Where each month has under ~44 units (every year together, 19+ months) a
-   larger pill label would not fit its pill, so it keeps the smaller size. A
-   single year gives each month the room for the larger one. */
-.dt-flow-dense .dt-flow-net-text { font-size: 11px; }
-/* The chart itself -- two lines, the soft fill between them, one baseline,
-   month labels. */
-.dt-flowchart { position: relative; }
-.dt-flowchart:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 4px; }
-.dt-flowchart-svg { width: 100%; height: auto; display: block; overflow: visible; }
-/* The chart draws at about 0.9 of its viewBox at 1920, so 13 units puts the
-   month names at about 12px on screen. */
-.dt-flowchart-svg .dt-axis-label { font-size: 13px; }
-.dt-flowchart-yearline { stroke: var(--border); stroke-width: 1; stroke-dasharray: 1.5 3; }
+.dt-flow-plot { position: relative; height: 260px; margin-block: 8px; }
+.dt-flow-grid, .dt-flow-baseline {
+  position: absolute; inset-inline: 0; height: 0;
+  border-top: 1px solid var(--divider);
+}
+.dt-flow-baseline { border-top-color: var(--border); }
+/* The month still in progress: a light wash down its column. */
+.dt-flow-opencol { position: absolute; inset-block: -8px; background: var(--accent-wash); border-radius: 4px; }
+.dt-flowchart-svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+/* A dot at every month: filled, with a white ring; the open month hollow and
+   a little larger. */
+.dt-flow-dot {
+  position: absolute; width: 9px; height: 9px; border-radius: 50%;
+  transform: translate(-50%, -50%);
+  background: var(--dt-dot); box-shadow: 0 0 0 2px var(--surface);
+}
+.dt-flow-dot-open {
+  width: 11px; height: 11px; box-sizing: border-box;
+  background: var(--surface); border: 2px solid var(--dt-dot); box-shadow: none;
+}
+
+.dt-flow-table {
+  width: 100%; table-layout: fixed; border-collapse: collapse;
+  font-size: 13px; line-height: 18px;
+}
+.dt-flow-gutter { width: 104px; }
+.dt-flow-table th, .dt-flow-table td {
+  padding: 4px 2px; text-align: center; border: 0;
+  background: transparent; text-transform: none; letter-spacing: 0;
+  font-size: 13px; line-height: 18px;
+}
+.dt-flow-table thead th { vertical-align: top; font-weight: 500; color: var(--text); padding-block: 2px 6px; }
+.dt-flow-table tbody tr:hover { background: transparent; }
+.dt-flow-month { display: block; font-size: 12px; line-height: 18px; color: var(--text); }
+.dt-flow-sub { display: block; font-size: 11px; line-height: 14px; color: var(--text-tertiary); font-weight: 400; }
+.dt-flow-table tbody th {
+  text-align: start; padding-inline-end: 12px;
+  font-size: 12px; font-weight: 500; color: var(--text-secondary); white-space: nowrap;
+}
+.dt-flow-table tbody td { color: var(--text); font-variant-numeric: tabular-nums; }
+.dt-flow-table tbody tr + tr > * { border-top: 1px solid var(--divider); }
+.dt-flow-table .dt-flow-col-open { background: var(--accent-wash); }
+/* Gap change: green where the backlog shrank, brick where it grew, neutral
+   at zero. The sign is always shown, so colour is never the only signal. */
+.dt-flow-table td[data-tone='good'] { color: var(--dt-gap-shrank); font-weight: 600; }
+.dt-flow-table td[data-tone='bad'] { color: var(--dt-gap-grew); font-weight: 600; }
+.dt-flow-table td[data-tone='flat'] { color: var(--text-tertiary); }
 
 /* Two readings of the same figure, side by side. Also what keeps a five-row
    bar chart from stretching its marks across a 1280px page. */
@@ -2915,6 +2947,9 @@ a.dt-contractor-name:hover { text-decoration: underline; text-decoration-color: 
    "reference" colour here: the On-aired series, balances, Not started.
    --dt-pending-bar is the darker neutral for Pending and folded rows. */
 .dt-page { --dt-gap: 16px; --dt-muted: #8391A7; --dt-pending-bar: #6B788D; }
+/* The month table's Gap change colours, from the Cobalt canvas: the backlog
+   shrank (green) or grew (brick). Page-scoped like --dt-muted above. */
+.dt-page { --dt-gap-shrank: #3A7E5E; --dt-gap-grew: #B05A5A; }
 /* The dashboard is sized to one office screen, so it takes the full width
    rather than the app's 1,280px cap, with tighter page padding. It applies to
    all three tabs, so switching views does not move the header. */

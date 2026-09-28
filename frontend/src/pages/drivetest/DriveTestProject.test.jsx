@@ -1915,11 +1915,18 @@ function chartTotals(card) {
   return { onAir: Number(onAir), dtDone: Number(dtDone), gap: Number(gap) }
 }
 
-/** Which month the crosshair is on, as the index of the outlined pill. */
-const activePill = (card) =>
+/** The month table's Gap change cells, as they read (the sign and the
+ * figure, without the words for a screen reader). */
+const gapChanges = (card) =>
   within(card)
     .getAllByTestId('dt-flow-net')
-    .findIndex((p) => p.getAttribute('data-active') === 'true')
+    .map((td) => td.firstChild.textContent)
+
+/** One row of the month table, by its name, as the figures read. */
+const tableRow = (card, name) =>
+  [...within(card).getByRole('rowheader', { name }).closest('tr').querySelectorAll('td')].map(
+    (td) => td.firstChild.textContent,
+  )
 
 describe('the flow chart', () => {
   // Replaces the old trailing-month trend chart in "Where this is going",
@@ -1945,10 +1952,9 @@ describe('the flow chart', () => {
   })
 
   it('the latest year draws the real running totals, not a restarted count', async () => {
-    // The view this replaces restarted both counts at zero for a year, which
-    // drew a year that tested more than it put on air as coverage over 100%.
-    // A year now caps the ledger rather than windowing onto it, so picking
-    // 1405 carries 1404 forward.
+    // The view this replaces once restarted both counts at zero for a year,
+    // which drew a year that tested more than it put on air as coverage over
+    // 100%. The lines carry the running total from 1404 instead.
     serve()
     draw()
 
@@ -1957,20 +1963,14 @@ describe('the flow chart', () => {
 
     // Real totals at the end of 1405: 80 on air, 35 done, a gap of 45.
     expect(chartTotals(card)).toEqual({ onAir: 80, dtDone: 35, gap: 45 })
-    // Every month is still drawn, 1404's included, not just 1405's two.
+    // One column per month of 1405, not 1404's too.
+    expect(gapChanges(card)).toEqual(['+2', '+2'])
     expect(
-      within(card)
-        .getAllByTestId('dt-flow-net')
-        .map((p) => p.querySelector('text').textContent),
-    ).toEqual(['+6', '+2', '+2', '+2'])
-    expect(
-      within(card).getByText(
-        /Showing every month from the opening balance on 1 Farvardin 1404 through 1405/,
-      ),
+      within(card).getByText(/Showing 1405, month by month\. The lines are the programme’s running totals/),
     ).toBeInTheDocument()
   })
 
-  it('caps at a past year but keeps every year before it, ending on that year, not today', async () => {
+  it('shows a past year on its own months, ending on that year, not today', async () => {
     serve()
     draw()
 
@@ -1981,8 +1981,8 @@ describe('the flow chart', () => {
     // first year, so this is also everything from the opening balance --
     // there is nothing before it to keep.
     expect(chartTotals(card)).toEqual({ onAir: 71, dtDone: 30, gap: 41 })
-    // The chart ends on 1404's last month: two months, not four.
-    expect(within(card).getAllByTestId('dt-flow-net')).toHaveLength(2)
+    // 1404's own months: two columns, not four.
+    expect(gapChanges(card)).toEqual(['+6', '+2'])
   })
 
   it('puts the year control in the card header, opening on the latest year', async () => {
@@ -2023,28 +2023,98 @@ describe('the flow chart', () => {
     expect(key.compareDocumentPosition(years) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })
 
-  it('opens the crosshair on the latest month rather than leaving it blank', async () => {
+  it('draws a dot at every month, hollow for the month in progress', async () => {
     serve()
     draw()
 
     const card = await section('Where this is going')
-    expect(within(card).getByTestId('dt-flow-crosshair')).toBeInTheDocument()
-    // The latest month's pill is the outlined one, so the two read as one.
-    expect(activePill(card)).toBe(3)
+    // 1405 has two months, the second still open: one filled dot per series
+    // for Farvardin, one hollow dot per series for Ordibehesht.
+    expect(within(card).getAllByTestId('dt-flow-dot')).toHaveLength(2)
+    expect(within(card).getAllByTestId('dt-flow-open-dot')).toHaveLength(2)
   })
 
-  it('moves the crosshair with the arrow keys, and back to the latest month when the pointer leaves', async () => {
+  it('names every month under the plot, with the year and the month in progress', async () => {
     serve()
     draw()
 
     const card = await section('Where this is going')
-    const chart = card.querySelector('.dt-flowchart')
-    chart.focus()
-    await userEvent.keyboard('{ArrowLeft}')
-    expect(activePill(card)).toBe(2)
+    const table = within(card).getByTestId('dt-flow-table')
+    const heads = within(table).getAllByRole('columnheader')
+    expect(heads.map((th) => th.textContent)).toEqual(['فروردین1405', 'اردیبهشتin progress'])
+    expect(heads[1]).toHaveClass('dt-flow-col-open')
+    expect(tableRow(card, 'New on air')).toEqual(['5', '4'])
+    expect(tableRow(card, 'DT done')).toEqual(['3', '2'])
+    expect(tableRow(card, 'Gap change')).toEqual(['+2', '+2'])
+  })
 
-    fireEvent.mouseLeave(chart)
-    expect(activePill(card)).toBe(3)
+  it("matches the KPI cards and What moved in the last column, for both years", async () => {
+    // One programme, told three ways. The fixture is consistent across the
+    // three endpoints -- as the backend's own parity tests require -- so a
+    // column that drifted from the cards would be a bug on this side.
+    //
+    // 60 on air and 10 done before 1404; 1404 adds 36 and 16; 1405 is quiet
+    // until Shahrivar, which is still open with 4 on air and 14 done. Totals:
+    // 100 on air, 40 done, 60 pending -- the overview's cards -- and Shahrivar
+    // opened on a gap of 70 and closes on 60 -- What moved's ledger.
+    const months = [
+      flowMonth(1404, 1, { on_aired: 20, dt_done: 10 }),
+      flowMonth(1404, 2, { on_aired: 16, dt_done: 6 }),
+      ...[1, 2, 3, 4, 5].map((m) => flowMonth(1405, m)),
+      flowMonth(1405, 6, { on_aired: 4, dt_done: 14, is_open: true }),
+    ]
+    const withDeltas = {
+      ...overview,
+      kpis: {
+        ...overview.kpis,
+        total_onair: { ...overview.kpis.total_onair, delta: 4 },
+        total_dt_done: { ...overview.kpis.total_dt_done, delta: 14 },
+        total_remaining: { ...overview.kpis.total_remaining, delta: -10 },
+      },
+    }
+    serve(
+      planDelivery(),
+      withDeltas,
+      trend(),
+      flow({ opening: { on_air: 60, dt_done: 10 }, months, not_placed: { on_air: 0, dt_done: 0 } }),
+    )
+    draw()
+
+    const card = await section('Where this is going')
+    const moved = await section('What moved')
+    const band = await screen.findByLabelText('Programme totals')
+    const cardFigure = (kpi) => band.querySelector(`[data-kpi="${kpi}"] .dt-kpi-figure`).textContent
+    const cardDelta = (kpi) => band.querySelector(`[data-kpi="${kpi}"] .dt-delta-pill b`).textContent
+    const lastOf = (row) => tableRow(card, row).at(-1)
+
+    // 1405: the lines end on the cards' totals, and the last column is the
+    // month the cards' deltas and What moved describe.
+    expect(chartTotals(card)).toEqual({
+      onAir: Number(cardFigure('onair')),
+      dtDone: Number(cardFigure('done')),
+      gap: Number(cardFigure('pending')),
+    })
+    const heads = within(card).getAllByRole('columnheader')
+    expect(heads.at(-1).textContent).toContain(trend().latest_flows.label)
+    expect(lastOf('New on air')).toBe(cardDelta('onair').replace('+', ''))
+    expect(lastOf('DT done')).toBe(cardDelta('done').replace('+', ''))
+    expect(lastOf('Gap change')).toBe(cardDelta('pending'))
+    expect(within(moved).getByText(`+${lastOf('New on air')}`)).toBeInTheDocument()
+    expect(within(moved).getByText(`−${lastOf('DT done')}`)).toBeInTheDocument()
+
+    // 1404: its last column is Esfand's own movement, and where the year
+    // closed is where 1405 picked up -- the lines carry, they do not reset.
+    // Its closing totals plus every 1405 column are the cards' totals.
+    await userEvent.click(within(card).getByRole('tab', { name: '1404' }))
+    const closed1404 = chartTotals(card)
+    expect(lastOf('New on air')).toBe('16')
+    expect(lastOf('DT done')).toBe('6')
+    expect(lastOf('Gap change')).toBe('+10')
+    await userEvent.click(within(card).getByRole('tab', { name: '1405' }))
+    const sum = (row) => tableRow(card, row).reduce((t, v) => t + Number(v), 0)
+    expect(closed1404.onAir + sum('New on air')).toBe(Number(cardFigure('onair')))
+    expect(closed1404.dtDone + sum('DT done')).toBe(Number(cardFigure('done')))
+    expect(closed1404.gap + sum('Gap change')).toBe(Number(cardFigure('pending')))
   })
 
   it("keeps the chart's notes behind the header's info icon, not under the chart", async () => {
@@ -2054,11 +2124,11 @@ describe('the flow chart', () => {
     const card = await section('Where this is going')
     expect(card.querySelector('.dt-flowcard .dt-note')).toBeNull()
     const note = within(card).getByText(
-      /Showing every month from the opening balance on 1 Farvardin 1404 through 1405/,
+      /Showing 1405, month by month/,
     )
-    // 20..80 fitted with a margin reaches zero, so this view claims no
-    // truncated scale -- the note only says so when it is true.
-    expect(note).not.toHaveTextContent('The scale starts at')
+    // 1405's lines run 30..80, fitted on steps of 20 from 20: the axis does
+    // not start at zero, and the note says so.
+    expect(note).toHaveTextContent('The scale starts at 20, not zero.')
     expect(note).not.toBeVisible()
 
     await userEvent.click(within(card).getByRole('button', { name: 'How this chart is drawn' }))
@@ -2070,28 +2140,18 @@ describe('the flow chart', () => {
     draw()
 
     const card = await section('Where this is going')
-    const pills = within(card).getAllByTestId('dt-flow-net')
-    // One per month drawn, not per point: the opening balance is a starting
-    // position, not a month that moved anything.
-    expect(pills).toHaveLength(4)
-    // 10 on air against 4 done is +6 pending; 8 against 6 is +2; 5 against 3
-    // is +2; 4 against 2 is +2.
-    expect(pills.map((p) => p.querySelector('text').textContent)).toEqual([
-      '+6',
-      '+2',
-      '+2',
-      '+2',
-    ])
-    // Every month here grew the backlog, so every pill is the bad tone.
-    expect(pills.map((p) => p.getAttribute('data-tone'))).toEqual([
-      'bad',
-      'bad',
-      'bad',
-      'bad',
-    ])
+    // One per month drawn: 1405's two. 5 on air against 3 done is +2
+    // pending; 4 against 2 is +2.
+    expect(gapChanges(card)).toEqual(['+2', '+2'])
+    // Both grew the backlog, so both are the bad tone.
+    expect(
+      within(card)
+        .getAllByTestId('dt-flow-net')
+        .map((p) => p.getAttribute('data-tone')),
+    ).toEqual(['bad', 'bad'])
   })
 
-  it('colours a month green when the backlog shrank and red when it grew', async () => {
+  it('colours a month green when the backlog shrank and brick when it grew', async () => {
     serve(planDelivery(), overview, trend(), flow({
       months: [
         flowMonth(1404, 1, { on_aired: 10, dt_done: 4 }),   // +6, grew
@@ -2102,33 +2162,26 @@ describe('the flow chart', () => {
     draw()
 
     const card = await section('Where this is going')
-    const pills = within(card).getAllByTestId('dt-flow-net')
-    expect(pills.map((p) => p.getAttribute('data-tone'))).toEqual(['bad', 'good', 'flat'])
-    expect(pills.map((p) => p.querySelector('text').textContent)).toEqual(['+6', '-17', '0'])
+    const cells = within(card).getAllByTestId('dt-flow-net')
+    expect(cells.map((p) => p.getAttribute('data-tone'))).toEqual(['bad', 'good', 'flat'])
+    expect(gapChanges(card)).toEqual(['+6', '-17', '0'])
   })
 
-  it('adds the strip up to the movement in the gap, which is the point of it', async () => {
-    // The parity that makes the strip trustworthy, in the same style as the
-    // ledger's: read the rendered pills, sum them, and check the total
-    // against the gap the chart itself reports. A strip that stops summing
-    // to its own chart is worse than no strip -- it is a second, quieter
-    // answer to a question the lines above already answered.
+  it('adds the month table up to the movement in the gap across the year', async () => {
+    // The parity that makes the table trustworthy: read the rendered Gap
+    // change cells, sum them, and check the total against the gap the chart
+    // itself ends on. A table that stops summing to its own chart is worse
+    // than no table.
     serve()
     draw()
 
     const card = await section('Where this is going')
-    const sum = within(card)
-      .getAllByTestId('dt-flow-net')
-      .reduce((total, p) => total + Number(p.querySelector('text').textContent), 0)
+    const sum = gapChanges(card).reduce((total, v) => total + Number(v), 0)
 
-    // Opening 53 on air (50 plus 3 not placed) / 20 done is a gap of 33; the
-    // chart ends on a gap of 45. The strip has to account for
-    // exactly that movement -- folding not-placed sites into the opening
-    // balance moves both ends of it by the same amount, so the strip itself
-    // does not change.
-    const closingGap = chartTotals(card).gap
-    expect(sum).toBe(closingGap - 33)
-    expect(sum).toBe(12)
+    // 1405 opened on the gap 1404 closed on: 71 on air, 30 done, 41. The
+    // chart ends on a gap of 45, so the year's columns must add up to 4.
+    expect(sum).toBe(chartTotals(card).gap - 41)
+    expect(sum).toBe(4)
   })
 
   it('marks the open month as still in progress', async () => {
