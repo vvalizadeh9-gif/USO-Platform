@@ -55,7 +55,6 @@ export default function PipThisMonth({ state, onRetry, scoped, provinceName }) {
     <Section
       title="PIP this month"
       icon={Target}
-      tone="support"
       subtitle={state.data?.month_label}
       inline
       state={state}

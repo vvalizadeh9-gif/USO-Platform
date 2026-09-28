@@ -1,9 +1,10 @@
 /* ===================================================================
    USO Enterprise Platform — Design System "Cobalt"
-   Cool blue-grey canvas, white cards, one cobalt accent with a supporting
-   teal, dark readable text. Inter for Latin and figures (tabular),
+   Cool blue-grey canvas, white cards, one cobalt accent for selection and
+   action, dark readable text. Inter for Latin and figures (tabular),
    Vazirmatn for Farsi. Status colour is always an ink on its own soft
-   fill, and always carries a text label.
+   fill, and always carries a text label. The rules behind every token are
+   written out in design-system-cobalt.md at the repository root.
    =================================================================== */
 
 /* Fonts are served from this application, not from Google. See fonts.css for
@@ -32,15 +33,32 @@
   --text-on-accent: #FFFFFF;
   --text-link: #2451C0;
 
-  /* ---- Accent: one cobalt, plus one supporting teal ----
-     White on --accent is 5.7:1; --accent-ink on white is 9.5:1. */
+  /* ---- Accent: one cobalt, for selected and action only ----
+     Never a data colour and never a decorative tint. White on --accent is
+     5.7:1; --accent-ink on white is 9.5:1. (The supporting teal that used to
+     tint icons is retired: it sat too close to --cra. Icon chips are
+     neutral.) */
   --accent: #2F5FD0;
   --accent-ink: #1D3F99;
   --accent-soft: #E3EAFB;
   --accent-wash: #F2F6FE;
   --accent-track: #D3DEF7;
-  --support: #0E7C86;
-  --support-soft: #DDF2F3;
+
+  /* ---- Authorities: ICT and CRA, for data only ----
+     Never a status, never a selection, and never shown without its label.
+     --ict is dark enough to be its own text ink (7.5:1 on white). --cra is
+     3.1:1 on white: graphics only, never text -- CRA words use --cra-ink
+     (6.0:1 on white, 5.2:1 on --cra-soft). The pair passes a colour-vision
+     check against each other and against --accent; against the status
+     colours it sits just under the comfort line, which is why the label is
+     mandatory. */
+  --ict: #8E2F74;
+  --ict-base: #EBD3E4;        /* the faint "base" column behind a gap */
+  --ict-soft: #F5E6F1;        /* chip background */
+  --cra: #23A396;
+  --cra-ink: #0F6F66;
+  --cra-base: #C9EAE5;
+  --cra-soft: #DDF3F0;
 
   /* ---- Status: an ink on its own soft fill, always with a label ----
      Every ink clears 4.5:1 on white and on its soft fill (lowest: success,
@@ -121,8 +139,8 @@
        --nav-text 15.3:1, on --nav-hover 14.1:1; --nav-dim 4.8:1;
        --nav-active-text on --nav-active 9.4:1; --nav-accent on
        --nav-active 5.7:1 (icon and bar); white on --nav-badge-bg 5.7:1.
-       Section icon tints on --nav-bg: accent 5.1:1, support teal 4.4:1,
-       month-end amber 4.7:1, tertiary 4.8:1 (non-text, 3:1 floor). */
+       Icons on --nav-bg: --nav-icon 4.8:1, month-end amber 4.7:1 (non-text,
+       3:1 floor). Only the selected item's icon is cobalt. */
   --nav-bg: var(--bg);
   --nav-edge: var(--border);
   --nav-text: var(--text);
@@ -134,8 +152,6 @@
   --nav-active-text: var(--accent-ink);
   --nav-accent: var(--accent);
   --nav-badge-bg: var(--accent);
-  --nav-tone-accent: var(--accent);
-  --nav-tone-support: var(--support);
   --nav-tone-monthend: #9A5F00;
   --nav-tone-tertiary: var(--text-tertiary);
 
@@ -334,9 +350,8 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
   position: relative;
 }
 .nav-item svg { color: var(--nav-icon); flex-shrink: 0; }
-/* Icons are tinted by the section they sit in. */
-.nav-section[data-tone='accent'] .nav-item svg { color: var(--nav-tone-accent); }
-.nav-section[data-tone='support'] .nav-item svg { color: var(--nav-tone-support); }
+/* Icons are neutral; Month-end keeps its amber. Cobalt is the selected item's
+   alone (below). */
 .nav-section[data-tone='monthend'] .nav-item svg { color: var(--nav-tone-monthend); }
 .nav-section[data-tone='tertiary'] .nav-item svg { color: var(--nav-tone-tertiary); }
 .nav-item:hover { background: var(--nav-hover); }
@@ -811,13 +826,13 @@ tbody tr:last-child td { border-bottom: none; }
   display: flex; flex-direction: column; gap: 16px;
 }
 .ui-card-head { display: flex; align-items: flex-start; gap: 14px; }
+/* Icon chips are neutral: an icon is decoration, and cobalt means selected. */
 .ui-card-chip {
   width: 36px; height: 36px; flex-shrink: 0;
   border-radius: 9px;
   display: grid; place-items: center;
+  background: var(--neutral-soft); color: var(--text-secondary);
 }
-.ui-chip-accent { background: var(--accent-soft); color: var(--accent); }
-.ui-chip-support { background: var(--support-soft); color: var(--support); }
 .ui-card-titles { flex: 1; min-width: 0; }
 .ui-card-title { font-size: 17px; line-height: 24px; font-weight: 600; letter-spacing: 0; }
 .ui-card-desc { margin-top: 2px; color: var(--text-secondary); font-size: 14px; line-height: 21px; max-width: 760px; }
@@ -2978,15 +2993,11 @@ a.dt-contractor-name:hover { text-decoration: underline; text-decoration-color: 
   gap: 12px;
   --kpi-accent: var(--accent);
 }
-/* Icon chips are accent or support tints -- never a status colour. */
-.dt-page .dt-kpi-card[data-kpi="onair"],
-.dt-page .dt-kpi-card[data-kpi="status"] { --kpi-ic-ink: var(--support); --kpi-ic: var(--support-soft); }
-.dt-page .dt-kpi-card[data-kpi="done"],
-.dt-page .dt-kpi-card[data-kpi="pending"] { --kpi-ic-ink: var(--accent); --kpi-ic: var(--accent-soft); }
+/* Icon chips are neutral -- never a status colour, never cobalt. */
 .dt-page .dt-kpi-hd { gap: 12px; margin-block-end: 0; }
 .dt-page .dt-kpi-ic {
   inline-size: 36px; block-size: 36px; border-radius: 9px;
-  color: var(--kpi-ic-ink); background: var(--kpi-ic);
+  color: var(--text-secondary); background: var(--neutral-soft);
 }
 .dt-page .dt-kpi-title { font-size: 13px; line-height: 18px; font-weight: 600; color: var(--text-secondary); }
 .dt-page .dt-kpi-v { gap: 8px; }

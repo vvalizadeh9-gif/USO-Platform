@@ -331,7 +331,6 @@ export default function DriveTestProject() {
                 <Section
                   title="Where this is going"
                   icon={TrendingUp}
-                  tone="accent"
                   inline
                   state={flow}
                   onRetry={refresh}
@@ -377,7 +376,6 @@ export default function DriveTestProject() {
                     <Section
                       title="What moved"
                       icon={ArrowLeftRight}
-                      tone="support"
                       subtitle={`${trend.data.latest_flows.label} ${trend.data.latest_flows.shamsi_year}${
                         trend.data.latest_flows.is_open ? ' · in progress' : ''
                       }`}
@@ -416,7 +414,6 @@ export default function DriveTestProject() {
                   <Section
                     title="Ongoing breakdown"
                     icon={Hourglass}
-                    tone="support"
                     inline
                     className="dt-breakdown-section"
                     state={overview}
@@ -448,7 +445,6 @@ export default function DriveTestProject() {
                   <Section
                     title="Problematic breakdown"
                     icon={OctagonAlert}
-                    tone="support"
                     inline
                     className="dt-breakdown-section"
                     state={overview}
@@ -488,7 +484,6 @@ export default function DriveTestProject() {
                   <Section
                     title="Contractor scorecard"
                     icon={Building2}
-                    tone="accent"
                     inline
                     state={overview}
                     onRetry={refresh}
@@ -522,7 +517,6 @@ export default function DriveTestProject() {
                     <Section
                       title="Drive Test progress by province"
                       icon={MapPinned}
-                      tone="accent"
                       inline
                       state={overview}
                       onRetry={refresh}

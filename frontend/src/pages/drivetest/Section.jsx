@@ -23,7 +23,6 @@ export default function Section({
   info,
   inline = false,
   icon: Icon,
-  tone = 'accent',
   state,
   onRetry,
   children,
@@ -33,9 +32,9 @@ export default function Section({
 }) {
   const { data, error, loading } = state
   // The Cobalt card header's icon chip (see Card in components/ui.jsx):
-  // tinted accent or support, never a status colour.
+  // neutral, never a status colour and never cobalt.
   const chip = Icon && (
-    <span className={`ui-card-chip ui-chip-${tone}`} aria-hidden="true">
+    <span className="ui-card-chip" aria-hidden="true">
       <Icon size={20} strokeWidth={1.9} />
     </span>
   )

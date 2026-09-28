@@ -147,7 +147,6 @@ export default function GapRoad() {
 
           <Card
             icon={Users}
-            tone="support"
             className="gap-owners-card"
             title={`Stopped before ${stretch ? stretchShort(stretch) : '…'}`}
             description="Who is behind the selected barrier"
@@ -251,7 +250,6 @@ function Road({ stretches, villages, selected, onSelect }) {
   return (
     <Card
       icon={Construction}
-      tone="accent"
       title="The road"
       description={
         <>

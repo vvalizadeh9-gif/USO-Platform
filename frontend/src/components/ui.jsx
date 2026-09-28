@@ -170,13 +170,12 @@ export function SegmentedControl({ options, value, onChange, label, className = 
 }
 
 /**
- * A white card on the canvas. The header is optional: an icon chip (tinted
- * `accent` or `support`), a title, a line of description and an actions slot
- * at the far end. Everything else is the card's body.
+ * A white card on the canvas. The header is optional: a neutral icon chip, a
+ * title, a line of description and an actions slot at the far end.
+ * Everything else is the card's body.
  */
 export function Card({
   icon: Icon,
-  tone = 'accent',
   title,
   titleAs: Title = 'h2',
   description,
@@ -191,7 +190,7 @@ export function Card({
       {hasHead && (
         <header className="ui-card-head">
           {Icon && (
-            <span className={`ui-card-chip ui-chip-${tone}`} aria-hidden="true">
+            <span className="ui-card-chip" aria-hidden="true">
               <Icon size={20} strokeWidth={1.9} />
             </span>
           )}
