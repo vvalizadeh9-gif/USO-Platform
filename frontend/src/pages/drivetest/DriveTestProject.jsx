@@ -38,17 +38,21 @@ const ONGOING_TABS = [
   { key: 'age', label: 'How long' },
 ]
 
-/** The page's two views. The KPI band, the toolbar and the province scope sit
- * above them, so the headline figures and what the page is narrowed to stay
- * on screen whichever view is open. The view lives in the address
- * (`?tab=contractors-provinces`), so a link or a bookmark opens it and Back
- * returns to the other one; Overview is the default and carries no param. */
+/** The page's three views, as tabs directly under the title row. The view
+ * lives in the address (`?tab=breakdowns`, `?tab=contractors-provinces`), so a
+ * link or a bookmark opens it and Back returns to the one before; Overview is
+ * the default and carries no param. The KPI band belongs to Overview: each
+ * view is sized to fit one screen on the office display, and the band above
+ * all three would push the other two past it. */
 const OVERVIEW = 'overview'
+const BREAKDOWNS = 'breakdowns'
 const RANKINGS = 'contractors-provinces'
 const VIEW_TABS = [
   { key: OVERVIEW, label: 'Overview' },
+  { key: BREAKDOWNS, label: 'Breakdowns' },
   { key: RANKINGS, label: 'Contractors & provinces' },
 ]
+const VIEW_KEYS = new Set(VIEW_TABS.map((t) => t.key))
 
 const PROBLEMATIC_TABS = [
   { key: 'category', label: 'Category' },
@@ -90,13 +94,6 @@ export default function DriveTestProject() {
   const provinces = useMemo(() => data?.provinces ?? [], [data])
   const provinceName = provinces.find((p) => p.id === provinceId)?.name
 
-  const siteCount = data?.kpis?.total_onair?.value
-  const subtitle = provinceName
-    ? `On-air and drive-test status in ${provinceName}`
-    : siteCount
-      ? `Every province · ${count(siteCount)} sites`
-      : 'On-air and drive-test status across your provinces'
-
   const has = (field) => !data || Boolean(data[field])
 
   async function exportWorkbook() {
@@ -121,7 +118,8 @@ export default function DriveTestProject() {
   }
 
   const [searchParams, setSearchParams] = useSearchParams()
-  const view = searchParams.get('tab') === RANKINGS ? RANKINGS : OVERVIEW
+  const requested = searchParams.get('tab')
+  const view = VIEW_KEYS.has(requested) ? requested : OVERVIEW
   const setView = useCallback(
     (next) => {
       const params = new URLSearchParams(searchParams)
@@ -247,13 +245,12 @@ export default function DriveTestProject() {
   return (
     <DrillProvider>
       <div className="dt-page">
-        {/* The toolbar rides on the title's row rather than in a bar of its
-            own under it: one row of chrome instead of two, so the Overview
-            fits one screen on the office display. */}
+        {/* One row: the title on the left, the scope, freshness and the two
+            actions on the right. No subtitle: the scope chip names the
+            province the page is narrowed to. */}
         <PageHead
           eyebrow="Drive Test"
           title="Dashboard"
-          subtitle={subtitle}
           actions={
             <Toolbar
               provinceId={provinceId}
@@ -280,18 +277,16 @@ export default function DriveTestProject() {
                 Try again
               </button>
             </Banner>
-          ) : overview.loading && !data ? (
-            <KpiSkeleton />
-          ) : data ? (
-            <>
-              <KpiBand kpis={data.kpis} provinceId={provinceId} />
+          ) : (
+            data && (
+              // On every tab: a growing gap is news wherever the reader is.
               <AlertStrip
                 kpis={data.kpis}
                 provinces={data.province_breakdown}
                 onScrollToProvinces={scrollToProvinces}
               />
-            </>
-          ) : null}
+            )
+          )}
 
           <Tabs
             className="dt-view-tabs"
@@ -303,6 +298,12 @@ export default function DriveTestProject() {
 
           {view === OVERVIEW ? (
             <div className="dt-view" role="tabpanel" aria-label="Overview">
+              {overview.loading && !data ? (
+                <KpiSkeleton />
+              ) : (
+                data && <KpiBand kpis={data.kpis} provinceId={provinceId} />
+              )}
+
               {/* The trend and the month side by side: the chart takes the wide
                   column and the month's two short answers -- what moved, and what
                   was promised -- stack beside it. They used to be a full-width
@@ -400,7 +401,9 @@ export default function DriveTestProject() {
                   />
                 </div>
               </div>
-
+            </div>
+          ) : view === BREAKDOWNS ? (
+            <div className="dt-view" role="tabpanel" aria-label="Breakdowns">
               <div className="dt-pair">
                 {has('ongoing_breakdown') && (
                   <Section
@@ -516,7 +519,7 @@ export default function DriveTestProject() {
                 {has('province_breakdown') && (
                   <div ref={provinceRef} className="dt-tables-cell">
                     <Section
-                      title="Drive Test Progress by Province"
+                      title="Drive Test progress by province"
                       icon={MapPinned}
                       tone="accent"
                       inline

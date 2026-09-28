@@ -2905,9 +2905,10 @@ a.dt-contractor-name:hover { text-decoration: underline; text-decoration-color: 
   .dt-drill { width: 100vw; }
 }
 
-/* ---------- the two views ----------
-   Overview and Contractors & provinces, under the KPI band. The tabs sit
-   closer to the view they switch than to the band above them. */
+/* ---------- the three views ----------
+   Overview, Breakdowns, and Contractors & provinces, as tabs directly under
+   the title row. The tabs sit closer to the view they switch than to the
+   title or the gap alert above them. */
 .dt-view { display: grid; gap: var(--dt-gap); min-width: 0; }
 .dt-view-tabs { margin-block-end: -8px; }
 
@@ -2917,8 +2918,9 @@ a.dt-contractor-name:hover { text-decoration: underline; text-decoration-color: 
    Until then this page's look is scoped under `.dt-page` so those pages do
    not change with it. */
 .dt-page { --dt-gap: 20px; }
-/* The title row carries the toolbar (see DriveTestProject). */
-.dt-page .page-head { margin-bottom: 20px; }
+/* The title row carries the toolbar (see DriveTestProject); the tabs sit
+   16px under it. */
+.dt-page .page-head { margin-bottom: 16px; }
 .dt-page .page-head > .row { flex: 0 1 auto; min-width: 0; }
 /* The two compact cards beside the trend take Cobalt's compact padding. */
 .dt-page .dt-stack > .dt-section { padding: 16px 20px 20px; gap: 12px; }
