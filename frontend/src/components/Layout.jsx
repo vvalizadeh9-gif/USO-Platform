@@ -251,8 +251,10 @@ function AccountMenu({ user, initials, logout }) {
       >
         <span className="user-avatar" aria-hidden="true">{initials}</span>
         <span className="who">
-          <b>{user?.full_name}</b>
-          <small>{roleLabel(user?.role?.name)}</small>
+          {/* One line each, ellipsed when too long; the title carries the
+              full text. */}
+          <b title={user?.full_name}>{user?.full_name}</b>
+          <small title={roleLabel(user?.role?.name)}>{roleLabel(user?.role?.name)}</small>
         </span>
         <ChevronsUpDown size={16} strokeWidth={1.75} className="account-chevron" aria-hidden="true" />
       </button>

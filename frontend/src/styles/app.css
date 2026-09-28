@@ -240,9 +240,15 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
 ::-webkit-scrollbar-thumb:hover { background: #b9c4d6; }
 
 /* ---------- Layout shell ---------- */
+/* Sidebar 224px (Cobalt spec, was 264): a lighter frame, and 40px more
+   content width on laptop screens. Measured at 224: the widest nav item
+   (step number or icon, label, three-digit badge, padding) needs 197px of its
+   200px box. .main is capped at 1,280px, so from a 1,544px window up the
+   narrower sidebar changes nothing; from 1,504px down it gives the page the
+   full 40px. */
 .app-shell {
   display: grid;
-  grid-template-columns: 264px 1fr;
+  grid-template-columns: 224px 1fr;
   min-height: 100vh;
   position: relative;
   z-index: 1;
@@ -435,6 +441,9 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
 .user-chip .who { flex: 1; min-width: 0; }
 .user-chip .who b { font-size: 14px; font-weight: 600; line-height: 18px; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--nav-text-strong); }
 .user-chip .who small { color: var(--text-secondary); font-size: 12px; line-height: 18px; }
+/* The account card keeps name and role to a line each: a longer one ends in
+   an ellipsis, and the full text is in the element's title (Layout.jsx). */
+.account-button .who small { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .logout-btn {
   background: transparent; border: none; color: var(--nav-dim);
   padding: 6px; border-radius: 6px; display: grid; place-items: center;
@@ -929,7 +938,7 @@ tbody tr:last-child td { border-bottom: none; }
 @media (max-width: 860px) {
   .app-shell { grid-template-columns: 1fr; }
   .sidebar {
-    position: fixed; z-index: 40; width: 264px;
+    position: fixed; z-index: 40; width: 224px;
     transform: translateX(-100%); transition: transform 0.25s;
   }
   .sidebar.open { transform: translateX(0); }
