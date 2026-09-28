@@ -256,15 +256,15 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
 ::-webkit-scrollbar-thumb:hover { background: #b9c4d6; }
 
 /* ---------- Layout shell ---------- */
-/* Sidebar 224px (Cobalt spec, was 264): a lighter frame, and 40px more
-   content width on laptop screens. Measured at 224: the widest nav item
-   (step number or icon, label, three-digit badge, padding) needs 197px of its
-   200px box. .main is capped at 1,280px, so from a 1,544px window up the
-   narrower sidebar changes nothing; from 1,504px down it gives the page the
-   full 40px. */
+/* Sidebar 216px (was 224, and 264 before that): the width its nav items
+   fill, with 12px side padding, so no strip of empty background is left
+   beside them. Measured at 216 (a 192px item box): every label fits on one
+   line, and with a two-digit badge too. The one that does not is the
+   Contractor's "My Drive Tests" with a three-digit badge (100+), which wraps
+   to two lines; at 224 it fitted. The user card's name truncates at both. */
 .app-shell {
   display: grid;
-  grid-template-columns: 224px 1fr;
+  grid-template-columns: 216px 1fr;
   min-height: 100vh;
   position: relative;
   z-index: 1;
