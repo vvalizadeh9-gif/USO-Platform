@@ -1,28 +1,18 @@
 /**
- * Which years "Where this is going" shows: each year on its own, or all of
- * them together, as one segmented control in the card header.
+ * Which year "Where this is going" shows, as one segmented control in the
+ * card header: one option per Shamsi year the payload covers, the latest
+ * selected until a reader picks another.
  *
- * It replaces "Cumulative / Monthly change" and a year dropdown that only
- * appeared on the second tab. That pair asked a reader to learn that
- * "Monthly change" meant "one year, counted from zero", and the from-zero
- * count drew a year that tested more than it put on air as coverage over
- * 100%. Every choice here is the same ledger, zoomed: see `flowView`.
- *
- * "All" is labelled with the span it covers -- "1404–1405" -- rather than
- * "All" or "Both", so it stays true as the programme runs into more years.
- * With a single year of data there is nothing to choose, and no control.
- *
- * A year here caps the chart at that year's last month; it does not crop the
- * years before it off screen. See `flowView` for why.
+ * There used to be a third option spanning every year ("1404–1405"). It was
+ * removed: the chart reads one year at a time. With a single year of data
+ * there is nothing to choose, and no control.
  *
  * Still a tab list: what it switches is the one panel under it.
  */
 export default function FlowViewControl({ years, scope, onScope }) {
   if (years.length < 2) return null
-  const options = [
-    ...years.map((y) => ({ key: y, label: String(y) })),
-    { key: 'all', label: `${years[0]}–${years[years.length - 1]}` },
-  ]
+  const current = years.includes(scope) ? scope : years[years.length - 1]
+  const options = years.map((y) => ({ key: y, label: String(y) }))
   return (
     <div className="ui-seg" role="tablist" aria-label="Years shown">
       {options.map((o) => (
@@ -30,7 +20,7 @@ export default function FlowViewControl({ years, scope, onScope }) {
           key={o.key}
           type="button"
           role="tab"
-          aria-selected={scope === o.key}
+          aria-selected={current === o.key}
           className="ui-seg-option"
           onClick={() => onScope(o.key)}
         >

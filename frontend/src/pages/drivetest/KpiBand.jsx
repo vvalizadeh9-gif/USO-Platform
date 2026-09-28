@@ -165,9 +165,10 @@ export default function KpiBand({ kpis, provinceId }) {
       <div className="dt-kpi-card" data-kpi="onair">
         <div className="dt-kpi-hd">
           <span className="dt-kpi-ic" aria-hidden="true">
-            <RadioTower size={20} strokeWidth={1.9} />
+            <RadioTower size={16} strokeWidth={1.9} />
           </span>
           <span className="dt-kpi-title">On air</span>
+          <DeltaChip pill delta={kpis.total_onair.delta} direction={KPI_DIRECTION.total_onair} />
         </div>
         <div className="dt-kpi-v">
           <DrillLink
@@ -178,16 +179,20 @@ export default function KpiBand({ kpis, provinceId }) {
             <AnimatedNumber value={onair} />
           </DrillLink>
         </div>
-        <DeltaChip pill delta={kpis.total_onair.delta} direction={KPI_DIRECTION.total_onair} />
       </div>
 
       {/* Card 2: Total DT Done */}
       <div className="dt-kpi-card" data-kpi="done">
         <div className="dt-kpi-hd">
           <span className="dt-kpi-ic" aria-hidden="true">
-            <CheckCircle2 size={20} strokeWidth={1.9} />
+            <CheckCircle2 size={16} strokeWidth={1.9} />
           </span>
           <span className="dt-kpi-title">DT done</span>
+          <DeltaChip
+            pill
+            delta={kpis.total_dt_done.delta}
+            direction={KPI_DIRECTION.total_dt_done}
+          />
         </div>
         <div className="dt-kpi-v">
           <DrillLink
@@ -211,11 +216,6 @@ export default function KpiBand({ kpis, provinceId }) {
             { key: 'done', pct: donePct, color: 'var(--accent)' },
           ]}
         />
-        <DeltaChip
-          pill
-          delta={kpis.total_dt_done.delta}
-          direction={KPI_DIRECTION.total_dt_done}
-        />
       </div>
 
       {/* Card 3: Total Pending. The bar mirrors DT done's — same two ratios,
@@ -224,9 +224,14 @@ export default function KpiBand({ kpis, provinceId }) {
       <div className="dt-kpi-card" data-kpi="pending">
         <div className="dt-kpi-hd">
           <span className="dt-kpi-ic" aria-hidden="true">
-            <Clock size={20} strokeWidth={1.9} />
+            <Clock size={16} strokeWidth={1.9} />
           </span>
           <span className="dt-kpi-title">Pending</span>
+          <DeltaChip
+            pill
+            delta={kpis.total_remaining.delta}
+            direction={KPI_DIRECTION.total_remaining}
+          />
         </div>
         <div className="dt-kpi-v">
           <DrillLink
@@ -246,11 +251,6 @@ export default function KpiBand({ kpis, provinceId }) {
             { key: 'pending', pct: pendingPct, color: 'var(--dt-pending-bar)' },
           ]}
         />
-        <DeltaChip
-          pill
-          delta={kpis.total_remaining.delta}
-          direction={KPI_DIRECTION.total_remaining}
-        />
       </div>
 
       {/* Card 4: Pending status.
@@ -267,7 +267,7 @@ export default function KpiBand({ kpis, provinceId }) {
       <div className="dt-kpi-card" data-kpi="status">
         <div className="dt-kpi-hd">
           <span className="dt-kpi-ic" aria-hidden="true">
-            <PieChart size={20} strokeWidth={1.9} />
+            <PieChart size={16} strokeWidth={1.9} />
           </span>
           <span className="dt-kpi-title">Pending status</span>
         </div>

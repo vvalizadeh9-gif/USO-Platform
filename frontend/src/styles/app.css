@@ -256,15 +256,15 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
 ::-webkit-scrollbar-thumb:hover { background: #b9c4d6; }
 
 /* ---------- Layout shell ---------- */
-/* Sidebar 224px (Cobalt spec, was 264): a lighter frame, and 40px more
-   content width on laptop screens. Measured at 224: the widest nav item
-   (step number or icon, label, three-digit badge, padding) needs 197px of its
-   200px box. .main is capped at 1,280px, so from a 1,544px window up the
-   narrower sidebar changes nothing; from 1,504px down it gives the page the
-   full 40px. */
+/* Sidebar 216px (was 224, and 264 before that): the width its nav items
+   fill, with 12px side padding, so no strip of empty background is left
+   beside them. Measured at 216 (a 192px item box): every label fits on one
+   line, and with a two-digit badge too. The one that does not is the
+   Contractor's "My Drive Tests" with a three-digit badge (100+), which wraps
+   to two lines; at 224 it fitted. The user card's name truncates at both. */
 .app-shell {
   display: grid;
-  grid-template-columns: 224px 1fr;
+  grid-template-columns: 216px 1fr;
   min-height: 100vh;
   position: relative;
   z-index: 1;
@@ -2526,19 +2526,6 @@ a.dt-contractor-name:hover { text-decoration: underline; text-decoration-color: 
 .dt-trend-down { color: var(--dt-done); }
 .dt-trend-caption-note { color: var(--text-dim); font-size: 11.5px; }
 
-.dt-trend-readout {
-  display: flex; align-items: center; gap: 8px 16px; flex-wrap: wrap;
-  padding: 8px 12px; min-height: 36px;
-  background: var(--surface-subtle); border: 1px solid var(--track);
-  border-radius: var(--radius-md); font-size: 13px; line-height: 18px;
-}
-.dt-readout-month { font-weight: 600; }
-.dt-readout-item { display: inline-flex; align-items: center; gap: 6px; color: var(--text-secondary); }
-.dt-readout-item i { width: 8px; height: 8px; border-radius: 50%; }
-.dt-readout-item i.dt-readout-gap { background: var(--accent-soft); border: 1px solid var(--accent-track); border-radius: 2px; }
-.dt-readout-item b { color: var(--text); font-variant-numeric: tabular-nums; }
-.dt-trend-readout em { color: var(--text-tertiary); font-size: 12px; }
-
 .dt-legend {
   display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
   margin-top: 12px; font-size: 11.5px; color: var(--text-muted);
@@ -2795,78 +2782,87 @@ a.dt-contractor-name:hover { text-decoration: underline; text-decoration-color: 
 /* ---------- flow chart: on-aired vs DT done ---------- */
 .dt-flowcard { display: grid; gap: 10px; }
 
-/* A plain text row, not a card grid: On-aired / DT done / Gap / Coverage
-   were four identical cards competing with the chart underneath them for
-   weight they did not need -- the numbers are the point, not a box around
-   each one. */
-.dt-flowtiles {
-  list-style: none; margin: 0; padding: 0;
-  display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 22px;
-}
-.dt-flowtile {
-  display: inline-flex; align-items: baseline; gap: 6px;
-}
-.dt-flowtile-label {
-  font-size: 13px; line-height: 18px; color: var(--text-secondary); font-weight: 600;
-}
-.dt-flowtile-figure {
-  font-size: 17px; line-height: 24px; font-weight: 600; font-variant-numeric: tabular-nums;
-}
-/* A single year's own activity, beside its running totals: a sentence, not a
-   figure, so it takes the note weight rather than a figure's. */
-.dt-flowtile-note { font-size: 14px; color: var(--text-secondary); font-weight: 500; }
-/* Figures are ink. The series colours are named once, in the legend. */
-.dt-flowtile-figure { color: var(--text); }
-
-/* The legend: the series/lane colours the tiles already carry, named once
-   in one place, so a reader never has to infer identity from hue alone. */
+/* The legend, in the card's title row just before the year switcher: the
+   series named once in one place, so a reader never has to infer identity
+   from hue alone. */
 .dt-flow-legend {
-  list-style: none; margin: 0; padding: 0;
-  display: flex; flex-wrap: wrap; gap: 8px 16px;
+  list-style: none; margin: 0 0 0 auto; padding: 0;
+  display: flex; flex-wrap: wrap; gap: 4px 14px;
   font-size: 13px; line-height: 18px; color: var(--text-secondary);
 }
 .dt-flow-legend-item { display: inline-flex; align-items: center; gap: 6px; }
-.dt-flow-legend-item-muted { color: var(--text-tertiary); }
+.dt-flow-legend + .dt-section-controls { margin-inline-start: 16px; }
 /* A series is a 3px line, as it is drawn; the gap is its fill. */
 .dt-flow-legend-line { width: 16px; height: 3px; border-radius: 2px; flex: none; }
 .dt-flow-legend-swatch {
   width: 14px; height: 10px; border-radius: 2px; flex: none;
   background: var(--accent-soft);
 }
-
-/* The net-change strip: one pill per month under the axis, saying what that
-   month did to the backlog. Neutral, with the sign kept ("+25", "−13"): a
-   period-over-period change is not a status, so it is not green or red. Its
-   direction is in `data-tone` on the pill's group. */
-.dt-flow-net-pill { stroke: none; fill: var(--neutral-soft); }
-.dt-flow-net-text {
-  font-size: 11px; font-weight: 600; fill: var(--text-secondary);
-  font-variant-numeric: tabular-nums;
-}
-/* The pill of the month the readout is on -- the current month until a
-   reader points elsewhere -- white with an accent ring, so the crosshair,
-   the pill and the readout read as one selection. */
-[data-active="true"] > .dt-flow-net-pill { fill: var(--surface); stroke: var(--accent); stroke-width: 1.5; }
-[data-active="true"] > .dt-flow-net-text { fill: var(--accent-ink); }
-/* Where each month has under ~44 units (every year together, 19+ months) a
-   larger pill label would not fit its pill, so it keeps the smaller size. A
-   single year gives each month the room for the larger one. */
-.dt-flow-dense .dt-flow-net-text { font-size: 11px; }
-/* The legend swatch for the strip: a neutral pill, as they are drawn. */
-.dt-flow-legend-pill {
-  width: 18px; height: 10px; border-radius: 999px; flex: none;
-  background: var(--neutral-soft);
+/* The open month: a hollow dot, as it is drawn. */
+.dt-flow-legend-open {
+  width: 9px; height: 9px; border-radius: 50%; flex: none;
+  background: var(--surface); border: 2px solid var(--dt-muted);
 }
 
-/* The chart itself -- two lines, the soft fill between them, one baseline,
-   month labels. */
-.dt-flowchart { position: relative; }
-.dt-flowchart:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 4px; }
-.dt-flowchart-svg { width: 100%; height: auto; display: block; overflow: visible; }
-/* The chart draws at about 0.9 of its viewBox at 1920, so 13 units puts the
-   month names at about 12px on screen. */
-.dt-flowchart-svg .dt-axis-label { font-size: 13px; }
-.dt-flowchart-yearline { stroke: var(--border); stroke-width: 1; stroke-dasharray: 1.5 3; }
+/* The chart and the month table under it share one grid: a 104px gutter
+   (the y-axis labels above, the row names below) and one equal column per
+   month, so each month's figures sit straight under its dots. Under about
+   48px a column the pair scrolls sideways rather than squeezing. */
+.dt-flow-scroll { overflow-x: auto; padding-block-start: 8px; }
+.dt-flow-scroll > * { min-width: calc(104px + var(--dt-flow-cols) * 48px); }
+.dt-flowchart { position: relative; display: grid; grid-template-columns: 104px minmax(0, 1fr); }
+.dt-flow-yaxis { position: relative; }
+.dt-flow-ytick {
+  position: absolute; inset-inline-end: 12px; transform: translateY(-50%);
+  font-size: 12px; line-height: 16px; color: var(--text-tertiary); white-space: nowrap;
+}
+.dt-flow-plot { position: relative; height: 260px; margin-block: 8px; }
+.dt-flow-grid, .dt-flow-baseline {
+  position: absolute; inset-inline: 0; height: 0;
+  border-top: 1px solid var(--divider);
+}
+.dt-flow-baseline { border-top-color: var(--border); }
+/* The month still in progress: a light wash down its column. */
+.dt-flow-opencol { position: absolute; inset-block: -8px; background: var(--accent-wash); border-radius: 4px; }
+.dt-flowchart-svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+/* A dot at every month: filled, with a white ring; the open month hollow and
+   a little larger. */
+.dt-flow-dot {
+  position: absolute; width: 9px; height: 9px; border-radius: 50%;
+  transform: translate(-50%, -50%);
+  background: var(--dt-dot); box-shadow: 0 0 0 2px var(--surface);
+}
+.dt-flow-dot-open {
+  width: 11px; height: 11px; box-sizing: border-box;
+  background: var(--surface); border: 2px solid var(--dt-dot); box-shadow: none;
+}
+
+.dt-flow-table {
+  width: 100%; table-layout: fixed; border-collapse: collapse;
+  font-size: 13px; line-height: 18px;
+}
+.dt-flow-gutter { width: 104px; }
+.dt-flow-table th, .dt-flow-table td {
+  padding: 4px 2px; text-align: center; border: 0;
+  background: transparent; text-transform: none; letter-spacing: 0;
+  font-size: 13px; line-height: 18px;
+}
+.dt-flow-table thead th { vertical-align: top; font-weight: 500; color: var(--text); padding-block: 2px 6px; }
+.dt-flow-table tbody tr:hover { background: transparent; }
+.dt-flow-month { display: block; font-size: 12px; line-height: 18px; color: var(--text); }
+.dt-flow-sub { display: block; font-size: 11px; line-height: 14px; color: var(--text-tertiary); font-weight: 400; }
+.dt-flow-table tbody th {
+  text-align: start; padding-inline-end: 12px;
+  font-size: 12px; font-weight: 500; color: var(--text-secondary); white-space: nowrap;
+}
+.dt-flow-table tbody td { color: var(--text); font-variant-numeric: tabular-nums; }
+.dt-flow-table tbody tr + tr > * { border-top: 1px solid var(--divider); }
+.dt-flow-table .dt-flow-col-open { background: var(--accent-wash); }
+/* Gap change: green where the backlog shrank, brick where it grew, neutral
+   at zero. The sign is always shown, so colour is never the only signal. */
+.dt-flow-table td[data-tone='good'] { color: var(--dt-gap-shrank); font-weight: 600; }
+.dt-flow-table td[data-tone='bad'] { color: var(--dt-gap-grew); font-weight: 600; }
+.dt-flow-table td[data-tone='flat'] { color: var(--text-tertiary); }
 
 /* Two readings of the same figure, side by side. Also what keeps a five-row
    bar chart from stretching its marks across a 1280px page. */
@@ -2939,7 +2935,6 @@ a.dt-contractor-name:hover { text-decoration: underline; text-decoration-color: 
    the title row. The tabs sit closer to the view they switch than to the
    title or the gap alert above them. */
 .dt-view { display: grid; gap: var(--dt-gap); min-width: 0; }
-.dt-view-tabs { margin-block-end: -8px; }
 
 /* ---------- Cobalt, scoped to this page ----------
    The KPI card classes below are shared with the Acceptance Dashboard and
@@ -2951,11 +2946,43 @@ a.dt-contractor-name:hover { text-decoration: underline; text-decoration-color: 
    the PM's call, so this page uses its own until that is settled. It is the
    "reference" colour here: the On-aired series, balances, Not started.
    --dt-pending-bar is the darker neutral for Pending and folded rows. */
-.dt-page { --dt-gap: 20px; --dt-muted: #8391A7; --dt-pending-bar: #6B788D; }
-/* The title row carries the toolbar (see DriveTestProject); the tabs sit
-   16px under it. */
-.dt-page .page-head { margin-bottom: 16px; }
-.dt-page .page-head > .row { flex: 0 1 auto; min-width: 0; }
+.dt-page { --dt-gap: 16px; --dt-muted: #8391A7; --dt-pending-bar: #6B788D; }
+/* The month table's Gap change colours, from the Cobalt canvas: the backlog
+   shrank (green) or grew (brick). Page-scoped like --dt-muted above. */
+.dt-page { --dt-gap-shrank: #3A7E5E; --dt-gap-grew: #B05A5A; }
+/* The dashboard is sized to one office screen, so it takes the full width
+   rather than the app's 1,280px cap, with tighter page padding. It applies to
+   all three tabs, so switching views does not move the header. */
+.main:has(.dt-page) { max-width: none; }
+@media (min-width: 861px) {
+  .main:has(.dt-page) { padding: 20px 32px 24px; }
+}
+/* The header: one 48px row -- "Drive Test / Dashboard", the three views as
+   a segmented control, then the scope, freshness and the actions pushed
+   right. It wraps rather than overflows on a narrow page. */
+.dt-head {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 8px 20px;
+  min-height: 48px; margin-bottom: 16px;
+}
+.dt-head-title { display: flex; align-items: baseline; gap: 8px; white-space: nowrap; }
+.dt-head-crumb, .dt-head-sep { font-size: 14px; line-height: 20px; color: var(--text-tertiary); }
+.dt-head h1 { font-size: 22px; line-height: 28px; font-weight: 600; letter-spacing: -0.01em; }
+.dt-head .dt-view-tabs {
+  flex-wrap: nowrap; gap: 2px; padding: 3px;
+  border-radius: var(--radius-md); background: var(--track);
+}
+.dt-head .ui-tab { height: 32px; white-space: nowrap; }
+.dt-head .ui-tab:hover { background: transparent; }
+.dt-head .ui-tab[aria-selected='true'] {
+  background: var(--surface);
+  box-shadow: 0 1px 2px rgba(20, 27, 43, 0.12);
+}
+.dt-head .ui-tab[aria-selected='true']::after { display: none; }
+.dt-head .dt-toolbar { flex: 1 1 auto; justify-content: flex-end; min-width: 0; }
+.dt-head .dt-toolbar-right { margin-left: 0; }
+.dt-head .btn.dt-scope-all { gap: 6px; padding: 0 12px; font-weight: 500; color: var(--text); }
+.dt-head .btn.dt-scope-all svg { color: var(--text-tertiary); }
+.dt-icon-btn { width: 36px; height: 36px; padding: 0; }
 /* The two compact cards beside the trend take Cobalt's compact padding. */
 .dt-page .dt-stack > .dt-section { padding: 16px 20px 20px; gap: 12px; }
 /* A wider side column: its two cards keep their headers on one line, and
@@ -2988,30 +3015,31 @@ a.dt-contractor-name:hover { text-decoration: underline; text-decoration-color: 
   border: 1px solid var(--border);
   border-radius: var(--radius);
   box-shadow: var(--shadow-1);
-  padding: 16px 20px;
-  min-block-size: 148px;
-  gap: 12px;
+  padding: 12px 18px;
+  gap: 8px;
   --kpi-accent: var(--accent);
 }
 /* Icon chips are neutral -- never a status colour, never cobalt. */
-.dt-page .dt-kpi-hd { gap: 12px; margin-block-end: 0; }
+.dt-page .dt-kpi-hd { flex-wrap: wrap; gap: 4px 10px; margin-block-end: 0; min-width: 0; }
+.dt-page .dt-kpi-title { white-space: nowrap; }
 .dt-page .dt-kpi-ic {
-  inline-size: 36px; block-size: 36px; border-radius: 9px;
+  inline-size: 28px; block-size: 28px; border-radius: 7px; flex: none;
   color: var(--text-secondary); background: var(--neutral-soft);
 }
 .dt-page .dt-kpi-title { font-size: 13px; line-height: 18px; font-weight: 600; color: var(--text-secondary); }
 .dt-page .dt-kpi-v { gap: 8px; }
 .dt-page .dt-kpi-figure {
-  font-family: inherit; font-size: 30px; line-height: 38px; font-weight: 600;
+  font-family: inherit; font-size: 28px; line-height: 34px; font-weight: 600;
   letter-spacing: -0.01em; font-variant-numeric: tabular-nums; color: var(--text);
 }
 .dt-page a.dt-kpi-figure { text-decoration-color: var(--dt-muted); text-underline-offset: 6px; }
 .dt-page .dt-kpi-pct { font-size: 14px; line-height: 20px; font-weight: 600; color: var(--text-secondary); }
 .dt-page .dt-kpi-split { block-size: 6px; border-radius: 3px; margin-block-start: 0; background: var(--track); }
-/* "+42 vs last month": neutral, the number in bold ink. Its direction is in
-   `data-tone` and a visually hidden word, not in a colour. */
-.dt-page .dt-kpi-card > .dt-delta {
-  margin-block-start: auto; padding-block-start: 0;
+/* "+42 vs last month": in the label row, right-aligned, so the card loses a
+   line. Neutral, the number in bold ink. Its direction is in `data-tone` and
+   a visually hidden word, not in a colour. */
+.dt-page .dt-kpi-hd > .dt-delta {
+  margin-inline-start: auto; padding-block-start: 0; white-space: nowrap;
   font-size: 12px; line-height: 16px; color: var(--text-secondary);
 }
 .dt-page .dt-delta-pill b {
@@ -3020,13 +3048,13 @@ a.dt-contractor-name:hover { text-decoration: underline; text-decoration-color: 
 }
 .dt-page .dt-delta-since { color: var(--text-secondary); font-size: 12px; }
 .dt-page .dt-status-list { gap: 8px; padding-block-start: 0; }
-.dt-page .dt-status-row { padding: 4px; row-gap: 2px; }
+.dt-page .dt-status-row { padding: 2px 4px; row-gap: 0; }
 .dt-page a.dt-status-row:hover { background: var(--surface-subtle); }
 .dt-page .dt-status-name {
   display: flex; align-items: center; gap: 6px;
-  font-size: 13px; line-height: 18px; color: var(--text-secondary); overflow-wrap: normal;
+  font-size: 13px; line-height: 16px; color: var(--text-secondary); overflow-wrap: normal;
 }
-.dt-page .dt-status-num { font-family: inherit; font-size: 17px; line-height: 24px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.dt-page .dt-status-num { font-family: inherit; font-size: 17px; line-height: 22px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .dt-page .dt-status-pct { font-size: 12px; color: var(--text-tertiary); font-variant-numeric: tabular-nums; }
 @container kpi-status (max-width: 271px) {
   /* The swatch is inside the label here, so the row has three tracks. */
@@ -3070,7 +3098,6 @@ a.dt-contractor-name:hover { text-decoration: underline; text-decoration-color: 
      KPI cards used to tighten their padding here, from 20px to 16px. They
      carry 13px/15px at every width now, which is already tighter than that
      override was, so the override is gone rather than left to widen them. */
-  .dt-flowtiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .dt-bar-link { grid-template-columns: 110px 1fr 42px; }
   .dt-bar-share, .dt-bar-go { display: none; }
   .dt-toolbar-right { margin-left: 0; width: 100%; }

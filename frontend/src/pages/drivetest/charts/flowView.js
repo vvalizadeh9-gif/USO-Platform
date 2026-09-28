@@ -28,9 +28,10 @@ function niceStep(raw) {
  * given each month more width and no more height. Fitted, the lines fill most
  * of the plot in every view.
  *
- * The chart draws no axis, so the floor is stated in the card's note ("the
- * scale starts at N, not zero"); a truncated scale is only honest if it says
- * where it starts. It never goes below zero.
+ * The chart labels its axis at every `step` from `floor` to `ceiling`, and
+ * the card's note says where the scale starts too ("the scale starts at N,
+ * not zero"); a truncated scale is only honest if it says where it starts.
+ * It never goes below zero.
  */
 export function fitScale(values) {
   const lo = Math.min(...values)
@@ -39,7 +40,7 @@ export function fitScale(values) {
   const step = niceStep((hi - lo + 2 * pad) / 4)
   const floor = Math.max(0, Math.floor((lo - pad) / step) * step)
   const ceiling = Math.max(floor + step, Math.ceil((hi + pad) / step) * step)
-  return { floor, ceiling }
+  return { floor, ceiling, step }
 }
 
 /** Running totals from the opening balance, one point per month plus the
@@ -79,20 +80,15 @@ export function cumulativePoints(data) {
  * The change in pending over the month: sites that went on air minus drive
  * tests finished. Negative means the backlog shrank.
  *
- * DERIVED FROM THE POINTS THE CHART IS ALREADY DRAWING, not fetched again
- * and not recomputed from the payload, which is what makes the strip
- * reconcile to the lines above it rather than merely agree with them most of
- * the time. The sum of these is exactly `last.gap - first.gap`, because each
- * one is the step between two consecutive gap values and the sum telescopes.
- * That identity is what the parity test asserts, and it is the reason this
- * takes `points` rather than `data.months`: a strip built from the payload
- * would keep summing correctly while the chart beside it drew a filtered
- * year, and be wrong in the one view where it looked right.
+ * DERIVED FROM THE POINTS THE CHART IS ALREADY DRAWING, not recomputed from
+ * the payload, which is what makes the month table reconcile to the lines
+ * above it rather than merely agree with them most of the time. The sum of
+ * these is exactly `last.gap - first.gap`, because each one is the step
+ * between two consecutive gap values and the sum telescopes. `points` starts
+ * with the balance the view opened on, so there is one entry per month.
  *
- * The sign convention is the one the Gap tile above already uses -- see its
- * `DeltaChip direction="down"`. A falling gap is good news, so a negative
- * number here is green. The two would be read together and must not disagree
- * about which way is which.
+ * Negative is good news, so a negative number is green -- the convention the
+ * Pending card's month-over-month chip already uses.
  */
 export function netChanges(points) {
   const out = []
@@ -118,82 +114,54 @@ export function flowYears(data) {
 
 /** Everything one view of the chart draws from.
  *
- * `scope` is 'all' or a Shamsi year. EVERY SCOPE IS THE SAME LEDGER, CAPPED.
- * Picking a year does not crop the chart down to that year's own months --
- * it draws the whole programme from the opening balance on 1 Farvardin 1404,
- * the same as 'all', just stopping at that year's last month instead of
- * running to today. Asking "where do we stand through 1405" must not lop off
- * 1404: every figure is still the real running total, so the gap is always
- * the real backlog and coverage can never pass 100%. The view this replaces
- * restarted both counts at zero for a year, which drew a year that finished
- * more drive tests than it brought on air as "coverage 295%" and a negative
- * gap -- capping keeps that fix and also keeps the years before the one
- * picked on screen, rather than hiding them behind a single opening point.
+ * `scope` is a Shamsi year; anything else -- no choice yet, or a year the
+ * payload does not have -- is the latest year. The chart draws one column per
+ * month of that year: twelve for a finished year, Farvardin to now for the
+ * current one.
  *
- * What a capped view could still not say on its own -- how much the selected
- * year itself put on air and drive-tested -- is `yearActivity`, the sums of
- * that year's own months.
+ * THE LINES CARRY THE RUNNING TOTAL; THEY DO NOT RESET. Each point is the
+ * programme's real running total at that month's end, carried from the
+ * opening balance on 1 Farvardin 1404 through every month before it, so the
+ * current year's last point is the KPI cards' figure and the gap is always
+ * the real backlog. The view this replaces once restarted both counts at zero
+ * for a year, which drew a year that finished more drive tests than it
+ * brought on air as "coverage 295%" and a negative gap. What the year itself
+ * did is in the month table under the chart, one column per month.
+ *
+ * `points[0]` is the balance the year opened on -- not drawn, but it is what
+ * the first month's change in the gap is measured from -- and `points[1..]`
+ * are the months, in the same order as `months`.
  */
-export function flowView(data, scope = 'all') {
+export function flowView(data, scope = null) {
   const years = flowYears(data)
-  const selected = years.includes(scope) ? scope : 'all'
+  const selected = years.includes(scope) ? scope : years[years.length - 1]
   const all = cumulativePoints(data)
-  let points = all
-  let months = data.months
-  let yearActivity = null
-  if (selected !== 'all') {
-    const first = data.months.findIndex((m) => m.year === selected)
-    const inYear = data.months.filter((m) => m.year === selected).length
-    const end = first + inYear
-    // Always from the very start of `data.months` (the opening balance is
-    // point 0), never from `first`: a year caps the ledger, it does not
-    // window onto it. Only years after the one picked are cut off.
-    points = all.slice(0, end + 1)
-    months = data.months.slice(0, end)
-    const yearMonths = data.months.slice(first, end)
-    yearActivity = {
-      onAired: yearMonths.reduce((sum, m) => sum + m.on_aired, 0),
-      dtDone: yearMonths.reduce((sum, m) => sum + m.dt_done, 0),
-    }
-  }
-  const { floor, ceiling } = fitScale(points.flatMap((p) => [p.onAir, p.dtDone]))
+  const first = data.months.findIndex((m) => m.year === selected)
+  const end = first + data.months.filter((m) => m.year === selected).length
+  // all[i + 1] is the running total after data.months[i], so all[first] is
+  // where the year opened.
+  const points = all.slice(first, end + 1)
+  const months = data.months.slice(first, end)
+  const { floor, ceiling, step } = fitScale(points.slice(1).flatMap((p) => [p.onAir, p.dtDone]))
+  const ticks = Array.from({ length: Math.round((ceiling - floor) / step) + 1 }, (_, i) => floor + i * step)
   // Both sides, not just on-air: the bug this count exists to disclose showed
   // up on the DT-done side. The larger of the two rather than their sum,
   // because a site can be missing both dates and be counted on both sides.
   const notPlaced = Math.max(data.not_placed?.on_air ?? 0, data.not_placed?.dt_done ?? 0)
-  // Whether the drawn window itself spans more than one Shamsi year -- which
-  // 'all' always does (the control only appears with 2+ years of data), and
-  // a capped year now does too whenever it is not the payload's first year.
-  // Drives the same layout choices (year captions, wider label spacing) that
-  // used to be keyed on `isAll` alone.
-  const multiYear = new Set(months.map((m) => m.year)).size > 1
-  return {
-    years,
-    selected,
-    isAll: selected === 'all',
-    multiYear,
-    points,
-    months,
-    floor,
-    ceiling,
-    notPlaced,
-    yearActivity,
-  }
+  return { years, selected, points, months, floor, ceiling, ticks, notPlaced }
 }
 
 /** The notes behind the card's info icon, for the view on screen. */
-export function flowNotes(data, scope = 'all') {
-  const { selected, isAll, floor, notPlaced } = flowView(data, scope)
+export function flowNotes(data, scope = null) {
+  const { selected, floor, notPlaced } = flowView(data, scope)
   const notes = [
     'Sites on air against drive tests done, and what each month did to the backlog.',
-    (isAll
-      ? 'The running total starts from the opening balance on 1 Farvardin 1404.'
-      : `Showing every month from the opening balance on 1 Farvardin 1404 through ${selected}. ` +
-        'These are the programme’s real running totals, so the gap is the real backlog at each ' +
-        'month’s end.') + (floor > 0 ? ` The scale starts at ${count(floor)}, not zero.` : ''),
-    'The pills under the months are what each one did to the backlog — sites on air that ' +
-      'month minus drive tests finished — so they add up to the movement in the gap across ' +
-      'the chart. Green shrank it, red grew it.',
+    `Showing ${selected}, month by month. The lines are the programme’s running totals, carried ` +
+      'from the opening balance on 1 Farvardin 1404, so the gap is the real backlog at each ' +
+      'month’s end.' +
+      (floor > 0 ? ` The scale starts at ${count(floor)}, not zero.` : ''),
+    'The table under the chart is each month’s own movement. Gap change is sites on air that ' +
+      'month minus drive tests finished: green shrank the backlog, brick grew it.',
   ]
   if (notPlaced > 0) {
     notes.push(
@@ -204,30 +172,4 @@ export function flowNotes(data, scope = 'all') {
     )
   }
   return notes
-}
-
-/** Which months get their name under the axis, as a set of indexes.
- *
- * Every `every`th month, because full Persian month names on every step
- * collide. The latest month is named too, since it is "now" -- unless that
- * would put it a single step from the label before it, where the two names
- * would run into each other. Then one of them gives way: the earlier label,
- * unless it is a Farvardin carrying its year underneath (`anchorsYear`), in
- * which case the year stays and the latest month goes unnamed. It is never
- * lost: the readout under the chart opens on it and names it in full.
- */
-export function labelledMonths(months, every, anchorsYear) {
-  const last = months.length - 1
-  const out = new Set()
-  if (last < 0) return out
-  for (let j = 0; j <= last; j += every) out.add(j)
-  if (out.has(last)) return out
-  const prev = last - (last % every)
-  if (last - prev >= 2) {
-    out.add(last)
-  } else if (!(anchorsYear && months[prev].month === 1)) {
-    out.delete(prev)
-    out.add(last)
-  }
-  return out
 }

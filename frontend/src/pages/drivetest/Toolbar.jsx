@@ -1,4 +1,4 @@
-import { Download, MapPin, RefreshCw, X } from 'lucide-react'
+import { ChevronDown, Download, MapPin, RefreshCw, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { freshness } from './format'
 
@@ -6,6 +6,7 @@ export default function Toolbar({
   provinceId,
   provinceName,
   onClearProvince,
+  onPickProvince,
   onRefresh,
   refreshing,
   generatedAt,
@@ -40,7 +41,12 @@ export default function Toolbar({
             </button>
           </span>
         ) : (
-          <span className="dt-scope-all">All provinces</span>
+          // The province filter is set from the province table, so this opens
+          // it: a control that looks live must do something.
+          <button type="button" className="btn dt-scope-all" onClick={onPickProvince}>
+            All provinces
+            <ChevronDown size={14} aria-hidden="true" />
+          </button>
         )}
       </div>
 
@@ -59,17 +65,17 @@ export default function Toolbar({
             the province table and cleared from the chip on the left. */}
         <button
           type="button"
-          className="btn"
+          className="btn dt-icon-btn"
           onClick={onRefresh}
           disabled={refreshing}
-          aria-label="Refresh the dashboard"
+          aria-label="Refresh"
+          title={refreshing ? 'Refreshing…' : 'Refresh the dashboard'}
         >
           <RefreshCw
             size={16}
             aria-hidden="true"
             className={refreshing ? 'dt-spin' : undefined}
           />
-          {refreshing ? 'Refreshing…' : 'Refresh'}
         </button>
         <button type="button" className="btn" onClick={onExport} disabled={exporting}>
           <Download size={16} aria-hidden="true" />
