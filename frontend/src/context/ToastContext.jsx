@@ -1,6 +1,6 @@
 // Lightweight toast system for success/error feedback.
 import { AnimatePresence, motion } from 'framer-motion'
-import { createContext, useCallback, useContext, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react'
 
 const ToastContext = createContext(null)
 
@@ -8,13 +8,26 @@ let idSeq = 0
 
 export function ToastProvider({ children }) {
   const [toasts, setToasts] = useState([])
+  // Dismiss timers still pending. Cleared on unmount, so a toast never
+  // updates a provider that is gone (and never outlives a test's DOM).
+  const timers = useRef(new Set())
+
+  useEffect(() => {
+    const pending = timers.current
+    return () => {
+      pending.forEach(clearTimeout)
+      pending.clear()
+    }
+  }, [])
 
   const push = useCallback((toast) => {
     const id = ++idSeq
     setToasts((t) => [...t, { id, ...toast }])
-    setTimeout(() => {
+    const timer = setTimeout(() => {
+      timers.current.delete(timer)
       setToasts((t) => t.filter((x) => x.id !== id))
     }, toast.duration || 4000)
+    timers.current.add(timer)
   }, [])
 
   const api = {

@@ -597,7 +597,8 @@ question to the one above it. KPI & Performance asks "how is this owner doing?"
 Gap & Performance asks **"where is the programme stopped, and whose villages are
 stopped there?"**
 
-`/reports/gaps`, served by `GET /gaps/road` and `services/gaps.py`. A pure read:
+`/reports/gaps`, served by `GET /gaps/road` (being replaced by `GET
+/gaps/overview`, below) and `services/gaps.py`. A pure read:
 no table, no migration, nothing written.
 
 ### The road
@@ -682,6 +683,50 @@ page: it is an aggregate of thirty-one provinces, it identifies nobody, and an
 owner's share of the national gap cannot be computed without it. A scoped
 reader's checksum says "your row is 230 of the 940 stopped nationally" rather
 than printing a sum that cannot balance.
+
+### The overview: where villages are stuck (`GET /gaps/overview`)
+
+The Lifecycle Gaps redesign replaces the road with six figures. The road above
+stays until the new page ships, and is retired in the same change as the old
+page (with `gap_road_precheck`, whose third question is the ICT-then-CRA
+assumption this section drops).
+
+**The universe is on-air villages.** A village row counts when it is هدف, its
+drive test is done, its site's `last_stage` is `راه_اندازی_موقت` or
+`راه_اندازی_دائم` (read through `kpi.onair_values`, the same on-air reading as
+the Acceptance dashboard), and neither it nor its work item is soft-deleted.
+The road did not apply the on-air rule; the overview does, **on purpose**. The
+coverage map keeps the road's counting and is unchanged.
+
+**ICT and CRA are parallel, not sequential.** Neither is counted "after" the
+other, so a village CRA-approved without ICT is simply "ICT remained", not an
+anomaly — which is why `cra_approved_without_ict` is not reported by the
+overview. Approved is the village roll-up (`Village.ict_status == Approved`);
+everything else, Pending and Rejected alike, is not approved.
+
+| Figure | Counted | Base |
+|---|---|---|
+| Pending ICT / CRA | not approved by that authority | eligible |
+| ICT remained | CRA approved, ICT not | CRA approved |
+| CRA remained | ICT approved, CRA not | ICT approved |
+| ICT / CRA missing in Mojri | approved, and Mojri's status for that authority is not `in_tracker` | approved |
+
+No `mojri_tracker_status` row reads as not in the tracker; `needs_look` counts
+as missing, and its count travels separately. No de-duplication, as
+everywhere in acceptance counting.
+
+Every figure is counted directly in the one GROUP BY (`_gap_grid`), not derived
+by subtraction, so the identities the tests check — `approved + pending =
+eligible`, `pending = remained + neither`, `missing + in_tracker = approved` —
+are evidence rather than arithmetic that holds by construction. Owner rows are
+folds of the same cells, so every lens sums to every figure, as on the road.
+
+**Scope differs from the road.** PM sees the country under any of the five
+lenses. Every other role sees **only their own villages**: totals, gaps and
+bases are all computed over the cells that roll up to their own key, and their
+one row therefore adds up to the totals they see. Lens and key come from
+`resolve_scope`; asking for another lens is a 403, and the endpoint takes no
+key at all.
 
 ### Deliberately not built
 
