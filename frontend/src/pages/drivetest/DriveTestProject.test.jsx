@@ -31,6 +31,9 @@ const { ToastProvider } = await import('../../context/ToastContext')
 /** The dashboard opened on its Contractors & provinces tab, where the
  * contractor scorecard and the province table live. */
 const TABLES = '/reports/drive-test?tab=contractors-provinces'
+/** The dashboard opened on its Breakdowns tab, where the ongoing and
+ * problematic breakdowns live. */
+const BREAKDOWNS = '/reports/drive-test?tab=breakdowns'
 
 const STAFF = { id: 1, username: 'pm', role: { name: 'PM' } }
 const VIEWER = { id: 2, username: 'v', role: { name: 'Viewer' } }
@@ -363,7 +366,7 @@ describe('breakdown chrome', () => {
         by_category: [{ name: 'Uncategorized', value: 10, key: 'Uncategorized' }],
       },
     })
-    draw()
+    draw(BREAKDOWNS)
 
     const card = await section('Problematic breakdown')
     expect(card).toHaveTextContent(
@@ -373,7 +376,7 @@ describe('breakdown chrome', () => {
 
   it('says nothing of the kind once any site has a category', async () => {
     serve()
-    draw()
+    draw(BREAKDOWNS)
 
     const card = await section('Problematic breakdown')
     expect(within(card).queryByText(/No site has a category yet/)).toBeNull()
@@ -382,7 +385,7 @@ describe('breakdown chrome', () => {
   it('keeps the chart/table switch in the card foot, below the bars', async () => {
     // It used to take a row of its own above them.
     serve()
-    draw()
+    draw(BREAKDOWNS)
 
     const card = await section('Ongoing breakdown')
     const toggle = within(card).getByRole('group', { name: 'Chart or table' })
@@ -393,7 +396,7 @@ describe('breakdown chrome', () => {
 
   it('switches views with a segmented control in the header', async () => {
     serve()
-    draw()
+    draw(BREAKDOWNS)
 
     const card = await section('Problematic breakdown')
     const tabs = within(card.querySelector('.dt-section-head')).getByRole('tablist', {
@@ -406,7 +409,7 @@ describe('breakdown chrome', () => {
 describe('breakdown sections', () => {
   it('renders each section, opening on its chart view', async () => {
     serve()
-    draw()
+    draw(BREAKDOWNS)
 
     const ongoing = await section('Ongoing breakdown')
     const problematic = await section('Problematic breakdown')
@@ -425,7 +428,7 @@ describe('breakdown sections', () => {
 
   it('shows the ongoing total on the section header', async () => {
     serve()
-    draw()
+    draw(BREAKDOWNS)
 
     const ongoing = await section('Ongoing breakdown')
     expect(within(ongoing).getByText('50')).toBeInTheDocument()
@@ -435,7 +438,7 @@ describe('breakdown sections', () => {
 
   it('switches the ongoing section between its three tabs', async () => {
     serve()
-    draw()
+    draw(BREAKDOWNS)
 
     const ongoing = await section('Ongoing breakdown')
     expect(within(ongoing).getByText('Alfa Drive Tests')).toBeInTheDocument()
@@ -454,7 +457,7 @@ describe('breakdown sections', () => {
 
   it('marks the selected tab for a screen reader, not just visually', async () => {
     serve()
-    draw()
+    draw(BREAKDOWNS)
 
     const ongoing = await section('Ongoing breakdown')
     expect(within(ongoing).getByRole('tab', { name: 'Contractor' })).toHaveAttribute(
@@ -472,7 +475,7 @@ describe('breakdown sections', () => {
     // The contractor rows come to 18 of 50 on purpose. Without this note the
     // view looks like it has lost 32 sites.
     serve()
-    draw()
+    draw(BREAKDOWNS)
 
     const ongoing = await section('Ongoing breakdown')
     expect(
@@ -491,7 +494,7 @@ describe('breakdown sections', () => {
         without_contractor: 0,
       },
     })
-    draw()
+    draw(BREAKDOWNS)
 
     const ongoing = await section('Ongoing breakdown')
     expect(within(ongoing).getByText('Every ongoing site has a contractor.')).toBeInTheDocument()
@@ -499,7 +502,7 @@ describe('breakdown sections', () => {
 
   it('says how many ongoing sites cannot be aged, for the same reason', async () => {
     serve()
-    draw()
+    draw(BREAKDOWNS)
 
     const ongoing = await section('Ongoing breakdown')
     await userEvent.click(within(ongoing).getByRole('tab', { name: 'How long' }))
@@ -513,7 +516,7 @@ describe('breakdown sections', () => {
     // site had been on air rather than how long anybody had been holding it:
     // a brand-new assignment on a two-year-old site read as a year overdue.
     serve()
-    draw()
+    draw(BREAKDOWNS)
 
     const ongoing = await section('Ongoing breakdown')
     await userEvent.click(within(ongoing).getByRole('tab', { name: 'How long' }))
@@ -536,7 +539,7 @@ describe('breakdown sections', () => {
     // a bar reading 64 sites on temporary power could be this week's news or
     // last year's -- and only one of those is somebody's to answer for.
     serve()
-    draw()
+    draw(BREAKDOWNS)
 
     const problematic = await section('Problematic breakdown')
     await userEvent.click(within(problematic).getByRole('tab', { name: 'How long' }))
@@ -559,7 +562,7 @@ describe('breakdown sections', () => {
     // not told that reads the bars as the whole picture -- and the direction
     // of the error is the dangerous one: the backlog looks fresher than it is.
     serve()
-    draw()
+    draw(BREAKDOWNS)
 
     const problematic = await section('Problematic breakdown')
     await userEvent.click(within(problematic).getByRole('tab', { name: 'How long' }))
@@ -570,7 +573,7 @@ describe('breakdown sections', () => {
 
   it('opens each problematic age band on the sites in that band', async () => {
     serve()
-    draw()
+    draw(BREAKDOWNS)
 
     const problematic = await section('Problematic breakdown')
     await userEvent.click(within(problematic).getByRole('tab', { name: 'How long' }))
@@ -586,7 +589,7 @@ describe('breakdown sections', () => {
 
   it('toggles each section to a table and back, in the same card', async () => {
     serve()
-    draw()
+    draw(BREAKDOWNS)
 
     for (const [title, unit] of [
       ['Ongoing breakdown', 'Contractor'],
@@ -609,7 +612,7 @@ describe('breakdown sections', () => {
 
   it('adds the table up to the section total', async () => {
     serve()
-    draw()
+    draw(BREAKDOWNS)
 
     const problematic = await section('Problematic breakdown')
     await userEvent.click(within(problematic).getByRole('button', { name: /Table/ }))
@@ -622,7 +625,7 @@ describe('breakdown sections', () => {
 
   it('switches the problematic section between category and province', async () => {
     serve()
-    draw()
+    draw(BREAKDOWNS)
 
     const problematic = await section('Problematic breakdown')
     expect(within(problematic).getByText('Power')).toBeInTheDocument()
@@ -652,7 +655,7 @@ describe('breakdown sections', () => {
         })),
       },
     })
-    draw()
+    draw(BREAKDOWNS)
 
     const ongoing = await section('Ongoing breakdown')
     await userEvent.click(within(ongoing).getByRole('tab', { name: 'Province' }))
@@ -683,7 +686,7 @@ describe('breakdown sections', () => {
         })),
       },
     })
-    draw()
+    draw(BREAKDOWNS)
 
     const ongoing = await section('Ongoing breakdown')
     await userEvent.click(within(ongoing).getByRole('tab', { name: 'Province' }))
@@ -1218,15 +1221,17 @@ describe('the KPI band', () => {
 })
 
 describe('the order of the page', () => {
-  it('asks its four questions in order: where, which way, what was promised, what is left', async () => {
-    // The trend moved up to sit directly under the band, which is the second
-    // question the page asks and used to be answered halfway down. The
-    // property this test was written for still holds and is still the point:
-    // the PIP summary stays above the ongoing and problematic detail.
+  it('asks its questions in order: where, which way, what was promised', async () => {
+    // The trend sits directly under the band, then the month's two short
+    // answers -- what moved against last month, and what was promised for
+    // this one -- in the column beside it. What is left, the ongoing and
+    // problematic detail, moved to its own Breakdowns tab so the Overview
+    // fits one screen.
     serve()
     draw()
 
     await screen.findByLabelText('Programme totals')
+    await section('PIP this month')
     const headings = screen
       .getAllByRole('heading')
       .map((h) => h.textContent)
@@ -1240,17 +1245,7 @@ describe('the order of the page', () => {
         ].includes(t),
       )
 
-    // The month's two short answers -- what moved against last month, and
-    // what was promised for this one -- sit in the column beside the trend,
-    // so they read straight after it and still above the ongoing and
-    // problematic detail.
-    expect(headings).toEqual([
-      'Where this is going',
-      'What moved',
-      'PIP this month',
-      'Ongoing breakdown',
-      'Problematic breakdown',
-    ])
+    expect(headings).toEqual(['Where this is going', 'What moved', 'PIP this month'])
   })
 
   it('stacks What moved and PIP this month in the column beside the trend', async () => {
@@ -1326,12 +1321,14 @@ describe('drill-through', () => {
     },
     {
       name: 'a problematic category',
+      path: BREAKDOWNS,
       open: () => section('Problematic breakdown'),
       text: 'Power',
       href: '/drive-test/sites?bucket=problematic&category=Power',
     },
     {
       name: 'a problematic province',
+      path: BREAKDOWNS,
       open: async () => {
         const card = await section('Problematic breakdown')
         await userEvent.click(within(card).getByRole('tab', { name: 'Province' }))
@@ -1342,12 +1339,14 @@ describe('drill-through', () => {
     },
     {
       name: 'an ongoing contractor',
+      path: BREAKDOWNS,
       open: () => section('Ongoing breakdown'),
       text: 'Alfa Drive Tests',
       href: '/drive-test/sites?bucket=ongoing&contractor_id=1',
     },
     {
       name: 'an ongoing province',
+      path: BREAKDOWNS,
       open: async () => {
         const card = await section('Ongoing breakdown')
         await userEvent.click(within(card).getByRole('tab', { name: 'Province' }))
@@ -1358,6 +1357,7 @@ describe('drill-through', () => {
     },
     {
       name: 'an age band, by its key rather than its label',
+      path: BREAKDOWNS,
       open: async () => {
         const card = await section('Ongoing breakdown')
         await userEvent.click(within(card).getByRole('tab', { name: 'How long' }))
@@ -1492,7 +1492,7 @@ describe('drill-through', () => {
       ],
     }
     serve(planDelivery(), contractorView)
-    draw()
+    draw(BREAKDOWNS)
 
     const card = await section('Ongoing breakdown')
     expect(within(card).getByText('Alfa Drive Tests').closest('a')).toHaveAttribute(
@@ -1647,7 +1647,7 @@ describe('failure and freshness', () => {
     delete older.province_breakdown
     delete older.contractor_scorecard
     serve(planDelivery(), older)
-    draw()
+    draw(BREAKDOWNS)
 
     expect(await screen.findByRole('heading', { level: 1, name: 'Dashboard' })).toBeInTheDocument()
     await waitFor(() => expect(screen.queryByText('Ongoing breakdown')).not.toBeInTheDocument())
@@ -2878,9 +2878,11 @@ describe('Cobalt chrome', () => {
       'Where this is going',
       'What moved',
       'PIP this month',
-      'Ongoing breakdown',
-      'Problematic breakdown',
     ]) {
+      await expectChip(title)
+    }
+    await userEvent.click(screen.getByRole('tab', { name: 'Breakdowns' }))
+    for (const title of ['Ongoing breakdown', 'Problematic breakdown']) {
       await expectChip(title)
     }
     await userEvent.click(screen.getByRole('tab', { name: 'Contractors & provinces' }))
@@ -2891,7 +2893,7 @@ describe('Cobalt chrome', () => {
 
   it('marks the selected breakdown view with aria-selected on a segmented tab', async () => {
     serve()
-    draw()
+    draw(BREAKDOWNS)
 
     const card = await section('Ongoing breakdown')
     const tabs = within(card.querySelector('.dt-section-head')).getAllByRole('tab')
@@ -2902,9 +2904,10 @@ describe('Cobalt chrome', () => {
   })
 })
 
-describe('the two views', () => {
-  // Overview and Contractors & provinces. The KPI band and the province
-  // scope sit above both, so the headline figures never leave the screen.
+describe('the three views', () => {
+  // Overview, Breakdowns, and Contractors & provinces. The KPI band and the
+  // province scope sit above all three, so the headline figures never leave
+  // the screen.
 
   const TAB = 'Contractors & provinces'
 
@@ -2935,6 +2938,78 @@ describe('the two views', () => {
     await userEvent.click(screen.getByRole('tab', { name: 'Overview' }))
     await section('Where this is going')
     expect(screen.queryByRole('heading', { name: 'Contractor scorecard' })).not.toBeInTheDocument()
+  })
+
+  it('offers three tabs, in order: Overview, Breakdowns, Contractors & provinces', async () => {
+    serve()
+    draw()
+
+    const tablist = await screen.findByRole('tablist', { name: 'Dashboard view' })
+    expect(within(tablist).getAllByRole('tab').map((t) => t.textContent)).toEqual([
+      'Overview',
+      'Breakdowns',
+      TAB,
+    ])
+  })
+
+  it('keeps the breakdowns off the Overview', async () => {
+    serve()
+    draw()
+
+    await section('PIP this month')
+    expect(screen.queryByRole('heading', { name: 'Ongoing breakdown' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Problematic breakdown' })).not.toBeInTheDocument()
+  })
+
+  it('opens the breakdowns straight from the address', async () => {
+    serve()
+    draw(BREAKDOWNS)
+
+    expect(await screen.findByRole('tab', { name: 'Breakdowns' })).toHaveAttribute('aria-selected', 'true')
+    await section('Ongoing breakdown')
+    await section('Problematic breakdown')
+    expect(screen.getByLabelText('Programme totals')).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Where this is going' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Contractor scorecard' })).not.toBeInTheDocument()
+  })
+
+  it('keeps the KPI band and the province scope across Overview, Breakdowns and the tables', async () => {
+    serve()
+    draw('/reports/drive-test?province=7')
+
+    const scopeChip = () =>
+      screen.getByRole('button', { name: /Show every province again, not just Kerman/ })
+
+    await section('Where this is going')
+    expect(await screen.findByLabelText('Programme totals')).toBeInTheDocument()
+    expect(scopeChip()).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('tab', { name: 'Breakdowns' }))
+    expect(screen.getByRole('tab', { name: 'Breakdowns' })).toHaveAttribute('aria-selected', 'true')
+    await section('Ongoing breakdown')
+    expect(screen.getByLabelText('Programme totals')).toBeInTheDocument()
+    expect(scopeChip()).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('tab', { name: TAB }))
+    await section('Contractor scorecard')
+    expect(screen.getByLabelText('Programme totals')).toBeInTheDocument()
+    expect(scopeChip()).toBeInTheDocument()
+
+    // Every request along the way stayed narrowed to the province.
+    for (const [url, config] of api.get.mock.calls) {
+      if (url === '/drive-test/overview') expect(config).toEqual({ params: { province_id: 7 } })
+    }
+  })
+
+  it('carries the drill-through scope from the breakdowns, as it did on the Overview', async () => {
+    serve()
+    draw(`${BREAKDOWNS}&province=7`)
+
+    const card = await section('Ongoing breakdown')
+    expect(within(card).getByText('Alfa Drive Tests').closest('a')).toHaveAttribute(
+      'href',
+      '/drive-test/sites?bucket=ongoing&contractor_id=1&province_id=7',
+    )
   })
 
   it('opens the tables straight from the address, so a link or bookmark lands there', async () => {

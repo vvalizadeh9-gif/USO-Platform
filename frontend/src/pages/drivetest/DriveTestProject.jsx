@@ -38,17 +38,23 @@ const ONGOING_TABS = [
   { key: 'age', label: 'How long' },
 ]
 
-/** The page's two views. The KPI band, the toolbar and the province scope sit
- * above them, so the headline figures and what the page is narrowed to stay
- * on screen whichever view is open. The view lives in the address
- * (`?tab=contractors-provinces`), so a link or a bookmark opens it and Back
- * returns to the other one; Overview is the default and carries no param. */
+/** The page's three views. The KPI band, the toolbar and the province scope
+ * sit above them, so the headline figures and what the page is narrowed to
+ * stay on screen whichever view is open. The view lives in the address
+ * (`?tab=breakdowns`, `?tab=contractors-provinces`), so a link or a bookmark
+ * opens it and Back returns to the one before; Overview is the default and
+ * carries no param. The breakdowns have a view of their own because on the
+ * Overview they pushed the page past one screen on the office display, and
+ * by a height that changed with their data. */
 const OVERVIEW = 'overview'
+const BREAKDOWNS = 'breakdowns'
 const RANKINGS = 'contractors-provinces'
 const VIEW_TABS = [
   { key: OVERVIEW, label: 'Overview' },
+  { key: BREAKDOWNS, label: 'Breakdowns' },
   { key: RANKINGS, label: 'Contractors & provinces' },
 ]
+const VIEW_KEYS = new Set(VIEW_TABS.map((t) => t.key))
 
 const PROBLEMATIC_TABS = [
   { key: 'category', label: 'Category' },
@@ -121,7 +127,8 @@ export default function DriveTestProject() {
   }
 
   const [searchParams, setSearchParams] = useSearchParams()
-  const view = searchParams.get('tab') === RANKINGS ? RANKINGS : OVERVIEW
+  const tabParam = searchParams.get('tab')
+  const view = VIEW_KEYS.has(tabParam) ? tabParam : OVERVIEW
   const setView = useCallback(
     (next) => {
       const params = new URLSearchParams(searchParams)
@@ -400,7 +407,9 @@ export default function DriveTestProject() {
                   />
                 </div>
               </div>
-
+            </div>
+          ) : view === BREAKDOWNS ? (
+            <div className="dt-view" role="tabpanel" aria-label="Breakdowns">
               <div className="dt-pair">
                 {has('ongoing_breakdown') && (
                   <Section
