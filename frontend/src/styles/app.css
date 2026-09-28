@@ -2918,6 +2918,12 @@ a.dt-contractor-name:hover { text-decoration: underline; text-decoration-color: 
   .dt-drill { width: 100vw; }
 }
 
+/* ---------- the two views ----------
+   Overview and Contractors & provinces, under the KPI band. The tabs sit
+   closer to the view they switch than to the band above them. */
+.dt-view { display: grid; gap: var(--dt-gap); min-width: 0; }
+.dt-view-tabs { margin-block-end: -8px; }
+
 /* ---------- Cobalt, scoped to this page ----------
    The KPI card classes below are shared with the Acceptance Dashboard and
    the Monthly Plan's target card, which move to Cobalt in their own steps.

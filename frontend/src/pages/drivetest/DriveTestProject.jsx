@@ -6,10 +6,11 @@ import {
   OctagonAlert,
   TrendingUp,
 } from 'lucide-react'
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import api from '../../api/client'
 import { describeBlobError, filenameFrom, saveBlob } from '../../lib/download'
-import { Banner, PageHead } from '../../components/ui'
+import { Banner, PageHead, Tabs } from '../../components/ui'
 import { useToast } from '../../context/ToastContext'
 import AlertStrip from './AlertStrip'
 import BreakdownCard, { BreakdownTabs } from './BreakdownCard'
@@ -35,6 +36,18 @@ const ONGOING_TABS = [
   { key: 'contractor', label: 'Contractor' },
   { key: 'province', label: 'Province' },
   { key: 'age', label: 'How long' },
+]
+
+/** The page's two views. The KPI band, the toolbar and the province scope sit
+ * above them, so the headline figures and what the page is narrowed to stay
+ * on screen whichever view is open. The view lives in the address
+ * (`?tab=contractors-provinces`), so a link or a bookmark opens it and Back
+ * returns to the other one; Overview is the default and carries no param. */
+const OVERVIEW = 'overview'
+const RANKINGS = 'contractors-provinces'
+const VIEW_TABS = [
+  { key: OVERVIEW, label: 'Overview' },
+  { key: RANKINGS, label: 'Contractors & provinces' },
 ]
 
 const PROBLEMATIC_TABS = [
@@ -107,9 +120,31 @@ export default function DriveTestProject() {
     }
   }
 
+  const [searchParams, setSearchParams] = useSearchParams()
+  const view = searchParams.get('tab') === RANKINGS ? RANKINGS : OVERVIEW
+  const setView = useCallback(
+    (next) => {
+      const params = new URLSearchParams(searchParams)
+      if (next === OVERVIEW) params.delete('tab')
+      else params.set('tab', next)
+      // Pushed, not replaced: Back returns to the view the reader came from.
+      setSearchParams(params)
+    },
+    [searchParams, setSearchParams],
+  )
+
+  // "View province details" in the gap alert opens the tables view and then
+  // scrolls to the province table, which only exists once that view renders.
+  const [provincesPending, setProvincesPending] = useState(false)
   const scrollToProvinces = useCallback(() => {
-    provinceRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-  }, [])
+    setView(RANKINGS)
+    setProvincesPending(true)
+  }, [setView])
+  useEffect(() => {
+    if (!provincesPending || view !== RANKINGS || !provinceRef.current) return
+    provinceRef.current.scrollIntoView?.({ behavior: 'smooth', block: 'start' })
+    setProvincesPending(false)
+  }, [provincesPending, view, data])
 
   const contractorIdByName = useMemo(() => {
     const map = new Map()
@@ -256,249 +291,263 @@ export default function DriveTestProject() {
             </>
           ) : null}
 
-          {/* The trend and the month side by side: the chart takes the wide
-              column and the month's two short answers -- what moved, and what
-              was promised -- stack beside it. They used to be a full-width
-              chart and then a pair of half-width cards under it, and that pair
-              spent about 370px of height on what, in a month with no approved
-              PIP, was mostly zeros. The chart gains from it too: it is drawn on
-              a 740-unit canvas, and full width scaled its 11.5px axis labels up
-              to about 18px. The column narrows it to roughly its drawn size.
-              Below about 1080px of page the grid gives up the side column and
-              the two short cards sit side by side under the chart instead (a
-              container query on the bench, so it follows the page's width, not
-              the window's). */}
-          <div className="dt-grid2">
-            {/* One-line header from the first frame: the control and the info
-                icon arrive with the data, and a header that changed shape as
-                they did would jump under the reader. The sentence that used to
-                be its subtitle opens the info note. */}
-            <Section
-              title="Where this is going"
-              icon={TrendingUp}
-              tone="accent"
-              inline
-              state={flow}
-              onRetry={refresh}
-              skeletonRows={4}
-              className="dt-trend-section"
-              info={
-                flowHasActivity(flow.data) && (
-                  <InfoTip label="How this chart is drawn">
-                    {flowNotes(flow.data, flowScope).map((line) => (
-                      <span key={line} className="dt-info-line">
-                        {line}
-                      </span>
-                    ))}
-                  </InfoTip>
-                )
-              }
-              controls={
-                flowHasActivity(flow.data) && (
-                  <FlowViewControl
-                    years={flowYears(flow.data)}
-                    scope={flowScope}
-                    onScope={setFlowScope}
-                  />
-                )
-              }
-            >
-              {(f) =>
-                flowHasActivity(f) ? (
-                  // Keyed on the years shown, so switching resets the readout to
-                  // the latest month of the new view.
-                  <FlowChart key={String(flowScope)} data={f} scope={flowScope} />
-                ) : (
-                  <div className="dt-empty">
-                    No on-air or drive-test activity has been recorded yet. The chart fills in
-                    as sites go on air and are drive-tested.
-                  </div>
-                )
-              }
-            </Section>
+          <Tabs
+            className="dt-view-tabs"
+            label="Dashboard view"
+            tabs={VIEW_TABS}
+            value={view}
+            onChange={setView}
+          />
 
-            <div className="dt-stack">
-              {trend.data?.latest_flows && (
+          {view === OVERVIEW ? (
+            <div className="dt-view" role="tabpanel" aria-label="Overview">
+              {/* The trend and the month side by side: the chart takes the wide
+                  column and the month's two short answers -- what moved, and what
+                  was promised -- stack beside it. They used to be a full-width
+                  chart and then a pair of half-width cards under it, and that pair
+                  spent about 370px of height on what, in a month with no approved
+                  PIP, was mostly zeros. The chart gains from it too: it is drawn on
+                  a 740-unit canvas, and full width scaled its 11.5px axis labels up
+                  to about 18px. The column narrows it to roughly its drawn size.
+                  Below about 1080px of page the grid gives up the side column and
+                  the two short cards sit side by side under the chart instead (a
+                  container query on the bench, so it follows the page's width, not
+                  the window's). */}
+              <div className="dt-grid2">
+                {/* One-line header from the first frame: the control and the info
+                    icon arrive with the data, and a header that changed shape as
+                    they did would jump under the reader. The sentence that used to
+                    be its subtitle opens the info note. */}
                 <Section
-                  title="What moved"
-                  icon={ArrowLeftRight}
-                  tone="support"
-                  subtitle={`${trend.data.latest_flows.label} ${trend.data.latest_flows.shamsi_year}${
-                    trend.data.latest_flows.is_open ? ' · in progress' : ''
-                  }`}
-                  inline
-                  state={trend}
-                  onRetry={refresh}
-                  skeletonRows={3}
-                  actions={<NetChange value={flowNet(trend.data.latest_flows)} />}
-                  info={
-                    <InfoTip label="How What moved is counted">
-                      Completions are counted directly. Arrivals are derived from the balances.
-                      Problem flags and resolutions are counted where the platform dates the
-                      change and reconciled against the balances where it does not. The scale
-                      starts at {count(flowScale(trend.data.latest_flows).floor)}, not zero.
-                    </InfoTip>
-                  }
-                  className="dt-flow-section"
-                >
-                  {(t) => <FlowLedger flows={t.latest_flows} monthLabel={t.latest_flows.label} />}
-                </Section>
-              )}
-
-              <PipThisMonth
-                state={plan}
-                onRetry={refresh}
-                scoped={provinceId != null}
-                provinceName={provinceName}
-              />
-            </div>
-          </div>
-
-          <div className="dt-pair">
-            {has('ongoing_breakdown') && (
-              <Section
-                title="Ongoing breakdown"
-                icon={Hourglass}
-                tone="support"
-                state={overview}
-                onRetry={refresh}
-                actions={
-                  data && (
-                    <SectionTotal
-                      value={data.ongoing_breakdown.total}
-                      label="ongoing"
-                      color={STATE_COLOR.ongoing}
-                    />
-                  )
-                }
-                controls={
-                  <BreakdownTabs
-                    idBase="dt-ongoing"
-                    tabs={ONGOING_TABS}
-                    tab={ongoingTab}
-                    onTab={setOngoingTab}
-                  />
-                }
-              >
-                {(d) => (
-                  <BreakdownCard
-                    idBase="dt-ongoing"
-                    tab={ongoingTab}
-                    views={ongoingViews}
-                    total={d.ongoing_breakdown.total}
-                  />
-                )}
-              </Section>
-            )}
-
-            {has('problematic_breakdown') && (
-              <Section
-                title="Problematic breakdown"
-                icon={OctagonAlert}
-                tone="support"
-                state={overview}
-                onRetry={refresh}
-                actions={
-                  data && (
-                    <SectionTotal
-                      value={data.problematic_breakdown.total}
-                      label="problematic"
-                      color={STATE_COLOR.problematic}
-                    />
-                  )
-                }
-                controls={
-                  <BreakdownTabs
-                    idBase="dt-problematic"
-                    tabs={PROBLEMATIC_TABS}
-                    tab={problematicTab}
-                    onTab={setProblematicTab}
-                  />
-                }
-              >
-                {(d) => (
-                  <BreakdownCard
-                    idBase="dt-problematic"
-                    tab={problematicTab}
-                    views={problematicViews}
-                    total={d.problematic_breakdown.total}
-                  />
-                )}
-              </Section>
-            )}
-          </div>
-
-          {/* The two tables, stacked: side by side they do not fit this
-              page's width without hiding columns -- measured, see app.css. */}
-          <div className="dt-tables">
-            {has('contractor_scorecard') && (
-              <Section
-                title="Contractor scorecard"
-                icon={Building2}
-                tone="accent"
-                inline
-                state={overview}
-                onRetry={refresh}
-                info={
-                  <InfoTip label="What the scorecard counts">
-                    <span className="dt-info-line">
-                      Assignment = DT done + Ongoing. Problematic sites are not part of a
-                      contractor&rsquo;s assignment: a site in a problem category has not been
-                      handed to them, and counting it would mark a company down for work the
-                      programme never gave it.
-                    </span>
-                    <span className="dt-info-line">
-                      PIP plan and Achieved are this month&rsquo;s approved plan and what was
-                      delivered against it.
-                    </span>
-                  </InfoTip>
-                }
-              >
-                {(d) => (
-                  <ContractorScorecard
-                    rows={d.contractor_scorecard}
-                    plan={plan.data}
-                    provinceId={provinceId}
-                  />
-                )}
-              </Section>
-            )}
-
-            {has('province_breakdown') && (
-              <div ref={provinceRef} className="dt-tables-cell">
-                <Section
-                  title="Drive Test Progress by Province"
-                  icon={MapPinned}
+                  title="Where this is going"
+                  icon={TrendingUp}
                   tone="accent"
                   inline
-                  state={overview}
+                  state={flow}
                   onRetry={refresh}
+                  skeletonRows={4}
+                  className="dt-trend-section"
                   info={
-                    <InfoTip label="How the province table reads">
-                      <span className="dt-info-line">
-                        Gap = On air − DT Done. Ongoing + Problematic can be lower than Gap,
-                        because on-air sites with no DT status yet are counted in Gap only.
-                      </span>
-                      <span className="dt-info-line">
-                        Sort any column; click a row to narrow the whole dashboard to that
-                        province.
-                      </span>
-                    </InfoTip>
+                    flowHasActivity(flow.data) && (
+                      <InfoTip label="How this chart is drawn">
+                        {flowNotes(flow.data, flowScope).map((line) => (
+                          <span key={line} className="dt-info-line">
+                            {line}
+                          </span>
+                        ))}
+                      </InfoTip>
+                    )
                   }
-                  controls={<ProvinceSearch value={provinceSearch} onChange={setProvinceSearch} />}
+                  controls={
+                    flowHasActivity(flow.data) && (
+                      <FlowViewControl
+                        years={flowYears(flow.data)}
+                        scope={flowScope}
+                        onScope={setFlowScope}
+                      />
+                    )
+                  }
                 >
-                  {(d) => (
-                    <ProvinceList
-                      rows={d.province_breakdown}
-                      provinces={d.provinces}
-                      onProvince={setProvince}
-                      search={provinceSearch}
-                    />
-                  )}
+                  {(f) =>
+                    flowHasActivity(f) ? (
+                      // Keyed on the years shown, so switching resets the readout to
+                      // the latest month of the new view.
+                      <FlowChart key={String(flowScope)} data={f} scope={flowScope} />
+                    ) : (
+                      <div className="dt-empty">
+                        No on-air or drive-test activity has been recorded yet. The chart fills in
+                        as sites go on air and are drive-tested.
+                      </div>
+                    )
+                  }
                 </Section>
+
+                <div className="dt-stack">
+                  {trend.data?.latest_flows && (
+                    <Section
+                      title="What moved"
+                      icon={ArrowLeftRight}
+                      tone="support"
+                      subtitle={`${trend.data.latest_flows.label} ${trend.data.latest_flows.shamsi_year}${
+                        trend.data.latest_flows.is_open ? ' · in progress' : ''
+                      }`}
+                      inline
+                      state={trend}
+                      onRetry={refresh}
+                      skeletonRows={3}
+                      actions={<NetChange value={flowNet(trend.data.latest_flows)} />}
+                      info={
+                        <InfoTip label="How What moved is counted">
+                          Completions are counted directly. Arrivals are derived from the balances.
+                          Problem flags and resolutions are counted where the platform dates the
+                          change and reconciled against the balances where it does not. The scale
+                          starts at {count(flowScale(trend.data.latest_flows).floor)}, not zero.
+                        </InfoTip>
+                      }
+                      className="dt-flow-section"
+                    >
+                      {(t) => <FlowLedger flows={t.latest_flows} monthLabel={t.latest_flows.label} />}
+                    </Section>
+                  )}
+
+                  <PipThisMonth
+                    state={plan}
+                    onRetry={refresh}
+                    scoped={provinceId != null}
+                    provinceName={provinceName}
+                  />
+                </div>
               </div>
-            )}
-          </div>
+
+              <div className="dt-pair">
+                {has('ongoing_breakdown') && (
+                  <Section
+                    title="Ongoing breakdown"
+                    icon={Hourglass}
+                    tone="support"
+                    state={overview}
+                    onRetry={refresh}
+                    actions={
+                      data && (
+                        <SectionTotal
+                          value={data.ongoing_breakdown.total}
+                          label="ongoing"
+                          color={STATE_COLOR.ongoing}
+                        />
+                      )
+                    }
+                    controls={
+                      <BreakdownTabs
+                        idBase="dt-ongoing"
+                        tabs={ONGOING_TABS}
+                        tab={ongoingTab}
+                        onTab={setOngoingTab}
+                      />
+                    }
+                  >
+                    {(d) => (
+                      <BreakdownCard
+                        idBase="dt-ongoing"
+                        tab={ongoingTab}
+                        views={ongoingViews}
+                        total={d.ongoing_breakdown.total}
+                      />
+                    )}
+                  </Section>
+                )}
+
+                {has('problematic_breakdown') && (
+                  <Section
+                    title="Problematic breakdown"
+                    icon={OctagonAlert}
+                    tone="support"
+                    state={overview}
+                    onRetry={refresh}
+                    actions={
+                      data && (
+                        <SectionTotal
+                          value={data.problematic_breakdown.total}
+                          label="problematic"
+                          color={STATE_COLOR.problematic}
+                        />
+                      )
+                    }
+                    controls={
+                      <BreakdownTabs
+                        idBase="dt-problematic"
+                        tabs={PROBLEMATIC_TABS}
+                        tab={problematicTab}
+                        onTab={setProblematicTab}
+                      />
+                    }
+                  >
+                    {(d) => (
+                      <BreakdownCard
+                        idBase="dt-problematic"
+                        tab={problematicTab}
+                        views={problematicViews}
+                        total={d.problematic_breakdown.total}
+                      />
+                    )}
+                  </Section>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div className="dt-view" role="tabpanel" aria-label="Contractors & provinces">
+              {/* The two tables, stacked: side by side they do not fit this
+                  page's width without hiding columns -- measured, see app.css. */}
+              <div className="dt-tables">
+                {has('contractor_scorecard') && (
+                  <Section
+                    title="Contractor scorecard"
+                    icon={Building2}
+                    tone="accent"
+                    inline
+                    state={overview}
+                    onRetry={refresh}
+                    info={
+                      <InfoTip label="What the scorecard counts">
+                        <span className="dt-info-line">
+                          Assignment = DT done + Ongoing. Problematic sites are not part of a
+                          contractor&rsquo;s assignment: a site in a problem category has not been
+                          handed to them, and counting it would mark a company down for work the
+                          programme never gave it.
+                        </span>
+                        <span className="dt-info-line">
+                          PIP plan and Achieved are this month&rsquo;s approved plan and what was
+                          delivered against it.
+                        </span>
+                      </InfoTip>
+                    }
+                  >
+                    {(d) => (
+                      <ContractorScorecard
+                        rows={d.contractor_scorecard}
+                        plan={plan.data}
+                        provinceId={provinceId}
+                      />
+                    )}
+                  </Section>
+                )}
+
+                {has('province_breakdown') && (
+                  <div ref={provinceRef} className="dt-tables-cell">
+                    <Section
+                      title="Drive Test Progress by Province"
+                      icon={MapPinned}
+                      tone="accent"
+                      inline
+                      state={overview}
+                      onRetry={refresh}
+                      info={
+                        <InfoTip label="How the province table reads">
+                          <span className="dt-info-line">
+                            Gap = On air − DT Done. Ongoing + Problematic can be lower than Gap,
+                            because on-air sites with no DT status yet are counted in Gap only.
+                          </span>
+                          <span className="dt-info-line">
+                            Sort any column; click a row to narrow the whole dashboard to that
+                            province.
+                          </span>
+                        </InfoTip>
+                      }
+                      controls={<ProvinceSearch value={provinceSearch} onChange={setProvinceSearch} />}
+                    >
+                      {(d) => (
+                        <ProvinceList
+                          rows={d.province_breakdown}
+                          provinces={d.provinces}
+                          onProvince={setProvince}
+                          search={provinceSearch}
+                        />
+                      )}
+                    </Section>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </DrillProvider>
