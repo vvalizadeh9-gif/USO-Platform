@@ -590,118 +590,39 @@ public internet.
 
 ---
 
-## 5c. Gap & Performance
+## 5c. Lifecycle Gaps
 
 The second reporting page over the same villages, and it asks the opposite
 question to the one above it. KPI & Performance asks "how is this owner doing?"
-Gap & Performance asks **"where is the programme stopped, and whose villages are
-stopped there?"**
+Lifecycle Gaps asks **"where are villages stuck, and whose villages are they?"**
 
-`/reports/gaps`, served by `GET /gaps/road` (being replaced by `GET
-/gaps/overview`, below) and `services/gaps.py`. A pure read:
-no table, no migration, nothing written.
+`/reports/gaps` (Performance → Lifecycle Gaps), two tabs:
 
-### The road
+* **Gaps**, served by `GET /gaps/overview`;
+* **Coverage map**, served by `GET /gaps/map`.
 
-Four stretches, in the order a village passes them:
+Both live in `services/gaps.py`. A pure read: no table, no migration, nothing
+written.
 
-```
-drive test done ──▶ ICT approved ──▶ CRA approved ──▶ in Mojri's tracker ──▶ depreciated
-                ICT               CRA              tracker              depreciation
-```
-
-A village is **stopped** on a stretch when it reached that stretch's starting
-state and not its end state. Nothing here is a delta and nothing is a snapshot:
-every figure is current standing, read exactly as the KPI page reads it (the two
-share `dt_done_values`, `target_values` and `province_label` rather than each
-having a view about what "DT done" means).
-
-The last two stretches read the Mojri tracker table, which does not exist yet.
-They are drawn and report **zero**, flagged `available: false`. Counting every
-CRA-approved village as "not in the tracker", when there is no tracker to look
-in, would put a large and confident wrong number on the page.
-
-### Every lens is a partition of the same rows
-
-Five lenses — regional manager, PSO coordinator, contractor, CRA region,
-province. The property that makes the page worth reading is that **each one sums
-back to the same country total.**
-
-A design preview of this page showed a country figure of 2,570 beside an owner
-list adding up to 445, because two of the five lenses were built from a
-different query than the rest. Two aggregates that are supposed to agree are not
-protected by anyone's good intentions, so they are not used:
-
-* `_grid()` is **one** GROUP BY over villages, by (province, DT SC contractor);
-* an owner list is `_fold()` over those cells with a key function naming the
-  owner;
-* the country total is the same `_fold()` with a key function that answers
-  "country" for every cell.
-
-Two groupings of one result set cannot disagree about their total. The parity
-test in `tests/test_gaps_road.py` asserts it for every lens against every
-stretch anyway, and names the lens, the stretch and the size of the discrepancy
-when it fails.
-
-The page then does the same sum **in the browser**, prints it in full under the
-list ("Coordinators below sum to the 940 stopped before ICT: 290 + 240 + 230 +
-180 = 940"), and says so loudly when it does not balance. That line is what
-should have caught the preview's bug before a person did.
-
-### Villages nobody owns are named, never dropped
-
-Three things the programme would like to be true, none of which the schema
-enforces: every village has a province (`sites.province_id` is nullable), every
-work item has a DT SC (nullable too), and every province has a current
-`province_mapping` row. Each missing case becomes its own named row — "Unknown
-province", "Unmapped province", "Unassigned" — carrying an `attribution` the page
-flags. Dropping them would break the sum above, which is the same reason the KPI
-heatmap shows an "Unknown province" row.
-
-A fourth assumption is reported rather than enforced: **ICT approval does not
-always precede CRA approval.** The two authorities are deliberately parallel
-(§5), so a village can be CRA-approved with no ICT approval. Such a village is
-counted once, as stopped on the ICT stretch — which is what it is — and is not
-counted as having reached the CRA stretch. The count travels in every response
-under `data_quality` and is shown on the page, because the arithmetic stays
-sound at any volume but the *shape* of a road drawn ICT-then-CRA stops
-describing the programme honestly if that number is large.
-`python -m app.scripts.gap_road_precheck` answers the same three questions from
-the command line, before the page is opened.
-
-### Who sees what
-
-Not decided here. `services/kpi.py` already answers "may this account see
-delivery numbers, and whose?", so this page calls `require_kpi_access` and
-`resolve_scope` rather than restating them: Admin is refused, PM may switch lens
-and sees every owner, and every other role is forced onto its own lens and its
-own row — asking for another is a 403. The province lens therefore belongs to PM
-alone, no role being confined to it.
-
-The country total is shown to every role, as the country average is on the KPI
-page: it is an aggregate of thirty-one provinces, it identifies nobody, and an
-owner's share of the national gap cannot be computed without it. A scoped
-reader's checksum says "your row is 230 of the 940 stopped nationally" rather
-than printing a sum that cannot balance.
+> The Gaps tab used to be "the road": four stretches drawn in sequence (ICT →
+> CRA → Mojri tracker → depreciation), served by `GET /gaps/road`. It was
+> retired with the redesign, together with its endpoint, its tests and the
+> `gap_road_precheck` script. The road assumed ICT came before CRA; the
+> overview does not.
 
 ### The overview: where villages are stuck (`GET /gaps/overview`)
-
-The Lifecycle Gaps redesign replaces the road with six figures. The road above
-stays until the new page ships, and is retired in the same change as the old
-page (with `gap_road_precheck`, whose third question is the ICT-then-CRA
-assumption this section drops).
 
 **The universe is on-air villages.** A village row counts when it is هدف, its
 drive test is done, its site's `last_stage` is `راه_اندازی_موقت` or
 `راه_اندازی_دائم` (read through `kpi.onair_values`, the same on-air reading as
 the Acceptance dashboard), and neither it nor its work item is soft-deleted.
 The road did not apply the on-air rule; the overview does, **on purpose**. The
-coverage map keeps the road's counting and is unchanged.
+coverage map keeps its own counting and is unchanged (below).
 
 **ICT and CRA are parallel, not sequential.** Neither is counted "after" the
 other, so a village CRA-approved without ICT is simply "ICT remained", not an
-anomaly — which is why `cra_approved_without_ict` is not reported by the
-overview. Approved is the village roll-up (`Village.ict_status == Approved`);
+anomaly — which is why the road's `cra_approved_without_ict` data-quality note
+is gone. Approved is the village roll-up (`Village.ict_status == Approved`);
 everything else, Pending and Rejected alike, is not approved.
 
 | Figure | Counted | Base |
@@ -712,21 +633,90 @@ everything else, Pending and Rejected alike, is not approved.
 | ICT / CRA missing in Mojri | approved, and Mojri's status for that authority is not `in_tracker` | approved |
 
 No `mojri_tracker_status` row reads as not in the tracker; `needs_look` counts
-as missing, and its count travels separately. No de-duplication, as
-everywhere in acceptance counting.
+as missing, and its count travels separately (not shown on the page yet). No
+de-duplication, as everywhere in acceptance counting.
 
 Every figure is counted directly in the one GROUP BY (`_gap_grid`), not derived
 by subtraction, so the identities the tests check — `approved + pending =
 eligible`, `pending = remained + neither`, `missing + in_tracker = approved` —
-are evidence rather than arithmetic that holds by construction. Owner rows are
-folds of the same cells, so every lens sums to every figure, as on the road.
+are evidence rather than arithmetic that holds by construction.
 
-**Scope differs from the road.** PM sees the country under any of the five
-lenses. Every other role sees **only their own villages**: totals, gaps and
-bases are all computed over the cells that roll up to their own key, and their
-one row therefore adds up to the totals they see. Lens and key come from
-`resolve_scope`; asking for another lens is a 403, and the endpoint takes no
-key at all.
+### Every lens is a partition of the same rows
+
+Five lenses — regional manager, PSO coordinator, contractor, CRA region,
+province. The property that makes the page worth reading is that **each one sums
+back to the same total.**
+
+A design preview of this page once showed a country figure of 2,570 beside an
+owner list adding up to 445, because two of the five lenses were built from a
+different query than the rest. Two aggregates that are supposed to agree are not
+protected by anyone's good intentions, so they are not used:
+
+* each view has **one** GROUP BY over villages, by (province, DT SC contractor)
+  — `_gap_grid()` for the overview, `_grid()` for the map;
+* an owner list is `_fold()` over those cells with a key function naming the
+  owner;
+* the total is the same `_fold()` with a key function that answers "country"
+  for every cell.
+
+Two groupings of one result set cannot disagree about their total.
+`tests/test_gaps_overview.py` asserts it for every lens against every figure
+anyway.
+
+The page then does the same sum **in the browser**: the details panel's footer
+adds up the rows it received ("All 31 provinces add up to 2,042 ✓") and says so
+loudly when they do not balance. A check that only shows when it passes is
+decoration.
+
+### Villages nobody owns are named, never dropped
+
+Three things the programme would like to be true, none of which the schema
+enforces: every village has a province (`sites.province_id` is nullable), every
+work item has a DT SC (nullable too), and every province has a current
+`province_mapping` row. Each missing case becomes its own named row — "Unknown
+province", "Unmapped province", "Unassigned" — carrying an `attribution` the page
+flags. Dropping them would break the sum above, which is the same reason the KPI
+heatmap shows an "Unknown province" row. Villages without a province and
+provinces without an owner are also counted under `data_quality`, and the page
+shows them behind its "data note" button.
+
+### Who sees what
+
+Not decided here. `services/kpi.py` already answers "may this account see
+delivery numbers, and whose?", so this page calls `require_kpi_access` and
+`resolve_scope` rather than restating them: Admin is refused, PM sees the
+country under any of the five lenses, and every other role sees **only their
+own villages**: totals, gaps and bases are all computed over the cells that
+roll up to their own key, and their one row therefore adds up to the totals they
+see. Asking for another lens is a 403, and the endpoint takes no key at all.
+
+### The page
+
+The first screen is gaps and their volume only, at 1280 × 800 with no scroll:
+three blocks (Pending approval · One approved, other remained · Mojri tracker vs
+MTN), two columns each, **ICT always left and CRA always right**. All six
+columns share one baseline and one linear scale; a faint column behind a
+remained or Mojri gap is the base it is counted from. Columns are hand-built
+HTML, coloured with the authority tokens (`--ict`, `--cra`; see
+`design-system-cobalt.md`), never with cobalt, which is kept for the selected
+column.
+
+Clicking a column opens a non-modal details panel on the right: who is behind
+that gap, top six rows plus "N more", each with its count, its "% of gap" (its
+share of the gap's total) and its own rate (count of its own base), and the
+checksum footer. PM switches lens inside the panel; every other role sees their
+own row only. The Mojri panels carry the date of the last Mojri import, since
+tracker gaps are only as fresh as that import; if Mojri was never imported,
+block 3 shows "No Mojri import yet" instead of a figure.
+
+### The coverage map (`GET /gaps/map`)
+
+ICT approval by province and CRA approval by CRA region. It counts every هدف
+village (no on-air rule) and reads each authority on its own stretch: ICT is
+drive-test-done-not-ICT-approved over drive-test-done, CRA is
+ICT-approved-not-CRA-approved over ICT-approved. A region is the fold of its
+provinces, so a region can never disagree with the provinces inside it.
+`tests/test_gaps_map.py`.
 
 ### Deliberately not built
 
@@ -814,9 +804,8 @@ being withdrawn.
 
 Aging on the tracker gap (low priority per the product owner), automatic
 parsing of Mojri's raw file (the clean-by-hand step stays manual and outside
-UEP), and the join into the Gap & Performance road's "tracker" and "dep"
-stretches — those two still report zero. Wiring them up is a small, separate,
-explicit step, and it needs the product owner's word first.
+UEP), and depreciation (it will come from Mojri's tracker later). The tracker
+is read by the Lifecycle Gaps overview's two "missing in Mojri" figures (§5c).
 
 ---
 

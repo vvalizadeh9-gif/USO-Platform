@@ -3,7 +3,7 @@ import { AlertTriangle, ChevronDown, ChevronRight, Info, X } from 'lucide-react'
 import api from '../../api/client'
 import { EmptyState } from '../../components/ui'
 import { fmtCount } from './kpiTheme'
-import { ATTRIBUTION_NOTES } from './gapRoad'
+import { ATTRIBUTION_NOTES } from './lifecycleGaps'
 import {
   BANDS,
   approvalRate,
@@ -14,7 +14,7 @@ import {
   wholePct,
 } from './coverageMap'
 import iranMap from './iranMap.json'
-import { Skeleton } from './GapRoad'
+import { Skeleton } from './LifecycleGaps'
 
 /**
  * Lifecycle Gaps → Coverage map.
