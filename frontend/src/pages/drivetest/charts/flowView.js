@@ -81,7 +81,7 @@ export function cumulativePoints(data) {
  * tests finished. Negative means the backlog shrank.
  *
  * DERIVED FROM THE POINTS THE CHART IS ALREADY DRAWING, not recomputed from
- * the payload, which is what makes the month table reconcile to the lines
+ * the payload, which is what makes the row under the plot reconcile to the lines
  * above it rather than merely agree with them most of the time. The sum of
  * these is exactly `last.gap - first.gap`, because each one is the step
  * between two consecutive gap values and the sum telescopes. `points` starts
@@ -131,7 +131,7 @@ export const CUMULATIVE = 'cumulative'
  * real backlog. A year view is a window onto the same lines, not a count
  * restarted at zero: the view that once did that drew a year that finished
  * more drive tests than it brought on air as "coverage 295%" and a negative
- * gap. What each month itself did is under the chart, one column per month.
+ * gap. What each month itself did is under its column and in the hover card.
  *
  * `points[0]` is the balance the view opened on -- not drawn, but it is what
  * the first month's change in the gap is measured from -- and `points[1..]`
@@ -172,8 +172,8 @@ export function flowNotes(data, scope = CUMULATIVE) {
       'from the opening balance on 1 Farvardin 1404, so the gap is the real backlog at each ' +
       'month’s end.' +
       (floor > 0 ? ` The scale starts at ${count(floor)}, not zero.` : ''),
-    'The table under the chart is each month’s own movement. Gap change is sites on air that ' +
-      'month minus drive tests finished: green shrank the backlog, brick grew it.',
+    'Under each month is its change in the gap: sites on air that month minus drive tests ' +
+      'finished. Green shrank the backlog, brick grew it. Hover or focus a month for its figures.',
   ]
   if (notPlaced > 0) {
     notes.push(

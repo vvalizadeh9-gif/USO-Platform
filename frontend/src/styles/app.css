@@ -2805,16 +2805,18 @@ a.dt-contractor-name:hover { text-decoration: underline; text-decoration-color: 
 .dt-flow-legend-pill[data-tone='good'] { color: var(--dt-gap-shrank); background: var(--dt-gap-shrank-soft); }
 .dt-flow-legend-pill[data-tone='bad'] { color: var(--dt-gap-grew); background: var(--dt-gap-grew-soft); }
 
-/* The chart and the month table under it share one grid: a 104px gutter
-   (the y-axis labels above, the row names below) and one equal column per
-   month, so each month's figures sit straight under its dots. Under about
-   48px a column the pair scrolls sideways rather than squeezing. */
+/* The chart and the rows under it share one grid: a 56px gutter (the y-axis
+   labels) and one equal column per month, so each month's name and change
+   sit straight under its dots. Under about 48px a column the chart scrolls
+   sideways rather than squeezing. */
+.dt-flowcard { --dt-flow-gutter: 56px; }
 .dt-flow-scroll { overflow-x: auto; padding-block-start: 8px; }
-.dt-flow-scroll > * { min-width: calc(104px + var(--dt-flow-cols) * 48px); }
-.dt-flowchart { position: relative; display: grid; grid-template-columns: 104px minmax(0, 1fr); }
+.dt-flow-scroll > * { min-width: calc(var(--dt-flow-gutter) + var(--dt-flow-cols) * 48px); }
+.dt-flow-frame { position: relative; }
+.dt-flowchart { position: relative; display: grid; grid-template-columns: var(--dt-flow-gutter) minmax(0, 1fr); }
 .dt-flow-yaxis { position: relative; }
 .dt-flow-ytick {
-  position: absolute; inset-inline-end: 12px; transform: translateY(-50%);
+  position: absolute; inset-inline-end: 10px; transform: translateY(-50%);
   font-size: 12px; line-height: 16px; color: var(--text-tertiary); white-space: nowrap;
 }
 .dt-flow-plot { position: relative; height: 260px; margin-block: 8px; }
@@ -2824,46 +2826,103 @@ a.dt-contractor-name:hover { text-decoration: underline; text-decoration-color: 
 }
 .dt-flow-baseline { border-top-color: var(--border); }
 /* The month still in progress: a light wash down its column. */
-.dt-flow-opencol { position: absolute; inset-block: -8px; background: var(--accent-wash); border-radius: 4px; }
+.dt-flow-opencol { position: absolute; inset-block: -8px; background: var(--surface-subtle); border-radius: 4px; }
+/* The hovered month: an accent wash down its column and a faint line. */
+.dt-flow-hovercol { position: absolute; inset-block: 0; background: var(--accent-wash); }
+.dt-flow-cross {
+  position: absolute; inset-block: 0; width: 0;
+  border-inline-start: 1px solid var(--dt-muted); opacity: 0.5;
+}
 .dt-flowchart-svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
 /* A dot at every month: filled, with a white ring; the open month hollow and
-   a little larger. */
+   a little larger; the hovered month's pair larger still (r = 6). */
 .dt-flow-dot {
-  position: absolute; width: 9px; height: 9px; border-radius: 50%;
+  position: absolute; width: 7px; height: 7px; border-radius: 50%;
   transform: translate(-50%, -50%);
-  background: var(--dt-dot); box-shadow: 0 0 0 2px var(--surface);
+  background: var(--dt-dot); box-shadow: 0 0 0 1.5px var(--surface);
 }
 .dt-flow-dot-open {
-  width: 11px; height: 11px; box-sizing: border-box;
+  width: 10px; height: 10px; box-sizing: border-box;
   background: var(--surface); border: 2px solid var(--dt-dot); box-shadow: none;
 }
+.dt-flow-dot.is-active { width: 12px; height: 12px; }
 
-.dt-flow-table {
-  width: 100%; table-layout: fixed; border-collapse: collapse;
-  font-size: 13px; line-height: 18px;
+/* The rows under the plot: the same gutter, one column per month. */
+.dt-flow-row {
+  display: grid; grid-template-columns: repeat(var(--dt-flow-cols), minmax(0, 1fr));
+  margin-inline-start: var(--dt-flow-gutter); justify-items: center;
 }
-.dt-flow-gutter { width: 104px; }
-.dt-flow-table th, .dt-flow-table td {
-  padding: 4px 2px; text-align: center; border: 0;
-  background: transparent; text-transform: none; letter-spacing: 0;
-  font-size: 13px; line-height: 18px;
+.dt-flow-month {
+  font-size: 13px; line-height: 20px; font-weight: 500; color: var(--text-secondary);
+  white-space: nowrap;
 }
-.dt-flow-table thead th { vertical-align: top; font-weight: 500; color: var(--text); padding-block: 2px 6px; }
-.dt-flow-table tbody tr:hover { background: transparent; }
-.dt-flow-month { display: block; font-size: 12px; line-height: 18px; color: var(--text); }
-.dt-flow-sub { display: block; font-size: 11px; line-height: 14px; color: var(--text-tertiary); font-weight: 400; }
-.dt-flow-table tbody th {
-  text-align: start; padding-inline-end: 12px;
-  font-size: 12px; font-weight: 500; color: var(--text-secondary); white-space: nowrap;
-}
-.dt-flow-table tbody td { color: var(--text); font-variant-numeric: tabular-nums; }
-.dt-flow-table tbody tr + tr > * { border-top: 1px solid var(--divider); }
-.dt-flow-table .dt-flow-col-open { background: var(--accent-wash); }
+.dt-flow-month.is-open { font-weight: 600; color: var(--accent-ink); }
+.dt-flow-month.is-active { font-weight: 700; color: var(--text); }
+.dt-flow-nets { margin-block-start: 6px; }
+.dt-flow-net { font-size: 13px; line-height: 24px; }
 /* Gap change: green where the backlog shrank, brick where it grew, neutral
    at zero. The sign is always shown, so colour is never the only signal. */
-.dt-flow-table td[data-tone='good'] { color: var(--dt-gap-shrank); font-weight: 600; }
-.dt-flow-table td[data-tone='bad'] { color: var(--dt-gap-grew); font-weight: 600; }
-.dt-flow-table td[data-tone='flat'] { color: var(--text-tertiary); }
+.dt-flow-net[data-tone='good'] { color: var(--dt-gap-shrank); font-weight: 600; }
+.dt-flow-net[data-tone='bad'] { color: var(--dt-gap-grew); font-weight: 600; }
+.dt-flow-net[data-tone='flat'] { color: var(--text-tertiary); }
+
+/* The hover targets: every column, full height, plot and rows together. */
+.dt-flow-hits {
+  position: absolute; inset-block: 0; inset-inline: var(--dt-flow-gutter) 0;
+  display: grid; grid-template-columns: repeat(var(--dt-flow-cols), minmax(0, 1fr));
+}
+.dt-flow-hit {
+  display: block; margin: 0; padding: 0; border: 0; border-radius: 4px;
+  background: transparent; cursor: default;
+}
+.dt-flow-hit:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+/* The hover card: pinned 10px right of the y-axis and 24px below the top
+   gridline, never following the pointer and never taking its events. Both
+   lines rise left to right, so that corner is always empty. */
+.dt-flow-tip {
+  position: absolute; z-index: 5; pointer-events: none;
+  inset-block-start: calc(8px + 24px);
+  inset-inline-start: calc(var(--dt-flow-gutter) + 10px);
+  padding: 10px 12px; border-radius: 10px;
+  background: var(--surface); box-shadow: var(--shadow-2);
+  opacity: 0; transition: opacity 120ms ease;
+}
+.dt-flow-tip.is-on { opacity: 1; }
+@media (prefers-reduced-motion: reduce) { .dt-flow-tip { transition: none; } }
+.dt-flow-tip-head { display: flex; align-items: baseline; gap: 8px; margin-block-end: 6px; }
+.dt-flow-tip-month {
+  unicode-bidi: isolate;
+  font-size: 15px; line-height: 22px; font-weight: 600; color: var(--text);
+}
+.dt-flow-tip-year { font-size: 12px; line-height: 16px; color: var(--text-tertiary); }
+.dt-flow-tip-open { font-size: 12px; line-height: 16px; color: var(--accent-ink); margin-inline-start: auto; }
+.dt-flow-tip-table { border-collapse: collapse; font-size: 13px; line-height: 18px; }
+.dt-flow-tip-table th, .dt-flow-tip-table td {
+  border: 0; background: transparent; text-transform: none; letter-spacing: 0;
+}
+.dt-flow-tip-table thead th {
+  padding: 0 0 4px 16px; text-align: end;
+  font-size: 12px; line-height: 16px; font-weight: 600; color: var(--text-tertiary);
+}
+.dt-flow-tip-table tbody th {
+  padding: 3px 0; text-align: start; white-space: nowrap;
+  font-size: 13px; font-weight: 400; color: var(--text-secondary);
+}
+.dt-flow-tip-table tbody td {
+  padding: 3px 0 3px 16px; text-align: end;
+  font-size: 13px; font-weight: 600; color: var(--text); font-variant-numeric: tabular-nums;
+}
+.dt-flow-tip-table tr[data-row='gap'] > * { border-top: 1px solid var(--divider); }
+.dt-flow-tip-table td[data-tone='good'] { color: var(--dt-gap-shrank); }
+.dt-flow-tip-table td[data-tone='bad'] { color: var(--dt-gap-grew); }
+.dt-flow-tip-sw {
+  display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+  margin-inline-end: 6px; vertical-align: 1px;
+}
+.dt-flow-tip-sw-gap {
+  border-radius: 2px; background: var(--accent-soft); box-shadow: inset 0 0 0 1px #C5D5F5;
+}
 
 /* Two readings of the same figure, side by side. Also what keeps a five-row
    bar chart from stretching its marks across a 1280px page. */
