@@ -2209,6 +2209,10 @@ class OverviewRow(BaseModel):
     status: str
     pip_above_assignment: bool | None = None
     hit_last_6: HitCount
+    #: Month view only: this contractor's PIP spread over the month's days so
+    #: far, and delivered minus it. None for a year, since start, or no PIP.
+    expected_by_today: int | None = None
+    pace_diff: int | None = None
     plan_id: int | None = None
     plan_status: str | None = None
     committed_count: int | None = None

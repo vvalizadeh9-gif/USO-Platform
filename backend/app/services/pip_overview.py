@@ -178,6 +178,19 @@ def _hit(pairs: list[tuple[int | None, int]]) -> dict:
     return {"hit": sum(1 for p, d in counted if d >= p), "of": len(counted)}
 
 
+def _pace(delivered: int, pip: int | None, fraction: float | None) -> tuple[int | None, int | None]:
+    """(expected by today, delivered minus that), or (None, None).
+
+    ``fraction`` is how much of the month is behind us, and None outside the
+    month view: a year has no "by today". Expected is the PIP spread evenly
+    over the month's days.
+    """
+    if fraction is None or pip is None:
+        return None, None
+    expected = round(pip * fraction)
+    return expected, delivered - expected
+
+
 def _diff(delivered: int | None, pip: int | None) -> int | None:
     if delivered is None or pip is None:
         return None
@@ -276,6 +289,8 @@ def _stream(
     def _rows_for(cid):
         return [figures[p]["rows"][cid] for p in months if cid in figures.get(p, {}).get("rows", {})]
 
+    fraction = _elapsed_fraction(months[0], today) if view == "month" else None
+
     rows = []
     for cid, name in names.items():
         entries = _rows_for(cid)
@@ -290,6 +305,7 @@ def _stream(
             for p in hit_months
             if p in figures
         ])
+        expected, pace_diff = _pace(delivered, pip, fraction)
         rows.append(
             {
                 "contractor_id": cid,
@@ -303,6 +319,8 @@ def _stream(
                     if is_dt else None
                 ),
                 "hit_last_6": hit,
+                "expected_by_today": expected,
+                "pace_diff": pace_diff,
                 **state,
             }
         )
@@ -325,13 +343,8 @@ def _stream(
         "achievement_percent": (
             round(100.0 * total_delivered / total_pip, 1) if total_pip else None
         ),
-        "expected_by_today": None,
-        "pace_diff": None,
     }
-    if view == "month" and total_pip is not None:
-        expected = round(total_pip * _elapsed_fraction(months[0], today))
-        kpis["expected_by_today"] = expected
-        kpis["pace_diff"] = total_delivered - expected
+    kpis["expected_by_today"], kpis["pace_diff"] = _pace(total_delivered, total_pip, fraction)
 
     approved = sum(1 for _, s in states if s["status"] in ("approved", "revision_requested"))
     all_contractors = {

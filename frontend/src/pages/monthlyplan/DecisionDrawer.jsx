@@ -4,16 +4,10 @@ import api from '../../api/client'
 import { Loading, StatusPill } from '../../components/ui'
 import { useToast } from '../../context/ToastContext'
 import Revisions from './Revisions'
+import { REASON_LABEL } from './streams'
 
 /** The statuses a PM decides: a first submission, or a revision request. */
 const DECIDABLE = ['Submitted', 'RevisionRequested']
-
-const REASON_LABEL = {
-  SITES_BLOCKED: 'Sites blocked',
-  SCOPE_CHANGE: 'Scope change',
-  PERMITS: 'Permits',
-  OTHER: 'Other',
-}
 
 /**
  * One contractor's plan for one stream and month, in a right-side panel.

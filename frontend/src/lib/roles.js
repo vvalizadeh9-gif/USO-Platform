@@ -76,6 +76,16 @@ export function canDecidePlans(user) {
   return user?.role?.name === 'PM'
 }
 
+// MTN's internal PIP. Every staff role the Monthly Plan page serves reads it
+// today -- GET /pip/overview carries it to PM, Coordinator, RegionalManager
+// and Viewer -- and no contractor does. Must agree with OVERVIEW_READERS in
+// app/api/monthly_plan.py.
+export const INTERNAL_PIP_ROLES = ['PM', 'Coordinator', 'RegionalManager', 'Viewer']
+
+export function canSeeInternalPip(user) {
+  return INTERNAL_PIP_ROLES.includes(user?.role?.name)
+}
+
 // The Acceptance Dashboard's monthly target. Same decider as the PIP —
 // PM alone — and must agree with app/api/acceptance.py's own `require_pm`
 // alias over PUT /acceptance/plan.
