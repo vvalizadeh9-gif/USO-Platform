@@ -1786,22 +1786,7 @@ tbody tr:last-child td { border-bottom: none; }
   font-size: 12px; color: var(--text-muted); font-weight: 500;
 }
 
-/* ---------- command bar ---------- */
-.dt-command {
-  position: sticky;
-  top: 0;
-  z-index: 20;
-  /* Bled to the gutters so the backdrop covers the full width of the content
-     column as cards scroll under it. Without the negative margin the cards
-     show through at the edges, which reads as a rendering fault. */
-  margin: 0 -14px 18px;
-  padding: 10px 14px 0;
-  background: var(--bg);
-  /* Not a hard edge: the bar carries no border of its own, so a card sliding
-     under it fades rather than being clipped against a line. */
-  box-shadow: 0 10px 12px -10px rgba(20, 35, 60, 0.16);
-}
-.dt-command .dt-toolbar { margin-bottom: 10px; }
+/* ---------- toolbar (on the page title's row) ---------- */
 
 .dt-toolbar {
   display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
@@ -2139,7 +2124,9 @@ a.dt-status-row:hover { background: var(--surface-2); }
 /* Rows again, swatch first, once the card is too narrow for three columns.
    `display: contents` lifts the figures into the row's own grid so the swatch
    can lead the line the way a legend does, without a second copy of it. */
-@container kpi-status (max-width: 239px) {
+/* 271, not 239: at three columns under about 272px a column is narrower
+   than "Problematic", which then broke mid-word. */
+@container kpi-status (max-width: 271px) {
   .dt-status-list {
     grid-template-columns: minmax(0, 1fr); gap: 1px;
   }
@@ -2929,14 +2916,30 @@ a.dt-contractor-name:hover { text-decoration: underline; text-decoration-color: 
    the Monthly Plan's target card, which move to Cobalt in their own steps.
    Until then this page's look is scoped under `.dt-page` so those pages do
    not change with it. */
-.dt-page { --dt-gap: 24px; }
+.dt-page { --dt-gap: 20px; }
+/* The title row carries the toolbar (see DriveTestProject). */
+.dt-page .page-head { margin-bottom: 20px; }
+.dt-page .page-head > .row { flex: 0 1 auto; min-width: 0; }
+/* The two compact cards beside the trend take Cobalt's compact padding. */
+.dt-page .dt-stack > .dt-section { padding: 16px 20px 20px; gap: 12px; }
+/* A wider side column: its two cards keep their headers on one line, and
+   the chart, which scales with its column, comes out shorter. */
+.dt-page .dt-grid2 { grid-template-columns: minmax(0, 2fr) minmax(0, 1.3fr); }
+/* Tighter rows in the breakdown bars. */
+.dt-page .dt-bar-link { padding-block: 3px; }
 .dt-page .dt-kpi-band { gap: 16px; }
+/* Pending status names three states side by side; a slightly wider column
+   keeps "Problematic" whole. Only where the band is one row of four. */
+@media (min-width: 1101px) {
+  .dt-page .dt-kpi-band { grid-template-columns: 1fr 1fr 1fr 1.3fr; }
+}
 .dt-page .dt-kpi-card {
+  position: relative;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   box-shadow: var(--shadow-1);
-  padding: 20px 24px;
+  padding: 16px 20px;
 }
 .dt-page .dt-kpi-hd { gap: 12px; margin-block-end: 12px; }
 .dt-page .dt-kpi-ic { inline-size: 36px; block-size: 36px; border-radius: 9px; }
@@ -2949,7 +2952,19 @@ a.dt-contractor-name:hover { text-decoration: underline; text-decoration-color: 
 .dt-page a.dt-kpi-figure { text-decoration-color: var(--control-border); text-underline-offset: 6px; }
 .dt-page .dt-kpi-pct { font-size: 14px; line-height: 20px; font-weight: 600; }
 .dt-page .dt-kpi-split { block-size: 6px; border-radius: 3px; margin-block-start: 12px; background: var(--track); }
-.dt-page .dt-kpi-card > .dt-delta { padding-block-start: 12px; font-size: 12px; color: var(--text-secondary); }
+.dt-page .dt-kpi-card > .dt-delta {
+  padding-block-start: 12px; font-size: 12px; color: var(--text-secondary);
+}
+/* Where the card is wide enough for the label and the pill side by side, the
+   pill moves up beside the label instead of taking a line at the foot. */
+.dt-page .dt-kpi-card:not([data-kpi="status"]) { container: dt-kpi / inline-size; }
+/* 250px is measured: icon, label, gap and pill side by side. */
+@container dt-kpi (min-width: 250px) {
+  .dt-page .dt-kpi-card > .dt-delta {
+    position: absolute; inset-block-start: 22px; inset-inline-end: 20px;
+    margin: 0; padding: 0;
+  }
+}
 .dt-page .dt-delta-pill b {
   display: inline-flex; align-items: center; min-height: 20px;
   padding: 0 8px; border-radius: 999px; font-size: 12px; font-weight: 600;
@@ -2964,7 +2979,7 @@ a.dt-contractor-name:hover { text-decoration: underline; text-decoration-color: 
 .dt-page .dt-status-name { font-size: 13px; line-height: 18px; color: var(--text-secondary); }
 .dt-page .dt-status-num { font-family: inherit; font-size: 17px; line-height: 24px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .dt-page .dt-status-pct { font-size: 12px; color: var(--text-tertiary); font-variant-numeric: tabular-nums; }
-@container kpi-status (max-width: 239px) {
+@container kpi-status (max-width: 271px) {
   .dt-page .dt-status-name { font-size: 13px; }
   .dt-page .dt-status-num { font-size: 14px; }
 }
@@ -3009,9 +3024,6 @@ a.dt-contractor-name:hover { text-decoration: underline; text-decoration-color: 
   .dt-bar-share, .dt-bar-go { display: none; }
   .dt-toolbar-right { margin-left: 0; width: 100%; }
   .dt-section { padding: 16px; }
-  /* A sticky bar that wraps to three rows on a phone eats half the viewport;
-     below this width it scrolls away with the page. */
-  .dt-command { position: static; margin: 0 0 18px; padding: 0; box-shadow: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {

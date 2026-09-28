@@ -247,24 +247,26 @@ export default function DriveTestProject() {
   return (
     <DrillProvider>
       <div className="dt-page">
+        {/* The toolbar rides on the title's row rather than in a bar of its
+            own under it: one row of chrome instead of two, so the Overview
+            fits one screen on the office display. */}
         <PageHead
           eyebrow="Drive Test"
           title="Dashboard"
           subtitle={subtitle}
+          actions={
+            <Toolbar
+              provinceId={provinceId}
+              provinceName={provinceName}
+              onClearProvince={() => setProvince(null)}
+              onRefresh={refresh}
+              refreshing={refreshing}
+              generatedAt={data?.generated_at}
+              onExport={exportWorkbook}
+              exporting={exporting}
+            />
+          }
         />
-
-        <div className="dt-command">
-          <Toolbar
-            provinceId={provinceId}
-            provinceName={provinceName}
-            onClearProvince={() => setProvince(null)}
-            onRefresh={refresh}
-            refreshing={refreshing}
-            generatedAt={data?.generated_at}
-            onExport={exportWorkbook}
-            exporting={exporting}
-          />
-        </div>
 
         <div className="dt-bench">
           {overview.error ? (

@@ -46,11 +46,13 @@ import { DrawPath, FadeArea } from './primitives'
  */
 
 const VIEW_W = 740
-const VIEW_H = 318
 
 const PAD_L = 16
 const MAIN_TOP = 16
-const MAIN_H = 228
+// 130, not the 228 it was: the dashboard's Overview is laid out to fit one
+// screen on the office display, and this plot was the tallest thing on it.
+// The lines, months and strip are unchanged; only the vertical scale is.
+const MAIN_H = 130
 const MAIN_W = 700
 const PLOT_RIGHT = PAD_L + MAIN_W
 const MAIN_AXIS_Y = MAIN_TOP + MAIN_H + 20
@@ -58,6 +60,7 @@ const MAIN_AXIS_Y = MAIN_TOP + MAIN_H + 20
 /** The net-change strip, under the month labels and the year captions. */
 const STRIP_TOP = MAIN_AXIS_Y + 26
 const STRIP_H = 20
+const VIEW_H = STRIP_TOP + STRIP_H + 8
 
 export default function FlowChart({ data, scope = 'all' }) {
   const reduced = useReducedMotion()
