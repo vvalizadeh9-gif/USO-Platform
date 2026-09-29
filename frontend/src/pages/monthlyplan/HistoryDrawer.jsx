@@ -1,9 +1,10 @@
 import { X } from 'lucide-react'
 import { useEffect } from 'react'
 import Revisions from './Revisions'
+import { STREAMS } from './streams'
 
 /**
- * Every version of one contractor's plans for one month, both streams, in a
+ * Every version of one contractor's plans for one month, every stream, in a
  * right-side panel. Read-only: decisions are made on the Plans tab itself.
  * Each stream is the existing Revisions panel (GET /pip/revisions).
  */
@@ -29,8 +30,9 @@ export default function HistoryDrawer({ contractor, period, label, onClose }) {
           </button>
         </div>
         <div className="mp-drawer-body">
-          <Revisions period={target} stream="DT" isContractor={false} onClose={onClose} />
-          <Revisions period={target} stream="ACCEPTANCE" isContractor={false} onClose={onClose} />
+          {STREAMS.map((stream) => (
+            <Revisions key={stream} period={target} stream={stream} isContractor={false} onClose={onClose} />
+          ))}
         </div>
       </aside>
     </>

@@ -1,15 +1,15 @@
 import { useEffect, useState } from 'react'
 import api from '../../api/client'
-
-const STREAMS = ['DT', 'ACCEPTANCE']
+import { STREAMS } from './streams'
 const keyOf = (p) => (p?.year && p?.month ? `${p.year}-${p.month}` : '')
 
 /**
- * The PM queue for both streams: the month on the Plans tab and the month
+ * The PM queue for every stream: the month on the Plans tab and the month
  * now running (its approved PIP and any pending revision).
  *
- * GET /pip/queue answers one stream per call, so this is two calls per
- * month, and two more for the running month unless it is the same month.
+ * GET /pip/queue answers one stream per call, so this is one call per stream
+ * per month, and as many again for the running month unless it is the same
+ * month.
  * Nothing is computed here; see planBoard.js for what is made of it.
  *
  * Returns `{ state, planning, running, reload }`. `state` is `loading` until
@@ -31,17 +31,20 @@ export default function usePlanBoard({ period, running, enabled }) {
     const separateRunning = runningKey && runningKey !== key
     if (separateRunning) reads.push(...STREAMS.map((s) => read(running, s)))
 
+    const byStream = (responses) => Object.fromEntries(STREAMS.map((s, i) => [s, responses[i]]))
+
     Promise.all(reads)
-      .then(([dt, acc, runDt, runAcc]) => {
+      .then((responses) => {
         if (!live) return
+        const planning = byStream(responses)
         setBoard({
           key,
           state: 'ready',
-          planning: { DT: dt, ACCEPTANCE: acc },
+          planning,
           running: runningKey
             ? separateRunning
-              ? { DT: runDt, ACCEPTANCE: runAcc }
-              : { DT: dt, ACCEPTANCE: acc }
+              ? byStream(responses.slice(STREAMS.length))
+              : planning
             : null,
         })
       })

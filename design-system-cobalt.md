@@ -106,9 +106,28 @@ each other and against `--accent`. It sits just under the comfort line against
 the Ongoing/Problem/Done status colours, which is acceptable only because of
 rules 3 and 4.
 
-First used on **Performance → Lifecycle Gaps**. Other pages move to these
-tokens one page per change. (The Acceptance Dashboard still uses its own
-`--blue` for ICT until it is migrated.)
+First used on **Performance → Lifecycle Gaps**, and on **Acceptance →
+Dashboard**. Other pages move to these tokens one page per change.
+
+| Token | Value | Use |
+|---|---|---|
+| `--accent-base` | `#D3DEF7` | cobalt's faint "base", for a cobalt data series (the Village stream's target bar) |
+
+#### A page with one data series per tab: `--acc-series*`
+
+The Acceptance Dashboard draws the same components for three streams. The
+page sets three custom properties once, on `.acc-page`, from the active tab
+(`.acc-stream-ict`, `.acc-stream-cra`), and every component reads them; no
+component chooses a colour itself.
+
+| Property | Village | ICT | CRA |
+|---|---|---|---|
+| `--acc-series` | `--accent` | `--ict` | `--cra` |
+| `--acc-series-base` | `--accent-base` | `--ict-base` | `--cra-base` |
+| `--acc-series-ink` | `--text-link` | `--ict` | `--cra-ink` |
+
+A page with the same shape of data can copy the pattern: one property
+block per tab, components that only read it.
 
 ### Status — an ink on its own soft fill, always with a label
 
@@ -232,6 +251,30 @@ Vazirmatn (`.text-farsi`), `dir="rtl"` or `dir="auto"`.
 - **AuthorityChip** — ICT or CRA in words: a 24px pill, `--ict-soft` with
   `--ict` ink, or `--cra-soft` with `--cra-ink`. Every authority figure carries
   one (rule 4).
+
+### Acceptance Dashboard components (`frontend/src/pages/reports/acceptance/`)
+
+- **Target-vs-actual bars** (`ProgressChart.jsx`, Monthly) -- one column per
+  month: the plan a pale bar behind (`--acc-series-base` at 55%, radius 6),
+  what was done a solid bar in front, same width (`--acc-series`), its value
+  inside at the base in white 12/600; a second plan as a 2px `--text` tick
+  across the bar, 5px past each side; the running month in 45° stripes with
+  its value above in `--acc-series-ink`. Under each Farsi month name
+  (Vazirmatn 12) an attainment pill: done ÷ plan as a whole %, success ink at
+  100% or more, danger below, "so far" (neutral) on the running month; no
+  plan, no pale bar and no pill. Four quiet gridlines, 12px tertiary labels.
+  Cumulative mode is a 3px monotone-cubic area (28% → 2% fill), plans dashed
+  (`--text`, 1.5, `6 5`) and dotted (`--dt-muted`, 2, `1.5 4`), end labels
+  nudged 15px apart and one gap callout. Every month is a transparent button
+  behind the drawing (`aria-pressed`); the selected one is an 8% accent wash.
+  The drawing is sized by a `ResizeObserver`, never fixed pixels.
+- **Plan ring** (`PlanRing.jsx`) -- 128px, stroke 11 on `--track`; the arc in
+  `--acc-series` with round caps from 12 o'clock, capped at a full circle;
+  in the running month a 2.5px ink tick at due-by-today. Centre: the done
+  count 28/34 600 over "of {plan}" 14/20. Under it the plan's name with its
+  line swatch, "**N%** delivered" (the true %, may pass 100) and a pace pill
+  ("+17 vs due today", "−20 vs plan", "On pace"). No plan: a neutral "No plan
+  set" ring and no pill.
 
 ### Lifecycle Gaps components (`frontend/src/components/`)
 

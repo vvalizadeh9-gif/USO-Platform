@@ -5,7 +5,11 @@ management for that month:
 
 * ``ACCEPTANCE`` -- villages to become fully accepted (ICT **and** CRA) in
   that month;
+* ``ICT`` / ``CRA`` -- villages to be approved by that one authority in that
+  month;
 * ``DT`` -- drive tests to be delivered in that month.
+
+The UI calls this number the **Internal PIP**.
 
 Both are **monthly amounts**, the same unit as a contractor's PIP and as
 Delivered, so "internal target vs actual" and "internal target vs the
@@ -53,16 +57,24 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
-from app.models.monthly_plan import PLAN_STREAMS, STREAM_ACCEPTANCE, STREAM_DT
+from app.models.monthly_plan import (
+    PLAN_STREAMS,
+    STREAM_ACCEPTANCE,
+    STREAM_CRA,
+    STREAM_DT,
+    STREAM_ICT,
+)
 
-#: Which of the two targets a row is. The same two names the contractors'
-#: PIPs use (``models/monthly_plan.py``), re-exported so callers of this
-#: module need not reach into that one.
+#: Which target a row is. The same names the contractors' PIPs use
+#: (``models/monthly_plan.py``), re-exported so callers of this module need
+#: not reach into that one.
 TARGET_STREAMS: tuple[str, ...] = PLAN_STREAMS
 __all__ = [
     "AcceptanceMonthlyTarget",
     "STREAM_ACCEPTANCE",
+    "STREAM_CRA",
     "STREAM_DT",
+    "STREAM_ICT",
     "TARGET_STREAMS",
 ]
 
@@ -91,7 +103,7 @@ class AcceptanceMonthlyTarget(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
 
-    #: ``DT`` or ``ACCEPTANCE``. Every row that predates streams is
+    #: One of :data:`TARGET_STREAMS`. Every row that predates streams is
     #: ``ACCEPTANCE``, the only target there was.
     stream: Mapped[str] = mapped_column(
         String(20),
@@ -108,8 +120,8 @@ class AcceptanceMonthlyTarget(Base):
     #: ``services/acceptance_plan.py`` is what keeps that true.
     is_current: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
-    #: This month alone: villages fully accepted (ACCEPTANCE) or drive tests
-    #: delivered (DT). Validated
+    #: This month alone: villages fully accepted (ACCEPTANCE), approved by one
+    #: authority (ICT, CRA) or drive tests delivered (DT). Validated
     #: non-negative at the service/schema layer, matching how
     #: ``committed_count`` is handled on ``ContractorMonthlyPlan``.
     target_count: Mapped[int] = mapped_column(Integer, nullable=False)

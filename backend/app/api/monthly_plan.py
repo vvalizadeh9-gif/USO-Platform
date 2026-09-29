@@ -41,7 +41,12 @@ from app.core.deps import (
     get_current_user,
     require_roles,
 )
-from app.models.monthly_plan import STATUS_APPROVED, ContractorMonthlyPlan
+from app.models.monthly_plan import (
+    PLAN_STREAMS,
+    STATUS_APPROVED,
+    STREAM_DT,
+    ContractorMonthlyPlan,
+)
 from app.models.reference import Contractor, User
 from app.schemas import (
     InternalTargetOut,
@@ -582,14 +587,14 @@ def _revision_counts(
     )
     if user.role.name == CONTRACTOR:
         stmt = stmt.where(ContractorMonthlyPlan.contractor_id == (user.contractor_id or -1))
-    out: dict[str, dict[tuple[int, int, int], int]] = {"DT": {}, "ACCEPTANCE": {}}
+    out: dict[str, dict[tuple[int, int, int], int]] = {stream: {} for stream in PLAN_STREAMS}
     for stream, cid, y, m, n in db.execute(stmt).all():
         out.setdefault(stream, {})[(cid, y, m)] = n
     return out
 
 
 def _plan_export(db: Session, user: User, period: str, year: int | None, month: int | None) -> Response:
-    """Both streams for the page's period: "DT Delivery" and "Acceptance"."""
+    """Every stream for the page's period, one sheet each (``PLAN_SHEETS``)."""
     from app.services import acceptance_plan as targets
 
     today = jalali.tehran_today()
@@ -608,8 +613,14 @@ def _plan_export(db: Session, user: User, period: str, year: int | None, month: 
     except pip_overview.OverviewError as exc:
         raise HTTPException(400, str(exc)) from None
 
-    dt = DriveTestAnalytics(db, user).scorecard(periods)
-    acc = targets.acceptance_scorecard(db, user, periods)
+    scorecards = {
+        stream: (
+            DriveTestAnalytics(db, user).scorecard(periods)
+            if stream == STREAM_DT
+            else targets.acceptance_scorecard(db, user, periods, stream)
+        )
+        for stream in PLAN_STREAMS
+    }
     internal = None
     if user.role.name != CONTRACTOR:
         # MTN's own number, staff only. A contractor's file never carries it.
@@ -618,10 +629,10 @@ def _plan_export(db: Session, user: User, period: str, year: int | None, month: 
                 (y, m): (t.target_count if (t := targets.get_current_target(db, y, m, stream)) else None)
                 for y, m in periods
             }
-            for stream in ("DT", "ACCEPTANCE")
+            for stream in PLAN_STREAMS
         }
     content = pip_export.plan_workbook(
-        dt, acc, revisions=_revision_counts(db, user, periods), internal=internal
+        scorecards, revisions=_revision_counts(db, user, periods), internal=internal
     )
     stamp = (jalali.format_shamsi(date.today()) or "").replace("/", "-")
     return Response(
@@ -638,7 +649,7 @@ def scorecard_export(
     months: int = Query(12, ge=1, le=36),
     year: int | None = Query(None),
     period: str | None = Query(
-        None, description="month, year or since_start: the Monthly Plan export, both streams"
+        None, description="month, year or since_start: the Monthly Plan export, every stream"
     ),
     month: int | None = Query(None, ge=1, le=12),
     db: Session = Depends(get_db),
@@ -647,9 +658,10 @@ def scorecard_export(
     """The same figures as a workbook, scoped identically.
 
     With ``period`` (the Monthly Plan page's Month / Year / Since start), the
-    file follows that period and carries both streams: a "DT Delivery" and an
-    "Acceptance" sheet, a row per contractor per month, a total per month and
-    a grand total, and -- for staff only -- MTN's internal PIP per month.
+    file follows that period and carries every stream: "DT Delivery",
+    "Acceptance", "ICT" and "CRA" sheets, each with a row per contractor per
+    month, a total per month and a grand total, and -- for staff only -- the
+    Internal PIP per month.
     Without it, the older scorecard workbook below, unchanged.
 
     Same service call as the screen, so the file cannot report something the
@@ -778,7 +790,7 @@ def internal_target(
 ) -> InternalTargetOut:
     """One stream's MTN internal target for a month, the month before, and history.
 
-    Staff only, for both streams: this is what MTN commits to management, set
+    Staff only, for every stream: this is what MTN commits to management, set
     against the contractors' own PIPs, and no contractor reads it here.
     (``GET /acceptance/plan`` keeps its own, older read rule for the
     Acceptance target; it is unchanged.)

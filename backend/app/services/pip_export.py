@@ -190,7 +190,7 @@ def scorecard_workbook(data: dict) -> bytes:
 
 
 # ---------------------------------------------------------------------------
-# The Monthly Plan export: both streams, for the period on the page
+# The Monthly Plan export: every stream, for the period on the page
 # ---------------------------------------------------------------------------
 _MONTH_TOTAL_FILL = PatternFill("solid", fgColor="EEF1F6")
 _INTERNAL_FONT = Font(italic=True, color="1F5E8C")
@@ -284,7 +284,7 @@ def _plan_sheet(
 
         if internal is not None:
             target = internal.get((y, m))
-            lead = ["MTN internal PIP", label] + ([None] if has_assignment else [])
+            lead = ["Internal PIP", label] + ([None] if has_assignment else [])
             _write(r, lead + [target, None, None, None, None], font=_INTERNAL_FONT)
             r += 1
 
@@ -317,34 +317,38 @@ def _plan_sheet(
     ).font = _NOTE
 
 
+#: The Monthly Plan export's sheets, in page order: (sheet, stream).
+PLAN_SHEETS: tuple[tuple[str, str], ...] = (
+    ("DT Delivery", "DT"),
+    ("Acceptance", "ACCEPTANCE"),
+    ("ICT", "ICT"),
+    ("CRA", "CRA"),
+)
+
+
 def plan_workbook(
-    dt: dict,
-    acceptance: dict,
+    scorecards: dict[str, dict],
     *,
     revisions: dict[str, dict[tuple[int, int, int], int]],
     internal: dict[str, dict[tuple[int, int], int | None]] | None,
 ) -> bytes:
-    """The Monthly Plan export: a "DT Delivery" and an "Acceptance" sheet.
+    """The Monthly Plan export: one sheet per stream (:data:`PLAN_SHEETS`).
 
-    ``dt`` and ``acceptance`` are the two scorecards for the period, already
+    ``scorecards`` maps each stream to its scorecard for the period, already
     scoped to the caller. ``revisions`` counts revisions per stream, keyed by
-    (contractor, year, month). ``internal`` is MTN's internal PIP per stream
+    (contractor, year, month). ``internal`` is the Internal PIP per stream
     and month, or None -- and it must be None for a contractor, who never
-    sees MTN's target.
+    sees it.
     """
     wb = Workbook()
-    ws = wb.active
-    ws.title = "DT Delivery"
-    _plan_sheet(
-        ws, dt["months"], has_assignment=True,
-        revisions=revisions.get("DT", {}),
-        internal=internal.get("DT") if internal is not None else None,
-    )
-    _plan_sheet(
-        wb.create_sheet("Acceptance"), acceptance["months"], has_assignment=False,
-        revisions=revisions.get("ACCEPTANCE", {}),
-        internal=internal.get("ACCEPTANCE") if internal is not None else None,
-    )
+    for index, (title, stream) in enumerate(PLAN_SHEETS):
+        ws = wb.active if index == 0 else wb.create_sheet()
+        ws.title = title
+        _plan_sheet(
+            ws, scorecards[stream]["months"], has_assignment=stream == "DT",
+            revisions=revisions.get(stream, {}),
+            internal=internal.get(stream) if internal is not None else None,
+        )
     buffer = io.BytesIO()
     wb.save(buffer)
     return buffer.getvalue()

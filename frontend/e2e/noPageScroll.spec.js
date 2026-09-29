@@ -15,6 +15,16 @@ const PAGES = [
   { name: 'HC Pool', path: '/health-check', ready: /^Health Check Pool/, table: true, dock: true },
   { name: 'HC In Progress', path: '/health-check?tab=running', ready: 'Health checks in progress', table: true },
   { name: 'DT Assignment', path: '/drive-test', ready: 'Assignment', table: true, dock: true },
+  { name: 'Acceptance Village', path: '/reports/acceptance', ready: 'Villages fully accepted against plan', fits: true },
+  { name: 'Acceptance ICT', path: '/reports/acceptance?tab=ict', ready: 'ICT approvals against plan', fits: true },
+  { name: 'Acceptance CRA', path: '/reports/acceptance?tab=cra', ready: 'CRA approvals against plan', fits: true },
+  {
+    name: 'Acceptance ICT cumulative',
+    path: '/reports/acceptance?tab=ict',
+    ready: 'ICT approvals against plan',
+    fits: true,
+    before: (page) => page.getByRole('button', { name: 'Cumulative' }).click(),
+  },
 ]
 
 async function pageScroll(page) {
@@ -38,6 +48,7 @@ for (const viewport of VIEWPORTS) {
         await signIn(page)
         await page.goto(p.path)
         await expect(page.getByRole('heading', { name: p.ready }).first()).toBeVisible()
+        if (p.before) await p.before(page)
         // Measure the settled page: every read answered (some deliberately
         // late -- see mockApi.js) and a frame for layout to follow.
         await page.waitForLoadState('networkidle')

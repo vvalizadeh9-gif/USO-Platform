@@ -100,7 +100,9 @@ def build_site_list_export(
     return buf.getvalue()
 
 
-def filename(metric: str, *, generated_on: date | None = None) -> str:
+def filename(
+    metric: str, *, authority: str | None = None, generated_on: date | None = None
+) -> str:
     """``acceptance-rejected-1405-06-25.xlsx`` — a name that says what is inside.
 
     Built from the metric rather than from the screen's wording so it cannot
@@ -108,4 +110,6 @@ def filename(metric: str, *, generated_on: date | None = None) -> str:
     """
     stamp = (jalali.format_shamsi(generated_on or date.today()) or "").replace("/", "-")
     slug = metric.replace("_", "-")
+    if authority:
+        slug = f"{authority.lower()}-{slug}"
     return f"acceptance-{slug}-{stamp}.xlsx"

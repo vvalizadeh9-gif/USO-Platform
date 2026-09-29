@@ -4,7 +4,9 @@
  * itself come from one place and cannot disagree.
  */
 
-export const STREAMS = ['DT', 'ACCEPTANCE']
+import { STREAMS } from './streams'
+
+export { STREAMS }
 
 const rowsOf = (queues, stream) => queues?.[stream]?.rows ?? []
 
@@ -79,7 +81,7 @@ function standing(cells) {
   if (waiting === STREAMS.length) return { shared, word: 'Waiting', done: false, group }
   if (waiting) return { shared, word: `${waiting} waiting`, done: false, group }
   if (returned) return { shared, word: 'Returned', done: false, group }
-  // One stream approved, the other not handed in yet.
+  // Some streams approved, the rest not handed in yet.
   return { shared, word: `${count('approved')} approved`, done: false, group }
 }
 

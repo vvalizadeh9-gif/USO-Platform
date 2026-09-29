@@ -30,3 +30,9 @@ export function sharePercent(delivered, pip) {
 export function figure(value) {
   return value == null ? '—' : value
 }
+
+/** A month-on-month change's direction: up, down, or flat for none. */
+export function planDeltaTone(delta) {
+  if (delta == null || delta === 0) return 'flat'
+  return delta > 0 ? 'up' : 'down'
+}

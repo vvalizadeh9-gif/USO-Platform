@@ -17,10 +17,10 @@ from app.services.monthly_plan import (
     MIN_SHAMSI_YEAR,
 )
 
-#: The two PIP streams and the revision reasons, as request types. The same
+#: The PIP streams and the revision reasons, as request types. The same
 #: values as ``models/monthly_plan.PLAN_STREAMS`` / ``REVISION_REASONS``, which
 #: the service checks again for callers that do not come through a schema.
-PlanStream = Literal["DT", "ACCEPTANCE"]
+PlanStream = Literal["DT", "ACCEPTANCE", "ICT", "CRA"]
 RevisionReason = Literal["SITES_BLOCKED", "SCOPE_CHANGE", "PERMITS", "OTHER"]
 
 
@@ -1796,6 +1796,59 @@ class AcceptanceTrendsResponse(BaseModel):
     months: list[AcceptanceTrendMonth]
 
 
+# ----- /acceptance/progress: the Acceptance Dashboard's chart and month panel -----
+class AcceptanceProgressToday(BaseModel):
+    """The Tehran day the response was computed on, in Shamsi terms.
+
+    Sent rather than worked out in the browser: the length of a Shamsi month
+    is the server's to know (``core/jalali``).
+    """
+
+    shamsi_year: int
+    shamsi_month: int
+    day: int
+    days_in_month: int
+
+
+class AcceptanceProgressStream(BaseModel):
+    """One stream's month: what was approved, and both plans for it.
+
+    Every plan field is None -- never 0 -- when there is no plan for that
+    month and stream, when plans are not available for the scope, and (the
+    ``internal_*`` pair) when the caller may not see the Internal PIP.
+    """
+
+    approved: int
+    approved_cumulative: int
+    internal_plan: int | None = None
+    internal_plan_cumulative: int | None = None
+    contractor_plan: int | None = None
+    contractor_plan_cumulative: int | None = None
+
+
+class AcceptanceProgressMonth(BaseModel):
+    shamsi_year: int
+    shamsi_month: int
+    #: The Shamsi month's name, e.g. مهر.
+    label: str
+    is_current: bool
+    days_in_month: int
+    village: AcceptanceProgressStream
+    ict: AcceptanceProgressStream
+    cra: AcceptanceProgressStream
+
+
+class AcceptanceProgress(BaseModel):
+    today: AcceptanceProgressToday
+    #: False when the view is narrowed to a province: plans are set for the
+    #: whole programme, never per province.
+    plans_available: bool
+    #: False for a contractor, and for staff narrowed to one contractor.
+    internal_visible: bool
+    #: Oldest first; the last is the running month.
+    months: list[AcceptanceProgressMonth]
+
+
 # ---------- Admin Dashboard ----------
 class AdminStatsOut(BaseModel):
     active_users_count: int
@@ -2284,6 +2337,8 @@ class PipOverviewOut(BaseModel):
     revisions_close_on: str | None = None
     dt: OverviewStream
     acceptance: OverviewStream
+    ict: OverviewStream
+    cra: OverviewStream
     needs_attention: list[OverviewAttention]
 
 
@@ -2296,8 +2351,8 @@ MAX_INTERNAL_TARGET = 1_000_000
 class InternalTargetPeriod(BaseModel):
     """One version of one stream's MTN internal target.
 
-    ``target_count`` is cumulative for ``ACCEPTANCE`` and a monthly amount for
-    ``DT`` -- see ``models/acceptance_plan.py``.
+    ``target_count`` is a monthly amount for every stream -- see
+    ``models/acceptance_plan.py``. Shown as "Internal PIP".
     """
 
     stream: PlanStream

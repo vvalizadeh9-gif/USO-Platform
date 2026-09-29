@@ -3,6 +3,7 @@ import { X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import api from '../../api/client'
 import { Loading, StatusPill } from '../../components/ui'
+import { streamMeta } from './streams'
 
 /**
  * Every version of one contractor's plan for one month, oldest first.
@@ -52,7 +53,7 @@ export default function Revisions({ period, stream = 'DT', isContractor, onClose
         <b style={{ fontFamily: 'var(--font-display)', fontSize: 'var(--fs-body)' }}>Revision history</b>
         {data && (
           <span className="dim text-data" style={{ fontSize: 13 }}>
-            {data.contractor_name} · {data.stream === 'ACCEPTANCE' ? 'Acceptance' : 'DT'} · {data.shamsi_month_name} {data.shamsi_year}
+            {data.contractor_name} · {streamMeta(data.stream).short} · {data.shamsi_month_name} {data.shamsi_year}
           </span>
         )}
         <div className="spacer" />
