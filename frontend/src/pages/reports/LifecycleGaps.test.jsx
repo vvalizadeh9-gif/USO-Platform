@@ -15,6 +15,10 @@ import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('../../api/client', () => ({ default: { get: vi.fn() } }))
+vi.mock('../../lib/download', async (importOriginal) => ({
+  ...(await importOriginal()),
+  saveBlob: vi.fn(),
+}))
 
 const authUser = vi.hoisted(() => ({ current: { role: { name: 'PM' } } }))
 vi.mock('../../context/AuthContext', () => ({
@@ -74,6 +78,7 @@ function mock({ lenses = { selectable: true, options: {} }, overview = payload()
       const lens = config?.params?.lens
       return Promise.resolve({ data: { ...overview, lens: lens ?? overview.lens } })
     }
+    if (url === '/gaps/villages.xlsx') return Promise.resolve({ data: new Blob(['x']), headers: {} })
     // The map has its own tests; here it only has to be asked for.
     if (url === '/gaps/map') return new Promise(() => {})
     return Promise.reject(new Error(`unexpected ${url}`))
@@ -284,6 +289,70 @@ describe('the drawer', () => {
     expect(drawer).toHaveTextContent(
       'the villages approved in UEP but missing in Mojri are listed here by coordinator.'
     )
+  })
+})
+
+describe('export behind every number', () => {
+  const exported = () => api.get.mock.calls.filter(([url]) => url === '/gaps/villages.xlsx')
+
+  it('exports a tile figure without opening the drawer', async () => {
+    mock()
+    draw()
+    await tiles()
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Export 2,257 villages (CRA pending) to Excel' })
+    )
+    expect(exported()).toEqual([
+      ['/gaps/villages.xlsx', { params: { gap: 'pending_cra' }, responseType: 'blob' }],
+    ])
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(await screen.findByText('Exported 2,257 villages')).toBeInTheDocument()
+  })
+
+  it("exports the Mojri tiles' approved-in-UEP counts before any import", async () => {
+    mock({ overview: payload({ last_mojri_import: null }) })
+    draw()
+    await tiles()
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Export 2,770 villages (ICT approved) to Excel' })
+    )
+    expect(exported()[0][1].params).toEqual({ gap: 'ict_approved' })
+  })
+
+  it('exports the drawer hero and each drawer row by its owner', async () => {
+    mock()
+    draw()
+    await userEvent.click((await tiles())[0])
+    const drawer = screen.getByRole('dialog')
+    await userEvent.click(
+      within(drawer).getByRole('button', { name: 'Export 2,042 villages (ICT pending) to Excel' })
+    )
+    await userEvent.click(
+      within(drawer).getByRole('button', {
+        name: 'Export 900 villages (ICT pending · Coordinator V. Hashemi) to Excel',
+      })
+    )
+    await userEvent.click(
+      within(drawer).getByRole('button', {
+        name: 'Export 442 villages (ICT pending · Coordinator Unknown province) to Excel',
+      })
+    )
+    expect(exported().map(([, config]) => config.params)).toEqual([
+      { gap: 'pending_ict' },
+      { gap: 'pending_ict', lens: 'coordinator', key: 'V. Hashemi' },
+      { gap: 'pending_ict', lens: 'coordinator', key: 'Unknown province' },
+    ])
+    // Still open: an export is not a close.
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
+  })
+
+  it('never makes a percentage exportable', async () => {
+    mock()
+    draw()
+    await userEvent.click((await tiles())[0])
+    const labels = screen.getAllByRole('button').map((b) => b.getAttribute('aria-label') ?? '')
+    expect(labels.filter((label) => label.startsWith('Export')).every((l) => /villages?\b/.test(l))).toBe(true)
+    expect(screen.queryByRole('button', { name: /%/ })).not.toBeInTheDocument()
   })
 })
 

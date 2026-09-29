@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { AlertTriangle, ClipboardList, Hourglass, Scale } from 'lucide-react'
 import api from '../../api/client'
+import ExportNumber, { ExportFeedback } from '../../components/ExportNumber'
 import GapDrawer from '../../components/GapDrawer'
 import PageFrame from '../../components/PageFrame'
 import WaffleTile from '../../components/WaffleTile'
@@ -119,35 +120,37 @@ export default function LifecycleGaps() {
   )
 
   return (
-    <PageFrame className="gap-page" bar={bar}>
-      {notesOpen && notes.length > 0 && (
-        <Banner tone="warning" title="Data quality.">
-          {notes.map((note) => (
-            <span key={note}>{note} </span>
-          ))}
-        </Banner>
-      )}
-      {error && data && <Banner tone="error">{error}</Banner>}
+    <ExportFeedback>
+      <PageFrame className="gap-page" bar={bar}>
+        {notesOpen && notes.length > 0 && (
+          <Banner tone="warning" title="Data quality.">
+            {notes.map((note) => (
+              <span key={note}>{note} </span>
+            ))}
+          </Banner>
+        )}
+        {error && data && <Banner tone="error">{error}</Banner>}
 
-      {tab === 'map' ? (
-        <CoverageMap />
-      ) : error && !data ? (
-        <Card>
-          <EmptyState title="Nothing to show" hint={error} />
-        </Card>
-      ) : !data ? (
-        <Skeleton />
-      ) : (
-        <GapsTab
-          data={data}
-          lens={lens}
-          isPm={isPm}
-          selected={selected}
-          onSelect={setSelected}
-          onLens={setLens}
-        />
-      )}
-    </PageFrame>
+        {tab === 'map' ? (
+          <CoverageMap />
+        ) : error && !data ? (
+          <Card>
+            <EmptyState title="Nothing to show" hint={error} />
+          </Card>
+        ) : !data ? (
+          <Skeleton />
+        ) : (
+          <GapsTab
+            data={data}
+            lens={lens}
+            isPm={isPm}
+            selected={selected}
+            onSelect={setSelected}
+            onLens={setLens}
+          />
+        )}
+      </PageFrame>
+    </ExportFeedback>
   )
 }
 
@@ -262,12 +265,11 @@ function GapTile({ gapKey, data, selected, onOpen }) {
   )
 }
 
-/**
- * A village count on this page. Step 4 turns every one of these into an
- * export; until then it is the number.
- */
-function GapFigure({ value, className }) {
-  return <span className={`tnum ${className ?? ''}`.trim()}>{fmt(value)}</span>
+/** A village count on this page: always an export of the villages it counts. */
+function GapFigure({ gap, value, lens, keyValue, className }) {
+  return (
+    <ExportNumber value={value} gap={gap} lens={lens} keyValue={keyValue} className={className} />
+  )
 }
 
 /* ---------------------------------------------------------------------------

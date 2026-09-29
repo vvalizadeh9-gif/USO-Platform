@@ -67,13 +67,16 @@ role that sees more than one owner row.
 """
 from __future__ import annotations
 
+import hashlib
+import re
 from dataclasses import dataclass, fields
 
 from fastapi import HTTPException
-from sqlalchemy import Select, and_, func, select
+from sqlalchemy import ColumnElement, Select, and_, func, select, true
 from sqlalchemy.orm import Session
 
 from app.core.province_directory import UNKNOWN_PROVINCE_LABEL
+from app.models.acceptance import Acceptance
 from app.models.kpi import ProvinceMapping
 from app.models.mojri import (
     IN_TRACKER,
@@ -274,6 +277,22 @@ def _owner(
     return owners[lens], OWNED
 
 
+def _owned_by(lens: str, key: str, mapping: dict[str, dict[str, str]]):
+    """A predicate on a (province, contractor) cell: does it roll up to
+    ``key`` under ``lens``? Case-insensitive, like the KPI scope.
+
+    The one way this module narrows cells to an owner -- a non-PM's scope, the
+    drawer's row and the export's filter all use it -- so a scoped figure and
+    its spreadsheet cannot disagree about whose villages they are.
+    """
+    wanted = key.casefold()
+
+    def test(province_fa: str | None, contractor: str | None) -> bool:
+        return _owner(lens, province_fa, contractor, mapping)[0].casefold() == wanted
+
+    return test
+
+
 def _fold(grid, key_of, empty=Cell) -> dict:
     """Regroup the grid under one key function.
 
@@ -397,47 +416,25 @@ GAPS: tuple[Gap, ...] = (
 GAP_KEYS = tuple(g.key for g in GAPS)
 
 
-def _gap_grid(db: Session) -> dict[tuple[str | None, str | None], GapCell]:
-    """Every overview counter, in one GROUP BY over the eligible universe.
+def _eligible(db: Session, stmt: Select) -> Select:
+    """Put the eligible villages under ``stmt``: هدف, drive test done, on air,
+    neither the village nor its work item deleted.
 
-    Grouped by (province, DT SC contractor) for the same reason as
-    :func:`_grid`: each lens is a fold of these cells, never a query of its
-    own. Unscoped; a non-PM's figures are a fold of a subset of these cells.
+    **The one definition of the overview's universe.** The grid
+    (:func:`_gap_grid`) aggregates over it and the export
+    (:func:`export_villages`) lists rows from it, so a village is in a figure
+    if and only if it is in that figure's spreadsheet. A second query with its
+    own joins and filters would be two answers that are supposed to agree --
+    the failure this module is built to rule out.
+
+    The Mojri tracker join is an outer join on a unique ``village_id``, so it
+    cannot double a village.
     """
     done = kpi.dt_done_values(db)
     targets = kpi.target_values(db)
     onair = kpi.onair_values(db)
-    approved = kpi.APPROVED
-
-    ict_ok = Village.ict_status == approved
-    cra_ok = Village.cra_status == approved
-    ict_not = Village.ict_status != approved
-    cra_not = Village.cra_status != approved
-    # No tracker row reads as "not in the tracker". The table holds one row per
-    # village (unique village_id), so the outer join cannot double a village.
-    ict_tracked = func.coalesce(MojriTrackerStatus.ict_status, NOT_IN_TRACKER)
-    cra_tracked = func.coalesce(MojriTrackerStatus.cra_status, NOT_IN_TRACKER)
-
-    stmt: Select = (
-        select(
-            Province.name,
-            Contractor.name,
-            # From here on, in GapCell's field order.
-            func.count(Village.id),
-            kpi.count_if(ict_ok),
-            kpi.count_if(cra_ok),
-            kpi.count_if(ict_not),
-            kpi.count_if(cra_not),
-            kpi.count_if(and_(cra_ok, ict_not)),
-            kpi.count_if(and_(ict_ok, cra_not)),
-            kpi.count_if(and_(ict_ok, ict_tracked == IN_TRACKER)),
-            kpi.count_if(and_(ict_ok, ict_tracked != IN_TRACKER)),
-            kpi.count_if(and_(ict_ok, ict_tracked == NEEDS_LOOK)),
-            kpi.count_if(and_(cra_ok, cra_tracked == IN_TRACKER)),
-            kpi.count_if(and_(cra_ok, cra_tracked != IN_TRACKER)),
-            kpi.count_if(and_(cra_ok, cra_tracked == NEEDS_LOOK)),
-        )
-        .select_from(Village)
+    return (
+        stmt.select_from(Village)
         .join(WorkItem, Village.work_item_id == WorkItem.id)
         .join(Site, WorkItem.site_id == Site.id)
         .outerjoin(Province, Site.province_id == Province.id)
@@ -450,12 +447,65 @@ def _gap_grid(db: Session) -> dict[tuple[str | None, str | None], GapCell]:
             WorkItem.dt_status.in_(done or [""]),
             WorkItem.last_stage.in_(onair or [""]),
         )
-        .group_by(Province.name, Contractor.name)
     )
+
+
+def _counter_conditions() -> dict[str, ColumnElement[bool]]:
+    """Each :class:`GapCell` counter, as the condition a village meets to be
+    counted in it. The grid counts them; the export filters by them.
+
+    "Approved" is the village roll-up (every requested technology approved);
+    anything else -- Pending, Rejected, not filed -- is not approved. No
+    tracker row reads as "not in the tracker".
+    """
+    approved = kpi.APPROVED
+    ict_ok = Village.ict_status == approved
+    cra_ok = Village.cra_status == approved
+    ict_not = Village.ict_status != approved
+    cra_not = Village.cra_status != approved
+    ict_tracked = func.coalesce(MojriTrackerStatus.ict_status, NOT_IN_TRACKER)
+    cra_tracked = func.coalesce(MojriTrackerStatus.cra_status, NOT_IN_TRACKER)
+    return {
+        "eligible": true(),
+        "ict_approved": ict_ok,
+        "cra_approved": cra_ok,
+        "pending_ict": ict_not,
+        "pending_cra": cra_not,
+        "ict_remained": and_(cra_ok, ict_not),
+        "cra_remained": and_(ict_ok, cra_not),
+        "ict_in_tracker": and_(ict_ok, ict_tracked == IN_TRACKER),
+        "ict_missing": and_(ict_ok, ict_tracked != IN_TRACKER),
+        "ict_needs_look": and_(ict_ok, ict_tracked == NEEDS_LOOK),
+        "cra_in_tracker": and_(cra_ok, cra_tracked == IN_TRACKER),
+        "cra_missing": and_(cra_ok, cra_tracked != IN_TRACKER),
+        "cra_needs_look": and_(cra_ok, cra_tracked == NEEDS_LOOK),
+    }
+
+
+def _gap_grid(db: Session) -> dict[tuple[str | None, str | None], GapCell]:
+    """Every overview counter, in one GROUP BY over the eligible universe.
+
+    Grouped by (province, DT SC contractor) for the same reason as
+    :func:`_grid`: each lens is a fold of these cells, never a query of its
+    own. Unscoped; a non-PM's figures are a fold of a subset of these cells.
+
+    Each counter is counted directly in SQL rather than derived by
+    subtraction, so the identities the tests check are evidence.
+    """
+    conditions = _counter_conditions()
+    names = list(conditions)
+    stmt = _eligible(
+        db,
+        select(
+            Province.name,
+            Contractor.name,
+            *(kpi.count_if(condition) for condition in conditions.values()),
+        ),
+    ).group_by(Province.name, Contractor.name)
 
     grid: dict[tuple[str | None, str | None], GapCell] = {}
     for province, contractor, *counts in db.execute(stmt):
-        cell = GapCell(*(value or 0 for value in counts))
+        cell = GapCell(**{name: value or 0 for name, value in zip(names, counts, strict=True)})
         cell.no_province = cell.eligible if province is None else 0
         grid[(province, contractor)] = cell
     return grid
@@ -539,12 +589,8 @@ def overview(db: Session, user, lens: str | None) -> dict:
     mapping = _mapping(db)
 
     if scope is not None:
-        grid = {
-            (province_fa, contractor): cell
-            for (province_fa, contractor), cell in grid.items()
-            if _owner(scope.lens, province_fa, contractor, mapping)[0].casefold()
-            == scope.key.casefold()
-        }
+        mine = _owned_by(scope.lens, scope.key, mapping)
+        grid = {cell_key: cell for cell_key, cell in grid.items() if mine(*cell_key)}
 
     owners = _fold(
         grid,
@@ -588,6 +634,245 @@ def overview(db: Session, user, lens: str | None) -> dict:
     }
 
 
+# ----- Export: the villages behind a figure ------------------------------
+#
+# ``GET /gaps/villages.xlsx``. Every village count on the page is a button
+# that downloads exactly the villages it counts. The rows come from the same
+# eligible selection the overview folds (:func:`_eligible`), filtered by the
+# same counter condition (:func:`_counter_conditions`) and narrowed to an
+# owner by the same function the folds group by (:func:`_owner`, through
+# :func:`_owned_by`). So the file for a figure has that figure's row count,
+# by construction; the tests check it for every gap and every lens anyway.
+
+#: What may be exported: the six gaps, and the two approved counts the Mojri
+#: tiles and the map show. Key -> the GapCell counter it lists.
+EXPORTS: dict[str, str] = {
+    **{gap.key: gap.count for gap in GAPS},
+    "ict_approved": "ict_approved",
+    "cra_approved": "cra_approved",
+}
+
+EXPORT_TITLES = {
+    "pending_ict": "Pending ICT approval",
+    "pending_cra": "Pending CRA approval",
+    "ict_remained": "ICT pending, CRA approved",
+    "cra_remained": "CRA pending, ICT approved",
+    "ict_missing_in_mojri": "ICT approved, missing in Mojri",
+    "cra_missing_in_mojri": "CRA approved, missing in Mojri",
+    "ict_approved": "ICT approved",
+    "cra_approved": "CRA approved",
+}
+
+SCOPE_PROVINCE = "province"
+SCOPE_REGION = "region"
+
+_MOJRI_WORDS = {IN_TRACKER: "in tracker", NOT_IN_TRACKER: "missing", NEEDS_LOOK: "needs a look"}
+
+
+@dataclass(frozen=True)
+class VillageExport:
+    """One export, validated and ready to write. ``rows`` is lazy: villages
+    are read from the database as the workbook is written, so a large export
+    is never held in memory whole."""
+
+    gap: str
+    title: str
+    #: "Coordinator = V. Hashemi · Province = Tehran", or "All villages".
+    filter_text: str
+    #: The part of the filename after the gap: an ASCII slug of the filter.
+    file_key: str
+    rows: object  # Iterator[dict]
+
+
+def export_villages(
+    db: Session,
+    user,
+    *,
+    gap: str,
+    lens: str | None = None,
+    key: str | None = None,
+    scope: str | None = None,
+) -> VillageExport:
+    """The villages behind one figure, for the spreadsheet.
+
+    Access is the overview's: :func:`kpi.require_kpi_access` (Admin is a 403)
+    and :func:`kpi.resolve_scope` (a non-PM is confined to their own villages,
+    and naming another person under their own lens is a 403). A non-PM may
+    narrow further -- by another lens or a map scope -- only to owners inside
+    their own villages; naming anybody else is a 403 too, never an empty file
+    that reads like "nothing pending".
+
+    Everything is validated before the first row is read, so a refusal is a
+    clean HTTP error rather than a broken download.
+    """
+    kpi.require_kpi_access(user)
+    counter = EXPORTS.get(gap)
+    if counter is None:
+        raise HTTPException(422, f"gap must be one of {', '.join(EXPORTS)}")
+    if lens is not None and lens not in LENSES:
+        raise HTTPException(422, f"lens must be one of {', '.join(LENSES)}")
+    if (lens is None) != (key is None or not key.strip()):
+        raise HTTPException(422, "lens and key go together: send both or neither")
+    key = key.strip() if key else None
+
+    mapping = _mapping(db)
+    tests: list = []
+    labels: list[str] = []
+    # Whether the viewer's own confinement already is the lens/key asked for.
+    lens_covered = False
+
+    if user.role.name != kpi.PM:
+        lens_covered = lens == kpi.LENS_BY_ROLE[user.role.name]
+        own = kpi.resolve_scope(
+            db, user, lens if lens_covered else None, key if lens_covered else None
+        )
+        tests.append(_owned_by(own.lens, own.key, mapping))
+        labels.append(f"{LENS_LABELS[own.lens]} = {own.key}")
+        if lens is not None and not lens_covered:
+            _require_own_owner(db, lens, key, tests, mapping)
+
+    if lens is not None and not lens_covered:
+        tests.append(_owned_by(lens, key, mapping))
+        labels.append(f"{LENS_LABELS[lens]} = {key}")
+
+    if scope is not None:
+        scope_test, scope_label = _scope_filter(scope, mapping)
+        tests.append(scope_test)
+        labels.append(scope_label)
+
+    return VillageExport(
+        gap=gap,
+        title=EXPORT_TITLES[gap],
+        filter_text=" · ".join(labels) or "All villages",
+        file_key=_file_key(lens, key, scope),
+        rows=_village_rows(db, counter, tests, mapping),
+    )
+
+
+def _require_own_owner(db: Session, lens: str, key: str, tests: list, mapping) -> None:
+    """403 unless ``key`` owns at least one of the viewer's own cells under
+    ``lens``: a non-PM may narrow their own villages, not look at anyone
+    else's."""
+    wanted = key.casefold()
+    for province_fa, contractor in _gap_grid(db):
+        if all(test(province_fa, contractor) for test in tests) and (
+            _owner(lens, province_fa, contractor, mapping)[0].casefold() == wanted
+        ):
+            return
+    raise HTTPException(403, "You may only export your own villages")
+
+
+def _scope_filter(scope: str, mapping) -> tuple:
+    """``province:<Persian name>`` or ``region:<CRA region>``, as a cell test
+    and a label. The map's two kinds of shape."""
+    kind, _, value = scope.partition(":")
+    value = value.strip()
+    if not value or kind not in (SCOPE_PROVINCE, SCOPE_REGION):
+        raise HTTPException(422, "scope must be province:<name> or region:<name>")
+    if kind == SCOPE_PROVINCE:
+        return (lambda province_fa, _c: province_fa == value), (
+            f"Province = {kpi.province_label(value)}"
+        )
+    return _owned_by(kpi.LENS_REGION, value, mapping), f"CRA region = {value}"
+
+
+def _file_key(lens: str | None, key: str | None, scope: str | None) -> str:
+    """The filename's filter part, ASCII-safe. Farsi names do not survive a
+    Content-Disposition header everywhere, so a name with no ASCII letters in
+    it becomes a short stable hash of itself."""
+    parts = []
+    if scope:
+        kind, _, value = scope.partition(":")
+        name = kpi.province_label(value) if kind == SCOPE_PROVINCE else value
+        parts.append(f"{kind}-{_slug(name)}")
+    if lens and key:
+        parts.append(f"{lens}-{_slug(key)}")
+    return "-".join(parts) or "all"
+
+
+def _slug(text: str) -> str:
+    ascii_only = re.sub(r"[^a-z0-9]+", "-", text.casefold()).strip("-")
+    if ascii_only:
+        return ascii_only[:40]
+    return hashlib.sha1(text.encode("utf-8")).hexdigest()[:8]
+
+
+def _village_rows(db: Session, counter: str, tests: list, mapping):
+    """The eligible villages in ``counter``, narrowed by ``tests``, one dict per
+    village, in province then village order. A generator: rows are read in
+    batches as the workbook is written."""
+    tracked = last_mojri_import(db) is not None
+    ict_date = (
+        select(func.max(Acceptance.ict_date))
+        .where(Acceptance.village_id == Village.id)
+        .scalar_subquery()
+    )
+    cra_date = (
+        select(func.max(Acceptance.cra_date))
+        .where(Acceptance.village_id == Village.id)
+        .scalar_subquery()
+    )
+    stmt = (
+        _eligible(
+            db,
+            select(
+                Province.name,
+                Contractor.name,
+                Village.village_code,
+                Village.village_name,
+                Village.ict_status,
+                ict_date,
+                Village.cra_status,
+                cra_date,
+                MojriTrackerStatus.ict_status,
+                MojriTrackerStatus.cra_status,
+            ),
+        )
+        .where(_counter_conditions()[counter])
+        .order_by(Province.name, Village.village_code, Village.id)
+        .execution_options(yield_per=2000)
+    )
+    for (
+        province_fa, contractor, code, name, ict, ict_on, cra, cra_on, ict_m, cra_m
+    ) in db.execute(stmt):
+        if not all(test(province_fa, contractor) for test in tests):
+            continue
+        yield {
+            "village_code": code,
+            "village_name": name,
+            "province": kpi.province_label(province_fa),
+            "region": _owner(kpi.LENS_REGION, province_fa, contractor, mapping)[0],
+            "rm": _owner(kpi.LENS_RM, province_fa, contractor, mapping)[0],
+            "coordinator": _owner(kpi.LENS_COORDINATOR, province_fa, contractor, mapping)[0],
+            "contractor": _owner(kpi.LENS_CONTRACTOR, province_fa, contractor, mapping)[0],
+            "ict_status": ict,
+            "ict_date": ict_on,
+            "cra_status": cra,
+            "cra_date": cra_on,
+            "mojri": _mojri_words(ict_m, cra_m) if tracked else "No Mojri import yet",
+            "attribution": _attribution(province_fa, contractor, mapping),
+        }
+
+
+def _mojri_words(ict: str | None, cra: str | None) -> str:
+    ict_word = _MOJRI_WORDS.get(ict or NOT_IN_TRACKER, ict)
+    cra_word = _MOJRI_WORDS.get(cra or NOT_IN_TRACKER, cra)
+    return f"ICT {ict_word} · CRA {cra_word}"
+
+
+def _attribution(province_fa: str | None, contractor: str | None, mapping) -> str:
+    """Why nobody owns this village under some lens, in the page's own terms
+    (``unknown_province``, ``unmapped``, ``unassigned``), or ``owned``."""
+    reasons = []
+    if province_fa is None:
+        reasons.append(UNKNOWN_PROVINCE)
+    elif province_fa not in mapping:
+        reasons.append(UNMAPPED)
+    if contractor is None:
+        reasons.append(UNASSIGNED)
+    return ", ".join(reasons) or OWNED
+
+
 # ----- Coverage map -------------------------------------------------------
 #
 # The same figures, drawn on Iran: ICT approval by province, CRA approval by
@@ -618,11 +903,11 @@ def coverage_map(db: Session, user) -> dict:
     grid = _grid(db)
     mapping = _mapping(db)
 
-    def in_scope(province_fa: str | None, contractor: str | None) -> bool:
-        if scope is None:
-            return True
-        name, _ = _owner(scope.lens, province_fa, contractor, mapping)
-        return name.casefold() == scope.key.casefold()
+    in_scope = (
+        (lambda _p, _c: True)
+        if scope is None
+        else _owned_by(scope.lens, scope.key, mapping)
+    )
 
     mine = {key: cell for key, cell in grid.items() if in_scope(*key)}
     ict, cra = _BY_KEY[STRETCH_ICT], _BY_KEY[STRETCH_CRA]

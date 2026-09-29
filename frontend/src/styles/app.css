@@ -4343,6 +4343,44 @@ a.lifecycle-step:focus-visible { outline: 2px solid var(--accent); outline-offse
 }
 .gap-drawer-empty { flex: 1 1 auto; min-height: 0; display: grid; place-items: center; }
 
+/* ----- ExportNumber (components/ExportNumber.jsx): a count that exports ----
+   At rest the number with a dotted underline; hover and focus give the
+   accent-soft fill, a solid underline and the download icon. The icon's
+   14px is always reserved, so showing it moves nothing. */
+.export-number {
+  display: inline-flex; align-items: center; gap: 4px;
+  margin-inline: -4px; padding: 0 4px;
+  border: 0; border-radius: var(--radius-sm); background: transparent;
+  color: inherit; font: inherit; letter-spacing: inherit; cursor: pointer;
+}
+.export-number > .tnum {
+  text-decoration: underline dotted var(--control-border);
+  text-decoration-thickness: 2px; text-underline-offset: 0.16em;
+}
+.export-number:hover, .export-number:focus-visible, .export-number[aria-busy] { background: var(--accent-soft); }
+.export-number:hover > .tnum, .export-number:focus-visible > .tnum {
+  text-decoration-style: solid; text-decoration-color: currentColor;
+}
+.export-number:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.export-number:disabled { cursor: progress; }
+.export-number-icon {
+  display: inline-grid; place-items: center; width: 14px; height: 14px; flex: none;
+  color: var(--accent-ink); visibility: hidden;
+}
+.export-number:hover .export-number-icon,
+.export-number:focus-visible .export-number-icon,
+.export-number[aria-busy] .export-number-icon { visibility: visible; }
+.export-number-icon .spinner { width: 12px; height: 12px; border-width: 2px; }
+
+/* The export results: Cobalt banners in a fixed corner, above the drawer,
+   outside the page's layout. */
+.export-feedback {
+  position: fixed; bottom: 24px; inset-inline-end: 24px; z-index: 80;
+  display: flex; flex-direction: column; gap: 8px;
+  width: min(380px, calc(100vw - 32px)); pointer-events: none;
+}
+.export-feedback .banner { pointer-events: auto; box-shadow: var(--shadow-2); }
+
 /* Kept for Mojri Import, which borrows this page's worked-example line. */
 .gap-example {
   background: var(--surface-subtle); border-radius: var(--radius-sm);
