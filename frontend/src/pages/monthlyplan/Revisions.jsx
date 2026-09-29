@@ -129,12 +129,12 @@ function Entry({ entry, last }) {
         {entry.return_comment && (
           <div
             style={{
-              background: 'var(--surface-2)',
+              background: 'var(--surface-subtle)',
               borderInlineStart: '2px solid var(--amber)',
               padding: '8px 11px',
               borderRadius: '0 6px 6px 0',
               fontSize: 'var(--fs-meta)',
-              color: 'var(--text-muted)',
+              color: 'var(--text-secondary)',
               marginTop: 8,
               fontFamily: 'var(--font-farsi)',
               lineHeight: 1.6,

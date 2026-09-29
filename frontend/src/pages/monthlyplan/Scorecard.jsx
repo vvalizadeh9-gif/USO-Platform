@@ -159,7 +159,7 @@ function percent(part, whole) {
 
 // The platform's three achievement bands, unchanged from plan-and-delivery.
 function bandColor(value) {
-  if (value == null) return 'var(--text-dim)'
+  if (value == null) return 'var(--text-tertiary)'
   if (value >= 100) return 'var(--green)'
   if (value >= 80) return 'var(--amber)'
   return 'var(--red)'
@@ -264,7 +264,7 @@ function FunnelStep({ label, value }) {
     <div
       style={{
         flex: '1 1 140px',
-        background: 'var(--surface-2)',
+        background: 'var(--surface-subtle)',
         border: '1px solid var(--border-soft)',
         borderRadius: 'var(--radius-sm)',
         padding: '13px 16px',
@@ -284,7 +284,7 @@ function FunnelRate({ label, value, tone }) {
       className="row"
       style={{ flex: '0 0 auto', flexDirection: 'column', justifyContent: 'center', gap: 1, padding: '0 14px' }}
     >
-      <b style={{ fontFamily: 'var(--font-display)', fontSize: 15, color: value == null ? 'var(--text-dim)' : tone }}>
+      <b style={{ fontFamily: 'var(--font-display)', fontSize: 15, color: value == null ? 'var(--text-tertiary)' : tone }}>
         {fmt(value)}
       </b>
       <small style={{ fontSize: 'var(--fs-caption)', color: 'var(--text-tertiary)', fontWeight: 600 }}>
@@ -325,9 +325,9 @@ function DeliveryChart({ months }) {
 
   return (
     <div style={{ padding: '10px 20px 20px' }}>
-      <div className="row wrap" style={{ gap: 16, fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>
+      <div className="row wrap" style={{ gap: 16, fontSize: 12, color: 'var(--text-secondary)', marginBottom: 8 }}>
         <LegendItem swatch="var(--violet)" opacity={0.28} border="var(--violet)" label="Available" />
-        <LegendItem swatch="var(--signal)" label="Delivered" />
+        <LegendItem swatch="var(--accent)" label="Delivered" />
         <span className="row" style={{ gap: 6 }}>
           <span style={{ width: 13, height: 2, background: 'var(--text)' }} />
           PIP target
@@ -344,7 +344,7 @@ function DeliveryChart({ months }) {
         {[0, top / 2, top].map((tick) => (
           <g key={tick}>
             <line x1={padLeft} y1={y(tick)} x2={width - 14} y2={y(tick)} stroke="var(--border)" />
-            <text x={padLeft - 9} y={y(tick) + 4} textAnchor="end" fontSize="11.5" fill="var(--text-dim)">
+            <text x={padLeft - 9} y={y(tick) + 4} textAnchor="end" fontSize="11.5" fill="var(--text-tertiary)">
               {tick}
             </text>
           </g>
@@ -376,7 +376,7 @@ function DeliveryChart({ months }) {
                 width={barWidth}
                 height={plotHeight - (y(m.delivered) - padTop)}
                 rx="4"
-                fill="var(--signal)"
+                fill="var(--accent)"
               />
               {m.pip > 0 && (
                 <line
@@ -391,7 +391,7 @@ function DeliveryChart({ months }) {
                 />
               )}
               {last && (
-                <text x={centre} y={y(m.delivered) - 9} textAnchor="middle" fontSize="12" fontWeight="600" fill="var(--signal-strong)">
+                <text x={centre} y={y(m.delivered) - 9} textAnchor="middle" fontSize="12" fontWeight="600" fill="var(--accent-ink)">
                   {m.delivered}
                 </text>
               )}
@@ -400,7 +400,7 @@ function DeliveryChart({ months }) {
                 y={height - padBottom + 17}
                 textAnchor="end"
                 fontSize="11.5"
-                fill="var(--text-muted)"
+                fill="var(--text-secondary)"
                 fontFamily="var(--font-farsi)"
                 transform={`rotate(-34 ${centre} ${height - padBottom + 17})`}
               >
@@ -469,7 +469,7 @@ function MonthGrid({
             })}
           </tbody>
           <tfoot>
-            <tr style={{ background: 'var(--surface-2)', borderTop: '1px solid var(--border)' }}>
+            <tr style={{ background: 'var(--surface-subtle)', borderTop: '1px solid var(--border)' }}>
               <td style={{ padding: '13px 16px', fontWeight: 600 }}>
                 Total — {months.length} month{months.length === 1 ? '' : 's'}
               </td>
@@ -554,7 +554,7 @@ function MonthRows({ month, open, expandable, onToggle, onRevisions, isContracto
 
       {open && (
         <tr>
-          <td colSpan={6} style={{ background: 'var(--surface-2)', padding: '12px 20px 16px' }}>
+          <td colSpan={6} style={{ background: 'var(--surface-subtle)', padding: '12px 20px 16px' }}>
             <ContractorRows rows={month.rows} onRevisions={onRevisions} month={month} />
           </td>
         </tr>
@@ -622,7 +622,7 @@ function AchievementCell({ value }) {
             left: `${(100 / scaleMax) * 100}%`,
             width: 1.5,
             height: 11,
-            background: 'var(--text-dim)',
+            background: 'var(--text-tertiary)',
           }}
           title="100% of plan"
         />

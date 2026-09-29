@@ -78,7 +78,7 @@ export function deltaTone(delta, goodDirection = 'up') {
 export const TONE_COLOR = {
   good: 'var(--dt-done)',
   bad: 'var(--dt-problem)',
-  flat: 'var(--text-dim)',
+  flat: 'var(--text-tertiary)',
 }
 
 /** At or above target, close to it, or short of it.
@@ -94,7 +94,7 @@ export const TONE_COLOR = {
  * honest reading of 85% anyway — it is work on its way, not a warning.
  */
 export function bandColor(value) {
-  if (value == null) return 'var(--text-dim)'
+  if (value == null) return 'var(--text-tertiary)'
   if (value >= 100) return 'var(--dt-done)'
   if (value >= 80) return 'var(--dt-ongoing)'
   return 'var(--dt-problem)'

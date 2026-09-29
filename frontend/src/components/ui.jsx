@@ -51,7 +51,7 @@ export function EmptyState({ title, hint }) {
   return (
     <div className="empty">
       <Inbox size={38} strokeWidth={1.5} />
-      <div style={{ fontWeight: 600, color: 'var(--text-muted)' }}>{title}</div>
+      <div style={{ fontWeight: 600, color: 'var(--text-secondary)' }}>{title}</div>
       {hint && <div style={{ marginTop: 4 }}>{hint}</div>}
     </div>
   )
@@ -59,7 +59,7 @@ export function EmptyState({ title, hint }) {
 
 export function Loading({ label = 'Loading' }) {
   return (
-    <div className="row" style={{ padding: 40, justifyContent: 'center', color: 'var(--text-dim)' }}>
+    <div className="row" style={{ padding: 40, justifyContent: 'center', color: 'var(--text-tertiary)' }}>
       <div className="spinner" />
       <span>{label}…</span>
     </div>

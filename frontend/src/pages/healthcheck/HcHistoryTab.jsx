@@ -128,7 +128,7 @@ export default function HcHistoryTab() {
                     onClick={() => toggle(a.id)}
                     style={{ cursor: 'pointer' }}
                   >
-                    <td style={{ color: 'var(--text-dim)' }}>
+                    <td style={{ color: 'var(--text-tertiary)' }}>
                       {isOpen ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
                     </td>
                     <td style={{ fontWeight: 500 }}>{a.code}</td>
@@ -145,7 +145,7 @@ export default function HcHistoryTab() {
                   {isOpen && (
                     <tr>
                       <td></td>
-                      <td colSpan={8} style={{ background: 'var(--surface-2)', padding: '10px 14px' }}>
+                      <td colSpan={8} style={{ background: 'var(--surface-subtle)', padding: '10px 14px' }}>
                         <AssignmentSummary
                           assignment={a}
                           exporting={exportingId === a.id}
@@ -176,8 +176,8 @@ function ViewChip({ active, onClick, children }) {
       className="btn btn-sm"
       onClick={onClick}
       style={{
-        background: active ? 'var(--signal)' : 'var(--surface-2)',
-        color: active ? '#fff' : 'var(--text-muted)',
+        background: active ? 'var(--accent)' : 'var(--surface-subtle)',
+        color: active ? '#fff' : 'var(--text-secondary)',
         border: active ? 'none' : '1px solid var(--border)',
       }}
     >

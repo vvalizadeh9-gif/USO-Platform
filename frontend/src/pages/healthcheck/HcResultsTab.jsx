@@ -177,7 +177,7 @@ export default function HcResultsTab({ highlightTaskId, onCountChange } = {}) {
       <div className="card-pad" style={{ paddingBottom: 12 }}>
         <div className="row between wrap" style={{ gap: 12 }}>
           <div style={{ position: 'relative', flex: 1, minWidth: 200 }}>
-            <Search size={15} style={{ position: 'absolute', left: 10, top: 11, color: 'var(--text-dim)' }} />
+            <Search size={15} style={{ position: 'absolute', left: 10, top: 11, color: 'var(--text-tertiary)' }} />
             <input className="input" style={{ paddingLeft: 32 }} placeholder="Search site ID…" value={query} onChange={(e) => setQuery(e.target.value)} />
           </div>
           <div className="row" style={{ gap: 6 }}>
@@ -260,7 +260,7 @@ export default function HcResultsTab({ highlightTaskId, onCountChange } = {}) {
                   <Fragment key={key}>
                     <tr
                       ref={isHighlighted ? highlightRef : null}
-                      style={isHighlighted ? { outline: '2px solid var(--signal)', outlineOffset: -2 } : undefined}
+                      style={isHighlighted ? { outline: '2px solid var(--accent)', outlineOffset: -2 } : undefined}
                     >
                       {canAssign && (
                         <td>
@@ -274,7 +274,7 @@ export default function HcResultsTab({ highlightTaskId, onCountChange } = {}) {
                         </td>
                       )}
                       <td
-                        style={{ color: 'var(--text-dim)', cursor: techs.length ? 'pointer' : 'default' }}
+                        style={{ color: 'var(--text-tertiary)', cursor: techs.length ? 'pointer' : 'default' }}
                         onClick={() => techs.length && toggleRow(key)}
                       >
                         {techs.length ? (isOpen ? <ChevronDown size={15} /> : <ChevronRight size={15} />) : null}
@@ -324,7 +324,7 @@ export default function HcResultsTab({ highlightTaskId, onCountChange } = {}) {
                       <tr>
                         {canAssign && <td></td>}
                         <td></td>
-                        <td colSpan={8} style={{ background: 'var(--surface-2)', padding: '10px 14px' }}>
+                        <td colSpan={8} style={{ background: 'var(--surface-subtle)', padding: '10px 14px' }}>
                           <TechBreakdown techs={techs} />
                         </td>
                       </tr>
@@ -446,7 +446,7 @@ function CategoryPicker({ row, categories, onRoute }) {
                 cursor: 'pointer',
                 border: `1px solid ${on ? 'transparent' : 'var(--border)'}`,
                 background: on ? 'var(--amber-dim)' : 'var(--surface-1)',
-                color: on ? 'var(--amber)' : 'var(--text-muted)',
+                color: on ? 'var(--amber)' : 'var(--text-secondary)',
               }}
             >
               {c}
@@ -504,7 +504,7 @@ function AssignBar({ count, contractors, onAssign, onClear }) {
     setContractorId('')
   }
   return (
-    <div className="row between wrap" style={{ gap: 12, alignItems: 'center', padding: '10px 12px', border: '1px solid var(--signal)', borderRadius: 10 }}>
+    <div className="row between wrap" style={{ gap: 12, alignItems: 'center', padding: '10px 12px', border: '1px solid var(--accent)', borderRadius: 10 }}>
       <span style={{ fontWeight: 500 }}>{count} Ready site(s) selected</span>
       <div className="row" style={{ gap: 8, alignItems: 'center' }}>
         <select className="input" style={{ minWidth: 200 }} value={contractorId} onChange={(e) => setContractorId(e.target.value)}>
@@ -526,8 +526,8 @@ function FilterChip({ active, onClick, color, children }) {
       className="btn btn-sm"
       onClick={onClick}
       style={{
-        background: active ? (color || 'var(--signal)') : 'var(--surface-2)',
-        color: active ? '#fff' : 'var(--text-muted)',
+        background: active ? (color || 'var(--accent)') : 'var(--surface-subtle)',
+        color: active ? '#fff' : 'var(--text-secondary)',
         border: active ? 'none' : '1px solid var(--border)',
       }}
     >

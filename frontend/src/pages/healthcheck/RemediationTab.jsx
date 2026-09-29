@@ -144,8 +144,8 @@ function Chip({ active, onClick, children }) {
       className="btn btn-sm"
       onClick={onClick}
       style={{
-        background: active ? 'var(--signal)' : 'var(--surface-2)',
-        color: active ? '#fff' : 'var(--text-muted)',
+        background: active ? 'var(--accent)' : 'var(--surface-subtle)',
+        color: active ? '#fff' : 'var(--text-secondary)',
         border: active ? 'none' : '1px solid var(--border)',
       }}
     >

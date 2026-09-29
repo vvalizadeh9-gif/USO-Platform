@@ -66,7 +66,7 @@ export default function AcceptanceTargetCard({ plan, onSaved }) {
           {delta != null ? (
             <div
               className="row"
-              style={{ gap: 4, fontSize: 'var(--fs-caption)', marginTop: 3, color: tone === 'up' ? 'var(--green)' : tone === 'down' ? 'var(--red)' : 'var(--text-dim)' }}
+              style={{ gap: 4, fontSize: 'var(--fs-caption)', marginTop: 3, color: tone === 'up' ? 'var(--green)' : tone === 'down' ? 'var(--red)' : 'var(--text-tertiary)' }}
             >
               {tone === 'up' && <ArrowUp size={11} />}
               {tone === 'down' && <ArrowDown size={11} />}

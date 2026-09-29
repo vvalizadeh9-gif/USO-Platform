@@ -90,7 +90,7 @@ export default function ReroutesTab({ onCountChange }) {
 
               <div className="row wrap" style={{ gap: 8, alignItems: 'center', marginTop: 10 }}>
                 <span className="pill pill-dim">{r.from_category}</span>
-                <ArrowRight size={15} style={{ color: 'var(--text-dim)' }} />
+                <ArrowRight size={15} style={{ color: 'var(--text-tertiary)' }} />
                 <span className="pill pill-amber">{r.to_category}</span>
               </div>
 

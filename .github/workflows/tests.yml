@@ -155,6 +155,21 @@ jobs:
         working-directory: frontend
         run: npm test
 
+      # The layout contract: at 1440x900 and 1280x800 the one-screen pages
+      # never scroll the browser page, their lists scroll inside their cards
+      # and the assignment dock stays on screen. The app runs on Vite's dev
+      # server with the API mocked in the page (e2e/mockApi.js), so this
+      # needs no backend.
+      - name: Install Chromium for the layout tests
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+
+      - name: Layout tests (Playwright)
+        working-directory: frontend
+        env:
+          CI: "true"
+        run: npm run test:e2e
+
       # Same reasoning as the backend audit above, and the same
       # report-do-not-block posture.
       - name: Audit dependencies for known vulnerabilities

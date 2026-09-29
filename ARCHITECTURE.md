@@ -1018,6 +1018,57 @@ is not. "Left the company" and "locked pending an investigation" were the same
 row when this was `active = false`, and the difference is exactly what someone
 reading the trail a year later needs. See `app/core/user_status.py`.
 
+### The frontend layout contract
+
+**The browser page never scrolls.** `html`, `body` and `#root` are one
+viewport high with `overflow: hidden`; the shell (`.app-shell`) is a
+`216px minmax(0, 1fr)` grid, `100dvh` high. `minmax(0, 1fr)` rather than
+`1fr` is load-bearing: a `1fr` track's minimum is its content's, so one
+`nowrap` cell used to widen the column past the window and scroll the page
+sideways. The sidebar scrolls itself; `.main` is a flex column that never
+scrolls.
+
+Inside `.main`, `.page-outlet` is the only box that can scroll, and how it
+does is the page's choice (`components/pageMode.js`):
+
+| Mode | Opted into by | Behaviour |
+|---|---|---|
+| scroll (default) | nothing | The page scrolls inside `.page-outlet`, with the usual padding and 1,280px cap. Every page outside the redesign works as before. |
+| fill | rendering `<PageFrame>` | The page takes exactly the remaining height: a fixed `PageBar`, a `.page-body` that fills the rest, and the dock slot. Long lists scroll inside their card (`.card-fill` > `.table-scroll`, sticky header). |
+
+The mode is registered by the page through context, not listed by route,
+because one URL can be both: `/monthly-plan` is a one-screen board for a PM
+and a long form for a contractor. `PageFrame` sets fill mode in a layout
+effect, so the first paint is already in the right frame.
+
+A fill page's parts:
+
+```
+.main (flex column, overflow hidden)
+  .page-outlet (flex 1, min-height 0)
+    .page-frame
+      PageBar            131px: eyebrow/title · context · actions / tabs · tabsRight
+      .page-body         flex 1, min-height 0; padding 20 32 24
+        .card-fill       flex 1, min-height 0
+          .table-scroll  the only thing that scrolls; sticky <th>
+      .page-dock         the AssignDock, rendered here through <PageDock>
+```
+
+Two rules keep it honest:
+
+- **Nothing is clipped.** `.page-body` has `overflow-y: auto` as a fallback:
+  a long tab that is not a one-screen design (HC Review, History, the Plans
+  board) scrolls inside the frame; the document still never does. The
+  one-screen designs (DT dashboard Overview, PIP vs Achieved, HC Pool, HC In
+  Progress, DT Assignment) are laid out to fit at 1440x900 and 1280x800
+  without using it -- `e2e/noPageScroll.spec.js` asserts both.
+- **Tab panels do not animate their height.** A tab change is a 120ms opacity
+  fade with no exit animation (`.tab-panel`), so the page never collapses
+  between panels.
+
+The layout tests run the real app on Vite's dev server with the API mocked in
+the page (`frontend/e2e/`), so they need no backend: `npm run test:e2e`.
+
 ---
 
 ## 9. If you are about to change something
@@ -1047,6 +1098,9 @@ above:
 - **bcrypt still being verifiable** after the move to Argon2id — deliberate;
   removing it locks out every user at once.
 - **No route that deletes a user** — deliberate; see "Nothing is deleted" above.
+- **The page itself never scrolling** — deliberate; see "The frontend layout
+  contract" above. A page that needs to scroll does so inside `.page-outlet`
+  (or its own card), never by giving the body a height.
 
 The backend tests cover all of these. If a change breaks one, the test is
 probably right.

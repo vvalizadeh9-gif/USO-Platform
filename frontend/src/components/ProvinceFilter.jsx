@@ -21,7 +21,7 @@ export default function ProvinceFilter({ options, selected, onToggle, onClear })
             ? 'All provinces'
             : `${selected.size} province${selected.size > 1 ? 's' : ''}`}
         </span>
-        <ChevronDown size={15} style={{ color: 'var(--text-dim)' }} />
+        <ChevronDown size={15} style={{ color: 'var(--text-tertiary)' }} />
       </button>
       {open && (
         <>
