@@ -3,6 +3,7 @@
 // of trend, because "the page never scrolls" only means something when there
 // is more content than the screen can hold.
 
+import { readFileSync } from 'node:fs'
 import { currentShamsiPeriod } from '../src/lib/shamsi.js'
 
 export const PM = {
@@ -303,3 +304,130 @@ export function gapsOverview(url) {
 }
 
 export const kpiLenses = { selectable: true, options: {} }
+
+// ----- Lifecycle Gaps: the coverage map ------------------------------------
+//
+// Every province in the map asset, with a made-up spread of approval rates.
+// The detail panels' owner rows are split from each shape's own figures, so
+// they add up the way the server's folds do.
+
+const IRAN = JSON.parse(readFileSync(new URL('../src/pages/reports/iranMap.json', import.meta.url), 'utf8'))
+
+const stretchFig = (stopped, reached) => ({
+  stopped,
+  reached,
+  rate: reached ? Math.round((stopped * 1000) / reached) / 10 : null,
+  low_sample: reached < 10,
+})
+
+const PANEL_OWNERS = {
+  coordinator: GAP_OWNERS.coordinator.slice(0, 3),
+  contractor: CONTRACTORS.slice(0, 4),
+  rm: GAP_OWNERS.rm.slice(0, 2),
+}
+
+function panelFigures(base, ictRate, craRate) {
+  const ictApproved = Math.round(base * ictRate)
+  const craApproved = Math.round(base * craRate)
+  return {
+    ict: { approved: ictApproved, base, pending: base - ictApproved, remained: Math.round((base - ictApproved) * 0.4) },
+    cra: { approved: craApproved, base, pending: base - craApproved, remained: Math.round((base - craApproved) * 0.3) },
+  }
+}
+
+/** Split each counter of `figures` over `names`, summing exactly. */
+function ownerRows(figures, names, extra = () => ({})) {
+  const pieces = {}
+  for (const stretch of ['ict', 'cra']) {
+    for (const counter of ['approved', 'base', 'pending', 'remained']) {
+      pieces[`${stretch}.${counter}`] = split(figures[stretch][counter], names.length)
+    }
+  }
+  return names.map((name, i) => {
+    const row = { name, attribution: 'owned', ...extra(name, i), ict: {}, cra: {} }
+    for (const [path, parts] of Object.entries(pieces)) {
+      const [stretch, counter] = path.split('.')
+      row[stretch][counter] = parts[i]
+    }
+    return row
+  })
+}
+
+const mapProvinces = Object.entries(IRAN.provinces).map(([key, shape], i) => {
+  const base = 60 + ((i * 37) % 340)
+  const ictRate = 0.2 + ((i * 13) % 75) / 100
+  const craRate = Math.min(ictRate, 0.15 + ((i * 29) % 70) / 100)
+  const figures = panelFigures(base, ictRate, craRate)
+  const reached = base + 40
+  const ictStopped = Math.round(reached * (1 - ictRate))
+  const craReached = reached - ictStopped
+  return {
+    key,
+    name: shape.en,
+    attribution: 'owned',
+    region: shape.region,
+    managers: [GAP_OWNERS.rm[i % GAP_OWNERS.rm.length]],
+    villages: reached + 20,
+    ict: stretchFig(ictStopped, reached),
+    cra: stretchFig(Math.round(craReached * (1 - craRate / Math.max(ictRate, 0.01))), craReached),
+    detail: {
+      ...figures,
+      owners: Object.fromEntries(
+        Object.entries(PANEL_OWNERS).map(([lens, names]) => [lens, ownerRows(figures, names)])
+      ),
+    },
+  }
+})
+
+const sumFig = (rows, stretch, counter) => rows.reduce((s, r) => s + r[stretch][counter], 0)
+
+const mapRegions = Object.keys(IRAN.regions).map((name) => {
+  const members = mapProvinces.filter((p) => p.region === name)
+  const figures = {}
+  for (const stretch of ['ict', 'cra']) {
+    figures[stretch] = {}
+    for (const counter of ['approved', 'base', 'pending', 'remained']) {
+      figures[stretch][counter] = members.reduce((s, m) => s + m.detail[stretch][counter], 0)
+    }
+  }
+  const provinceRows = members.map((m) => ({
+    name: m.name,
+    key: m.key,
+    attribution: 'owned',
+    ict: m.detail.ict,
+    cra: m.detail.cra,
+  }))
+  return {
+    name,
+    attribution: 'owned',
+    provinces: members.map((m) => m.key),
+    managers: [...new Set(members.flatMap((m) => m.managers))].sort(),
+    villages: members.reduce((s, m) => s + m.villages, 0),
+    ict: stretchFig(members.reduce((s, m) => s + m.ict.stopped, 0), members.reduce((s, m) => s + m.ict.reached, 0)),
+    cra: stretchFig(members.reduce((s, m) => s + m.cra.stopped, 0), members.reduce((s, m) => s + m.cra.reached, 0)),
+    detail: {
+      ...figures,
+      owners: {
+        province: provinceRows,
+        ...Object.fromEntries(
+          Object.entries(PANEL_OWNERS).map(([lens, names]) => [lens, ownerRows(figures, names)])
+        ),
+      },
+    },
+  }
+})
+
+export const gapsMap = {
+  scoped: false,
+  lens_label: null,
+  key: null,
+  last_cpm_import: '2026-09-20T09:30:00Z',
+  low_sample_threshold: 10,
+  provinces: mapProvinces,
+  regions: mapRegions,
+  total: {
+    villages: mapProvinces.reduce((s, p) => s + p.villages, 0),
+    ict: stretchFig(sumFig(mapProvinces, 'ict', 'stopped'), sumFig(mapProvinces, 'ict', 'reached')),
+    cra: stretchFig(sumFig(mapProvinces, 'cra', 'stopped'), sumFig(mapProvinces, 'cra', 'reached')),
+  },
+}

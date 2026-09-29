@@ -893,6 +893,63 @@ def _attribution(province_fa: str | None, contractor: str | None, mapping) -> st
 # that roll up to their own key under their own lens.
 
 
+#: The owner lists the map's detail panel offers. A province is one CRA
+#: region, so only a region's panel lists by province.
+PROVINCE_DETAIL_LENSES = (kpi.LENS_COORDINATOR, kpi.LENS_CONTRACTOR, kpi.LENS_RM)
+REGION_DETAIL_LENSES = (LENS_PROVINCE, *PROVINCE_DETAIL_LENSES)
+
+
+def _stretch_figures(cell: GapCell) -> dict:
+    """One shape's detail figures, both authorities, in the Gaps tab's
+    counting: approved, pending and remained, each over the drive-tested
+    base. Every one of them is a count the export can list."""
+    return {
+        "ict": {
+            "approved": cell.ict_approved,
+            "base": cell.eligible,
+            "pending": cell.pending_ict,
+            "remained": cell.ict_remained,
+        },
+        "cra": {
+            "approved": cell.cra_approved,
+            "base": cell.eligible,
+            "pending": cell.pending_cra,
+            "remained": cell.cra_remained,
+        },
+    }
+
+
+def _detail(cells: dict, lenses: tuple[str, ...], mapping) -> dict:
+    """The detail panel for one shape: its figures and, under each lens, its
+    owners -- all folds of the same cells, so the owner rows sum to the
+    shape's own figures."""
+    total = _fold(cells, lambda _p, _c: (_COUNTRY, OWNED), GapCell).get(
+        (_COUNTRY, OWNED), GapCell()
+    )
+    owners = {}
+    for lens in lenses:
+        def owner_of(province_fa, contractor, lens=lens):
+            # A province row also carries its Persian name, which is the key
+            # the map and the export's province scope use.
+            name, attribution = _owner(lens, province_fa, contractor, mapping)
+            return name, attribution, province_fa if lens == LENS_PROVINCE else None
+
+        folded = _fold(cells, owner_of, GapCell)
+        owners[lens] = sorted(
+            (
+                {
+                    "name": name,
+                    "attribution": attribution,
+                    **({"key": province_fa} if lens == LENS_PROVINCE else {}),
+                    **_stretch_figures(cell),
+                }
+                for (name, attribution, province_fa), cell in folded.items()
+            ),
+            key=lambda row: row["name"],
+        )
+    return {**_stretch_figures(total), "owners": owners}
+
+
 def coverage_map(db: Session, user) -> dict:
     """Every province and CRA region, with ICT and CRA figures. Reads only."""
     kpi.require_kpi_access(user)
@@ -910,6 +967,9 @@ def coverage_map(db: Session, user) -> dict:
     )
 
     mine = {key: cell for key, cell in grid.items() if in_scope(*key)}
+    # The detail panel counts like the Gaps tab (and its export), so it folds
+    # the overview's grid -- the same scope, the same cells.
+    gap_mine = {key: cell for key, cell in _gap_grid(db).items() if in_scope(*key)}
     ict, cra = _BY_KEY[STRETCH_ICT], _BY_KEY[STRETCH_CRA]
 
     def both(cell: Cell) -> dict:
@@ -931,8 +991,14 @@ def coverage_map(db: Session, user) -> dict:
                 "name": name,
                 "attribution": attribution,
                 "region": owners[kpi.LENS_REGION] if owners else None,
+                "managers": [owners[kpi.LENS_RM]] if owners else [],
                 "villages": by_province.get(province_fa, Cell()).villages,
                 **both(by_province.get(province_fa, Cell())),
+                "detail": _detail(
+                    {k: c for k, c in gap_mine.items() if k[0] == province_fa},
+                    PROVINCE_DETAIL_LENSES,
+                    mapping,
+                ),
             }
         )
 
@@ -953,13 +1019,26 @@ def coverage_map(db: Session, user) -> dict:
             for row in provinces
             if row["key"] is not None and row["region"] == name
         ]
+        in_region = _owned_by(kpi.LENS_REGION, name, mapping)
         regions.append(
             {
                 "name": name,
                 "attribution": attribution,
                 "provinces": members,
+                "managers": sorted(
+                    {
+                        mapping[fa][kpi.LENS_RM]
+                        for fa in members
+                        if fa in mapping
+                    }
+                ),
                 "villages": cell.villages,
                 **both(cell),
+                "detail": _detail(
+                    {k: c for k, c in gap_mine.items() if in_region(*k)},
+                    REGION_DETAIL_LENSES,
+                    mapping,
+                ),
             }
         )
 

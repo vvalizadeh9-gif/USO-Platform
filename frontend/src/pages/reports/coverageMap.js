@@ -72,21 +72,75 @@ export function regionDrift(provinces, asset) {
     .map((row) => ({ name: row.name, now: row.region, drawn: asset.provinces[row.key].region }))
 }
 
+/* ---------------------------------------------------------------------------
+   The detail panel. Its figures are the Gaps tab's counting (on-air,
+   drive-tested villages; approved, pending and remained over that base), so
+   every count in it exports exactly -- see `/gaps/villages.xlsx`.
+   --------------------------------------------------------------------------- */
+
+/** The two maps, one at a time. */
+export const MAPS = [
+  { key: 'ict', label: 'ICT approval · by province', authority: 'ICT', shape: 'province' },
+  { key: 'cra', label: 'CRA approval · by region', authority: 'CRA', shape: 'region' },
+]
+
+/** The detail list's lenses, per map. A province is one region, so only the
+ * region panel lists by province. */
+export const DETAIL_LENSES = {
+  ict: [
+    { key: 'coordinator', label: 'Coordinator' },
+    { key: 'contractor', label: 'Contractor' },
+    { key: 'rm', label: 'Regional manager' },
+  ],
+  cra: [
+    { key: 'province', label: 'Province' },
+    { key: 'coordinator', label: 'Coordinator' },
+    { key: 'contractor', label: 'Contractor' },
+    { key: 'rm', label: 'Regional manager' },
+  ],
+}
+
+/** What "remained" means on each map, under the figure. */
+export const REMAINED_NOTES = {
+  ict: 'CRA approved, ICT pending',
+  cra: 'ICT approved, CRA pending',
+}
+
+/** Approval over the drive-tested base, as a percentage, or null. */
+export function detailRate(figures) {
+  return figures?.base ? (figures.approved * 100) / figures.base : null
+}
+
 /**
- * The region report, worst CRA approval first -- the order the mockup reads
- * in, so the region to call is at the top. Regions nobody owns (no province,
- * no mapping) go last whatever their figures, and a region with nothing to
- * compare sorts after every region that has.
+ * The band for a detail figure, or null when it is not compared (nothing
+ * drive-tested, or fewer than the low-sample threshold) -- the map's rule,
+ * applied to the detail's own counts.
  */
-export function reportOrder(regions) {
-  const rank = (row) => {
-    if (row.attribution !== 'owned') return [2, 0, row.name]
-    const rate = approvalRate(row.cra)
-    return rate == null ? [1, 0, row.name] : [0, rate, row.name]
+export function detailBand(figures, threshold) {
+  const rate = detailRate(figures)
+  if (rate == null || figures.base < threshold) return null
+  return BANDS.find((band) => rate < band.below)
+}
+
+/**
+ * One lens's rows for one authority: name, pending over its own base.
+ *
+ * Most pending first. The CRA map's Province list is the exception: weakest
+ * CRA approval first, so the province to call is at the top; a province
+ * with nothing drive-tested sorts last.
+ */
+export function detailRows(detail, stretch, lens) {
+  const rows = (detail?.owners?.[lens] ?? []).map((row) => ({
+    ...row,
+    figures: row[stretch],
+    pending: row[stretch].pending,
+    base: row[stretch].base,
+    rate: detailRate(row[stretch]),
+    pendingShare: row[stretch].base ? (row[stretch].pending * 100) / row[stretch].base : null,
+  }))
+  if (stretch === 'cra' && lens === 'province') {
+    const rank = (row) => (row.rate == null ? Infinity : row.rate)
+    return rows.sort((a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name))
   }
-  return [...regions].sort((a, b) => {
-    const [ga, ra, na] = rank(a)
-    const [gb, rb, nb] = rank(b)
-    return ga - gb || ra - rb || na.localeCompare(nb)
-  })
+  return rows.sort((a, b) => b.pending - a.pending || a.name.localeCompare(b.name))
 }

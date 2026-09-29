@@ -1,16 +1,22 @@
-import { Fragment, useEffect, useMemo, useState } from 'react'
-import { AlertTriangle, ChevronDown, ChevronRight, Info, X } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { X } from 'lucide-react'
 import api from '../../api/client'
-import { EmptyState } from '../../components/ui'
+import ExportNumber from '../../components/ExportNumber'
+import { AuthorityChip, Banner, Card, EmptyState, SegmentedControl } from '../../components/ui'
 import { fmtCount } from './kpiTheme'
 import { ATTRIBUTION_NOTES } from './lifecycleGaps'
 import {
   BANDS,
+  DETAIL_LENSES,
+  MAPS,
+  REMAINED_NOTES,
   approvalRate,
   bandOf,
+  detailBand,
+  detailRate,
+  detailRows,
   onePct,
   regionDrift,
-  reportOrder,
   wholePct,
 } from './coverageMap'
 import iranMap from './iranMap.json'
@@ -19,35 +25,30 @@ import { Skeleton } from './LifecycleGaps'
 /**
  * Lifecycle Gaps → Coverage map.
  *
- * Iran twice, side by side: ICT approval by province, CRA approval by CRA
- * region -- each authority drawn at the level it works at. Under the maps, the
- * CRA region report: every region, its provinces one click away.
+ * One map at a time -- ICT approval by province, or CRA approval by CRA
+ * region, each authority drawn at the level it works at -- and beside it a
+ * detail panel that is empty until a shape is clicked.
  *
  * Where a village is drawn is decided by its CPM province, the same province
  * every figure is grouped by. The borders are OpenStreetMap's, committed as
  * `iranMap.json` by `scripts/build-iran-map.py` and keyed by the Persian
  * province name, so the join with the API is the same string on both sides.
- * The nine region shapes were dissolved from the provinces once, offline.
  *
- * Three rules:
+ * The map keeps its own counting, unchanged: ICT is drive-test-done villages
+ * ICT-approved, CRA is ICT-approved villages CRA-approved, over every هدف
+ * village. The detail panel counts like the Gaps tab -- on-air, drive-tested
+ * villages -- because every count in it is an export, and an export lists
+ * exactly the villages the Gaps tab counts.
  *
- * **A number on every shape.** Each province and region prints its name and
- * approval rate; hovering gives the counts, clicking a province gives them in
- * full. Colour is never the only carrier.
- *
- * **One fixed scale.** Six bands, the same on both maps and in the table.
- *
- * **Low sample is hatched, not coloured.** The KPI page's threshold, sent by
- * the server.
- *
- * Scope is the server's. A PM sees the country; anyone else sees the whole
- * map with only their own provinces and regions coloured.
+ * Rules: a number on every shape; one fixed six-band scale; low sample is
+ * hatched, not coloured. Scope is the server's: a PM sees the country;
+ * anyone else sees the map with only their own shapes coloured.
  */
 export default function CoverageMap() {
   const [data, setData] = useState(null)
   const [error, setError] = useState('')
-  const [province, setProvince] = useState(null)
-  const [open, setOpen] = useState(() => new Set())
+  const [map, setMap] = useState('ict')
+  const [selected, setSelected] = useState(null)
 
   useEffect(() => {
     let live = true
@@ -64,140 +65,147 @@ export default function CoverageMap() {
     }
   }, [])
 
+  // Esc clears the selection, wherever focus is.
+  useEffect(() => {
+    if (!selected) return undefined
+    const onKey = (event) => {
+      if (event.key === 'Escape') setSelected(null)
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [selected])
+
   const byKey = useMemo(
     () => new Map((data?.provinces ?? []).filter((r) => r.key).map((r) => [r.key, r])),
     [data]
   )
-  const byRegion = useMemo(
-    () => new Map((data?.regions ?? []).map((r) => [r.name, r])),
-    [data]
-  )
+  const byRegion = useMemo(() => new Map((data?.regions ?? []).map((r) => [r.name, r])), [data])
 
   if (error) {
     return (
-      <div className="card card-pad">
+      <Card>
         <EmptyState title="Nothing to show" hint={error} />
-      </div>
+      </Card>
     )
   }
   if (!data) return <Skeleton />
 
-  const toggle = (name) =>
-    setOpen((current) => {
-      const next = new Set(current)
-      if (next.has(name)) next.delete(name)
-      else next.add(name)
-      return next
-    })
-
-  const openRegion = (name) => {
-    setOpen((current) => new Set(current).add(name))
-    document.getElementById(`cov-region-${name}`)?.scrollIntoView?.({ block: 'nearest' })
+  const current = MAPS.find((item) => item.key === map)
+  const row = selected ? (map === 'ict' ? byKey.get(selected) : byRegion.get(selected)) : null
+  const switchMap = (next) => {
+    setMap(next)
+    setSelected(null)
   }
 
-  const drift = regionDrift(data.provinces, iranMap)
-  const threshold = data.low_sample_threshold
-
   return (
-    <section className="card card-pad kpi-card cov">
-      <h2 className="cov-title">Coverage map</h2>
-      <p className="cov-sub">
-        ICT is decided by province offices, CRA by the nine region offices. Each map is
-        drawn at the level its authority actually works. Click a region to open its
-        provinces.
-      </p>
+    <div className="cov">
+      <Card className="cov-map-card">
+        <div className="cov-map-head">
+          <SegmentedControl label="Map" options={MAPS} value={map} onChange={switchMap} />
+          <div className="cov-scale" role="list" aria-label="Approval rate bands">
+            {BANDS.map((band) => (
+              <span
+                key={band.label}
+                role="listitem"
+                className="cov-scale-band"
+                style={{ background: band.fill, color: band.ink }}
+              >
+                {band.label}
+              </span>
+            ))}
+          </div>
+        </div>
 
-      {data.scoped && (
-        <p className="kpi-banner">
-          <Info size={16} aria-hidden="true" />
-          Showing your own scope only — {data.lens_label} <strong>{data.key}</strong>.
-          Grey provinces and regions are outside it.
-        </p>
-      )}
+        <Notes data={data} />
 
-      {drift.length > 0 && (
-        <p className="kpi-banner warn" data-testid="cov-drift">
-          <AlertTriangle size={16} aria-hidden="true" />
-          <span>
-            The province mapping has moved{' '}
-            {drift.map((d) => `${d.name} to ${d.now}`).join(', ')}. The figures follow
-            the mapping; the region borders on the map still show the original
-            grouping ({drift.map((d) => `${d.name} in ${d.drawn}`).join(', ')}) until the
-            map asset is rebuilt.
-          </span>
-        </p>
-      )}
-
-      <div className="cov-scale" role="list" aria-label="Approval rate bands">
-        {BANDS.map((band) => (
-          <span
-            key={band.label}
-            role="listitem"
-            className="cov-scale-band"
-            style={{ background: band.fill, color: band.ink }}
-          >
-            {band.label}
-          </span>
-        ))}
-      </div>
-      <p className="cov-caption">
-        ICT: share of drive-test-done villages ICT-approved. CRA: share of ICT-approved
-        villages CRA-approved. Hatched = fewer than {threshold} reached, not compared.
-      </p>
-
-      <div className="cov-maps">
-        <figure className="cov-map" data-testid="cov-map-ict">
-          <figcaption className="cov-map-title">ICT approved — by province</figcaption>
-          <MapLayer
-            label="ICT approval by province"
-            stretch="ICT"
-            shapes={Object.entries(iranMap.provinces).map(([key, shape]) => ({
-              id: key,
-              name: shape.en,
-              ...shape,
-              figures: byKey.get(key)?.ict,
-            }))}
-            picked={province ? [province] : []}
-            onPick={(key) => setProvince(province === key ? null : key)}
-            small
-          />
+        <figure className="cov-map" data-testid={`cov-map-${map}`}>
+          {map === 'ict' ? (
+            <MapLayer
+              label="ICT approval by province"
+              stretch="ICT"
+              shapes={Object.entries(iranMap.provinces).map(([key, shape]) => ({
+                id: key,
+                name: shape.en,
+                ...shape,
+                figures: byKey.get(key)?.ict,
+              }))}
+              picked={selected}
+              onPick={(key) => setSelected(selected === key ? null : key)}
+              small
+            />
+          ) : (
+            <MapLayer
+              label="CRA approval by region"
+              stretch="CRA"
+              shapes={Object.entries(iranMap.regions).map(([name, shape]) => ({
+                id: name,
+                name,
+                ...shape,
+                figures: byRegion.get(name)?.cra,
+              }))}
+              picked={selected}
+              onPick={(name) => setSelected(selected === name ? null : name)}
+              region
+            />
+          )}
         </figure>
 
-        <figure className="cov-map" data-testid="cov-map-cra">
-          <figcaption className="cov-map-title">CRA approved — by region</figcaption>
-          <MapLayer
-            label="CRA approval by region"
-            stretch="CRA"
-            shapes={Object.entries(iranMap.regions).map(([name, shape]) => ({
-              id: name,
-              name,
-              ...shape,
-              figures: byRegion.get(name)?.cra,
-            }))}
-            picked={[...open]}
-            onPick={openRegion}
-            region
+        <p className="cov-caption">
+          {map === 'ict'
+            ? 'Share of drive-test-done villages ICT-approved.'
+            : 'Share of ICT-approved villages CRA-approved.'}{' '}
+          Hatched = fewer than {data.low_sample_threshold} reached, not compared. Boundaries ©
+          OpenStreetMap contributors (ODbL), via geoBoundaries.
+        </p>
+      </Card>
+
+      <Card className="cov-panel" aria-label="Detail">
+        {row ? (
+          <Detail
+            key={`${map}:${selected}`}
+            row={row}
+            map={current}
+            threshold={data.low_sample_threshold}
+            onClose={() => setSelected(null)}
           />
-        </figure>
-      </div>
-
-      <ProvinceDetail
-        row={province ? byKey.get(province) : null}
-        threshold={threshold}
-        onClose={() => setProvince(null)}
-      />
-
-      <RegionReport data={data} byKey={byKey} open={open} onToggle={toggle} />
-
-      <p className="cov-foot">
-        A region figure is the sum of its provinces, never a separate calculation, so this
-        table and the map cannot disagree. Villages are placed by their CPM province.
-        Boundaries © OpenStreetMap contributors, available under the Open Database
-        License (ODbL), via geoBoundaries.
-      </p>
-    </section>
+        ) : (
+          <div className="cov-panel-empty">
+            <EmptyState
+              title={map === 'ict' ? 'Select a province on the map' : 'Select a CRA region on the map'}
+              hint="Its approval, pending and remained villages appear here, and who holds them."
+            />
+          </div>
+        )}
+      </Card>
+    </div>
   )
 }
+
+/** The scope and region-drift notes, when there is something to say. */
+function Notes({ data }) {
+  const drift = regionDrift(data.provinces, iranMap)
+  return (
+    <>
+      {data.scoped && (
+        <Banner tone="info">
+          Showing your own scope only — {data.lens_label} <strong>{data.key}</strong>. Grey shapes
+          are outside it.
+        </Banner>
+      )}
+      {drift.length > 0 && (
+        <Banner tone="warning" data-testid="cov-drift">
+          The province mapping has moved {drift.map((d) => `${d.name} to ${d.now}`).join(', ')}. The
+          figures follow the mapping; the region borders still show the original grouping (
+          {drift.map((d) => `${d.name} in ${d.drawn}`).join(', ')}) until the map asset is rebuilt.
+        </Banner>
+      )}
+    </>
+  )
+}
+
+/* ---------------------------------------------------------------------------
+   The map itself: unchanged apart from a single selection.
+   --------------------------------------------------------------------------- */
 
 /** The diagonal hatch for a shape that is shown but not compared. */
 function Hatch() {
@@ -243,12 +251,12 @@ function describe(name, figures, stretch) {
 }
 
 /**
- * One map: every shape, then the outline of whatever is picked, then every
- * label -- in that order, so no neighbouring shape is painted over an outline
- * or a label.
+ * One map: every shape, then the outline of the selected one, then every
+ * label -- in that order, so no neighbouring shape is painted over the
+ * outline or a label.
  */
 function MapLayer({ label, stretch, shapes, picked, onPick, small, region }) {
-  const byId = new Map(shapes.map((shape) => [shape.id, shape]))
+  const chosen = shapes.find((shape) => shape.id === picked)
   return (
     <svg viewBox={iranMap.viewBox} role="group" aria-label={label}>
       <Hatch />
@@ -257,16 +265,12 @@ function MapLayer({ label, stretch, shapes, picked, onPick, small, region }) {
           key={shape.id}
           shape={shape}
           stretch={stretch}
-          selected={picked.includes(shape.id)}
+          selected={shape.id === picked}
           onPick={() => onPick(shape.id)}
           region={region}
         />
       ))}
-      {picked
-        .filter((id) => byId.has(id))
-        .map((id) => (
-          <path key={id} d={byId.get(id).path} className="cov-outline" />
-        ))}
+      {chosen && <path d={chosen.path} className="cov-outline" data-testid="cov-outline" />}
       {shapes.map((shape) => (
         <Label key={shape.id} shape={shape} small={small} />
       ))}
@@ -279,7 +283,7 @@ function Shape({ shape, stretch, selected, onPick, region }) {
   const band = bandOf(figures)
   // Three states: coloured by band; hatched (in scope, not comparable); grey
   // (outside this account's scope -- no figures were sent for it at all).
-  const fill = band ? band.fill : figures ? 'url(#cov-hatch)' : 'var(--surface-3)'
+  const fill = band ? band.fill : figures ? 'url(#cov-hatch)' : 'var(--track)'
   const text = describe(name, figures, stretch)
   const state = band ? 'coloured' : figures ? 'hatched' : 'outside'
 
@@ -332,162 +336,127 @@ function Label({ shape, small }) {
   )
 }
 
-function ProvinceDetail({ row, threshold, onClose }) {
-  if (!row) {
-    return <p className="cov-hint">Click any province to see its numbers here.</p>
-  }
-  const { ict, cra } = row
+/* ---------------------------------------------------------------------------
+   The detail panel: one province (ICT map) or one CRA region (CRA map).
+   --------------------------------------------------------------------------- */
+
+function Detail({ row, map, threshold, onClose }) {
+  const stretch = map.key
+  const lenses = DETAIL_LENSES[stretch]
+  const [lens, setLens] = useState(lenses[0].key)
+  const figures = row.detail[stretch]
+  const scope = map.shape === 'province' ? `province:${row.key}` : `region:${row.name}`
+  const gapOf = { approved: `${stretch}_approved`, pending: `pending_${stretch}`, remained: `${stretch}_remained` }
+  const exportProps = { scope, scopeLabel: row.name }
+  const rows = detailRows(row.detail, stretch, lens)
+  const where =
+    map.shape === 'province'
+      ? row.region && `${row.region} region`
+      : `${row.provinces.length} ${row.provinces.length === 1 ? 'province' : 'provinces'}`
+  const managers = row.managers?.length ? `RM ${row.managers.join(', ')}` : null
+  const attributionNote = ATTRIBUTION_NOTES[row.attribution]
+
   return (
     <div className="cov-detail" role="region" aria-label={`${row.name} detail`}>
       <header className="cov-detail-head">
-        <div>
-          <strong>{row.name}</strong>
-          {row.region && <span className="kpi-region">{row.region} region</span>}
+        <div className="cov-detail-titles">
+          <h3 className="cov-detail-name">{row.name}</h3>
+          <p className="cov-detail-sub">
+            {[where, managers, attributionNote].filter(Boolean).join(' · ')}
+          </p>
         </div>
-        <button type="button" className="cov-close" onClick={onClose} aria-label="Close detail">
-          <X size={15} aria-hidden="true" />
+        <button type="button" className="btn cov-close" onClick={onClose} aria-label="Clear selection">
+          <X size={16} aria-hidden="true" />
         </button>
       </header>
+
       <dl className="cov-figures">
-        <Figure term="Drive test done" value={fmtCount(ict.reached)} />
-        <Figure
-          term="ICT approved"
-          value={onePct(approvalRate(ict))}
-          note={`${fmtCount(ict.reached - ict.stopped)} of ${fmtCount(ict.reached)}`}
-        />
-        <Figure term="Stopped before ICT" value={fmtCount(ict.stopped)} />
-        <Figure
-          term="CRA approved"
-          value={onePct(approvalRate(cra))}
-          note={`${fmtCount(cra.reached - cra.stopped)} of ${fmtCount(cra.reached)} ICT-approved`}
-        />
-        <Figure term="Stopped before CRA" value={fmtCount(cra.stopped)} />
+        <div className="cov-figure cov-figure-wide">
+          <dt>
+            <AuthorityChip authority={map.authority} /> approved
+          </dt>
+          <dd>
+            <span className="cov-figure-main">{onePct(detailRate(figures))}</span>
+            <BandPill figures={figures} threshold={threshold} band />
+          </dd>
+          <dd className="cov-figure-note">
+            <ExportNumber value={figures.approved} gap={gapOf.approved} {...exportProps} /> of{' '}
+            {fmtCount(figures.base)} drive-tested
+          </dd>
+        </div>
+        <div className="cov-figure">
+          <dt>Pending</dt>
+          <dd className="cov-figure-main">
+            <ExportNumber value={figures.pending} gap={gapOf.pending} {...exportProps} />
+          </dd>
+        </div>
+        <div className="cov-figure">
+          <dt>Remained</dt>
+          <dd className="cov-figure-main">
+            <ExportNumber value={figures.remained} gap={gapOf.remained} {...exportProps} />
+          </dd>
+          <dd className="cov-figure-note">{REMAINED_NOTES[stretch]}</dd>
+        </div>
       </dl>
-      {ict.low_sample && (
-        <p className="kpi-note cov-low">
-          Fewer than {threshold} drive-test-done villages, so this province is hatched
-          rather than coloured and is not compared.
+      {figures.base > 0 && figures.base < threshold && (
+        <p className="cov-low">
+          Fewer than {threshold} drive-tested villages, so this is not compared.
         </p>
       )}
+
+      <SegmentedControl
+        label="List by"
+        options={lenses}
+        value={lens}
+        onChange={setLens}
+        className="cov-detail-lenses"
+      />
+      <ul className="cov-rows" aria-label={`Pending by ${lenses.find((l) => l.key === lens).label}`}>
+        {rows.map((item) => (
+          <li key={`${item.attribution}:${item.name}`} className="cov-row">
+            <span
+              className={`cov-row-name ${item.attribution === 'owned' ? 'text-farsi' : 'is-unowned'}`}
+              dir={item.attribution === 'owned' ? 'auto' : undefined}
+              title={ATTRIBUTION_NOTES[item.attribution]}
+            >
+              {item.name}
+            </span>
+            {stretch === 'cra' && lens === 'province' && (
+              <BandPill figures={item.figures} threshold={threshold} />
+            )}
+            <span className="cov-row-count">
+              <ExportNumber
+                value={item.pending}
+                gap={gapOf.pending}
+                lens={lens}
+                keyValue={item.name}
+                {...exportProps}
+              />
+            </span>
+            <span className="cov-row-of">
+              of {fmtCount(item.base)} · {item.pendingShare == null ? '—' : `${Math.round(item.pendingShare)}%`}
+            </span>
+          </li>
+        ))}
+      </ul>
     </div>
   )
 }
 
-function Figure({ term, value, note }) {
-  return (
-    <div>
-      <dt>{term}</dt>
-      <dd>
-        {value}
-        {note && <em>{note}</em>}
-      </dd>
-    </div>
-  )
-}
-
-/** The CRA % cell: the band colour behind the figure, as in the mockup. */
-function BandPill({ figures }) {
-  const band = bandOf(figures)
-  const rate = approvalRate(figures)
-  if (!band) return <span className="cov-pill plain">{onePct(rate)}</span>
+/**
+ * An approval rate on its band's colour, or plain when not compared. With
+ * `band`, the pill names the band ("85%+") -- for when the rate itself is
+ * already printed beside it.
+ */
+function BandPill({ figures, threshold, band: showBand = false }) {
+  const band = detailBand(figures, threshold)
+  const rate = detailRate(figures)
+  if (!band) {
+    return <span className="cov-pill plain">{showBand ? 'Not compared' : onePct(rate)}</span>
+  }
   return (
     <span className="cov-pill" style={{ background: band.fill, color: band.ink }}>
-      {onePct(rate)}
+      {showBand ? band.label : onePct(rate)}
     </span>
-  )
-}
-
-function RegionReport({ data, byKey, open, onToggle }) {
-  const rows = reportOrder(data.regions)
-  const owned = rows.filter((row) => row.attribution === 'owned')
-  const provinceCount = owned.reduce((sum, row) => sum + row.provinces.length, 0)
-
-  return (
-    <div className="cov-report">
-      <h3 className="cov-map-title">CRA region report — every province in the region, together</h3>
-      <div className="kpi-table-wrap">
-        <table className="cov-table">
-          <thead>
-            <tr>
-              <th scope="col">CRA region</th>
-              <th scope="col">Provinces</th>
-              <th scope="col">DT done</th>
-              <th scope="col">ICT %</th>
-              <th scope="col">CRA %</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row) => {
-              const expandable = row.provinces.length > 0
-              const isOpen = open.has(row.name)
-              return (
-                <Fragment key={row.name}>
-                  <tr
-                    id={`cov-region-${row.name}`}
-                    className={`cov-region-row ${row.attribution === 'owned' ? '' : 'unowned'}`}
-                  >
-                    <th scope="row">
-                      {expandable ? (
-                        <button
-                          type="button"
-                          className="cov-expand"
-                          aria-expanded={isOpen}
-                          onClick={() => onToggle(row.name)}
-                        >
-                          {isOpen ? (
-                            <ChevronDown size={14} aria-hidden="true" />
-                          ) : (
-                            <ChevronRight size={14} aria-hidden="true" />
-                          )}
-                          {row.name}
-                        </button>
-                      ) : (
-                        <span className="cov-expand static">{row.name}</span>
-                      )}
-                      {ATTRIBUTION_NOTES[row.attribution] && (
-                        <span className="kpi-region">{ATTRIBUTION_NOTES[row.attribution]}</span>
-                      )}
-                    </th>
-                    <td>{row.provinces.length || '—'}</td>
-                    <td>{fmtCount(row.ict.reached)}</td>
-                    <td>{onePct(approvalRate(row.ict))}</td>
-                    <td>
-                      <BandPill figures={row.cra} />
-                    </td>
-                  </tr>
-                  {isOpen &&
-                    row.provinces
-                      .map((key) => byKey.get(key))
-                      .filter(Boolean)
-                      .sort((a, b) => a.name.localeCompare(b.name))
-                      .map((member) => (
-                        <tr key={member.key} className="cov-member-row">
-                          <th scope="row">{member.name}</th>
-                          <td />
-                          <td>{fmtCount(member.ict.reached)}</td>
-                          <td>{onePct(approvalRate(member.ict))}</td>
-                          <td>
-                            <BandPill figures={member.cra} />
-                          </td>
-                        </tr>
-                      ))}
-                </Fragment>
-              )
-            })}
-          </tbody>
-          <tfoot>
-            <tr>
-              <th scope="row">
-                {data.scoped ? 'Your total' : `All ${owned.length} regions`}
-              </th>
-              <td>{provinceCount}</td>
-              <td>{fmtCount(data.total.ict.reached)}</td>
-              <td>{onePct(approvalRate(data.total.ict))}</td>
-              <td>{onePct(approvalRate(data.total.cra))}</td>
-            </tr>
-          </tfoot>
-        </table>
-      </div>
-    </div>
   )
 }

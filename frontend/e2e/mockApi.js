@@ -21,6 +21,7 @@ const ROUTES = {
   '/reference/contractors': F.contractors,
   '/kpi/lenses': F.kpiLenses,
   '/gaps/overview': F.gapsOverview,
+  '/gaps/map': F.gapsMap,
 }
 
 // Endpoints answered late, on purpose: the dashboard's side cards arriving

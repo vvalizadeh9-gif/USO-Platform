@@ -159,6 +159,42 @@ def test_a_scope_and_an_owner_narrow_together(client, actors):
     ) == 8
 
 
+_STRETCH_GAPS = {
+    "ict": {"approved": "ict_approved", "pending": "pending_ict", "remained": "ict_remained"},
+    "cra": {"approved": "cra_approved", "pending": "pending_cra", "remained": "cra_remained"},
+}
+
+
+def test_every_map_panel_number_exports_exactly_its_count(client, actors):
+    """The coverage map's panels: each shape's figures and each owner row's
+    pending count, against the file behind them."""
+    payload = client.get("/api/v1/gaps/map", headers=actors["pm"]).json()
+    shapes = [
+        (f"province:{p['key']}", p["detail"]) for p in payload["provinces"]
+        if p["key"] and p["detail"]["ict"]["base"]
+    ] + [
+        (f"region:{r['name']}", r["detail"]) for r in payload["regions"]
+        if r["attribution"] == gaps.OWNED and r["detail"]["ict"]["base"]
+    ]
+    assert shapes, "the seed should put villages on the map"
+    problems = []
+    for scope, detail in shapes:
+        for stretch, figures in _STRETCH_GAPS.items():
+            for counter, gap in figures.items():
+                got = _count(client, actors["pm"], gap=gap, scope=scope)
+                if got != detail[stretch][counter]:
+                    problems.append(f"{scope}/{gap}: file {got}, panel {detail[stretch][counter]}")
+            for lens, rows in detail["owners"].items():
+                for row in rows:
+                    got = _count(
+                        client, actors["pm"], gap=figures["pending"], scope=scope,
+                        lens=lens, key=row["name"],
+                    )
+                    if got != row[stretch]["pending"]:
+                        problems.append(f"{scope}/{lens}/{row['name']}/{stretch}: {got}")
+    assert not problems, "\n".join(problems)
+
+
 # ----- The workbook -------------------------------------------------------
 
 

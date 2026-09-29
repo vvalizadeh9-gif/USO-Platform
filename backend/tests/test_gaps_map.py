@@ -478,3 +478,81 @@ def test_the_map_asset_has_every_province_and_region_and_nothing_else():
     assert len(asset["provinces"]) == 31 and len(asset["regions"]) == 9
     for shape in [*asset["provinces"].values(), *asset["regions"].values()]:
         assert shape["path"].startswith("M") and len(shape["label"]) == 2
+
+
+# ----- The detail panel ---------------------------------------------------
+#
+# Each province and region carries the Gaps tab's figures (approved, pending,
+# remained over the drive-tested base) and, under each lens, the owners
+# behind them. All are folds of the overview's grid, so they must add up.
+
+_COUNTERS = ("approved", "base", "pending", "remained")
+
+
+def _sum_rows(rows, stretch, counter):
+    return sum(row[stretch][counter] for row in rows)
+
+
+def test_every_owner_list_adds_up_to_its_province(client, actors):
+    payload = _map(client, actors["pm"])
+    problems = []
+    for province in payload["provinces"]:
+        detail = province["detail"]
+        assert set(detail["owners"]) == set(gaps.PROVINCE_DETAIL_LENSES)
+        for lens, rows in detail["owners"].items():
+            for stretch in ("ict", "cra"):
+                for counter in _COUNTERS:
+                    if _sum_rows(rows, stretch, counter) != detail[stretch][counter]:
+                        problems.append(f"{province['name']}/{lens}/{stretch}/{counter}")
+    assert not problems, "\n".join(problems)
+
+
+def test_every_owner_list_adds_up_to_its_region(client, actors):
+    payload = _map(client, actors["pm"])
+    problems = []
+    for region in payload["regions"]:
+        detail = region["detail"]
+        assert set(detail["owners"]) == set(gaps.REGION_DETAIL_LENSES)
+        for lens, rows in detail["owners"].items():
+            for stretch in ("ict", "cra"):
+                for counter in _COUNTERS:
+                    if _sum_rows(rows, stretch, counter) != detail[stretch][counter]:
+                        problems.append(f"{region['name']}/{lens}/{stretch}/{counter}")
+    assert not problems, "\n".join(problems)
+
+
+def test_a_region_detail_is_the_sum_of_its_provinces(client, actors):
+    payload = _map(client, actors["pm"])
+    by_key = {p["key"]: p for p in payload["provinces"]}
+    for region in payload["regions"]:
+        if region["attribution"] != gaps.OWNED:
+            continue
+        for stretch in ("ict", "cra"):
+            for counter in _COUNTERS:
+                members = sum(by_key[k]["detail"][stretch][counter] for k in region["provinces"])
+                assert members == region["detail"][stretch][counter], (region["name"], stretch, counter)
+
+
+def test_the_details_add_up_to_the_overview(client, actors):
+    """The map's panels and the Gaps tab count the same villages."""
+    payload = _map(client, actors["pm"])
+    overview = client.get("/api/v1/gaps/overview", headers=actors["pm"]).json()
+    pending_ict = sum(r["detail"]["ict"]["pending"] for r in payload["regions"])
+    assert pending_ict == overview["gaps"]["pending_ict"]["count"]
+    cra_remained = sum(r["detail"]["cra"]["remained"] for r in payload["regions"])
+    assert cra_remained == overview["gaps"]["cra_remained"]["count"]
+
+
+def test_a_shape_names_its_regional_managers(client, actors):
+    payload = _map(client, actors["pm"])
+    tehran = next(p for p in payload["provinces"] if p["key"] == TEHRAN)
+    assert tehran["managers"] == ["Allahyar"]
+    north = next(r for r in payload["regions"] if r["name"] == "North")
+    assert "Allahyar" in north["managers"] and "Nobakht" in north["managers"]
+
+
+def test_a_region_lists_its_provinces_by_their_persian_key(client, actors):
+    payload = _map(client, actors["pm"])
+    north = next(r for r in payload["regions"] if r["name"] == "North")
+    keys = {row["key"] for row in north["detail"]["owners"]["province"]}
+    assert TEHRAN in keys and MAZANDARAN in keys
