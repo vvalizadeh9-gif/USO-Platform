@@ -110,7 +110,7 @@ export function DrawPath({ d, stroke, strokeWidth = 2, delay = 0, dashed, ...res
  * A flat series is drawn flat, down the middle, rather than divided by a
  * zero span.
  */
-export function Sparkline({ points, color, width = 78, height = 26, label }) {
+export function Sparkline({ points, color, width = 78, height = 26, label, fluid = false }) {
   const reduced = useReducedMotion()
   if (!points || points.length < 2) return null
 
@@ -132,17 +132,29 @@ export function Sparkline({ points, color, width = 78, height = 26, label }) {
   return (
     <svg
       className="dt-spark"
-      width={width}
+      // Fluid: as wide as its box, stretched along x only. The stroke keeps
+      // its width (non-scaling-stroke) and the head dot is left out, since a
+      // stretched circle would be an ellipse.
+      width={fluid ? '100%' : width}
       height={height}
       viewBox={`0 0 ${width} ${height}`}
+      preserveAspectRatio={fluid ? 'none' : undefined}
       role="img"
       aria-label={label}
       data-testid="dt-spark"
     >
-      <DrawPath d={d} stroke={color} strokeWidth={1.75} />
+      <DrawPath
+        d={d}
+        stroke={color}
+        strokeWidth={1.75}
+        vectorEffect={fluid ? 'non-scaling-stroke' : undefined}
+        // A drawn-in stroke measures its length in user units, which a
+        // stretched, non-scaling stroke does not have: shown at once instead.
+        {...(fluid ? { initial: false, animate: { opacity: 1 } } : {})}
+      />
       {/* The head of the line, so the eye lands on "now" rather than on the
           middle of the stroke. */}
-      <motion.circle
+      {!fluid && <motion.circle
         cx={lastX}
         cy={lastY}
         r={2.4}
@@ -150,7 +162,7 @@ export function Sparkline({ points, color, width = 78, height = 26, label }) {
         initial={reduced ? false : { opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ duration: 0.3, delay: 0.8 }}
-      />
+      />}
     </svg>
   )
 }

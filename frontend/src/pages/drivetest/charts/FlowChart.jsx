@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { shamsiMonthName } from '../../../lib/shamsi'
 import { count } from '../format'
-import { CUMULATIVE, flowView, netChanges } from './flowView'
+import { LAST_12, flowView, flowViewName, netChanges } from './flowView'
 import { FadeArea } from './primitives'
 
 /**
@@ -99,9 +99,10 @@ export function FlowLegend() {
   )
 }
 
-export default function FlowChart({ data, scope = CUMULATIVE }) {
-  const { selected, cumulative, points, months, floor, ceiling, ticks } = flowView(data, scope)
-  const shown = cumulative ? 'every month since Farvardin 1404' : String(selected)
+export default function FlowChart({ data, scope = LAST_12 }) {
+  const view = flowView(data, scope)
+  const { yearMarks, points, months, floor, ceiling, ticks } = view
+  const shown = flowViewName(view)
   const n = months.length
   // points[0] is the balance the year opened on; points[j + 1] is month j.
   const drawn = points.slice(1)
@@ -180,9 +181,10 @@ export default function FlowChart({ data, scope = CUMULATIVE }) {
                   style={{ left: `${((n - 1) / n) * 100}%`, width: `${100 / n}%` }}
                 />
               )}
-              {/* The cumulative view spans years: a dashed line where each new
-                  year starts, and its label at the top of the plot beside it. */}
-              {cumulative &&
+              {/* A window that spans years (cumulative, last 12 months): a
+                  dashed line where each new year starts, and its label at
+                  the top of the plot beside it. */}
+              {yearMarks &&
                 months.map(
                   (m, j) =>
                     (j === 0 || m.month === 1) && (
@@ -349,16 +351,27 @@ function useWidth(ref) {
 
 /** The plot's height on a wide page: whatever keeps the whole Overview on
  * one screen, between these two. */
-const FIT_MIN = 240
+const FIT_MIN = 180
 const FIT_MAX = 440
 /** Page width (the bench's, like the layout's container queries) from which
  * the plot fits the screen; below it the CSS's fixed 260px applies. */
 const FIT_FROM = 980
 
+/** How far the page's content overruns the space it has. On a fill page
+ * (PageFrame) that is the body's content against the body's own height --
+ * the document itself never scrolls; anywhere else, the document against
+ * the window. */
+function overrun(plot) {
+  const body = plot.closest('.page-body')
+  if (body) return body.scrollHeight - body.clientHeight
+  return document.documentElement.scrollHeight - window.innerHeight
+}
+
 /** Size the plot so the page does not scroll: draw it at the tallest, see
- * how far the document overruns the window, and take that off, within
- * FIT_MIN..FIT_MAX. Measured once after the first render, again when the web
- * fonts arrive (they change line heights) and on every resize. Written to the
+ * how far the page overruns its space, and take that off, within
+ * FIT_MIN..FIT_MAX. Measured after the first render, again when the web
+ * fonts arrive (they change line heights), on every window resize, and
+ * whenever the rest of the view changes size as its data arrives. Written to the
  * element's style, not to React state, so nothing re-renders and a fit can
  * never trigger another one. */
 function useFitHeight(ref) {
@@ -374,15 +387,32 @@ function useFitHeight(ref) {
         return
       }
       plot.style.height = `${FIT_MAX}px`
-      const over = document.documentElement.scrollHeight - window.innerHeight
+      const over = overrun(plot)
       plot.style.height = `${Math.max(FIT_MIN, Math.min(FIT_MAX, FIT_MAX - over))}px`
     }
     fit()
     document.fonts?.ready?.then(fit)
     window.addEventListener('resize', fit)
+    // The rest of the view loads on its own requests: the KPI band replacing
+    // its skeleton, or the side cards arriving, changes how much room there is
+    // after the first fit. Re-fit whenever the view's size changes, on the
+    // next frame. A fit is idempotent -- the same layout gives the same
+    // height -- so the view settles instead of oscillating.
+    let frame = 0
+    const view = plot.closest('.dt-view')
+    const observer =
+      view && typeof ResizeObserver !== 'undefined'
+        ? new ResizeObserver(() => {
+            cancelAnimationFrame(frame)
+            frame = requestAnimationFrame(fit)
+          })
+        : null
+    observer?.observe(view)
     return () => {
       live = false
       window.removeEventListener('resize', fit)
+      cancelAnimationFrame(frame)
+      observer?.disconnect()
     }
   }, [ref])
 }

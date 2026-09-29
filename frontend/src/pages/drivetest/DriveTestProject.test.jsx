@@ -1071,13 +1071,13 @@ describe('the KPI band', () => {
     // "Total" said three times across one row is three words a reader skips
     // on every visit. The figures are totals by position; the names say what
     // each one counts. Checked as whole labels, so "Pending" cannot be
-    // satisfied by "Pending status".
+    // satisfied by "Pending by status".
     serve()
     draw()
 
     const band = await screen.findByLabelText('Programme totals')
     const titles = [...band.querySelectorAll('.dt-kpi-title')].map((t) => t.textContent)
-    expect(titles).toEqual(['On air', 'DT done', 'Pending', 'Pending status'])
+    expect(titles).toEqual(['On air', 'DT done', 'Pending', 'Pending by status'])
   })
 
   it('no longer leads with the overall progress rate or the four-state on-air bar', async () => {
@@ -1185,10 +1185,10 @@ describe('the KPI band', () => {
     draw()
 
     const band = await screen.findByLabelText('Programme totals')
-    const stack = within(band).getByRole('img', { name: /Pending status/ })
+    const stack = within(band).getByRole('img', { name: /Pending by status/ })
     expect(stack).toHaveAttribute(
       'aria-label',
-      'Pending status: Ongoing 50, Problematic 10',
+      'Pending by status: Ongoing 50, Problematic 10',
     )
     // Two segments. Not started is 0 in the fixture, so it is named in the
     // rows beneath but draws nothing — a zero-width segment is not drawn
@@ -1208,7 +1208,7 @@ describe('the KPI band', () => {
     draw()
 
     const band = await screen.findByLabelText('Programme totals')
-    const stack = within(band).getByRole('img', { name: /Pending status/ })
+    const stack = within(band).getByRole('img', { name: /Pending by status/ })
     expect(stack.querySelectorAll('[data-seg]')).toHaveLength(3)
     expect(within(part(band, 'Not started')).getByText('12')).toBeInTheDocument()
   })
@@ -1262,26 +1262,19 @@ describe('the KPI band', () => {
     expect(within(band).queryAllByTestId('dt-spark')).toHaveLength(0)
   })
 
-  it('draws no sparklines even when the series is long enough, since the donut replaced them', async () => {
-    // Sparklines were removed from the KPI band in the redesign: the flow
-    // chart directly below draws the same series, larger, and the donut now
-    // occupies the space the sparklines used.
+  it('draws one sparkline, On air in the reference neutral, once the series is long enough', async () => {
+    // The last twelve months of the running on-air total -- the same series
+    // the trend chart draws -- on the On air card's floor, where the other
+    // cards carry their bar.
     serve(planDelivery(), overview, trend(), flow({ months: longMonths() }))
     draw()
 
     const band = await screen.findByLabelText('Programme totals')
-    expect(within(band).queryAllByTestId('dt-spark')).toHaveLength(0)
-  })
-
-  it('has no sparklines in the band — the donut and flow chart replaced them', async () => {
-    // The pending sparkline was removed with the rest of them. The flow
-    // chart below draws the cumulative series and the donut shows the
-    // pending split, so the band no longer needs its own trend line.
-    serve(planDelivery(), overview, trend(), flow({ months: longMonths() }))
-    draw()
-
-    const band = await screen.findByLabelText('Programme totals')
-    expect(within(band).queryAllByTestId('dt-spark')).toHaveLength(0)
+    const sparks = within(band).getAllByTestId('dt-spark')
+    expect(sparks).toHaveLength(1)
+    expect(card(band, 'On air')).toContainElement(sparks[0])
+    expect(sparks[0]).toHaveAttribute('aria-label', 'On air over the last 8 months')
+    expect(sparks[0].querySelector('path')).toHaveAttribute('stroke', 'var(--dt-muted)')
   })
 
   it('no longer repeats the monthly figure the plan section already carries', async () => {
@@ -1774,11 +1767,10 @@ describe('the province filter', () => {
     serve()
     draw('/reports/drive-test?province=7')
 
-    // By the scope chip on the title row: the page has no subtitle.
-    const chip = (await screen.findByRole('button', { name: /not just Kerman/ })).closest(
-      '.dt-scope-chip',
-    )
-    expect(chip).toHaveTextContent('Kerman')
+    // By the scope button in the header's context slot, with a clear
+    // button beside it: the page has no subtitle.
+    await screen.findByRole('button', { name: /not just Kerman/ })
+    expect(screen.getByRole('button', { name: 'Province scope: Kerman' })).toHaveTextContent('Kerman')
   })
 
   it('narrows from a province row, which is where a reader knows which one', async () => {
@@ -1858,17 +1850,47 @@ describe('the province filter', () => {
     ).toBeInTheDocument()
   })
 
-  it('shows no scope chip when nothing is narrowed', async () => {
+  it('says "All provinces" when nothing is narrowed, with nothing to clear', async () => {
     serve()
     draw()
 
     await screen.findByLabelText('Programme totals')
-    // Un-narrowed, the header says nothing about scope: the old "All
-    // provinces" label did nothing and is gone.
-    expect(screen.queryByText('All provinces')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Province scope: All provinces' })).toBeInTheDocument()
     expect(
       screen.queryByRole('button', { name: /Show every province again/ }),
     ).not.toBeInTheDocument()
+  })
+
+  it('narrows the page from the scope button', async () => {
+    serve()
+    draw()
+
+    const scope = await screen.findByRole('button', { name: 'Province scope: All provinces' })
+    await userEvent.click(scope)
+    const menu = screen.getByRole('menu', { name: 'Province' })
+    const items = within(menu).getAllByRole('menuitemradio')
+    expect(items.map((i) => i.textContent)).toEqual(['All provinces', 'Kerman', 'Yazd'])
+    expect(items[0]).toHaveAttribute('aria-checked', 'true')
+
+    await userEvent.click(within(menu).getByRole('menuitemradio', { name: 'Yazd' }))
+    await waitFor(() =>
+      expect(api.get).toHaveBeenCalledWith('/drive-test/overview', { params: { province_id: 9 } }),
+    )
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument()
+  })
+
+  it('closes the province menu on Escape and returns focus to the button', async () => {
+    serve()
+    draw()
+
+    const scope = await screen.findByRole('button', { name: 'Province scope: All provinces' })
+    await userEvent.click(scope)
+    expect(screen.getByRole('menuitemradio', { name: 'All provinces' })).toHaveFocus()
+    await userEvent.keyboard('{ArrowDown}')
+    expect(screen.getByRole('menuitemradio', { name: 'Kerman' })).toHaveFocus()
+    await userEvent.keyboard('{Escape}')
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument()
+    expect(scope).toHaveFocus()
   })
 
   it('says the PIP card is not narrowed, because it cannot be', async () => {
@@ -1990,7 +2012,7 @@ describe('the flow chart', () => {
     expect(gapChanges(card)).toEqual(['+6', '+2'])
   })
 
-  it('puts one period switch in the card header: Cumulative, then each year', async () => {
+  it('puts one period switch in the card header: Last 12 months, Cumulative, then each year', async () => {
     serve()
     draw()
 
@@ -1998,14 +2020,15 @@ describe('the flow chart', () => {
     const header = card.querySelector('.dt-section-head')
     const period = within(header).getByRole('group', { name: 'Chart period' })
     const options = within(period).getAllByRole('button')
-    // The years come from the payload, oldest first, after Cumulative.
-    expect(options.map((b) => b.textContent)).toEqual(['Cumulative', '1404', '1405'])
+    // The years come from the payload, oldest first, after the two fixed
+    // views. The last twelve months is the default.
+    expect(options.map((b) => b.textContent)).toEqual(['Last 12 months', 'Cumulative', '1404', '1405'])
     const pressed = () => options.filter((b) => b.getAttribute('aria-pressed') === 'true')
-    expect(pressed().map((b) => b.textContent)).toEqual(['Cumulative'])
+    expect(pressed().map((b) => b.textContent)).toEqual(['Last 12 months'])
 
     // One click per view, one option pressed at a time, and each year
     // redraws on that year's months only.
-    await userEvent.click(options[1])
+    await userEvent.click(options[2])
     expect(pressed().map((b) => b.textContent)).toEqual(['1404'])
     expect(gapChanges(card)).toHaveLength(2)
     await userEvent.click(within(card).getByRole('button', { name: '1405' }))
@@ -2029,6 +2052,7 @@ describe('the flow chart', () => {
     const card = await section('Where this is going')
     const period = within(card).getByRole('group', { name: 'Chart period' })
     expect(within(period).getAllByRole('button').map((b) => b.textContent)).toEqual([
+      'Last 12 months',
       'Cumulative',
       '1404',
       '1405',
@@ -2321,7 +2345,7 @@ describe('the flow chart', () => {
 
     const card = await section('Where this is going')
     expect(card.querySelector('.dt-flowcard .dt-note')).toBeNull()
-    expect(within(card).getByText(/^Showing every month since Farvardin 1404\./)).not.toBeVisible()
+    expect(within(card).getByText(/^Showing the last 12 months, month by month\./)).not.toBeVisible()
     await userEvent.click(within(card).getByRole('button', { name: '1405' }))
     const note = within(card).getByText(
       /Showing 1405, month by month/,
@@ -3234,7 +3258,7 @@ describe('Cobalt chrome', () => {
     expect(within(failed).getByRole('button', { name: /Retry/ })).toBeInTheDocument()
   })
 
-  it('raises a growing gap as a warning banner, still announced on arrival', async () => {
+  it('has no gap alert strip: the Pending card and the trend carry the gap', async () => {
     const grew = {
       ...overview,
       kpis: { ...overview.kpis, total_remaining: kpi(60, 7) },
@@ -3242,22 +3266,10 @@ describe('Cobalt chrome', () => {
     serve(planDelivery(), grew)
     draw()
 
-    const text = await screen.findByText('Gap increased by 7 sites this month')
-    const banner = text.closest('.banner')
-    expect(banner).toHaveClass('banner-warning')
-    expect(banner).toHaveAttribute('role', 'alert')
-    expect(within(banner).getByRole('button', { name: /View province details/ })).toBeInTheDocument()
-  })
-
-  it('shows no gap banner when the gap shrank', async () => {
-    serve(planDelivery(), {
-      ...overview,
-      kpis: { ...overview.kpis, total_remaining: kpi(60, -3) },
-    })
-    draw()
-
     await screen.findByLabelText('Programme totals')
     expect(screen.queryByText(/Gap increased/)).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /View province details/ })).not.toBeInTheDocument()
+    expect(document.querySelector('.banner-warning')).toBeNull()
   })
 
   it('gives every card an icon chip that is hidden from assistive technology', async () => {
@@ -3314,9 +3326,9 @@ describe('the three views', () => {
 
     await screen.findByRole('tab', { name: 'Overview' })
     expect(viewTabs().map((t) => t.textContent)).toEqual(['Overview', 'Breakdowns', TAB])
-    // The tabs share the header row with the title, so switching views never moves them.
+    // The tabs are in the page header with the title, so switching views never moves them.
     const tablist = screen.getByRole('tablist', { name: 'Dashboard view' })
-    const head = screen.getByRole('heading', { level: 1, name: 'Dashboard' }).closest('.dt-head')
+    const head = screen.getByRole('heading', { level: 1, name: 'Dashboard' }).closest('.page-bar')
     expect(head).toContainElement(tablist)
     const band = await screen.findByLabelText('Programme totals')
     expect(tablist.compareDocumentPosition(band) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
@@ -3440,28 +3452,4 @@ describe('the three views', () => {
     expect(screen.getByRole('tab', { name: 'Breakdowns' })).toHaveAttribute('aria-selected', 'true')
   })
 
-  it('shows the gap alert on every tab', async () => {
-    serve(planDelivery(), {
-      ...overview,
-      kpis: { ...overview.kpis, total_remaining: kpi(60, 7) },
-    })
-    draw(BREAKDOWNS)
-
-    expect(await screen.findByText('Gap increased by 7 sites this month')).toBeInTheDocument()
-    await userEvent.click(screen.getByRole('tab', { name: TAB }))
-    expect(screen.getByText('Gap increased by 7 sites this month')).toBeInTheDocument()
-  })
-
-  it('opens the tables from the gap alert\'s "View province details"', async () => {
-    serve(planDelivery(), {
-      ...overview,
-      kpis: { ...overview.kpis, total_remaining: kpi(60, 7) },
-    })
-    draw()
-
-    await userEvent.click(await screen.findByRole('button', { name: /View province details/ }))
-
-    expect(screen.getByRole('tab', { name: TAB })).toHaveAttribute('aria-selected', 'true')
-    await section('Drive Test progress by province')
-  })
 })

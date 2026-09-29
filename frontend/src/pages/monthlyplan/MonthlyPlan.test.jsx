@@ -1002,8 +1002,11 @@ describe('the PM page: two tabs', () => {
     await pipLoaded()
     expect(tabNames()).toEqual(['Plans', 'PIP vs Achieved'])
     expect(selectedTab()).toHaveTextContent('PIP vs Achieved')
-    expect(screen.getByText('Month-end')).toBeInTheDocument()
+    // The page header: "Drive Test" over the title, as in the sidebar, and
+    // the process stepper on step 1.
+    expect(document.querySelector('.page-bar-eyebrow')).toHaveTextContent('Drive Test')
     expect(screen.getByRole('heading', { name: 'Monthly Plan' })).toBeInTheDocument()
+    expect(screen.getByText('Monthly Plan', { selector: '.stepper-label' }).closest('[aria-current="step"]')).not.toBeNull()
   })
 
   it('opens the Plans tab from the address, on the month being planned', async () => {
@@ -1093,7 +1096,7 @@ const DRAWER_LINK = '/monthly-plan?year=1405&month=8&stream=ACCEPTANCE&contracto
 
 describe('PIP vs Achieved', () => {
   const row = (name) => screen.getByText(name, { selector: 'button' }).closest('tr')
-  const kpi = (label) => screen.getByText(label, { selector: '.pv-kpi-label' }).closest('.pv-kpi')
+  const kpi = (label) => screen.getByRole('region', { name: label })
 
   it('shows one stream from one read: KPIs, contractors and the total', async () => {
     signedInAs('PM')
@@ -1102,15 +1105,24 @@ describe('PIP vs Achieved', () => {
 
     const table = await pipLoaded()
     expect(within(kpi('Assignment')).getByText('143')).toBeInTheDocument()
-    expect(within(kpi('MTN internal PIP')).getByText('150')).toBeInTheDocument()
-    expect(within(kpi('Contractor PIP')).getByText('7 below internal')).toBeInTheDocument()
-    expect(within(kpi('Delivered')).getByText('2 ahead of today’s target of 19')).toBeInTheDocument()
-    expect(within(table).getByRole('columnheader', { name: 'Assignment' })).toBeInTheDocument()
-    const total = within(table).getByText('All contractors').closest('tr')
-    expect(within(total).getByText('21 of 143')).toBeInTheDocument()
+    expect(within(kpi('Assignment')).getByText('3 contractors')).toBeInTheDocument()
+    expect(within(kpi('MTN target')).getByText('150')).toBeInTheDocument()
+    expect(within(kpi('MTN target')).getByText('Internal')).toHaveClass('pill')
+    // 143 of an internal 150.
+    expect(within(kpi('Contractor PIP')).getByText('95% of target')).toBeInTheDocument()
+    // Neutral words, the number in ink: +2 against 19 expected by today.
+    expect(within(kpi('Delivered')).getByText('+2').closest('.kpi-card-aside')).toHaveTextContent('+2 ahead of pace')
+    expect(within(kpi('Delivered')).getByText('14.7%')).toBeInTheDocument()   // 21 ÷ 143
+    expect(within(kpi('Delivered')).getByTestId('meter-tick')).toHaveStyle({ left: '13.286713286713287%' })
+    // Assigned sites ride under each name rather than in a column.
+    expect(within(table).queryByRole('columnheader', { name: 'Assignment' })).toBeNull()
+    expect(within(row('Alpha Telecom')).getByText('40 assigned')).toBeInTheDocument()
+    const total = within(table).getByText(/All contractors/).closest('tr')
+    expect(within(total).getByText('143 assigned')).toBeInTheDocument()
+    expect(within(total).getByRole('img', { name: '21 of 143' })).toBeInTheDocument()
     expect(within(total).getByText('15%')).toBeInTheDocument()   // 21 ÷ 143
-    expect(within(total).getByText('3 of 6')).toBeInTheDocument()
-    expect(screen.getByText('Day 4 of 30 · revisions until day 15')).toBeInTheDocument()
+    expect(within(total).getByText('+2 ahead')).toHaveClass('pill-green')
+    expect(screen.getByTestId('mp-clock')).toHaveTextContent('Day 4 of 30Revisions open until day 15')
     const reads = api.get.mock.calls.filter(([url]) => url === '/pip/overview')
     expect(reads).toHaveLength(1)
     expect(reads[0][1].params).toMatchObject({ period: 'month' })
@@ -1126,11 +1138,11 @@ describe('PIP vs Achieved', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Acceptance' }))
     const table = await screen.findByRole('table', { name: 'Acceptance by contractor' })
     expect(screen.getByTestId('location')).toHaveTextContent('REPLACE ?stream=acceptance')
-    expect(screen.queryByText('Assignment', { selector: '.pv-kpi-label' })).toBeNull()
-    expect(within(table).queryByRole('columnheader', { name: 'Assignment' })).toBeNull()
+    expect(screen.queryByRole('region', { name: 'Assignment' })).toBeNull()
+    expect(within(table).queryByText(/assigned/)).toBeNull()
     expect(within(kpi('Contractor PIP')).getByText('30')).toBeInTheDocument()
-    expect(within(kpi('Delivered')).getByText('1 behind today’s target of 10')).toBeInTheDocument()
-    expect(within(row('Alpha Telecom')).getByText('9 of 30')).toBeInTheDocument()
+    expect(within(kpi('Delivered')).getByText('−1').closest('.kpi-card-aside')).toHaveTextContent('−1 behind pace')
+    expect(within(row('Alpha Telecom')).getByRole('img', { name: '9 of 30' })).toBeInTheDocument()
     // Still one read: both streams came in it.
     expect(api.get.mock.calls.filter(([url]) => url === '/pip/overview')).toHaveLength(1)
   })
@@ -1154,7 +1166,7 @@ describe('PIP vs Achieved', () => {
     // Beta 12 of 50 (24%), Alpha 21 of 38 (55%), Gamma no plan.
     expect(names).toEqual(['Beta Networks', 'Alpha Telecom', 'Gamma Survey'])
     const gamma = row('Gamma Survey')
-    expect(within(gamma).getByText('no plan this month')).toBeInTheDocument()
+    expect(within(gamma).getByText('Plan not filed')).toHaveClass('pill', 'pill-amber')
     expect(within(gamma).queryByText(/0%/)).toBeNull()
   })
 
@@ -1164,17 +1176,17 @@ describe('PIP vs Achieved', () => {
     show()
 
     const table = await pipLoaded()
-    expect(within(table).getByRole('columnheader', { name: 'Pace' })).toBeInTheDocument()
-    expect(within(row('Beta Networks')).getByText('5 behind')).toBeInTheDocument()
-    expect(within(row('Alpha Telecom')).getByText('8 ahead')).toBeInTheDocument()
-    expect(within(row('Beta Networks')).getByTestId('pv-tick')).toHaveStyle({ left: '34%' })  // 17 of 50
+    expect(within(table).getByRole('columnheader', { name: 'Pace today' })).toBeInTheDocument()
+    expect(within(row('Beta Networks')).getByText('−5 behind')).toHaveClass('pill-red')
+    expect(within(row('Alpha Telecom')).getByText('+8 ahead')).toHaveClass('pill-green')
+    expect(within(row('Beta Networks')).getByTestId('meter-tick')).toHaveStyle({ left: '34%' })  // 17 of 50
 
     // A closed month: the same figures, no "by today".
     serveOverview(overview({ shamsi_month: 6, shamsi_month_name: 'شهریور', day_of_month: null }))
     await userEvent.click(screen.getByRole('button', { name: 'Previous' }))
-    await waitFor(() => expect(within(table).queryByRole('columnheader', { name: 'Pace' })).toBeNull())
-    expect(screen.queryByTestId('pv-tick')).toBeNull()
-    expect(screen.getByText('15% of PIP')).toBeInTheDocument()
+    await waitFor(() => expect(within(table).queryByRole('columnheader', { name: 'Pace today' })).toBeNull())
+    expect(screen.queryByTestId('meter-tick')).toBeNull()
+    expect(screen.getByText('14.7% of PIP')).toBeInTheDocument()
   })
 
   it('takes a year’s share from the totals, never an average of the rows', async () => {
@@ -1195,10 +1207,10 @@ describe('PIP vs Achieved', () => {
     await waitFor(() =>
       expect(api.get.mock.calls.filter(([url]) => url === '/pip/overview').at(-1)[1].params).toMatchObject({ period: 'year' }),
     )
-    const total = (await screen.findByText('100 of 120')).closest('tr')
+    const total = (await screen.findByRole('img', { name: '100 of 120' })).closest('tr')
     expect(within(total).getByText('83%')).toBeInTheDocument()   // not (50 + 90) / 2 = 70
-    expect(screen.queryByRole('columnheader', { name: 'Pace' })).toBeNull()
-    expect(screen.queryByTestId('pv-tick')).toBeNull()
+    expect(screen.queryByRole('columnheader', { name: 'Pace today' })).toBeNull()
+    expect(screen.queryByTestId('meter-tick')).toBeNull()
   })
 
   it('does not draw the internal PIP for a role that does not see it', async () => {
@@ -1207,7 +1219,7 @@ describe('PIP vs Achieved', () => {
     show()
 
     await pipLoaded()
-    expect(screen.queryByText('MTN internal PIP')).toBeNull()
+    expect(screen.queryByText('MTN target')).toBeNull()
   })
 
   it('colours the last seven months met or below, with a legend', async () => {
@@ -1217,16 +1229,19 @@ describe('PIP vs Achieved', () => {
 
     await pipLoaded()
     const trend = screen.getByRole('img', { name: /delivered against PIP by month/ })
-    const cols = trend.querySelectorAll('.pv-col')
-    expect(cols).toHaveLength(7)
+    const rows = trend.querySelectorAll('.pv-trend-row')
+    expect(rows).toHaveLength(7)
     // The last seven of trendPoints: 110 (met) and 80 (below) in turn against
     // a PIP of 100, ending on the running month.
-    expect([...cols].map((c) => c.dataset.kind)).toEqual(['met', 'below', 'met', 'below', 'met', 'below', 'running'])
-    expect(cols[0].querySelector('.pv-col-bar')).toHaveClass('pv-col-met')
-    expect(cols[1].querySelector('.pv-col-bar')).toHaveClass('pv-col-below')
-    expect(within(cols[0]).getByText('110 / 100')).toBeInTheDocument()
-    expect(screen.getByText('All contractors · last 7 months')).toBeInTheDocument()
-    for (const word of ['met', 'below', 'PIP']) expect(screen.getByText(word, { selector: '.pv-legend span' })).toBeInTheDocument()
+    expect([...rows].map((c) => c.dataset.kind)).toEqual(['met', 'below', 'met', 'below', 'met', 'below', 'running'])
+    expect(rows[0].querySelector('.pv-trend-bar')).toHaveClass('pv-trend-met')
+    expect(rows[1].querySelector('.pv-trend-bar')).toHaveClass('pv-trend-below')
+    expect(rows[6].querySelector('.pv-trend-bar')).toHaveClass('pv-trend-running')
+    // A 2px ink PIP tick on every row, on the same scale as the bars.
+    expect(rows[0].querySelector('.pv-trend-pip')).toHaveStyle({ left: `${(100 * 100) / 110}%` })
+    expect(within(rows[0]).getByText('110 / 100')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Last 7 months' })).toBeInTheDocument()
+    for (const word of ['Met', 'Below', 'Running', 'PIP']) expect(screen.getByText(word, { selector: '.pv-legend span' })).toBeInTheDocument()
   })
 
   it('says "no plan" for a month with none', async () => {
@@ -1304,7 +1319,7 @@ describe('PIP vs Achieved', () => {
     )
 
     await userEvent.click(screen.getByRole('button', { name: 'Acceptance' }))
-    expect(within(kpi('MTN internal PIP')).getByText('Not set')).toBeInTheDocument()
+    expect(within(kpi('MTN target')).getByText('Not set')).toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: 'Set the Acceptance internal target' }))
     expect(screen.getByRole('dialog', { name: 'Set the acceptance target' })).toBeInTheDocument()
   })

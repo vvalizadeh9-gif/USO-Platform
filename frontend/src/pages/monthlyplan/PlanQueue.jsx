@@ -12,7 +12,7 @@ import { FigureCards, Standing } from './Standing'
 // and nothing else -- see ALLOWED_TRANSITIONS in services/monthly_plan.py.
 const DECIDABLE = 'Submitted'
 
-const TOTAL_CELL = { padding: '13px 16px', fontSize: 13.5 }
+const TOTAL_CELL = { padding: '13px 16px', fontSize: 'var(--fs-control)' }
 
 const sum = (rows, field) =>
   rows.reduce((total, row) => total + (row[field] ?? 0), 0)
@@ -213,7 +213,7 @@ export default function PlanQueue({ period, canDecide, onDecided }) {
                       key={row.contractor_id}
                       style={
                         row.contractor_id === selectedId
-                          ? { background: 'var(--signal-glow)' }
+                          ? { background: 'var(--accent-soft)' }
                           : undefined
                       }
                     >
@@ -225,7 +225,7 @@ export default function PlanQueue({ period, canDecide, onDecided }) {
                           <button
                             type="button"
                             className="btn btn-ghost btn-sm"
-                            style={{ padding: 0, fontFamily: 'var(--font-farsi)', fontSize: 14.5, color: 'var(--signal-strong)', fontWeight: 500 }}
+                            style={{ padding: 0, fontFamily: 'var(--font-farsi)', fontSize: 'var(--fs-body)', color: 'var(--accent-ink)', fontWeight: 500 }}
                             onClick={() => select(row)}
                           >
                             {row.contractor_name}
@@ -272,7 +272,7 @@ export default function PlanQueue({ period, canDecide, onDecided }) {
                       site open across two months is in both of them. The
                       programme's own figure is in the card above, computed
                       once rather than added up from rows. */}
-                  <tr style={{ background: 'var(--surface-2)', borderTop: '1px solid var(--border)' }}>
+                  <tr style={{ background: 'var(--surface-subtle)', borderTop: '1px solid var(--border)' }}>
                     <td style={{ ...TOTAL_CELL, fontWeight: 600 }}>
                       Total — {rows.length} contractor{rows.length === 1 ? '' : 's'}
                     </td>
@@ -316,7 +316,7 @@ export default function PlanQueue({ period, canDecide, onDecided }) {
             </div>
 
             {selected.return_comment && (
-              <div className="dim mt-8" style={{ fontSize: 12.5 }}>
+              <div className="dim mt-8" style={{ fontSize: 'var(--fs-meta)' }}>
                 You sent this back earlier: “{selected.return_comment}”
               </div>
             )}
@@ -324,7 +324,7 @@ export default function PlanQueue({ period, canDecide, onDecided }) {
             {selected.status === DECIDABLE ? (
               <div className="mt-16">
                 <label className="field" htmlFor="pip-comment">
-                  <span style={{ fontSize: 12.5, color: 'var(--text-muted)', fontWeight: 500 }}>
+                  <span style={{ fontSize: 'var(--fs-meta)', color: 'var(--text-secondary)', fontWeight: 500 }}>
                     Comment — required to return, and the contractor reads it
                   </span>
                   <textarea

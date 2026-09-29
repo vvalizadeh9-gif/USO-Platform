@@ -128,16 +128,16 @@ export default function HcHistoryTab() {
                     onClick={() => toggle(a.id)}
                     style={{ cursor: 'pointer' }}
                   >
-                    <td style={{ color: 'var(--text-dim)' }}>
+                    <td style={{ color: 'var(--text-tertiary)' }}>
                       {isOpen ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
                     </td>
                     <td style={{ fontWeight: 500 }}>{a.code}</td>
                     <td className="text-data">{contractors[a.contractor_id] || '—'}</td>
-                    <td className="dim" style={{ fontSize: 12.5 }}>{formatDate(a.created_at)}</td>
+                    <td className="dim" style={{ fontSize: 'var(--fs-meta)' }}>{formatDate(a.created_at)}</td>
                     <td className="tnum">{a.task_count ?? a.tasks?.length ?? '—'}</td>
                     <td className="tnum" style={{ color: 'var(--green)', fontWeight: 500 }}>{a.sites_ready ?? '—'}</td>
                     <td className="tnum" style={{ color: 'var(--red)', fontWeight: 500 }}>{a.sites_not_ready ?? '—'}</td>
-                    <td className="dim" style={{ fontSize: 12.5 }}>{formatAging(a)}</td>
+                    <td className="dim" style={{ fontSize: 'var(--fs-meta)' }}>{formatAging(a)}</td>
                     <td>
                       <span className={`pill ${a.status === 'Completed' ? 'pill-green' : 'pill-amber'}`}>{a.status}</span>
                     </td>
@@ -145,15 +145,15 @@ export default function HcHistoryTab() {
                   {isOpen && (
                     <tr>
                       <td></td>
-                      <td colSpan={8} style={{ background: 'var(--surface-2)', padding: '10px 14px' }}>
+                      <td colSpan={8} style={{ background: 'var(--surface-subtle)', padding: '10px 14px' }}>
                         <AssignmentSummary
                           assignment={a}
                           exporting={exportingId === a.id}
                           onExport={() => exportAssignment(a)}
                         />
-                        {detail?.loading && <span className="dim" style={{ fontSize: 12.5 }}>Loading sites…</span>}
+                        {detail?.loading && <span className="dim" style={{ fontSize: 'var(--fs-meta)' }}>Loading sites…</span>}
                         {detail && !detail.loading && !detail.data && (
-                          <span className="dim" style={{ fontSize: 12.5 }}>Couldn't load detail.</span>
+                          <span className="dim" style={{ fontSize: 'var(--fs-meta)' }}>Couldn't load detail.</span>
                         )}
                         {detail?.data && <AssignmentDetail data={detail.data} />}
                       </td>
@@ -176,8 +176,8 @@ function ViewChip({ active, onClick, children }) {
       className="btn btn-sm"
       onClick={onClick}
       style={{
-        background: active ? 'var(--signal)' : 'var(--surface-2)',
-        color: active ? '#fff' : 'var(--text-muted)',
+        background: active ? 'var(--accent)' : 'var(--surface-subtle)',
+        color: active ? '#fff' : 'var(--text-secondary)',
         border: active ? 'none' : '1px solid var(--border)',
       }}
     >
@@ -274,7 +274,7 @@ function DecidedResults() {
                     : r.problem_category) || '—'}
                 </td>
                 <td className="text-data">{r.contractor_name || '—'}</td>
-                <td className="dim" style={{ fontSize: 12.5 }}>{r.assignment_code}</td>
+                <td className="dim" style={{ fontSize: 'var(--fs-meta)' }}>{r.assignment_code}</td>
               </tr>
             ))}
           </tbody>
@@ -308,7 +308,7 @@ function AssignmentSummary({ assignment: a, exporting, onExport }) {
       <div className="row wrap" style={{ gap: 18 }}>
         {stats.map((s) => (
           <div key={s.label} style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <span className="dim" style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.3 }}>{s.label}</span>
+            <span className="dim" style={{ fontSize: 'var(--fs-caption)', textTransform: 'uppercase', letterSpacing: 0.3 }}>{s.label}</span>
             <span style={{ fontSize: 14, fontWeight: 600, color: s.color || 'var(--text)' }}>{s.value}</span>
           </div>
         ))}
@@ -323,7 +323,7 @@ function AssignmentSummary({ assignment: a, exporting, onExport }) {
 function AssignmentDetail({ data }) {
   const tasks = data.tasks || []
   if (tasks.length === 0) {
-    return <span className="dim" style={{ fontSize: 12.5 }}>No sites in this assignment.</span>
+    return <span className="dim" style={{ fontSize: 'var(--fs-meta)' }}>No sites in this assignment.</span>
   }
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -333,7 +333,7 @@ function AssignmentDetail({ data }) {
             <span className="text-data" style={{ fontWeight: 600, minWidth: 90 }}>{t.site_code || `#${t.work_item_id}`}</span>
             <span className="pill pill-dim">{t.site_type}</span>
             {(t.requested_technologies || []).map((tech) => (
-              <span key={tech} className="pill pill-dim" style={{ fontSize: 11 }}>{tech}</span>
+              <span key={tech} className="pill pill-dim" style={{ fontSize: 'var(--fs-caption)' }}>{tech}</span>
             ))}
             <span style={{ flex: 1 }} />
             <Outcome task={t} />
@@ -360,17 +360,17 @@ function AssignmentDetail({ data }) {
 
 function Outcome({ task }) {
   if (!task.overall_result) {
-    return <span className="dim" style={{ fontSize: 12.5 }}>Pending</span>
+    return <span className="dim" style={{ fontSize: 'var(--fs-meta)' }}>Pending</span>
   }
   if (task.overall_result === 'Ready') {
     return (
-      <span className="row" style={{ gap: 4, color: 'var(--green)', fontSize: 12.5, fontWeight: 500 }}>
+      <span className="row" style={{ gap: 4, color: 'var(--green)', fontSize: 'var(--fs-meta)', fontWeight: 500 }}>
         <CheckCircle2 size={14} /> Ready
       </span>
     )
   }
   return (
-    <span className="row" style={{ gap: 4, color: 'var(--red)', fontSize: 12.5, fontWeight: 500 }}>
+    <span className="row" style={{ gap: 4, color: 'var(--red)', fontSize: 'var(--fs-meta)', fontWeight: 500 }}>
       <XCircle size={14} /> Not Ready
     </span>
   )

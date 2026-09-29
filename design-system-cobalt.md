@@ -17,8 +17,11 @@ These hold on every page. A page that needs to break one asks first.
 
 1. **Status colour is an ink on its own soft fill, and always carries its
    label.** Done/Ongoing/Pending/Problem are never shown by colour alone.
-2. **Cobalt (`--accent`) means selected or action — nothing else.** It is not a
-   data colour, not a bar fill and not a decorative icon tint.
+2. **Cobalt (`--accent`) means selected, action, or progress.** Selection and
+   the primary action, and one data meaning: work done against a whole (DT
+   done, PIP delivered, a met month, submitted of assigned, the DT-done line).
+   Reference and backlog data are the two data neutrals (`--dt-muted`,
+   `--dt-pending-bar`). Cobalt is never a decorative icon tint.
 3. **Authority colours (`--ict`, `--cra`) are for data only.** Never for status,
    never for selection. Status pills keep their own colours.
 4. **ICT and CRA always appear with their label**, never as colour alone.
@@ -34,6 +37,17 @@ These hold on every page. A page that needs to break one asks first.
 8. **Figures use tabular numbers** (`font-feature-settings: 'tnum'` is on for
    the whole body).
 9. **Charts are hand-built** (HTML/SVG). No charting library.
+10. **The browser page never scrolls.** At 1440x900 and 1280x800 the document
+    neither scrolls vertically nor sideways. A one-screen page (`PageFrame`)
+    fills the space under its `PageBar`; its long lists scroll inside their
+    card under a sticky header, and the assignment dock stays pinned. Every
+    other page scrolls inside the shell's `.page-outlet`. See ARCHITECTURE.md,
+    "The frontend layout contract".
+11. **Changes are ink, not colour.** "+64 vs last month" is neutral text with
+    the number in bold ink. The one exception is the trend's gap pills, which
+    keep green (shrank) and brick (grew) because they are a verdict, with a
+    legend.
+12. **Nothing is set below 12px**, and every size is a `--fs-*` token (below).
 
 ---
 
@@ -106,6 +120,16 @@ Every ink clears 4.5:1 on white and on its soft fill. Done and Problem are only
 11.4 apart (CIEDE2000) for a deuteranope — which is why every status keeps its
 text label and every chart keeps its legend.
 
+### Data neutrals
+
+| Token | Value | Use |
+|---|---|---|
+| `--dt-muted` | `#8391A7` | reference data: the on-air series and sparkline, opening balances, open work on a contractor tile, "not started" (3.19:1 — graphics only) |
+| `--dt-pending-bar` | `#6B788D` | backlog data: the pending share, arrivals, a month below its PIP, folded rows |
+
+Progress data is `--accent`; an ink `--text` tick marks "expected by today"
+on any progress bar and the PIP on a month's bar.
+
 ### Banners
 
 Info, warning, error and success each have `-bg`, `-border`, `-text` and
@@ -114,18 +138,23 @@ in words; the tone only colours it.
 
 ### Type
 
-| Role | Size / line | Weight |
-|---|---|---|
-| Display (page title) | 28 / 36 | 600 |
-| Figure (a headline number) | 30 / 38 | 600, tabular |
-| Card heading | 17 / 24 | 600 |
-| Block / tile title | 15 / 22 | 600 |
-| Body | 15 / 22 | 400 |
-| Small / eyebrow | 13 / 18 | 600 for eyebrows |
-| Caption | 12 / 16 | 400 |
+Every size is a token pair on `:root`; inline font sizes use the token
+(`fontSize: 'var(--fs-meta)'`), never a number.
 
-Inter for Latin and figures, Vazirmatn for Farsi (`--font-farsi`). Farsi names
-in data are 15px Vazirmatn, `dir="rtl"` or `dir="auto"`.
+| Role | Tokens | Size / line | Weight |
+|---|---|---|---|
+| Display (page title) | `--fs-display` / `--lh-display` | 28 / 36 | 600 |
+| Figure (a headline number) | `--fs-figure` / `--lh-figure` | 30 / 38 | 600, tabular |
+| Card heading | `--fs-heading` / `--lh-heading` | 17 / 24 | 600 |
+| KPI / tile title | `--fs-title` / `--lh-title` | 15 / 22 | 600 |
+| Body, Farsi data | `--fs-body` / `--lh-body` | 15 / 22 | 400 |
+| Table cell, tab, button | `--fs-control` / `--lh-control` | 14 / 20 | 400–600 |
+| Meta, legend, eyebrow | `--fs-meta` / `--lh-meta` | 13 / 18 | 600 for eyebrows |
+| Table header, count, pill | `--fs-caption` / `--lh-caption` | 12 / 16 | 600 |
+
+Nothing is smaller than 12px and nothing is uppercase. Inter for Latin and
+figures, Vazirmatn for Farsi (`--font-farsi`). Farsi names in data are 15px
+Vazirmatn (`.text-farsi`), `dir="rtl"` or `dir="auto"`.
 
 ### Shape and depth
 
@@ -141,9 +170,34 @@ in data are 15px Vazirmatn, `dir="rtl"` or `dir="auto"`.
 
 ## 3. Components (in `frontend/src/components/ui.jsx`)
 
-- **PageHead** — eyebrow (13/600, `--text-link`), title (Display), optional
+- **PageBar** — the header of a one-screen page (with `PageFrame`), 131px:
+  row 1 (min 60px) the eyebrow (13/18 600, `--text-link`) over the title
+  (28/36), then a `context` slot after a 1px divider (the process stepper, or
+  the dashboard's province scope), then `actions` pushed right; row 2 (50px)
+  the `tabs` and, at the far end, `tabsRight` (controls that act on the
+  tab's view). Padding 20 32 0 on `--bg`, 1px `--border` below. The eyebrow
+  is the sidebar section ("Drive Test").
+- **PageHead** — the scrolling pages' header: eyebrow, title, optional
   subtitle, actions on the right.
-- **Tabs** — real `role="tab"`; arrow keys move and select.
+- **ProcessStepper** — 1 › 2 › 3 (Monthly Plan › Health Check › Drive Test) in
+  a PageBar's context slot. The current step is `--accent-wash` with a filled
+  accent number and `aria-current="step"`; the others are links when the
+  person can open them. Under 1360px the other steps show their numbers only.
+- **Tabs** — real `role="tab"`; arrow keys move and select. 38px high in a
+  PageBar, the selected one heavier with a 20x3 accent bar. A tab may carry
+  an icon, a count chip (neutral; `--accent-soft`/`--accent-ink` on the
+  selected tab) and a second chip in `--danger-soft`/`--danger-ink` ("4
+  late"). `steps` puts a chevron between the parts of a process; a `group`
+  draws tabs that are one thing (the fix loop) in a labelled
+  `--neutral-soft` container; an `end` tab (History) sits at the far end
+  behind a divider.
+- **KpiCard** — one card of a KPI band: 20px padding, a neutral 36px icon chip
+  and a 15/22 title (a badge, e.g. an "Internal" pill, at the end of the
+  row), the 30/38 figure with a note or the neutral delta at the end of its
+  line, and the card's floor for a bar or sparkline. A region named by its
+  title. Bands are 12px apart.
+- **Meter** — an 8px share on the track: `--accent` fill, an optional 2px
+  `--text` tick at expected-by-today.
 - **SegmentedControl** — one choice out of a few; every option is a button with
   `aria-pressed`.
 - **Card** — white, radius 10, padding 20/24; optional header with a neutral
@@ -153,3 +207,21 @@ in data are 15px Vazirmatn, `dir="rtl"` or `dir="auto"`.
   message.
 - **Selectable tile** — `--surface-subtle`, 1px `--track`, radius 8, padding 16.
   Selected: `--accent-wash` fill and a 2px `--accent` border.
+- **AssignDock** (`components/AssignDock.jsx`) — the assignment dock on HC
+  Pool and DT Assignment, pinned to the bottom of the main column (never
+  inside the table, never over it). Top row: the accent count badge and "N
+  sites selected", Clear (ghost), a hint, and the primary button naming the
+  pick ("Assign health check to پیشرو فن"), disabled until there is both a
+  site and a contractor. Under it, one row of contractor tiles as a
+  `role="radiogroup"` of buttons: radius 10, 1px `--border`, `--shadow-2` on
+  hover; a 40px neutral initial avatar; the Farsi name 15/600 with an
+  ellipsis; a 4px load meter (open work in `--dt-muted`, the late share in
+  `--danger-ink` on health checks); a 12px line ("14 open · 2 late", "16 in
+  progress"). Selected: 2px accent border, accent-wash fill, filled accent
+  avatar, accent-ink name, accent meter, and a 22px accent check badge at the
+  top right. Arrow keys move the choice; the focus ring is visible.
+- **Queue card** — a fill-height `Card` (`.card-fill.queue-card`): chip,
+  title (with a neutral `.count-chip`), a one-line instruction, and the
+  filters (search, province, a segmented state filter with counts) in its
+  head; the table in `.table-scroll`; a foot row ("200 of 1,012 loaded",
+  Load 200 more). Ticked rows are `--accent-wash`.

@@ -114,12 +114,12 @@ export default function RemediationTab({ onCountChange }) {
               <td>
                 <span className="tnum">{r.days_open}d</span>
                 {r.days_late > 0 && (
-                  <span className="pill pill-red" style={{ marginLeft: 6, fontSize: 11 }}>
+                  <span className="pill pill-red" style={{ marginLeft: 6, fontSize: 'var(--fs-caption)' }}>
                     {r.days_late}d late
                   </span>
                 )}
                 {r.reroute_pending && (
-                  <span className="pill pill-amber" style={{ marginLeft: 6, fontSize: 11 }}>
+                  <span className="pill pill-amber" style={{ marginLeft: 6, fontSize: 'var(--fs-caption)' }}>
                     Disputed
                   </span>
                 )}
@@ -144,8 +144,8 @@ function Chip({ active, onClick, children }) {
       className="btn btn-sm"
       onClick={onClick}
       style={{
-        background: active ? 'var(--signal)' : 'var(--surface-2)',
-        color: active ? '#fff' : 'var(--text-muted)',
+        background: active ? 'var(--accent)' : 'var(--surface-subtle)',
+        color: active ? '#fff' : 'var(--text-secondary)',
         border: active ? 'none' : '1px solid var(--border)',
       }}
     >

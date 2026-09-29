@@ -49,7 +49,7 @@ export default function Revisions({ period, stream = 'DT', isContractor, onClose
       transition={{ duration: 0.2 }}
     >
       <div className="row wrap" style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)' }}>
-        <b style={{ fontFamily: 'var(--font-display)', fontSize: 14.5 }}>Revision history</b>
+        <b style={{ fontFamily: 'var(--font-display)', fontSize: 'var(--fs-body)' }}>Revision history</b>
         {data && (
           <span className="dim text-data" style={{ fontSize: 13 }}>
             {data.contractor_name} · {data.stream === 'ACCEPTANCE' ? 'Acceptance' : 'DT'} · {data.shamsi_month_name} {data.shamsi_year}
@@ -115,7 +115,7 @@ function Entry({ entry, last }) {
           {entry.is_current && <span className="pill pill-cyan">Current</span>}
         </div>
 
-        <div className="dim" style={{ fontSize: 11.5, marginTop: 3 }}>
+        <div className="dim" style={{ fontSize: 'var(--fs-caption)', marginTop: 3 }}>
           {entry.submitted_shamsi && <>Handed in {entry.submitted_shamsi}</>}
           {entry.decided_shamsi && (
             <>
@@ -129,12 +129,12 @@ function Entry({ entry, last }) {
         {entry.return_comment && (
           <div
             style={{
-              background: 'var(--surface-2)',
+              background: 'var(--surface-subtle)',
               borderInlineStart: '2px solid var(--amber)',
               padding: '8px 11px',
               borderRadius: '0 6px 6px 0',
-              fontSize: 12.5,
-              color: 'var(--text-muted)',
+              fontSize: 'var(--fs-meta)',
+              color: 'var(--text-secondary)',
               marginTop: 8,
               fontFamily: 'var(--font-farsi)',
               lineHeight: 1.6,

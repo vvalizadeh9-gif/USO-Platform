@@ -22,7 +22,7 @@ export default function HistoryDrawer({ contractor, period, label, onClose }) {
         <div className="mp-drawer-head">
           <div>
             <div className="mp-drawer-title">{contractor.name}</div>
-            <div className="dim" style={{ fontSize: 12.5 }}>Plan history · {label}</div>
+            <div className="dim" style={{ fontSize: 'var(--fs-meta)' }}>Plan history · {label}</div>
           </div>
           <button type="button" className="btn btn-ghost btn-sm" onClick={onClose} aria-label="Close">
             <X size={15} />

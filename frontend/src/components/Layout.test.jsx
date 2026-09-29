@@ -7,7 +7,7 @@
 // item at all, so an unguarded heading would give them a label pointing at
 // empty space.
 import { act, fireEvent, render, screen } from '@testing-library/react'
-import { Link, MemoryRouter, useLocation } from 'react-router-dom'
+import { Link, MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const HC_QUEUE_COUNTS = {
@@ -36,6 +36,7 @@ vi.mock('../context/AuthContext', () => ({
 }))
 
 const Layout = (await import('./Layout')).default
+const PageFrame = (await import('./PageFrame')).default
 
 async function sidebarAs(roleName) {
   mockAuth.current = {
@@ -481,5 +482,44 @@ describe('the account menu at the foot of the sidebar', () => {
     expect(screen.queryByRole('button', { name: /Sara Karimi/ })).toBeNull()
     fireEvent.click(screen.getByTitle('Sign out'))
     expect(logout).toHaveBeenCalledTimes(1)
+  })
+})
+
+// ---------------------------------------------------------------- page mode
+//
+// The shell never scrolls the browser page. A page that renders PageFrame
+// fills the main column; any other page scrolls inside .page-outlet.
+describe('the page mode', () => {
+  function drawAt(path) {
+    mockAuth.current = {
+      user: { full_name: 'A Person', role: { name: 'PM' } },
+      logout: () => {},
+      isAdmin: false,
+      mustChangePassword: false,
+    }
+    return render(
+      <MemoryRouter initialEntries={[path]}>
+        <Routes>
+          <Route element={<Layout />}>
+            <Route path="/fill" element={<PageFrame bar={<h1>Fill</h1>}>body</PageFrame>} />
+            <Route path="/scroll" element={<p>A long page</p>} />
+          </Route>
+        </Routes>
+      </MemoryRouter>,
+    )
+  }
+
+  it('scrolls a page that does not ask to fill', async () => {
+    const { container } = drawAt('/scroll')
+    await act(async () => {})
+    expect(container.querySelector('main')).toHaveClass('main-scroll')
+    expect(container.querySelector('main .page-outlet')).toHaveTextContent('A long page')
+  })
+
+  it('fills the column for a PageFrame page', async () => {
+    const { container } = drawAt('/fill')
+    await act(async () => {})
+    expect(container.querySelector('main')).toHaveClass('main-fill')
+    expect(container.querySelector('.page-frame .page-body')).toHaveTextContent('body')
   })
 })

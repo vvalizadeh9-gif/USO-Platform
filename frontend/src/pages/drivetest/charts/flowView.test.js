@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import { fitScale, flowNotes, flowView, netChanges } from './flowView'
+import {
+  CUMULATIVE,
+  LAST_12,
+  fitScale,
+  flowNotes,
+  flowView,
+  flowViewName,
+  netChanges,
+} from './flowView'
 
 describe('fitScale', () => {
   it('fits the scale to the values drawn, with a margin, on round steps', () => {
@@ -33,8 +41,8 @@ describe('flowView', () => {
   }
   const totals = (v) => v.points.map((p) => [p.onAir, p.dtDone])
 
-  it('opens on every month, from the opening balance, undated sites included', () => {
-    const v = flowView(data)
+  it('draws every month cumulatively, from the opening balance, undated sites included', () => {
+    const v = flowView(data, CUMULATIVE)
     expect(v.cumulative).toBe(true)
     expect(v.months).toHaveLength(4)
     expect(totals(v)).toEqual([[53, 20], [63, 24], [71, 30], [76, 33], [80, 35]])
@@ -114,6 +122,64 @@ describe('flowView', () => {
   })
 })
 
+describe('flowView: the last 12 months', () => {
+  // Nineteen months, Farvardin 1404 to Mehr 1405, one on air and nothing
+  // done each month, from an opening of 100 on air and 40 done.
+  const long = {
+    opening: { on_air: 100, dt_done: 40 },
+    months: Array.from({ length: 19 }, (_, i) => ({
+      year: 1404 + Math.floor(i / 12),
+      month: (i % 12) + 1,
+      on_aired: 1,
+      dt_done: 0,
+      is_open: i === 18,
+    })),
+    not_placed: { on_air: 5, dt_done: 0 },
+  }
+
+  it('is the default view', () => {
+    expect(flowView(long).selected).toBe(LAST_12)
+    expect(flowView(long).cumulative).toBe(false)
+  })
+
+  it('draws the twelve most recent months, oldest first', () => {
+    const v = flowView(long, LAST_12)
+    expect(v.months).toHaveLength(12)
+    expect(v.months.map((m) => `${m.year}-${m.month}`)).toEqual([
+      '1404-8', '1404-9', '1404-10', '1404-11', '1404-12',
+      '1405-1', '1405-2', '1405-3', '1405-4', '1405-5', '1405-6', '1405-7',
+    ])
+  })
+
+  it('carries the real running totals rather than restarting the count', () => {
+    const v = flowView(long, LAST_12)
+    // points[0] is the balance at the end of month 7: 105 opening (undated
+    // sites included) + 7 months of one on air each.
+    expect(v.points).toHaveLength(13)
+    expect(v.points[0]).toMatchObject({ onAir: 112, dtDone: 40 })
+    // The last point is the KPI cards' figure, whatever the window.
+    expect(v.points.at(-1)).toMatchObject(flowView(long, CUMULATIVE).points.at(-1))
+  })
+
+  it('marks the year change inside the window', () => {
+    expect(flowView(long, LAST_12).yearMarks).toBe(true)
+    expect(flowView(long, 1405).yearMarks).toBe(false)
+  })
+
+  it('shows every month when there are fewer than twelve', () => {
+    const short = { ...long, months: long.months.slice(0, 5) }
+    const v = flowView(short, LAST_12)
+    expect(v.months).toHaveLength(5)
+    // Opened on the opening balance itself, undated sites included.
+    expect(v.points[0]).toMatchObject({ onAir: 105, dtDone: 40 })
+  })
+
+  it('says which window it shows', () => {
+    expect(flowViewName(flowView(long, LAST_12))).toBe('the last 12 months')
+    expect(flowNotes(long).join(' ')).toMatch(/Showing the last 12 months, month by month\./)
+  })
+})
+
 describe('flowNotes', () => {
   const data = {
     opening: { on_air: 1000, dt_done: 900 },
@@ -125,7 +191,7 @@ describe('flowNotes', () => {
   }
 
   it('states where the running total starts, where the scale starts, and the undated sites', () => {
-    expect(flowNotes(data)).toContain(
+    expect(flowNotes(data, CUMULATIVE)).toContain(
       'Showing every month since Farvardin 1404. The lines are the programme’s running totals, ' +
         'carried from the opening balance on 1 Farvardin 1404, so the gap is the real backlog at ' +
         'each month’s end. The scale starts at 900, not zero.',

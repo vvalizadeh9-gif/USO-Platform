@@ -95,7 +95,14 @@ def _seed(db, rng, sites=160):
     hc_assignments = [
         HcAssignment(
             code=f"PAR-{n}", contractor_id=rng.choice(contractors).id,
-            assigned_at=T0 + timedelta(days=n), status="Open",
+            # Half long outstanding, half within the late line, so the late
+            # count has both kinds to tell apart.
+            assigned_at=(
+                T0 + timedelta(days=n)
+                if n % 2
+                else datetime.now(timezone.utc) - timedelta(days=n)
+            ),
+            status="Open",
         )
         for n in range(8)
     ]
@@ -177,6 +184,11 @@ def _by_lists(db, user):
         "pool": len(basket),
         "pool_assignable": sum(1 for b in basket if b["assignable"]),
         "in_progress": sum(r["sites_pending"] for r in hc_queues.in_progress(db, user)),
+        "hc_in_progress_late": sum(
+            1
+            for r in hc_queues.in_progress(db, user)
+            if r["days_outstanding"] > hc_queues.HC_LATE_AFTER_DAYS
+        ),
         "hc_review": hc_queues._hc_review_count(db, user),
         "remediation": len(hc_queues.remediations(db, user)),
         "reroutes": len(hc_queues.reroutes(db, user)),

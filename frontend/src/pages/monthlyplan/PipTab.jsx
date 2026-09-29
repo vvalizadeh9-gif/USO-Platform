@@ -1,14 +1,23 @@
+import { CalendarRange, PackageCheck, Target, Users, Building2 } from 'lucide-react'
 import { useState } from 'react'
-import { Card, Loading } from '../../components/ui'
+import { Card, KpiCard, Loading, Meter } from '../../components/ui'
 import { SetTargetForm } from './AcceptanceTargetCard'
 import { sharePercent } from './figures'
 
 const fmt = (v) => (v == null ? '—' : Number(v).toLocaleString('en-US'))
 const TREND_MONTHS = 7
 
+/** A share to one decimal, dropped when it is zero: 26.7%, 40%. */
+const oneDecimal = (part, whole) =>
+  whole ? `${((100 * part) / whole).toLocaleString('en-US', { maximumFractionDigits: 1 })}%` : '—'
+
+/** Where `value` sits on a track that ends at `whole`, 0-100. */
+const along = (value, whole) => (100 * value) / Math.max(1, whole)
+
 /**
- * The PIP vs Achieved tab: one stream of GET /pip/overview at a time -- KPI
- * cards, one row per contractor, and the last seven months for all of them.
+ * The PIP vs Achieved tab: one stream of GET /pip/overview at a time -- four
+ * KPI cards, then the contractors beside the last seven months, filling the
+ * rest of the screen.
  *
  * Every figure is the server's. The only arithmetic here is delivered as a
  * share of PIP (figures.sharePercent), taken from totals for a year or since
@@ -31,7 +40,7 @@ export default function PipTab({ data, failed, meta, view, period, canSetTarget,
     <div className="pv-tab" data-stream={meta.stream}>
       <Kpis
         meta={meta}
-        kpis={stream.kpis}
+        stream={stream}
         isRunning={isRunning}
         internal={
           canSeeInternal && (
@@ -39,49 +48,45 @@ export default function PipTab({ data, failed, meta, view, period, canSetTarget,
           )
         }
       />
-      <ContractorTable
-        meta={meta}
-        stream={stream}
-        view={view}
-        isRunning={isRunning}
-        onOpen={(row) =>
-          onOpen({ contractorId: row.contractor_id, name: row.name, stream: meta.stream, year: last.shamsi_year, month: last.shamsi_month })
-        }
-      />
-      <Trend trend={stream.trend.slice(-TREND_MONTHS)} />
+      <div className="pv-body">
+        <ContractorTable
+          meta={meta}
+          stream={stream}
+          view={view}
+          isRunning={isRunning}
+          onOpen={(row) =>
+            onOpen({ contractorId: row.contractor_id, name: row.name, stream: meta.stream, year: last.shamsi_year, month: last.shamsi_month })
+          }
+        />
+        <Trend trend={stream.trend.slice(-TREND_MONTHS)} />
+      </div>
     </div>
   )
 }
 
 // ---------------------------------------------------------------------- KPIs
-function Kpis({ meta, kpis, isRunning, internal }) {
+function Kpis({ meta, stream, isRunning, internal }) {
+  const { kpis, rows } = stream
   return (
     <div className="pv-kpis">
-      {meta.hasAssignment && <Kpi label="Assignment" value={fmt(kpis.assignment)} note="sites held" />}
+      {meta.hasAssignment && (
+        <KpiCard
+          icon={Users}
+          title="Assignment"
+          figure={fmt(kpis.assignment)}
+          aside={`${rows.length} contractor${rows.length === 1 ? '' : 's'}`}
+        />
+      )}
       {internal}
-      <Kpi label="Contractor PIP" value={fmt(kpis.contractor_pip)} note={pipNote(meta, kpis)} />
-      <Kpi label="Delivered" value={fmt(kpis.delivered)} note={deliveredNote(kpis, isRunning)} warn={isRunning && kpis.pace_diff < 0} />
-    </div>
-  )
-}
-
-function Kpi({ label, value, note, warn, children }) {
-  return (
-    <div className="pv-kpi">
-      <div className="pv-kpi-label">{label}</div>
-      <div className="pv-kpi-line">
-        <span className="pv-kpi-value tnum">{value}</span>
-        {note && <span className={`pv-kpi-note ${warn ? 'pv-warn' : ''}`}>{note}</span>}
-      </div>
-      {children}
+      <KpiCard icon={Target} title="Contractor PIP" figure={fmt(kpis.contractor_pip)} aside={pipNote(meta, kpis)} />
+      <DeliveredKpi kpis={kpis} isRunning={isRunning} />
     </div>
   )
 }
 
 function pipNote(meta, kpis) {
-  const gap = kpis.gap_vs_internal
-  if (gap != null) {
-    return gap < 0 ? `${fmt(-gap)} below internal` : gap > 0 ? `${fmt(gap)} above internal` : 'matches internal'
+  if (kpis.internal_pip && kpis.contractor_pip != null) {
+    return `${sharePercent(kpis.contractor_pip, kpis.internal_pip)}% of target`
   }
   if (meta.hasAssignment && kpis.contractor_pip != null && kpis.assignment) {
     return `${sharePercent(kpis.contractor_pip, kpis.assignment)}% of assignment`
@@ -89,28 +94,71 @@ function pipNote(meta, kpis) {
   return kpis.contractor_pip == null ? 'no plan approved' : 'approved plans in force'
 }
 
-function deliveredNote(kpis, isRunning) {
-  if (isRunning && kpis.expected_by_today != null) {
-    const d = kpis.pace_diff
-    const target = `today’s target of ${fmt(kpis.expected_by_today)}`
-    return d < 0 ? `${fmt(-d)} behind ${target}` : d > 0 ? `${fmt(d)} ahead of ${target}` : `on ${target}`
-  }
-  const share = sharePercent(kpis.delivered, kpis.contractor_pip)
-  return share == null ? 'no PIP to measure against' : `${share}% of PIP`
+/** Delivered against the contractors' PIP: the share on an accent bar, the
+ * tick at where an even pace would have it today, and the pace in words --
+ * neutral text, not a colour: a KPI card's change is ink. */
+function DeliveredKpi({ kpis, isRunning }) {
+  const pip = kpis.contractor_pip
+  const running = isRunning && kpis.expected_by_today != null
+  return (
+    <KpiCard
+      icon={PackageCheck}
+      title="Delivered"
+      figure={fmt(kpis.delivered)}
+      aside={running ? <PaceWords diff={kpis.pace_diff} /> : pip ? `${oneDecimal(kpis.delivered, pip)} of PIP` : 'no PIP to measure against'}
+    >
+      {pip ? (
+        <div className="kpi-card-meter">
+          <Meter
+            value={along(kpis.delivered, pip)}
+            tick={running ? along(kpis.expected_by_today, pip) : null}
+            label={`Delivered ${oneDecimal(kpis.delivered, pip)} of PIP${
+              running ? `, ${fmt(kpis.expected_by_today)} expected by today` : ''
+            }`}
+          />
+          <span className="kpi-card-pct tnum">{oneDecimal(kpis.delivered, pip)}</span>
+        </div>
+      ) : null}
+    </KpiCard>
+  )
 }
 
-/** MTN's internal target: "Not set" rather than 0, and for the PM a Set link
- * that opens the existing target editor for the stream. */
+function PaceWords({ diff }) {
+  if (diff == null) return null
+  if (diff === 0) return 'on pace'
+  return (
+    <>
+      <b className="tnum">{diff > 0 ? `+${fmt(diff)}` : `−${fmt(-diff)}`}</b>
+      {diff > 0 ? ' ahead of pace' : ' behind pace'}
+    </>
+  )
+}
+
+/** MTN's internal target: "Not set" rather than 0, marked Internal, and for
+ * the PM an Edit button that opens the target editor for the stream. */
 function InternalKpi({ meta, kpis, view, period, canSetTarget, onSaved }) {
   const [open, setOpen] = useState(false)
   const set = kpis.internal_pip != null
   return (
-    <Kpi label="MTN internal PIP" value={set ? fmt(kpis.internal_pip) : <span className="pv-unset">Not set</span>} note="target to management">
-      {canSetTarget && (
-        <button type="button" className="pv-link" onClick={() => setOpen((o) => !o)} aria-label={`Set the ${meta.title} internal target`}>
-          Set
-        </button>
-      )}
+    <KpiCard
+      icon={Building2}
+      title="MTN target"
+      className="pv-internal"
+      badge={<span className="pill pill-dim">Internal</span>}
+      figure={set ? fmt(kpis.internal_pip) : <span className="pv-unset">Not set</span>}
+      aside={
+        canSetTarget && (
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            onClick={() => setOpen((o) => !o)}
+            aria-label={`Set the ${meta.title} internal target`}
+          >
+            Edit
+          </button>
+        )
+      }
+    >
       {open && (
         <SetTargetForm
           stream={meta.stream}
@@ -122,7 +170,7 @@ function InternalKpi({ meta, kpis, view, period, canSetTarget, onSaved }) {
           }}
         />
       )}
-    </Kpi>
+    </KpiCard>
   )
 }
 
@@ -141,20 +189,18 @@ function sortRows(rows) {
 function ContractorTable({ meta, stream, view, isRunning, onOpen }) {
   const rows = sortRows(stream.rows)
   const all = stream.all_contractors
-  const noPlan = view === 'month' ? 'no plan this month' : 'no plan this period'
+  const noPlanWords = view === 'month' ? 'Plan not filed' : 'No plan this period'
   return (
-    <Card className="pv-card">
-      <div className="pv-table-wrap">
+    <Card className="card-fill pv-card" icon={Users} title="By contractor" titleAs="h2">
+      <div className="table-scroll">
         <table className="table table-compact pv-table" aria-label={`${meta.title} by contractor`}>
           <thead>
             <tr>
               <th>Contractor</th>
-              {meta.hasAssignment && <th className="num">Assignment</th>}
               <th className="num">PIP</th>
-              <th>Delivered</th>
-              <th className="num">% of PIP</th>
-              {isRunning && <th>Pace</th>}
-              <th className="num">Met last 6</th>
+              <th className="num">Delivered</th>
+              <th>Progress against PIP</th>
+              {isRunning && <th>Pace today</th>}
             </tr>
           </thead>
           <tbody>
@@ -162,102 +208,111 @@ function ContractorTable({ meta, stream, view, isRunning, onOpen }) {
               <tr key={r.contractor_id} data-contractor={r.contractor_id}>
                 <th scope="row">
                   <button type="button" className="pv-name" onClick={() => onOpen(r)}>{r.name}</button>
+                  {meta.hasAssignment && <span className="pv-sub tnum">{fmt(r.assignment)} assigned</span>}
                 </th>
-                {meta.hasAssignment && <td className="num">{fmt(r.assignment)}</td>}
-                {r.pip == null ? (
-                  <>
-                    <td className="num">—</td>
-                    <td className="pv-delivered-plain tnum">{fmt(r.delivered)} delivered</td>
-                    <td className="num pv-noplan" colSpan={isRunning ? 2 : 1}>{noPlan}</td>
-                  </>
-                ) : (
-                  <>
-                    <td className="num">{fmt(r.pip)}</td>
-                    <td><DeliveredBar delivered={r.delivered} pip={r.pip} expected={isRunning ? r.expected_by_today : null} /></td>
-                    <td className="num">{sharePercent(r.delivered, r.pip)}%</td>
-                    {isRunning && <td><Pace diff={r.pace_diff} /></td>}
-                  </>
+                <td className="num">{fmt(r.pip)}</td>
+                <td className="num">{fmt(r.delivered)}</td>
+                <td>
+                  {r.pip == null ? (
+                    isRunning ? <span className="pv-none">—</span> : <NoPlanPill words={noPlanWords} />
+                  ) : (
+                    <Progress delivered={r.delivered} pip={r.pip} expected={isRunning ? r.expected_by_today : null} />
+                  )}
+                </td>
+                {isRunning && (
+                  <td>{r.pip == null ? <NoPlanPill words={noPlanWords} /> : <PacePill diff={r.pace_diff} />}</td>
                 )}
-                <td className="num"><Met hit={r.hit_last_6} /></td>
               </tr>
             ))}
+            {rows.length === 0 && (
+              <tr>
+                <td colSpan={isRunning ? 5 : 4} className="pv-none">No contractors in this period.</td>
+              </tr>
+            )}
           </tbody>
           <tfoot>
             <tr className="pv-total">
-              <th scope="row">All contractors</th>
-              {meta.hasAssignment && <td className="num">{fmt(all.assignment)}</td>}
+              <th scope="row">
+                All contractors
+                {meta.hasAssignment && <span className="pv-sub tnum">{fmt(all.assignment)} assigned</span>}
+              </th>
               <td className="num">{fmt(all.pip)}</td>
+              <td className="num">{fmt(all.delivered)}</td>
               <td>
                 {all.pip == null ? (
-                  <span className="tnum">{fmt(all.delivered)} delivered</span>
+                  <span className="pv-none">—</span>
                 ) : (
-                  <DeliveredBar delivered={all.delivered} pip={all.pip} expected={isRunning ? stream.kpis.expected_by_today : null} />
+                  <Progress delivered={all.delivered} pip={all.pip} expected={isRunning ? stream.kpis.expected_by_today : null} />
                 )}
               </td>
-              <td className="num">{all.pip == null ? '—' : `${sharePercent(all.delivered, all.pip)}%`}</td>
-              {isRunning && <td><Pace diff={stream.kpis.pace_diff} /></td>}
-              <td className="num"><Met hit={all.hit_last_6} /></td>
+              {isRunning && <td><PacePill diff={stream.kpis.pace_diff} /></td>}
             </tr>
           </tfoot>
         </table>
-        {rows.length === 0 && <div className="empty">No contractors in this period.</div>}
       </div>
     </Card>
   )
 }
 
-/** Delivered against the row's own PIP, with a tick at expected-by-today. */
-function DeliveredBar({ delivered, pip, expected }) {
-  const at = (v) => `${Math.min(100, (100 * v) / Math.max(1, pip))}%`
+/** Delivered against the row's own PIP: a 110px accent bar with a tick at
+ * expected-by-today, and the share. */
+function Progress({ delivered, pip, expected }) {
   return (
-    <span className="pv-bar-cell">
-      <span className="pv-bar" aria-hidden="true">
-        <i className="pv-bar-fill" style={{ width: at(delivered) }} />
-        {expected != null && <i className="pv-bar-tick" data-testid="pv-tick" style={{ left: at(expected) }} />}
-      </span>
-      <span className="pv-bar-text tnum">{fmt(delivered)} of {fmt(pip)}</span>
+    <span className="pv-progress">
+      <Meter
+        className="pv-meter"
+        value={along(delivered, pip)}
+        tick={expected != null ? along(expected, pip) : null}
+        label={`${fmt(delivered)} of ${fmt(pip)}`}
+      />
+      <span className="pv-pct tnum">{sharePercent(delivered, pip)}%</span>
     </span>
   )
 }
 
-function Pace({ diff }) {
-  if (diff == null) return <span className="dim">—</span>
-  if (diff === 0) return <span>On pace</span>
-  return diff < 0 ? <span className="pv-warn">{fmt(-diff)} behind</span> : <span>{fmt(diff)} ahead</span>
+/** A status: ink on its soft fill, with the words. */
+function PacePill({ diff }) {
+  if (diff == null) return <span className="pv-none">—</span>
+  if (diff === 0) return <span className="pill pill-dim">On pace</span>
+  return diff > 0 ? (
+    <span className="pill pill-green tnum">+{fmt(diff)} ahead</span>
+  ) : (
+    <span className="pill pill-red tnum">−{fmt(-diff)} behind</span>
+  )
 }
 
-function Met({ hit }) {
-  if (!hit?.of) return <span className="dim">—</span>
-  return <span className="tnum">{hit.hit} of {hit.of}</span>
+function NoPlanPill({ words }) {
+  return <span className="pill pill-amber">{words}</span>
 }
 
 // --------------------------------------------------------------------- trend
+/** The last seven months for all contractors, one row per month: delivered
+ * as a bar, the PIP as a 2px ink tick on the same scale. Met is the accent,
+ * below the reference neutral, the running month an accent outline. */
 function Trend({ trend }) {
   const max = Math.max(1, ...trend.map((p) => Math.max(p.pip ?? 0, p.delivered)))
   return (
-    <Card className="pv-card">
-      <div className="pv-trend-head">
-        <span className="pv-card-title">All contractors · last {trend.length} months</span>
-        <span className="pv-legend">
-          <span><i className="pv-key-met" />met</span>
-          <span><i className="pv-key-below" />below</span>
-          <span><i className="pv-key-pip" />PIP</span>
-        </span>
-      </div>
-      <div className="pv-trend" role="img" aria-label="All contractors, delivered against PIP by month">
+    <Card className="pv-trend-card" icon={CalendarRange} title={`Last ${trend.length} months`} titleAs="h2">
+      <ul className="pv-trend" role="img" aria-label="All contractors, delivered against PIP by month">
         {trend.map((p) => {
           const kind = p.in_progress ? 'running' : p.pip == null ? 'noplan' : p.delivered >= p.pip ? 'met' : 'below'
           return (
-            <div key={`${p.shamsi_year}-${p.shamsi_month}`} className="pv-col" data-kind={kind}>
-              <span className="pv-col-plot">
-                <i className={`pv-col-bar pv-col-${kind}`} style={{ height: `${(100 * p.delivered) / max}%` }} />
-                {p.pip != null && <i className="pv-col-pip" style={{ bottom: `${(100 * p.pip) / max}%` }} />}
+            <li key={`${p.shamsi_year}-${p.shamsi_month}`} className="pv-trend-row" data-kind={kind}>
+              <span className="pv-trend-name">{p.shamsi_month_name}</span>
+              <span className="pv-trend-track">
+                <i className={`pv-trend-bar pv-trend-${kind}`} style={{ width: `${along(p.delivered, max)}%` }} />
+                {p.pip != null && <i className="pv-trend-pip" style={{ left: `${along(p.pip, max)}%` }} />}
               </span>
-              <span className="pv-col-name">{p.shamsi_month_name}</span>
-              <span className="pv-col-num tnum">{p.pip == null ? 'no plan' : `${fmt(p.delivered)} / ${fmt(p.pip)}`}</span>
-            </div>
+              <span className="pv-trend-num tnum">{p.pip == null ? 'no plan' : `${fmt(p.delivered)} / ${fmt(p.pip)}`}</span>
+            </li>
           )
         })}
+      </ul>
+      <div className="pv-legend" aria-label="Legend">
+        <span><i className="pv-key-met" />Met</span>
+        <span><i className="pv-key-below" />Below</span>
+        <span><i className="pv-key-running" />Running</span>
+        <span><i className="pv-key-pip" />PIP</span>
       </div>
     </Card>
   )

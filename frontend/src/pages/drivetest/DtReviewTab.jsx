@@ -1,10 +1,10 @@
-import { CheckCircle2, Paperclip, Search, XCircle } from 'lucide-react'
+import { CheckCircle2, Eye, Paperclip, Search, XCircle } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import api from '../../api/client'
 import ProvinceFilter from '../../components/ProvinceFilter'
 import SiteHistoryDrawer, { SiteCodeButton } from '../../components/SiteHistoryDrawer'
 import WaitingPill from '../../components/WaitingPill'
-import { ConfirmDialog, EmptyState, Loading } from '../../components/ui'
+import { Card, ConfirmDialog, EmptyState, Loading } from '../../components/ui'
 import { useToast } from '../../context/ToastContext'
 
 /**
@@ -107,31 +107,26 @@ export default function DtReviewTab({ onCountChange }) {
 
   if (!rows) return <Loading label="Loading drive tests awaiting review" />
 
-  if (rows.length === 0) {
-    return (
-      <div className="card card-pad">
-        <EmptyState
-          title="No drive tests waiting"
-          hint="Submissions from contractors appear here for approval."
-        />
-      </div>
-    )
-  }
+  const filtering = query.trim() || provinceSel.size > 0 || contractorFilter
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-      <div className="card card-pad">
-        <div className="row between wrap" style={{ gap: 12 }}>
-          <div style={{ position: 'relative', flex: 1, minWidth: 200 }}>
-            <Search size={15} style={{ position: 'absolute', left: 10, top: 11, color: 'var(--text-dim)' }} />
+    <Card
+      className="card-fill queue-card"
+      icon={Eye}
+      title="Review"
+      description="Submitted drive tests awaiting your decision. An approved drive test is final."
+      actions={
+        <>
+          <label className="search-box">
+            <Search size={16} aria-hidden="true" />
             <input
               className="input"
-              style={{ paddingLeft: 32 }}
               placeholder="Search site ID…"
+              aria-label="Search site ID"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
             />
-          </div>
+          </label>
           <ProvinceFilter
             options={provinceOptions}
             selected={provinceSel}
@@ -139,8 +134,8 @@ export default function DtReviewTab({ onCountChange }) {
             onClear={() => setProvinceSel(new Set())}
           />
           <select
-            className="input text-data"
-            style={{ minWidth: 160 }}
+            className="input queue-select"
+            aria-label="Contractor"
             value={contractorFilter}
             onChange={(e) => setContractorFilter(e.target.value)}
           >
@@ -149,96 +144,100 @@ export default function DtReviewTab({ onCountChange }) {
               <option key={name} value={name}>{name}</option>
             ))}
           </select>
-        </div>
-        <div className="row between" style={{ marginTop: 8 }}>
-          <span className="dim" style={{ fontSize: 11.5 }}>Sorted: waiting longest first</span>
-          {(query.trim() || provinceSel.size > 0 || contractorFilter) && (
-            <span className="dim" style={{ fontSize: 11.5 }}>
-              {filtered.length} of {rows.length}
-            </span>
-          )}
-        </div>
+        </>
+      }
+    >
+      <div className="queue-toolbar">
+        <span className="queue-meta">Sorted: waiting longest first</span>
+        {filtering && (
+          <span className="queue-meta tnum">
+            {filtered.length} of {rows.length}
+          </span>
+        )}
       </div>
 
-      {filtered.length === 0 && (
-        <div className="card card-pad">
-          <EmptyState title="No drive tests match these filters" />
-        </div>
+      {rows.length === 0 ? (
+        <EmptyState title="No drive tests waiting" hint="Submissions from contractors appear here for approval." />
+      ) : filtered.length === 0 ? (
+        <EmptyState title="No drive tests match these filters" />
+      ) : (
+        <ul className="table-scroll review-list">
+          {filtered.map((r) => (
+            <li key={r.drive_test_id} className="review-item">
+              <div className="review-body">
+                <div className="review-head">
+                  <SiteCodeButton
+                    workItemId={r.work_item_id}
+                    siteCode={r.site_code}
+                    onOpen={(id, code) => setHistory({ id, code })}
+                  />
+                  <span className="pill pill-dim">{r.site_type}</span>
+                  <span className="text-farsi review-province">{r.province}</span>
+                </div>
+
+                <dl className="review-facts">
+                  <Field label="Carried out" value={r.execution_date || '—'} />
+                  <Field label="Submitted" value={fmt(r.submitted_at)} />
+                  <Field label="Waiting" value={<WaitingPill days={r.days_waiting} />} />
+                  <Field label="Contractor" value={<span className="text-farsi">{r.contractor_name || '—'}</span>} />
+                </dl>
+
+                <div className="review-files">
+                  {r.evidence.length === 0 ? (
+                    <span className="queue-meta">
+                      No report attached — approve only if you have seen it elsewhere.
+                    </span>
+                  ) : (
+                    r.evidence.map((e) => (
+                      <button
+                        key={e.id}
+                        type="button"
+                        className="btn btn-sm"
+                        onClick={() => download(e)}
+                        title={`${Math.round(e.size_bytes / 1024)} KB`}
+                      >
+                        <Paperclip size={14} aria-hidden="true" /> {e.original_filename}
+                      </button>
+                    ))
+                  )}
+                </div>
+
+                <div className="field review-comment">
+                  <label htmlFor={`dt-comment-${r.drive_test_id}`}>Comment (required when sending back)</label>
+                  <textarea
+                    id={`dt-comment-${r.drive_test_id}`}
+                    className="input"
+                    rows={2}
+                    value={comments[r.drive_test_id] || ''}
+                    onChange={(e) =>
+                      setComments((c) => ({ ...c, [r.drive_test_id]: e.target.value }))
+                    }
+                    placeholder="Optional note for the contractor"
+                  />
+                </div>
+              </div>
+
+              <div className="review-actions">
+                <button
+                  type="button"
+                  className="btn btn-primary btn-sm"
+                  onClick={() => setPending({ row: r, decision: 'Approved' })}
+                >
+                  <CheckCircle2 size={14} aria-hidden="true" /> Approve
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-sm btn-danger-quiet"
+                  disabled={(comments[r.drive_test_id] || '').trim().length < 3}
+                  onClick={() => setPending({ row: r, decision: 'Rejected' })}
+                >
+                  <XCircle size={14} aria-hidden="true" /> Send back
+                </button>
+              </div>
+            </li>
+          ))}
+        </ul>
       )}
-
-      {filtered.map((r) => (
-        <div key={r.drive_test_id} className="card card-pad">
-          <div className="row between wrap" style={{ gap: 14, alignItems: 'flex-start' }}>
-            <div style={{ flex: 1, minWidth: 260 }}>
-              <div className="row wrap" style={{ gap: 10, alignItems: 'baseline' }}>
-                <SiteCodeButton
-                  workItemId={r.work_item_id}
-                  siteCode={r.site_code}
-                  onOpen={(id, code) => setHistory({ id, code })}
-                />
-                <span className="pill pill-dim">{r.site_type}</span>
-                <span className="dim" style={{ fontSize: 13 }}>{r.province}</span>
-              </div>
-
-              <div className="row wrap" style={{ gap: 18, marginTop: 10, fontSize: 13 }}>
-                <Field label="Carried out" value={r.execution_date || '—'} />
-                <Field label="Submitted" value={fmt(r.submitted_at)} />
-                <Field label="Waiting" value={<WaitingPill days={r.days_waiting} />} />
-                <Field label="Contractor" value={r.contractor_name || '—'} />
-              </div>
-
-              <div className="row wrap" style={{ gap: 8, marginTop: 12 }}>
-                {r.evidence.length === 0 ? (
-                  <span className="dim" style={{ fontSize: 12.5 }}>
-                    No report attached — approve only if you have seen it elsewhere.
-                  </span>
-                ) : (
-                  r.evidence.map((e) => (
-                    <button
-                      key={e.id}
-                      className="btn btn-sm"
-                      onClick={() => download(e)}
-                      title={`${Math.round(e.size_bytes / 1024)} KB`}
-                    >
-                      <Paperclip size={13} /> {e.original_filename}
-                    </button>
-                  ))
-                )}
-              </div>
-
-              <div className="field" style={{ marginTop: 12, maxWidth: 520 }}>
-                <label>Comment (required when sending back)</label>
-                <textarea
-                  className="input"
-                  rows={2}
-                  value={comments[r.drive_test_id] || ''}
-                  onChange={(e) =>
-                    setComments((c) => ({ ...c, [r.drive_test_id]: e.target.value }))
-                  }
-                  placeholder="Optional note for the contractor"
-                />
-              </div>
-            </div>
-
-            <div className="row" style={{ gap: 8 }}>
-              <button
-                className="btn btn-primary btn-sm"
-                onClick={() => setPending({ row: r, decision: 'Approved' })}
-              >
-                <CheckCircle2 size={14} /> Approve
-              </button>
-              <button
-                className="btn btn-sm"
-                style={{ color: 'var(--red)', borderColor: 'var(--red)' }}
-                disabled={(comments[r.drive_test_id] || '').trim().length < 3}
-                onClick={() => setPending({ row: r, decision: 'Rejected' })}
-              >
-                <XCircle size={14} /> Send back
-              </button>
-            </div>
-          </div>
-        </div>
-      ))}
 
       <ConfirmDialog
         open={pending !== null}
@@ -264,19 +263,15 @@ export default function DtReviewTab({ onCountChange }) {
         siteCode={history.code}
         onClose={() => setHistory({ id: null, code: null })}
       />
-    </div>
+    </Card>
   )
 }
 
 function Field({ label, value }) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-      <span className="dim" style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.3 }}>
-        {label}
-      </span>
-      <span className="tnum" style={{ fontWeight: 500 }}>
-        {value}
-      </span>
+    <div className="review-fact">
+      <dt>{label}</dt>
+      <dd className="tnum">{value}</dd>
     </div>
   )
 }

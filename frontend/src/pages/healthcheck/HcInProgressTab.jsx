@@ -1,7 +1,14 @@
-import { ChevronDown, ChevronRight } from 'lucide-react'
-import { Fragment, useEffect, useState } from 'react'
+import { ChevronDown, ChevronRight, Timer } from 'lucide-react'
+import { Fragment, useEffect, useMemo, useState } from 'react'
 import api from '../../api/client'
-import { EmptyState, Loading } from '../../components/ui'
+import { Card, EmptyState, Loading, Meter, SegmentedControl } from '../../components/ui'
+import { HC_LATE_AFTER_DAYS } from '../../lib/waiting'
+
+const LATENESS = [
+  { key: 'all', label: 'All', match: () => true },
+  { key: 'late', label: 'Late', match: (a) => a.days_outstanding > HC_LATE_AFTER_DAYS },
+  { key: 'on-time', label: 'On time', match: (a) => a.days_outstanding <= HC_LATE_AFTER_DAYS },
+]
 
 /**
  * Health checks currently out with a subcontractor.
@@ -9,15 +16,17 @@ import { EmptyState, Loading } from '../../components/ui'
  * This fills a gap rather than adding a feature: between assignment and
  * submission a site had left the pool and reached no results table, so it was
  * visible on no screen at all. The only trace was the assignment-level history
- * tab, which the Coordinator could not open — meaning the role that assigns
+ * tab, which the Coordinator could not open -- meaning the role that assigns
  * health checks could not see which of them were late.
  *
  * Read-only, longest outstanding first. There is nothing to do here except
- * know who to chase.
+ * know who to chase: filter to the late ones, or to one subcontractor.
  */
 export default function HcInProgressTab({ onCountChange }) {
   const [rows, setRows] = useState(null)
   const [expanded, setExpanded] = useState(() => new Set())
+  const [lateness, setLateness] = useState('all')
+  const [contractor, setContractor] = useState('')
 
   useEffect(() => {
     api
@@ -29,6 +38,15 @@ export default function HcInProgressTab({ onCountChange }) {
       .catch(() => setRows([]))
   }, [onCountChange])
 
+  const contractorOptions = useMemo(
+    () => [...new Set((rows ?? []).map((a) => a.contractor_name).filter(Boolean))].sort(),
+    [rows],
+  )
+  const shown = useMemo(() => {
+    const match = LATENESS.find((l) => l.key === lateness).match
+    return (rows ?? []).filter((a) => match(a) && (!contractor || a.contractor_name === contractor))
+  }, [rows, lateness, contractor])
+
   const toggle = (id) =>
     setExpanded((prev) => {
       const next = new Set(prev)
@@ -38,83 +56,123 @@ export default function HcInProgressTab({ onCountChange }) {
 
   if (!rows) return <Loading label="Loading health checks in progress" />
 
-  if (rows.length === 0) {
-    return (
-      <div className="card card-pad">
-        <EmptyState
-          title="No health checks outstanding"
-          hint="Every assigned site has reported back."
-        />
-      </div>
-    )
-  }
-
   return (
-    <div className="card" style={{ overflow: 'hidden' }}>
-      <table>
-        <thead>
-          <tr>
-            <th style={{ width: 28 }}></th>
-            <th>Assignment</th>
-            <th>Subcontractor</th>
-            <th>Assigned</th>
-            <th>Submitted</th>
-            <th>Outstanding</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((a) => {
-            const isOpen = expanded.has(a.assignment_id)
-            // Nothing shouts until it has actually been a while. A row still
-            // inside a normal turnaround stays quiet.
-            const late = a.days_outstanding > 14
-            return (
-              <Fragment key={a.assignment_id}>
-                <tr onClick={() => toggle(a.assignment_id)} style={{ cursor: 'pointer' }}>
-                  <td style={{ color: 'var(--text-dim)' }}>
-                    {isOpen ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
-                  </td>
-                  <td style={{ fontWeight: 500 }}>{a.code}</td>
-                  <td className="text-data">{a.contractor_name || '—'}</td>
-                  <td className="dim" style={{ fontSize: 12.5 }}>{fmt(a.assigned_at)}</td>
-                  <td className="tnum">
-                    {a.sites_submitted}/{a.sites_total}
-                  </td>
-                  <td>
-                    <span
-                      className="tnum"
-                      style={{ color: late ? 'var(--red)' : undefined, fontWeight: late ? 600 : 400 }}
-                    >
-                      {a.days_outstanding} day{a.days_outstanding === 1 ? '' : 's'}
-                    </span>
-                    <span className="dim" style={{ marginLeft: 8, fontSize: 12.5 }}>
-                      {a.sites_pending} site{a.sites_pending === 1 ? '' : 's'} pending
-                    </span>
-                  </td>
-                </tr>
-                {isOpen && (
-                  <tr>
-                    <td></td>
-                    <td colSpan={5} style={{ background: 'var(--surface-2)', padding: '10px 14px' }}>
-                      <div className="dim" style={{ fontSize: 12, marginBottom: 6 }}>
-                        Still awaiting a result
-                      </div>
-                      <div className="row wrap" style={{ gap: 6 }}>
-                        {a.pending_sites.filter(Boolean).map((code) => (
-                          <span key={code} className="pill pill-dim text-data" style={{ fontSize: 11.5 }}>
-                            {code}
-                          </span>
-                        ))}
-                      </div>
-                    </td>
-                  </tr>
-                )}
-              </Fragment>
-            )
-          })}
-        </tbody>
-      </table>
-    </div>
+    <Card
+      className="card-fill queue-card"
+      icon={Timer}
+      title="Health checks in progress"
+      description={`Out with a subcontractor, longest outstanding first. Late is more than ${HC_LATE_AFTER_DAYS} days.`}
+      actions={
+        <>
+          <SegmentedControl label="Lateness" options={LATENESS} value={lateness} onChange={setLateness} />
+          <select
+            className="input queue-select"
+            aria-label="Subcontractor"
+            value={contractor}
+            onChange={(e) => setContractor(e.target.value)}
+          >
+            <option value="">All subcontractors</option>
+            {contractorOptions.map((name) => (
+              <option key={name} value={name}>{name}</option>
+            ))}
+          </select>
+        </>
+      }
+    >
+      {rows.length === 0 ? (
+        <EmptyState title="No health checks outstanding" hint="Every assigned site has reported back." />
+      ) : shown.length === 0 ? (
+        <EmptyState title="Nothing matches" hint="No assignment fits this filter." />
+      ) : (
+        <div className="table-scroll">
+          <table className="table table-compact queue-table">
+            <thead>
+              <tr>
+                <th className="col-check"><span className="dt-sr-only">Expand</span></th>
+                <th>Assignment</th>
+                <th>Subcontractor</th>
+                <th>Assigned</th>
+                <th>Submitted</th>
+                <th>Outstanding</th>
+                <th>Still pending</th>
+              </tr>
+            </thead>
+            <tbody>
+              {shown.map((a) => (
+                <AssignmentRows
+                  key={a.assignment_id}
+                  assignment={a}
+                  open={expanded.has(a.assignment_id)}
+                  onToggle={() => toggle(a.assignment_id)}
+                />
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </Card>
+  )
+}
+
+function AssignmentRows({ assignment: a, open, onToggle }) {
+  // Nothing shouts until it has actually been a while. A row still inside a
+  // normal turnaround stays quiet.
+  const late = a.days_outstanding > HC_LATE_AFTER_DAYS
+  const Chevron = open ? ChevronDown : ChevronRight
+  return (
+    <Fragment>
+      <tr className="row-action" onClick={onToggle}>
+        <td className="col-check">
+          <button
+            type="button"
+            className="queue-expand"
+            aria-expanded={open}
+            aria-label={`${open ? 'Hide' : 'Show'} the sites pending in ${a.code}`}
+            onClick={(e) => {
+              e.stopPropagation()
+              onToggle()
+            }}
+          >
+            <Chevron size={16} aria-hidden="true" />
+          </button>
+        </td>
+        <td className="queue-code">{a.code}</td>
+        <td className="text-farsi">{a.contractor_name || '—'}</td>
+        <td className="queue-date tnum">{fmt(a.assigned_at)}</td>
+        <td>
+          <span className="queue-progress">
+            <Meter className="queue-meter" value={(100 * a.sites_submitted) / Math.max(1, a.sites_total)} />
+            <span className="tnum">
+              {a.sites_submitted} of {a.sites_total}
+            </span>
+          </span>
+        </td>
+        <td>
+          <span className="queue-outstanding">
+            <span className={`tnum${late ? ' is-late' : ''}`}>
+              {a.days_outstanding} day{a.days_outstanding === 1 ? '' : 's'}
+            </span>
+            {late && <span className="pill pill-red">Late</span>}
+          </span>
+        </td>
+        <td className="tnum">
+          {a.sites_pending} site{a.sites_pending === 1 ? '' : 's'}
+        </td>
+      </tr>
+      {open && (
+        <tr className="queue-detail">
+          <td />
+          <td colSpan={6}>
+            <div className="queue-detail-label">Still awaiting a result</div>
+            <div className="tech-chips">
+              {a.pending_sites.filter(Boolean).map((code) => (
+                <span key={code} className="pill pill-dim">{code}</span>
+              ))}
+            </div>
+          </td>
+        </tr>
+      )}
+    </Fragment>
   )
 }
 

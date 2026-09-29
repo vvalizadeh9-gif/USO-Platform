@@ -85,7 +85,7 @@ export default function DecisionDrawer({ target, canDecide, onClose, onDecided }
         <div className="mp-drawer-head">
           <div>
             <div className="mp-drawer-title">{row?.contractor_name || target.name}</div>
-            <div className="dim" style={{ fontSize: 12.5 }}>
+            <div className="dim" style={{ fontSize: 'var(--fs-meta)' }}>
               {streamName} · {label || `${target.year}/${target.month}`}
             </div>
           </div>
@@ -154,7 +154,7 @@ export default function DecisionDrawer({ target, canDecide, onClose, onDecided }
                 </div>
               )}
               {waiting && !canDecide && (
-                <div className="dim" style={{ fontSize: 12.5, marginTop: 12 }}>Waiting on the PM’s decision.</div>
+                <div className="dim" style={{ fontSize: 'var(--fs-meta)', marginTop: 12 }}>Waiting on the PM’s decision.</div>
               )}
 
               <Revisions

@@ -10,7 +10,7 @@ const DOT = {
   passed: 'var(--green)',
   failed: 'var(--red)',
   routed: 'var(--amber)',
-  fixed: 'var(--signal)',
+  fixed: 'var(--accent)',
   assigned: 'var(--border)',
 }
 
@@ -124,7 +124,7 @@ export default function SiteHistoryDrawer({ workItemId, siteCode, onClose }) {
                     fontSize: 11,
                     letterSpacing: '0.14em',
                     textTransform: 'uppercase',
-                    color: 'var(--signal-strong)',
+                    color: 'var(--accent-ink)',
                     fontWeight: 600,
                   }}
                 >
@@ -154,7 +154,7 @@ export default function SiteHistoryDrawer({ workItemId, siteCode, onClose }) {
                       fontSize: 11,
                       letterSpacing: '0.1em',
                       textTransform: 'uppercase',
-                      color: 'var(--text-dim)',
+                      color: 'var(--text-tertiary)',
                       marginBottom: 14,
                     }}
                   >
@@ -189,7 +189,7 @@ export default function SiteHistoryDrawer({ workItemId, siteCode, onClose }) {
                         />
                         <div
                           className="tnum"
-                          style={{ fontSize: 11.5, color: 'var(--text-dim)' }}
+                          style={{ fontSize: 11.5, color: 'var(--text-tertiary)' }}
                         >
                           {formatDate(ev.at)}
                         </div>
@@ -242,7 +242,7 @@ export function SiteCodeButton({ workItemId, siteCode, onOpen }) {
         fontVariantNumeric: 'tabular-nums',
       }}
       onMouseEnter={(e) => {
-        e.currentTarget.style.color = 'var(--signal-strong)'
+        e.currentTarget.style.color = 'var(--accent-ink)'
         e.currentTarget.style.textDecoration = 'underline'
       }}
       onMouseLeave={(e) => {

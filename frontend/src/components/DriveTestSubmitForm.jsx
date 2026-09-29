@@ -56,7 +56,7 @@ export default function DriveTestSubmitForm({ onSubmit, footer }) {
 
   return (
     <div className="card card-pad">
-      <div className="row" style={{ gap: 8, marginBottom: 4, color: 'var(--signal)' }}>
+      <div className="row" style={{ gap: 8, marginBottom: 4, color: 'var(--accent)' }}>
         <Radio size={17} />
         <h3 style={{ fontSize: 15 }}>Submit drive test</h3>
       </div>

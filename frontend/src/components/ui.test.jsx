@@ -11,7 +11,10 @@ import {
   Card,
   ConfirmDialog,
   Drawer,
+  KpiCard,
+  Meter,
   Modal,
+  PageBar,
   PageHead,
   SegmentedControl,
   StatusPill,
@@ -277,5 +280,134 @@ describe('ConfirmDialog', () => {
     rerender(<ConfirmDialog {...props} danger busy onConfirm={vi.fn()} onCancel={vi.fn()} />)
     expect(screen.getByRole('button', { name: 'Please wait…' })).toBeDisabled()
     expect(screen.getByRole('button', { name: 'Cancel' })).toBeDisabled()
+  })
+})
+
+// ------------------------------------------------------ Tabs: the full row
+//
+// The redesigned pages' tab rows: icons, a count chip, a late chip, steps
+// with chevrons between them, a labelled group, and an end tab behind a
+// divider -- and still one keyboard stop that arrows through every tab.
+const PROCESS_TABS = [
+  { key: 'pool', label: 'HC Pool', icon: Users, count: 1012 },
+  { key: 'running', label: 'In Progress', count: 320, alert: '4 late' },
+  { key: 'review', label: 'HC Review', count: 0 },
+  { key: 'fix', label: 'Remediation', group: 'loop', count: 9 },
+  { key: 'reroutes', label: 'Re-routes', group: 'loop' },
+  { key: 'history', label: 'History', end: true },
+]
+
+function ProcessTabs() {
+  const [value, setValue] = useState('pool')
+  return (
+    <Tabs
+      steps
+      label="Health check"
+      tabs={PROCESS_TABS}
+      groups={{ loop: { label: 'Fix loop', title: 'Fixed sites return to the pool' } }}
+      value={value}
+      onChange={setValue}
+    />
+  )
+}
+
+describe('Tabs: counts, groups and steps', () => {
+  it('shows a count above zero, and the alert chip beside it', () => {
+    render(<ProcessTabs />)
+    expect(screen.getByRole('tab', { name: /HC Pool/ })).toHaveTextContent('1012')
+    const running = screen.getByRole('tab', { name: /In Progress/ })
+    expect(running.querySelector('.ui-tab-count')).toHaveTextContent('320')
+    expect(running.querySelector('.ui-tab-alert')).toHaveTextContent('4 late')
+    // A zero is no chip at all.
+    expect(screen.getByRole('tab', { name: 'HC Review' }).querySelector('.ui-tab-count')).toBeNull()
+  })
+
+  it('draws a group under its label, and the end tab after a divider', () => {
+    const { container } = render(<ProcessTabs />)
+    const group = container.querySelector('.ui-tab-group')
+    expect(group).toHaveTextContent('Fix loop')
+    expect(group.querySelectorAll('[role="tab"]')).toHaveLength(2)
+    expect(container.querySelector('.ui-tab-end')).toHaveTextContent('History')
+  })
+
+  it('puts a chevron between the steps, but not inside the group or before the end', () => {
+    const { container } = render(<ProcessTabs />)
+    // pool › running › review › [group]: three chevrons.
+    expect(container.querySelectorAll('.ui-tab-sep')).toHaveLength(3)
+    expect(container.querySelector('.ui-tab-group .ui-tab-sep')).toBeNull()
+  })
+
+  it('arrows through every tab, the grouped and the end one included', async () => {
+    const user = userEvent.setup()
+    render(<ProcessTabs />)
+    screen.getByRole('tab', { name: /HC Pool/ }).focus()
+    await user.keyboard('{End}')
+    expect(screen.getByRole('tab', { name: 'History' })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByRole('tab', { name: 'History' })).toHaveFocus()
+    await user.keyboard('{ArrowLeft}')
+    expect(screen.getByRole('tab', { name: 'Re-routes' })).toHaveAttribute('aria-selected', 'true')
+    await user.keyboard('{ArrowRight}{ArrowRight}')
+    expect(screen.getByRole('tab', { name: /HC Pool/ })).toHaveAttribute('aria-selected', 'true')
+  })
+})
+
+describe('PageBar', () => {
+  it('puts each slot in its place', () => {
+    const { container } = render(
+      <PageBar
+        eyebrow="Drive Test"
+        title="Dashboard"
+        context={<span>scope</span>}
+        actions={<button type="button">Export</button>}
+        tabs={<Tabs tabs={TABS} value="road" onChange={() => {}} label="Views" />}
+        tabsRight={<span>period</span>}
+      />,
+    )
+    expect(screen.getByRole('heading', { level: 1, name: 'Dashboard' })).toBeInTheDocument()
+    expect(container.querySelector('.page-bar-eyebrow')).toHaveTextContent('Drive Test')
+    expect(container.querySelector('.page-bar-context')).toHaveTextContent('scope')
+    expect(container.querySelector('.page-bar-actions')).toContainElement(
+      screen.getByRole('button', { name: 'Export' }),
+    )
+    expect(container.querySelector('.page-bar-tabs [role="tablist"]')).toBeInTheDocument()
+    expect(container.querySelector('.page-bar-tabs-right')).toHaveTextContent('period')
+  })
+
+  it('leaves out the slots it is not given', () => {
+    const { container } = render(<PageBar title="Monthly Plan" />)
+    expect(container.querySelector('.page-bar-context')).toBeNull()
+    expect(container.querySelector('.page-bar-actions')).toBeNull()
+    expect(container.querySelector('.page-bar-tabs')).toBeNull()
+  })
+})
+
+describe('KpiCard', () => {
+  it('is a region named by its title, with the figure, its note and the badge', () => {
+    render(
+      <KpiCard icon={Users} title="MTN target" figure="345" aside="Edit" badge={<span>Internal</span>}>
+        <span>floor</span>
+      </KpiCard>,
+    )
+    const card = screen.getByRole('region', { name: 'MTN target' })
+    expect(card.querySelector('.kpi-card-figure')).toHaveTextContent('345')
+    expect(card.querySelector('.kpi-card-aside')).toHaveTextContent('Edit')
+    expect(card.querySelector('.kpi-card-badge')).toHaveTextContent('Internal')
+    expect(card.querySelector('.kpi-card-chip')).toHaveAttribute('aria-hidden', 'true')
+    expect(card).toHaveTextContent('floor')
+  })
+})
+
+describe('Meter', () => {
+  it('caps the fill at the track and places the tick', () => {
+    render(<Meter value={130} tick={40} label="Delivered 130%" />)
+    const meter = screen.getByRole('img', { name: 'Delivered 130%' })
+    expect(meter.querySelector('.meter-fill')).toHaveStyle({ width: '100%' })
+    expect(screen.getByTestId('meter-tick')).toHaveStyle({ left: '40%' })
+  })
+
+  it('draws no tick without one, and hides itself without a label', () => {
+    const { container } = render(<Meter value={20} />)
+    expect(screen.queryByTestId('meter-tick')).toBeNull()
+    expect(container.querySelector('.meter')).toHaveAttribute('aria-hidden', 'true')
   })
 })

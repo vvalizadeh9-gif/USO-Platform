@@ -1,12 +1,13 @@
-import { AnimatePresence, motion } from 'framer-motion'
-import { ChevronRight, Eye, Radio, Timer } from 'lucide-react'
+import { Eye, Radio, Timer } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import api from '../api/client'
-import LifecycleStrip from '../components/LifecycleStrip'
-import { PageHead } from '../components/ui'
+import PageFrame from '../components/PageFrame'
+import ProcessStepper from '../components/ProcessStepper'
+import { PageBar, Tabs } from '../components/ui'
 import { useAuth } from '../context/AuthContext'
 import { canReview } from '../lib/roles'
+import useCountSetters from '../lib/useCountSetters'
 import DtAssignmentTab from './drivetest/DtAssignmentTab'
 import DtInProgressTab from './drivetest/DtInProgressTab'
 import DtReviewTab from './drivetest/DtReviewTab'
@@ -47,57 +48,29 @@ export default function DriveTest() {
   // pre-action number teaches people to stop trusting the badges.
   useEffect(loadCounts, [loadCounts, tab])
 
-  const setCount = useCallback(
-    (key) => (value) => setCounts((c) => ({ ...c, [key]: value })),
-    [],
-  )
+  const setCount = useCountSetters(setCounts)
+
+  const tabs = TABS.map((t) => ({ ...t, count: counts[t.count] }))
 
   return (
-    <>
-      <PageHead
-        eyebrow="Drive Test"
-        title="Drive Test"
-        subtitle="Sites confirmed Ready: assign them, follow the contractor’s progress, and review each submission. An approved drive test is final."
-      />
-
-      <LifecycleStrip current="dt" />
-
-      <div className="tabs tabs-steps" style={{ flexWrap: 'wrap' }}>
-        {TABS.map((t, i) => {
-          const count = t.count ? counts[t.count] : undefined
-          const isActive = tab === t.key
-          return (
-            <div className="tab-step" key={t.key}>
-              {i > 0 && <ChevronRight size={14} className="tab-sep" aria-hidden="true" />}
-              <button
-                className={`tab ${isActive ? 'active' : ''}`}
-                onClick={() => setTab(t.key)}
-              >
-                <span className="row" style={{ gap: 8 }}>
-                  <t.icon size={15} /> {t.label}
-                  {count > 0 && (
-                    <span className={`badge tnum ${isActive ? 'badge-active' : ''}`}>{count}</span>
-                  )}
-                </span>
-              </button>
-            </div>
-          )
-        })}
-      </div>
-
-      <AnimatePresence mode="wait">
-        <motion.div
-          key={tab}
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -8 }}
-          transition={{ duration: 0.2 }}
-        >
+    <PageFrame
+      className="dtq-page"
+      bar={
+        <PageBar
+          eyebrow="Drive Test"
+          title="Drive Test"
+          context={<ProcessStepper current="dt" />}
+          tabs={<Tabs steps label="Drive test queues" tabs={tabs} value={tab} onChange={setTab} />}
+        />
+      }
+    >
+      {/* Opacity only, no exit: the old panel is gone the moment the new
+          one mounts, so the page never collapses between them. */}
+      <div key={tab} className="tab-panel">
           {tab === 'assignment' && <DtAssignmentTab onCountChange={setCount('dt_assignment')} />}
           {tab === 'in-progress' && <DtInProgressTab onCountChange={setCount('dt_in_progress')} />}
           {tab === 'review' && <DtReviewTab onCountChange={setCount('dt_review')} />}
-        </motion.div>
-      </AnimatePresence>
-    </>
+      </div>
+    </PageFrame>
   )
 }

@@ -6,13 +6,13 @@ import {
   OctagonAlert,
   TrendingUp,
 } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import api from '../../api/client'
 import { describeBlobError, filenameFrom, saveBlob } from '../../lib/download'
-import { Banner, Tabs } from '../../components/ui'
+import PageFrame from '../../components/PageFrame'
+import { Banner, PageBar, Tabs } from '../../components/ui'
 import { useToast } from '../../context/ToastContext'
-import AlertStrip from './AlertStrip'
 import BreakdownCard, { BreakdownTabs } from './BreakdownCard'
 import { DrillProvider } from './DrillPanel'
 import ContractorScorecard from './ContractorScorecard'
@@ -21,10 +21,10 @@ import KpiBand from './KpiBand'
 import PipThisMonth from './PipThisMonth'
 import ProvinceList, { ProvinceSearch } from './ProvinceList'
 import Section from './Section'
-import Toolbar from './Toolbar'
+import DashboardActions, { ProvinceScope } from './Toolbar'
 import FlowChart, { FlowLegend } from './charts/FlowChart'
 import FlowViewControl from './charts/FlowViewControl'
-import { CUMULATIVE, flowHasActivity, flowNotes, flowYears } from './charts/flowView'
+import { LAST_12, flowHasActivity, flowNotes, flowView, flowYears } from './charts/flowView'
 import FlowLedger, { flowNet } from './charts/FlowLedger'
 import { flowScale } from './charts/flowScale'
 import { PROVINCE_LIMIT } from './constants'
@@ -86,14 +86,14 @@ export default function DriveTestProject() {
   } = useDashboard()
   const [ongoingTab, setOngoingTab] = useState('contractor')
   const [problematicTab, setProblematicTab] = useState('category')
-  // Which months the trend shows: every month (cumulative) or one Shamsi
-  // year. Held here, not in the chart, because the card header shows both
-  // the control that switches it and the note that describes the view.
-  const [flowScope, setFlowScope] = useState(CUMULATIVE)
+  // Which months the trend shows: the last twelve (the default), every month
+  // (cumulative) or one Shamsi year. Held here, not in the chart, because the
+  // card header shows both the control that switches it and the note that
+  // describes the view.
+  const [flowScope, setFlowScope] = useState(LAST_12)
   const [provinceSearch, setProvinceSearch] = useState('')
   const [exporting, setExporting] = useState(false)
   const toast = useToast()
-  const provinceRef = useRef(null)
 
   const data = overview.data
   const provinces = useMemo(() => data?.provinces ?? [], [data])
@@ -136,18 +136,15 @@ export default function DriveTestProject() {
     [searchParams, setSearchParams],
   )
 
-  // "View province details" in the gap alert opens the tables view and then
-  // scrolls to the province table, which only exists once that view renders.
-  const [provincesPending, setProvincesPending] = useState(false)
-  const scrollToProvinces = useCallback(() => {
-    setView(RANKINGS)
-    setProvincesPending(true)
-  }, [setView])
-  useEffect(() => {
-    if (!provincesPending || view !== RANKINGS || !provinceRef.current) return
-    provinceRef.current.scrollIntoView?.({ behavior: 'smooth', block: 'start' })
-    setProvincesPending(false)
-  }, [provincesPending, view, data])
+  // On air over the last twelve months, for the On air card's sparkline:
+  // the same running totals the trend chart draws, so the two agree.
+  const onAirSeries = useMemo(
+    () =>
+      flowHasActivity(flow.data)
+        ? flowView(flow.data, LAST_12).points.slice(1).map((p) => p.onAir)
+        : null,
+    [flow.data],
+  )
 
   const contractorIdByName = useMemo(() => {
     const map = new Map()
@@ -251,41 +248,35 @@ export default function DriveTestProject() {
 
   return (
     <DrillProvider>
-      <div className="dt-page">
-        {/* One 48px row: the breadcrumb and title, the three views as a
-            segmented control beside it, then the scope, freshness and the
-            two actions pushed right. The header is shared by all three tabs,
-            so switching views never moves it. No subtitle: the scope button
-            names the province the page is narrowed to. */}
-        <header className="dt-head">
-          <div className="dt-head-title">
-            <span className="dt-head-crumb">Drive Test</span>
-            <span className="dt-head-sep" aria-hidden="true">
-              /
-            </span>
-            <h1>Dashboard</h1>
-          </div>
-          <Tabs
-            className="dt-view-tabs"
-            label="Dashboard view"
-            tabs={VIEW_TABS}
-            value={view}
-            onChange={setView}
+      <PageFrame
+        className="dt-page"
+        bar={
+          <PageBar
+            eyebrow="Drive Test"
+            title="Dashboard"
+            context={
+              <ProvinceScope
+                provinces={provinces}
+                provinceId={provinceId}
+                provinceName={provinceName}
+                onChange={setProvince}
+              />
+            }
+            actions={
+              <DashboardActions
+                onRefresh={refresh}
+                refreshing={refreshing}
+                generatedAt={data?.generated_at}
+                onExport={exportWorkbook}
+                exporting={exporting}
+              />
+            }
+            tabs={<Tabs label="Dashboard view" tabs={VIEW_TABS} value={view} onChange={setView} />}
           />
-          <Toolbar
-            provinceId={provinceId}
-            provinceName={provinceName}
-            onClearProvince={() => setProvince(null)}
-            onRefresh={refresh}
-            refreshing={refreshing}
-            generatedAt={data?.generated_at}
-            onExport={exportWorkbook}
-            exporting={exporting}
-          />
-        </header>
-
+        }
+      >
         <div className="dt-bench">
-          {overview.error ? (
+          {overview.error && (
             <Banner
               tone="error"
               className="dt-page-error"
@@ -296,15 +287,6 @@ export default function DriveTestProject() {
                 Try again
               </button>
             </Banner>
-          ) : (
-            data && (
-              // On every tab: a growing gap is news wherever the reader is.
-              <AlertStrip
-                kpis={data.kpis}
-                provinces={data.province_breakdown}
-                onScrollToProvinces={scrollToProvinces}
-              />
-            )
           )}
 
           {view === OVERVIEW ? (
@@ -312,7 +294,7 @@ export default function DriveTestProject() {
               {overview.loading && !data ? (
                 <KpiSkeleton />
               ) : (
-                data && <KpiBand kpis={data.kpis} provinceId={provinceId} />
+                data && <KpiBand kpis={data.kpis} provinceId={provinceId} onAirSeries={onAirSeries} />
               )}
 
               {/* The trend and the month side by side: the chart takes the rest
@@ -518,7 +500,7 @@ export default function DriveTestProject() {
                 )}
 
                 {has('province_breakdown') && (
-                  <div ref={provinceRef} className="dt-tables-cell">
+                  <div className="dt-tables-cell">
                     <Section
                       title="Drive Test progress by province"
                       icon={MapPinned}
@@ -554,7 +536,7 @@ export default function DriveTestProject() {
             </div>
           )}
         </div>
-      </div>
+      </PageFrame>
     </DrillProvider>
   )
 }

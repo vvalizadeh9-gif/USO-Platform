@@ -50,7 +50,7 @@ export default function AcceptanceTargetCard({ plan, onSaved }) {
             onClick={() => setOpen((o) => !o)}
             aria-expanded={open}
             aria-label={open ? 'Close set-target form' : 'Set this month’s acceptance target'}
-            style={{ marginInlineStart: 'auto', flexShrink: 0, padding: '2px 7px', fontSize: 11.5 }}
+            style={{ marginInlineStart: 'auto', flexShrink: 0, padding: '2px 7px', fontSize: 'var(--fs-caption)' }}
           >
             {open ? <X size={13} /> : '+ Set target'}
           </button>
@@ -66,7 +66,7 @@ export default function AcceptanceTargetCard({ plan, onSaved }) {
           {delta != null ? (
             <div
               className="row"
-              style={{ gap: 4, fontSize: 11.5, marginTop: 3, color: tone === 'up' ? 'var(--green)' : tone === 'down' ? 'var(--red)' : 'var(--text-dim)' }}
+              style={{ gap: 4, fontSize: 'var(--fs-caption)', marginTop: 3, color: tone === 'up' ? 'var(--green)' : tone === 'down' ? 'var(--red)' : 'var(--text-tertiary)' }}
             >
               {tone === 'up' && <ArrowUp size={11} />}
               {tone === 'down' && <ArrowDown size={11} />}

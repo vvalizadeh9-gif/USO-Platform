@@ -1,6 +1,7 @@
 import { ChevronRight } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { CONTRACTOR_STEPS, STAFF_STEPS } from '../lib/lifecycle'
 import { NAV_BY_PATH, navItemVisible } from '../lib/nav'
 
 /**
@@ -19,22 +20,9 @@ import { NAV_BY_PATH, navItemVisible } from '../lib/nav'
  * and dropping one would make the strip say different things to different
  * people about what the work is.
  *
- * Two variants, not one strip reused with different labels: a contractor's
- * three steps are three different screens (My Health Check, My Drive Tests),
- * not the staff ones with a contractor-friendly hint, so the ``to`` targets
- * differ and not just the wording.
+ * The staff pages show the same steps compactly, in the PageBar
+ * (ProcessStepper); both read them from lib/lifecycle.
  */
-const STAFF_STEPS = [
-  { key: 'plan', label: 'Monthly Plan', hint: 'Target for the month', to: '/monthly-plan' },
-  { key: 'hc', label: 'Health Check', hint: 'Check · confirm · route fixes', to: '/health-check' },
-  { key: 'dt', label: 'Drive Test', hint: 'Assign · progress · review', to: '/drive-test' },
-]
-
-const CONTRACTOR_STEPS = [
-  { key: 'plan', label: 'Monthly Plan', hint: 'Your count for the month', to: '/monthly-plan' },
-  { key: 'hc', label: 'My Health Check', hint: 'Sites to check', to: '/my-health-check' },
-  { key: 'dt', label: 'My Drive Tests', hint: 'Sites to drive-test', to: '/my-drive-tests' },
-]
 
 export default function LifecycleStrip({ current, variant = 'staff' }) {
   const { user } = useAuth()

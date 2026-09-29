@@ -1,12 +1,13 @@
 import { motion } from 'framer-motion'
 import { ChevronsUpDown, KeyRound, LogOut, Menu, Settings } from 'lucide-react'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import BrandMark from './BrandMark'
 import { DATA_CHANGED_EVENT } from '../lib/dataChanged'
 import { NAV_SECTIONS, navItemVisible } from '../lib/nav'
 import { roleLabel } from '../lib/roles'
+import { PAGE_MODE, PageModeContext } from './pageMode'
 import api from '../api/client'
 
 /**
@@ -264,6 +265,10 @@ export default function Layout() {
   const { user, logout, isAdmin, mustChangePassword } = useAuth()
   const location = useLocation()
   const [open, setOpen] = useState(false)
+  // Whether the page on screen fills the main column or scrolls inside it
+  // (see pageMode.js). The page sets it; the shell only applies it.
+  const [pageMode, setPageMode] = useState(PAGE_MODE.scroll)
+  const pageModeValue = useMemo(() => ({ setMode: setPageMode }), [])
   const [actionCount, setActionCount] = useState(0)
   // hc: assignable HC Pool + HC Review + Re-routes (D2) -- these wait on a
   //     PM/Coordinator. The pool's own figure is every on-air site whose
@@ -401,7 +406,7 @@ export default function Layout() {
         </div>
       </aside>
 
-      <main className="main">
+      <main className={`main main-${pageMode}`}>
         <button
           className="btn btn-ghost btn-sm"
           style={{ display: 'none' }}
@@ -409,23 +414,32 @@ export default function Layout() {
         >
           <Menu size={18} />
         </button>
-        {/* A quick fade/slide-in on the incoming page. We deliberately do NOT
-            use mode="wait" (which held the new page back until the old one
-            finished animating out, adding ~0.2s of dead time to every
-            navigation) and keep the duration short so pages feel instant.
+        {/* The page's own box, and the only thing under the shell that can
+            scroll: the browser page never does (the layout contract in
+            ARCHITECTURE.md). A scrolling page scrolls here; a fill page
+            (PageFrame) takes this box's height and scrolls inside its cards.
+
+            A quick opacity fade on the incoming page. Opacity only: a
+            transform here would give fixed-position drawers inside the page
+            a new containing block for the length of the animation. No
+            mode="wait", which held the new page back until the old one had
+            finished animating out.
 
             Keyed on the page, not the URL. Keying on the full pathname
-            remounts the whole page whenever any part of the URL changes —
+            remounts the whole page whenever any part of the URL changes --
             which silently threw away My Work's queue, filter and half-typed
             form every time it selected a village. */}
-        <motion.div
-          key={pageKey(location.pathname)}
-          initial={{ opacity: 0, y: 6 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.12 }}
-        >
-          <Outlet />
-        </motion.div>
+        <PageModeContext.Provider value={pageModeValue}>
+          <motion.div
+            key={pageKey(location.pathname)}
+            className="page-outlet"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.12 }}
+          >
+            <Outlet />
+          </motion.div>
+        </PageModeContext.Provider>
       </main>
     </div>
   )
