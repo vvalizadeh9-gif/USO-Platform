@@ -38,6 +38,10 @@ for (const viewport of VIEWPORTS) {
         await signIn(page)
         await page.goto(p.path)
         await expect(page.getByRole('heading', { name: p.ready }).first()).toBeVisible()
+        // Measure the settled page: every read answered (some deliberately
+        // late -- see mockApi.js) and a frame for layout to follow.
+        await page.waitForLoadState('networkidle')
+        await page.waitForTimeout(300)
 
         const m = await pageScroll(page)
         expect(m.scrollHeight).toBeLessThanOrEqual(m.innerHeight)

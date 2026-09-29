@@ -369,8 +369,9 @@ function overrun(plot) {
 
 /** Size the plot so the page does not scroll: draw it at the tallest, see
  * how far the page overruns its space, and take that off, within
- * FIT_MIN..FIT_MAX. Measured once after the first render, again when the web
- * fonts arrive (they change line heights) and on every resize. Written to the
+ * FIT_MIN..FIT_MAX. Measured after the first render, again when the web
+ * fonts arrive (they change line heights), on every window resize, and
+ * whenever the rest of the view changes size as its data arrives. Written to the
  * element's style, not to React state, so nothing re-renders and a fit can
  * never trigger another one. */
 function useFitHeight(ref) {
@@ -392,9 +393,26 @@ function useFitHeight(ref) {
     fit()
     document.fonts?.ready?.then(fit)
     window.addEventListener('resize', fit)
+    // The rest of the view loads on its own requests: the KPI band replacing
+    // its skeleton, or the side cards arriving, changes how much room there is
+    // after the first fit. Re-fit whenever the view's size changes, on the
+    // next frame. A fit is idempotent -- the same layout gives the same
+    // height -- so the view settles instead of oscillating.
+    let frame = 0
+    const view = plot.closest('.dt-view')
+    const observer =
+      view && typeof ResizeObserver !== 'undefined'
+        ? new ResizeObserver(() => {
+            cancelAnimationFrame(frame)
+            frame = requestAnimationFrame(fit)
+          })
+        : null
+    observer?.observe(view)
     return () => {
       live = false
       window.removeEventListener('resize', fit)
+      cancelAnimationFrame(frame)
+      observer?.disconnect()
     }
   }, [ref])
 }

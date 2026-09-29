@@ -7,6 +7,7 @@ import ProcessStepper from '../components/ProcessStepper'
 import { PageBar, Tabs } from '../components/ui'
 import { useAuth } from '../context/AuthContext'
 import { canReview } from '../lib/roles'
+import useCountSetters from '../lib/useCountSetters'
 import DtAssignmentTab from './drivetest/DtAssignmentTab'
 import DtInProgressTab from './drivetest/DtInProgressTab'
 import DtReviewTab from './drivetest/DtReviewTab'
@@ -47,10 +48,7 @@ export default function DriveTest() {
   // pre-action number teaches people to stop trusting the badges.
   useEffect(loadCounts, [loadCounts, tab])
 
-  const setCount = useCallback(
-    (key) => (value) => setCounts((c) => ({ ...c, [key]: value })),
-    [],
-  )
+  const setCount = useCountSetters(setCounts)
 
   const tabs = TABS.map((t) => ({ ...t, count: counts[t.count] }))
 

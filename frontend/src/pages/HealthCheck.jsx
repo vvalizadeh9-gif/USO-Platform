@@ -15,6 +15,7 @@ import ProcessStepper from '../components/ProcessStepper'
 import { PageBar, Tabs } from '../components/ui'
 import { useAuth } from '../context/AuthContext'
 import { canReview } from '../lib/roles'
+import useCountSetters from '../lib/useCountSetters'
 import HcBasketTab from './healthcheck/HcBasketTab'
 import HcInProgressTab from './healthcheck/HcInProgressTab'
 import HcResultsTab from './healthcheck/HcResultsTab'
@@ -88,10 +89,7 @@ export default function HealthCheck() {
   useEffect(loadCounts, [loadCounts, tab])
 
   // A tab reporting its own size keeps the badge honest between refreshes.
-  const setCount = useCallback(
-    (key) => (value) => setCounts((c) => ({ ...c, [key]: value })),
-    [],
-  )
+  const setCount = useCountSetters(setCounts)
 
   // After every hook, so the hook order is the same on the render that
   // redirects as on the one that does not. `replace` because the old URL is

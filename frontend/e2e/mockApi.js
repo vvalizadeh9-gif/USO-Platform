@@ -20,14 +20,20 @@ const ROUTES = {
   '/reference/contractors': F.contractors,
 }
 
+// Endpoints answered late, on purpose: the dashboard's side cards arriving
+// after the trend chart is the order that exposed the chart fitting itself
+// only once. Every page must lay out right whatever order its reads land in.
+const LATE = { '/drive-test/overview': 400, '/drive-test/plan-delivery': 250, '/drive-test/trend': 250 }
+
 export async function signIn(page) {
   await page.addInitScript((user) => {
     localStorage.setItem('uep_token', 'e2e-token')
     localStorage.setItem('uep_user', JSON.stringify(user))
   }, F.PM)
-  await page.route('**/api/v1/**', (route) => {
+  await page.route('**/api/v1/**', async (route) => {
     const path = new URL(route.request().url()).pathname.replace('/api/v1', '')
     const body = path in ROUTES ? ROUTES[path] : []
+    if (LATE[path]) await new Promise((r) => setTimeout(r, LATE[path]))
     return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) })
   })
 }
