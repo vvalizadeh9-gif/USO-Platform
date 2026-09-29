@@ -1,13 +1,10 @@
 import { ArrowDown, ArrowUp, Flag, X } from 'lucide-react'
 import { useState } from 'react'
-import api from '../../api/client'
 import { useAuth } from '../../context/AuthContext'
-import { useToast } from '../../context/ToastContext'
 import { canSetAcceptancePlan } from '../../lib/roles'
-import { currentShamsiPeriod } from '../../lib/shamsi'
-import { planDeltaTone } from '../reports/acceptancePlan'
 import { fmtCount } from '../reports/kpiTheme'
-import PeriodPicker from './PeriodPicker'
+import { planDeltaTone } from './figures'
+import SetTargetForm from './SetTargetForm'
 
 /**
  * This month's programme-wide acceptance target, and — for a PM only — the
@@ -20,8 +17,7 @@ import PeriodPicker from './PeriodPicker'
  * It lives on the Monthly Plan page, beside the other monthly commitments a
  * PM sets, and not on the Acceptance Dashboard: that page reports what has
  * happened, and a target is what was promised. The dashboard still reads it
- * — its Plan vs Actual chart draws the dashed "Planned" line from these same
- * stored targets, month by month (/acceptance/trends).
+ * as the Internal PIP line on its progress chart (/acceptance/progress).
  *
  * It keeps the `.dt-kpi-card` shell, with the PM's control riding at the end
  * of the header row rather than in a corner of its own.
@@ -93,110 +89,6 @@ export default function AcceptanceTargetCard({ plan, onSaved }) {
           }}
         />
       )}
-    </div>
-  )
-}
-
-/**
- * The PM's own inline form: which Shamsi month, how many, why.
- *
- * One form for both MTN internal targets: `stream` ACCEPTANCE (villages,
- * saved through PUT /acceptance/plan as it always was) or DT (drive tests,
- * PUT /pip/internal-target). Both are monthly amounts.
- */
-export function SetTargetForm({ defaultValue, onClose, onSaved, stream = 'ACCEPTANCE', initialPeriod }) {
-  const toast = useToast()
-  const running = currentShamsiPeriod()
-  const unit = stream === 'DT' ? 'drive tests' : 'villages'
-  const [period, setPeriod] = useState(initialPeriod || running || { year: 0, month: 0 })
-  const [count, setCount] = useState(defaultValue != null ? String(defaultValue) : '')
-  const [note, setNote] = useState('')
-  const [busy, setBusy] = useState(false)
-
-  const parsed = () => {
-    const raw = count.trim()
-    if (!/^\d+$/.test(raw)) return undefined
-    return Number(raw)
-  }
-
-  async function submit() {
-    const value = parsed()
-    if (!period?.year || !period?.month) {
-      toast.error('Pick a month', 'Choose the Shamsi year and month this target is for.')
-      return
-    }
-    if (value === undefined) {
-      toast.error(`That is not a number of ${unit}`, 'Enter a whole number.')
-      return
-    }
-    setBusy(true)
-    try {
-      if (stream === 'DT') {
-        await api.put('/pip/internal-target', {
-          stream,
-          year: period.year,
-          month: period.month,
-          target_count: value,
-          note: note.trim() || undefined,
-        })
-      } else {
-        await api.put('/acceptance/plan', {
-          shamsi_year: period.year,
-          shamsi_month: period.month,
-          target_count: value,
-          note: note.trim() || undefined,
-        })
-      }
-      toast.success('Target set', `Saved for ${period.year}/${period.month}.`)
-      onSaved?.()
-    } catch (err) {
-      toast.error('Could not save the target', err.response?.data?.detail || 'Please try again.')
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  return (
-    <div
-      className="card"
-      style={{
-        position: 'absolute', zIndex: 5, top: '100%', left: 0, right: 0, marginTop: 8,
-        padding: 14, boxShadow: 'var(--shadow-1, 0 8px 24px rgba(20,35,60,0.14))',
-      }}
-      role="dialog"
-      aria-label={stream === 'DT' ? 'Set the DT internal target' : 'Set the acceptance target'}
-    >
-      <div className="field" style={{ margin: 0, marginBottom: 10 }}>
-        <label>Shamsi month</label>
-        <PeriodPicker period={period} onChange={setPeriod} disabled={busy} />
-      </div>
-      <div className="field" style={{ margin: 0, marginBottom: 10 }}>
-        <label htmlFor="acc-plan-target">Target ({unit} this month)</label>
-        <input
-          id="acc-plan-target"
-          className="input"
-          inputMode="numeric"
-          value={count}
-          disabled={busy}
-          onChange={(e) => setCount(e.target.value)}
-        />
-      </div>
-      <div className="field" style={{ margin: 0, marginBottom: 12 }}>
-        <label htmlFor="acc-plan-note">Note (optional)</label>
-        <input
-          id="acc-plan-note"
-          className="input"
-          value={note}
-          disabled={busy}
-          onChange={(e) => setNote(e.target.value)}
-        />
-      </div>
-      <div className="row" style={{ gap: 8, justifyContent: 'flex-end' }}>
-        <button type="button" className="btn btn-sm" onClick={onClose} disabled={busy}>Cancel</button>
-        <button type="button" className="btn btn-primary btn-sm" onClick={submit} disabled={busy}>
-          {busy ? 'Saving…' : 'Save target'}
-        </button>
-      </div>
     </div>
   )
 }

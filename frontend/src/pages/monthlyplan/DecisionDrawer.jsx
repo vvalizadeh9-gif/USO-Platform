@@ -4,7 +4,7 @@ import api from '../../api/client'
 import { Loading, StatusPill } from '../../components/ui'
 import { useToast } from '../../context/ToastContext'
 import Revisions from './Revisions'
-import { REASON_LABEL } from './streams'
+import { REASON_LABEL, streamMeta } from './streams'
 
 /** The statuses a PM decides: a first submission, or a revision request. */
 const DECIDABLE = ['Submitted', 'RevisionRequested']
@@ -29,7 +29,7 @@ export default function DecisionDrawer({ target, canDecide, onClose, onDecided }
   const [failed, setFailed] = useState(false)
   const [comment, setComment] = useState('')
   const [busy, setBusy] = useState(false)
-  const streamName = target.stream === 'ACCEPTANCE' ? 'Acceptance' : 'DT'
+  const streamName = streamMeta(target.stream).short
 
   const load = useCallback(() => {
     setFailed(false)

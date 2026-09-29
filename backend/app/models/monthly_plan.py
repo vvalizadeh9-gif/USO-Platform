@@ -1,8 +1,9 @@
 """Contractor monthly plan (PIP): one committed count per stream per month.
 
 A contractor's coordinator submits a single number for a Shamsi month and a
-stream — how many drive tests (``DT``) or how many sites accepted
-(``ACCEPTANCE``) that contractor commits to. A PM approves it, or returns it
+stream — how many drive tests (``DT``), villages fully accepted
+(``ACCEPTANCE``), villages ICT-approved (``ICT``) or villages CRA-approved
+(``CRA``) that contractor commits to. A PM approves it, or returns it
 with a comment. Once approved it locks and becomes that contractor's target
 for the month. The two streams are separate plans: each has its own versions,
 its own status and its own PM decision.
@@ -94,10 +95,29 @@ PLAN_STATUSES: tuple[str, ...] = (
 # ---------------------------------------------------------------------------
 #: Counted in drive tests. Every plan filed before streams existed is this one.
 STREAM_DT = "DT"
-#: Counted in sites accepted.
+#: Counted in villages fully accepted (ICT **and** CRA approved).
 STREAM_ACCEPTANCE = "ACCEPTANCE"
+#: Counted in villages approved by ICT, whatever CRA has said.
+STREAM_ICT = "ICT"
+#: Counted in villages approved by CRA, whatever ICT has said.
+STREAM_CRA = "CRA"
 
-PLAN_STREAMS: tuple[str, ...] = (STREAM_DT, STREAM_ACCEPTANCE)
+#: ``stream`` is a plain ``VARCHAR(20)`` with no CHECK constraint or enum on
+#: either table, so adding a stream is this tuple (and the ``PlanStream``
+#: request type), never a migration. Months before a stream existed simply
+#: have no plan for it.
+PLAN_STREAMS: tuple[str, ...] = (STREAM_DT, STREAM_ACCEPTANCE, STREAM_ICT, STREAM_CRA)
+
+#: The three acceptance streams, in the order the dashboard shows them.
+ACCEPTANCE_STREAMS: tuple[str, ...] = (STREAM_ACCEPTANCE, STREAM_ICT, STREAM_CRA)
+
+#: How each stream is named on screen, in chips and in exports.
+STREAM_LABELS: dict[str, str] = {
+    STREAM_DT: "DT",
+    STREAM_ACCEPTANCE: "Acceptance",
+    STREAM_ICT: "ICT",
+    STREAM_CRA: "CRA",
+}
 
 # ---------------------------------------------------------------------------
 # Revision reasons
@@ -151,8 +171,8 @@ class ContractorMonthlyPlan(Base):
         ForeignKey("contractors.id"), nullable=False, index=True
     )
 
-    #: ``DT`` or ``ACCEPTANCE``. One plan per contractor, per stream, per
-    #: month; the two streams never share a version sequence.
+    #: One of :data:`PLAN_STREAMS`. One plan per contractor, per stream, per
+    #: month; streams never share a version sequence.
     stream: Mapped[str] = mapped_column(
         String(20), default=STREAM_DT, server_default=STREAM_DT, nullable=False
     )

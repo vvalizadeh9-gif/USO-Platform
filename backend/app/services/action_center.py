@@ -24,6 +24,7 @@ from sqlalchemy.orm import Session, selectinload
 from app.core.deps import ADMIN, COORDINATOR, CONTRACTOR, PM
 from app.models.acceptance import CpmChangeRequest, Notification
 from app.models.health_check import HcAssignment, HcRemediation, HcTask
+from app.models.monthly_plan import STREAM_LABELS
 from app.models.reference import User
 from app.models.workitem import Assignment, Site, Village, WorkItem
 from app.schemas import ActionCounter, ActionItem
@@ -287,7 +288,8 @@ def _event_items(db: Session, user: User) -> list[ActionItem]:
 # ---------------------------------------------------------------------------
 # Monthly plans (PIP)
 # ---------------------------------------------------------------------------
-_STREAM_NAME = {"DT": "DT", "ACCEPTANCE": "Acceptance"}
+#: How each PIP stream is named in a chip.
+_STREAM_NAME = STREAM_LABELS
 
 
 def _plan_url(plan, *, drawer: bool) -> str:

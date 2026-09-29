@@ -1,7 +1,7 @@
 import { CalendarRange, PackageCheck, Target, Users, Building2 } from 'lucide-react'
 import { useState } from 'react'
 import { Card, KpiCard, Loading, Meter } from '../../components/ui'
-import { SetTargetForm } from './AcceptanceTargetCard'
+import SetTargetForm from './SetTargetForm'
 import { sharePercent } from './figures'
 
 const fmt = (v) => (v == null ? '—' : Number(v).toLocaleString('en-US'))
@@ -86,7 +86,7 @@ function Kpis({ meta, stream, isRunning, internal }) {
 
 function pipNote(meta, kpis) {
   if (kpis.internal_pip && kpis.contractor_pip != null) {
-    return `${sharePercent(kpis.contractor_pip, kpis.internal_pip)}% of target`
+    return `${sharePercent(kpis.contractor_pip, kpis.internal_pip)}% of Internal PIP`
   }
   if (meta.hasAssignment && kpis.contractor_pip != null && kpis.assignment) {
     return `${sharePercent(kpis.contractor_pip, kpis.assignment)}% of assignment`
@@ -134,15 +134,15 @@ function PaceWords({ diff }) {
   )
 }
 
-/** MTN's internal target: "Not set" rather than 0, marked Internal, and for
- * the PM an Edit button that opens the target editor for the stream. */
+/** The Internal PIP: "Not set" rather than 0, marked Internal, and for the
+ * PM an Edit button that opens the editor for the stream. */
 function InternalKpi({ meta, kpis, view, period, canSetTarget, onSaved }) {
   const [open, setOpen] = useState(false)
   const set = kpis.internal_pip != null
   return (
     <KpiCard
       icon={Building2}
-      title="MTN target"
+      title="Internal PIP"
       className="pv-internal"
       badge={<span className="pill pill-dim">Internal</span>}
       figure={set ? fmt(kpis.internal_pip) : <span className="pv-unset">Not set</span>}
@@ -152,7 +152,7 @@ function InternalKpi({ meta, kpis, view, period, canSetTarget, onSaved }) {
             type="button"
             className="btn btn-ghost btn-sm"
             onClick={() => setOpen((o) => !o)}
-            aria-label={`Set the ${meta.title} internal target`}
+            aria-label={`Set the ${meta.title} Internal PIP`}
           >
             Edit
           </button>

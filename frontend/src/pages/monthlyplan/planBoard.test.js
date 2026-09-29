@@ -24,7 +24,8 @@ describe('planBoard', () => {
       ACCEPTANCE: { rows: [row(1, 'A', 'Approved', { committed_count: 7, in_force_count: 7 })] },
     })
     const view = buildBoard(board)
-    expect(view.totals).toEqual({ DT: 12, ACCEPTANCE: 7 })
+    // A stream nobody read (ICT, CRA here) totals 0: nothing shared.
+    expect(view.totals).toEqual({ DT: 12, ACCEPTANCE: 7, ICT: 0, CRA: 0 })
     expect(view.shared.map((c) => c.name)).toEqual(['A'])
     expect(view.notShared.map((c) => c.name)).toEqual(['B'])
     expect(view.shared[0].word).toBe('1 waiting')

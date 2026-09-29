@@ -8,6 +8,7 @@ import { figure } from './figures'
 import Revisions from './Revisions'
 import SixMonthChart, { ChartLegend } from './SixMonthChart'
 import { FigureCards, Standing } from './Standing'
+import { STREAM_LIST } from './streams'
 
 // What the server accepts (services/monthly_plan.MAX_COMMITTED_COUNT). Checked
 // here so a typo is refused where it was typed, not after a round trip; the
@@ -24,11 +25,21 @@ const EDITABLE = ['Draft', 'Returned', 'Reopened']
 // own screen creates; a server that does not produce it simply never matches.
 const ANSWERING = ['Returned', 'Reopened']
 
-/** The two plans a contractor files every month, in the order they are read. */
-const STREAMS = [
-  { key: 'DT', name: 'DT', unit: 'drive tests', example: 'e.g. 40' },
-  { key: 'ACCEPTANCE', name: 'Acceptance', unit: 'villages fully accepted', example: 'e.g. 25' },
-]
+/** The plans a contractor files every month, in the order they are read:
+ * DT, Acceptance, ICT and CRA (streams.js). `key` is the server's code. */
+const STREAMS = STREAM_LIST.map((s) => ({ key: s.stream, name: s.short, unit: s.unit, example: s.example }))
+
+const emptyCounts = () => Object.fromEntries(STREAMS.map((s) => [s.key, '']))
+
+/** Every stream's /pip/my for one month, keyed by stream code. */
+const getAll = async (year, month) => {
+  const reads = await Promise.all(STREAMS.map((s) => getMy(year, month, s.key)))
+  return Object.fromEntries(STREAMS.map((s, i) => [s.key, reads[i]]))
+}
+
+/** "DT and ICT", "DT, ICT and CRA". */
+const andList = (names) =>
+  names.length < 2 ? names.join('') : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`
 
 /** Why a contractor may ask for an approved number to change. Same values as
  * the server's REVISION_REASONS; OTHER needs a comment. */
@@ -48,18 +59,19 @@ function parseCount(text) {
   return value > MAX_COMMITTED ? undefined : value
 }
 
-const getMy = (year, month, stream) =>
-  api.get('/pip/my', { params: { year, month, stream } }).then((r) => r.data)
+function getMy(year, month, stream) {
+  return api.get('/pip/my', { params: { year, month, stream } }).then((r) => r.data)
+}
 
 /**
  * The contractor's own side of the monthly plan.
  *
  * One screen, in the order the person using it reads:
  *
- * 1. **Next month's two numbers** -- the DT PIP and the Acceptance PIP, on one
- *    form with one Submit. They are two plans on the server (one per
- *    stream), decided by the PM separately, so each number carries its own
- *    status, version, deadline and PM comment.
+ * 1. **Next month's numbers** -- the DT, Acceptance, ICT and CRA PIPs, on
+ *    one form with one Submit. They are separate plans on the server (one
+ *    per stream), decided by the PM separately, so each number carries its
+ *    own status, version, deadline and PM comment.
  * 2. **This month's approved numbers**, and -- until the end of day 15 -- a
  *    way to ask the PM to change one. The approved number stays in force
  *    until the PM approves the request.
@@ -71,7 +83,7 @@ const getMy = (year, month, stream) =>
  * month, carried in plus newly assigned. **PIP** is what the PM approved.
  * **Delivered** is what was done.
  *
- * Nothing here names another company or shows MTN's internal target: every
+ * Nothing here names another company or shows the Internal PIP: every
  * call reads the caller's own contractor off their session.
  */
 export default function ContractorPlan({ period }) {
@@ -79,7 +91,7 @@ export default function ContractorPlan({ period }) {
   // Per stream: the planning month's context, and the running month's.
   const [planning, setPlanning] = useState(null)
   const [running, setRunning] = useState(null)
-  const [counts, setCounts] = useState({ DT: '', ACCEPTANCE: '' })
+  const [counts, setCounts] = useState(emptyCounts)
   const [busy, setBusy] = useState(false)
   const [denied, setDenied] = useState(false)
   const [historyFor, setHistoryFor] = useState(null)
@@ -89,26 +101,26 @@ export default function ContractorPlan({ period }) {
   const load = useCallback(async () => {
     setDenied(false)
     try {
-      const [dt, acc] = await Promise.all([getMy(year, month, 'DT'), getMy(year, month, 'ACCEPTANCE')])
-      const next = { DT: dt, ACCEPTANCE: acc }
+      const next = await getAll(year, month)
       setPlanning(next)
       // The inputs follow the server's numbers on every load, including after
       // a submit: the value on screen should be the value on record.
-      setCounts({
-        DT: dt.planning?.committed_count == null ? '' : String(dt.planning.committed_count),
-        ACCEPTANCE: acc.planning?.committed_count == null ? '' : String(acc.planning.committed_count),
-      })
+      setCounts(
+        Object.fromEntries(
+          STREAMS.map((s) => {
+            const count = next[s.key].planning?.committed_count
+            return [s.key, count == null ? '' : String(count)]
+          }),
+        ),
+      )
 
       // The month now running, for the revision block. When the picker is on
-      // the running month already, those are the same two plans.
-      const ry = dt.current_month?.shamsi_year
-      const rm = dt.current_month?.shamsi_month
+      // the running month already, those are the same plans.
+      const ry = next.DT.current_month?.shamsi_year
+      const rm = next.DT.current_month?.shamsi_month
       if (!ry || !rm) setRunning(null)
       else if (ry === year && rm === month) setRunning(next)
-      else {
-        const [rdt, racc] = await Promise.all([getMy(ry, rm, 'DT'), getMy(ry, rm, 'ACCEPTANCE')])
-        setRunning({ DT: rdt, ACCEPTANCE: racc })
-      }
+      else setRunning(await getAll(ry, rm))
     } catch (err) {
       // A staff account reaching this screen, which the route guard should
       // have prevented -- but the server is what decides, and saying so
@@ -151,7 +163,7 @@ export default function ContractorPlan({ period }) {
         return
       }
       if (value === null) {
-        toast.error(`Enter your ${s.name} PIP`, `Both numbers are handed in together. Enter the ${s.unit} you commit to.`)
+        toast.error(`Enter your ${s.name} PIP`, `Every number is handed in together. Enter the ${s.unit} you commit to.`)
         return
       }
     }
@@ -171,10 +183,10 @@ export default function ContractorPlan({ period }) {
     }
     setBusy(false)
     if (failed.length === 0) {
-      toast.success('Handed in', `Your ${label} ${done.join(' and ')} PIP ${done.length > 1 ? 'are' : 'is'} with the PM.`)
+      toast.success('Handed in', `Your ${label} ${andList(done)} PIP ${done.length > 1 ? 'are' : 'is'} with the PM.`)
     } else {
       toast.error(
-        done.length ? `Only your ${done.join(' and ')} PIP was handed in` : 'Could not submit',
+        done.length ? `Only your ${andList(done)} PIP was handed in` : 'Could not submit',
         failed.join(' · '),
       )
     }
@@ -205,7 +217,8 @@ export default function ContractorPlan({ period }) {
             </button>
             {open.length < STREAMS.length && (
               <span className="dim" style={{ fontSize: 'var(--fs-meta)' }}>
-                Hands in your {open.map((s) => s.name).join(' and ')} PIP only; the other is with the PM already.
+                Hands in your {andList(open.map((s) => s.name))} PIP only; the{' '}
+                {STREAMS.length - open.length === 1 ? 'other is' : 'others are'} with the PM already.
               </span>
             )}
           </div>

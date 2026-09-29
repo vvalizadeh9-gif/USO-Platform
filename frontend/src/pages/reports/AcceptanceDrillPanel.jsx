@@ -52,17 +52,22 @@ const PANEL_ROWS = 50
 
 const DrillContext = createContext(null)
 
-export function AcceptanceDrillProvider({ children }) {
+/**
+ * Owns the panel. `scope` is the page's filter (`province_id`,
+ * `contractor_id`), sent with every list so the list is the figure's own
+ * population, not the whole programme's.
+ */
+export function AcceptanceDrillProvider({ scope, children }) {
   const [focus, setFocus] = useState(null)
 
-  const open = useCallback((metric, label) => setFocus({ metric, label }), [])
+  const open = useCallback((metric, label, authority) => setFocus({ metric, label, authority }), [])
   const close = useCallback(() => setFocus(null), [])
   const value = useMemo(() => ({ open, close, focus }), [open, close, focus])
 
   return (
     <DrillContext.Provider value={value}>
       {children}
-      <AcceptanceDrillPanel focus={focus} onClose={close} />
+      <AcceptanceDrillPanel focus={focus} scope={scope} onClose={close} />
     </DrillContext.Provider>
   )
 }
@@ -71,11 +76,12 @@ export function AcceptanceDrillProvider({ children }) {
  * A quantity that opens the sites behind it.
  *
  * `metric` is the server's name for the figure — one of the keys in
- * `acceptance_analytics.SITE_METRICS` — and it is the only thing that decides
- * what the panel lists. `label` is what the card called the number, repeated
- * in the panel's header so a reader arriving from a figure recognises it.
+ * `acceptance_analytics.SITE_METRICS` — and, with `authority` (ICT or CRA,
+ * for that authority's reading of it), the only thing that decides what the
+ * panel lists. `label` is what the card called the number, repeated in the
+ * panel's header so a reader arriving from a figure recognises it.
  */
-export function DrillFigure({ metric, label, value, className, children }) {
+export function DrillFigure({ metric, authority, label, value, className, children }) {
   const ctx = useContext(DrillContext)
   const shown = children ?? fmtCount(value)
 
@@ -85,7 +91,7 @@ export function DrillFigure({ metric, label, value, className, children }) {
     <button
       type="button"
       className={`drill ${className || ''}`.trim()}
-      onClick={() => ctx.open(metric, label)}
+      onClick={() => ctx.open(metric, label, authority)}
       aria-label={`${label}: ${value} villages — open the sites behind this figure`}
     >
       {shown}
@@ -93,7 +99,16 @@ export function DrillFigure({ metric, label, value, className, children }) {
   )
 }
 
-function AcceptanceDrillPanel({ focus, onClose }) {
+/** The query for one figure: its metric, its authority if any, the scope. */
+function listParams(focus, scope) {
+  return {
+    metric: focus.metric,
+    ...(focus.authority ? { authority: focus.authority } : {}),
+    ...(scope ?? {}),
+  }
+}
+
+function AcceptanceDrillPanel({ focus, scope, onClose }) {
   const reduced = useReducedMotion()
   const toast = useToast()
   const closeRef = useRef(null)
@@ -101,16 +116,20 @@ function AcceptanceDrillPanel({ focus, onClose }) {
   const [exporting, setExporting] = useState(false)
 
   const metric = focus?.metric
+  const params = focus ? listParams(focus, scope) : null
+  // One key for "the same list": a new object for the same figure and scope
+  // is not a new request.
+  const paramsKey = params ? JSON.stringify(params) : ''
 
   useEffect(() => {
-    if (!metric) {
+    if (!paramsKey) {
       setState({ data: null, error: null, loading: false })
       return undefined
     }
     let live = true
     setState({ data: null, error: null, loading: true })
     api
-      .get('/acceptance/sites', { params: { metric, limit: PANEL_ROWS } })
+      .get('/acceptance/sites', { params: { ...JSON.parse(paramsKey), limit: PANEL_ROWS } })
       .then((r) => {
         if (live) setState({ data: r.data, error: null, loading: false })
       })
@@ -129,7 +148,7 @@ function AcceptanceDrillPanel({ focus, onClose }) {
     return () => {
       live = false
     }
-  }, [metric])
+  }, [paramsKey])
 
   // Escape closes, the same as the button. A panel that can only be dismissed
   // by finding a small target is one people leave open and scroll behind.
@@ -153,7 +172,7 @@ function AcceptanceDrillPanel({ focus, onClose }) {
       // spreadsheet assembled in the browser from the fifty loaded rows would
       // be a different, silently shorter answer than the figure promised.
       const res = await api.get('/acceptance/sites/export', {
-        params: { metric },
+        params,
         responseType: 'blob',
       })
       saveBlob(res.data, filenameFrom(res.headers, `acceptance-${metric}.xlsx`))

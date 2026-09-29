@@ -25,13 +25,19 @@ from app.schemas import (
     AcceptancePlanPeriod,
     AcceptancePlanResponse,
     AcceptancePlanUpdate,
+    AcceptanceProgress,
     AcceptanceSiteList,
     AcceptanceSiteRow,
     AcceptanceTrendMonth,
     AcceptanceTrendsResponse,
     ProvinceAcceptanceRow,
 )
-from app.services import acceptance_plan, acceptance_site_export
+from app.services import (
+    acceptance_plan,
+    acceptance_progress,
+    acceptance_progress_export,
+    acceptance_site_export,
+)
 from app.services.acceptance_analytics import SITE_METRICS, AcceptanceAnalytics
 
 router = APIRouter(prefix="/acceptance", tags=["acceptance"])
@@ -44,15 +50,19 @@ require_pm = require_roles(PM)
 
 
 def _resolve_province_filter(
-    db: Session, coordinator_id: int | None, regional_manager_id: int | None
+    db: Session,
+    coordinator_id: int | None,
+    regional_manager_id: int | None,
+    province_id: int | None = None,
 ) -> set[int] | None:
     """Turn a coordinator/regional-manager pick into the provinces Admin
-    assigned them, intersecting when both are given.
+    assigned them, intersecting when both are given, and with *province_id*
+    (the dashboard's scope picker) when that is given too.
 
-    Returns ``None`` — no province narrowing — when neither filter is set,
-    so an unfiltered dashboard never pays for this resolution.
+    Returns ``None`` — no province narrowing — when no filter is set, so an
+    unfiltered dashboard never pays for this resolution.
     """
-    province_ids: set[int] | None = None
+    province_ids: set[int] | None = None if province_id is None else {province_id}
     if coordinator_id is not None:
         matched = {
             p.id
@@ -60,7 +70,7 @@ def _resolve_province_filter(
                 Province.coordinator_user_id == coordinator_id
             )
         }
-        province_ids = matched
+        province_ids = matched if province_ids is None else province_ids & matched
     if regional_manager_id is not None:
         matched = {
             p.id
@@ -77,6 +87,7 @@ def acceptance_overview(
     coordinator_id: int | None = Query(default=None),
     regional_manager_id: int | None = Query(default=None),
     contractor_id: int | None = Query(default=None),
+    province_id: int | None = Query(default=None),
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> AcceptanceOverview:
@@ -87,7 +98,9 @@ def acceptance_overview(
     coordinator/RM pick becomes a set of provinces and how contractor scopes
     directly on the work item, respectively.
     """
-    province_ids = _resolve_province_filter(db, coordinator_id, regional_manager_id)
+    province_ids = _resolve_province_filter(
+        db, coordinator_id, regional_manager_id, province_id
+    )
     data = AcceptanceAnalytics(
         db, user, province_ids=province_ids, contractor_id=contractor_id
     ).build()
@@ -113,6 +126,8 @@ def _site_rows(
     coordinator_id: int | None,
     regional_manager_id: int | None,
     contractor_id: int | None,
+    province_id: int | None = None,
+    authority: str | None = None,
 ) -> dict:
     """One figure's sites, through the same analytics the figure came from.
 
@@ -120,12 +135,16 @@ def _site_rows(
     answers a different question from the one asked is the failure this whole
     drill-through exists to prevent.
     """
-    province_ids = _resolve_province_filter(db, coordinator_id, regional_manager_id)
+    province_ids = _resolve_province_filter(
+        db, coordinator_id, regional_manager_id, province_id
+    )
     analytics = AcceptanceAnalytics(
         db, user, province_ids=province_ids, contractor_id=contractor_id
     )
     try:
-        return analytics.site_rows(metric)
+        return analytics.site_rows(
+            metric, authority.upper().strip() if authority else None
+        )
     except ValueError as exc:
         raise HTTPException(422, str(exc)) from exc
 
@@ -140,6 +159,10 @@ def acceptance_sites(
     coordinator_id: int | None = Query(default=None),
     regional_manager_id: int | None = Query(default=None),
     contractor_id: int | None = Query(default=None),
+    province_id: int | None = Query(default=None),
+    authority: str | None = Query(
+        default=None, description="ICT|CRA: that authority's reading of the figure"
+    ),
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> AcceptanceSiteList:
@@ -155,7 +178,8 @@ def acceptance_sites(
     items exist for them, and the three filters here can only narrow that.
     """
     data = _site_rows(
-        db, user, metric, coordinator_id, regional_manager_id, contractor_id
+        db, user, metric, coordinator_id, regional_manager_id, contractor_id,
+        province_id, authority,
     )
     page = data["rows"][offset : offset + limit]
     return AcceptanceSiteList(
@@ -175,6 +199,10 @@ def export_acceptance_sites(
     coordinator_id: int | None = Query(default=None),
     regional_manager_id: int | None = Query(default=None),
     contractor_id: int | None = Query(default=None),
+    province_id: int | None = Query(default=None),
+    authority: str | None = Query(
+        default=None, description="ICT|CRA: that authority's reading of the figure"
+    ),
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> Response:
@@ -185,7 +213,8 @@ def export_acceptance_sites(
     screenful and this is how a reader gets the rest.
     """
     data = _site_rows(
-        db, user, metric, coordinator_id, regional_manager_id, contractor_id
+        db, user, metric, coordinator_id, regional_manager_id, contractor_id,
+        province_id, authority,
     )
     content = acceptance_site_export.build_site_list_export(
         data["rows"], label=data["label"], total=data["total"]
@@ -195,7 +224,8 @@ def export_acceptance_sites(
         media_type=_XLSX_MEDIA_TYPE,
         headers={
             "Content-Disposition": (
-                f'attachment; filename="{acceptance_site_export.filename(metric)}"'
+                'attachment; filename="'
+                f'{acceptance_site_export.filename(metric, authority=authority)}"'
             )
         },
     )
@@ -319,7 +349,7 @@ def set_acceptance_plan(
     return _plan_period(target, names)
 
 
-@router.get("/trends", response_model=AcceptanceTrendsResponse)
+@router.get("/trends", response_model=AcceptanceTrendsResponse, deprecated=True)
 def acceptance_trends(
     coordinator_id: int | None = Query(default=None),
     regional_manager_id: int | None = Query(default=None),
@@ -331,6 +361,9 @@ def acceptance_trends(
     """Monthly pace of ICT/CRA/full acceptance, for this user's scope.
 
     Same scope resolution as ``/overview``, and the same read permission.
+
+    **Deprecated**: the Acceptance Dashboard reads ``/progress`` instead.
+    Kept for any external reader; nothing in this codebase calls it.
     """
     province_ids = _resolve_province_filter(db, coordinator_id, regional_manager_id)
     months_data = acceptance_plan.monthly_approval_trend(
@@ -338,6 +371,56 @@ def acceptance_trends(
     )
     return AcceptanceTrendsResponse(
         months=[AcceptanceTrendMonth(**m) for m in months_data]
+    )
+
+
+@router.get("/progress", response_model=AcceptanceProgress)
+def acceptance_progress_view(
+    months: int = Query(
+        acceptance_progress.DEFAULT_MONTHS, ge=1, le=acceptance_progress.MAX_MONTHS
+    ),
+    province_id: int | None = Query(default=None),
+    contractor_id: int | None = Query(default=None),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> AcceptanceProgress:
+    """Approvals against the Internal PIP and the Contractor PIP, per month,
+    for the village, ICT and CRA streams at once.
+
+    Open to every signed-in role, like ``/overview``: the villages are the
+    caller's own scope, a contractor's ``contractor_id`` is always its own
+    company, and the Internal PIP is withheld (``null``) wherever the caller
+    may not see it. See ``services/acceptance_progress.py``.
+    """
+    return AcceptanceProgress(
+        **acceptance_progress.progress(
+            db, user, months=months, province_id=province_id, contractor_id=contractor_id
+        )
+    )
+
+
+@router.get("/progress/export")
+def export_acceptance_progress(
+    months: int = Query(
+        acceptance_progress.DEFAULT_MONTHS, ge=1, le=acceptance_progress.MAX_MONTHS
+    ),
+    province_id: int | None = Query(default=None),
+    contractor_id: int | None = Query(default=None),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> Response:
+    """The same payload as ``/progress``, as a workbook: one sheet per stream."""
+    data = acceptance_progress.progress(
+        db, user, months=months, province_id=province_id, contractor_id=contractor_id
+    )
+    return Response(
+        content=acceptance_progress_export.build_progress_export(data),
+        media_type=_XLSX_MEDIA_TYPE,
+        headers={
+            "Content-Disposition": (
+                f'attachment; filename="{acceptance_progress_export.filename()}"'
+            )
+        },
     )
 
 

@@ -218,15 +218,19 @@ def test_not_submitted_after_the_deadline_per_stream(client, world, monkeypatch)
     _on_day(monkeypatch, 4)
     items, counters = _summary(client, world, "alpha")
     missing = [i for i in items if i["id"].startswith("pip-missing")]
+    month = f"{jalali.month_name(RUNNING[1])} {RUNNING[0]}"
     # Alpha filed DT for the running month (approved) and Acceptance (a
-    # returned revision is still a plan): nothing missing.
-    assert missing == []
+    # returned revision is still a plan); only the ICT and CRA plans, which
+    # nobody in this fixture files, are missing.
+    assert [i["label"] for i in missing] == [f"ICT PIP, {month}", f"CRA PIP, {month}"]
 
     beta, beta_counters = _summary(client, world, "beta")
     missing = [i for i in beta if i["id"].startswith("pip-missing")]
     # Beta filed DT (a pending revision) but no Acceptance plan this month.
-    assert [i["label"] for i in missing] == [f"Acceptance PIP, {jalali.month_name(RUNNING[1])} {RUNNING[0]}"]
-    assert beta_counters["plans_missing"]["count"] == 1
+    assert [i["label"] for i in missing] == [
+        f"Acceptance PIP, {month}", f"ICT PIP, {month}", f"CRA PIP, {month}",
+    ]
+    assert beta_counters["plans_missing"]["count"] == 3
 
 
 def test_not_submitted_waits_for_the_deadline(client, world, monkeypatch):
@@ -240,17 +244,21 @@ def test_filing_clears_not_submitted(client, world, monkeypatch):
 
     _on_day(monkeypatch, 4)
     db = SessionLocal()
-    plan = ContractorMonthlyPlan(
-        contractor_id=world["b"], stream="ACCEPTANCE", shamsi_year=RUNNING[0],
-        shamsi_month=RUNNING[1], version=1, is_current=True, committed_count=4,
-        status="Submitted",
-    )
-    db.add(plan)
+    filed = [
+        ContractorMonthlyPlan(
+            contractor_id=world["b"], stream=stream, shamsi_year=RUNNING[0],
+            shamsi_month=RUNNING[1], version=1, is_current=True, committed_count=4,
+            status="Submitted",
+        )
+        for stream in ("ACCEPTANCE", "ICT", "CRA")
+    ]
+    db.add_all(filed)
     db.commit()
     try:
         items, _ = _summary(client, world, "beta")
         assert not any(i["id"].startswith("pip-missing") for i in items)
     finally:
-        db.delete(plan)
+        for plan in filed:
+            db.delete(plan)
         db.commit()
         db.close()

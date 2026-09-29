@@ -228,26 +228,31 @@ beforeEach(() => {
 // behind it. What these tests hold up is that order, the three words the
 // figures are called by, and the two buttons that are no longer there.
 describe('a contractor filing next month', () => {
-  it('names the month being planned and hands both numbers in, one plan per stream', async () => {
+  /** Type a number into each named stream's field. */
+  const fill = async (numbers) => {
+    for (const [name, value] of Object.entries(numbers)) {
+      await userEvent.type(await screen.findByLabelText(new RegExp(`your مهر ${name} PIP`, 'i')), value)
+    }
+  }
+  const EVERY = { DT: '42', Acceptance: '18', ICT: '30', CRA: '26' }
+
+  it('names the month being planned and hands every number in, one plan per stream', async () => {
     signedInAs('Contractor')
     serve({ my: context() })
     show()
 
     expect(await screen.findByText('Planning مهر 1405')).toBeInTheDocument()
 
-    await userEvent.type(await screen.findByLabelText(/your مهر DT PIP/i), '42')
-    await userEvent.type(screen.getByLabelText(/your مهر Acceptance PIP/i), '18')
+    await fill(EVERY)
     await userEvent.click(screen.getByRole('button', { name: 'Submit' }))
 
-    await waitFor(() => expect(api.post).toHaveBeenCalledTimes(2))
-    expect(api.post).toHaveBeenCalledWith(
-      '/pip/my',
-      expect.objectContaining({ stream: 'DT', committed_count: 42, submit: true }),
-    )
-    expect(api.post).toHaveBeenCalledWith(
-      '/pip/my',
-      expect.objectContaining({ stream: 'ACCEPTANCE', committed_count: 18, submit: true }),
-    )
+    await waitFor(() => expect(api.post).toHaveBeenCalledTimes(4))
+    for (const [stream, count] of [['DT', 42], ['ACCEPTANCE', 18], ['ICT', 30], ['CRA', 26]]) {
+      expect(api.post).toHaveBeenCalledWith(
+        '/pip/my',
+        expect.objectContaining({ stream, committed_count: count, submit: true }),
+      )
+    }
   })
 
   it('reads each stream’s plan on its own', async () => {
@@ -259,8 +264,7 @@ describe('a contractor filing next month', () => {
     const streams = api.get.mock.calls
       .filter(([url]) => url === '/pip/my')
       .map(([, config]) => config.params.stream)
-    expect(streams).toContain('DT')
-    expect(streams).toContain('ACCEPTANCE')
+    expect(streams).toEqual(expect.arrayContaining(['DT', 'ACCEPTANCE', 'ICT', 'CRA']))
   })
 
   it('will not hand in one number without the other', async () => {
@@ -275,7 +279,7 @@ describe('a contractor filing next month', () => {
     expect(api.post).not.toHaveBeenCalled()
   })
 
-  it('says which number failed, and does not report success for both', async () => {
+  it('says which number failed, and does not report success for all of them', async () => {
     signedInAs('Contractor')
     serve({ my: context() })
     api.post.mockImplementation((url, body) =>
@@ -285,22 +289,21 @@ describe('a contractor filing next month', () => {
     )
     show()
 
-    await userEvent.type(await screen.findByLabelText(/your مهر DT PIP/i), '42')
-    await userEvent.type(screen.getByLabelText(/your مهر Acceptance PIP/i), '18')
+    await fill(EVERY)
     await userEvent.click(screen.getByRole('button', { name: 'Submit' }))
 
-    expect(await screen.findByText('Only your DT PIP was handed in')).toBeInTheDocument()
+    expect(await screen.findByText('Only your DT, ICT and CRA PIP was handed in')).toBeInTheDocument()
     expect(screen.getByText(/Acceptance: The deadline has passed/)).toBeInTheDocument()
     expect(screen.queryByText('Handed in')).not.toBeInTheDocument()
   })
 
-  it('submits only the stream still open when the other is with the PM', async () => {
+  it('submits only the stream still open when the others are with the PM', async () => {
     signedInAs('Contractor')
     serve({
       my: ({ stream }) =>
-        stream === 'DT'
-          ? context({ planning: { status: 'Submitted', committed_count: 40 } })
-          : context(),
+        stream === 'ACCEPTANCE'
+          ? context()
+          : context({ planning: { status: 'Submitted', committed_count: 40 } }),
     })
     show()
 
@@ -329,7 +332,7 @@ describe('a contractor filing next month', () => {
     show()
 
     const metas = await screen.findAllByText(/1405\/07\/03/)
-    expect(metas).toHaveLength(2)
+    expect(metas).toHaveLength(4)
     for (const node of metas) {
       const meta = node.closest('.pip-meta')
       expect(meta).toHaveTextContent('Version 1')
@@ -389,7 +392,7 @@ describe('a contractor filing next month', () => {
     })
     show()
 
-    expect((await screen.findAllByText(/this is your target for the month/i)).length).toBe(2)
+    expect((await screen.findAllByText(/this is your target for the month/i)).length).toBe(4)
     expect(document.querySelector('.pip-locked')).toHaveTextContent('40')
     expect(screen.queryByRole('spinbutton')).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /submit|revise/i })).not.toBeInTheDocument()
@@ -400,7 +403,7 @@ describe('a contractor filing next month', () => {
     serve({ my: context({ planning: { status: 'Submitted', committed_count: 40 } }) })
     show()
 
-    expect((await screen.findAllByText(/waiting on the pm/i)).length).toBe(2)
+    expect((await screen.findAllByText(/waiting on the pm/i)).length).toBe(4)
     expect(screen.queryByRole('spinbutton')).not.toBeInTheDocument()
   })
 
@@ -551,7 +554,7 @@ describe('a contractor filing next month', () => {
     show()
 
     const buttons = await screen.findAllByRole('button', { name: 'Request revision' })
-    expect(buttons.map((b) => b.closest('[data-revision]').dataset.revision)).toEqual(['DT', 'ACCEPTANCE'])
+    expect(buttons.map((b) => b.closest('[data-revision]').dataset.revision)).toEqual(['DT', 'ACCEPTANCE', 'ICT', 'CRA'])
   })
 
   it('hides the request once the window has closed', async () => {
@@ -920,6 +923,8 @@ const overview = (over = {}) => ({
       achievement_percent: 30, expected_by_today: 10, pace_diff: -1,
     },
   }),
+  ict: streamOut('ICT', []),
+  cra: streamOut('CRA', []),
   needs_attention: [
     { contractor_id: 3, name: 'Gamma Survey', stream: 'DT', kind: 'not_submitted', label: 'DT مهر · not submitted', shamsi_year: 1405, shamsi_month: 7, plan_id: null },
     { contractor_id: 1, name: 'Alpha Telecom', stream: 'ACCEPTANCE', kind: 'awaiting_approval', label: 'Acceptance آبان · 20 awaiting approval', shamsi_year: 1405, shamsi_month: 8, plan_id: 21 },
@@ -1066,7 +1071,8 @@ describe('the PM page: two tabs', () => {
     show()
 
     await pipLoaded()
-    await waitFor(() => expect(api.get.mock.calls.filter(([url]) => url === '/pip/queue').length).toBe(4))
+    // One read per stream for the planning month, and again for the running one.
+    await waitFor(() => expect(api.get.mock.calls.filter(([url]) => url === '/pip/queue').length).toBe(8))
     expect(screen.getByRole('tab', { name: /Plans/ })).toHaveTextContent(/^Plans$/)
   })
 
@@ -1106,10 +1112,10 @@ describe('PIP vs Achieved', () => {
     const table = await pipLoaded()
     expect(within(kpi('Assignment')).getByText('143')).toBeInTheDocument()
     expect(within(kpi('Assignment')).getByText('3 contractors')).toBeInTheDocument()
-    expect(within(kpi('MTN target')).getByText('150')).toBeInTheDocument()
-    expect(within(kpi('MTN target')).getByText('Internal')).toHaveClass('pill')
+    expect(within(kpi('Internal PIP')).getByText('150')).toBeInTheDocument()
+    expect(within(kpi('Internal PIP')).getByText('Internal')).toHaveClass('pill')
     // 143 of an internal 150.
-    expect(within(kpi('Contractor PIP')).getByText('95% of target')).toBeInTheDocument()
+    expect(within(kpi('Contractor PIP')).getByText('95% of Internal PIP')).toBeInTheDocument()
     // Neutral words, the number in ink: +2 against 19 expected by today.
     expect(within(kpi('Delivered')).getByText('+2').closest('.kpi-card-aside')).toHaveTextContent('+2 ahead of pace')
     expect(within(kpi('Delivered')).getByText('14.7%')).toBeInTheDocument()   // 21 ÷ 143
@@ -1219,7 +1225,7 @@ describe('PIP vs Achieved', () => {
     show()
 
     await pipLoaded()
-    expect(screen.queryByText('MTN target')).toBeNull()
+    expect(screen.queryByText('Internal PIP')).toBeNull()
   })
 
   it('colours the last seven months met or below, with a legend', async () => {
@@ -1301,17 +1307,17 @@ describe('PIP vs Achieved', () => {
     expect(await within(drawer).findByText('Waiting on the PM’s decision.')).toBeInTheDocument()
     expect(within(drawer).queryByRole('button', { name: /approve/i })).toBeNull()
     expect(within(drawer).queryByRole('button', { name: 'Return' })).toBeNull()
-    expect(screen.queryByRole('button', { name: /internal target/ })).toBeNull()
+    expect(screen.queryByRole('button', { name: /Internal PIP/ })).toBeNull()
   })
 
-  it('offers the PM a Set link for an internal target, per stream', async () => {
+  it('offers the PM a Set link for an Internal PIP, per stream', async () => {
     signedInAs('PM')
     serveOverview()
     show()
 
     await pipLoaded()
-    await userEvent.click(screen.getByRole('button', { name: 'Set the DT Delivery internal target' }))
-    const form = screen.getByRole('dialog', { name: 'Set the DT internal target' })
+    await userEvent.click(screen.getByRole('button', { name: 'Set the DT Delivery Internal PIP' }))
+    const form = screen.getByRole('dialog', { name: 'Set the DT Internal PIP' })
     await userEvent.type(within(form).getByLabelText('Target (drive tests this month)'), '160')
     await userEvent.click(within(form).getByRole('button', { name: 'Save target' }))
     await waitFor(() =>
@@ -1319,10 +1325,32 @@ describe('PIP vs Achieved', () => {
     )
 
     await userEvent.click(screen.getByRole('button', { name: 'Acceptance' }))
-    expect(within(kpi('MTN target')).getByText('Not set')).toBeInTheDocument()
-    await userEvent.click(screen.getByRole('button', { name: 'Set the Acceptance internal target' }))
+    expect(within(kpi('Internal PIP')).getByText('Not set')).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Set the Acceptance Internal PIP' }))
     expect(screen.getByRole('dialog', { name: 'Set the acceptance target' })).toBeInTheDocument()
   })
+
+  it.each([['ICT', 'ict'], ['CRA', 'cra']])(
+    'sets the %s Internal PIP through the Internal PIP endpoint, and keeps ?stream=%s',
+    async (stream, key) => {
+      signedInAs('PM')
+      serveOverview()
+      showWithProbe()
+
+      await pipLoaded()
+      await userEvent.click(screen.getByRole('button', { name: stream }))
+      expect(screen.getByTestId('location')).toHaveTextContent(`REPLACE ?stream=${key}`)
+      expect(await screen.findByRole('table', { name: `${stream} by contractor` })).toBeInTheDocument()
+
+      await userEvent.click(screen.getByRole('button', { name: `Set the ${stream} Internal PIP` }))
+      const form = screen.getByRole('dialog', { name: `Set the ${stream} Internal PIP` })
+      await userEvent.type(within(form).getByLabelText('Target (villages this month)'), '44')
+      await userEvent.click(within(form).getByRole('button', { name: 'Save target' }))
+      await waitFor(() =>
+        expect(api.put).toHaveBeenCalledWith('/pip/internal-target', expect.objectContaining({ stream, target_count: 44 })),
+      )
+    },
+  )
 
   it('offers the Month / Year / Since start switch on this tab only', async () => {
     signedInAs('PM')
@@ -1391,7 +1419,7 @@ describe('the Plans tab', () => {
     const notShared = await screen.findByRole('region', { name: 'Not shared yet' })
     expect(within(notShared).getByText('Gamma Survey')).toBeInTheDocument()
     expect(within(notShared).getByText('Delta Radio')).toBeInTheDocument()
-    expect(within(notShared).getByText('Last month: DT 26 · Acceptance —')).toBeInTheDocument()
+    expect(within(notShared).getByText('Last month: DT 26 · Acceptance — · ICT — · CRA —')).toBeInTheDocument()
     expect(within(notShared).queryByRole('button')).toBeNull()
 
     // Waiting first, then returned, then approved.
@@ -1402,8 +1430,9 @@ describe('the Plans tab', () => {
     expect(within(card).getByText('3')).toBeInTheDocument()
     expect(within(card).getByText('/ 5')).toBeInTheDocument()
     const word = (id) => card.querySelector(`[data-contractor="${id}"] .pl-person-word`).textContent
-    expect(word(1)).toBe('Waiting')
-    expect(word(2)).toBe('Approved')
+    // Alpha and Beta have not filed ICT or CRA yet, so neither is whole.
+    expect(word(1)).toBe('2 waiting')
+    expect(word(2)).toBe('2 approved')
     expect(word(3)).toBe('Not shared')
     expect(word(5)).toBe('Returned')
   })
@@ -1456,13 +1485,18 @@ describe('the Plans tab', () => {
     expect(screen.getAllByText(/sites held/)).toHaveLength(1)
   })
 
-  it('compares the shared plans with MTN’s internal PIP', async () => {
+  it('compares the shared plans with the Internal PIP', async () => {
     showPlans()
 
-    const card = await screen.findByRole('region', { name: 'Contractors vs MTN internal' })
+    const card = await screen.findByRole('region', { name: 'Contractors vs Internal PIP' })
     // 40 (Alpha) + 25 (Beta) + 20 (Epsilon); Gamma's Draft adds nothing.
     expect(await within(card).findByText('85 of 100 · 15 short')).toBeInTheDocument()
-    expect(within(card).getByText('No internal PIP set')).toBeInTheDocument()
+    const acceptance = card.querySelector('[data-stream="ACCEPTANCE"]')
+    expect(within(acceptance).getByText('No internal PIP set')).toBeInTheDocument()
+    // ICT and CRA have their own Internal PIP, unset here too.
+    for (const stream of ['ICT', 'CRA']) {
+      expect(within(card.querySelector(`[data-stream="${stream}"]`)).getByText('No internal PIP set')).toBeInTheDocument()
+    }
     expect(within(card).getByText('not shown to contractors')).toBeInTheDocument()
   })
 
@@ -1470,7 +1504,7 @@ describe('the Plans tab', () => {
     showPlans('Admin')
 
     await screen.findByRole('table', { name: 'Shared plans' })
-    expect(screen.queryByRole('region', { name: 'Contractors vs MTN internal' })).toBeNull()
+    expect(screen.queryByRole('region', { name: 'Contractors vs Internal PIP' })).toBeNull()
     expect(api.get).not.toHaveBeenCalledWith('/pip/internal-target', expect.anything())
   })
 
@@ -1531,13 +1565,13 @@ describe('the Plans tab', () => {
     expect(screen.getByText('2 decisions waiting')).toBeInTheDocument()
   })
 
-  it('opens a contractor’s plan history, both streams, read-only', async () => {
+  it('opens a contractor’s plan history, every stream, read-only', async () => {
     showPlans()
 
     await userEvent.click(within(await sharedRow('Beta Networks')).getByRole('button', { name: 'Beta Networks' }))
     const drawer = await screen.findByRole('dialog', { name: 'Plan history' })
     const planning = nextPeriod(RUNNING.year, RUNNING.month)
-    for (const stream of ['DT', 'ACCEPTANCE']) {
+    for (const stream of ['DT', 'ACCEPTANCE', 'ICT', 'CRA']) {
       await waitFor(() =>
         expect(api.get).toHaveBeenCalledWith('/pip/revisions', {
           params: { year: planning.year, month: planning.month, stream, contractor_id: 2 },
@@ -1549,7 +1583,7 @@ describe('the Plans tab', () => {
 })
 
 describe('the PM export', () => {
-  it('downloads the period on the page, both streams', async () => {
+  it('downloads the period on the page, every stream', async () => {
     signedInAs('PM')
     serveOverview()
     const blobUrl = vi.fn(() => 'blob:x')

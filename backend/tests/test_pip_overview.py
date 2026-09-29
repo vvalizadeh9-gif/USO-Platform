@@ -414,14 +414,15 @@ def _cells(ws):
 def test_export_has_both_sheets_and_their_headers(client, world, monkeypatch):
     _on_day(monkeypatch, 10)
     wb = _book(client, world, {"period": "month"})
-    assert wb.sheetnames == ["DT Delivery", "Acceptance"]
+    assert wb.sheetnames == ["DT Delivery", "Acceptance", "ICT", "CRA"]
     assert _cells(wb["DT Delivery"])[0] == [
         "Contractor", "Shamsi month", "Assignment", "PIP", "Revisions",
         "Delivered", "+/−", "Achievement %",
     ]
-    assert _cells(wb["Acceptance"])[0] == [
-        "Contractor", "Shamsi month", "PIP", "Revisions", "Delivered", "+/−", "Achievement %",
-    ]
+    for sheet in ("Acceptance", "ICT", "CRA"):
+        assert _cells(wb[sheet])[0] == [
+            "Contractor", "Shamsi month", "PIP", "Revisions", "Delivered", "+/−", "Achievement %",
+        ]
 
 
 def test_export_rows_totals_and_persian_month(client, world, monkeypatch):
@@ -435,7 +436,7 @@ def test_export_rows_totals_and_persian_month(client, world, monkeypatch):
     assert beta[4] == 1                            # one revision request
     total = next(r for r in rows if r[0] == f"Total — {label}")
     assert total[3] == 8 and total[5] == 1         # 5 + 3 PIP, 1 delivered
-    internal = next(r for r in rows if r[0] == "MTN internal PIP")
+    internal = next(r for r in rows if r[0] == "Internal PIP")
     assert internal[3] == 10
 
 
@@ -457,7 +458,7 @@ def test_export_never_gives_a_contractor_the_internal_pip(client, world, monkeyp
     _on_day(monkeypatch, 10)
     wb = _book(client, world, {"period": "month"}, who="contractor")
     text = [v for ws in wb.worksheets for row in _cells(ws) for v in row if v is not None]
-    assert "MTN internal PIP" not in text
+    assert "Internal PIP" not in text
     assert "Beta Ov" not in text and "Gamma Ov" not in text
     assert "Alpha Ov" in text
 

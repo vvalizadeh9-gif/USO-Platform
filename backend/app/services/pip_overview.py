@@ -1,11 +1,12 @@
-"""The PM's Monthly Plan overview: both streams, one period, one read.
+"""The PM's Monthly Plan overview: every stream, one period, one read.
 
 Built only from services that already exist, so no figure here can disagree
 with the screen it came from:
 
 * DT: ``DriveTestAnalytics.scorecard`` (Assignment, PIP in force, Delivered).
-* Acceptance: ``acceptance_plan.acceptance_scorecard`` (PIP in force,
-  Delivered = villages fully accepted that month; no Assignment).
+* Acceptance, ICT, CRA: ``acceptance_plan.acceptance_scorecard`` (PIP in
+  force, Delivered = villages that cleared the stream that month; no
+  Assignment).
 * MTN internal target: ``acceptance_plan.get_current_target`` per stream.
 * Plan states: ``monthly_plan.queue_rows`` / ``in_force_plan``.
 
@@ -41,8 +42,12 @@ from app.models.monthly_plan import (
     STATUS_REVISION_REQUESTED,
     STATUS_REVISION_RETURNED,
     STATUS_SUBMITTED,
+    PLAN_STREAMS,
     STREAM_ACCEPTANCE,
+    STREAM_CRA,
     STREAM_DT,
+    STREAM_ICT,
+    STREAM_LABELS,
     ContractorMonthlyPlan,
 )
 from app.models.reference import User
@@ -61,7 +66,13 @@ HIT_WINDOW = 6
 #: Months on the trend chart.
 TREND_MONTHS = 12
 
-STREAM_KEYS = {STREAM_DT: "dt", STREAM_ACCEPTANCE: "acceptance"}
+#: The response key for each stream, in page order.
+STREAM_KEYS = {
+    STREAM_DT: "dt",
+    STREAM_ACCEPTANCE: "acceptance",
+    STREAM_ICT: "ict",
+    STREAM_CRA: "cra",
+}
 
 
 class OverviewError(ValueError):
@@ -143,7 +154,7 @@ def _figures(db: Session, user: User, stream: str, periods: list[tuple[int, int]
 
         data = DriveTestAnalytics(db, user).scorecard(periods)
     else:
-        data = acceptance_plan.acceptance_scorecard(db, user, periods)
+        data = acceptance_plan.acceptance_scorecard(db, user, periods, stream)
     out = {}
     for entry in data["months"]:
         out[(entry["shamsi_year"], entry["shamsi_month"])] = {
@@ -388,7 +399,7 @@ def _stream(
 
 
 def _needs_attention(db: Session, user: User, running: tuple[int, int], today: date, dt_rows_running: dict) -> list[dict]:
-    """What the PM should act on now, across both streams.
+    """What the PM should act on now, across every stream.
 
     * ``not_submitted`` -- the running month, past its deadline (day 3 of the
       month a plan covers), and no plan filed.
@@ -402,8 +413,8 @@ def _needs_attention(db: Session, user: User, running: tuple[int, int], today: d
     out = []
     deadline_passed = plans.deadline_has_passed(*running, today=today)
 
-    for stream in (STREAM_DT, STREAM_ACCEPTANCE):
-        name = "DT" if stream == STREAM_DT else "Acceptance"
+    for stream in PLAN_STREAMS:
+        name = STREAM_LABELS[stream]
         for month in (running, planning):
             for contractor, state in _plan_states(db, *month, stream):
                 month_name = jalali.month_name(month[1])
@@ -466,8 +477,7 @@ def overview(
 
     common = dict(view=period, months=months, status_month=status_month,
                   trend=trend, hit_months=hit_months, running=running, today=today)
-    dt = _stream(db, user, STREAM_DT, **common)
-    acc = _stream(db, user, STREAM_ACCEPTANCE, **common)
+    streams = {key: _stream(db, user, stream, **common) for stream, key in STREAM_KEYS.items()}
 
     from app.services.drive_test_analytics import DriveTestAnalytics
 
@@ -492,7 +502,6 @@ def overview(
         "revisions_close_on": jalali.format_shamsi(
             jalali.from_shamsi_date(sy, sm, plans.REVISION_CUTOFF_DAY)
         ),
-        "dt": dt,
-        "acceptance": acc,
+        **streams,
         "needs_attention": _needs_attention(db, user, running, today, dt_rows_running),
     }

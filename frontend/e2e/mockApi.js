@@ -23,6 +23,9 @@ const ROUTES = {
   '/kpi/lenses': F.kpiLenses,
   '/gaps/overview': F.gapsOverview,
   '/gaps/map': F.gapsMap,
+  '/acceptance/overview': F.accOverview,
+  '/acceptance/progress': F.accProgress,
+  '/reference/provinces': [],
 }
 
 // Endpoints answered late, on purpose: the dashboard's side cards arriving

@@ -6,18 +6,18 @@ import { useToast } from '../../context/ToastContext'
 import { periodLabel } from '../../lib/shamsi'
 import HistoryDrawer from './HistoryDrawer'
 import { STREAMS, buildBoard, initials } from './planBoard'
-import { REASON_LABEL } from './streams'
+import { REASON_LABEL, streamMeta } from './streams'
 
-const STREAM_TITLE = { DT: 'DT Delivery', ACCEPTANCE: 'Acceptance' }
-const STREAM_SHORT = { DT: 'DT', ACCEPTANCE: 'Acceptance' }
+const STREAM_TITLE = Object.fromEntries(STREAMS.map((s) => [s, streamMeta(s).title]))
+const STREAM_SHORT = Object.fromEntries(STREAMS.map((s) => [s, streamMeta(s).short]))
 const fmt = (v) => (v == null ? '—' : Number(v).toLocaleString('en-US'))
 
 /**
  * The Plans tab: who has shared a plan for the month being planned, and a
  * decision per stream on each one.
  *
- * Reads nothing of its own but MTN's internal PIP: the queue for both
- * streams (and for the running month) is the page's, because the tab badge
+ * Reads nothing of its own but the Internal PIP: the queue for every
+ * stream (and for the running month) is the page's, because the tab badge
  * counts from the same responses (usePlanBoard, planBoard.buildBoard).
  *
  * Approve and Return are offered to `canDecide` (the PM) only, and act on
@@ -97,7 +97,7 @@ export default function PlansTab({ board, period, runningMonthName, canDecide, c
   )
 }
 
-/** MTN's internal PIP for the month, per stream: {DT, ACCEPTANCE}, null while unread. */
+/** The Internal PIP for the month, per stream code, null while unread. */
 function useInternalTargets(period, enabled) {
   const [targets, setTargets] = useState(null)
   const { year, month } = period
@@ -114,7 +114,7 @@ function useInternalTargets(period, enabled) {
           // failed read has nothing to compare against.
           .catch(() => null),
       ),
-    ).then(([dt, acc]) => live && setTargets({ DT: dt, ACCEPTANCE: acc }))
+    ).then((counts) => live && setTargets(Object.fromEntries(STREAMS.map((s, i) => [s, counts[i]]))))
     return () => {
       live = false
     }
@@ -160,11 +160,12 @@ function SharedCard({ view }) {
 
 function InternalCard({ totals, internal }) {
   return (
-    <Card className="pl-card" aria-label="Contractors vs MTN internal">
+    <Card className="pl-card" aria-label="Contractors vs Internal PIP">
       <div className="pl-card-head">
-        <span className="pl-card-label">Contractors vs MTN internal</span>
+        <span className="pl-card-label">Contractors vs Internal PIP</span>
         <span className="pl-card-note">not shown to contractors</span>
       </div>
+      <div className="pl-vs-grid">
       {STREAMS.map((stream) => (
         <div key={stream} className="pl-vs" data-stream={stream}>
           <div className="pl-vs-head">
@@ -184,6 +185,7 @@ function InternalCard({ totals, internal }) {
           )}
         </div>
       ))}
+      </div>
     </Card>
   )
 }
@@ -212,7 +214,8 @@ function NotSharedList({ contractors }) {
               <span>
                 <span className="pl-name">{c.name}</span>
                 <span className="pl-row-sub tnum">
-                  Last month: DT {fmt(c.cells.DT.lastMonth)} · Acceptance {fmt(c.cells.ACCEPTANCE.lastMonth)}
+                  Last month:{' '}
+                  {STREAMS.map((s) => `${STREAM_SHORT[s]} ${fmt(c.cells[s].lastMonth)}`).join(' · ')}
                 </span>
               </span>
             </li>
@@ -236,8 +239,9 @@ function SharedList({ contractors, runningMonthName, decision, onOpenHistory }) 
         <div className="pl-grid" role="table" aria-label="Shared plans">
           <div className="pl-grid-row pl-grid-head" role="row">
             <span role="columnheader">Contractor</span>
-            <span role="columnheader">DT Delivery</span>
-            <span role="columnheader">Acceptance</span>
+            {STREAMS.map((s) => (
+              <span key={s} role="columnheader">{STREAM_TITLE[s]}</span>
+            ))}
           </div>
           {contractors.map((c) => (
             <div key={c.id} className="pl-grid-row" role="row" data-contractor={c.id}>

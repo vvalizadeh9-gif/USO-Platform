@@ -162,6 +162,8 @@ export const pipOverview = {
   revision_window_open: true, revisions_close_on: '',
   dt: streamOut('DT'),
   acceptance: streamOut('ACCEPTANCE'),
+  ict: streamOut('ICT'),
+  cra: streamOut('CRA'),
   needs_attention: [],
 }
 
@@ -460,4 +462,67 @@ export function exportCount(url) {
   }
   if (lens) return gapRows(lens)[gap].find((row) => row.name === key).count
   return GAP_FIGURES[gap]?.count ?? GAP_TOTALS[gap]
+}
+
+// ------------------------------------------------------ Acceptance Dashboard
+// Shaped from app/schemas: AcceptanceOverview and AcceptanceProgress. Totals
+// run to four digits, the widest the chart's labels and the panel's figures
+// have to hold.
+export const accOverview = {
+  kpis: {
+    total_onair_villages: 5210, total_onair_permanent: 4100, total_onair_temporary: 1110,
+    total_dt_done_villages: 4437,
+    total_ict_approval: 3840, total_ict_remained: 597, total_ict_rejected: 404, total_ict_pending: 193,
+    total_cra_approval: 3044, total_cra_remained: 1393, total_cra_rejected: 435, total_cra_pending: 958,
+  },
+  analysis: {
+    sites_ict_full: 0, sites_cra_full: 0, sites_ict_and_cra_full: 0, sites_ict_not_cra: 0, sites_cra_not_ict: 0,
+    villages_ict_not_cra: 0, villages_cra_not_ict: 0, villages_both_approved: 2884,
+    villages_accepted: 2884, villages_needs_attention: 0, villages_in_review: 0, villages_not_filed: 0,
+    villages_rejected: 0, villages_remained: 0,
+  },
+  provinces: [],
+}
+
+function progressMonths() {
+  const out = []
+  let { year, month } = RUNNING
+  for (let i = 0; i < 12; i += 1) {
+    out.unshift({ year, month })
+    month -= 1
+    if (month === 0) { month = 12; year -= 1 }
+  }
+  const stream = (approvedPer, internal, contractor, opening) => {
+    let run = opening
+    let internalRun = opening
+    let contractorRun = opening
+    return out.map((p, i) => {
+      const approved = approvedPer[i]
+      const row = {
+        approved,
+        approved_cumulative: (run += approved),
+        internal_plan: i >= 3 ? internal : null,
+        internal_plan_cumulative: i >= 3 ? (internalRun += internal) : null,
+        contractor_plan: i >= 3 ? contractor : null,
+        contractor_plan_cumulative: i >= 3 ? (contractorRun += contractor) : null,
+      }
+      if (i < 3) { internalRun = run; contractorRun = run }
+      return row
+    })
+  }
+  const village = stream([180, 210, 250, 290, 305, 330, 280, 340, 310, 360, 318, 92], 320, 300, 0)
+  const ict = stream([260, 300, 340, 400, 420, 380, 360, 410, 390, 420, 372, 118], 400, 380, 0)
+  const cra = stream([200, 230, 260, 300, 320, 280, 250, 300, 290, 310, 260, 44], 300, 280, 0)
+  return out.map((p, i) => ({
+    shamsi_year: p.year, shamsi_month: p.month, label: MONTHS[p.month - 1],
+    is_current: i === 11, days_in_month: p.month <= 6 ? 31 : 30,
+    village: village[i], ict: ict[i], cra: cra[i],
+  }))
+}
+
+export const accProgress = {
+  today: { shamsi_year: RUNNING.year, shamsi_month: RUNNING.month, day: 7, days_in_month: RUNNING.month <= 6 ? 31 : 30 },
+  plans_available: true,
+  internal_visible: true,
+  months: progressMonths(),
 }

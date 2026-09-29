@@ -527,7 +527,7 @@ class AcceptanceAnalytics:
         return {p.id: p.name for p in rows}
 
     # ---------- the sites behind one figure ----------
-    def site_rows(self, metric: str) -> dict:
+    def site_rows(self, metric: str, authority: str | None = None) -> dict:
         """The sites behind one KPI figure, and the villages it counted on each.
 
         Every quantity on the dashboard opens this. It is computed from the
@@ -542,9 +542,8 @@ class AcceptanceAnalytics:
         drive test and health check screens are keyed by. The village count
         rides on the row so the list still adds up to the figure.
         """
-        if metric not in SITE_METRICS:
-            raise ValueError(f"metric must be one of: {', '.join(SITE_METRICS)}")
-        selected = [r for r in self._load_rows() if _METRIC_PREDICATE[metric](r)]
+        predicate = metric_predicate(metric, authority)
+        selected = [r for r in self._load_rows() if predicate(r)]
 
         by_site: dict[tuple, dict] = {}
         for row in selected:
@@ -585,9 +584,12 @@ class AcceptanceAnalytics:
         # site with no code sorts last rather than first, where it would be
         # the first thing read and the least useful.
         rows.sort(key=lambda r: (r["site_code"] is None, r["site_code"] or "", r["site_id"] or 0))
+        label = METRIC_LABEL[metric]
+        if authority is not None and metric in AUTHORITY_METRICS:
+            label = f"{authority} {label}"
         return {
             "metric": metric,
-            "label": METRIC_LABEL[metric],
+            "label": label,
             "total": len(selected),
             "site_count": len(rows),
             "rows": rows,
@@ -635,6 +637,51 @@ _METRIC_PREDICATE = {
     "rejected": lambda r: _is_remaining(r) and REJECTED in (r.unit.ict, r.unit.cra),
     "remained": lambda r: _is_remaining(r) and REJECTED not in (r.unit.ict, r.unit.cra),
 }
+
+
+#: The figures that have a per-authority reading: the ICT and CRA tabs'
+#: approved, remaining, rejected and waiting cards. On air and DT done are
+#: the same population whichever authority is asked about.
+AUTHORITY_METRICS = ("approved", "remaining", "rejected", "remained")
+AUTHORITIES = ("ICT", "CRA")
+
+
+def _authority_predicate(metric: str, authority: str):
+    """Which village rows one authority's figure counted.
+
+    The same verdicts ``compute_kpis`` tallies -- approved, and the two halves
+    of remained (rejected, pending) -- so the list behind ``total_ict_rejected``
+    is exactly that many villages.
+    """
+    field = authority.lower()
+
+    def verdict(row) -> str | None:
+        return getattr(row.unit, field) if row.dt_done else None
+
+    return {
+        "approved": lambda r: verdict(r) == APPROVED,
+        "remaining": lambda r: r.dt_done and verdict(r) != APPROVED,
+        "rejected": lambda r: verdict(r) == REJECTED,
+        "remained": lambda r: verdict(r) == PENDING,
+    }[metric]
+
+
+def metric_predicate(metric: str, authority: str | None = None):
+    """The row test behind one figure, optionally one authority's reading of it.
+
+    Raises ``ValueError`` for an unknown metric or authority: a list that
+    silently answers a different question from the one asked is the failure
+    the drill-through exists to prevent.
+    """
+    if metric not in SITE_METRICS:
+        raise ValueError(f"metric must be one of: {', '.join(SITE_METRICS)}")
+    if authority is None or metric not in AUTHORITY_METRICS:
+        if authority is not None and authority not in AUTHORITIES:
+            raise ValueError(f"authority must be one of: {', '.join(AUTHORITIES)}")
+        return _METRIC_PREDICATE[metric]
+    if authority not in AUTHORITIES:
+        raise ValueError(f"authority must be one of: {', '.join(AUTHORITIES)}")
+    return _authority_predicate(metric, authority)
 
 
 def _village_partition(units) -> dict[str, int]:

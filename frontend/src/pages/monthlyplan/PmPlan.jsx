@@ -12,7 +12,7 @@ import PlansTab from './PlansTab'
 import { countWaiting } from './planBoard'
 import useOverview from './useOverview'
 import usePlanBoard from './usePlanBoard'
-import { PIP_STREAMS } from './streams'
+import { PIP_STREAMS, STREAM_LIST, streamMeta } from './streams'
 import { downloadXlsx } from './xlsx'
 
 const VIEWS = [
@@ -21,17 +21,17 @@ const VIEWS = [
   { key: 'since_start', label: 'Since start' },
 ]
 
-const STREAM_OPTIONS = Object.values(PIP_STREAMS).map((s) => ({ key: s.key, label: s.title }))
+const STREAM_OPTIONS = STREAM_LIST.map((s) => ({ key: s.key, label: s.title }))
 
 /** ?tab=plans is the Plans tab; anything else, or nothing, is PIP vs Achieved. */
 function tabFromParams(params) {
   return params.get('tab') === 'plans' ? 'plans' : 'pip'
 }
 
-/** ?stream=acceptance (any case, so an Action Center link's ACCEPTANCE
- * counts too) is Acceptance; anything else is DT Delivery. */
+/** ?stream=acceptance, ict or cra (any case, so an Action Center link's
+ * ACCEPTANCE counts too) is that stream; anything else is DT Delivery. */
 function streamFromParams(params) {
-  return params.get('stream')?.toLowerCase() === 'acceptance' ? PIP_STREAMS.acceptance : PIP_STREAMS.dt
+  return streamMeta(params.get('stream'))
 }
 
 /**
@@ -41,7 +41,8 @@ function streamFromParams(params) {
  *   month), decided per stream (PlansTab). Its label carries, for the PM, the number of
  *   decisions waiting on them.
  * * **PIP vs Achieved** (the default) -- the month now running, or a year, or
- *   everything since the start, one stream at a time (?stream=acceptance):
+ *   everything since the start, one stream at a time (?stream=acceptance,
+ *   ict or cra):
  *   GET /pip/overview, drawn by PipTab.
  *
  * Each tab keeps its own month, held here so it survives a tab switch. An
@@ -88,8 +89,8 @@ export default function PmPlan({ canDecide, canSetTarget, canSeeInternal }) {
   // A view of the same page rather than a place: replaces the entry.
   function selectStream(key) {
     const nextParams = new URLSearchParams(params)
-    if (key === 'acceptance') nextParams.set('stream', 'acceptance')
-    else nextParams.delete('stream')
+    if (key === PIP_STREAMS.dt.key) nextParams.delete('stream')
+    else nextParams.set('stream', key)
     setParams(nextParams, { replace: true })
   }
 
@@ -108,9 +109,8 @@ export default function PmPlan({ canDecide, canSetTarget, canSeeInternal }) {
 
   async function exportExcel() {
     try {
-      // The period on the page, both streams: a "DT Delivery" and an
-      // "Acceptance" sheet (the MTN internal PIP rows are the server's to add
-      // for staff).
+      // The period on the page, every stream: one sheet each (the Internal
+      // PIP rows are the server's to add for staff).
       const exportParams = { period: pickerView }
       if (pickerView === 'year') exportParams.year = period.year
       if (pickerView === 'month') Object.assign(exportParams, { year: period.year, month: period.month })
@@ -242,7 +242,7 @@ function linkedTarget(params) {
     year,
     month,
     contractorId,
-    stream: stream === 'ACCEPTANCE' ? 'ACCEPTANCE' : 'DT',
+    stream: streamMeta(stream).stream,
     name: '',
   }
 }

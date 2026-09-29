@@ -1,9 +1,9 @@
 """Acceptance plan: the PM's monthly target, and the trend it is measured against.
 
-The target table also carries a second, separate number: the PM's DT
-"MTN internal PIP" (``stream="DT"``), read and written through the same three
+The target table carries one Internal PIP per stream -- ``ACCEPTANCE``,
+``ICT``, ``CRA`` and ``DT`` -- read and written through the same three
 functions with ``stream`` set. Every function defaults to ``ACCEPTANCE``.
-Both streams are monthly amounts; see ``models/acceptance_plan.py``.
+Every stream is a monthly amount; see ``models/acceptance_plan.py``.
 
 **A contractor never sees the MTN target.** In the trend, a contractor (or a
 staff view filtered to one contractor) gets that contractor's own approved
@@ -39,6 +39,8 @@ from sqlalchemy.orm import Session
 from app.core import jalali
 from app.models.acceptance_plan import (
     STREAM_ACCEPTANCE,
+    STREAM_CRA,
+    STREAM_ICT,
     TARGET_STREAMS,
     AcceptanceMonthlyTarget,
 )
@@ -111,8 +113,9 @@ def set_target(
 ) -> AcceptanceMonthlyTarget:
     """Set one stream's MTN internal target for one month. Caller commits.
 
-    A monthly amount for both streams: villages to be fully accepted in that
-    month (``ACCEPTANCE``, the default), or drive tests (``DT``).
+    A monthly amount for every stream: villages to be fully accepted in that
+    month (``ACCEPTANCE``, the default), approved by one authority (``ICT``,
+    ``CRA``), or drive tests (``DT``).
 
     Always appends: an existing current row for the stream and period is
     flipped to ``is_current=False`` in the same call, and the new one is
@@ -179,25 +182,27 @@ def recent_targets(
 # ---------------------------------------------------------------------------
 # The plan line: MTN's target for staff, a contractor's own PIP otherwise
 # ---------------------------------------------------------------------------
-def _internal_monthly_targets(db: Session) -> dict[tuple[int, int], int]:
-    """Every month's current ACCEPTANCE internal target, all history."""
+def internal_monthly_targets(
+    db: Session, stream: str = STREAM_ACCEPTANCE
+) -> dict[tuple[int, int], int]:
+    """Every month's current internal target (Internal PIP) for one stream."""
     rows = db.execute(
         select(
             AcceptanceMonthlyTarget.shamsi_year,
             AcceptanceMonthlyTarget.shamsi_month,
             AcceptanceMonthlyTarget.target_count,
         ).where(
-            AcceptanceMonthlyTarget.stream == STREAM_ACCEPTANCE,
+            AcceptanceMonthlyTarget.stream == stream,
             AcceptanceMonthlyTarget.is_current.is_(True),
         )
     ).all()
     return {(y, m): count for y, m, count in rows}
 
 
-def _contractor_monthly_pips(
-    db: Session, contractor_id: int
+def contractor_monthly_pips(
+    db: Session, contractor_id: int, stream: str = STREAM_ACCEPTANCE
 ) -> dict[tuple[int, int], int]:
-    """One contractor's approved Acceptance PIP in force, per month, all history.
+    """One contractor's approved PIP in force for a stream, per month, all history.
 
     Narrowed to the contractor in the query. "In force" is the highest
     approved version, the same rule as ``monthly_plan.in_force_plan``:
@@ -211,7 +216,7 @@ def _contractor_monthly_pips(
         )
         .where(
             ContractorMonthlyPlan.contractor_id == contractor_id,
-            ContractorMonthlyPlan.stream == STREAM_ACCEPTANCE,
+            ContractorMonthlyPlan.stream == stream,
             ContractorMonthlyPlan.status == STATUS_APPROVED,
         )
         .order_by(ContractorMonthlyPlan.version)
@@ -219,8 +224,10 @@ def _contractor_monthly_pips(
     return {(y, m): count or 0 for y, m, count in rows}
 
 
-def _all_contractor_monthly_pips(db: Session) -> dict[tuple[int, int], int]:
-    """Every contractor's approved Acceptance PIP in force, summed per month.
+def all_contractor_monthly_pips(
+    db: Session, stream: str = STREAM_ACCEPTANCE
+) -> dict[tuple[int, int], int]:
+    """Every contractor's approved PIP in force for a stream, summed per month.
 
     Folded per contractor first (highest approved version wins), then summed,
     so a revised plan is counted once, at its approved number.
@@ -233,7 +240,7 @@ def _all_contractor_monthly_pips(db: Session) -> dict[tuple[int, int], int]:
             ContractorMonthlyPlan.committed_count,
         )
         .where(
-            ContractorMonthlyPlan.stream == STREAM_ACCEPTANCE,
+            ContractorMonthlyPlan.stream == stream,
             ContractorMonthlyPlan.status == STATUS_APPROVED,
         )
         .order_by(ContractorMonthlyPlan.version)
@@ -261,7 +268,7 @@ def plan_contractor(user: User, contractor_id: int | None) -> int | None:
     return contractor_id
 
 
-def _cumulative_plan(
+def cumulative_plan(
     monthly: dict[tuple[int, int], int],
     actual_cumulative_before: Callable[[tuple[int, int]], int],
 ) -> dict[tuple[int, int], int]:
@@ -287,10 +294,14 @@ def _cumulative_plan(
     return out
 
 
+#: The name this function had before the Acceptance progress chart shared it.
+_cumulative_plan = cumulative_plan
+
+
 # ---------------------------------------------------------------------------
 # Monthly approval trend
 # ---------------------------------------------------------------------------
-def _load_scoped_villages(
+def load_scoped_villages(
     db: Session,
     user: User,
     *,
@@ -324,7 +335,7 @@ def _scoped_village_pairs(
     province_ids: set[int] | None,
     contractor_id: int | None,
 ) -> list[tuple]:
-    """``_load_scoped_villages``, with each village's work item beside it.
+    """``load_scoped_villages``, with each village's work item beside it.
 
     The one place the qualifying universe is decided (scope, province and
     contractor narrowing, DT done, pure هدف, not deleted); the per-contractor
@@ -347,18 +358,51 @@ def _scoped_village_pairs(
     return pairs
 
 
+def is_approved(village, stream: str) -> bool:
+    """Whether a village has cleared one acceptance stream, dated or not.
+
+    ``ICT`` / ``CRA``: that authority's whole verdict is Approved.
+    ``ACCEPTANCE``: both are -- the same test the overview's
+    ``villages_both_approved`` applies, so the two always count alike.
+    """
+    if stream == STREAM_ACCEPTANCE:
+        return is_approved(village, STREAM_ICT) and is_approved(village, STREAM_CRA)
+    return flow.authority_verdict(village, stream) == flow.APPROVED
+
+
+def approval_period(village, stream: str) -> tuple[int, int] | None:
+    """The Shamsi month a village cleared one acceptance stream, or None.
+
+    The one month attribution every acceptance chart and count uses:
+
+    * ``ICT`` / ``CRA`` -- the month of that authority's verdict date
+      (``authority_verdict_date``: the last requested technology to clear);
+    * ``ACCEPTANCE`` -- the later of the two, the month the *second*
+      authority cleared it.
+
+    None when the village has not cleared the stream, **or** when it has but
+    the date is missing (a verdict seeded without one). Callers that need
+    totals to reconcile with the overview count those through
+    :func:`is_approved` as an undated opening balance.
+    """
+    if stream == STREAM_ACCEPTANCE:
+        ict = flow.authority_verdict_date(village, STREAM_ICT)
+        cra = flow.authority_verdict_date(village, STREAM_CRA)
+        if ict is None or cra is None:
+            return None
+        return jalali.to_shamsi(max(ict, cra))
+    verdict_date = flow.authority_verdict_date(village, stream)
+    return jalali.to_shamsi(verdict_date) if verdict_date is not None else None
+
+
 def fully_accepted_period(village) -> tuple[int, int] | None:
     """The Shamsi month a village became fully accepted, or None if it has not.
 
-    The later of its ICT and CRA verdict dates -- the month the *second*
-    authority cleared it. The one definition of acceptance "Delivered"; the
-    trend and the per-contractor count both read it from here.
+    ``approval_period`` for the ``ACCEPTANCE`` stream. The one definition of
+    acceptance "Delivered"; the trend and the per-contractor count both read
+    it from here.
     """
-    ict_date = flow.authority_verdict_date(village, "ICT")
-    cra_date = flow.authority_verdict_date(village, "CRA")
-    if ict_date is None or cra_date is None:
-        return None
-    return jalali.to_shamsi(max(ict_date, cra_date))
+    return approval_period(village, STREAM_ACCEPTANCE)
 
 
 def _trailing_periods(upto_year: int, upto_month: int, months: int) -> list[tuple[int, int]]:
@@ -387,7 +431,7 @@ def monthly_approval_trend(
     staff filtered to it) -- see ``plan_contractor``. ``target_monthly`` is
     the month's plan; ``target_cumulative`` its running total, anchored on
     what was actually accepted before the first planned month
-    (``_cumulative_plan``). ``target_count`` repeats the cumulative figure
+    (``cumulative_plan``). ``target_count`` repeats the cumulative figure
     for the dashboard that reads that name today.
 
     ``pip_monthly`` / ``pip_cumulative`` are the contractors' approved
@@ -415,7 +459,7 @@ def monthly_approval_trend(
     workflow. Those villages are not filtered out -- doing so would silently
     understate the totals -- only flagged here for whoever reads this code.
     """
-    villages = _load_scoped_villages(
+    villages = load_scoped_villages(
         db, user, province_ids=province_ids, contractor_id=contractor_id
     )
 
@@ -430,15 +474,14 @@ def monthly_approval_trend(
         bucket[key] += 1
 
     for village in villages:
-        ict_date = flow.authority_verdict_date(village, "ICT")
-        cra_date = flow.authority_verdict_date(village, "CRA")
-        if ict_date is not None:
-            _bump(jalali.to_shamsi(ict_date), "ict_new")
-        if cra_date is not None:
-            _bump(jalali.to_shamsi(cra_date), "cra_new")
-        full = fully_accepted_period(village)
-        if full is not None:
-            _bump(full, "fully_accepted_new")
+        for stream, key in (
+            (STREAM_ICT, "ict_new"),
+            (STREAM_CRA, "cra_new"),
+            (STREAM_ACCEPTANCE, "fully_accepted_new"),
+        ):
+            period = approval_period(village, stream)
+            if period is not None:
+                _bump(period, key)
 
     # Walk the whole history chronologically to build the running totals,
     # from the earliest month any approval landed in.
@@ -456,9 +499,9 @@ def monthly_approval_trend(
     # The plan line: MTN's monthly target, or one contractor's own PIP.
     whose = plan_contractor(user, contractor_id)
     monthly_plan = (
-        _internal_monthly_targets(db)
+        internal_monthly_targets(db)
         if whose is None
-        else _contractor_monthly_pips(db, whose)
+        else contractor_monthly_pips(db, whose)
     )
 
     def _actual_before(period: tuple[int, int]) -> int:
@@ -469,13 +512,13 @@ def monthly_approval_trend(
             total = cumulative[p]["fully_accepted_new"]
         return total
 
-    cumulative_plan = _cumulative_plan(monthly_plan, _actual_before)
+    plan_cumulative = cumulative_plan(monthly_plan, _actual_before)
 
     # The contractors' own commitment: the one contractor's PIP when the plan
     # is already that, otherwise every contractor's PIP summed -- so staff
     # see MTN's target and what the contractors signed up to side by side.
-    monthly_pip = monthly_plan if whose is not None else _all_contractor_monthly_pips(db)
-    cumulative_pip = _cumulative_plan(monthly_pip, _actual_before)
+    monthly_pip = monthly_plan if whose is not None else all_contractor_monthly_pips(db)
+    cumulative_pip = cumulative_plan(monthly_pip, _actual_before)
 
     out: list[dict] = []
     # The running cumulative total as of just before the window starts, so a
@@ -504,13 +547,13 @@ def monthly_approval_trend(
                 "cra_cumulative": carried["cra_new"],
                 "fully_accepted_cumulative": carried["fully_accepted_new"],
                 "target_monthly": monthly_plan.get(period),
-                "target_cumulative": cumulative_plan.get(period),
+                "target_cumulative": plan_cumulative.get(period),
                 "pip_monthly": monthly_pip.get(period),
                 "pip_cumulative": cumulative_pip.get(period),
                 # The name the dashboard reads today: the cumulative plan, so
                 # its Cumulative view is right and its Monthly view (which
                 # differences consecutive months) gives the monthly plan.
-                "target_count": cumulative_plan.get(period),
+                "target_count": plan_cumulative.get(period),
             }
         )
     return out
@@ -524,9 +567,9 @@ def _percent(num: int, den: int) -> float | None:
 
 
 def _acceptance_universe(
-    db: Session, year: int, month: int, own: int | None
+    db: Session, year: int, month: int, own: int | None, stream: str = STREAM_ACCEPTANCE
 ) -> dict[int, str]:
-    """Contractors expected to have an Acceptance plan this month.
+    """Contractors expected to have a plan for this acceptance stream this month.
 
     The same rule as the DT scorecard's and the PM queue's: every active
     contractor, plus an inactive one that filed for the month. Narrowed to the
@@ -535,7 +578,7 @@ def _acceptance_universe(
     from app.models.reference import Contractor
 
     with_a_plan = select(ContractorMonthlyPlan.contractor_id).where(
-        ContractorMonthlyPlan.stream == STREAM_ACCEPTANCE,
+        ContractorMonthlyPlan.stream == stream,
         ContractorMonthlyPlan.shamsi_year == year,
         ContractorMonthlyPlan.shamsi_month == month,
     )
@@ -548,13 +591,18 @@ def _acceptance_universe(
 
 
 def acceptance_scorecard(
-    db: Session, user: User, periods: list[tuple[int, int]]
+    db: Session,
+    user: User,
+    periods: list[tuple[int, int]],
+    stream: str = STREAM_ACCEPTANCE,
 ) -> dict:
-    """Acceptance PIP against Delivered, per contractor, for several months.
+    """An acceptance stream's PIP against Delivered, per contractor, per month.
 
     The Acceptance counterpart of ``DriveTestAnalytics.scorecard`` and the
-    same shape, so a reader can treat both streams alike. **Delivered** is
-    villages fully accepted in that month (``fully_accepted_period``), counted
+    same shape, so a reader can treat every stream alike. **Delivered** is
+    villages that cleared *stream* in that month (``approval_period``: fully
+    accepted for ``ACCEPTANCE``, one authority's approval for ``ICT`` /
+    ``CRA``), counted
     against the site's drive-test contractor, over the same universe the
     Acceptance Dashboard counts (``_scoped_village_pairs``: DT done, pure
     هدف). Villages are not de-duplicated -- two villages on one site are two.
@@ -578,7 +626,7 @@ def acceptance_scorecard(
         cid = wi.dt_sc_contractor_id
         if cid is None:
             continue
-        period = fully_accepted_period(village)
+        period = approval_period(village, stream)
         if period in wanted:
             key = (wanted[period], cid)
             delivered[key] = delivered.get(key, 0) + 1
@@ -587,10 +635,8 @@ def acceptance_scorecard(
 
     months = []
     for i, (year, month) in enumerate(periods):
-        pip = approved_pip_in_force(
-            db, year, month, STREAM_ACCEPTANCE, contractor_id=own
-        )
-        universe = _acceptance_universe(db, year, month, own)
+        pip = approved_pip_in_force(db, year, month, stream, contractor_id=own)
+        universe = _acceptance_universe(db, year, month, own, stream)
         ids = set(universe) | set(pip) | {cid for (idx, cid) in delivered if idx == i}
         names = dict(universe)
         missing = [cid for cid in ids if cid not in names]

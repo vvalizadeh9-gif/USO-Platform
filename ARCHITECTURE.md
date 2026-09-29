@@ -385,8 +385,9 @@ My Work                    where letters are actually filed and validated
 ```
 
 **Reports → Acceptance Dashboard** (`/reports/acceptance`, served by
-`/acceptance/overview` and `acceptance_analytics.py`) is the read surface. It
-computes from current state on every request and writes nothing.
+`/acceptance/overview` and `/acceptance/progress`) is the read surface. It
+computes from current state on every request and writes nothing. See
+"The Acceptance Dashboard" below.
 
 **My Work** (`/my-work`) is the work surface. Its left pane is a queue of
 villages, its right pane is one village and the one thing to do about it. The
@@ -408,6 +409,95 @@ village is in exactly one, so the chip counts sum to the total):
 They are evaluated in that order, so a village whose ICT was returned while CRA
 is awaiting review counts as needing attention: the contractor has to move
 before anyone else can.
+
+#### The Acceptance Dashboard
+
+The page answers two questions for a PM: *am I on plan month by month, and
+what happened in a given month?* It has one tab per **stream**:
+
+| Tab | Counts | Plan stream | Colour |
+|---|---|---|---|
+| Village | villages **fully accepted** (ICT and CRA both approved) | `ACCEPTANCE` | `--accent` |
+| ICT | villages approved by ICT, whatever CRA has said | `ICT` | `--ict` |
+| CRA | villages approved by CRA, whatever ICT has said | `CRA` | `--cra` / `--cra-ink` |
+
+Each tab is a KPI band, a progress chart (Monthly bars or Cumulative lines)
+and a month panel. Two reads feed the whole page, and each card loads, fails
+and retries on its own:
+
+- `GET /acceptance/overview` -- the KPI band. Unchanged apart from an
+  optional `province_id`, so the page-wide scope picker narrows the band and
+  the chart alike.
+- `GET /acceptance/progress?months=12&province_id&contractor_id` -- the chart
+  and the panel, **all three streams at once**, so a tab switch never
+  refetches (`services/acceptance_progress.py`, response
+  `schemas.AcceptanceProgress`). `GET /acceptance/progress/export` is the
+  same payload as a workbook, one sheet per stream.
+
+**Two plans, and what they are called.** The **Internal PIP** is the PM's own
+monthly number for the team (`AcceptanceMonthlyTarget`, set on Monthly Plan,
+formerly "MTN internal target"). The **Contractor PIP** is the contractors'
+approved PIPs in force (`ContractorMonthlyPlan`): every contractor's summed,
+or one contractor's when the page is narrowed to it. A contractor reads its
+own as "Your PIP" and never sees the Internal PIP.
+
+**The progress payload's rules.**
+
+- `approved` is the villages that cleared the stream in that Shamsi month,
+  attributed by `acceptance_plan.approval_period` -- the one month rule the
+  older trend and the scorecards use too (the authority's verdict date; for
+  Village the later of the two).
+- **Undated approvals are an opening balance.** A village approved without a
+  verdict date has no month. It is counted in every month's
+  `approved_cumulative` from the first month of the window, and in no month's
+  `approved`. That is what makes the last month's running total equal the
+  overview's approved figure (`villages_both_approved`, `total_ict_approval`,
+  `total_cra_approval`) for the same scope -- a test holds it.
+- Plans are monthly amounts. **Every plan field is `null`, never 0**, when no
+  plan exists for that month and stream; all of them when the page is
+  narrowed to a province (`plans_available: false`, plans are programme-wide);
+  and the `internal_*` pair for a contractor, or staff narrowed to one
+  contractor (`internal_visible: false`). A contractor's `contractor_id` is
+  always its own company, whatever it sends.
+- Cumulative plans are anchored on actuals (`acceptance_plan.cumulative_plan`):
+  what was actually approved before the first planned month, plus each
+  month's plan. They are `null` wherever the monthly plan is.
+- The universe is the overview's: `acceptance_plan.load_scoped_villages`,
+  DT done and pure هدف, loaded once and bucketed for all three streams in one
+  pass -- no per-month queries.
+
+The panel's arithmetic (due by today, pace, what is left, per day) is in
+`pages/reports/acceptance/model.js`, from the server's `today` (day of month
+and its length -- the browser does no calendar arithmetic).
+
+Every figure opens the sites behind it. `GET /acceptance/sites` takes an
+optional `authority=ICT|CRA`, which gives the approved, remaining, rejected and
+waiting (`remained`) metrics that authority's reading, so the ICT and CRA
+cards open lists that add up to exactly their figures.
+
+Not on this page, on purpose: per-owner and per-contractor performance (Roles
+Performance), and every breakdown the old page carried (see CHANGELOG.md).
+
+`GET /acceptance/trends` is **deprecated**: nothing in this codebase reads it
+since the dashboard moved to `/progress`. It is kept for any outside reader.
+
+#### Plan streams: DT, ACCEPTANCE, ICT, CRA
+
+`ContractorMonthlyPlan` (a contractor's PIP) and `AcceptanceMonthlyTarget`
+(the Internal PIP) share one set of streams, `models/monthly_plan.PLAN_STREAMS`:
+`DT` (drive tests), `ACCEPTANCE` (villages fully accepted), `ICT` and `CRA`
+(villages approved by that authority). `stream` is a plain `VARCHAR(20)` on
+both tables with no CHECK constraint or enum, so adding `ICT` and `CRA` needed
+no migration -- the validators are the tuple and the `PlanStream` request type.
+Existing rows are untouched and there is no backfill: months before the new
+streams simply have no ICT or CRA plan. Versioning (`version`, `is_current`,
+append on every change) is identical for every stream.
+
+On Monthly Plan the PM sets an Internal PIP per stream (the Internal PIP card
+on PIP vs Achieved), and a contractor files all four PIPs on one form, each
+decided, returned and revised on its own. The deadline and "not submitted"
+chips, the Action Center items and the export (one sheet per stream) cover
+all four. Only the PM sets an Internal PIP; a contractor never reads one.
 
 #### Where a village stands, and the cache underneath it
 
