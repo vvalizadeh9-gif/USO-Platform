@@ -469,21 +469,39 @@ def last_mojri_import(db: Session):
     ).scalar_one_or_none()
 
 
-def _gap_rows(owners: dict[tuple[str, str], GapCell], gap: Gap) -> list[dict]:
+def _managers_by_coordinator(mapping: dict[str, dict[str, str]]) -> dict[str, list[str]]:
+    """The regional manager(s) each coordinator works under, from the same
+    current mapping the lenses fold by. A coordinator whose provinces sit
+    under two managers lists both."""
+    out: dict[str, set[str]] = {}
+    for owners in mapping.values():
+        out.setdefault(owners[kpi.LENS_COORDINATOR], set()).add(owners[kpi.LENS_RM])
+    return {name: sorted(managers) for name, managers in out.items()}
+
+
+def _gap_rows(
+    owners: dict[tuple[str, str], GapCell],
+    gap: Gap,
+    managers: dict[str, list[str]] | None = None,
+) -> list[dict]:
     """One gap's owner rows, biggest first, name breaking ties.
 
     An owner with none in this gap keeps its row, reading zero, so the rows
-    always add up to the gap's total.
+    always add up to the gap's total. ``managers`` (coordinator lens only)
+    adds each owned row's regional manager(s), which the drawer prints under
+    the coordinator's name.
     """
-    rows = [
-        {
+    rows = []
+    for (name, attribution), cell in owners.items():
+        row = {
             "name": name,
             "count": getattr(cell, gap.count),
             "base": getattr(cell, gap.base),
             "attribution": attribution,
         }
-        for (name, attribution), cell in owners.items()
-    ]
+        if managers is not None:
+            row["managers"] = managers.get(name, []) if attribution == OWNED else []
+        rows.append(row)
     rows.sort(key=lambda row: (-row["count"], row["name"]))
     return rows
 
@@ -542,6 +560,9 @@ def overview(db: Session, user, lens: str | None) -> dict:
     )
 
     provinces = {province for province, _ in grid if province is not None}
+    managers = (
+        _managers_by_coordinator(mapping) if lens == kpi.LENS_COORDINATOR else None
+    )
     return {
         "last_cpm_import": kpi.last_cpm_import(db),
         "last_mojri_import": last_mojri_import(db),
@@ -557,7 +578,7 @@ def overview(db: Session, user, lens: str | None) -> dict:
             "cra_approved": total.cra_approved,
         },
         "gaps": {gap.key: _gap_figure(total, gap) for gap in GAPS},
-        "rows": {gap.key: _gap_rows(owners, gap) for gap in GAPS},
+        "rows": {gap.key: _gap_rows(owners, gap, managers) for gap in GAPS},
         "data_quality": {
             "villages_without_province": total.no_province,
             "unmapped_provinces": sorted(

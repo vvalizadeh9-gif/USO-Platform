@@ -1182,6 +1182,12 @@ select.queue-select { width: auto; min-width: 190px; height: 36px; padding: 0 32
 .table tbody tr.row-muted td { color: var(--text-tertiary); }
 .table tbody tr.row-muted .pill, .table tbody tr.row-muted input { opacity: 0.7; }
 .text-farsi { font-family: var(--font-farsi); font-size: var(--fs-body); line-height: var(--lh-body); }
+.nowrap { white-space: nowrap; }
+/* Read by assistive technology, not drawn. */
+.sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+}
 .tech-chips { display: inline-flex; flex-wrap: wrap; gap: 4px; }
 .seg-count { margin-inline-start: 4px; font-weight: 500; color: var(--text-tertiary); }
 .ui-seg-option[aria-pressed='true'] .seg-count { color: var(--text-secondary); }
@@ -4139,11 +4145,12 @@ a.lifecycle-step:focus-visible { outline: 2px solid var(--accent); outline-offse
 /* ---------------------------------------------------------------------------
    Lifecycle Gaps (Performance → /reports/gaps)
 
-   Built on the shared Cobalt components (PageHead, Tabs, Card, Banner,
-   SegmentedControl). What is left here is the chart -- six hand-built HTML
-   columns on one baseline and one scale -- and the details panel beside it.
-   Authority colours (--ict, --cra) are data only; cobalt marks the selected
-   column and nothing else. See design-system-cobalt.md.
+   Built on the shared Cobalt components (PageFrame, PageBar, Tabs, Card,
+   Banner, SegmentedControl) and three of its own: WaffleTile, GapDrawer and
+   ExportNumber. Authority colours (--ict, --cra) are data only; cobalt marks
+   the tile whose drawer is open and nothing else. The page never scrolls:
+   the drawer is fixed over a scrim and only its list scrolls. See
+   design-system-cobalt.md.
    --------------------------------------------------------------------------- */
 /* The page: PageBar over a PageFrame body, padded 20 32. */
 .gap-page .page-body { padding: 20px 32px; }
@@ -4164,153 +4171,177 @@ a.lifecycle-step:focus-visible { outline: 2px solid var(--accent); outline-offse
 }
 .gap-total strong { color: var(--text); font-weight: 600; }
 
-/* Chart and panel side by side; the chart takes what the panel leaves. */
-.gap-body { display: flex; gap: 24px; align-items: stretch; }
-.gap-chart { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 12px; }
+/* ----- The Gaps tab: three cards in one row, two tiles in each ----- */
+.gap-tab { display: flex; flex-direction: column; gap: 12px; min-height: 0; }
+.gap-cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.gap-card.ui-card { padding: 16px; gap: 14px; min-width: 0; }
+.gap-card .ui-card-desc { font-size: var(--fs-meta); line-height: var(--lh-meta); }
+/* Bottom-aligned, so a card whose description wraps keeps its tiles level
+   with its neighbours' (every card stretches to the tallest). */
+.gap-tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: auto; }
+@media (max-width: 900px) { .gap-cards { grid-template-columns: minmax(0, 1fr); } }
 
-.gap-blocks {
-  display: grid; gap: 24px;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+/* The authority chip (ui.jsx AuthorityChip): soft fill, authority ink. CRA
+   text is --cra-ink, never --cra. */
+.auth-chip {
+  display: inline-flex; align-items: center; height: 24px; padding: 0 10px; flex: none;
+  border-radius: 999px; font-size: var(--fs-caption); line-height: var(--lh-caption); font-weight: 600;
 }
-/* A block is a selectable-tile surface. */
-.gap-block {
-  background: var(--surface-subtle); border: 1px solid var(--track);
-  border-radius: var(--radius-md); padding: 16px;
-  display: flex; flex-direction: column; gap: 12px;
-}
-.gap-block-title { font-size: 15px; line-height: 22px; font-weight: 600; }
-.gap-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.auth-chip[data-authority="ict"] { background: var(--ict-soft); color: var(--ict); }
+.auth-chip[data-authority="cra"] { background: var(--cra-soft); color: var(--cra-ink); }
 
-/* One column. The figure and caption have fixed heights, so every plot
-   starts and ends at the same place: one baseline across the card. */
-.gap-col {
-  --plot: 200px;
-  display: flex; flex-direction: column; align-items: stretch;
-  padding: 8px 8px 10px; min-width: 0;
-  background: transparent; border: 2px solid transparent;
-  border-bottom: 0; border-radius: var(--radius-md) var(--radius-md) 0 0;
-  color: var(--text); text-align: center; font: inherit;
+/* ----- Waffle (components/Waffle.jsx): squares of a whole ----- */
+.waffle {
+  display: grid; grid-template-columns: repeat(var(--waffle-cols, 10), minmax(0, 1fr));
+  gap: 4px; flex: none;
 }
-.gap-col[data-authority="ict"] { --auth: var(--ict); --auth-base: var(--ict-base); }
-.gap-col[data-authority="cra"] { --auth: var(--cra); --auth-base: var(--cra-base); }
-.gap-col:hover:not(:disabled) { background: var(--accent-wash); }
-.gap-col[aria-pressed="true"] { background: var(--accent-wash); border-color: var(--accent); }
-.gap-col:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.gap-col:disabled { cursor: default; }
+.waffle[data-authority="ict"] { --auth: var(--ict); --auth-base: var(--ict-base); }
+.waffle[data-authority="cra"] { --auth: var(--cra); --auth-base: var(--cra-base); }
+.waffle i { display: block; aspect-ratio: 1; border-radius: 2px; background: var(--auth-base); }
+.waffle i.on { background: var(--auth); }
+.waffle[data-empty] i { background: transparent; border: 1px dotted var(--control-border); }
+.waffle-tile-grid { width: 100%; max-width: 220px; }
+@media (max-width: 1300px) { .waffle-tile-grid { max-width: 180px; } }
+.waffle-size-hero { grid-template-columns: repeat(var(--waffle-cols, 10), 7px); gap: 2px; }
+.waffle-size-hero i { border-radius: 1px; }
+.waffle-size-mark { grid-template-columns: repeat(var(--waffle-cols, 20), 5px); gap: 1px; }
+.waffle-size-mark i { border-radius: 1px; }
 
-.gap-col-figure {
-  font-size: 30px; line-height: 38px; font-weight: 600;
-  font-variant-numeric: tabular-nums; color: var(--text);
+/* ----- WaffleTile (components/WaffleTile.jsx): a selectable tile ----- */
+.waffle-tile {
+  position: relative; min-width: 0;
+  display: flex; flex-direction: column; align-items: flex-start; gap: 8px;
+  padding: 16px; background: var(--surface-subtle);
+  border: 1px solid var(--track); border-radius: var(--radius-md);
+  transition: box-shadow 0.15s ease;
 }
-.gap-col-caption {
-  min-height: 32px;
-  font-size: 12px; line-height: 16px; color: var(--text-secondary);
+.waffle-tile[data-authority="ict"] { --auth-ink: var(--ict); }
+.waffle-tile[data-authority="cra"] { --auth-ink: var(--cra-ink); }
+.waffle-tile:hover { box-shadow: var(--shadow-2); }
+/* Selected: the wash and a 2px accent border; the padding gives back the
+   extra pixel so nothing inside moves. */
+.waffle-tile[data-selected] { background: var(--accent-wash); border: 2px solid var(--accent); padding: 15px; }
+/* The stretched button under everything opens the tile. Everything drawn on
+   top lets clicks through to it, except the figure and a live line, which
+   hold their own buttons. Never a button inside a button. */
+.waffle-tile > :not(.waffle-tile-hit) { position: relative; z-index: 1; pointer-events: none; }
+.waffle-tile-hit {
+  position: absolute; inset: 0; z-index: 0;
+  border: 0; border-radius: inherit; background: transparent; cursor: pointer;
+}
+.waffle-tile-hit:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.waffle-tile-figure :is(button, a), .waffle-tile-live :is(button, a) { pointer-events: auto; }
+.waffle-tile-head { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.waffle-tile-label {
+  font-size: var(--fs-title); line-height: var(--lh-title); font-weight: 600; color: var(--text);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.waffle-tile-grid { margin-top: 4px; }
+.waffle-tile-figure {
+  font-size: var(--fs-figure); line-height: var(--lh-figure); font-weight: 600;
+  letter-spacing: -0.01em; color: var(--auth-ink);
+}
+.waffle-tile-none { color: var(--text-tertiary); }
+.waffle-tile-line {
+  font-size: var(--fs-meta); line-height: var(--lh-meta); color: var(--text-secondary);
   font-variant-numeric: tabular-nums;
 }
-.gap-col-plot {
-  position: relative; height: var(--plot); margin-top: 8px;
-  border-bottom: 1px solid var(--control-border);
-}
-.gap-col-base, .gap-col-bar {
-  position: absolute; bottom: 0; left: 50%; transform: translateX(-50%);
-  border-radius: 6px 6px 0 0;
-}
-.gap-col-base { width: 72%; max-width: 64px; background: var(--auth-base); }
-.gap-col-bar { width: 48%; max-width: 44px; background: var(--auth); }
-/* Chip over label, the same under every column however long the label. */
-.gap-col-foot {
-  display: flex; flex-direction: column; align-items: center;
-  gap: 4px; margin-top: 8px;
-}
-.gap-col-label { font-size: 13px; line-height: 18px; color: var(--text-secondary); }
+.waffle-tile-line strong { color: var(--text); font-weight: 600; }
+.waffle-tile-scale { font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--text-tertiary); }
 
-/* The authority chip: soft fill, authority ink. CRA text is --cra-ink,
-   never --cra. */
-.gap-chip {
-  display: inline-flex; align-items: center; height: 24px; padding: 0 10px;
-  border-radius: 999px; font-size: 12px; font-weight: 600;
-}
-.gap-chip[data-authority="ict"] { background: var(--ict-soft); color: var(--ict); }
-.gap-chip[data-authority="cra"] { background: var(--cra-soft); color: var(--cra-ink); }
-
+/* The one legend line under the cards. */
 .gap-legend {
-  display: flex; flex-wrap: wrap; gap: 6px 18px;
-  font-size: 12px; line-height: 16px; color: var(--text-tertiary);
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px 18px;
+  font-size: var(--fs-meta); line-height: var(--lh-meta); color: var(--text-tertiary);
 }
 .gap-legend span { display: inline-flex; align-items: center; gap: 6px; }
-.gap-swatch { display: inline-block; width: 10px; height: 10px; border-radius: 2px; }
-.gap-swatch[data-authority="ict"] { background: var(--ict); }
-.gap-swatch[data-authority="cra"] { background: var(--cra); }
+.gap-legend-hint { margin-inline-start: auto; }
+.gap-swatch {
+  display: inline-block; width: 12px; height: 12px; border-radius: 2px;
+  background: linear-gradient(90deg, var(--ict) 50%, var(--cra) 50%);
+}
 .gap-swatch-base { background: linear-gradient(90deg, var(--ict-base) 50%, var(--cra-base) 50%); }
 
-/* The details panel: docked, non-modal, 400 wide. */
-.gap-panel {
-  flex: 0 0 400px; min-width: 0;
-  border-inline-start: 1px solid var(--divider); padding-inline-start: 24px;
-  display: flex; flex-direction: column; gap: 12px;
+/* ----- GapDrawer (components/GapDrawer.jsx): who is holding it ----- */
+.gap-drawer {
+  position: fixed; top: 0; bottom: 0; inset-inline-end: 0; z-index: var(--z-drawer);
+  width: min(620px, 100vw);
+  display: flex; flex-direction: column; gap: 16px;
+  padding: 20px 24px 16px;
+  background: var(--surface); box-shadow: var(--shadow-2);
+  border-start-start-radius: var(--radius); border-end-start-radius: var(--radius);
+  overflow: hidden;
 }
-.gap-panel-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
-.gap-panel-caption { font-size: 12px; line-height: 16px; color: var(--text-tertiary); }
-.gap-panel-title { font-size: 17px; line-height: 24px; font-weight: 600; }
-.gap-panel-summary {
-  font-size: 13px; line-height: 18px; color: var(--text-secondary);
+@media (max-width: 640px) { .gap-drawer { border-radius: 0; padding: 16px; } }
+.gap-drawer[data-authority="ict"] { --auth-ink: var(--ict); }
+.gap-drawer[data-authority="cra"] { --auth-ink: var(--cra-ink); }
+.gap-drawer-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex: none; }
+.gap-drawer-titles { min-width: 0; }
+.gap-drawer-eyebrow { font-size: var(--fs-meta); line-height: var(--lh-meta); font-weight: 600; color: var(--text-link); }
+.gap-drawer-title {
+  display: flex; align-items: center; gap: 8px; margin-top: 2px;
+  font-size: var(--fs-heading); line-height: var(--lh-heading); font-weight: 600;
+}
+.gap-drawer-close {
+  width: 32px; height: 32px; padding: 0; flex: none;
+  display: inline-grid; place-items: center; border-radius: var(--radius-sm);
+}
+.gap-drawer-hero {
+  display: flex; align-items: center; gap: 16px; flex: none;
+  padding: 16px; background: var(--surface-subtle);
+  border: 1px solid var(--track); border-radius: var(--radius-md);
+}
+.gap-drawer-hero-text { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.gap-drawer-figure {
+  font-size: var(--fs-figure); line-height: var(--lh-figure); font-weight: 600; color: var(--auth-ink);
+}
+.gap-drawer-line { font-size: var(--fs-meta); line-height: var(--lh-meta); color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+.gap-drawer-note { font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--text-tertiary); }
+.gap-drawer-lenses { align-self: flex-start; flex-wrap: nowrap; flex: none; max-width: 100%; }
+.gap-drawer-lenses .ui-seg-option { padding: 0 12px; }
+.gap-drawer-summary {
+  flex: none; font-size: var(--fs-control); line-height: var(--lh-control); color: var(--text-secondary);
   font-variant-numeric: tabular-nums;
 }
-.gap-panel-close {
-  width: 32px; height: 32px; padding: 0; flex-shrink: 0;
-  display: inline-grid; place-items: center;
-}
-.gap-panel-lenses { align-self: flex-start; }
-
-.gap-rows { list-style: none; display: flex; flex-direction: column; }
-.gap-rows[data-authority="ict"] { --auth: var(--ict); }
-.gap-rows[data-authority="cra"] { --auth: var(--cra); }
-.gap-row {
-  display: flex; align-items: center; gap: 12px;
-  min-height: 42px; padding: 6px 0;
+.gap-drawer-summary strong { color: var(--text); font-weight: 600; }
+.gap-drawer-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; transition: opacity 0.15s; }
+.gap-drawer-scroll[data-loading] { opacity: 0.55; }
+.gap-drawer-table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.gap-drawer-table th, .gap-drawer-table td {
+  padding: 8px; text-align: start; vertical-align: middle;
   border-bottom: 1px solid var(--divider);
+  font-size: var(--fs-control); line-height: var(--lh-control);
 }
-.gap-row-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
-.gap-row-name {
-  font-size: 14px; line-height: 20px;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+.gap-drawer-table thead th {
+  position: sticky; top: 0; z-index: 1; background: var(--surface);
+  font-size: var(--fs-caption); line-height: var(--lh-caption); font-weight: 600; color: var(--text-tertiary);
+  text-transform: none; letter-spacing: 0;
+  border-bottom: 1px solid var(--border);
 }
-.gap-row-name.gap-farsi { font-family: var(--font-farsi); font-size: 15px; }
-.gap-row-bar { display: block; height: 6px; border-radius: 3px; background: var(--track); overflow: hidden; }
-.gap-row-fill { display: block; height: 100%; border-radius: 3px; background: var(--auth); }
-.gap-row-more .gap-row-fill { background: #6B788D; }
-.gap-row-more .gap-row-name { color: var(--text-secondary); }
-.gap-row-rate {
-  font-size: 12px; line-height: 16px; color: var(--text-tertiary);
+.gap-drawer-table .num { text-align: end; white-space: nowrap; }
+.gap-drawer-mark-col { width: 1%; padding-inline-start: 0; }
+.gap-drawer-name { font-weight: 500; min-width: 0; }
+.gap-drawer-name > span:first-child { display: block; }
+.gap-drawer-name .text-farsi { font-weight: 500; }
+.gap-drawer-sub {
+  display: block; font-size: var(--fs-caption); line-height: var(--lh-caption); font-weight: 400; color: var(--text-tertiary);
+}
+.gap-drawer-table tr.is-unowned .gap-drawer-name > span:first-child { font-style: italic; color: var(--text-secondary); }
+.gap-drawer-table td:nth-child(3) { font-weight: 600; }
+.gap-drawer-share { color: var(--text-secondary); }
+.gap-drawer-foot {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; flex: none;
+  padding-top: 12px; border-top: 1px solid var(--divider);
+  font-size: var(--fs-meta); line-height: var(--lh-meta); color: var(--text-secondary);
   font-variant-numeric: tabular-nums;
 }
-.gap-row-figures { display: flex; flex-direction: column; align-items: flex-end; text-align: end; }
-.gap-row-count { font-size: 14px; line-height: 20px; font-weight: 600; font-variant-numeric: tabular-nums; }
-.gap-row-share {
-  font-size: 12px; line-height: 16px; color: var(--text-secondary);
-  font-variant-numeric: tabular-nums; white-space: nowrap;
-}
-
-/* Narrow screens: the panel drops under the chart. */
-@media (max-width: 900px) {
-  .gap-body { flex-direction: column; }
-  .gap-panel {
-    flex-basis: auto; border-inline-start: 0; padding-inline-start: 0;
-    border-top: 1px solid var(--divider); padding-top: 16px;
-  }
-  .gap-col { --plot: 140px; }
-}
-
-.gap-checksum {
-  display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
-  font-size: 13px; line-height: 20px; color: var(--text-secondary);
-  font-variant-numeric: tabular-nums;
-}
-.gap-checksum.bad {
-  align-items: flex-start;
+.gap-drawer-check { color: var(--success-ink); font-weight: 600; }
+.gap-drawer-check.bad {
+  display: flex; align-items: flex-start; gap: 8px; flex-basis: 100%;
   padding: 10px 14px; border-radius: var(--radius-md);
-  background: var(--danger-soft); color: var(--danger-ink); font-weight: 600;
+  background: var(--danger-soft); color: var(--danger-ink);
 }
+.gap-drawer-empty { flex: 1 1 auto; min-height: 0; display: grid; place-items: center; }
 
 /* Kept for Mojri Import, which borrows this page's worked-example line. */
 .gap-example {

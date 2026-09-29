@@ -227,3 +227,79 @@ export const dtInProgress = Array.from({ length: 96 }, (_, i) => ({
   sent_back_comment: null,
   sent_back_at: null,
 }))
+
+// ----- Lifecycle Gaps ------------------------------------------------------
+//
+// The national totals are the design's; the owners are placeholders and the
+// split between them is made up. Every lens's rows add up to every gap, as
+// the server guarantees.
+
+const GAP_TOTALS = { eligible: 4433, ict_approved: 3042, cra_approved: 3858 }
+const GAP_FIGURES = {
+  pending_ict: { count: 1391, base: 4433 },
+  pending_cra: { count: 575, base: 4433 },
+  ict_remained: { count: 991, base: 3858 },
+  cra_remained: { count: 175, base: 3042 },
+  ict_missing_in_mojri: { count: 3042, base: 3042, in_tracker: 0, needs_look: 0 },
+  cra_missing_in_mojri: { count: 3858, base: 3858, in_tracker: 0, needs_look: 0 },
+}
+
+const GAP_OWNERS = {
+  coordinator: ['V. Hashemi', 'R. Karimi', 'S. Moradi', 'A. Rahimi', 'M. Jafari', 'N. Ahmadi', 'H. Kazemi',
+    'F. Sadeghi', 'P. Rostami', 'Z. Hosseini', 'K. Bagheri', 'L. Ebrahimi', 'T. Sharifi'],
+  contractor: CONTRACTORS,
+  province: ['Tehran', 'Isfahan', 'Fars', 'Khorasan Razavi', 'Kerman', 'Yazd', 'Gilan', 'Mazandaran',
+    'Khuzestan', 'East Azerbaijan', 'West Azerbaijan', 'Kermanshah', 'Hormozgan', 'Sistan & Baluchestan',
+    'Golestan', 'Lorestan', 'Hamadan', 'Markazi', 'Qazvin', 'Zanjan', 'Ardabil', 'Kurdistan', 'Ilam',
+    'Bushehr', 'Semnan', 'Qom', 'Alborz', 'Chaharmahal & Bakhtiari', 'Kohgiluyeh & Boyer-Ahmad',
+    'North Khorasan', 'South Khorasan'],
+  region: ['North', 'North East', 'North West', 'Central', 'Azar', 'South', 'South East', 'West', 'East'],
+  rm: ['Allahyar', 'Nobakht', 'Pirayesh', 'Rouhi', 'Fazl Talab'],
+}
+const MANAGERS = GAP_OWNERS.rm
+
+/** `total` split over `n` owners, largest first, summing exactly. */
+function split(total, n) {
+  const weights = Array.from({ length: n }, (_, i) => n - i + (i % 3))
+  const whole = weights.reduce((a, b) => a + b, 0)
+  const parts = weights.map((w) => Math.floor((total * w) / whole))
+  parts[0] += total - parts.reduce((a, b) => a + b, 0)
+  return parts
+}
+
+function gapRows(lens) {
+  const names = GAP_OWNERS[lens]
+  const rows = {}
+  for (const [key, gap] of Object.entries(GAP_FIGURES)) {
+    const counts = split(gap.count, names.length)
+    const bases = split(gap.base, names.length)
+    rows[key] = names
+      .map((name, i) => ({
+        name,
+        count: counts[i],
+        base: bases[i],
+        attribution: 'owned',
+        ...(lens === 'coordinator' ? { managers: [MANAGERS[i % MANAGERS.length]] } : {}),
+      }))
+      .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
+  }
+  return rows
+}
+
+export function gapsOverview(url) {
+  const lens = new URL(url).searchParams.get('lens') || 'coordinator'
+  return {
+    last_cpm_import: '2026-09-20T09:30:00Z',
+    last_mojri_import: null,
+    scoped: false,
+    lens,
+    key: null,
+    lenses: [],
+    totals: GAP_TOTALS,
+    gaps: GAP_FIGURES,
+    rows: gapRows(lens),
+    data_quality: { villages_without_province: 0, unmapped_provinces: [] },
+  }
+}
+
+export const kpiLenses = { selectable: true, options: {} }

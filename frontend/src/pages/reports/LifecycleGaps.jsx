@@ -1,57 +1,53 @@
 import { useEffect, useState } from 'react'
-import { AlertTriangle, Layers, X } from 'lucide-react'
+import { AlertTriangle, ClipboardList, Hourglass, Scale } from 'lucide-react'
 import api from '../../api/client'
+import GapDrawer from '../../components/GapDrawer'
 import PageFrame from '../../components/PageFrame'
+import WaffleTile from '../../components/WaffleTile'
 import { useAuth } from '../../context/AuthContext'
-import {
-  Banner,
-  Card,
-  EmptyState,
-  PageBar,
-  SegmentedControl,
-  Tabs,
-} from '../../components/ui'
+import { Banner, Card, EmptyState, PageBar, Tabs } from '../../components/ui'
 import CoverageMap from './CoverageMap'
 import {
   ATTRIBUTION_NOTES,
-  BLOCKS,
+  CARDS,
   GAPS,
   LENSES,
-  chartMax,
   checksum,
-  columnCaption,
   dataNotes,
+  drawerRows,
   fmt,
   hasData,
-  heightPct,
+  holdersParts,
+  lensNoun,
   mojriStamp,
-  panelRows,
-  summaryLine,
+  onePct,
+  scaleNote,
+  shareParts,
+  waffleFilled,
 } from './lifecycleGaps'
 
 /**
  * Performance → Lifecycle Gaps.
  *
- * The Gaps tab answers one question in one look, with no scrolling: how big
- * is each gap? Six columns in three blocks -- pending approval, one approved
- * and the other remained, and approved villages missing from Mojri's tracker
- * -- all on one baseline and one scale, so the tallest solid column is the
- * biggest gap on the page. Who is behind a gap comes only on click, in a
- * panel docked beside the chart.
+ * Clean first, detail on demand. At rest the Gaps tab is six numbers in three
+ * cards -- pending approval, one approved and the other pending, approved but
+ * missing from Mojri's tracker -- each a waffle of its gap against its base.
+ * Who is holding a gap opens in a drawer on click.
  *
  * Rules rather than choices:
  *
- * **ICT left, CRA right, in every block**, each in its authority colour and
- * always with its label. Cobalt is never a data colour here: it marks the
- * selected column only.
+ * **ICT left, CRA right, in every card**, each in its authority colour and
+ * always with its chip. Cobalt is never a data colour here: it marks the tile
+ * whose drawer is open, and nothing else.
  *
- * **The panel adds up, visibly.** Its footer sums the rows it received and
+ * **The drawer adds up, visibly.** Its footer sums the rows it received and
  * says out loud whether they make the gap's total.
  *
  * **The lens is PM's.** Every other role is confined by the server to its own
- * villages, so the panel shows their own row and no lens tabs.
+ * villages, so the drawer shows their own row and no Group-by control.
  *
- * Hand-built HTML columns. No charting library, deliberately.
+ * **The page never scrolls.** The cards fit; the drawer is fixed over a scrim
+ * and its list scrolls inside it.
  */
 export default function LifecycleGaps() {
   const { user } = useAuth()
@@ -71,7 +67,7 @@ export default function LifecycleGaps() {
     let live = true
     api
       .get('/kpi/lenses')
-      .then((r) => live && setLens(r.data.selectable ? 'province' : r.data.lens))
+      .then((r) => live && setLens(r.data.selectable ? LENSES[0].key : r.data.lens))
       .catch((err) => live && setError(readError(err, 'Could not work out your scope.')))
     return () => {
       live = false
@@ -90,16 +86,6 @@ export default function LifecycleGaps() {
       live = false
     }
   }, [lens])
-
-  // Esc closes the panel, wherever focus is.
-  useEffect(() => {
-    if (!selected) return undefined
-    const onKey = (event) => {
-      if (event.key === 'Escape') setSelected(null)
-    }
-    document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
-  }, [selected])
 
   const notes = dataNotes(data?.data_quality)
 
@@ -141,36 +127,25 @@ export default function LifecycleGaps() {
           ))}
         </Banner>
       )}
-      {error && !data && tab === 'gaps' && (
-        <Card>
-          <EmptyState title="Nothing to show" hint={error} />
-        </Card>
-      )}
       {error && data && <Banner tone="error">{error}</Banner>}
 
       {tab === 'map' ? (
         <CoverageMap />
-      ) : !data ? (
-        !error && <Skeleton />
-      ) : (
-        <Card icon={Layers} title="Where villages are stuck" className="gap-card">
-          <div className="gap-body">
-            <Chart
-              data={data}
-              selected={selected}
-              onSelect={(key) => setSelected((current) => (current === key ? null : key))}
-            />
-            {selected && (
-              <Panel
-                gapKey={selected}
-                data={data}
-                isPm={isPm}
-                onLens={setLens}
-                onClose={() => setSelected(null)}
-              />
-            )}
-          </div>
+      ) : error && !data ? (
+        <Card>
+          <EmptyState title="Nothing to show" hint={error} />
         </Card>
+      ) : !data ? (
+        <Skeleton />
+      ) : (
+        <GapsTab
+          data={data}
+          lens={lens}
+          isPm={isPm}
+          selected={selected}
+          onSelect={setSelected}
+          onLens={setLens}
+        />
       )}
     </PageFrame>
   )
@@ -181,184 +156,181 @@ const TABS = [
   { key: 'map', label: 'Coverage map' },
 ]
 
+const CARD_ICONS = { pending: Hourglass, remained: Scale, mojri: ClipboardList }
+
 function readError(err, fallback) {
   const detail = err?.response?.data?.detail
   return typeof detail === 'string' ? detail : fallback
 }
 
 /* ---------------------------------------------------------------------------
-   The chart: three blocks, two columns each, one baseline and one scale.
+   The Gaps tab: three cards, six tiles, one legend line.
    --------------------------------------------------------------------------- */
 
-function Chart({ data, selected, onSelect }) {
-  const max = chartMax(data)
+function GapsTab({ data, lens, isPm, selected, onSelect, onLens }) {
   return (
-    <div className="gap-chart">
-      <div className="gap-blocks">
-        {BLOCKS.map((block) => (
-          <section key={block.key} className="gap-block" aria-labelledby={`gap-block-${block.key}`}>
-            <h3 id={`gap-block-${block.key}`} className="gap-block-title">
-              {block.title}
-            </h3>
-            <div className="gap-cols">
-              {block.gaps.map((key) => (
-                <Column
+    <div className="gap-tab">
+      <div className="gap-cards">
+        {CARDS.map((card) => (
+          <Card
+            key={card.key}
+            icon={CARD_ICONS[card.key]}
+            title={card.title}
+            titleAs="h3"
+            description={card.description}
+            className="gap-card"
+          >
+            <div className="gap-tiles">
+              {card.gaps.map((key) => (
+                <GapTile
                   key={key}
                   gapKey={key}
                   data={data}
-                  max={max}
                   selected={selected === key}
-                  onSelect={onSelect}
+                  onOpen={() => onSelect(key)}
                 />
               ))}
             </div>
-          </section>
+          </Card>
         ))}
       </div>
+
       <p className="gap-legend">
-        <span><i className="gap-swatch" data-authority="ict" aria-hidden="true" />ICT</span>
-        <span><i className="gap-swatch" data-authority="cra" aria-hidden="true" />CRA</span>
+        <span>
+          <i className="gap-swatch" aria-hidden="true" />
+          Pending
+        </span>
         <span>
           <i className="gap-swatch gap-swatch-base" aria-hidden="true" />
-          faint = the base it is counted from
+          Counted from (100 squares = the base)
         </span>
-        <span>All six columns share one baseline and one scale.</span>
+        <span className="gap-legend-hint">
+          Select a tile to see who is holding it · select a number to export its villages to Excel
+        </span>
       </p>
+
+      {selected && (
+        <HoldersDrawer
+          gapKey={selected}
+          data={data}
+          lens={lens}
+          isPm={isPm}
+          onLens={onLens}
+          onClose={() => onSelect(null)}
+        />
+      )}
     </div>
   )
 }
 
-function Column({ gapKey, data, max, selected, onSelect }) {
+function GapTile({ gapKey, data, selected, onOpen }) {
   const meta = GAPS[gapKey]
   const gap = data.gaps[gapKey]
   const ready = hasData(gapKey, data)
-  const authority = meta.authority.toLowerCase()
+  const share = shareParts(gapKey, gap)
+  const approved = meta.approvedGap && data.totals[meta.approvedGap]
 
   return (
-    <button
-      type="button"
-      className="gap-col"
-      data-authority={authority}
-      aria-pressed={selected}
-      aria-label={
-        ready
-          ? `${meta.authority} ${meta.label}: ${fmt(gap.count)} villages`
-          : `${meta.authority} ${meta.label}: no Mojri import yet`
+    <WaffleTile
+      authority={meta.authority}
+      label={meta.tileLabel}
+      filled={waffleFilled(gap.count, gap.base)}
+      figure={<GapFigure gap={gapKey} value={gap.count} className="waffle-tile-number" />}
+      share={
+        <>
+          <strong>{share.pct}</strong> {share.of} <span className="nowrap">{share.name}</span>
+        </>
       }
-      disabled={!ready}
-      onClick={() => onSelect(gapKey)}
-    >
-      <span className="gap-col-figure">{ready ? fmt(gap.count) : '—'}</span>
-      <span className="gap-col-caption">{columnCaption(gapKey, data)}</span>
-      <span className="gap-col-plot" aria-hidden="true">
-        {ready && meta.showBase && (
-          <span className="gap-col-base" style={{ height: `${heightPct(gap.base, max)}%` }} />
-        )}
-        {ready && (
-          <span className="gap-col-bar" style={{ height: `${heightPct(gap.count, max)}%` }} />
-        )}
-      </span>
-      <span className="gap-col-foot">
-        <span className="gap-chip" data-authority={authority}>
-          {meta.authority}
-        </span>
-        <span className="gap-col-label">{meta.label}</span>
-      </span>
-    </button>
+      scale={scaleNote(gap.base)}
+      selected={selected}
+      empty={!ready}
+      emptyNote="No Mojri import yet"
+      emptyFigure={
+        meta.mojri && (
+          <>
+            <GapFigure gap={meta.approvedGap} value={approved} /> approved in UEP
+          </>
+        )
+      }
+      openLabel={
+        ready
+          ? `${meta.authority} ${meta.tileLabel}: ${fmt(gap.count)} villages — see who is holding it`
+          : `${meta.authority} ${meta.tileLabel}: no Mojri import yet`
+      }
+      onOpen={onOpen}
+    />
   )
+}
+
+/**
+ * A village count on this page. Step 4 turns every one of these into an
+ * export; until then it is the number.
+ */
+function GapFigure({ value, className }) {
+  return <span className={`tnum ${className ?? ''}`.trim()}>{fmt(value)}</span>
 }
 
 /* ---------------------------------------------------------------------------
-   The details panel: who is behind the selected gap.
+   The drawer: who is holding the selected gap.
    --------------------------------------------------------------------------- */
 
-function Panel({ gapKey, data, isPm, onLens, onClose }) {
+function HoldersDrawer({ gapKey, data, lens, isPm, onLens, onClose }) {
   const meta = GAPS[gapKey]
-  const total = data.gaps[gapKey].count
-  const rows = data.rows[gapKey] ?? []
-  const { shown, more } = panelRows(rows, total)
-  const widest = Math.max(0, ...shown.map((row) => row.count), more?.count ?? 0)
-  const block = BLOCKS.find((item) => item.key === meta.block)
-  const check = checksum(rows, total, data.lens)
+  const gap = data.gaps[gapKey]
+  const ready = hasData(gapKey, data)
+  const card = CARDS.find((item) => item.key === meta.card)
+  // Until the new lens arrives, the rows on screen are the old lens's.
+  const loading = data.lens !== lens
+  const shownLens = data.lens
+  const rows = drawerRows(data.rows[gapKey] ?? [], gap.count).map((row) => ({
+    ...row,
+    note: ATTRIBUTION_NOTES[row.attribution],
+    sub: row.managers?.length ? `RM ${row.managers.join(', ')}` : null,
+  }))
+  const check = checksum(rows, gap.count)
+  const holders = holdersParts(rows, shownLens, gap.count)
 
   return (
-    <aside className="gap-panel" aria-label={`Details: ${meta.title}`}>
-      <header className="gap-panel-head">
-        <div>
-          <div className="gap-panel-caption">{block.title}</div>
-          <h3 className="gap-panel-title">{meta.title}</h3>
-          <p className="gap-panel-summary">{summaryLine(gapKey, data)}</p>
-          {meta.mojri && (
-            <p className="gap-panel-summary">{mojriStamp(data.last_mojri_import)}</p>
-          )}
-        </div>
-        <button
-          type="button"
-          className="btn gap-panel-close"
-          aria-label="Close details"
-          onClick={onClose}
-        >
-          <X size={16} aria-hidden="true" />
-        </button>
-      </header>
-
-      {isPm && (
-        <SegmentedControl
-          label="Lens"
-          options={LENSES}
-          value={data.lens}
-          onChange={onLens}
-          className="gap-panel-lenses"
-        />
-      )}
-
-      <ul className="gap-rows" data-authority={meta.authority.toLowerCase()}>
-        {shown.map((row) => (
-          <Row key={row.name} row={row} widest={widest} />
-        ))}
-        {more && <Row row={more} widest={widest} />}
-      </ul>
-
-      <p className={`gap-checksum ${check.ok ? '' : 'bad'}`} data-testid="gap-checksum">
-        {check.ok ? null : <AlertTriangle size={15} aria-hidden="true" />}
-        <span>{check.text}</span>
-        {check.ok && <span aria-label="adds up"> ✓</span>}
-      </p>
-    </aside>
-  )
-}
-
-function Row({ row, widest }) {
-  const note = ATTRIBUTION_NOTES[row.attribution]
-  const owned = row.attribution === 'owned'
-  return (
-    <li className={`gap-row ${row.attribution === 'more' ? 'gap-row-more' : ''}`}>
-      <div className="gap-row-main">
-        <span
-          className={`gap-row-name ${owned ? 'gap-farsi' : ''}`}
-          dir={owned ? 'auto' : undefined}
-          title={note}
-        >
-          {row.name}
-        </span>
-        <span className="gap-row-bar" aria-hidden="true">
-          <span
-            className="gap-row-fill"
-            style={{ width: `${widest ? (row.count * 100) / widest : 0}%` }}
-          />
-        </span>
-        <span className="gap-row-rate">
-          own rate {row.rate == null ? '—' : `${Math.round(row.rate)}%`} · {fmt(row.count)} of{' '}
-          {fmt(row.base)}
-        </span>
-      </div>
-      <div className="gap-row-figures">
-        <span className="gap-row-count">{fmt(row.count)}</span>
-        <span className="gap-row-share">
-          {row.share == null ? '—' : `${row.share.toFixed(1)}%`} of gap
-        </span>
-      </div>
-    </li>
+    <GapDrawer
+      open
+      onClose={onClose}
+      eyebrow={card.title}
+      authority={meta.authority}
+      title={meta.title}
+      hero={{
+        empty: !ready,
+        filled: waffleFilled(gap.count, gap.base),
+        figure: ready ? <GapFigure gap={gapKey} value={gap.count} /> : '—',
+        line: ready
+          ? `${onePct(gap.count, gap.base)} of ${fmt(gap.base)} ${meta.baseName}`
+          : 'No Mojri import yet',
+        note: meta.mojri && ready ? mojriStamp(data.last_mojri_import) : null,
+      }}
+      lens={isPm ? lens : shownLens}
+      lensOptions={isPm ? LENSES : null}
+      onLens={onLens}
+      rows={rows}
+      renderCount={(row) => <GapFigure gap={gapKey} value={row.count} lens={shownLens} keyValue={row.name} />}
+      loading={loading}
+      summary={
+        <>
+          <strong>{holders.holders}</strong> {holders.noun} {holders.verb} these{' '}
+          <strong>{holders.total}</strong> {holders.villages} · most pending first
+        </>
+      }
+      shareNote={`Share of gap = their pending ÷ ${fmt(gap.count)}`}
+      check={check}
+      empty={
+        ready
+          ? null
+          : {
+              title: 'Nothing to compare yet.',
+              hint:
+                'Once the Mojri tracker is imported, the villages approved in UEP but missing ' +
+                `in Mojri are listed here by ${lensNoun(isPm ? lens : shownLens, 1)}.`,
+            }
+      }
+    />
   )
 }
 

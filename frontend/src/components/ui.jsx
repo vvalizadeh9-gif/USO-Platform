@@ -24,6 +24,18 @@ const STATUS_CLASS = {
   New: 'pill-dim',
 }
 
+/**
+ * ICT or CRA, always in words: the authority's soft fill and its ink. CRA's
+ * ink is `--cra-ink`, never `--cra` (which is graphics only).
+ */
+export function AuthorityChip({ authority, className = '' }) {
+  return (
+    <span className={`auth-chip ${className}`.trim()} data-authority={authority.toLowerCase()}>
+      {authority}
+    </span>
+  )
+}
+
 export function StatusPill({ status }) {
   const cls = STATUS_CLASS[status] || 'pill-dim'
   return <span className={`pill ${cls}`}>{status || '—'}</span>
@@ -395,8 +407,11 @@ const FOCUSABLE =
  * The keyboard contract every dialog shares: focus moves into the panel when
  * it opens, Tab and Shift+Tab stay inside it, Escape asks to close, and focus
  * goes back to whatever had it before when the panel goes away.
+ *
+ * Focus lands on the panel's first focusable element, so a dialog whose
+ * first control is its Close button opens on Close.
  */
-function useDialogFocus(open, panelRef, onClose) {
+export function useDialogFocus(open, panelRef, onClose) {
   const closeRef = useRef(onClose)
   closeRef.current = onClose
 

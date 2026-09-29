@@ -501,3 +501,22 @@ def test_the_coverage_map_is_unchanged_by_the_on_air_rule(client, actors):
     assert response.status_code == 200, response.text
     ardabil = next(p for p in response.json()["provinces"] if p["key"] == ARDABIL)
     assert ardabil["ict"]["reached"] == 3
+
+
+def test_coordinator_rows_name_their_regional_managers(client, actors):
+    """Every manager over any province Amir coordinates, from the directory
+    that seeds the mapping -- not only the provinces with villages here."""
+    from app.core.province_directory import PROVINCE_DIRECTORY
+
+    expected = sorted({p.regional_manager for p in PROVINCE_DIRECTORY if p.pso_coordinator == "Amir"})
+    assert {"Allahyar", "Nobakht", "Pirayesh"} <= set(expected)
+    rows = _overview(client, actors["pm"], lens="coordinator")["rows"]["pending_ict"]
+    amir = next(row for row in rows if row["name"] == "Amir")
+    assert amir["managers"] == expected
+    unknown = next(row for row in rows if row["attribution"] == gaps.UNKNOWN_PROVINCE)
+    assert unknown["managers"] == []
+
+
+def test_other_lenses_carry_no_managers(client, actors):
+    rows = _overview(client, actors["pm"], lens="province")["rows"]["pending_ict"]
+    assert all("managers" not in row for row in rows)

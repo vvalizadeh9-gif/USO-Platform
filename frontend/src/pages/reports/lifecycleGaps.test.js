@@ -1,108 +1,111 @@
 import { describe, expect, it } from 'vitest'
 import {
-  BLOCKS,
+  CARDS,
   GAPS,
-  chartMax,
+  LENSES,
   checksum,
-  columnCaption,
   dataNotes,
-  heightPct,
+  drawerRows,
+  exportDescription,
+  gapShortName,
+  hasData,
+  holdersParts,
   mojriStamp,
-  panelRows,
-  summaryLine,
+  scaleNote,
+  shareParts,
+  waffleFilled,
 } from './lifecycleGaps'
-
-// The sample figures from the design.
-const data = (over = {}) => ({
-  last_mojri_import: '2026-09-12T08:00:00Z',
-  totals: { eligible: 4812, ict_approved: 2770, cra_approved: 2555 },
-  gaps: {
-    pending_ict: { count: 2042, base: 4812 },
-    pending_cra: { count: 2257, base: 4812 },
-    ict_remained: { count: 395, base: 2555 },
-    cra_remained: { count: 610, base: 2770 },
-    ict_missing_in_mojri: { count: 980, base: 2770, in_tracker: 1790, needs_look: 40 },
-    cra_missing_in_mojri: { count: 760, base: 2555, in_tracker: 1795, needs_look: 20 },
-  },
-  ...over,
-})
 
 const row = (name, count, base, attribution = 'owned') => ({ name, count, base, attribution })
 
-describe('the blocks', () => {
-  it('puts ICT on the left and CRA on the right of every block', () => {
-    for (const block of BLOCKS) {
-      expect(block.gaps.map((key) => GAPS[key].authority)).toEqual(['ICT', 'CRA'])
+describe('the cards', () => {
+  it('puts ICT on the left and CRA on the right of every card', () => {
+    for (const card of CARDS) {
+      expect(card.gaps.map((key) => GAPS[key].authority)).toEqual(['ICT', 'CRA'])
     }
   })
-})
 
-describe('the shared scale', () => {
-  it('is the largest bar or base drawn on the card', () => {
-    // The pending bases (4,812) are not drawn; the tallest thing is 2,770.
-    expect(chartMax(data())).toBe(2770)
+  it('covers the six gaps once each', () => {
+    expect(CARDS.flatMap((card) => card.gaps).sort()).toEqual(Object.keys(GAPS).sort())
   })
 
-  it('leaves the Mojri block out when Mojri has never been imported', () => {
-    const noMojri = data({ last_mojri_import: null })
-    noMojri.gaps.ict_missing_in_mojri.base = 9999
-    expect(chartMax(noMojri)).toBe(2770)
-  })
-
-  it('draws a zero gap as a zero-height column, not a missing one', () => {
-    expect(heightPct(0, 2770)).toBe(0)
-    expect(heightPct(2770, 2770)).toBe(100)
-    expect(heightPct(5, 0)).toBe(0)
+  it('offers the five lenses in the design order', () => {
+    expect(LENSES.map((lens) => lens.key)).toEqual(['coordinator', 'contractor', 'province', 'region', 'rm'])
   })
 })
 
-describe('captions', () => {
-  it('says what each column is counted from', () => {
-    expect(columnCaption('pending_ict', data())).toBe('42% of 4,812')
-    expect(columnCaption('ict_remained', data())).toBe('of 2,555 CRA-approved')
-    expect(columnCaption('cra_remained', data())).toBe('of 2,770 ICT-approved')
-    expect(columnCaption('ict_missing_in_mojri', data())).toBe('Mojri has 1,790 of 2,770')
+describe('the waffle', () => {
+  it('fills round(100 × gap ÷ base) squares', () => {
+    expect(waffleFilled(1391, 4433)).toBe(31)
+    expect(waffleFilled(2042, 4812)).toBe(42)
   })
 
-  it('says there is no Mojri import rather than guessing', () => {
-    expect(columnCaption('cra_missing_in_mojri', data({ last_mojri_import: null }))).toBe(
-      'No Mojri import yet'
-    )
+  it('never fills below zero, above the whole, or on an empty base', () => {
+    expect(waffleFilled(0, 4433)).toBe(0)
+    expect(waffleFilled(5, 0)).toBe(0)
+    expect(waffleFilled(900, 800)).toBe(100)
   })
 
-  it('summarises a gap in the panel', () => {
-    expect(summaryLine('pending_ict', data())).toBe('2,042 villages · 42.4% of 4,812 drive-tested')
+  it('works for a strip of 20 as well as a grid of 100', () => {
+    expect(waffleFilled(205, 1391, 20)).toBe(3)
+  })
+
+  it('says what one square stands for, rounded', () => {
+    expect(scaleNote(4433)).toBe('1 square ≈ 44 villages')
+    expect(scaleNote(149)).toBe('1 square ≈ 1 village')
+  })
+
+  it('does not pretend a square is a whole village when the base is under 50', () => {
+    expect(scaleNote(40)).toBe('100 squares = 40 villages')
+    expect(scaleNote(0)).toBe('Nothing counted yet')
+  })
+
+  it('splits the share line into the percentage and its base', () => {
+    expect(shareParts('pending_cra', { count: 575, base: 4433 })).toEqual({
+      pct: '13%',
+      of: 'of 4,433',
+      name: 'drive-tested',
+    })
+    expect(shareParts('cra_remained', { count: 610, base: 2770 }).name).toBe('ICT-approved')
   })
 })
 
-describe('the panel rows', () => {
-  const rows = [
-    row('A', 50, 100),
-    row('B', 40, 80),
-    row('C', 30, 60),
-    row('D', 20, 40),
-    row('E', 10, 20),
-    row('F', 5, 10),
-    row('G', 3, 6),
-    row('H', 2, 4),
-  ]
+describe('Mojri', () => {
+  it('has no data until Mojri has been imported', () => {
+    expect(hasData('ict_missing_in_mojri', { last_mojri_import: null })).toBe(false)
+    expect(hasData('ict_missing_in_mojri', { last_mojri_import: '2026-09-12' })).toBe(true)
+    expect(hasData('pending_ict', { last_mojri_import: null })).toBe(true)
+  })
+})
 
-  it('shows the top six and folds the rest into one row', () => {
-    const { shown, more } = panelRows(rows, 160)
-    expect(shown.map((r) => r.name)).toEqual(['A', 'B', 'C', 'D', 'E', 'F'])
-    expect(more).toMatchObject({ name: '2 more', count: 5, base: 10, folded: 2 })
+describe('the drawer rows', () => {
+  const rows = [row('A', 290, 400), row('B', 240, 500), row('C', 0, 600)]
+
+  it('keeps every row, with its share of the gap and its 20-square mark', () => {
+    const out = drawerRows(rows, 530)
+    expect(out).toHaveLength(3)
+    expect(out[0].share).toBeCloseTo(54.72, 2)
+    expect(out[0].marks).toBe(11)
+    expect(out[2].marks).toBe(0)
   })
 
-  it('does not fold a single row into "1 more"', () => {
-    const { shown, more } = panelRows(rows.slice(0, 7), 158)
-    expect(shown).toHaveLength(7)
-    expect(more).toBeNull()
+  it('has no share when the gap is zero', () => {
+    expect(drawerRows([row('A', 0, 10)], 0)[0].share).toBeNull()
   })
 
-  it('carries both fractions: share of the gap and own rate', () => {
-    const [a] = panelRows(rows, 160).shown
-    expect(a.share).toBeCloseTo(31.25)
-    expect(a.rate).toBe(50)
+  it('counts the holders that hold any of it', () => {
+    expect(holdersParts(rows, 'coordinator', 530)).toEqual({
+      holders: '2',
+      noun: 'coordinators',
+      verb: 'hold',
+      total: '530',
+      villages: 'villages',
+    })
+    expect(holdersParts([row('A', 1, 1)], 'province', 1)).toMatchObject({
+      noun: 'province',
+      verb: 'holds',
+      villages: 'village',
+    })
   })
 })
 
@@ -110,23 +113,27 @@ describe('the checksum', () => {
   const rows = [row('A', 290, 400), row('B', 240, 500), row('C', 410, 600)]
 
   it('says the rows add up when they do', () => {
-    expect(checksum(rows, 940, 'province')).toEqual({
-      ok: true,
-      text: 'All 3 provinces add up to 940',
-    })
+    expect(checksum(rows, 940)).toEqual({ ok: true, sum: 940, text: 'Adds up to 940' })
   })
 
   it('says so loudly when they do not', () => {
-    const result = checksum(rows, 2570, 'coordinator')
+    const result = checksum(rows, 2570)
     expect(result.ok).toBe(false)
-    expect(result.text).toContain('The 3 coordinators add up to 940, not the 2,570 total')
+    expect(result.text).toContain('The rows add up to 940, not 2,570')
     expect(result.text).toContain('a difference of 1,630')
   })
+})
 
-  it('reads for one row', () => {
-    expect(checksum([row('Amir', 230, 300)], 230, 'coordinator').text).toBe(
-      'The 1 coordinator adds up to 230'
-    )
+describe('export descriptions', () => {
+  it('names the gap, then the scope, then the owner', () => {
+    expect(gapShortName('pending_cra')).toBe('CRA pending')
+    expect(gapShortName('ict_missing_in_mojri')).toBe('ICT not in Mojri')
+    expect(gapShortName('ict_approved')).toBe('ICT approved')
+    expect(
+      exportDescription({ gap: 'pending_cra', lens: 'coordinator', keyValue: 'V. Hashemi' })
+    ).toBe('CRA pending · Coordinator V. Hashemi')
+    expect(exportDescription({ gap: 'pending_ict', scopeLabel: 'Tehran' })).toBe('ICT pending · Tehran')
+    expect(exportDescription({ gap: 'pending_ict' })).toBe('ICT pending')
   })
 })
 
