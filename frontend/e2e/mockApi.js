@@ -3,6 +3,7 @@
 // still renders, and a test that cares about it adds it here. A route may be
 // a function of the request URL, for an answer that depends on its query.
 import * as F from './fixtures.js'
+import { villagesXlsx } from './xlsx.js'
 
 const ROUTES = {
   '/auth/me': F.PM,
@@ -36,6 +37,15 @@ export async function signIn(page) {
   }, F.PM)
   await page.route('**/api/v1/**', async (route) => {
     const path = new URL(route.request().url()).pathname.replace('/api/v1', '')
+    if (path === '/gaps/villages.xlsx') {
+      const count = F.exportCount(route.request().url())
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        headers: { 'content-disposition': `attachment; filename="uep-export-${count}.xlsx"` },
+        body: villagesXlsx(count),
+      })
+    }
     const entry = path in ROUTES ? ROUTES[path] : []
     const body = typeof entry === 'function' ? entry(route.request().url()) : entry
     if (LATE[path]) await new Promise((r) => setTimeout(r, LATE[path]))

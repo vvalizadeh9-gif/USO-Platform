@@ -431,3 +431,33 @@ export const gapsMap = {
     cra: stretchFig(sumFig(mapProvinces, 'cra', 'stopped'), sumFig(mapProvinces, 'cra', 'reached')),
   },
 }
+
+// ----- Lifecycle Gaps: the export ------------------------------------------
+//
+// How many villages the mocked `/gaps/villages.xlsx` lists for a request:
+// read from the same fixtures the page draws, the way the server reads the
+// same cells the overview folds.
+
+const STRETCH_OF = {
+  pending_ict: ['ict', 'pending'], pending_cra: ['cra', 'pending'],
+  ict_remained: ['ict', 'remained'], cra_remained: ['cra', 'remained'],
+  ict_approved: ['ict', 'approved'], cra_approved: ['cra', 'approved'],
+}
+
+export function exportCount(url) {
+  const q = new URL(url).searchParams
+  const gap = q.get('gap')
+  const lens = q.get('lens')
+  const key = q.get('key')
+  const scope = q.get('scope')
+  if (scope) {
+    const [kind, value] = scope.split(/:(.*)/s)
+    const shape =
+      kind === 'province' ? mapProvinces.find((p) => p.key === value) : mapRegions.find((r) => r.name === value)
+    const [stretch, counter] = STRETCH_OF[gap]
+    if (!lens) return shape.detail[stretch][counter]
+    return shape.detail.owners[lens].find((row) => row.name === key)[stretch][counter]
+  }
+  if (lens) return gapRows(lens)[gap].find((row) => row.name === key).count
+  return GAP_FIGURES[gap]?.count ?? GAP_TOTALS[gap]
+}

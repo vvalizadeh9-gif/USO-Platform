@@ -596,12 +596,16 @@ The second reporting page over the same villages, and it asks the opposite
 question to the one above it. KPI & Performance asks "how is this owner doing?"
 Lifecycle Gaps asks **"where are villages stuck, and whose villages are they?"**
 
-`/reports/gaps` (Performance → Lifecycle Gaps), two tabs:
+`/reports/gaps` (Performance → Lifecycle Gaps; `/reports/lifecycle-gaps`
+redirects there), two tabs:
 
 * **Gaps**, served by `GET /gaps/overview`;
-* **Coverage map**, served by `GET /gaps/map`.
+* **Coverage map**, served by `GET /gaps/map`;
 
-Both live in `services/gaps.py`. A pure read: no table, no migration, nothing
+and behind every village count on either tab, `GET /gaps/villages.xlsx`.
+
+All three live in `services/gaps.py` (the workbook itself in
+`services/gap_export.py`). A pure read: no table, no migration, nothing
 written.
 
 > The Gaps tab used to be "the road": four stretches drawn in sequence (ICT →
@@ -637,7 +641,7 @@ as missing, and its count travels separately (not shown on the page yet). No
 de-duplication, as everywhere in acceptance counting.
 
 Every figure is counted directly in the one GROUP BY (`_gap_grid`), not derived
-by subtraction, so the identities the tests check — `approved + pending =
+by subtraction, over the one definition of the universe (`_eligible`, below), so the identities the tests check — `approved + pending =
 eligible`, `pending = remained + neither`, `missing + in_tracker = approved` —
 are evidence rather than arithmetic that holds by construction.
 
@@ -663,10 +667,9 @@ Two groupings of one result set cannot disagree about their total.
 `tests/test_gaps_overview.py` asserts it for every lens against every figure
 anyway.
 
-The page then does the same sum **in the browser**: the details panel's footer
-adds up the rows it received ("All 31 provinces add up to 2,042 ✓") and says so
-loudly when they do not balance. A check that only shows when it passes is
-decoration.
+The page then does the same sum **in the browser**: the drawer's footer adds up
+the rows it received ("Adds up to 1,391 ✓") and says so loudly when they do not
+balance. A check that only shows when it passes is decoration.
 
 ### Villages nobody owns are named, never dropped
 
@@ -692,37 +695,102 @@ see. Asking for another lens is a 403, and the endpoint takes no key at all.
 
 ### The page
 
-The first screen is gaps and their volume only, at 1280 × 800 with no scroll:
-three blocks (Pending approval · One approved, other remained · Mojri tracker vs
-MTN), two columns each, **ICT always left and CRA always right**. All six
-columns share one baseline and one linear scale; a faint column behind a
-remained or Mojri gap is the base it is counted from. Columns are hand-built
-HTML, coloured with the authority tokens (`--ict`, `--cra`; see
-`design-system-cobalt.md`), never with cobalt, which is kept for the selected
-column.
+Clean first, detail on demand. At 1440 × 900 and 1280 × 800 the browser page
+does not scroll on either tab, with the drawer open or closed (a `PageFrame`
+under a `PageBar`; `e2e/lifecycleGaps.spec.js` measures it).
 
-Clicking a column opens a non-modal details panel on the right: who is behind
-that gap, top six rows plus "N more", each with its count, its "% of gap" (its
-share of the gap's total) and its own rate (count of its own base), and the
-checksum footer. PM switches lens inside the panel; every other role sees their
-own row only. The Mojri panels carry the date of the last Mojri import, since
-tracker gaps are only as fresh as that import; if Mojri was never imported,
-block 3 shows "No Mojri import yet" instead of a figure.
+**Gaps tab.** At rest, six numbers in three cards (Pending approval · One
+approved, other pending · ICT vs CRA vs Mojri tracker), **ICT always left and
+CRA always right**. Each is a `WaffleTile`: a 10 × 10 waffle whose 100 squares
+are that gap's own base, `round(100 × gap ÷ base)` of them filled, with the
+share of the base and what one square stands for ("1 square ≈ 44 villages") —
+the tiles have different bases, so the note is what stops two waffles being
+compared as equal. Authority tokens (`--ict`, `--cra`) colour data only;
+cobalt marks the tile whose drawer is open. Before any Mojri import the two
+Mojri tiles show a dotted grid, "—" and the approved-in-UEP count instead of a
+guessed gap.
+
+**The drawer.** Clicking a tile opens `GapDrawer`, a right-side modal dialog
+over a scrim — fixed to the viewport, so the page behind never moves (the
+earlier docked panel re-laid the chart out on every click). The hero figure,
+then "Group by" (Coordinator · Contractor · Province · CRA region · Regional
+manager; PM only, re-asking `/gaps/overview` for the lens), then **every** owner
+row — the list scrolls inside the drawer, nothing is folded into "N more" — each
+with a 20-square mark of its share of the gap, its count and that share, and
+coordinators with their regional manager(s) (`managers` on the coordinator
+rows, from the same current mapping). Attribution rows stay named. The footer
+is the checksum.
+
+### Exports: the villages behind a figure (`GET /gaps/villages.xlsx`)
+
+**Every number that counts villages is a button that downloads exactly those
+villages**: the tile figures, the Mojri tiles' approved-in-UEP counts, the
+drawer's hero and every drawer row, and every count in the coverage map's
+panel. Percentages are not exportable. Parameters: `gap` (the six gaps, plus
+`ict_approved` / `cra_approved`), optionally `lens` + `key` (one owner, named
+as its row names it) and `scope` (`province:<Persian name>` or
+`region:<CRA region>`, from the map).
+
+**The one-selection rule.** The file for a figure must have that figure's row
+count, so the export is not a second query that is supposed to agree with the
+overview. Three pieces are defined once and shared:
+
+* `_eligible()` — the universe: joins and filters (هدف, drive test done, on
+  air, not deleted). The grid aggregates over it; the export selects rows from
+  it.
+* `_counter_conditions()` — each counter as the SQL condition a village meets
+  to count in it. The grid counts each one; the export filters by one.
+* `_owner()` / `_owned_by()` — which owner a (province, contractor) cell rolls
+  up to under each lens, attribution rows included. The folds group by it, a
+  non-PM's scope narrows by it, and the export narrows by it.
+
+`tests/test_gaps_export.py` asserts the row count equals the figure for every
+exportable gap, under every lens, for every owner row the overview returns,
+and for every number in every map panel.
+
+**Access** is the overview's: `require_kpi_access` (Admin is a 403) and
+`resolve_scope` (a non-PM is confined to their own villages; naming another
+person under their own lens is a 403). A non-PM may narrow further — by another
+lens or a map scope — only to owners inside their own villages; anything else
+is a 403, never an empty file that reads like "nothing pending".
+
+**The workbook** (`services/gap_export.py`, following
+`acceptance_site_export.py`): a *Villages* sheet (village ID and Farsi name,
+province, CRA region, RM, coordinator, contractor, ICT and CRA status and
+Jalali date, Mojri standing, attribution; bold frozen header, autofilter) and a
+*Summary* sheet (the figure, the filter, the count, exported-at in Jalali and
+Gregorian, who). The filename is `uep-<gap>-<filter>-<jalali date>.xlsx`,
+ASCII-safe (a Farsi name becomes a short hash). Rows are streamed from the
+database into an openpyxl write-only workbook in a spooled temporary file, and
+over 20,000 villages the response is streamed in chunks.
 
 ### The coverage map (`GET /gaps/map`)
 
-ICT approval by province and CRA approval by CRA region. It counts every هدف
-village (no on-air rule) and reads each authority on its own stretch: ICT is
-drive-test-done-not-ICT-approved over drive-test-done, CRA is
+ICT approval by province and CRA approval by CRA region, one map at a time (a
+segmented control switches; switching clears the selection). The map counts
+every هدف village (no on-air rule) and reads each authority on its own
+stretch: ICT is drive-test-done-not-ICT-approved over drive-test-done, CRA is
 ICT-approved-not-CRA-approved over ICT-approved. A region is the fold of its
-provinces, so a region can never disagree with the provinces inside it.
-`tests/test_gaps_map.py`.
+provinces, so a region can never disagree with the provinces inside it. The
+six fixed bands, the labels and the low-sample hatch are unchanged.
+
+Beside the map, a detail panel that is empty until a shape is clicked (a
+second click, ✕ or Esc clears it). Its figures are a `detail` block on every
+province and region: approved, pending and remained over the drive-tested
+base, and the owners behind them by coordinator, contractor, RM (and, for a
+region, province — weakest CRA approval first). **The detail counts like the
+Gaps tab, not like the map colours**: it is a fold of the overview's grid
+(same scope, same cells), because every count in it is an export and an
+export lists the overview's villages. So a province's panel can read a little
+differently from its colour (on-air villages only); the tests hold the panel
+to the overview and to its exports, and the map to its own counting.
+`tests/test_gaps_map.py`, `tests/test_gaps_export.py`.
 
 ### Deliberately not built
 
 Monthly deltas and "vs last month" (they need a snapshot job that does not
-exist), plan versus actual (it needs the Monthly Plan redesign), the Iran
-coverage map, and reason codes on the ICT/CRA stretches — the last rejected by
+exist), plan versus actual (it needs the Monthly Plan redesign), and reason
+codes on the ICT/CRA stretches — the last rejected by
 the product owner as more complexity than can be handled now.
 
 ---

@@ -2,7 +2,8 @@ import { useId, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { motion } from 'framer-motion'
 import { AlertTriangle, X } from 'lucide-react'
-import { AuthorityChip, EmptyState, SegmentedControl, useDialogFocus } from './ui'
+import { AuthorityChip, EmptyState, SegmentedControl } from './ui'
+import { useDialogFocus } from './useDialogFocus'
 import Waffle from './Waffle'
 
 /**
