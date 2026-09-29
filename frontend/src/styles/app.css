@@ -1123,7 +1123,7 @@ a.stepper-step:focus-visible { outline: 2px solid var(--accent); outline-offset:
 .table-compact tbody th { height: 40px; padding-block: 4px; }
 
 /* A tab's own count. Grey by default; the active tab's count is a filled
-   pill (white on dark teal) so it reads as "this is the one you're on and
+   pill (white on the accent) so it reads as "this is the one you're on and
    here's how many are waiting", not just a number among several. */
 .badge {
   display: inline-flex;
@@ -1139,7 +1139,8 @@ a.stepper-step:focus-visible { outline: 2px solid var(--accent); outline-offset:
   font-weight: 600;
   line-height: 1;
 }
-.badge-active { background: #0b7f73; color: #fff; }
+/* The selected tab's count: the accent, as selection is everywhere. */
+.badge-active { background: var(--accent); color: var(--text-on-accent); }
 
 /* ---------- A queue in a fill-height card (HC Pool, HC In Progress, DT
    Assignment) ----------
@@ -1194,6 +1195,29 @@ select.queue-select { width: auto; min-width: 190px; height: 36px; padding: 0 32
 .search-box { position: relative; display: inline-flex; align-items: center; }
 .search-box svg { position: absolute; inset-inline-start: 10px; color: var(--text-tertiary); pointer-events: none; }
 .search-box .input { width: 240px; height: 36px; padding-inline-start: 34px; }
+
+.queue-note {
+  margin-top: 4px; max-width: 360px;
+  font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--text-secondary);
+}
+/* DT Review: one tile per submission in the scrolling list. */
+.review-list { list-style: none; display: flex; flex-direction: column; gap: 10px; }
+.review-item {
+  display: flex; align-items: flex-start; gap: 16px;
+  padding: 14px 16px; border: 1px solid var(--track); border-radius: var(--radius-md);
+  background: var(--surface-subtle);
+}
+.review-body { flex: 1 1 auto; min-width: 0; }
+.review-head { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
+.review-province { color: var(--text-secondary); }
+.review-facts { display: flex; flex-wrap: wrap; gap: 8px 24px; margin: 10px 0 0; }
+.review-fact dt { font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--text-tertiary); }
+.review-fact dd { margin: 2px 0 0; font-size: var(--fs-control); line-height: var(--lh-control); font-weight: 500; }
+.review-files { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.review-comment { margin: 12px 0 0; max-width: 520px; }
+.review-actions { display: flex; gap: 8px; flex: none; }
+.btn-danger-quiet { color: var(--danger-ink); border-color: var(--danger-ink); }
+.btn-danger-quiet:hover:not(:disabled) { background: var(--danger-soft); }
 
 /* ---------- The assignment dock (components/AssignDock.jsx) ----------
    A row pinned to the bottom of the main column: the count, Clear, a hint
@@ -3881,45 +3905,7 @@ a.lifecycle-step:focus-visible { outline: 2px solid var(--signal); outline-offse
 .tab-step { display: flex; align-items: center; }
 .tab-sep { color: var(--text-dim); flex: none; align-self: center; }
 
-/* Remediation and Re-routes are one thing with two queues: a fix is opened,
-   the owning team closes it, and the site returns to the pool by itself. The
-   wash says they belong together; there is no chevron inside it, because
-   neither one follows the other. */
-.tab-group {
-  display: flex;
-  align-items: center;
-  background: var(--surface-2);
-  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
-  padding-left: 10px;
-}
-.tab-group-label {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  font-size: var(--fs-caption);
-  line-height: var(--lh-caption);
-  font-weight: 600;
-  color: var(--text-secondary);
-  padding-right: 2px;
-  cursor: help;
-}
 
-/* History is the archive, not a step: pushed to the far end, behind a rule. */
-.tab-end { margin-left: auto; display: flex; align-items: center; }
-.tab-end::before {
-  content: '';
-  width: 1px;
-  align-self: stretch;
-  margin: 8px 10px 8px 0;
-  background: var(--border);
-}
-
-@media (max-width: 640px) {
-  /* The row still wraps; History simply stops being pushed away, because
-     there is nothing left to push it away from. */
-  .tab-end { margin-left: 0; }
-  .tab-end::before { display: none; }
-}
 
 /* ---------------------------------------------------------------------------
    KPI & Performance

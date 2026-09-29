@@ -1,9 +1,10 @@
-import { ChevronRight, Eye, Radio, Timer } from 'lucide-react'
+import { Eye, Radio, Timer } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import api from '../api/client'
-import LifecycleStrip from '../components/LifecycleStrip'
-import { PageHead } from '../components/ui'
+import PageFrame from '../components/PageFrame'
+import ProcessStepper from '../components/ProcessStepper'
+import { PageBar, Tabs } from '../components/ui'
 import { useAuth } from '../context/AuthContext'
 import { canReview } from '../lib/roles'
 import DtAssignmentTab from './drivetest/DtAssignmentTab'
@@ -51,39 +52,20 @@ export default function DriveTest() {
     [],
   )
 
+  const tabs = TABS.map((t) => ({ ...t, count: counts[t.count] }))
+
   return (
-    <>
-      <PageHead
-        eyebrow="Drive Test"
-        title="Drive Test"
-        subtitle="Sites confirmed Ready: assign them, follow the contractor’s progress, and review each submission. An approved drive test is final."
-      />
-
-      <LifecycleStrip current="dt" />
-
-      <div className="tabs tabs-steps" style={{ flexWrap: 'wrap' }}>
-        {TABS.map((t, i) => {
-          const count = t.count ? counts[t.count] : undefined
-          const isActive = tab === t.key
-          return (
-            <div className="tab-step" key={t.key}>
-              {i > 0 && <ChevronRight size={14} className="tab-sep" aria-hidden="true" />}
-              <button
-                className={`tab ${isActive ? 'active' : ''}`}
-                onClick={() => setTab(t.key)}
-              >
-                <span className="row" style={{ gap: 8 }}>
-                  <t.icon size={15} /> {t.label}
-                  {count > 0 && (
-                    <span className={`badge tnum ${isActive ? 'badge-active' : ''}`}>{count}</span>
-                  )}
-                </span>
-              </button>
-            </div>
-          )
-        })}
-      </div>
-
+    <PageFrame
+      className="dtq-page"
+      bar={
+        <PageBar
+          eyebrow="Drive Test"
+          title="Drive Test"
+          context={<ProcessStepper current="dt" />}
+          tabs={<Tabs steps label="Drive test queues" tabs={tabs} value={tab} onChange={setTab} />}
+        />
+      }
+    >
       {/* Opacity only, no exit: the old panel is gone the moment the new
           one mounts, so the page never collapses between them. */}
       <div key={tab} className="tab-panel">
@@ -91,6 +73,6 @@ export default function DriveTest() {
           {tab === 'in-progress' && <DtInProgressTab onCountChange={setCount('dt_in_progress')} />}
           {tab === 'review' && <DtReviewTab onCountChange={setCount('dt_review')} />}
       </div>
-    </>
+    </PageFrame>
   )
 }

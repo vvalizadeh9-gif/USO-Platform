@@ -1,10 +1,10 @@
-import { Search } from 'lucide-react'
+import { Search, Timer } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import api from '../../api/client'
 import ProvinceFilter from '../../components/ProvinceFilter'
 import SiteHistoryDrawer, { SiteCodeButton } from '../../components/SiteHistoryDrawer'
 import WaitingPill from '../../components/WaitingPill'
-import { EmptyState, Loading } from '../../components/ui'
+import { Card, EmptyState, Loading } from '../../components/ui'
 
 /**
  * Sites out with a drive-test contractor, waiting on them.
@@ -69,31 +69,26 @@ export default function DtInProgressTab({ onCountChange }) {
 
   if (!rows) return <Loading label="Loading sites with contractors" />
 
-  if (rows.length === 0) {
-    return (
-      <div className="card card-pad">
-        <EmptyState
-          title="Nothing with contractors right now"
-          hint="Sites appear here once assigned, until the contractor submits the drive test."
-        />
-      </div>
-    )
-  }
+  const filtering = query.trim() || provinceSel.size > 0 || contractorFilter
 
   return (
-    <div className="card" style={{ overflow: 'hidden' }}>
-      <div className="card-pad" style={{ paddingBottom: 12 }}>
-        <div className="row between wrap" style={{ gap: 12 }}>
-          <div style={{ position: 'relative', flex: 1, minWidth: 200 }}>
-            <Search size={15} style={{ position: 'absolute', left: 10, top: 11, color: 'var(--text-dim)' }} />
+    <Card
+      className="card-fill queue-card"
+      icon={Timer}
+      title="In progress"
+      description="Out with a drive-test contractor, waiting on them. Sent back first, then longest waiting."
+      actions={
+        <>
+          <label className="search-box">
+            <Search size={16} aria-hidden="true" />
             <input
               className="input"
-              style={{ paddingLeft: 32 }}
               placeholder="Search site ID…"
+              aria-label="Search site ID"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
             />
-          </div>
+          </label>
           <ProvinceFilter
             options={provinceOptions}
             selected={provinceSel}
@@ -101,8 +96,8 @@ export default function DtInProgressTab({ onCountChange }) {
             onClear={() => setProvinceSel(new Set())}
           />
           <select
-            className="input text-data"
-            style={{ minWidth: 160 }}
+            className="input queue-select"
+            aria-label="Contractor"
             value={contractorFilter}
             onChange={(e) => setContractorFilter(e.target.value)}
           >
@@ -111,73 +106,80 @@ export default function DtInProgressTab({ onCountChange }) {
               <option key={name} value={name}>{name}</option>
             ))}
           </select>
-        </div>
-        <div className="row between" style={{ marginTop: 8 }}>
-          <span className="dim" style={{ fontSize: 'var(--fs-caption)' }}>Sorted: waiting longest first</span>
-          {(query.trim() || provinceSel.size > 0 || contractorFilter) && (
-            <span className="dim" style={{ fontSize: 'var(--fs-caption)' }}>
-              {filtered.length} of {rows.length}
-            </span>
-          )}
-        </div>
+        </>
+      }
+    >
+      <div className="queue-toolbar">
+        <span className="queue-meta">Sorted: waiting longest first</span>
+        {filtering && (
+          <span className="queue-meta tnum">
+            {filtered.length} of {rows.length}
+          </span>
+        )}
       </div>
 
-      <table>
-        <thead>
-          <tr>
-            <th>Site ID</th>
-            <th>Province</th>
-            <th>Contractor</th>
-            <th>Status</th>
-            <th>Waiting</th>
-          </tr>
-        </thead>
-        <tbody>
-          {filtered.map((r) => {
-            const sentBack = r.status === 'sent_back'
-            return (
-              <tr key={r.work_item_id}>
-                <td>
-                  <SiteCodeButton
-                    workItemId={r.work_item_id}
-                    siteCode={r.site_code}
-                    onOpen={(id, code) => setHistory({ id, code })}
-                  />
-                </td>
-                <td className="text-data dim">{r.province || '—'}</td>
-                <td className="text-data dim">{r.contractor_name || '—'}</td>
-                <td>
-                  {/* Sent back is the one that needs chasing, so it is the one
-                      that carries colour — and the reviewer's own words with
-                      it, because "what did I send back" is half of why this
-                      queue exists. */}
-                  <span
-                    className={`pill ${sentBack ? 'pill-red' : 'pill-dim'}`}
-                    style={{ fontSize: 'var(--fs-caption)' }}
-                    title={sentBack ? r.sent_back_comment || undefined : undefined}
-                  >
-                    {sentBack ? 'Sent back' : 'With contractor'}
-                  </span>
-                  {sentBack && r.sent_back_comment && (
-                    <div className="dim" style={{ fontSize: 'var(--fs-caption)', marginTop: 4, maxWidth: 360 }}>
-                      {r.sent_back_comment}
-                    </div>
-                  )}
-                </td>
-                <td>
-                  <WaitingPill days={r.days_since_assigned} />
-                </td>
+      {rows.length === 0 ? (
+        <EmptyState
+          title="Nothing with contractors right now"
+          hint="Sites appear here once assigned, until the contractor submits the drive test."
+        />
+      ) : (
+        <div className="table-scroll">
+          <table className="table table-compact queue-table">
+            <thead>
+              <tr>
+                <th>Site ID</th>
+                <th>Province</th>
+                <th>Contractor</th>
+                <th>Status</th>
+                <th>Waiting</th>
               </tr>
-            )
-          })}
-        </tbody>
-      </table>
+            </thead>
+            <tbody>
+              {filtered.map((r) => {
+                const sentBack = r.status === 'sent_back'
+                return (
+                  <tr key={r.work_item_id}>
+                    <td>
+                      <SiteCodeButton
+                        workItemId={r.work_item_id}
+                        siteCode={r.site_code}
+                        onOpen={(id, code) => setHistory({ id, code })}
+                      />
+                    </td>
+                    <td className="text-farsi">{r.province || '—'}</td>
+                    <td className="text-farsi">{r.contractor_name || '—'}</td>
+                    <td>
+                      {/* Sent back is the one that needs chasing, so it is the
+                          one that carries colour -- and the reviewer's own
+                          words with it, because "what did I send back" is half
+                          of why this queue exists. */}
+                      <span
+                        className={`pill ${sentBack ? 'pill-red' : 'pill-dim'}`}
+                        title={sentBack ? r.sent_back_comment || undefined : undefined}
+                      >
+                        {sentBack ? 'Sent back' : 'With contractor'}
+                      </span>
+                      {sentBack && r.sent_back_comment && (
+                        <div className="queue-note" dir="auto">{r.sent_back_comment}</div>
+                      )}
+                    </td>
+                    <td>
+                      <WaitingPill days={r.days_since_assigned} />
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       <SiteHistoryDrawer
         workItemId={history.id}
         siteCode={history.code}
         onClose={() => setHistory({ id: null, code: null })}
       />
-    </div>
+    </Card>
   )
 }
