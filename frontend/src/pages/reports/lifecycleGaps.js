@@ -1,28 +1,35 @@
 // Lifecycle Gaps: the arithmetic the page does in the browser.
 //
 // Everything here is derived from one `/gaps/overview` response and nothing
-// else. Kept out of the component so each rule can be tested on its own.
+// else. Kept out of the components so each rule can be tested on its own.
 //
-// The live checksum is the one rule that matters most: the details panel adds
-// up the rows it is about to draw and says out loud whether they make the
-// gap's total. A design preview of this page once showed 2,570 at the top
-// beside an owner list adding to 445, and it reached a person because nothing
-// on the screen ever added the rows up.
+// The live checksum is the one rule that matters most: the drawer adds up the
+// rows it is about to draw and says out loud whether they make the gap's
+// total. A design preview of this page once showed 2,570 at the top beside an
+// owner list adding to 445, and it reached a person because nothing on the
+// screen ever added the rows up.
 
 /**
- * The three blocks of the first screen, in order. ICT is always the left
- * column and CRA the right one, in every block.
+ * The three cards of the Gaps tab, in order. ICT is always the left tile and
+ * CRA the right one, in every card.
  */
-export const BLOCKS = [
-  { key: 'pending', title: 'Pending approval', gaps: ['pending_ict', 'pending_cra'] },
+export const CARDS = [
+  {
+    key: 'pending',
+    title: 'Pending approval',
+    description: 'Drive-tested villages still waiting',
+    gaps: ['pending_ict', 'pending_cra'],
+  },
   {
     key: 'remained',
-    title: 'One approved, other remained',
+    title: 'One approved, other pending',
+    description: "One authority has signed, the other hasn't",
     gaps: ['ict_remained', 'cra_remained'],
   },
   {
     key: 'mojri',
-    title: 'Mojri tracker vs MTN',
+    title: 'ICT vs CRA vs Mojri tracker',
+    description: 'Approved in UEP but missing in Mojri',
     gaps: ['ict_missing_in_mojri', 'cra_missing_in_mojri'],
   },
 ]
@@ -30,46 +37,54 @@ export const BLOCKS = [
 /**
  * One entry per gap the API returns.
  *
- * `label` is the word under the column, beside the authority chip. `baseName`
- * names what the base counts, for the captions ("of 2,555 CRA-approved").
- * `showBase` draws the faint base column behind the gap (blocks 2 and 3).
+ * `tileLabel` is the word beside the authority chip on the tile. `title` is
+ * the drawer's heading and the export's description. `baseName` names what
+ * the base counts ("of 2,555 CRA-approved"). `approvedGap` is the export key
+ * of a Mojri gap's base -- the "approved in UEP" count shown before any
+ * Mojri import.
  */
 export const GAPS = {
   pending_ict: {
-    authority: 'ICT', block: 'pending', label: 'pending',
-    title: 'Pending ICT approval', baseName: 'drive-tested', showBase: false,
+    authority: 'ICT', card: 'pending', tileLabel: 'Pending', short: 'pending',
+    title: 'Pending ICT approval', baseName: 'drive-tested',
   },
   pending_cra: {
-    authority: 'CRA', block: 'pending', label: 'pending',
-    title: 'Pending CRA approval', baseName: 'drive-tested', showBase: false,
+    authority: 'CRA', card: 'pending', tileLabel: 'Pending', short: 'pending',
+    title: 'Pending CRA approval', baseName: 'drive-tested',
   },
   ict_remained: {
-    authority: 'ICT', block: 'remained', label: 'remained',
-    title: 'ICT remained (CRA approved)', baseName: 'CRA-approved', showBase: true,
+    authority: 'ICT', card: 'remained', tileLabel: 'Pending', short: 'remained',
+    title: 'ICT pending, CRA approved', baseName: 'CRA-approved',
   },
   cra_remained: {
-    authority: 'CRA', block: 'remained', label: 'remained',
-    title: 'CRA remained (ICT approved)', baseName: 'ICT-approved', showBase: true,
+    authority: 'CRA', card: 'remained', tileLabel: 'Pending', short: 'remained',
+    title: 'CRA pending, ICT approved', baseName: 'ICT-approved',
   },
   ict_missing_in_mojri: {
-    authority: 'ICT', block: 'mojri', label: 'missing in Mojri',
-    title: 'ICT approved, missing in Mojri', baseName: 'ICT-approved', showBase: true,
-    mojri: true,
+    authority: 'ICT', card: 'mojri', tileLabel: 'Not in Mojri', short: 'not in Mojri',
+    title: 'ICT approved, missing in Mojri', baseName: 'ICT-approved',
+    mojri: true, approvedGap: 'ict_approved',
   },
   cra_missing_in_mojri: {
-    authority: 'CRA', block: 'mojri', label: 'missing in Mojri',
-    title: 'CRA approved, missing in Mojri', baseName: 'CRA-approved', showBase: true,
-    mojri: true,
+    authority: 'CRA', card: 'mojri', tileLabel: 'Not in Mojri', short: 'not in Mojri',
+    title: 'CRA approved, missing in Mojri', baseName: 'CRA-approved',
+    mojri: true, approvedGap: 'cra_approved',
   },
 }
 
-/** The panel's lens tabs, in the order the design gives them. */
+/** What an export key that is not one of the six gaps is called. */
+const EXPORT_TITLES = {
+  ict_approved: 'ICT approved',
+  cra_approved: 'CRA approved',
+}
+
+/** The drawer's "Group by" options, in the order the design gives them. */
 export const LENSES = [
-  { key: 'province', label: 'Province' },
-  { key: 'rm', label: 'RM' },
   { key: 'coordinator', label: 'Coordinator' },
   { key: 'contractor', label: 'Contractor' },
-  { key: 'region', label: 'CRA Region' },
+  { key: 'province', label: 'Province' },
+  { key: 'region', label: 'CRA region' },
+  { key: 'rm', label: 'Regional manager' },
 ]
 
 const LENS_NOUNS = {
@@ -80,8 +95,16 @@ const LENS_NOUNS = {
   region: ['CRA region', 'CRA regions'],
 }
 
-/** How many owner rows the panel lists before folding the rest into one. */
-export const TOP_ROWS = 6
+/** The lens's name in a sentence: "coordinator" / "coordinators". */
+export function lensNoun(lens, count) {
+  const [one, many] = LENS_NOUNS[lens] ?? ['row', 'rows']
+  return count === 1 ? one : many
+}
+
+/** The lens's name on a label: "Coordinator". */
+export function lensLabel(lens) {
+  return LENSES.find((option) => option.key === lens)?.label ?? lens
+}
 
 /**
  * Whether a gap has data to show. The two Mojri gaps have none until Mojri's
@@ -92,95 +115,108 @@ export function hasData(key, data) {
   return !(GAPS[key].mojri && !data.last_mojri_import)
 }
 
-/**
- * The one scale all six columns share: the largest bar or base drawn on the
- * card. The tallest solid column is then the biggest gap on the page.
- */
-export function chartMax(data) {
-  let most = 0
-  for (const [key, meta] of Object.entries(GAPS)) {
-    if (!hasData(key, data)) continue
-    const gap = data.gaps[key]
-    most = Math.max(most, gap.count, meta.showBase ? gap.base : 0)
-  }
-  return most
-}
+/* ---------------------------------------------------------------------------
+   The waffle: 100 squares, the base.
+   --------------------------------------------------------------------------- */
 
-/** A column's height as a percentage of the plot, on the shared scale. */
-export function heightPct(value, max) {
-  return max ? (value * 100) / max : 0
-}
-
-/** The one caption line above a column. */
-export function columnCaption(key, data) {
-  const meta = GAPS[key]
-  if (!hasData(key, data)) return 'No Mojri import yet'
-  const gap = data.gaps[key]
-  if (meta.block === 'pending') return `${wholePct(gap.count, gap.base)} of ${fmt(gap.base)}`
-  if (meta.mojri) return `Mojri has ${fmt(gap.in_tracker)} of ${fmt(gap.base)}`
-  return `of ${fmt(gap.base)} ${meta.baseName}`
-}
-
-/** The panel's summary line: "2,042 villages · 42.4% of 4,812 drive-tested". */
-export function summaryLine(key, data) {
-  const gap = data.gaps[key]
-  return (
-    `${fmt(gap.count)} ${gap.count === 1 ? 'village' : 'villages'} · ` +
-    `${onePct(gap.count, gap.base)} of ${fmt(gap.base)} ${GAPS[key].baseName}`
-  )
+/** How many of the waffle's 100 squares are the gap. */
+export function waffleFilled(count, base, squares = 100) {
+  if (!base || !count) return 0
+  return Math.min(squares, Math.max(0, Math.round((count * squares) / base)))
 }
 
 /**
- * The owner rows the panel draws: the top six, and the rest folded into one
- * "N more" row, so the list fits without scrolling. Each row carries its
- * share of the gap (`share`) and its own rate (`rate`), which are two
- * different fractions of two different things.
+ * What one square stands for. Every tile has its own base, so two waffles
+ * with the same number of squares filled can be very different numbers of
+ * villages -- the note is what stops them being compared as equal.
  */
-export function panelRows(rows, total, limit = TOP_ROWS) {
-  const decorate = (row) => ({
-    ...row,
-    share: total ? (row.count * 100) / total : null,
-    rate: row.base ? (row.count * 100) / row.base : null,
+export function scaleNote(base) {
+  if (!base) return 'Nothing counted yet'
+  const per = Math.round(base / 100)
+  if (per < 1) return `100 squares = ${fmt(base)} ${base === 1 ? 'village' : 'villages'}`
+  return `1 square ≈ ${fmt(per)} ${per === 1 ? 'village' : 'villages'}`
+}
+
+/**
+ * "13%", "of 4,433" and "drive-tested": the tile's share line, in parts, so
+ * the base's name can be kept whole (it would otherwise break at its hyphen).
+ */
+export function shareParts(key, gap) {
+  return { pct: wholePct(gap.count, gap.base), of: `of ${fmt(gap.base)}`, name: GAPS[key].baseName }
+}
+
+/* ---------------------------------------------------------------------------
+   The drawer: who is holding it.
+   --------------------------------------------------------------------------- */
+
+/**
+ * The drawer's rows, each with its share of the gap (0-100) and how many of
+ * the mark's 20 squares that is. Every row is listed: the drawer's list
+ * scrolls, so nothing is folded away.
+ */
+export function drawerRows(rows, total) {
+  return rows.map((row) => {
+    const share = total ? (row.count * 100) / total : null
+    return { ...row, share, marks: waffleFilled(row.count, total, 20) }
   })
-  // Folding one row into "1 more" saves nothing; show it instead.
-  const keep = rows.length > limit + 1 ? limit : rows.length
-  const shown = rows.slice(0, keep).map(decorate)
-  const rest = rows.slice(keep)
-  const more = rest.length
-    ? decorate({
-        name: `${rest.length} more`,
-        count: rest.reduce((sum, row) => sum + row.count, 0),
-        base: rest.reduce((sum, row) => sum + row.base, 0),
-        attribution: 'more',
-        folded: rest.length,
-      })
-    : null
-  return { shown, more }
+}
+
+/** "13 coordinators hold these 1,391 villages", in parts for the markup. */
+export function holdersParts(rows, lens, total) {
+  const holding = rows.filter((row) => row.count > 0).length
+  return {
+    holders: fmt(holding),
+    noun: lensNoun(lens, holding),
+    verb: holding === 1 ? 'holds' : 'hold',
+    total: fmt(total),
+    villages: total === 1 ? 'village' : 'villages',
+  }
 }
 
 /**
- * The footer line: the rows, added up in the browser, against the gap's
+ * The footer's check: the rows, added up in the browser, against the gap's
  * total. Printed whether or not it balances -- a check that only appears when
  * it passes is decoration.
  */
-export function checksum(rows, total, lens) {
+export function checksum(rows, total) {
   const sum = rows.reduce((acc, row) => acc + row.count, 0)
-  const [one, many] = LENS_NOUNS[lens] ?? ['row', 'rows']
-  const noun = rows.length === 1 ? one : many
-  if (sum === total) {
-    const lead = rows.length === 1 ? `The 1 ${noun} adds` : `All ${rows.length} ${noun} add`
-    return { ok: true, text: `${lead} up to ${fmt(total)}` }
-  }
+  if (sum === total) return { ok: true, sum, text: `Adds up to ${fmt(total)}` }
   return {
     ok: false,
+    sum,
     text:
-      `The ${rows.length} ${noun} add up to ${fmt(sum)}, not the ${fmt(total)} total ` +
-      `— a difference of ${fmt(Math.abs(total - sum))}. One of the two is wrong; ` +
-      'do not act on this panel until it is.',
+      `The rows add up to ${fmt(sum)}, not ${fmt(total)} — a difference of ` +
+      `${fmt(Math.abs(total - sum))}. Do not act on this list until it is fixed.`,
   }
 }
 
-/** The data-quality notes behind the page head's warning button. */
+/* ---------------------------------------------------------------------------
+   Export: what a clicked number is, in words.
+   --------------------------------------------------------------------------- */
+
+/** "CRA pending", "ICT not in Mojri", "ICT approved": the export's name for a gap. */
+export function gapShortName(gap) {
+  const meta = GAPS[gap]
+  if (meta) return `${meta.authority} ${meta.short}`
+  return EXPORT_TITLES[gap] ?? gap
+}
+
+/**
+ * "CRA pending · Coordinator V. Hashemi": what an export holds. The filter
+ * parts are optional; the gap is not.
+ */
+export function exportDescription({ gap, lens, keyValue, scopeLabel }) {
+  const parts = [gapShortName(gap)]
+  if (scopeLabel) parts.push(scopeLabel)
+  if (lens && keyValue) parts.push(`${lensLabel(lens)} ${keyValue}`)
+  return parts.join(' · ')
+}
+
+/* ---------------------------------------------------------------------------
+   Around the page.
+   --------------------------------------------------------------------------- */
+
+/** The data-quality notes behind the page bar's warning button. */
 export function dataNotes(quality) {
   const notes = []
   if (quality?.villages_without_province > 0) {
@@ -198,7 +234,7 @@ export function dataNotes(quality) {
   return notes
 }
 
-/** "Mojri import: 12 Sep 2026 · 16 days ago", for the Mojri panels. */
+/** "Mojri import: 12 Sep 2026 · 16 days ago", for the Mojri drawers. */
 export function mojriStamp(value, now = new Date()) {
   if (!value) return 'No Mojri import yet'
   const when = new Date(value)
@@ -220,12 +256,12 @@ export function fmt(value) {
   return value == null ? '—' : value.toLocaleString('en-US')
 }
 
-/** "42%": the first screen's rounding. */
+/** "42%": the tiles' rounding. */
 export function wholePct(part, whole) {
   return whole ? `${Math.round((part * 100) / whole)}%` : '—'
 }
 
-/** "42.4%": the panel's rounding. */
+/** "42.4%": the drawer's rounding. */
 export function onePct(part, whole) {
   return whole ? `${((part * 100) / whole).toFixed(1)}%` : '—'
 }

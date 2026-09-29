@@ -48,6 +48,10 @@ These hold on every page. A page that needs to break one asks first.
     keep green (shrank) and brick (grew) because they are a verdict, with a
     legend.
 12. **Nothing is set below 12px**, and every size is a `--fs-*` token (below).
+13. **Every number that counts villages is exportable.** On a page that has
+    the export behind it (Lifecycle Gaps today), each village count is an
+    `ExportNumber` that downloads exactly the villages it counts, and the
+    file adds up to the number. Percentages are never exportable.
 
 ---
 
@@ -90,11 +94,11 @@ These hold on every page. A page that needs to break one asks first.
 | Token | Value | Use |
 |---|---|---|
 | `--ict` | `#8E2F74` | ICT data fill; also ICT text ink (7.5:1 on white) |
-| `--ict-base` | `#EBD3E4` | ICT faint "base" column |
+| `--ict-base` | `#EBD3E4` | ICT faint "base": the waffle's unfilled squares |
 | `--ict-soft` | `#F5E6F1` | ICT chip background |
 | `--cra` | `#23A396` | CRA data fill (3.1:1 on white — graphics only, never text) |
 | `--cra-ink` | `#0F6F66` | CRA text ink (6.0:1 on white, 5.2:1 on `--cra-soft`) |
-| `--cra-base` | `#C9EAE5` | CRA faint "base" column |
+| `--cra-base` | `#C9EAE5` | CRA faint "base": the waffle's unfilled squares |
 | `--cra-soft` | `#DDF3F0` | CRA chip background |
 
 The ICT/CRA pair was checked with a colour-vision validator: it passes against
@@ -225,3 +229,53 @@ Vazirmatn (`.text-farsi`), `dir="rtl"` or `dir="auto"`.
   filters (search, province, a segmented state filter with counts) in its
   head; the table in `.table-scroll`; a foot row ("200 of 1,012 loaded",
   Load 200 more). Ticked rows are `--accent-wash`.
+- **AuthorityChip** — ICT or CRA in words: a 24px pill, `--ict-soft` with
+  `--ict` ink, or `--cra-soft` with `--cra-ink`. Every authority figure carries
+  one (rule 4).
+
+### Lifecycle Gaps components (`frontend/src/components/`)
+
+Built for Lifecycle Gaps and free of it; any page with the same shape of data
+can use them.
+
+- **Waffle** (`Waffle.jsx`) — squares of a whole, `aria-hidden` (the figure
+  beside it carries the number): `filled` of `total` in `--ict`/`--cra`, the
+  rest in `--ict-base`/`--cra-base`; a dotted empty grid for "no data yet".
+  Three sizes: `tile` (10 × 10, fills its width, max 220px, 180px under
+  1300px, gap 4), `hero` (7px squares) and `mark` (a 20-square strip, 5px,
+  one square per 5% of a whole).
+- **WaffleTile** (`WaffleTile.jsx`) — one gap as a selectable tile:
+  `--surface-subtle`, 1px `--track`, radius 8, padding 16, `--shadow-2` on
+  hover; selected is `--accent-wash` with a 2px `--accent` border. The chip and
+  a 15/22 label; the 10 × 10 waffle, `round(100 × gap ÷ base)` squares filled
+  (100 squares = that tile's own base); the 30/38 figure in `--ict` or
+  `--cra-ink`; "**13%** of 4,433 drive-tested" (13/18); and the scale note
+  "1 square ≈ 44 villages" (12/16 `--text-tertiary`) — tiles have different
+  bases, so the note is what stops two waffles being read as the same size.
+  **Two targets, never nested**: the tile is a stretched `<button>` under
+  everything (it opens), the figure is its own button above it (it exports);
+  everything else lets clicks through.
+- **GapDrawer** (`GapDrawer.jsx`) — the right-side drawer pattern: a modal
+  dialog (`role="dialog"`, `aria-modal`) 620px wide (full width on phones),
+  `--surface`, `--shadow-2`, radius 10 on its left corners, over the shared
+  `.scrim`, portalled to the body and fixed, so **the page behind never moves
+  or reflows**. Focus goes to Close on open, stays inside, and returns to the
+  opener; Esc, ✕ and the scrim close it. Header: eyebrow (13/18 600
+  `--text-link`), the chip and a 17/24 title, the close button. A subtle hero
+  tile (7px waffle, the figure, its share); a `SegmentedControl` "Group by" on
+  one line (hidden when there is only one's own row to show); a summary line;
+  the list, which alone scrolls, with a sticky 12/16 header (mark · name ·
+  pending · share of gap) and every row listed; a footer with what the share
+  means and the checksum ("Adds up to 1,391 ✓", or a `--danger-soft` warning
+  with no tick). An `EmptyState` replaces the list when there is nothing to
+  list yet.
+- **ExportNumber** (`ExportNumber.jsx`) — a village count that downloads its
+  villages (rule 13). At rest the number with a 2px dotted `--control-border`
+  underline; on hover and focus `--accent-soft`, a solid underline and a 14px
+  download icon that sits just past the number (it takes no room at rest, so
+  nothing moves). Label and tooltip: "Export 205 villages (CRA pending ·
+  Coordinator V. Hashemi) to Excel". While the file is built it spins and is
+  disabled. The result is a Cobalt `Banner` — success ("Exported 205
+  villages") or error (the server's reason) — in `ExportFeedback`'s fixed
+  corner, so a download never scrolls or re-lays out the page. A zero is drawn
+  as a plain number.

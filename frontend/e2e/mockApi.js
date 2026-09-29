@@ -1,7 +1,9 @@
 // Serves the API from fixtures, so the layout tests need no backend. Any
 // endpoint not listed answers an empty list: a page that reads something new
-// still renders, and a test that cares about it adds it here.
+// still renders, and a test that cares about it adds it here. A route may be
+// a function of the request URL, for an answer that depends on its query.
 import * as F from './fixtures.js'
+import { villagesXlsx } from './xlsx.js'
 
 const ROUTES = {
   '/auth/me': F.PM,
@@ -18,6 +20,9 @@ const ROUTES = {
   '/hc/queues/dt-assignment': F.dtAssignment,
   '/hc/queues/dt-in-progress': F.dtInProgress,
   '/reference/contractors': F.contractors,
+  '/kpi/lenses': F.kpiLenses,
+  '/gaps/overview': F.gapsOverview,
+  '/gaps/map': F.gapsMap,
 }
 
 // Endpoints answered late, on purpose: the dashboard's side cards arriving
@@ -32,7 +37,17 @@ export async function signIn(page) {
   }, F.PM)
   await page.route('**/api/v1/**', async (route) => {
     const path = new URL(route.request().url()).pathname.replace('/api/v1', '')
-    const body = path in ROUTES ? ROUTES[path] : []
+    if (path === '/gaps/villages.xlsx') {
+      const count = F.exportCount(route.request().url())
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        headers: { 'content-disposition': `attachment; filename="uep-export-${count}.xlsx"` },
+        body: villagesXlsx(count),
+      })
+    }
+    const entry = path in ROUTES ? ROUTES[path] : []
+    const body = typeof entry === 'function' ? entry(route.request().url()) : entry
     if (LATE[path]) await new Promise((r) => setTimeout(r, LATE[path]))
     return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) })
   })

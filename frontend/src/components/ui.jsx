@@ -2,7 +2,8 @@
 // in one place avoids duplicating the logic across every table.
 import { motion } from 'framer-motion'
 import { AlertTriangle, CheckCircle2, ChevronRight, Inbox, Info, XCircle } from 'lucide-react'
-import { Fragment, useEffect, useId, useRef } from 'react'
+import { Fragment, useId, useRef } from 'react'
+import { useDialogFocus } from './useDialogFocus'
 
 const STATUS_CLASS = {
   Approved: 'pill-green',
@@ -22,6 +23,18 @@ const STATUS_CLASS = {
   Rejected: 'pill-red',
   Problematic: 'pill-red',
   New: 'pill-dim',
+}
+
+/**
+ * ICT or CRA, always in words: the authority's soft fill and its ink. CRA's
+ * ink is `--cra-ink`, never `--cra` (which is graphics only).
+ */
+export function AuthorityChip({ authority, className = '' }) {
+  return (
+    <span className={`auth-chip ${className}`.trim()} data-authority={authority.toLowerCase()}>
+      {authority}
+    </span>
+  )
 }
 
 export function StatusPill({ status }) {
@@ -385,56 +398,6 @@ export function Banner({ tone = 'info', title, children, className = '', ...rest
       </div>
     </div>
   )
-}
-
-const FOCUSABLE =
-  'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), ' +
-  'textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
-
-/**
- * The keyboard contract every dialog shares: focus moves into the panel when
- * it opens, Tab and Shift+Tab stay inside it, Escape asks to close, and focus
- * goes back to whatever had it before when the panel goes away.
- */
-function useDialogFocus(open, panelRef, onClose) {
-  const closeRef = useRef(onClose)
-  closeRef.current = onClose
-
-  useEffect(() => {
-    if (!open) return undefined
-    const previous = document.activeElement
-    const panel = panelRef.current
-    const first = panel?.querySelector(FOCUSABLE)
-    ;(first || panel)?.focus()
-
-    const onKeyDown = (event) => {
-      if (event.key === 'Escape') {
-        event.stopPropagation()
-        closeRef.current?.()
-        return
-      }
-      if (event.key !== 'Tab' || !panel) return
-      const items = [...panel.querySelectorAll(FOCUSABLE)]
-      if (items.length === 0) {
-        event.preventDefault()
-        return
-      }
-      const firstItem = items[0]
-      const lastItem = items[items.length - 1]
-      if (event.shiftKey && document.activeElement === firstItem) {
-        event.preventDefault()
-        lastItem.focus()
-      } else if (!event.shiftKey && document.activeElement === lastItem) {
-        event.preventDefault()
-        firstItem.focus()
-      }
-    }
-    panel?.addEventListener('keydown', onKeyDown)
-    return () => {
-      panel?.removeEventListener('keydown', onKeyDown)
-      if (previous && typeof previous.focus === 'function') previous.focus()
-    }
-  }, [open, panelRef])
 }
 
 /**

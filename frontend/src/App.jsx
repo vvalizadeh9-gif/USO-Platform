@@ -109,6 +109,8 @@ export default function App() {
               </Protected>
             }
           />
+          {/* The name the page goes by in the design documents. */}
+          <Route path="/reports/lifecycle-gaps" element={<Navigate to="/reports/gaps" replace />} />
           <Route
             path="/reports/kpi/mapping"
             element={

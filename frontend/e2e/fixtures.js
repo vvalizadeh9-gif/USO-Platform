@@ -3,6 +3,7 @@
 // of trend, because "the page never scrolls" only means something when there
 // is more content than the screen can hold.
 
+import { readFileSync } from 'node:fs'
 import { currentShamsiPeriod } from '../src/lib/shamsi.js'
 
 export const PM = {
@@ -227,3 +228,236 @@ export const dtInProgress = Array.from({ length: 96 }, (_, i) => ({
   sent_back_comment: null,
   sent_back_at: null,
 }))
+
+// ----- Lifecycle Gaps ------------------------------------------------------
+//
+// The national totals are the design's; the owners are placeholders and the
+// split between them is made up. Every lens's rows add up to every gap, as
+// the server guarantees.
+
+const GAP_TOTALS = { eligible: 4433, ict_approved: 3042, cra_approved: 3858 }
+const GAP_FIGURES = {
+  pending_ict: { count: 1391, base: 4433 },
+  pending_cra: { count: 575, base: 4433 },
+  ict_remained: { count: 991, base: 3858 },
+  cra_remained: { count: 175, base: 3042 },
+  ict_missing_in_mojri: { count: 3042, base: 3042, in_tracker: 0, needs_look: 0 },
+  cra_missing_in_mojri: { count: 3858, base: 3858, in_tracker: 0, needs_look: 0 },
+}
+
+const GAP_OWNERS = {
+  coordinator: ['V. Hashemi', 'R. Karimi', 'S. Moradi', 'A. Rahimi', 'M. Jafari', 'N. Ahmadi', 'H. Kazemi',
+    'F. Sadeghi', 'P. Rostami', 'Z. Hosseini', 'K. Bagheri', 'L. Ebrahimi', 'T. Sharifi'],
+  contractor: CONTRACTORS,
+  province: ['Tehran', 'Isfahan', 'Fars', 'Khorasan Razavi', 'Kerman', 'Yazd', 'Gilan', 'Mazandaran',
+    'Khuzestan', 'East Azerbaijan', 'West Azerbaijan', 'Kermanshah', 'Hormozgan', 'Sistan & Baluchestan',
+    'Golestan', 'Lorestan', 'Hamadan', 'Markazi', 'Qazvin', 'Zanjan', 'Ardabil', 'Kurdistan', 'Ilam',
+    'Bushehr', 'Semnan', 'Qom', 'Alborz', 'Chaharmahal & Bakhtiari', 'Kohgiluyeh & Boyer-Ahmad',
+    'North Khorasan', 'South Khorasan'],
+  region: ['North', 'North East', 'North West', 'Central', 'Azar', 'South', 'South East', 'West', 'East'],
+  rm: ['Allahyar', 'Nobakht', 'Pirayesh', 'Rouhi', 'Fazl Talab'],
+}
+const MANAGERS = GAP_OWNERS.rm
+
+/** `total` split over `n` owners, largest first, summing exactly. */
+function split(total, n) {
+  const weights = Array.from({ length: n }, (_, i) => n - i + (i % 3))
+  const whole = weights.reduce((a, b) => a + b, 0)
+  const parts = weights.map((w) => Math.floor((total * w) / whole))
+  parts[0] += total - parts.reduce((a, b) => a + b, 0)
+  return parts
+}
+
+function gapRows(lens) {
+  const names = GAP_OWNERS[lens]
+  const rows = {}
+  for (const [key, gap] of Object.entries(GAP_FIGURES)) {
+    const counts = split(gap.count, names.length)
+    const bases = split(gap.base, names.length)
+    rows[key] = names
+      .map((name, i) => ({
+        name,
+        count: counts[i],
+        base: bases[i],
+        attribution: 'owned',
+        ...(lens === 'coordinator' ? { managers: [MANAGERS[i % MANAGERS.length]] } : {}),
+      }))
+      .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
+  }
+  return rows
+}
+
+export function gapsOverview(url) {
+  const lens = new URL(url).searchParams.get('lens') || 'coordinator'
+  return {
+    last_cpm_import: '2026-09-20T09:30:00Z',
+    last_mojri_import: null,
+    scoped: false,
+    lens,
+    key: null,
+    lenses: [],
+    totals: GAP_TOTALS,
+    gaps: GAP_FIGURES,
+    rows: gapRows(lens),
+    data_quality: { villages_without_province: 0, unmapped_provinces: [] },
+  }
+}
+
+export const kpiLenses = { selectable: true, options: {} }
+
+// ----- Lifecycle Gaps: the coverage map ------------------------------------
+//
+// Every province in the map asset, with a made-up spread of approval rates.
+// The detail panels' owner rows are split from each shape's own figures, so
+// they add up the way the server's folds do.
+
+const IRAN = JSON.parse(readFileSync(new URL('../src/pages/reports/iranMap.json', import.meta.url), 'utf8'))
+
+const stretchFig = (stopped, reached) => ({
+  stopped,
+  reached,
+  rate: reached ? Math.round((stopped * 1000) / reached) / 10 : null,
+  low_sample: reached < 10,
+})
+
+const PANEL_OWNERS = {
+  coordinator: GAP_OWNERS.coordinator.slice(0, 3),
+  contractor: CONTRACTORS.slice(0, 4),
+  rm: GAP_OWNERS.rm.slice(0, 2),
+}
+
+function panelFigures(base, ictRate, craRate) {
+  const ictApproved = Math.round(base * ictRate)
+  const craApproved = Math.round(base * craRate)
+  return {
+    ict: { approved: ictApproved, base, pending: base - ictApproved, remained: Math.round((base - ictApproved) * 0.4) },
+    cra: { approved: craApproved, base, pending: base - craApproved, remained: Math.round((base - craApproved) * 0.3) },
+  }
+}
+
+/** Split each counter of `figures` over `names`, summing exactly. */
+function ownerRows(figures, names, extra = () => ({})) {
+  const pieces = {}
+  for (const stretch of ['ict', 'cra']) {
+    for (const counter of ['approved', 'base', 'pending', 'remained']) {
+      pieces[`${stretch}.${counter}`] = split(figures[stretch][counter], names.length)
+    }
+  }
+  return names.map((name, i) => {
+    const row = { name, attribution: 'owned', ...extra(name, i), ict: {}, cra: {} }
+    for (const [path, parts] of Object.entries(pieces)) {
+      const [stretch, counter] = path.split('.')
+      row[stretch][counter] = parts[i]
+    }
+    return row
+  })
+}
+
+const mapProvinces = Object.entries(IRAN.provinces).map(([key, shape], i) => {
+  const base = 60 + ((i * 37) % 340)
+  const ictRate = 0.2 + ((i * 13) % 75) / 100
+  const craRate = Math.min(ictRate, 0.15 + ((i * 29) % 70) / 100)
+  const figures = panelFigures(base, ictRate, craRate)
+  const reached = base + 40
+  const ictStopped = Math.round(reached * (1 - ictRate))
+  const craReached = reached - ictStopped
+  return {
+    key,
+    name: shape.en,
+    attribution: 'owned',
+    region: shape.region,
+    managers: [GAP_OWNERS.rm[i % GAP_OWNERS.rm.length]],
+    villages: reached + 20,
+    ict: stretchFig(ictStopped, reached),
+    cra: stretchFig(Math.round(craReached * (1 - craRate / Math.max(ictRate, 0.01))), craReached),
+    detail: {
+      ...figures,
+      owners: Object.fromEntries(
+        Object.entries(PANEL_OWNERS).map(([lens, names]) => [lens, ownerRows(figures, names)])
+      ),
+    },
+  }
+})
+
+const sumFig = (rows, stretch, counter) => rows.reduce((s, r) => s + r[stretch][counter], 0)
+
+const mapRegions = Object.keys(IRAN.regions).map((name) => {
+  const members = mapProvinces.filter((p) => p.region === name)
+  const figures = {}
+  for (const stretch of ['ict', 'cra']) {
+    figures[stretch] = {}
+    for (const counter of ['approved', 'base', 'pending', 'remained']) {
+      figures[stretch][counter] = members.reduce((s, m) => s + m.detail[stretch][counter], 0)
+    }
+  }
+  const provinceRows = members.map((m) => ({
+    name: m.name,
+    key: m.key,
+    attribution: 'owned',
+    ict: m.detail.ict,
+    cra: m.detail.cra,
+  }))
+  return {
+    name,
+    attribution: 'owned',
+    provinces: members.map((m) => m.key),
+    managers: [...new Set(members.flatMap((m) => m.managers))].sort(),
+    villages: members.reduce((s, m) => s + m.villages, 0),
+    ict: stretchFig(members.reduce((s, m) => s + m.ict.stopped, 0), members.reduce((s, m) => s + m.ict.reached, 0)),
+    cra: stretchFig(members.reduce((s, m) => s + m.cra.stopped, 0), members.reduce((s, m) => s + m.cra.reached, 0)),
+    detail: {
+      ...figures,
+      owners: {
+        province: provinceRows,
+        ...Object.fromEntries(
+          Object.entries(PANEL_OWNERS).map(([lens, names]) => [lens, ownerRows(figures, names)])
+        ),
+      },
+    },
+  }
+})
+
+export const gapsMap = {
+  scoped: false,
+  lens_label: null,
+  key: null,
+  last_cpm_import: '2026-09-20T09:30:00Z',
+  low_sample_threshold: 10,
+  provinces: mapProvinces,
+  regions: mapRegions,
+  total: {
+    villages: mapProvinces.reduce((s, p) => s + p.villages, 0),
+    ict: stretchFig(sumFig(mapProvinces, 'ict', 'stopped'), sumFig(mapProvinces, 'ict', 'reached')),
+    cra: stretchFig(sumFig(mapProvinces, 'cra', 'stopped'), sumFig(mapProvinces, 'cra', 'reached')),
+  },
+}
+
+// ----- Lifecycle Gaps: the export ------------------------------------------
+//
+// How many villages the mocked `/gaps/villages.xlsx` lists for a request:
+// read from the same fixtures the page draws, the way the server reads the
+// same cells the overview folds.
+
+const STRETCH_OF = {
+  pending_ict: ['ict', 'pending'], pending_cra: ['cra', 'pending'],
+  ict_remained: ['ict', 'remained'], cra_remained: ['cra', 'remained'],
+  ict_approved: ['ict', 'approved'], cra_approved: ['cra', 'approved'],
+}
+
+export function exportCount(url) {
+  const q = new URL(url).searchParams
+  const gap = q.get('gap')
+  const lens = q.get('lens')
+  const key = q.get('key')
+  const scope = q.get('scope')
+  if (scope) {
+    const [kind, value] = scope.split(/:(.*)/s)
+    const shape =
+      kind === 'province' ? mapProvinces.find((p) => p.key === value) : mapRegions.find((r) => r.name === value)
+    const [stretch, counter] = STRETCH_OF[gap]
+    if (!lens) return shape.detail[stretch][counter]
+    return shape.detail.owners[lens].find((row) => row.name === key)[stretch][counter]
+  }
+  if (lens) return gapRows(lens)[gap].find((row) => row.name === key).count
+  return GAP_FIGURES[gap]?.count ?? GAP_TOTALS[gap]
+}
