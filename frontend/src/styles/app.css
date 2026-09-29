@@ -4145,28 +4145,24 @@ a.lifecycle-step:focus-visible { outline: 2px solid var(--accent); outline-offse
    Authority colours (--ict, --cra) are data only; cobalt marks the selected
    column and nothing else. See design-system-cobalt.md.
    --------------------------------------------------------------------------- */
-.gap-page { display: flex; flex-direction: column; gap: 16px; }
-.gap-page .page-head { margin-bottom: 0; }
-.gap-tabs { margin-top: -4px; }
+/* The page: PageBar over a PageFrame body, padded 20 32. */
+.gap-page .page-body { padding: 20px 32px; }
 
 /* The "1 data note" button: warning banner colours, 36 high. */
 .gap-note-btn {
   display: inline-flex; align-items: center; gap: 8px;
-  height: 36px; padding: 0 12px; border-radius: var(--radius-md);
+  height: 36px; padding: 0 12px; border-radius: var(--radius-sm);
   background: var(--banner-warning-bg); border: 1px solid var(--banner-warning-border);
-  color: var(--banner-warning-text); font-size: 14px; font-weight: 600;
+  color: var(--banner-warning-text); font-size: var(--fs-control); line-height: var(--lh-control); font-weight: 600;
 }
 .gap-note-btn svg { color: var(--banner-warning-icon); }
 .gap-note-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
-/* The card header's total, on the right. */
-.gap-card .ui-card-head { align-items: center; }
-.gap-total { display: flex; align-items: baseline; gap: 8px; }
-.gap-total-figure {
-  font-size: 30px; line-height: 38px; font-weight: 600;
-  font-variant-numeric: tabular-nums; color: var(--text);
+/* The PageBar's total: "4,433 villages with drive test done". */
+.gap-total {
+  font-size: var(--fs-control); line-height: var(--lh-control); color: var(--text-secondary); white-space: nowrap;
 }
-.gap-total-caption { font-size: 13px; line-height: 18px; color: var(--text-secondary); }
+.gap-total strong { color: var(--text); font-weight: 600; }
 
 /* Chart and panel side by side; the chart takes what the panel leaves. */
 .gap-body { display: flex; gap: 24px; align-items: stretch; }

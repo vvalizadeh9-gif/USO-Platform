@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react'
 import { AlertTriangle, Layers, X } from 'lucide-react'
 import api from '../../api/client'
+import PageFrame from '../../components/PageFrame'
 import { useAuth } from '../../context/AuthContext'
 import {
   Banner,
   Card,
   EmptyState,
-  PageHead,
+  PageBar,
   SegmentedControl,
   Tabs,
 } from '../../components/ui'
@@ -102,24 +103,13 @@ export default function LifecycleGaps() {
 
   const notes = dataNotes(data?.data_quality)
 
-  if (error && !data) {
-    return (
-      <>
-        <PageHead eyebrow="Performance" title="Lifecycle Gaps" />
-        <Card>
-          <EmptyState title="Nothing to show" hint={error} />
-        </Card>
-      </>
-    )
-  }
-
-  return (
-    <div className="gap-page">
-      <PageHead
-        eyebrow="Performance"
-        title="Lifecycle Gaps"
-        actions={
-          notes.length > 0 && (
+  const bar = (
+    <PageBar
+      eyebrow="Performance"
+      title="Lifecycle Gaps"
+      actions={
+        <>
+          {notes.length > 0 && (
             <button
               type="button"
               className="gap-note-btn"
@@ -129,12 +119,21 @@ export default function LifecycleGaps() {
               <AlertTriangle size={18} aria-hidden="true" />
               {notes.length} data {notes.length === 1 ? 'note' : 'notes'}
             </button>
-          )
-        }
-      />
+          )}
+          {data && (
+            <span className="gap-total" data-testid="gap-total">
+              <strong className="tnum">{fmt(data.totals.eligible)}</strong> villages with drive
+              test done
+            </span>
+          )}
+        </>
+      }
+      tabs={<Tabs tabs={TABS} value={tab} onChange={setTab} label="Gap views" />}
+    />
+  )
 
-      <Tabs tabs={TABS} value={tab} onChange={setTab} label="Gap views" className="gap-tabs" />
-
+  return (
+    <PageFrame className="gap-page" bar={bar}>
       {notesOpen && notes.length > 0 && (
         <Banner tone="warning" title="Data quality.">
           {notes.map((note) => (
@@ -142,24 +141,19 @@ export default function LifecycleGaps() {
           ))}
         </Banner>
       )}
+      {error && !data && tab === 'gaps' && (
+        <Card>
+          <EmptyState title="Nothing to show" hint={error} />
+        </Card>
+      )}
       {error && data && <Banner tone="error">{error}</Banner>}
 
       {tab === 'map' ? (
         <CoverageMap />
       ) : !data ? (
-        <Skeleton />
+        !error && <Skeleton />
       ) : (
-        <Card
-          icon={Layers}
-          title="Where villages are stuck"
-          className="gap-card"
-          actions={
-            <div className="gap-total">
-              <span className="gap-total-figure">{fmt(data.totals.eligible)}</span>
-              <span className="gap-total-caption">villages with drive test done</span>
-            </div>
-          }
-        >
+        <Card icon={Layers} title="Where villages are stuck" className="gap-card">
           <div className="gap-body">
             <Chart
               data={data}
@@ -178,7 +172,7 @@ export default function LifecycleGaps() {
           </div>
         </Card>
       )}
-    </div>
+    </PageFrame>
   )
 }
 

@@ -114,8 +114,7 @@ describe('the first screen', () => {
     mock()
     draw()
     await columns()
-    expect(screen.getByText('4,812')).toBeInTheDocument()
-    expect(screen.getByText('villages with drive test done')).toBeInTheDocument()
+    expect(screen.getByTestId('gap-total')).toHaveTextContent('4,812 villages with drive test done')
     expect(screen.getByText('42% of 4,812')).toBeInTheDocument()
     expect(screen.getByText('Mojri has 1,790 of 2,770')).toBeInTheDocument()
     expect(screen.queryByRole('complementary')).not.toBeInTheDocument()
@@ -250,6 +249,17 @@ describe('the details panel', () => {
 })
 
 describe('around the chart', () => {
+  it('heads the page with the PageBar: eyebrow, title, total and the two tabs', async () => {
+    mock()
+    draw()
+    await columns()
+    const bar = document.querySelector('.page-bar')
+    expect(within(bar).getByRole('heading', { level: 1, name: 'Lifecycle Gaps' })).toBeInTheDocument()
+    expect(within(bar).getByText('Performance')).toBeInTheDocument()
+    expect(within(bar).getAllByRole('tab').map((t) => t.textContent)).toEqual(['Gaps', 'Coverage map'])
+    expect(within(bar).getByTestId('gap-total')).toBeInTheDocument()
+  })
+
   it('puts data-quality notes behind the warning button', async () => {
     mock({
       overview: payload({
