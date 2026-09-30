@@ -114,12 +114,12 @@ describe('the first screen', () => {
     draw()
     const hits = await tiles()
     expect(hits.map((hit) => hit.getAttribute('aria-label'))).toEqual([
-      'ICT Pending: 2,042 villages — see who is holding it',
-      'CRA Pending: 2,257 villages — see who is holding it',
-      'ICT Pending: 395 villages — see who is holding it',
-      'CRA Pending: 0 villages — see who is holding it',
-      'ICT Not in Mojri: 1,280 villages — see who is holding it',
-      'CRA Not in Mojri: 1,060 villages — see who is holding it',
+      'ICT Pending: 2,042 villages, 42% of 4,812 drive-tested — see who is holding it',
+      'CRA Pending: 2,257 villages, 47% of 4,812 drive-tested — see who is holding it',
+      'ICT Pending: 395 villages, 15% of 2,555 CRA-approved — see who is holding it',
+      'CRA Pending: 0 villages, 0% of 2,770 ICT-approved — see who is holding it',
+      'ICT Not in Mojri: 1,280 villages, 42% of 3,070 approved in UEP — see who is holding it',
+      'CRA Not in Mojri: 1,060 villages, 37% of 2,855 approved in UEP — see who is holding it',
     ])
     for (const title of ['Pending approval', 'One approved, other pending', 'ICT vs CRA vs Mojri tracker']) {
       const card = screen.getByRole('heading', { name: title }).closest('section')
@@ -128,20 +128,31 @@ describe('the first screen', () => {
     }
   })
 
-  it('shows the share of the base and what one square stands for', async () => {
+  it('shows only the share of the base under each figure', async () => {
     mock()
     draw()
     await tiles()
     const shares = screen.getAllByTestId('waffle-share').map((line) => line.textContent)
-    expect(shares[0]).toBe('42% of 4,812 drive-tested')
-    expect(shares[2]).toBe('15% of 2,555 CRA-approved')
-    expect(screen.getAllByText('1 square ≈ 48 villages')).toHaveLength(2)
-    // Each tile has its own base: 2,555, 2,770, 3,070 and 2,855 once each.
-    expect(screen.getAllByText('1 square ≈ 26 villages')).toHaveLength(1)
-    expect(screen.getAllByText('1 square ≈ 28 villages')).toHaveLength(1)
-    expect(screen.getAllByText('1 square ≈ 31 villages')).toHaveLength(1)
-    expect(screen.getAllByText('1 square ≈ 29 villages')).toHaveLength(1)
-    expect(shares[4]).toBe('42% of 3,070 approved in UEP')
+    expect(shares).toEqual(['42%', '47%', '15%', '0%', '42%', '37%'])
+    for (const tile of screen.getAllByTestId('waffle-tile')) {
+      expect(tile.textContent).not.toMatch(/ of [\d,]+ /)
+      expect(tile.textContent).not.toMatch(/1 square/)
+    }
+    expect(screen.queryByText('Nothing counted yet')).not.toBeInTheDocument()
+  })
+
+  it('shows a dash, not a percentage, over a base of 0', async () => {
+    const none = payload()
+    none.gaps.cra_remained = { count: 0, base: 0 }
+    mock({ overview: none })
+    draw()
+    const hits = await tiles()
+    expect(screen.getAllByTestId('waffle-share')[3]).toHaveTextContent(/^—$/)
+    const tile = hits[3].closest('[data-testid="waffle-tile"]')
+    expect(within(tile).getByText('Nothing counted yet')).toBeInTheDocument()
+    expect(hits[3]).toHaveAccessibleName(
+      'CRA Pending: 0 villages, — of 0 ICT-approved — see who is holding it'
+    )
   })
 
   it('fills round(100 × gap ÷ base) squares of each waffle', async () => {
@@ -373,7 +384,8 @@ describe('export behind every number', () => {
     await userEvent.click((await tiles())[0])
     const labels = screen.getAllByRole('button').map((b) => b.getAttribute('aria-label') ?? '')
     expect(labels.filter((label) => label.startsWith('Export')).every((l) => /villages?\b/.test(l))).toBe(true)
-    expect(screen.queryByRole('button', { name: /%/ })).not.toBeInTheDocument()
+    // Tiles say their share in their accessible name; no export button does.
+    expect(screen.queryByRole('button', { name: /^Export.*%/ })).not.toBeInTheDocument()
   })
 })
 

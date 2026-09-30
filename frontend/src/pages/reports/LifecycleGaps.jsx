@@ -22,9 +22,9 @@ import {
   lensNoun,
   mojriStamp,
   onePct,
-  scaleNote,
-  shareParts,
+  shareSentence,
   waffleFilled,
+  wholePct,
 } from './lifecycleGaps'
 
 /**
@@ -230,7 +230,6 @@ function GapTile({ gapKey, data, selected, onOpen }) {
   const meta = GAPS[gapKey]
   const gap = data.gaps[gapKey]
   const ready = hasData(gapKey, data)
-  const share = shareParts(gapKey, gap)
   const approved = meta.approvedGap && data.totals[meta.approvedGap]
 
   return (
@@ -239,12 +238,8 @@ function GapTile({ gapKey, data, selected, onOpen }) {
       label={meta.tileLabel}
       filled={waffleFilled(gap.count, gap.base)}
       figure={<GapFigure gap={gapKey} value={gap.count} className="waffle-tile-number" />}
-      share={
-        <>
-          <strong>{share.pct}</strong> {share.of} <span className="nowrap">{share.name}</span>
-        </>
-      }
-      scale={scaleNote(gap.base)}
+      share={<strong>{wholePct(gap.count, gap.base)}</strong>}
+      scale={gap.base ? null : 'Nothing counted yet'}
       breakdown={meta.mojri && ready ? mojriBreakdown(gap) : null}
       selected={selected}
       empty={!ready}
@@ -258,7 +253,8 @@ function GapTile({ gapKey, data, selected, onOpen }) {
       }
       openLabel={
         ready
-          ? `${meta.authority} ${meta.tileLabel}: ${fmt(gap.count)} villages — see who is holding it`
+          ? `${meta.authority} ${meta.tileLabel}: ${fmt(gap.count)} villages, ` +
+            `${shareSentence(gapKey, gap)} — see who is holding it`
           : `${meta.authority} ${meta.tileLabel}: no Mojri import yet`
       }
       onOpen={onOpen}

@@ -16,9 +16,8 @@ function draw(props = {}) {
           575
         </button>
       }
-      share="13% of 4,433 drive-tested"
-      scale="1 square ≈ 44 villages"
-      openLabel="CRA Pending: 575 villages — see who is holding it"
+      share="13%"
+      openLabel="CRA Pending: 575 villages, 13% of 4,433 drive-tested — see who is holding it"
       onOpen={onOpen}
       {...props}
     />
@@ -27,14 +26,19 @@ function draw(props = {}) {
 }
 
 describe('WaffleTile', () => {
-  it('fills the given squares of 100 and says what a square is', () => {
+  it('fills the given squares of 100 and shows the share', () => {
     draw()
     const grid = document.querySelector('.waffle-tile-grid')
     expect(grid.querySelectorAll('i')).toHaveLength(100)
     expect(grid.querySelectorAll('i.on')).toHaveLength(13)
     expect(grid).toHaveAttribute('aria-hidden', 'true')
-    expect(screen.getByText('1 square ≈ 44 villages')).toBeInTheDocument()
-    expect(screen.getByText('13% of 4,433 drive-tested')).toBeInTheDocument()
+    expect(screen.getByTestId('waffle-share')).toHaveTextContent(/^13%$/)
+    expect(document.querySelector('.waffle-tile-scale')).toBeNull()
+  })
+
+  it('adds the scale line only when given one', () => {
+    draw({ scale: 'Nothing counted yet' })
+    expect(screen.getByText('Nothing counted yet')).toBeInTheDocument()
   })
 
   it('always carries the authority chip', () => {
@@ -69,7 +73,7 @@ describe('WaffleTile', () => {
     expect(screen.getByRole('button', { name: /see who is holding it/ })).toHaveAttribute('aria-expanded', 'true')
   })
 
-  it('adds a breakdown line under the scale when given one', () => {
+  it('adds a breakdown line under the share when given one', () => {
     draw({ breakdown: 'In Mojri 3,472 · Needs a look 0 · Missing 403' })
     expect(screen.getByTestId('waffle-breakdown')).toHaveTextContent(
       'In Mojri 3,472 · Needs a look 0 · Missing 403'
@@ -88,6 +92,6 @@ describe('WaffleTile', () => {
     expect(screen.getByText('—')).toBeInTheDocument()
     expect(screen.getByText('No Mojri import yet')).toBeInTheDocument()
     expect(screen.getByText('3,838 approved in UEP')).toBeInTheDocument()
-    expect(screen.queryByText('1 square ≈ 44 villages')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('waffle-share')).not.toBeInTheDocument()
   })
 })
