@@ -245,6 +245,7 @@ function GapTile({ gapKey, data, selected, onOpen }) {
         </>
       }
       scale={scaleNote(gap.base)}
+      breakdown={meta.mojri && ready ? mojriBreakdown(gap) : null}
       selected={selected}
       empty={!ready}
       emptyNote="No Mojri import yet"
@@ -263,6 +264,17 @@ function GapTile({ gapKey, data, selected, onOpen }) {
       onOpen={onOpen}
     />
   )
+}
+
+/**
+ * What a Mojri tile's figure is made of, from counts the API already sends:
+ * the figure is every approved village not `in_tracker`, so it is the
+ * needs-a-look villages plus the ones simply missing.
+ */
+function mojriBreakdown(gap) {
+  const needsLook = gap.needs_look ?? 0
+  const missing = Math.max(0, gap.count - needsLook)
+  return `In Mojri ${fmt(gap.in_tracker ?? 0)} · Needs a look ${fmt(needsLook)} · Missing ${fmt(missing)}`
 }
 
 /** A village count on this page: always an export of the villages it counts. */

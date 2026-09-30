@@ -3789,6 +3789,7 @@ a.lifecycle-step:focus-visible { outline: 2px solid var(--accent); outline-offse
   font-size: 13.5px; line-height: 1.5; margin: 0;
 }
 .kpi-banner.warn { background: var(--amber-dim); color: var(--amber); }
+.kpi-banner.danger { background: var(--danger-soft); color: var(--danger-ink); }
 
 /* ----- Lens row ----- */
 .kpi-lens {

@@ -1,5 +1,28 @@
 # Changelog
 
+## Mojri import matches on site and village codes; "2G" in the 2G column reads registered
+
+After a Mojri import, **Lifecycle Gaps** showed every approved village as "Not
+in Mojri". Two causes, either enough on its own:
+
+* the importer matched each row on the internal village id, which nobody
+  filling the file can know. The team's file holds CPM village codes, so rows
+  matched nothing — or matched an unrelated village whose id equalled the code.
+  Rows are now matched on **site_code, site_type and village_code**; the
+  template carries those three plus `village_name`, and no internal id. The old
+  `site_id` / `village_id` headers are still read, as codes, for one transition;
+* a technology marked by writing its own name ("2G" in the 2G column), the CPM
+  convention, read as "needs a look". The rule now lives in the shared token
+  vocabulary, so the CPM and Mojri importers read a cell the same way.
+
+The preview now says **"Matched X of Y rows"**, turns red below 90%, and
+Confirm is refused when nothing matched. Each Mojri tile on Lifecycle Gaps
+shows its split: in Mojri · needs a look · missing.
+
+**Deploy note:** migration `e9a4c7b2d153` deletes every Mojri tracker status
+(each was matched on the wrong key; the import-run history is kept). **The PM
+re-uploads the current Mojri file once after deploy.**
+
 ## Erase CPM data after a Mojri import; the Mojri card compares every approved village
 
 **Admin → Erase all CPM data** failed ("Erase failed") on any database that had
