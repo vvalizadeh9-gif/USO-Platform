@@ -957,10 +957,36 @@ row the PM fills in is a row the card reads back, and none it reads is missing
 from the template. `tests/test_gaps_overview.py` holds the two equal. A
 non-هدف (legacy sub-flag) village is in neither; no report counts those.
 
-`site_id` and `site_type` are in the template for the person matching rows
-against Mojri's file, which is organised by site. **The importer reads
-`village_id` and nothing else**: one site routinely serves several villages, and
-registration, like acceptance, is per village.
+### How a row finds its village
+
+The template's columns are `site_code`, `site_type`, `village_code`,
+`village_name`, then `ict_2g … cra_4g`. **The template and the importer key on
+`(site_code, site_type, village_code)`** — the codes the team's own tracker
+uses — and the internal `villages.id` is never shown to people. That triple is
+exactly what identifies a village: a work item is unique per (site, site_type),
+and a village belongs to one work item. `village_name` is for reading only.
+
+The first release matched on `villages.id`. Nobody filling the file can know a
+primary key, so the team filled that column with CPM village codes; rows
+matched nothing, or matched the unrelated village whose primary key equalled
+the code. Lifecycle Gaps then read 100% "Not in Mojri".
+
+* **Normalisation** is one function (`mojri_tracker.normalize_key_part`) used
+  for the file and the database alike: trimmed, internal spaces collapsed,
+  case-folded, and an integral number compared as the text of the integer
+  (`229164`, `229164.0` and `"229164"` are one code).
+* **Only live villages** are candidates: neither the village nor its work item
+  soft-deleted.
+* **One key, several villages.** CPM legitimately lists the same village twice
+  on one work item and UEP counts both rows, so a row's statuses are written to
+  every live village its key matches.
+* **One key, several rows.** Rows that read the same are one answer. Rows that
+  disagree are listed in the preview and none of them is written.
+* **Legacy headers, for one transition.** `site_id` is read as `site_code`, and
+  `village_id` as `village_code`: the old template wrote the site code under
+  `site_id`, and the team's current file holds village codes under
+  `village_id`. The canonical header wins when a file carries both. Remove the
+  aliases (`LEGACY_HEADER_ALIASES`) once the team is on the new template.
 
 The template is a **read**, which is why Admin may take it — and the import is a
 write, which is why it is PM's alone. That is the Admin/PM separation in §6,
@@ -969,10 +995,18 @@ applied here. Coordinator reaches neither.
 ### How a cell is read
 
 Per authority, for **each technology the village actually requested**: a
-recognised positive token → registered; blank → not registered; anything else —
+positive cell → registered; blank → not registered; anything else —
 an unrecognised word, a note, a cell carrying an Excel comment → **needs a
 look**. The village's status is `in_tracker` only if every requested technology
 reads registered, and `needs_look` if any single one does. Never an average.
+
+A positive cell is `acceptance_tokens.is_positive(token, tech)`: a recognised
+yes, **or the column's own technology name** — `2G` in the 2G column, the
+original CPM convention. The rule is part of the shared token vocabulary, used
+by the CPM importer (`CpmImportService._approval`) and this one alike; it used
+to live only inside the CPM importer, and the Mojri importer read every such
+cell as "needs a look". Another technology's name (`3G` in the 2G column) is
+not positive and needs a look.
 
 Two rules that look like omissions:
 
@@ -994,13 +1028,29 @@ so an abandoned upload leaves nothing behind. Confirm sends the same file back
 with the SHA-256 the preview returned, and a file whose digest does not match is
 refused: without that, "preview then confirm" would guarantee nothing.
 
-The preview names three things rather than counting them: rows whose
-`village_id` matched nothing, rows repeating a `village_id` (neither is written
-— if two rows disagree, taking the last one silently loses the other claim), and
-**villages that were in the tracker last import and are absent from this file**.
-That last group is left exactly as it was. Each file is a full snapshot of the
-villages it names; a row filtered out of a spreadsheet is not a registration
-being withdrawn.
+The preview opens with **"Matched X of Y rows"** (`matched_rows` /
+`total_rows`; `villages_matched` counts villages, which can be more when one key
+holds two), and turns red below 90%: a correct file matches nearly every row,
+so a low share means the wrong file or the wrong columns. **Confirm is refused
+(400) when no row matched** — such an import would change nothing while
+reading, in the run history, as this month's reconciliation.
+
+It then names three things rather than counting them: rows that matched no live
+village, shown by the `site_code / site_type / village_code` that was typed;
+rows repeating a key with different answers (none is written — taking the last
+would silently lose the other claim); and **villages that were in the tracker
+last import and are absent from this file**. That last group is left exactly as
+it was. Each file is a full snapshot of the villages it names; a row filtered
+out of a spreadsheet is not a registration being withdrawn.
+
+### The one-time cleanup
+
+Migration `e9a4c7b2d153` deletes every row of `mojri_tracker_status`. Each was
+matched by primary key against village codes, and a correct row cannot be told
+from one written onto the wrong village. `mojri_import_runs` is kept: it is
+the audit history of who imported which file. The downgrade is a no-op — the
+deleted rows were wrong. **After deploy, the PM re-uploads the current file
+once.**
 
 ### Not built, deliberately
 

@@ -164,6 +164,18 @@ describe('the first screen', () => {
     expect(screen.queryByText('V. Hashemi')).not.toBeInTheDocument()
   })
 
+  it('splits each Mojri figure into in Mojri, needs a look and missing', async () => {
+    mock()
+    draw()
+    await tiles()
+    const lines = screen.getAllByTestId('waffle-breakdown').map((line) => line.textContent)
+    // Only the two Mojri tiles carry it; the figure is needs-a-look + missing.
+    expect(lines).toEqual([
+      'In Mojri 1,790 · Needs a look 40 · Missing 1,240',
+      'In Mojri 1,795 · Needs a look 20 · Missing 1,040',
+    ])
+  })
+
   it('shows the Mojri tiles empty, not guessed, before any Mojri import', async () => {
     mock({ overview: payload({ last_mojri_import: null }) })
     draw()
@@ -174,6 +186,7 @@ describe('the first screen', () => {
     expect(within(tile).getByText('—')).toBeInTheDocument()
     expect(within(tile).getByText('No Mojri import yet')).toBeInTheDocument()
     expect(tile).toHaveTextContent('3,070 approved in UEP')
+    expect(screen.queryByTestId('waffle-breakdown')).not.toBeInTheDocument()
   })
 })
 

@@ -102,7 +102,8 @@ def commit_import(
         entity_id=result["import_run_id"],
         new_value={
             "filename": result["filename"],
-            "matched": result["matched"],
+            "matched_rows": result["matched_rows"],
+            "villages_matched": result["villages_matched"],
             "unmatched": result["unmatched"],
             "disappeared": result["disappeared_count"],
             "ict": result["authorities"]["ict"],

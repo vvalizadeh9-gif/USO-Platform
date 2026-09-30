@@ -601,9 +601,9 @@ class CpmImportService:
     # They live in services/acceptance_tokens.py because the Mojri tracker
     # importer reads the same kind of hand-typed cell and must read the same
     # vocabulary. Two copies would not fail, they would drift: one importer
-    # would learn a spelling the other never did. The names are kept here so
-    # the call sites below read as they always did.
-    _APPROVED_TOKENS = tokens.APPROVED_TOKENS
+    # would learn a spelling the other never did. The yes side, including the
+    # tech-name convention, is ``tokens.is_positive``; the no side is kept
+    # under its old name so the call site below reads as it always did.
     _REJECTED_TOKENS = tokens.REJECTED_TOKENS
 
     @classmethod
@@ -612,14 +612,13 @@ class CpmImportService:
 
         Accepts the technology name itself ("2G" in the 2G column) as approved —
         the original CPM convention — plus a broad set of natural English/Persian
-        approval and rejection tokens.
+        approval and rejection tokens. The approved side is
+        ``acceptance_tokens.is_positive``, shared with the Mojri importer.
         """
         if cell is None:
             return "Pending"
         low = str(cell).strip().lower()
-        if low == tech.lower():
-            return "Approved"
-        if low in cls._APPROVED_TOKENS:
+        if tokens.is_positive(low, tech):
             return "Approved"
         if low in cls._REJECTED_TOKENS:
             return "Rejected"

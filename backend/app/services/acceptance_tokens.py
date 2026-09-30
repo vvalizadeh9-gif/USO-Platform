@@ -55,3 +55,24 @@ def normalize(cell: object | None) -> str | None:
         return None
     text = str(cell).strip()
     return text.lower() if text else None
+
+
+def is_positive(token: str | None, tech: str | None = None) -> bool:
+    """True when a hand-typed cell means yes.
+
+    Either a word from APPROVED_TOKENS, or -- the original CPM convention --
+    the technology's own name written in that technology's column ("2G" in
+    the 2G column). Shared by the CPM and Mojri importers so they can never
+    disagree about what a cell means.
+
+    Only the column's **own** technology counts: "3G" in the 2G column is not a
+    yes, it is somebody's note in the wrong place, and it reads as unrecognised.
+    The token is normalised here as well, so a caller holding a raw cell value
+    and one holding an already-lowered string get the same answer.
+    """
+    text = normalize(token)
+    if text is None:
+        return False
+    if tech and text == tech.strip().lower():
+        return True
+    return text in APPROVED_TOKENS

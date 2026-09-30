@@ -17,8 +17,10 @@ import { fmtCount } from '../reports/kpiTheme'
  * Three things the preview refuses to hide, because each would otherwise be a
  * silent loss:
  *
- * rows whose village_id matched nothing, listed one by one rather than
- * counted;
+ * rows that matched no UEP village, listed one by one by the codes that were
+ * typed (site_code / site_type / village_code) rather than counted — and, when
+ * fewer than MATCH_FLOOR of the rows matched, a red banner at the top, because
+ * a file that mostly matches nothing is the wrong file, not a noisy one;
  *
  * villages that were in the tracker last import and are absent from this file
  * — flagged as a discrepancy and left exactly as they are. A row filtered out
@@ -28,6 +30,10 @@ import { fmtCount } from '../reports/kpiTheme'
  * blank. The importer never guesses, so this number is a work list, not a
  * failure.
  */
+/** Below this share of matched rows the preview says, in red, that the file
+ *  is probably wrong. A correct file matches nearly every row. */
+const MATCH_FLOOR = 0.9
+
 export default function MojriImport() {
   const inputRef = useRef(null)
   const [file, setFile] = useState(null)
@@ -112,9 +118,13 @@ export default function MojriImport() {
       <section className="card card-pad kpi-card">
         <h3 className="kpi-card-title">1 · The template</h3>
         <p className="kpi-note">
-          One row per village we have approved, technology columns blank. Fill
-          it in from Mojri&apos;s file by hand — that step is deliberately
-          outside this platform — then bring it back here.
+          One row per village we have approved, technology columns blank. Each
+          row is matched on its <strong>site_code</strong>,{' '}
+          <strong>site_type</strong> and <strong>village_code</strong> — the
+          codes in your own tracker — so keep those three as they are. Fill in
+          the technology columns from Mojri&apos;s file by hand (a yes, or the
+          technology&apos;s own name: 2G in the 2G column) — that step is
+          deliberately outside this platform — then bring it back here.
         </p>
         <button
           type="button"
@@ -172,16 +182,50 @@ export default function MojriImport() {
   )
 }
 
+/** Rows matched, whatever the server calls it: `matched_rows`, or the older
+ *  `matched` it is kept alongside. */
+function matchedRows(data) {
+  return data.matched_rows ?? data.matched ?? 0
+}
+
+function unmatchedLabel(row) {
+  const key = [row.site_code, row.site_type, row.village_code]
+    .map((part) => part || '—')
+    .join(' / ')
+  return `row ${row.row} ${key} (${row.reason})`
+}
+
 function Preview({ data, onConfirm, busy }) {
+  const matched = matchedRows(data)
+  const share = data.total_rows > 0 ? matched / data.total_rows : 0
+  const nothingMatched = matched === 0
+
   return (
     <section className="card card-pad kpi-card" data-testid="mojri-preview">
       <h3 className="kpi-card-title">3 · What confirming would do</h3>
 
-      <p className="gap-example">
-        {fmtCount(data.total_rows)} row{data.total_rows === 1 ? '' : 's'} read,{' '}
-        {fmtCount(data.matched)} matched a village
-        {data.unmatched > 0 && `, ${fmtCount(data.unmatched)} did not`}.
+      <p className="gap-example" data-testid="mojri-match-line">
+        <strong>
+          Matched {fmtCount(matched)} of {fmtCount(data.total_rows)} row
+          {data.total_rows === 1 ? '' : 's'}
+        </strong>
+        {data.villages_matched != null && data.villages_matched !== matched &&
+          ` — ${fmtCount(data.villages_matched)} villages`}
+        {data.unmatched > 0 && `, ${fmtCount(data.unmatched)} not imported`}.
       </p>
+
+      {share < MATCH_FLOOR && (
+        <div className="kpi-banner danger" role="alert" style={{ marginBottom: 14 }}>
+          <AlertTriangle size={16} aria-hidden="true" />
+          <span>
+            {nothingMatched
+              ? 'None of these rows match a UEP village, so this file cannot be imported. '
+              : `Only ${Math.floor(share * 100)}% of the rows match a UEP village. `}
+            Check the site_code, site_type and village_code columns — they
+            must hold the codes from the template.
+          </span>
+        </div>
+      )}
 
       <div className="kpi-table-wrap">
         <table className="kpi-table gap-table">
@@ -220,10 +264,7 @@ function Preview({ data, onConfirm, busy }) {
           <span>
             {fmtCount(data.unmatched)} row
             {data.unmatched === 1 ? '' : 's'} will not be imported:{' '}
-            {data.exceptions
-              .slice(0, 8)
-              .map((row) => `row ${row.row} (${row.reason})`)
-              .join('; ')}
+            {data.exceptions.slice(0, 8).map(unmatchedLabel).join('; ')}
             {data.exceptions_truncated > 0 &&
               ` — and ${fmtCount(data.exceptions_truncated)} more`}
             .
@@ -254,7 +295,7 @@ function Preview({ data, onConfirm, busy }) {
           type="button"
           className="btn btn-primary"
           onClick={onConfirm}
-          disabled={busy}
+          disabled={busy || nothingMatched}
         >
           {busy ? 'Applying…' : 'Confirm and import'}
         </button>
@@ -264,13 +305,14 @@ function Preview({ data, onConfirm, busy }) {
 }
 
 function Done({ data }) {
+  const updated = data.villages_matched ?? matchedRows(data)
   return (
     <section className="card card-pad kpi-card" data-testid="mojri-done">
       <h3 className="kpi-card-title">
         <CheckCircle2 size={16} aria-hidden="true" /> Imported
       </h3>
       <EmptyState
-        title={`${fmtCount(data.matched)} village${data.matched === 1 ? '' : 's'} updated`}
+        title={`${fmtCount(updated)} village${updated === 1 ? '' : 's'} updated`}
         hint={
           `ICT: ${fmtCount(data.authorities.ict.in_tracker)} in tracker, ` +
           `${fmtCount(data.authorities.ict.needs_look)} need a look. ` +

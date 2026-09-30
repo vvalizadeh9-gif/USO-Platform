@@ -69,6 +69,18 @@ describe('WaffleTile', () => {
     expect(screen.getByRole('button', { name: /see who is holding it/ })).toHaveAttribute('aria-expanded', 'true')
   })
 
+  it('adds a breakdown line under the scale when given one', () => {
+    draw({ breakdown: 'In Mojri 3,472 · Needs a look 0 · Missing 403' })
+    expect(screen.getByTestId('waffle-breakdown')).toHaveTextContent(
+      'In Mojri 3,472 · Needs a look 0 · Missing 403'
+    )
+  })
+
+  it('draws no breakdown line when none is given', () => {
+    draw()
+    expect(screen.queryByTestId('waffle-breakdown')).not.toBeInTheDocument()
+  })
+
   it('draws an empty dotted grid and a dash when there is no data yet', () => {
     draw({ empty: true, emptyNote: 'No Mojri import yet', emptyFigure: '3,838 approved in UEP' })
     expect(document.querySelector('.waffle[data-empty]')).not.toBeNull()

@@ -19,6 +19,10 @@ import Waffle from './Waffle'
  * drive-tested", "1 square ≈ 44 villages"); each tile has its own base, so
  * the scale line is what stops two waffles being read as the same size.
  *
+ * `breakdown`, when given, is one more short line under those two: what the
+ * figure is made of (the Mojri tiles say how many are in Mojri, need a look
+ * and are missing). One line, so the page still fits without scrolling.
+ *
  * `selected` draws the Cobalt selected state while whatever the tile opened
  * is open. `empty` is the "no data yet" state: a dotted grid, the figure
  * reads "—", and `emptyNote` / `emptyFigure` explain why.
@@ -30,6 +34,7 @@ export default function WaffleTile({
   figure,
   share,
   scale,
+  breakdown,
   selected = false,
   empty = false,
   emptyNote,
@@ -74,6 +79,11 @@ export default function WaffleTile({
         <>
           <p className="waffle-tile-line" data-testid="waffle-share">{share}</p>
           <p className="waffle-tile-line waffle-tile-scale">{scale}</p>
+          {breakdown && (
+            <p className="waffle-tile-line waffle-tile-scale" data-testid="waffle-breakdown">
+              {breakdown}
+            </p>
+          )}
         </>
       )}
     </div>

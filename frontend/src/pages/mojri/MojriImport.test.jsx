@@ -6,8 +6,11 @@
 // is a person approving numbers they have not seen.
 //
 // The other two are the losses a reconciliation makes quietly: a row whose
-// village_id matched nothing, and a village that was in the tracker and has
-// dropped out of this month's file. Both are named on screen, one by one.
+// site_code / site_type / village_code matched nothing, and a village that was
+// in the tracker and has dropped out of this month's file. Both are named on
+// screen, one by one. And a file that mostly matches nothing is the wrong
+// file: the preview says so in red, and a file matching nothing at all cannot
+// be confirmed.
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
@@ -21,12 +24,26 @@ const MojriImport = (await import('./MojriImport')).default
 const preview = (over = {}) => ({
   filename: 'mojri.xlsx',
   digest: 'abc123',
-  total_rows: 12,
-  matched: 10,
+  total_rows: 20,
+  matched_rows: 18,
+  matched: 18,
+  villages_matched: 19,
   unmatched: 2,
   exceptions: [
-    { row: 4, village_id: 999, reason: 'No village with that id' },
-    { row: 7, village_id: 41, reason: 'Repeated village_id (already on row 6)' },
+    {
+      row: 4,
+      site_code: 'CE0626',
+      site_type: 'Macro',
+      village_code: '999',
+      reason: 'No live UEP village with this site_code, site_type and village_code',
+    },
+    {
+      row: 7,
+      site_code: 'CE0700',
+      site_type: 'Macro',
+      village_code: '',
+      reason: 'village_code is blank',
+    },
   ],
   exceptions_truncated: 0,
   authorities: {
@@ -133,8 +150,23 @@ describe('what the preview will not hide', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Preview' }))
 
     const panel = await screen.findByTestId('mojri-preview')
-    expect(panel).toHaveTextContent('row 4 (No village with that id)')
-    expect(panel).toHaveTextContent('row 7 (Repeated village_id (already on row 6))')
+    expect(panel).toHaveTextContent(
+      'row 4 CE0626 / Macro / 999 (No live UEP village with this site_code, site_type and village_code)'
+    )
+    expect(panel).toHaveTextContent('row 7 CE0700 / Macro / — (village_code is blank)')
+  })
+
+  it('says how many rows matched, at the top', async () => {
+    draw()
+    await choose()
+    await userEvent.click(screen.getByRole('button', { name: 'Preview' }))
+
+    const line = await screen.findByTestId('mojri-match-line')
+    expect(line).toHaveTextContent('Matched 18 of 20 rows')
+    // One key can hold two villages; the village count is said when it differs.
+    expect(line).toHaveTextContent('19 villages')
+    // 90% matched is a normal file: no alarm.
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
 
   it('flags a village that has dropped out of this month’s file', async () => {
@@ -161,6 +193,42 @@ describe('what the preview will not hide', () => {
 })
 
 describe('when something is wrong', () => {
+  it('warns in red when fewer than 90% of the rows matched', async () => {
+    api.post.mockResolvedValue({ data: preview({ matched_rows: 17, matched: 17 }) })
+    draw()
+    await choose()
+    await userEvent.click(screen.getByRole('button', { name: 'Preview' }))
+
+    const alert = await screen.findByRole('alert')
+    expect(alert).toHaveClass('danger')
+    expect(alert).toHaveTextContent('Only 85% of the rows match a UEP village')
+    expect(alert).toHaveTextContent('site_code, site_type and village_code')
+    // Some rows matched, so the person may still decide to confirm.
+    expect(screen.getByRole('button', { name: /Confirm/ })).toBeEnabled()
+  })
+
+  it('cannot confirm a file in which nothing matched', async () => {
+    api.post.mockResolvedValue({
+      data: preview({ matched_rows: 0, matched: 0, villages_matched: 0, unmatched: 20 }),
+    })
+    draw()
+    await choose()
+    await userEvent.click(screen.getByRole('button', { name: 'Preview' }))
+
+    const alert = await screen.findByRole('alert')
+    expect(alert).toHaveTextContent('None of these rows match a UEP village')
+    expect(screen.getByTestId('mojri-match-line')).toHaveTextContent('Matched 0 of 20 rows')
+    expect(screen.getByRole('button', { name: /Confirm/ })).toBeDisabled()
+  })
+
+  it('names the three key columns on the template card', () => {
+    draw()
+    const card = screen.getByRole('heading', { name: /The template/ }).closest('section')
+    for (const column of ['site_code', 'site_type', 'village_code']) {
+      expect(card).toHaveTextContent(column)
+    }
+  })
+
   it('refuses a file that is not an .xlsx without asking the server', async () => {
     draw()
     // applyAccept off, because the input's accept=".xlsx" would otherwise
@@ -175,14 +243,14 @@ describe('when something is wrong', () => {
 
   it('shows the server’s reason rather than a generic failure', async () => {
     api.post.mockRejectedValue({
-      response: { data: { detail: 'That file has no village_id column.' } },
+      response: { data: { detail: 'That file has no village_code column.' } },
     })
     draw()
     await choose()
     await userEvent.click(screen.getByRole('button', { name: 'Preview' }))
 
     expect(
-      await screen.findByText('That file has no village_id column.')
+      await screen.findByText('That file has no village_code column.')
     ).toBeInTheDocument()
     expect(screen.queryByTestId('mojri-preview')).not.toBeInTheDocument()
   })

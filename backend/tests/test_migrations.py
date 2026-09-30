@@ -425,3 +425,36 @@ def test_internal_target_converts_to_monthly_and_round_trips(engine):
 
     _upgrade(engine)
     assert [r[4] for r in _all()] == [1000, 1100, 150, 0, 40]
+
+
+def test_mojri_cleanup_empties_statuses_and_keeps_the_runs(engine):
+    """e9a4c7b2d153: every Mojri status was matched on the primary key and is
+    deleted; the import runs are audit history and stay. The downgrade is a
+    no-op."""
+    _wipe(engine)
+    _upgrade(engine, "c4f9a2e7d318")
+    with engine.begin() as conn:
+        # Only the two Mojri tables matter here; the village rows the statuses
+        # point at are beside the point, so foreign keys are not enforced for
+        # this seed.
+        conn.execute(sa.text("SET LOCAL session_replication_role = replica"))
+        conn.execute(sa.text(
+            "INSERT INTO mojri_import_runs (id, filename) VALUES (1, 'mojri.xlsx')"
+        ))
+        conn.execute(sa.text(
+            "INSERT INTO mojri_tracker_status (village_id, ict_status, cra_status, source_import_id) "
+            "VALUES (101, 'in_tracker', 'not_in_tracker', 1), (102, 'needs_look', 'in_tracker', 1)"
+        ))
+
+    def _counts():
+        with engine.begin() as conn:
+            return tuple(
+                conn.execute(sa.text(f"SELECT count(*) FROM {table}")).scalar()
+                for table in ("mojri_tracker_status", "mojri_import_runs")
+            )
+
+    assert _counts() == (2, 1)
+    _upgrade(engine)
+    assert _counts() == (0, 1)
+    _downgrade(engine, "c4f9a2e7d318")
+    assert _counts() == (0, 1)
