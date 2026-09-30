@@ -11,8 +11,7 @@ import {
   hasData,
   holdersParts,
   mojriStamp,
-  scaleNote,
-  shareParts,
+  shareSentence,
   waffleFilled,
 } from './lifecycleGaps'
 
@@ -50,23 +49,10 @@ describe('the waffle', () => {
     expect(waffleFilled(205, 1391, 20)).toBe(3)
   })
 
-  it('says what one square stands for, rounded', () => {
-    expect(scaleNote(4433)).toBe('1 square ≈ 44 villages')
-    expect(scaleNote(149)).toBe('1 square ≈ 1 village')
-  })
-
-  it('does not pretend a square is a whole village when the base is under 50', () => {
-    expect(scaleNote(40)).toBe('100 squares = 40 villages')
-    expect(scaleNote(0)).toBe('Nothing counted yet')
-  })
-
-  it('splits the share line into the percentage and its base', () => {
-    expect(shareParts('pending_cra', { count: 575, base: 4433 })).toEqual({
-      pct: '13%',
-      of: 'of 4,433',
-      name: 'drive-tested',
-    })
-    expect(shareParts('cra_remained', { count: 610, base: 2770 }).name).toBe('ICT-approved')
+  it('says what a share is a share of, for the accessible name', () => {
+    expect(shareSentence('pending_cra', { count: 575, base: 4433 })).toBe('13% of 4,433 drive-tested')
+    expect(shareSentence('cra_remained', { count: 610, base: 2770 })).toBe('22% of 2,770 ICT-approved')
+    expect(shareSentence('pending_ict', { count: 0, base: 0 })).toBe('— of 0 drive-tested')
     // The Mojri card's base is every approved village, not an on-air count.
     expect(GAPS.ict_missing_in_mojri.baseName).toBe('approved in UEP')
     expect(GAPS.cra_missing_in_mojri.baseName).toBe('approved in UEP')

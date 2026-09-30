@@ -292,9 +292,10 @@ can use them.
   hover; selected is `--accent-wash` with a 2px `--accent` border. The chip and
   a 15/22 label; the 10 × 10 waffle, `round(100 × gap ÷ base)` squares filled
   (100 squares = that tile's own base); the 30/38 figure in `--ict` or
-  `--cra-ink`; "**13%** of 4,433 drive-tested" (13/18); and the scale note
-  "1 square ≈ 44 villages" (12/16 `--text-tertiary`) — tiles have different
-  bases, so the note is what stops two waffles being read as the same size.
+  `--cra-ink`; and only the share, "**13%**" (13/18), or "—" over a base of
+  0 with "Nothing counted yet" under it (12/16 `--text-tertiary`). What the
+  share is a share of ("13% of 4,433 drive-tested") is in the tile's
+  accessible name, not on screen.
   **Two targets, never nested**: the tile is a stretched `<button>` under
   everything (it opens), the figure is its own button above it (it exports);
   everything else lets clicks through.

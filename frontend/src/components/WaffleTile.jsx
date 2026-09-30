@@ -15,11 +15,12 @@ import Waffle from './Waffle'
  *
  * Everything else in the tile lets clicks through to the stretched button.
  *
- * `share` and `scale` are the two lines under the figure ("13% of 4,433
- * drive-tested", "1 square ≈ 44 villages"); each tile has its own base, so
- * the scale line is what stops two waffles being read as the same size.
+ * `share` is the line under the figure: the gap's share of its base, "13%".
+ * `scale`, when given, is one more quiet line under it (e.g. "Nothing
+ * counted yet" for a base of 0). What the share is a share of belongs in
+ * `openLabel`, which screen readers announce.
  *
- * `breakdown`, when given, is one more short line under those two: what the
+ * `breakdown`, when given, is one more short line under those: what the
  * figure is made of (the Mojri tiles say how many are in Mojri, need a look
  * and are missing). One line, so the page still fits without scrolling.
  *
@@ -78,7 +79,7 @@ export default function WaffleTile({
       ) : (
         <>
           <p className="waffle-tile-line" data-testid="waffle-share">{share}</p>
-          <p className="waffle-tile-line waffle-tile-scale">{scale}</p>
+          {scale && <p className="waffle-tile-line waffle-tile-scale">{scale}</p>}
           {breakdown && (
             <p className="waffle-tile-line waffle-tile-scale" data-testid="waffle-breakdown">
               {breakdown}

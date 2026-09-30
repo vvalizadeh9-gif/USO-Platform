@@ -844,10 +844,10 @@ under a `PageBar`; `e2e/lifecycleGaps.spec.js` measures it).
 **Gaps tab.** At rest, six numbers in three cards (Pending approval · One
 approved, other pending · ICT vs CRA vs Mojri tracker), **ICT always left and
 CRA always right**. Each is a `WaffleTile`: a 10 × 10 waffle whose 100 squares
-are that gap's own base, `round(100 × gap ÷ base)` of them filled, with the
-share of the base and what one square stands for ("1 square ≈ 44 villages") —
-the tiles have different bases, so the note is what stops two waffles being
-compared as equal. Authority tokens (`--ict`, `--cra`) colour data only;
+are that gap's own base, `round(100 × gap ÷ base)` of them filled, and under
+the figure only the share of that base ("13%"; "—" over a base of 0). The
+base itself ("13% of 4,433 drive-tested") is spoken in the tile's accessible
+name rather than printed. Authority tokens (`--ict`, `--cra`) colour data only;
 cobalt marks the tile whose drawer is open. Before any Mojri import the two
 Mojri tiles show a dotted grid, "—" and the approved-in-UEP count instead of a
 guessed gap.

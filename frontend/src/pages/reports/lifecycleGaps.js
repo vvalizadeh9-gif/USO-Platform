@@ -39,7 +39,8 @@ export const CARDS = [
  *
  * `tileLabel` is the word beside the authority chip on the tile. `title` is
  * the drawer's heading and the export's description. `baseName` names what
- * the base counts ("of 2,555 CRA-approved"). `approvedGap` is the export key
+ * the base counts ("of 2,555 CRA-approved"), in the drawer and in the tile's
+ * accessible name. `approvedGap` is the export key
  * of a Mojri gap's base -- the "approved in UEP" count shown before any
  * Mojri import. That base is every approved village, drive test done or not
  * (the same villages the Mojri template lists), not the drive-tested count
@@ -127,26 +128,6 @@ export function hasData(key, data) {
 export function waffleFilled(count, base, squares = 100) {
   if (!base || !count) return 0
   return Math.min(squares, Math.max(0, Math.round((count * squares) / base)))
-}
-
-/**
- * What one square stands for. Every tile has its own base, so two waffles
- * with the same number of squares filled can be very different numbers of
- * villages -- the note is what stops them being compared as equal.
- */
-export function scaleNote(base) {
-  if (!base) return 'Nothing counted yet'
-  const per = Math.round(base / 100)
-  if (per < 1) return `100 squares = ${fmt(base)} ${base === 1 ? 'village' : 'villages'}`
-  return `1 square ≈ ${fmt(per)} ${per === 1 ? 'village' : 'villages'}`
-}
-
-/**
- * "13%", "of 4,433" and "drive-tested": the tile's share line, in parts, so
- * the base's name can be kept whole (it would otherwise break at its hyphen).
- */
-export function shareParts(key, gap) {
-  return { pct: wholePct(gap.count, gap.base), of: `of ${fmt(gap.base)}`, name: GAPS[key].baseName }
 }
 
 /* ---------------------------------------------------------------------------
@@ -260,9 +241,18 @@ export function fmt(value) {
   return value == null ? '—' : value.toLocaleString('en-US')
 }
 
-/** "42%": the tiles' rounding. */
+/** "42%": the tiles' rounding; "—" for a base of 0. */
 export function wholePct(part, whole) {
   return whole ? `${Math.round((part * 100) / whole)}%` : '—'
+}
+
+/**
+ * "42% of 4,812 drive-tested": what a tile's share is a share of, in words.
+ * The tile shows only the percentage; this keeps the context for screen
+ * readers.
+ */
+export function shareSentence(key, gap) {
+  return `${wholePct(gap.count, gap.base)} of ${fmt(gap.base)} ${GAPS[key].baseName}`
 }
 
 /** "42.4%": the drawer's rounding. */
