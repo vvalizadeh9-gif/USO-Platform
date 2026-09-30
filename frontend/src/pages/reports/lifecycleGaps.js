@@ -41,8 +41,9 @@ export const CARDS = [
  * the drawer's heading and the export's description. `baseName` names what
  * the base counts ("of 2,555 CRA-approved"). `approvedGap` is the export key
  * of a Mojri gap's base -- the "approved in UEP" count shown before any
- * Mojri import. That base is every approved village, on air or not (the same
- * villages the Mojri template lists), not the on-air count card 2 uses.
+ * Mojri import. That base is every approved village, drive test done or not
+ * (the same villages the Mojri template lists), not the drive-tested count
+ * card 2 uses.
  */
 export const GAPS = {
   pending_ict: {

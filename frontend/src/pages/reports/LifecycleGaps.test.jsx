@@ -50,8 +50,8 @@ const payload = (over = {}) => ({
   lens: 'coordinator',
   key: null,
   lenses: [],
-  // The Mojri bases are every approved village, on air or not: wider than the
-  // on-air approved counts card 2 uses.
+  // The Mojri bases are every approved village, drive test done or not: wider
+  // than the drive-tested approved counts card 2 uses.
   totals: {
     eligible: 4812, ict_approved: 2770, cra_approved: 2555,
     ict_approved_all: 3070, cra_approved_all: 2855,

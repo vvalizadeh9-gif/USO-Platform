@@ -5,9 +5,10 @@ Two views, one module:
 
 * **The overview** (:func:`overview`, ``GET /gaps/overview``) -- the Gaps tab.
   Six figures: pending ICT / CRA and one approved with the other remained,
-  over the eligible (هدف, drive-test-done, on-air) villages; and approved
-  villages missing from Mojri's tracker, over every approved هدف village
-  (on air or not). ICT and CRA are parallel jobs.
+  over the eligible villages -- the Acceptance dashboard's universe exactly
+  (هدف, drive test done, on air or not); and approved villages missing from
+  Mojri's tracker, over every approved هدف village (drive test done or
+  not). ICT and CRA are parallel jobs.
 * **The coverage map** (:func:`coverage_map`, ``GET /gaps/map``) -- ICT
   approval by province and CRA approval by CRA region.
 
@@ -88,7 +89,7 @@ from app.models.mojri import (
 )
 from app.models.reference import Contractor, Province
 from app.models.workitem import Site, Village, WorkItem
-from app.services import kpi, mojri_tracker
+from app.services import acceptance_universe, kpi, mojri_tracker
 
 # ----- Lenses -------------------------------------------------------------
 #
@@ -338,16 +339,20 @@ def _scored(cell: Cell, stretch: Stretch) -> dict:
 # * **ICT and CRA are parallel jobs.** Neither is counted "after" the other, so
 #   a village CRA-approved without ICT is not an anomaly any more: it is simply
 #   "ICT remained". The road's ``cra_approved_without_ict`` note is gone.
-# * **Cards 1 and 2 count on-air villages only.** هدف, drive test done *and*
-#   the site's ``last_stage`` is temporary or permanent launch -- the same
-#   on-air reading the Acceptance dashboard splits on. The map does not apply
-#   the on-air rule.
+# * **Cards 1 and 2 count the Acceptance dashboard's universe exactly.** هدف,
+#   drive test done, not soft-deleted -- :func:`acceptance_universe.dt_done_universe`,
+#   the SQL twin of the rule the dashboard applies, with no on-air condition.
+#   They used to require the site on air too, and a drive-tested site whose
+#   CPM stage was never moved on (E2953, still ``Site Survey``) then made the
+#   two screens disagree about CRA pending (760 vs 758). A parity test now
+#   holds their figures equal.
 # * **The Mojri card counts every approved village.** Every هدف village ICT or
-#   CRA approved, on air or not, drive test done or not
+#   CRA approved, drive test done or not
 #   (:func:`mojri_tracker.comparison_scope`): the same villages the Mojri
 #   template lists, so the figure is read against the rows the PM filled in.
-#   The universe (:func:`_universe`) is therefore on-air villages *plus* every
-#   approved village, and each counter carries its own on-air condition.
+#   The universe (:func:`_universe`) is therefore the drive-tested villages
+#   *plus* every approved village, and each counter carries its own
+#   drive-test condition.
 # * **A non-PM's figures are their own.** Totals, every gap and every base are
 #   computed over the cells that roll up to their own key, so the one row they
 #   see adds up to the totals they see.
@@ -375,12 +380,13 @@ class GapCell:
     rest) are evidence, not arithmetic that holds by construction.
     """
 
-    #: On air (هدف, drive test done, on-air stage): cards 1 and 2's base.
+    #: The Acceptance dashboard's universe (هدف, drive test done): cards 1
+    #: and 2's base.
     eligible: int = 0
-    #: On air and approved.
+    #: Eligible and approved.
     ict_approved: int = 0
     cra_approved: int = 0
-    #: Approved, on air or not: the Mojri card's base.
+    #: Approved, drive test done or not: the Mojri card's base.
     ict_approved_all: int = 0
     cra_approved_all: int = 0
     pending_ict: int = 0
@@ -389,7 +395,7 @@ class GapCell:
     ict_remained: int = 0
     #: ICT approved, CRA not.
     cra_remained: int = 0
-    #: ICT approved (on air or not), and Mojri's ICT tracker has it / does
+    #: ICT approved (drive test done or not), and Mojri's ICT tracker has it / does
     #: not / needs a look.
     ict_in_tracker: int = 0
     ict_missing: int = 0
@@ -429,18 +435,10 @@ GAPS: tuple[Gap, ...] = (
 GAP_KEYS = tuple(g.key for g in GAPS)
 
 
-def _on_air(db: Session) -> ColumnElement[bool]:
-    """Drive test done and the site on air: the condition cards 1 and 2 count
-    over. The هدف and not-deleted rules are the universe's."""
-    return and_(
-        WorkItem.dt_status.in_(kpi.dt_done_values(db) or [""]),
-        WorkItem.last_stage.in_(kpi.onair_values(db) or [""]),
-    )
-
-
 def _universe(db: Session, stmt: Select) -> Select:
     """Put the overview's villages under ``stmt``: every live هدف village that
-    is on air (cards 1-2) or approved by either authority (the Mojri card).
+    is drive-test done (cards 1-2) or approved by either authority (the Mojri
+    card).
 
     **The one definition of the overview's universe.** The grid
     (:func:`_gap_grid`) aggregates over it and the export
@@ -450,7 +448,7 @@ def _universe(db: Session, stmt: Select) -> Select:
     the failure this module is built to rule out.
 
     Each counter narrows it further (:func:`_counter_conditions`): cards 1-2
-    to on air, the Mojri card to approved -- which, within this universe, is
+    to the Acceptance dashboard's universe, the Mojri card to approved -- which, within this universe, is
     exactly :func:`mojri_tracker.comparison_scope`.
 
     The Mojri tracker join is an outer join on a unique ``village_id``, so it
@@ -465,7 +463,10 @@ def _universe(db: Session, stmt: Select) -> Select:
         .outerjoin(MojriTrackerStatus, MojriTrackerStatus.village_id == Village.id)
         .where(
             *mojri_tracker.live_target_village(db),
-            or_(_on_air(db), mojri_tracker.approved_by_either()),
+            or_(
+                acceptance_universe.dt_done_universe(db),
+                mojri_tracker.approved_by_either(),
+            ),
         )
     )
 
@@ -474,17 +475,20 @@ def _counter_conditions(db: Session) -> dict[str, ColumnElement[bool]]:
     """Each :class:`GapCell` counter, as the condition a village meets to be
     counted in it. The grid counts them; the export filters by them.
 
-    Cards 1 and 2 are ANDed with on-air, so widening the universe for the
-    Mojri card leaves their figures exactly as they were. The Mojri counters
-    carry no on-air rule: they compare every approved village.
+    Cards 1 and 2 are ANDed with the Acceptance dashboard's universe
+    (:func:`acceptance_universe.dt_done_universe`), so widening the universe
+    for the Mojri card cannot move them, and they count exactly the villages
+    the dashboard counts. The Mojri counters carry no drive-test rule: they
+    compare every approved village.
 
     "Approved" is the village roll-up (every requested technology approved);
-    anything else -- Pending, Rejected, not filed -- is not approved. No
+    anything else -- Pending, Rejected, not filed -- is not approved, which is
+    the dashboard's "remained" (rejected + pending). No
     tracker row reads as "not in the tracker", and ``needs_look`` counts as
     missing (it is not ``in_tracker``).
     """
     approved = kpi.APPROVED
-    on_air = _on_air(db)
+    dt_done = acceptance_universe.dt_done_universe(db)
     ict_ok = Village.ict_status == approved
     cra_ok = Village.cra_status == approved
     ict_not = Village.ict_status != approved
@@ -492,15 +496,15 @@ def _counter_conditions(db: Session) -> dict[str, ColumnElement[bool]]:
     ict_tracked = func.coalesce(MojriTrackerStatus.ict_status, NOT_IN_TRACKER)
     cra_tracked = func.coalesce(MojriTrackerStatus.cra_status, NOT_IN_TRACKER)
     return {
-        "eligible": on_air,
-        "ict_approved": and_(on_air, ict_ok),
-        "cra_approved": and_(on_air, cra_ok),
+        "eligible": dt_done,
+        "ict_approved": and_(dt_done, ict_ok),
+        "cra_approved": and_(dt_done, cra_ok),
         "ict_approved_all": ict_ok,
         "cra_approved_all": cra_ok,
-        "pending_ict": and_(on_air, ict_not),
-        "pending_cra": and_(on_air, cra_not),
-        "ict_remained": and_(on_air, cra_ok, ict_not),
-        "cra_remained": and_(on_air, ict_ok, cra_not),
+        "pending_ict": and_(dt_done, ict_not),
+        "pending_cra": and_(dt_done, cra_not),
+        "ict_remained": and_(dt_done, cra_ok, ict_not),
+        "cra_remained": and_(dt_done, ict_ok, cra_not),
         "ict_in_tracker": and_(ict_ok, ict_tracked == IN_TRACKER),
         "ict_missing": and_(ict_ok, ict_tracked != IN_TRACKER),
         "ict_needs_look": and_(ict_ok, ict_tracked == NEEDS_LOOK),
@@ -674,7 +678,7 @@ def overview(db: Session, user, lens: str | None) -> dict:
 # :func:`_owned_by`). So the file for a figure has that figure's row count,
 # by construction; the tests check it for every gap and every lens anyway.
 
-#: What may be exported: the six gaps; the on-air approved counts card 2 and
+#: What may be exported: the six gaps; the drive-tested approved counts card 2 and
 #: the map show; and the approved-in-UEP counts the Mojri tiles show (every
 #: approved village, the Mojri card's base). Key -> the GapCell counter it
 #: lists.

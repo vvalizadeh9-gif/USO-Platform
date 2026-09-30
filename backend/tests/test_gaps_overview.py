@@ -8,11 +8,13 @@ holds:
 * every approval combination (both / ICT only / CRA only / neither) crossed
   with every Mojri standing (in_tracker / not_in_tracker / needs_look / no row),
   with Rejected as well as Pending and NotFiled standing for "not approved";
-* the on-air stage in both spellings CPM writes (underscore and space);
+* the on-air stage in both spellings CPM writes (underscore and space), and a
+  drive-tested site that is *not* on air, which cards 1-2 count all the same
+  (they use the Acceptance dashboard's universe: هدف + drive test done);
 * one village of each kind cards 1-2 must exclude: not هدف, drive test not
-  done, not on air, soft-deleted village, soft-deleted work item -- the
-  approved off-air / DT-not-done ones still count on the Mojri card, and one
-  off-air village nobody approved is outside the universe altogether;
+  done, soft-deleted village, soft-deleted work item -- the approved
+  DT-not-done ones still count on the Mojri card, and one DT-not-done village
+  nobody approved is outside the universe altogether;
 * a village code that appears on two work items, which counts twice;
 * a site with no province and a work item with no DT SC contractor.
 
@@ -65,16 +67,19 @@ IN, OUT, LOOK = "in_tracker", "not_in_tracker", "needs_look"
 
 # ----- The figures the seed produces, worked out by hand -------------------
 #
-# Cards 1-2 count on-air villages (WI1-WI4). The Mojri card counts every
-# approved هدف village, on air or not, so it also counts WI5 (Ardabil, not on
-# air: 3 villages, both approved, no tracker row) and WI6 (Zanjan, drive test
+# Cards 1-2 count the Acceptance dashboard's universe: هدف + drive test done,
+# on air or not -- WI1-WI5. WI5 (Ardabil, stage طراحی, not on air, drive
+# test done: 3 villages, both approved, no tracker row) is in it; before
+# cards 1-2 dropped the on-air rule it was not, and eligible read 23, ICT
+# approved 13, CRA approved 12. The Mojri card counts every approved هدف
+# village, drive test done or not, so it also counts WI6 (Zanjan, drive test
 # not done: 2 villages, both approved, no tracker row). WI6's V6-P is neither
-# on air nor approved, so it is in no figure at all.
+# drive-tested nor approved, so it is in no figure at all.
 #
 #                       WI1  WI2  WI3  WI4  WI5  WI6 | total
-#   eligible (on air)    16    3    2    2    0    0 |   23
-#   ICT approved          8    2    2    1    0    0 |   13   (on air)
-#   CRA approved          8    1    2    1    0    0 |   12   (on air)
+#   eligible (DT done)   16    3    2    2    3    0 |   26
+#   ICT approved          8    2    2    1    3    0 |   16   (DT done)
+#   CRA approved          8    1    2    1    3    0 |   15   (DT done)
 #   pending ICT           8    1    0    1    0    0 |   10
 #   pending CRA           8    2    0    1    0    0 |   11
 #   ICT remained          4    0    0    1    0    0 |    5   (CRA yes, ICT no)
@@ -92,18 +97,18 @@ IN, OUT, LOOK = "in_tracker", "not_in_tracker", "needs_look"
 # Before the Mojri card widened to every approved village its two rows read
 # ICT 10 of 13 and CRA 8 of 12: the same figures without WI5 and WI6.
 TOTALS = {
-    "eligible": 23,
-    "ict_approved": 13,
-    "cra_approved": 12,
+    "eligible": 26,
+    "ict_approved": 16,
+    "cra_approved": 15,
     "ict_approved_all": 18,
     "cra_approved_all": 17,
 }
 NEITHER = 5
 GAPS = {
-    "pending_ict": {"count": 10, "base": 23},
-    "pending_cra": {"count": 11, "base": 23},
-    "ict_remained": {"count": 5, "base": 12},
-    "cra_remained": {"count": 6, "base": 13},
+    "pending_ict": {"count": 10, "base": 26},
+    "pending_cra": {"count": 11, "base": 26},
+    "ict_remained": {"count": 5, "base": 15},
+    "cra_remained": {"count": 6, "base": 16},
     "ict_missing_in_mojri": {"count": 15, "base": 18, "in_tracker": 3, "needs_look": 2},
     "cra_missing_in_mojri": {"count": 13, "base": 17, "in_tracker": 4, "needs_look": 2},
 }
@@ -111,13 +116,14 @@ GAPS = {
 CARD_ONE_TWO = ("pending_ict", "pending_cra", "ict_remained", "cra_remained")
 
 # Province rows for Pending ICT: Tehran is WI1 + WI4, Mazandaran WI2, and the
-# province-less site WI3. Ardabil and Zanjan hold only off-air villages: they
-# are in the universe for the Mojri card, so their rows are here, reading zero.
+# province-less site WI3. Ardabil (WI5) is drive-tested but not on air: in the
+# base, nothing pending. Zanjan holds only DT-not-done villages: it is in the
+# universe for the Mojri card, so its row is here, reading zero.
 PENDING_ICT_BY_PROVINCE = {
     "Tehran": (9, 18),
     "Mazandaran": (1, 3),
     "Unknown province": (0, 2),
-    "Ardabil": (0, 0),
+    "Ardabil": (0, 3),
     "Zanjan": (0, 0),
 }
 
@@ -230,15 +236,17 @@ def _seed() -> None:
         village(wi4, "V4-0", N, A, (OUT, IN))
         village(wi4, "V1-00", A, P, (OUT, OUT))
 
-        # Off cards 1-2: not on air, drive test not done, soft-deleted. The
-        # approved villages on WI5 and WI6 still count on the Mojri card.
+        # WI5: drive test done but not on air -- on cards 1-2 all the same,
+        # as on the Acceptance dashboard. Off cards 1-2: drive test not done
+        # (WI6), soft-deleted (WI7); WI6's approved villages still count on
+        # the Mojri card.
         wi5 = work_item(site("S-ARD", ARDABIL), alpha, stage=DESIGN)
         for k in range(3):
             village(wi5, f"V5-{k}", A, A)
         wi6 = work_item(site("S-ZAN", ZANJAN), beta, dt="Ongoing")
         for k in range(2):
             village(wi6, f"V6-{k}", A, A)
-        # Neither on air nor approved: outside the universe altogether.
+        # Neither drive-tested nor approved: outside the universe altogether.
         village(wi6, "V6-P", P, R)
         wi7 = work_item(tehran, alpha, site_type="C", deleted=True)
         village(wi7, "V7-0", A, A)
@@ -381,30 +389,41 @@ def _universe_codes(condition=None) -> list[str]:
         db.close()
 
 
-def test_the_universe_is_on_air_villages_plus_every_approved_village():
+def test_the_universe_is_drive_tested_villages_plus_every_approved_village():
     """Straight at the grid, so no role or scope is in the way."""
     db = SessionLocal()
     try:
         grid = gaps._gap_grid(db)
     finally:
         db.close()
-    # Ardabil (not on air) and Zanjan (drive test not done) are in the
-    # universe for their approved villages, and add nothing to cards 1-2.
+    # Ardabil (drive-tested, not on air) is on cards 1-2; Zanjan (drive test
+    # not done) is in the universe only for its approved villages.
     assert {province for province, _ in grid} == {
         TEHRAN, MAZANDARAN, ARDABIL, ZANJAN, None,
     }
     assert sum(cell.eligible for cell in grid.values()) == TOTALS["eligible"]
     by_province = {province: cell for (province, _), cell in grid.items()}
-    assert (by_province[ARDABIL].eligible, by_province[ARDABIL].ict_approved_all) == (0, 3)
+    assert (by_province[ARDABIL].eligible, by_province[ARDABIL].ict_approved_all) == (3, 3)
     assert (by_province[ZANJAN].eligible, by_province[ZANJAN].cra_approved_all) == (0, 2)
 
     codes = _universe_codes()
-    # 23 on air + 5 approved off air (WI5, WI6).
+    # 26 drive-tested + 2 approved with the drive test not done (WI6).
     assert len(codes) == 28
-    # Not هدف, soft-deleted village, soft-deleted work item, and off air with
-    # no approval: in no figure.
+    # Not هدف, soft-deleted village, soft-deleted work item, and DT not done
+    # with no approval: in no figure.
     for excluded in ("V1-SIDE", "V1-DEL", "V7-0", "V6-P"):
         assert excluded not in codes, excluded
+
+
+def test_drive_tested_villages_off_air_are_on_cards_one_and_two():
+    """The Acceptance dashboard's universe has no on-air condition, so neither
+    have cards 1-2: WI5's villages (stage طراحی) are eligible and approved.
+    Villages whose drive test is not done (WI6) stay off them."""
+    eligible = _universe_codes("eligible")
+    assert {"V5-0", "V5-1", "V5-2"} <= set(eligible)
+    assert {"V5-0", "V5-1", "V5-2"} <= set(_universe_codes("cra_approved"))
+    assert not {"V6-0", "V6-1", "V6-P"} & set(eligible)
+    assert len(eligible) == TOTALS["eligible"]
 
 
 def test_the_mojri_card_counts_every_approved_village_on_air_or_not(client, actors):
@@ -563,7 +582,8 @@ def test_admin_is_refused(client, actors):
 #   RM Allahyar       -> Tehran                   = WI1 + WI4
 #   Coordinator Amir  -> Tehran+Mazandaran+Zanjan = WI1 + WI2 + WI4 + WI6
 #   Contractor Alpha  -> WI1 + WI3 + WI5
-# Eligible and pending ICT are on air only, so WI5/WI6 add nothing to them.
+# Eligible and pending ICT are drive-tested only: WI5 adds 3 eligible (none
+# pending) to Alpha, WI6 adds nothing to Amir.
 # CRA missing in Mojri counts every approved village:
 #   Allahyar  6 (WI1) + 0 (WI4)                     =  6
 #   Amir      6 (WI1) + 0 (WI2) + 0 (WI4) + 2 (WI6) =  8
@@ -573,7 +593,7 @@ def test_admin_is_refused(client, actors):
     [
         ("rm", "rm", "Allahyar", 18, 9, 6),
         ("coordinator", "coordinator", "Amir", 21, 10, 8),
-        ("contractor", "contractor", ALPHA, 18, 8, 11),
+        ("contractor", "contractor", ALPHA, 21, 8, 11),
     ],
 )
 def test_a_non_pm_gets_only_their_own_figures(

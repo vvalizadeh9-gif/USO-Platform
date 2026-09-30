@@ -246,7 +246,9 @@ class AcceptanceAnalytics:
                     continue
                 village_totals[province_id] += 1
                 unit = None
-                if dt_done:  # acceptance only applies once the drive test is done
+                # Acceptance only applies once the drive test is done. The rule
+                # is acceptance_universe's, which Lifecycle Gaps counts by too.
+                if acceptance_universe.in_dt_done_universe(wi, village):
                     unit = _Unit(
                         village.id,
                         site_id,

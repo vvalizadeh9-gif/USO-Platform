@@ -13,17 +13,25 @@ matters: a village has ``.work_item`` (with ``.requested_technology``) and
 ``.acceptances`` (with ``.technology``, ``.ict_status`` and so on), so
 ``acceptance_workflow.authority_verdict`` and friends take them unchanged.
 Nothing here decides anything; the rules stay where they were.
+
+One rule *is* stated here: which villages the dashboard's acceptance figures
+count (:func:`in_dt_done_universe`), with its SQL twin
+(:func:`dt_done_universe`) beside it. Lifecycle Gaps counts over the SQL one,
+so the two screens answer "how many drive-tested villages are still waiting
+for CRA?" from one definition rather than two that are supposed to agree.
 """
 from __future__ import annotations
 
 from datetime import date, datetime
 
-from sqlalchemy import select
+from sqlalchemy import ColumnElement, and_, select
 from sqlalchemy.orm import Session
 
 from app.models.acceptance import Acceptance
 from app.models.reference import User
 from app.models.workitem import Site, Village, WorkItem
+from app.services import cpm_columns as C
+from app.services import kpi
 from app.services.acceptance_workflow import DT_DONE
 from app.services.visibility import apply_work_item_scope
 
@@ -102,6 +110,41 @@ class WorkItemRow:
         self.last_stage = last_stage
         self.requested_technology = requested_technology
         self.villages: list[VillageRow] = []
+
+
+def in_dt_done_universe(work_item: WorkItemRow, village: VillageRow) -> bool:
+    """Is this village in the Acceptance dashboard's universe?
+
+    هدف, drive test Done, not soft-deleted -- and nothing about whether the
+    site is on air. A site whose drive test is done is waiting on the
+    authorities whatever stage CPM last recorded for it.
+
+    Takes the rows :func:`load` returns, which has already dropped deleted
+    work items and villages; the deleted check stays so the rule reads whole.
+    :func:`dt_done_universe` is its SQL twin, and a test holds the two to the
+    same village ids.
+    """
+    return (
+        village.deleted_at is None
+        and work_item.dt_status == DT_DONE
+        and C.is_pure_target(village.target_classification)
+    )
+
+
+def dt_done_universe(db: Session) -> ColumnElement[bool]:
+    """:func:`in_dt_done_universe` as one SQL condition, for pages that count
+    in the database (Lifecycle Gaps' cards 1-2).
+
+    Expects ``Village`` joined to ``WorkItem``. The هدف rule is read as the
+    distinct classification values ``cpm_columns.is_pure_target`` accepts --
+    the same test, applied to values instead of rows.
+    """
+    return and_(
+        Village.deleted_at.is_(None),
+        WorkItem.deleted_at.is_(None),
+        WorkItem.dt_status == DT_DONE,
+        Village.target_classification.in_(kpi.target_values(db) or [""]),
+    )
 
 
 def load(db: Session, user: User) -> list[WorkItemRow]:
