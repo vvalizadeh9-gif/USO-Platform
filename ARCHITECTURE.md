@@ -727,38 +727,55 @@ written.
 
 ### The overview: where villages are stuck (`GET /gaps/overview`)
 
-**The universe is on-air villages plus every approved village.** Neither the
-village nor its work item is soft-deleted and the village is هدف; on top of
-that it is either **on air** — drive test done and the site's `last_stage` is
-`راه_اندازی_موقت` or `راه_اندازی_دائم` (read through `kpi.onair_values`, the
-same on-air reading as the Acceptance dashboard) — or **approved** by ICT or
-CRA. Each counter then narrows it:
+**Cards 1–2 use the Acceptance dashboard's universe exactly** — هدف, drive
+test done, not soft-deleted (`acceptance_universe`), with no on-air condition.
+The same SQL condition serves both screens and a parity test holds their
+figures equal. The Mojri card counts every approved village
+(`mojri_tracker.comparison_scope`). The coverage map keeps its own counting.
 
-* **Cards 1–2** (pending, one approved/other pending) count **on-air villages
-  only**. Every one of their counters is ANDed with on-air, so widening the
-  universe for the Mojri card left their figures exactly as they were. The
-  road did not apply the on-air rule; these cards do, **on purpose**.
+Concretely, the overview's universe (`_universe`) is every live هدف village
+that is either drive-test done or approved by ICT or CRA, and each counter
+narrows it:
+
+* **Cards 1–2** (pending, one approved/other pending) AND every counter with
+  `acceptance_universe.dt_done_universe` — the SQL twin of
+  `acceptance_universe.in_dt_done_universe`, the rule the Acceptance dashboard
+  applies in Python. `tests/test_gaps_dashboard_parity.py` holds eligible,
+  pending ICT/CRA and ICT/CRA approved equal to the dashboard's
+  `total_dt_done_villages`, `total_ict_remained` / `total_cra_remained` and
+  `total_ict_approval` / `total_cra_approval` for PM, regional manager and
+  coordinator (each with their own scoping), and holds the SQL and Python
+  twins to the same village ids.
 * **Card 3** (ICT vs CRA vs Mojri tracker) counts **every approved village**,
-  on air or not, drive test done or not — `mojri_tracker.comparison_scope`,
-  the same set the Mojri template lists (§5d). The PM downloads the template,
-  fills it, uploads it, and the card is read against exactly those rows. Its
-  bases are `ict_approved_all` / `cra_approved_all`; `ict_approved` /
-  `cra_approved` keep their on-air meaning for card 2 and the map panel.
+  drive test done or not — `mojri_tracker.comparison_scope`, the same set the
+  Mojri template lists (§5d). The PM downloads the template, fills it, uploads
+  it, and the card is read against exactly those rows. Its bases are
+  `ict_approved_all` / `cra_approved_all`; `ict_approved` / `cra_approved`
+  keep their drive-tested meaning for card 2 and the map panel.
 
-The coverage map keeps its own counting and is unchanged (below).
+> **Why no on-air condition.** Cards 1–2 used to require the site on air
+> (drive test done *and* `last_stage` a launch stage). Site E2953 has its drive
+> test done but CPM's last stage is still `Site Survey`, so its four villages
+> were on the Acceptance dashboard and not on Lifecycle Gaps: 4,437 vs 4,433
+> villages, and 760 vs 758 CRA pending. Two screens answering the same
+> question must not disagree, so the product owner chose the dashboard's
+> universe for both.
+
+The coverage map is unchanged (below).
 
 **ICT and CRA are parallel, not sequential.** Neither is counted "after" the
 other, so a village CRA-approved without ICT is simply "ICT remained", not an
 anomaly — which is why the road's `cra_approved_without_ict` data-quality note
 is gone. Approved is the village roll-up (`Village.ict_status == Approved`);
-everything else, Pending and Rejected alike, is not approved.
+everything else, Pending and Rejected alike, is not approved — the
+dashboard's "remained" (rejected + pending).
 
 | Figure | Counted | Base |
 |---|---|---|
-| Pending ICT / CRA | on air, not approved by that authority | eligible (on air) |
-| ICT remained | on air, CRA approved, ICT not | CRA approved (on air) |
-| CRA remained | on air, ICT approved, CRA not | ICT approved (on air) |
-| ICT / CRA missing in Mojri | approved (on air or not), and Mojri's status for that authority is not `in_tracker` | approved (on air or not) |
+| Pending ICT / CRA | drive-tested, not approved by that authority | eligible (drive-tested) |
+| ICT remained | drive-tested, CRA approved, ICT not | CRA approved (drive-tested) |
+| CRA remained | drive-tested, ICT approved, CRA not | ICT approved (drive-tested) |
+| ICT / CRA missing in Mojri | approved (drive test done or not), and Mojri's status for that authority is not `in_tracker` | approved (drive test done or not) |
 
 No `mojri_tracker_status` row reads as not in the tracker; `needs_look` counts
 as missing, and its count travels separately (not shown on the page yet). No
@@ -908,7 +925,7 @@ region, province — weakest CRA approval first). **The detail counts like the
 Gaps tab, not like the map colours**: it is a fold of the overview's grid
 (same scope, same cells), because every count in it is an export and an
 export lists the overview's villages. So a province's panel can read a little
-differently from its colour (on-air villages only); the tests hold the panel
+differently from its colour (the colour's CRA base is ICT-approved villages); the tests hold the panel
 to the overview and to its exports, and the map to its own counting.
 `tests/test_gaps_map.py`, `tests/test_gaps_export.py`.
 

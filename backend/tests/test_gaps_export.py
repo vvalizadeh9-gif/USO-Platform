@@ -114,7 +114,8 @@ def test_the_hand_worked_figures_come_out_of_the_files(client, actors):
         assert _count(client, actors["pm"], gap=gap) == figure["count"], gap
     assert _count(client, actors["pm"], gap="ict_approved") == TOTALS["ict_approved"]
     assert _count(client, actors["pm"], gap="cra_approved") == TOTALS["cra_approved"]
-    # The Mojri tiles' "approved in UEP": every approved village, on air or not.
+    # The Mojri tiles' "approved in UEP": every approved village, drive test
+    # done or not.
     assert _count(client, actors["pm"], gap="ict_approved_all") == TOTALS["ict_approved_all"]
     assert _count(client, actors["pm"], gap="cra_approved_all") == TOTALS["cra_approved_all"]
 
