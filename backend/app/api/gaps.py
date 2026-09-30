@@ -55,7 +55,8 @@ def gap_villages_export(
     gap: str = Query(
         ...,
         description="pending_ict | pending_cra | ict_remained | cra_remained | "
-        "ict_missing_in_mojri | cra_missing_in_mojri | ict_approved | cra_approved",
+        "ict_missing_in_mojri | cra_missing_in_mojri | ict_approved | cra_approved | "
+        "ict_approved_all | cra_approved_all",
     ),
     lens: str | None = Query(
         None, description="With key: only the villages that roll up to this owner."
@@ -69,7 +70,7 @@ def gap_villages_export(
 ):
     """The villages behind one figure, as an Excel file.
 
-    The same eligible villages the overview counts, the same gap condition and
+    The same villages the overview counts, the same gap condition and
     the same owner attribution, so the file has exactly the clicked figure's
     row count. Access is the overview's: Admin is a 403, and a non-PM naming
     somebody else's villages is a 403, never an empty file.

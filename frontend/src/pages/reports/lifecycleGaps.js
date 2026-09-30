@@ -29,7 +29,7 @@ export const CARDS = [
   {
     key: 'mojri',
     title: 'ICT vs CRA vs Mojri tracker',
-    description: 'Approved in UEP but missing in Mojri',
+    description: 'Every approved village (CPM + in-app) missing in Mojri',
     gaps: ['ict_missing_in_mojri', 'cra_missing_in_mojri'],
   },
 ]
@@ -41,7 +41,8 @@ export const CARDS = [
  * the drawer's heading and the export's description. `baseName` names what
  * the base counts ("of 2,555 CRA-approved"). `approvedGap` is the export key
  * of a Mojri gap's base -- the "approved in UEP" count shown before any
- * Mojri import.
+ * Mojri import. That base is every approved village, on air or not (the same
+ * villages the Mojri template lists), not the on-air count card 2 uses.
  */
 export const GAPS = {
   pending_ict: {
@@ -62,13 +63,13 @@ export const GAPS = {
   },
   ict_missing_in_mojri: {
     authority: 'ICT', card: 'mojri', tileLabel: 'Not in Mojri', short: 'not in Mojri',
-    title: 'ICT approved, missing in Mojri', baseName: 'ICT-approved',
-    mojri: true, approvedGap: 'ict_approved',
+    title: 'ICT approved, missing in Mojri', baseName: 'approved in UEP',
+    mojri: true, approvedGap: 'ict_approved_all',
   },
   cra_missing_in_mojri: {
     authority: 'CRA', card: 'mojri', tileLabel: 'Not in Mojri', short: 'not in Mojri',
-    title: 'CRA approved, missing in Mojri', baseName: 'CRA-approved',
-    mojri: true, approvedGap: 'cra_approved',
+    title: 'CRA approved, missing in Mojri', baseName: 'approved in UEP',
+    mojri: true, approvedGap: 'cra_approved_all',
   },
 }
 
@@ -76,6 +77,8 @@ export const GAPS = {
 const EXPORT_TITLES = {
   ict_approved: 'ICT approved',
   cra_approved: 'CRA approved',
+  ict_approved_all: 'ICT approved in UEP',
+  cra_approved_all: 'CRA approved in UEP',
 }
 
 /** The drawer's "Group by" options, in the order the design gives them. */

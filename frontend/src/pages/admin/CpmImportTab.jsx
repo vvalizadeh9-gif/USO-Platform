@@ -155,7 +155,8 @@ export default function CpmImportTab() {
         </div>
         <p className="muted" style={{ fontSize: 12.5, marginTop: 8, marginBottom: 14 }}>
           Permanently erase all CPM-imported data (sites, work items, villages,
-          acceptances, letters, import history). Users, roles, provinces, and
+          acceptances, letters, Mojri tracker statuses, import history). Users,
+          roles, provinces, and
           contractors are kept. This cannot be undone.
         </p>
         <button
@@ -240,7 +241,7 @@ function WipeConfirmModal({ onClose, onWiped }) {
 
         <p className="muted" style={{ fontSize: 13, marginTop: 12, lineHeight: 1.6 }}>
           This permanently deletes all sites, work items, villages, acceptances,
-          letters, and import history. <b>Users, roles, provinces, and contractors
+          letters, Mojri tracker statuses, and import history. <b>Users, roles, provinces, and contractors
           are kept.</b> This action cannot be undone.
         </p>
 

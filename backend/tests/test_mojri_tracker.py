@@ -547,31 +547,71 @@ def test_coordinator_reaches_neither(client, actors):
 # ----- What this feature must not touch -----------------------------------
 
 
-def test_acceptance_is_untouched_by_an_import(client, actors):
-    """This is a parallel record of somebody else's paperwork. It reads our
-    acceptance data and never writes it."""
+def _acceptance_snapshot() -> dict:
+    """Everything acceptance owns, row by row: the village roll-ups, the
+    per-technology verdicts and the filed submissions."""
+    from app.models.acceptance import Acceptance
+    from app.models.acceptance_workflow import AcceptanceSubmission
     from app.models.workitem import Village
 
     db = SessionLocal()
-    before = {
-        village.id: (village.ict_status, village.cra_status)
-        for village in db.query(Village).all()
-    }
-    db.close()
+    try:
+        return {
+            "villages": {
+                village.id: (village.ict_status, village.cra_status)
+                for village in db.query(Village).all()
+            },
+            "acceptances": {
+                row.id: (row.village_id, row.technology, row.ict_status, row.cra_status,
+                         row.ict_date, row.cra_date)
+                for row in db.query(Acceptance).all()
+            },
+            "submissions": {
+                row.id: (row.village_id, row.authority, row.round_no, row.review_status)
+                for row in db.query(AcceptanceSubmission).all()
+            },
+        }
+    finally:
+        db.close()
+
+
+def test_acceptance_is_untouched_by_an_import(client, actors):
+    """This is a parallel record of somebody else's paperwork. It reads our
+    acceptance data and never writes it: not the village roll-ups, not the
+    per-technology verdicts, not a submission."""
+    from datetime import datetime, timezone
+
+    from app.models.acceptance import Acceptance
+    from app.models.acceptance_workflow import AcceptanceSubmission
+
+    db = SessionLocal()
+    try:
+        # Acceptance history for the village the file below marks, so there
+        # is something for a stray write to change.
+        db.add(Acceptance(
+            village_id=IDS["cra_only"], technology="2G",
+            ict_status="Pending", cra_status="Approved",
+        ))
+        db.add(AcceptanceSubmission(
+            village_id=IDS["cra_only"], authority="ICT", round_no=1,
+            letter_number="L-MOJRI-1", source="Contractor",
+            review_status="Pending", submitted_at=datetime.now(timezone.utc),
+        ))
+        db.commit()
+    finally:
+        db.close()
+
+    before = _acceptance_snapshot()
+    assert before["acceptances"] and before["submissions"]
 
     content = _fill(
         [(IDS["cra_only"], {"cra_2g": "yes", "ict_2g": "yes"})]
     )
     payload = _preview(client, actors["pm"], content)
-    _upload(client, actors["pm"], "import/commit", content, digest=payload["digest"])
+    response = _upload(client, actors["pm"], "import/commit", content, digest=payload["digest"])
+    assert response.status_code == 200, response.text
 
-    db = SessionLocal()
-    after = {
-        village.id: (village.ict_status, village.cra_status)
-        for village in db.query(Village).all()
-    }
-    db.close()
-    assert after == before
+    assert _acceptance_snapshot() == before
 
 
 def test_mojri_is_not_a_third_acceptance_authority():

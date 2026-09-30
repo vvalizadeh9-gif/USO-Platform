@@ -9,8 +9,10 @@ holds:
   with every Mojri standing (in_tracker / not_in_tracker / needs_look / no row),
   with Rejected as well as Pending and NotFiled standing for "not approved";
 * the on-air stage in both spellings CPM writes (underscore and space);
-* one village of each kind the universe must exclude: not هدف, drive test not
-  done, not on air, soft-deleted village, soft-deleted work item;
+* one village of each kind cards 1-2 must exclude: not هدف, drive test not
+  done, not on air, soft-deleted village, soft-deleted work item -- the
+  approved off-air / DT-not-done ones still count on the Mojri card, and one
+  off-air village nobody approved is outside the universe altogether;
 * a village code that appears on two work items, which counts twice;
 * a site with no province and a work item with no DT SC contractor.
 
@@ -63,35 +65,61 @@ IN, OUT, LOOK = "in_tracker", "not_in_tracker", "needs_look"
 
 # ----- The figures the seed produces, worked out by hand -------------------
 #
-#                       WI1  WI2  WI3  WI4 | total
-#   eligible             16    3    2    2 |   23
-#   ICT approved          8    2    2    1 |   13
-#   CRA approved          8    1    2    1 |   12
-#   pending ICT           8    1    0    1 |   10
-#   pending CRA           8    2    0    1 |   11
-#   ICT remained          4    0    0    1 |    5   (CRA yes, ICT no)
-#   CRA remained          4    1    0    1 |    6   (ICT yes, CRA no)
-#   neither               4    1    0    0 |    5
-#   ICT in tracker        2    1    0    0 |    3
-#   ICT missing           6    1    2    1 |   10
-#   ICT needs look        2    0    0    0 |    2
-#   CRA in tracker        2    1    0    1 |    4
-#   CRA missing           6    0    2    0 |    8
-#   CRA needs look        2    0    0    0 |    2
-TOTALS = {"eligible": 23, "ict_approved": 13, "cra_approved": 12}
+# Cards 1-2 count on-air villages (WI1-WI4). The Mojri card counts every
+# approved هدف village, on air or not, so it also counts WI5 (Ardabil, not on
+# air: 3 villages, both approved, no tracker row) and WI6 (Zanjan, drive test
+# not done: 2 villages, both approved, no tracker row). WI6's V6-P is neither
+# on air nor approved, so it is in no figure at all.
+#
+#                       WI1  WI2  WI3  WI4  WI5  WI6 | total
+#   eligible (on air)    16    3    2    2    0    0 |   23
+#   ICT approved          8    2    2    1    0    0 |   13   (on air)
+#   CRA approved          8    1    2    1    0    0 |   12   (on air)
+#   pending ICT           8    1    0    1    0    0 |   10
+#   pending CRA           8    2    0    1    0    0 |   11
+#   ICT remained          4    0    0    1    0    0 |    5   (CRA yes, ICT no)
+#   CRA remained          4    1    0    1    0    0 |    6   (ICT yes, CRA no)
+#   neither               4    1    0    0    0    0 |    5
+#   ICT approved (all)    8    2    2    1    3    2 |   18   Mojri card base
+#   CRA approved (all)    8    1    2    1    3    2 |   17   Mojri card base
+#   ICT in tracker        2    1    0    0    0    0 |    3
+#   ICT missing           6    1    2    1    3    2 |   15   (= 18 - 3)
+#   ICT needs look        2    0    0    0    0    0 |    2
+#   CRA in tracker        2    1    0    1    0    0 |    4
+#   CRA missing           6    0    2    0    3    2 |   13   (= 17 - 4)
+#   CRA needs look        2    0    0    0    0    0 |    2
+#
+# Before the Mojri card widened to every approved village its two rows read
+# ICT 10 of 13 and CRA 8 of 12: the same figures without WI5 and WI6.
+TOTALS = {
+    "eligible": 23,
+    "ict_approved": 13,
+    "cra_approved": 12,
+    "ict_approved_all": 18,
+    "cra_approved_all": 17,
+}
 NEITHER = 5
 GAPS = {
     "pending_ict": {"count": 10, "base": 23},
     "pending_cra": {"count": 11, "base": 23},
     "ict_remained": {"count": 5, "base": 12},
     "cra_remained": {"count": 6, "base": 13},
-    "ict_missing_in_mojri": {"count": 10, "base": 13, "in_tracker": 3, "needs_look": 2},
-    "cra_missing_in_mojri": {"count": 8, "base": 12, "in_tracker": 4, "needs_look": 2},
+    "ict_missing_in_mojri": {"count": 15, "base": 18, "in_tracker": 3, "needs_look": 2},
+    "cra_missing_in_mojri": {"count": 13, "base": 17, "in_tracker": 4, "needs_look": 2},
 }
+#: Cards 1-2's gaps: the figures that must not move when the Mojri card widens.
+CARD_ONE_TWO = ("pending_ict", "pending_cra", "ict_remained", "cra_remained")
 
 # Province rows for Pending ICT: Tehran is WI1 + WI4, Mazandaran WI2, and the
-# province-less site WI3. Ardabil and Zanjan hold only excluded villages.
-PENDING_ICT_BY_PROVINCE = {"Tehran": (9, 18), "Mazandaran": (1, 3), "Unknown province": (0, 2)}
+# province-less site WI3. Ardabil and Zanjan hold only off-air villages: they
+# are in the universe for the Mojri card, so their rows are here, reading zero.
+PENDING_ICT_BY_PROVINCE = {
+    "Tehran": (9, 18),
+    "Mazandaran": (1, 3),
+    "Unknown province": (0, 2),
+    "Ardabil": (0, 0),
+    "Zanjan": (0, 0),
+}
 
 
 @pytest.fixture(scope="module")
@@ -202,13 +230,16 @@ def _seed() -> None:
         village(wi4, "V4-0", N, A, (OUT, IN))
         village(wi4, "V1-00", A, P, (OUT, OUT))
 
-        # Excluded work items: not on air, drive test not done, soft-deleted.
+        # Off cards 1-2: not on air, drive test not done, soft-deleted. The
+        # approved villages on WI5 and WI6 still count on the Mojri card.
         wi5 = work_item(site("S-ARD", ARDABIL), alpha, stage=DESIGN)
         for k in range(3):
             village(wi5, f"V5-{k}", A, A)
         wi6 = work_item(site("S-ZAN", ZANJAN), beta, dt="Ongoing")
         for k in range(2):
             village(wi6, f"V6-{k}", A, A)
+        # Neither on air nor approved: outside the universe altogether.
+        village(wi6, "V6-P", P, R)
         wi7 = work_item(tehran, alpha, site_type="C", deleted=True)
         village(wi7, "V7-0", A, A)
 
@@ -319,10 +350,9 @@ def test_the_identities_hold(client, actors):
     assert g["pending_cra"]["count"] == g["cra_remained"]["count"] + NEITHER
     assert totals["ict_approved"] + g["pending_ict"]["count"] == eligible
     assert totals["cra_approved"] + g["pending_cra"]["count"] == eligible
-    for key, approved in (
-        ("ict_missing_in_mojri", totals["ict_approved"]),
-        ("cra_missing_in_mojri", totals["cra_approved"]),
-    ):
+    for authority in ("ict", "cra"):
+        key = f"{authority}_missing_in_mojri"
+        approved = totals[f"{authority}_approved_all"]
         assert g[key]["count"] + g[key]["in_tracker"] == approved, key
 
 
@@ -334,16 +364,116 @@ def test_rejected_counts_as_not_approved(client, actors):
     assert payload["gaps"]["pending_cra"]["count"] == 8
 
 
-def test_the_universe_excludes_off_air_undone_non_target_and_deleted():
+def _universe_codes(condition=None) -> list[str]:
+    """The village codes the overview's universe selects, optionally narrowed
+    by one counter's condition -- straight at the query, no role in the way."""
+    from sqlalchemy import select
+
+    from app.models.workitem import Village
+
+    db = SessionLocal()
+    try:
+        stmt = gaps._universe(db, select(Village.village_code))
+        if condition is not None:
+            stmt = stmt.where(gaps._counter_conditions(db)[condition])
+        return sorted(db.execute(stmt).scalars().all())
+    finally:
+        db.close()
+
+
+def test_the_universe_is_on_air_villages_plus_every_approved_village():
     """Straight at the grid, so no role or scope is in the way."""
     db = SessionLocal()
     try:
         grid = gaps._gap_grid(db)
     finally:
         db.close()
-    # Ardabil (not on air) and Zanjan (drive test not done) have no cell.
-    assert {province for province, _ in grid} == {TEHRAN, MAZANDARAN, None}
+    # Ardabil (not on air) and Zanjan (drive test not done) are in the
+    # universe for their approved villages, and add nothing to cards 1-2.
+    assert {province for province, _ in grid} == {
+        TEHRAN, MAZANDARAN, ARDABIL, ZANJAN, None,
+    }
     assert sum(cell.eligible for cell in grid.values()) == TOTALS["eligible"]
+    by_province = {province: cell for (province, _), cell in grid.items()}
+    assert (by_province[ARDABIL].eligible, by_province[ARDABIL].ict_approved_all) == (0, 3)
+    assert (by_province[ZANJAN].eligible, by_province[ZANJAN].cra_approved_all) == (0, 2)
+
+    codes = _universe_codes()
+    # 23 on air + 5 approved off air (WI5, WI6).
+    assert len(codes) == 28
+    # Not هدف, soft-deleted village, soft-deleted work item, and off air with
+    # no approval: in no figure.
+    for excluded in ("V1-SIDE", "V1-DEL", "V7-0", "V6-P"):
+        assert excluded not in codes, excluded
+
+
+def test_the_mojri_card_counts_every_approved_village_on_air_or_not(client, actors):
+    """Counted straight from the table, not through any gaps helper: every
+    live هدف village the authority approved is the Mojri card's base."""
+    from app.models.workitem import Village, WorkItem
+
+    db = SessionLocal()
+    try:
+        def approved(column) -> int:
+            return (
+                db.query(Village)
+                .join(WorkItem, Village.work_item_id == WorkItem.id)
+                .filter(
+                    Village.deleted_at.is_(None),
+                    WorkItem.deleted_at.is_(None),
+                    Village.target_classification == "هدف",
+                    column == A,
+                )
+                .count()
+            )
+
+        ict_all, cra_all = approved(Village.ict_status), approved(Village.cra_status)
+    finally:
+        db.close()
+
+    payload = _overview(client, actors["pm"])
+    totals, g = payload["totals"], payload["gaps"]
+    assert g["ict_missing_in_mojri"]["base"] == ict_all == totals["ict_approved_all"]
+    assert g["cra_missing_in_mojri"]["base"] == cra_all == totals["cra_approved_all"]
+    # The seed has approved villages off air, so the widening is visible.
+    assert totals["ict_approved_all"] > totals["ict_approved"]
+    assert totals["cra_approved_all"] > totals["cra_approved"]
+
+
+def test_the_template_lists_exactly_the_villages_the_mojri_card_compares():
+    """The Mojri template and the Mojri card share one definition
+    (``mojri_tracker.comparison_scope``); this holds them equal."""
+    from sqlalchemy import or_, select
+
+    from app.models.workitem import Village
+    from app.services import mojri_tracker
+
+    db = SessionLocal()
+    try:
+        template = {village.id for village in mojri_tracker.eligible_villages(db)}
+        conditions = gaps._counter_conditions(db)
+        card = set(
+            db.execute(
+                gaps._universe(db, select(Village.id)).where(
+                    or_(conditions["ict_approved_all"], conditions["cra_approved_all"])
+                )
+            ).scalars().all()
+        )
+    finally:
+        db.close()
+    assert template == card
+    assert template, "the seed should give the template rows"
+
+
+def test_cards_one_and_two_are_unchanged_by_the_wider_universe(client, actors):
+    """Widening the universe for the Mojri card must not move cards 1-2: the
+    figures below are the hand-worked ones from before the change."""
+    payload = _overview(client, actors["pm"])
+    assert payload["totals"]["eligible"] == TOTALS["eligible"]
+    assert payload["totals"]["ict_approved"] == TOTALS["ict_approved"]
+    assert payload["totals"]["cra_approved"] == TOTALS["cra_approved"]
+    for key in CARD_ONE_TWO:
+        assert payload["gaps"][key] == GAPS[key], key
 
 
 def test_a_repeated_village_code_counts_twice(client, actors):
@@ -430,15 +560,20 @@ def test_admin_is_refused(client, actors):
 
 
 # Own figures, worked out by hand:
-#   RM Allahyar       -> Tehran            = WI1 + WI4
-#   Coordinator Amir  -> Tehran+Mazandaran = WI1 + WI2 + WI4
-#   Contractor Alpha  -> WI1 + WI3
+#   RM Allahyar       -> Tehran                   = WI1 + WI4
+#   Coordinator Amir  -> Tehran+Mazandaran+Zanjan = WI1 + WI2 + WI4 + WI6
+#   Contractor Alpha  -> WI1 + WI3 + WI5
+# Eligible and pending ICT are on air only, so WI5/WI6 add nothing to them.
+# CRA missing in Mojri counts every approved village:
+#   Allahyar  6 (WI1) + 0 (WI4)                     =  6
+#   Amir      6 (WI1) + 0 (WI2) + 0 (WI4) + 2 (WI6) =  8
+#   Alpha     6 (WI1) + 2 (WI3) + 3 (WI5)           = 11
 @pytest.mark.parametrize(
     "actor, lens, own, eligible, pending_ict, cra_missing",
     [
         ("rm", "rm", "Allahyar", 18, 9, 6),
-        ("coordinator", "coordinator", "Amir", 21, 10, 6),
-        ("contractor", "contractor", ALPHA, 18, 8, 8),
+        ("coordinator", "coordinator", "Amir", 21, 10, 8),
+        ("contractor", "contractor", ALPHA, 18, 8, 11),
     ],
 )
 def test_a_non_pm_gets_only_their_own_figures(

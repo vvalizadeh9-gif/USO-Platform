@@ -50,22 +50,27 @@ const payload = (over = {}) => ({
   lens: 'coordinator',
   key: null,
   lenses: [],
-  totals: { eligible: 4812, ict_approved: 2770, cra_approved: 2555 },
+  // The Mojri bases are every approved village, on air or not: wider than the
+  // on-air approved counts card 2 uses.
+  totals: {
+    eligible: 4812, ict_approved: 2770, cra_approved: 2555,
+    ict_approved_all: 3070, cra_approved_all: 2855,
+  },
   gaps: {
     pending_ict: { count: 2042, base: 4812 },
     pending_cra: { count: 2257, base: 4812 },
     ict_remained: { count: 395, base: 2555 },
     cra_remained: { count: 0, base: 2770 },
-    ict_missing_in_mojri: { count: 980, base: 2770, in_tracker: 1790, needs_look: 40 },
-    cra_missing_in_mojri: { count: 760, base: 2555, in_tracker: 1795, needs_look: 20 },
+    ict_missing_in_mojri: { count: 1280, base: 3070, in_tracker: 1790, needs_look: 40 },
+    cra_missing_in_mojri: { count: 1060, base: 2855, in_tracker: 1795, needs_look: 20 },
   },
   rows: {
     pending_ict: PENDING_ICT_ROWS,
     pending_cra: [row('V. Hashemi', 2257, 4812)],
     ict_remained: [row('V. Hashemi', 395, 2555)],
     cra_remained: [row('V. Hashemi', 0, 2770)],
-    ict_missing_in_mojri: [row('V. Hashemi', 980, 2770)],
-    cra_missing_in_mojri: [row('V. Hashemi', 760, 2555)],
+    ict_missing_in_mojri: [row('V. Hashemi', 1280, 3070)],
+    cra_missing_in_mojri: [row('V. Hashemi', 1060, 2855)],
   },
   data_quality: { villages_without_province: 0, unmapped_provinces: [] },
   ...over,
@@ -113,8 +118,8 @@ describe('the first screen', () => {
       'CRA Pending: 2,257 villages — see who is holding it',
       'ICT Pending: 395 villages — see who is holding it',
       'CRA Pending: 0 villages — see who is holding it',
-      'ICT Not in Mojri: 980 villages — see who is holding it',
-      'CRA Not in Mojri: 760 villages — see who is holding it',
+      'ICT Not in Mojri: 1,280 villages — see who is holding it',
+      'CRA Not in Mojri: 1,060 villages — see who is holding it',
     ])
     for (const title of ['Pending approval', 'One approved, other pending', 'ICT vs CRA vs Mojri tracker']) {
       const card = screen.getByRole('heading', { name: title }).closest('section')
@@ -131,9 +136,12 @@ describe('the first screen', () => {
     expect(shares[0]).toBe('42% of 4,812 drive-tested')
     expect(shares[2]).toBe('15% of 2,555 CRA-approved')
     expect(screen.getAllByText('1 square ≈ 48 villages')).toHaveLength(2)
-    // Each tile has its own base: 2,555 and 2,770 each appear twice.
-    expect(screen.getAllByText('1 square ≈ 26 villages')).toHaveLength(2)
-    expect(screen.getAllByText('1 square ≈ 28 villages')).toHaveLength(2)
+    // Each tile has its own base: 2,555, 2,770, 3,070 and 2,855 once each.
+    expect(screen.getAllByText('1 square ≈ 26 villages')).toHaveLength(1)
+    expect(screen.getAllByText('1 square ≈ 28 villages')).toHaveLength(1)
+    expect(screen.getAllByText('1 square ≈ 31 villages')).toHaveLength(1)
+    expect(screen.getAllByText('1 square ≈ 29 villages')).toHaveLength(1)
+    expect(shares[4]).toBe('42% of 3,070 approved in UEP')
   })
 
   it('fills round(100 × gap ÷ base) squares of each waffle', async () => {
@@ -165,7 +173,7 @@ describe('the first screen', () => {
     expect(tile.querySelector('.waffle[data-empty]')).not.toBeNull()
     expect(within(tile).getByText('—')).toBeInTheDocument()
     expect(within(tile).getByText('No Mojri import yet')).toBeInTheDocument()
-    expect(tile).toHaveTextContent('2,770 approved in UEP')
+    expect(tile).toHaveTextContent('3,070 approved in UEP')
   })
 })
 
@@ -314,9 +322,9 @@ describe('export behind every number', () => {
     draw()
     await tiles()
     await userEvent.click(
-      screen.getByRole('button', { name: 'Export 2,770 villages (ICT approved) to Excel' })
+      screen.getByRole('button', { name: 'Export 3,070 villages (ICT approved in UEP) to Excel' })
     )
-    expect(exported()[0][1].params).toEqual({ gap: 'ict_approved' })
+    expect(exported()[0][1].params).toEqual({ gap: 'ict_approved_all' })
   })
 
   it('exports the drawer hero and each drawer row by its owner', async () => {

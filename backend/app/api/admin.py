@@ -145,8 +145,8 @@ def wipe_cpm_import_data(
     user: User = Depends(require_roles(ADMIN)),
 ):
     """Erase all CPM-imported data (sites, work items, villages, acceptances,
-    letters, import history, monthly snapshots). Users, roles, contractors,
-    provinces, and problem categories are preserved.
+    letters, Mojri tracker statuses, import history, monthly snapshots).
+    Users, roles, contractors, provinces, and problem categories are preserved.
 
     Requires the exact confirmation phrase to guard against accidental calls,
     including direct API calls that bypass the UI's confirmation dialog.

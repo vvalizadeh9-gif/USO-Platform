@@ -74,7 +74,7 @@ from fastapi import HTTPException
 from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Font, PatternFill
 from openpyxl.utils import get_column_letter
-from sqlalchemy import func, select
+from sqlalchemy import ColumnElement, func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.core.jalali import current_shamsi_period
@@ -87,6 +87,7 @@ from app.models.mojri import (
 )
 from app.models.workitem import Site, Village, WorkItem
 from app.services import acceptance_tokens as tokens
+from app.services import kpi
 from app.services.tech_parser import parse_technologies
 
 #: The two authorities whose tracker registration is recorded. Deliberately the
@@ -129,23 +130,56 @@ def template_filename(period: tuple[int, int] | None = None) -> str:
     return f"mojri_template_{year}_{month:02d}.xlsx"
 
 
-def eligible_villages(db: Session) -> list[Village]:
-    """Villages worth tracking: the ones **we** have already approved.
+def approved_by_either() -> ColumnElement[bool]:
+    """At least one authority approved the village (the village roll-up: every
+    requested technology approved). A village neither has accepted cannot be
+    behind in somebody else's tracker yet."""
+    return or_(
+        Village.ict_status == APPROVED_VERDICT,
+        Village.cra_status == APPROVED_VERDICT,
+    )
 
-    At least one authority approved. A village we have not accepted cannot be
-    behind in somebody else's tracker yet, and putting it in the template would
-    ask the team to fill in a row that means nothing.
+
+def live_target_village(db: Session) -> tuple[ColumnElement[bool], ...]:
+    """A village the programme still counts: neither it nor its work item
+    deleted, and a pure هدف village -- the same target rule as every report.
+
+    Expects ``Village`` joined to ``WorkItem``.
+    """
+    return (
+        Village.deleted_at.is_(None),
+        WorkItem.deleted_at.is_(None),
+        Village.target_classification.in_(kpi.target_values(db) or [""]),
+    )
+
+
+def comparison_scope(db: Session) -> tuple[ColumnElement[bool], ...]:
+    """**The one definition** of the villages compared with Mojri's tracker.
+
+    Every live هدف village at least one authority approved -- on air or not,
+    drive-test done or not. The template lists exactly these, and the Lifecycle
+    Gaps Mojri card counts exactly these, so the rows a PM fills in and the
+    figure they are later read back into cannot disagree. A test holds the two
+    equal.
+
+    Expects ``Village`` joined to ``WorkItem``.
+    """
+    return (*live_target_village(db), approved_by_either())
+
+
+def eligible_villages(db: Session) -> list[Village]:
+    """Villages worth tracking: the ones **we** have already approved, as
+    :func:`comparison_scope` defines them.
+
+    A village we have not accepted cannot be behind in somebody else's tracker
+    yet, and putting it in the template would ask the team to fill in a row
+    that means nothing.
     """
     stmt = (
         select(Village)
         .join(WorkItem, Village.work_item_id == WorkItem.id)
         .join(Site, WorkItem.site_id == Site.id)
-        .where(
-            Village.deleted_at.is_(None),
-            WorkItem.deleted_at.is_(None),
-            (Village.ict_status == APPROVED_VERDICT)
-            | (Village.cra_status == APPROVED_VERDICT),
-        )
+        .where(*comparison_scope(db))
         .options(selectinload(Village.work_item).selectinload(WorkItem.site))
         .order_by(Village.id)
     )
