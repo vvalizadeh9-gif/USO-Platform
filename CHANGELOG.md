@@ -1,5 +1,24 @@
 # Changelog
 
+## Erase CPM data after a Mojri import; the Mojri card compares every approved village
+
+**Admin → Erase all CPM data** failed ("Erase failed") on any database that had
+ever had a Mojri tracker import: `mojri_tracker_status` references `villages`
+and was never deleted, so the village delete failed its foreign-key check and
+the whole wipe rolled back. The wipe now also erases Mojri tracker statuses and
+import runs (and drive-test evidence, explicitly). Every wiped table is listed
+once in `data_wipe.WIPE_ORDER`, and a test walks the schema so a new table
+that references CPM data can no longer be forgotten.
+
+**Lifecycle Gaps → ICT vs CRA vs Mojri tracker** now compares **every** village
+ICT or CRA approved (CPM and in-app, on air or not, drive test done or not)
+with Mojri's tracker. It used to count on-air, drive-tested villages only,
+while the Mojri template lists every approved village, so approved villages
+off air were in the uploaded file but never counted on the page. The template
+and the card now share one definition, and a test holds them equal. The
+template now lists هدف villages only, like every other report. Cards 1 and 2
+are unchanged. The Mojri import still never writes acceptance data.
+
 ## Acceptance Dashboard redesign; ICT and CRA plan streams
 
 **Acceptance → Dashboard** is rebuilt around one question per card: *am I on

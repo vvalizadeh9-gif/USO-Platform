@@ -67,6 +67,9 @@ describe('the waffle', () => {
       name: 'drive-tested',
     })
     expect(shareParts('cra_remained', { count: 610, base: 2770 }).name).toBe('ICT-approved')
+    // The Mojri card's base is every approved village, not an on-air count.
+    expect(GAPS.ict_missing_in_mojri.baseName).toBe('approved in UEP')
+    expect(GAPS.cra_missing_in_mojri.baseName).toBe('approved in UEP')
   })
 })
 
@@ -129,6 +132,8 @@ describe('export descriptions', () => {
     expect(gapShortName('pending_cra')).toBe('CRA pending')
     expect(gapShortName('ict_missing_in_mojri')).toBe('ICT not in Mojri')
     expect(gapShortName('ict_approved')).toBe('ICT approved')
+    expect(gapShortName('ict_approved_all')).toBe('ICT approved in UEP')
+    expect(gapShortName('cra_approved_all')).toBe('CRA approved in UEP')
     expect(
       exportDescription({ gap: 'pending_cra', lens: 'coordinator', keyValue: 'V. Hashemi' })
     ).toBe('CRA pending · Coordinator V. Hashemi')
