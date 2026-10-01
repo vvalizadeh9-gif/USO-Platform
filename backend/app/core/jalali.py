@@ -10,6 +10,8 @@ from zoneinfo import ZoneInfo
 
 import jdatetime
 
+from app.core.digits import to_latin
+
 #: The programme's clock. Day boundaries that carry a rule -- "revisions close
 #: at the end of day 15" -- are Tehran's, whatever timezone the server runs in.
 TEHRAN = ZoneInfo("Asia/Tehran")
@@ -121,7 +123,7 @@ def parse_shamsi(text: str | None) -> date | None:
     """
     if text is None:
         return None
-    cleaned = str(text).strip().translate(_DIGIT_MAP)
+    cleaned = to_latin(str(text)).strip()
     if not cleaned:
         return None
     parts = cleaned.replace("-", "/").replace(".", "/").split("/")
@@ -133,9 +135,3 @@ def parse_shamsi(text: str | None) -> date | None:
         raise ValueError("Date must be in the form 1404/05/29") from None
     return from_shamsi_date(year, month, day)
 
-
-# Persian (\u06f0..) and Arabic-Indic (\u0660..) digits mapped to ASCII.
-_DIGIT_MAP = {
-    **{0x06F0 + i: ord(str(i)) for i in range(10)},
-    **{0x0660 + i: ord(str(i)) for i in range(10)},
-}

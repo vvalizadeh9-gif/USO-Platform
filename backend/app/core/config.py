@@ -104,6 +104,15 @@ class Settings(BaseSettings):
             return self.captcha_secret_key
         return hashlib.sha256(f"uep-captcha:{self.jwt_secret_key}".encode()).hexdigest()
 
+    @property
+    def scan_key(self) -> str:
+        """The signing key for acceptance scan tokens (``services/scan_tokens``).
+
+        Derived one-way from the JWT secret for the same reason as
+        :attr:`captcha_key`: one key, one job, nothing extra to configure.
+        """
+        return hashlib.sha256(f"uep-scan:{self.jwt_secret_key}".encode()).hexdigest()
+
     @model_validator(mode="after")
     def _reject_insecure_config(self) -> "Settings":
         """Refuse to start with configuration that is not safe to expose.

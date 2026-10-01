@@ -344,7 +344,7 @@ def test_awaiting_counters_are_province_scoped(client):
     assert pm is not None, "a PM must be told what is sitting with ICT"
     assert pm["count"] == 2                 # both provinces
     assert pm["oldest_days"] == 40          # the older of the two
-    assert pm["url"] == "/my-work?awaiting=ICT"
+    assert pm["url"] == "/my-work?tab=filled&authority=ICT"
 
     coord = _counter(client, _headers(client, "coord"), "awaiting_ict")
     assert coord is not None

@@ -7,6 +7,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.core.user_status import USER_STATUSES
+from app.schemas.my_work import CpmFacts, SideDetailOut
 # The PIP bounds are defined once, in the service that enforces them, and
 # imported here so the request schema and the rule cannot disagree.
 from app.services.monthly_plan import (
@@ -703,6 +704,12 @@ class BulkSubmissionResult(BaseModel):
 
 
 class AcceptanceVillageDetail(BaseModel):
+    # My Work's fields (schemas/my_work.py).
+    village_id: int
+    facts: CpmFacts
+    contractor_name: str | None
+    sides: dict[str, SideDetailOut]
+    # Deprecated: the old workspace's fields, removed with the old endpoints.
     village: AcceptanceVillageRow
     dt_status: str | None
     submissions: list[AcceptanceSubmissionOut]

@@ -94,7 +94,17 @@ DT_DONE = "Done"
 
 
 class WorkflowError(ValueError):
-    """A rule violation, with a message meant for the person who caused it."""
+    """A rule violation, with a message meant for the person who caused it.
+
+    ``code`` is the machine-readable reason a client maps onto a field
+    ("Reason missing" inside the 4G row, say); ``tech`` names the technology
+    it concerns, when there is one.
+    """
+
+    def __init__(self, message: str, *, code: str = "invalid", tech: str | None = None):
+        super().__init__(message)
+        self.code = code
+        self.tech = tech
 
 
 def _now() -> datetime:
@@ -287,6 +297,23 @@ def authority_verdict_date(village: Village, authority: str) -> date | None:
     # but a genuinely None date is guarded against defensively, so a data
     # inconsistency reads as "no date" rather than crashing the endpoint.
     return max(dates) if dates else None
+
+
+def techs_to_file(village: Village, authority: str) -> list[str]:
+    """The requested technologies this authority has not approved yet.
+
+    What the next round must claim when it carries the approvals over. Read
+    from the ``acceptances`` projection -- the record of what was decided,
+    including verdicts seeded from the CPM workbook with no submission behind
+    them -- so an approval can never be asked for twice.
+    """
+    field = f"{authority.lower()}_status"
+    by_tech = {a.technology: a for a in village.acceptances}
+    return [
+        t
+        for t in requested_technologies(village)
+        if t not in by_tech or getattr(by_tech[t], field) != APPROVED
+    ]
 
 
 def village_verdict(village: Village) -> str:
@@ -482,8 +509,15 @@ def site_status(work_item: WorkItem) -> str:
 # --------------------------------------------------------------------------
 # Submitting
 # --------------------------------------------------------------------------
-def _validate_claims(village: Village, claims: list[dict]) -> list[dict]:
+def _validate_claims(
+    village: Village, claims: list[dict], *, expected: list[str] | None = None
+) -> list[dict]:
     """Check a set of per-technology claims against what CPM requested.
+
+    ``expected`` is the technologies the claims must cover exactly -- every
+    requested one by default, or only the ones still to file when approvals
+    carry over (:func:`techs_to_file`). A requested technology outside
+    ``expected`` is an approval being claimed a second time.
 
     Returns the claims in the requested-technology order. Raises for a missing
     technology, an unrequested one, an unknown verdict, or a rejection with no
@@ -493,38 +527,59 @@ def _validate_claims(village: Village, claims: list[dict]) -> list[dict]:
     if not requested:
         raise WorkflowError(
             "This village's site has no requested technology in CPM, so there "
-            "is nothing to approve"
+            "is nothing to approve",
+            code="tech_not_requested",
         )
+    expected = requested if expected is None else expected
 
     given = {}
     for claim in claims:
         technology = str(claim.get("technology", "")).upper().strip()
         if technology in given:
-            raise WorkflowError(f"{technology} was given twice")
+            raise WorkflowError(
+                f"{technology} was given twice", code="duplicate_tech", tech=technology
+            )
         given[technology] = claim
 
     unexpected = sorted(set(given) - set(requested))
     if unexpected:
         raise WorkflowError(
             f"{', '.join(unexpected)} was not requested for this site "
-            f"(requested: {', '.join(requested)})"
+            f"(requested: {', '.join(requested)})",
+            code="tech_not_requested",
+            tech=unexpected[0],
         )
-    missing = [t for t in requested if t not in given]
+    carried = sorted(set(given) - set(expected))
+    if carried:
+        raise WorkflowError(
+            f"{', '.join(carried)} is already approved and carries over",
+            code="tech_carried",
+            tech=carried[0],
+        )
+    missing = [t for t in expected if t not in given]
     if missing:
-        raise WorkflowError(f"A status is required for {', '.join(missing)}")
+        raise WorkflowError(
+            f"A status is required for {', '.join(missing)}",
+            code="tech_missing",
+            tech=missing[0],
+        )
 
     ordered = []
-    for technology in requested:
+    for technology in (t for t in requested if t in given):
         claim = given[technology]
         status = str(claim.get("claimed_status", "")).strip().title()
         if status not in CLAIMS:
             raise WorkflowError(
-                f"{technology} status must be {' or '.join(CLAIMS)}"
+                f"{technology} status must be {' or '.join(CLAIMS)}",
+                code="invalid_result",
+                tech=technology,
             )
         comment = (claim.get("comment") or "").strip() or None
         if status == CLAIM_REJECTED and not comment:
             raise WorkflowError(
-                f"A comment is required explaining why {technology} was rejected"
+                f"A comment is required explaining why {technology} was rejected",
+                code="reason_missing",
+                tech=technology,
             )
         ordered.append(
             {"technology": technology, "claimed_status": status, "comment": comment}
@@ -554,6 +609,25 @@ def _next_round(db: Session, village_id: int, authority: str) -> int:
     return (max(rounds) + 1) if rounds else 1
 
 
+def lock_villages(db: Session, village_ids) -> None:
+    """Take row locks on these villages, in id order, until the commit.
+
+    Round numbers are read-then-written (:func:`_next_round`). The partial
+    unique index on pending rounds serialises two contractor filings, but a
+    staff filing is decided in the same transaction and is never pending at
+    commit, so two of those could both take round N. Locking the village rows
+    first makes the second wait for the first. Id order means two letters
+    sharing villages lock them in the same order and cannot deadlock. SQLite,
+    which the tests use, has no row locks and serialises writers anyway.
+    """
+    ids = sorted(set(village_ids))
+    if ids:
+        db.execute(
+            select(Village.id).where(Village.id.in_(ids)).order_by(Village.id)
+            .with_for_update()
+        ).all()
+
+
 def submit(
     db: Session,
     *,
@@ -564,35 +638,49 @@ def submit(
     claims: list[dict],
     user: User,
     source: str,
+    carry_over: bool = False,
 ) -> AcceptanceSubmission:
-    """Record a claimed ICT or CRA verdict for one village. Caller commits."""
+    """Record a claimed ICT or CRA verdict for one village. Caller commits.
+
+    With ``carry_over`` the claims cover only :func:`techs_to_file` -- a
+    re-filed round names just the technologies refused before, and the ones
+    already approved keep their approval and its date.
+    """
     authority = str(authority).upper().strip()
     if authority not in AUTHORITIES:
-        raise WorkflowError(f"Authority must be {' or '.join(AUTHORITIES)}")
+        raise WorkflowError(
+            f"Authority must be {' or '.join(AUTHORITIES)}", code="invalid_authority"
+        )
 
     work_item = village.work_item
     if work_item is None or work_item.deleted_at is not None:
-        raise WorkflowError("This village is not attached to an active site")
+        raise WorkflowError(
+            "This village is not attached to an active site", code="not_found"
+        )
     if work_item.dt_status != DT_DONE:
         raise WorkflowError(
-            "Acceptance can only be submitted once the drive test is Done"
+            "Acceptance can only be submitted once the drive test is Done",
+            code="dt_not_done",
         )
 
     letter_number = (letter_number or "").strip()
     if not letter_number:
-        raise WorkflowError("A letter number is required")
+        raise WorkflowError("A letter number is required", code="missing")
 
     if _open_submission(db, village.id, authority) is not None:
         raise WorkflowError(
-            f"A {authority} submission for this village is already awaiting review"
+            f"A {authority} submission for this village is already awaiting review",
+            code="not_editable",
         )
     if authority_verdict(village, authority) == APPROVED:
         raise WorkflowError(
             f"This village is already {authority}-approved for every requested "
-            "technology"
+            "technology",
+            code="not_editable",
         )
 
-    validated = _validate_claims(village, claims)
+    expected = techs_to_file(village, authority) if carry_over else None
+    validated = _validate_claims(village, claims, expected=expected)
 
     submission = AcceptanceSubmission(
         village_id=village.id,
@@ -680,7 +768,9 @@ def review(
 ) -> AcceptanceSubmission:
     """Validate a submission, or return it to the submitter. Caller commits."""
     if submission.review_status != REVIEW_PENDING:
-        raise WorkflowError("This submission has already been reviewed")
+        raise WorkflowError(
+            "This submission has already been reviewed", code="not_pending"
+        )
 
     # The separation this module's docstring promises: a claim becomes a fact
     # only when someone *else* agrees. Coordinator and PM are in both the
@@ -693,9 +783,21 @@ def review(
         raise WorkflowError(
             "You cannot review your own submission. Acceptance is recorded by "
             "one person and validated by another, so that no single person can "
-            "move a date with contractual consequences."
+            "move a date with contractual consequences.",
+            code="own_submission",
         )
+    return _decide(db, submission=submission, decision=decision, comment=comment, user=user)
 
+
+def _decide(
+    db: Session,
+    *,
+    submission: AcceptanceSubmission,
+    decision: str,
+    comment: str | None,
+    user: User,
+) -> AcceptanceSubmission:
+    """Record a decision on a pending submission. The guards are the caller's."""
     decision = str(decision).strip().title()
     comment = (comment or "").strip() or None
 
@@ -705,11 +807,13 @@ def review(
         if not comment:
             raise WorkflowError(
                 "A reason is required when returning a submission, so the "
-                "submitter knows what to correct"
+                "submitter knows what to correct",
+                code="reason_missing",
             )
     else:
         raise WorkflowError(
-            f"Decision must be {REVIEW_VALIDATED} or {REVIEW_RETURNED}"
+            f"Decision must be {REVIEW_VALIDATED} or {REVIEW_RETURNED}",
+            code="invalid_decision",
         )
 
     submission.review_status = decision
@@ -718,3 +822,40 @@ def review(
     submission.reviewed_at = _now()
     refresh_authority_status(db, submission.village, submission.authority)
     return submission
+
+
+def record_decided(
+    db: Session,
+    *,
+    village: Village,
+    authority: str,
+    letter_number: str,
+    letter_date: date | None,
+    claims: list[dict],
+    user: User,
+    source: str,
+) -> AcceptanceSubmission:
+    """File a round that a coordinator or PM has already decided. Caller commits.
+
+    The one sanctioned exception to "a claim becomes a fact only when someone
+    else agrees": a coordinator or PM recording a letter they received from
+    the province or region themselves. The letter is the evidence, the round
+    is recorded as reviewed by them, and it is audited as such by the caller.
+    It is not a way round :func:`review`'s guard -- confirming somebody's
+    *pending* filing still needs a second person.
+    """
+    submission = submit(
+        db,
+        village=village,
+        authority=authority,
+        letter_number=letter_number,
+        letter_date=letter_date,
+        claims=claims,
+        user=user,
+        source=source,
+        carry_over=True,
+    )
+    db.flush()
+    return _decide(
+        db, submission=submission, decision=REVIEW_VALIDATED, comment=None, user=user
+    )
