@@ -589,3 +589,38 @@ def test_rows_carry_to_file_and_ids_fetch_rows_outside_the_tab_but_inside_scope(
     co_headers = _contractor(client, "tofile", _co)
     got = _ids(_list(client, co_headers, tab="filled", ids=f"{vid},{foreign}"))
     assert got == {vid}
+
+
+@pytest.mark.parametrize("claims, decision, expected", [
+    ([("2G", "Approved"), ("4G", "Approved")], "Validated", "APPROVED"),
+    ([("2G", "Approved"), ("4G", "Rejected")], "Validated", "REJECTED"),
+    ([("2G", "Approved"), ("4G", "Approved")], "Returned", "RETURNED"),
+])
+def test_the_old_review_endpoint_audits_by_outcome(client, claims, decision, expected):
+    """It compared review_status to "Approved", which it never is, so every
+    decision was audited as REJECTED."""
+    from sqlalchemy import select
+
+    from app.models.acceptance import AuditLog
+
+    co, _p, _s, (vid,) = _seed(f"AUDIT-{expected}")
+    headers = _contractor(client, f"audit_{expected.lower()}", co)
+    filed = client.post(f"/api/v1/acceptance/villages/{vid}/submissions", headers=headers, json={
+        "authority": "ICT", "letter_number": "A-1", "letter_date_shamsi": "1405/04/11",
+        "technologies": [{"technology": t, "claimed_status": c, "comment": "x" if c == "Rejected" else None}
+                         for t, c in claims],
+    })
+    assert filed.status_code == 201, filed.text
+    sid = filed.json()["id"]
+    pm = _user(client, "PM", "mw2_pm")
+    reviewed = client.post(f"/api/v1/acceptance/submissions/{sid}/review", headers=pm,
+                           json={"decision": decision, "comment": "wrong letter"})
+    assert reviewed.status_code == 200, reviewed.text
+
+    db = SessionLocal()
+    try:
+        actions = db.execute(select(AuditLog.action).where(
+            AuditLog.entity_type == "AcceptanceSubmission", AuditLog.entity_id == sid)).scalars().all()
+    finally:
+        db.close()
+    assert actions == ["SUBMITTED", expected]

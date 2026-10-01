@@ -470,6 +470,7 @@ from app.schemas import (  # noqa: E402
 from app.services import acceptance_workflow as flow  # noqa: E402
 from app.services import evidence_store  # noqa: E402
 from app.api import my_work  # noqa: E402
+from app.services import acceptance_rounds  # noqa: E402
 from app.services.audit import notify_roles, record_audit  # noqa: E402
 
 # Who may put a claim in, and who may turn it into a fact. Admin is absent from
@@ -634,6 +635,13 @@ def _letter_date(raw: str | None):
         return parse_shamsi(raw)
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from None
+
+
+_REVIEW_AUDIT_ACTION = {
+    acceptance_rounds.RESULT_APPROVED: audit_actions.APPROVED,
+    acceptance_rounds.RESULT_REJECTED: audit_actions.REJECTED,
+    acceptance_rounds.RESULT_RETURNED: audit_actions.RETURNED,
+}
 
 
 def _retiring(response: Response) -> None:
@@ -1359,11 +1367,11 @@ def review_submission(
     village = submission.village
     record_audit(
         db, user_id=user.id,
-        action=(
-            audit_actions.APPROVED
-            if submission.review_status == "Approved"
-            else audit_actions.REJECTED
-        ),
+        # By outcome: a validated round is approved or rejected by its claims,
+        # a returned one is a return. ``review_status`` is never "Approved"
+        # (it is Validated or Returned), so comparing it to that recorded
+        # every decision as REJECTED.
+        action=_REVIEW_AUDIT_ACTION[acceptance_rounds.round_result(submission)],
         module="Acceptance",
         entity_type="AcceptanceSubmission", entity_id=submission.id,
         new_value={
