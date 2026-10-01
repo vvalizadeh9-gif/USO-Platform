@@ -70,15 +70,15 @@ export default function ReviewBlock({ round, contractor, sameLetter, onConfirm, 
         </>
       ) : (
         <div className="mw-actions">
+          {sameLetter && sameLetter.count > 1 && (
+            <button type="button" className="btn mw-confirm-all" onClick={onConfirmAll} disabled={busy}>
+              Confirm all {sameLetter.count} on this letter
+            </button>
+          )}
           <button type="button" className="btn mw-btn-danger-text" onClick={() => setReturning(true)} disabled={busy}>
             Return
           </button>
           <span className="mw-grow" />
-          {sameLetter && sameLetter.count > 1 && (
-            <button type="button" className="btn" onClick={onConfirmAll} disabled={busy}>
-              Confirm all {sameLetter.count} on this letter
-            </button>
-          )}
           <button type="button" className="btn btn-primary" onClick={onConfirm} disabled={busy}>
             <Check size={16} aria-hidden="true" />
             Confirm

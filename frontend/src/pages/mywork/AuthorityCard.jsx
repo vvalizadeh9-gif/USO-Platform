@@ -20,16 +20,26 @@ function topNote(status, history, reviewable) {
   if (status === 'approved') {
     const round = history.find((r) => r.result === 'approved')
     if (!round) return null
-    return { tone: 'success', text: ['Approved', shown(round.letter_number), shown(round.letter_date_shamsi)].join(' · ') }
+    return { tone: 'success', label: 'Approved', codes: [round.letter_number, round.letter_date_shamsi] }
   }
   if (status === 'filled' && !reviewable && history[0]) {
-    return { tone: 'ongoing', text: `With coordinator · ${shown(history[0].letter_number)}` }
+    return { tone: 'ongoing', label: 'With coordinator', codes: [history[0].letter_number] }
   }
   return null
 }
 
+/** A status note; letter numbers and dates are isolated so a Persian
+ * letter inside one cannot reorder the sentence around it. */
 function Note({ note }) {
-  return note ? <div className="mw-note" data-tone={note.tone}>{note.text}</div> : null
+  if (!note) return null
+  return (
+    <div className="mw-note" data-tone={note.tone}>
+      {note.label}
+      {note.codes.filter(Boolean).map((code) => (
+        <span key={code}> · <span className="mw-fa-ltr">{shown(code)}</span></span>
+      ))}
+    </div>
+  )
 }
 
 /** One authority, one village: status, the thing to do, the history. */

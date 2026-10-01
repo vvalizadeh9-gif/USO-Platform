@@ -32,7 +32,7 @@ export default function RoundHistory({ rounds }) {
           const [short, full] = roundSummary(round)
           const mark = MARK[round.result] || MARK.pending
           return (
-            <li key={round.submission_id} className="mw-history-line" title={full}>
+            <li key={round.submission_id} className="mw-history-line" title={`${full} · ${shown(round.letter_number)} · ${shown(round.letter_date_shamsi)}`}>
               <span className="mw-history-mark" data-tone={mark.tone} data-outline={Boolean(mark.outline)} aria-hidden="true">
                 <mark.Icon size={12} strokeWidth={2.5} />
               </span>

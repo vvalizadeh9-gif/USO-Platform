@@ -38,7 +38,8 @@ function VillageRow({ row, view, focused, ticked, onFocus, onTick, statusFor }) 
             {row.refiling_round && <span className="mw-round-tag">Round {row.refiling_round}</span>}
           </span>
           <span className="mw-row-meta">
-            {meta} · <span className={row.long_wait ? 'mw-days is-long' : 'mw-days'}>{row.days_waiting ?? '—'} d</span>
+            <span className="mw-meta-text">{meta}</span>
+            <span className={row.long_wait ? 'mw-days is-long' : 'mw-days'}>{'\u00a0· '}{row.days_waiting ?? '—'} d</span>
           </span>
         </span>
         {['ICT', 'CRA'].map((authority) => (
