@@ -213,11 +213,13 @@ export default function Login() {
 
 // "I cannot get in."
 //
-// This platform sends no mail, so there is no reset link to send. Building one
-// would mean an SMTP server, a token table and an unauthenticated endpoint that
-// mints credentials — the largest new attack surface in the system, for a few
-// dozen internal users who all know their administrator. So this posts a
-// message, and an administrator issues a temporary password.
+// The platform's only outgoing mail is the Action Center's daily digest, sent
+// by a scheduled job to signed-in users' own addresses. Password resets stay
+// out of band on purpose: a reset link would need a token table and an
+// unauthenticated endpoint that mints credentials — the largest new attack
+// surface in the system, for a few dozen internal users who all know their
+// administrator. So this posts a message, and an administrator issues a
+// temporary password.
 //
 // The confirmation is deliberately non-committal about whether the account
 // exists, and the server answers identically either way: this form is

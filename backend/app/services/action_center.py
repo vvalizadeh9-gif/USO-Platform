@@ -18,17 +18,18 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from urllib.parse import quote
 
-from sqlalchemy import Select, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from app.core.deps import ADMIN, COORDINATOR, CONTRACTOR, PM
-from app.models.acceptance import CpmChangeRequest, Notification
+from app.models.acceptance import Notification
 from app.models.health_check import HcAssignment, HcRemediation, HcTask
 from app.models.monthly_plan import STREAM_LABELS
 from app.models.reference import User
-from app.models.workitem import Assignment, Site, Village, WorkItem
+from app.models.workitem import Assignment, Village, WorkItem
 from app.schemas import ActionCounter, ActionItem
 from app.services import acceptance_workflow as flow
+from app.services.action_queues.sources import plans as plan_sources
 from app.services.visibility import apply_work_item_scope, visible_work_item_ids
 from app.services.workflow import STAGE_ASSIGNED, STAGE_READY, STAGE_RETURNED
 
@@ -98,15 +99,6 @@ def _cpm_change_request_items(db: Session, user: User) -> list[ActionItem]:
     """Pending CPM change requests — only for roles that can decide them."""
     if user.role.name not in (ADMIN, PM):
         return []
-    pending = (
-        db.query(CpmChangeRequest)
-        .filter(
-            CpmChangeRequest.status == "Pending",
-            CpmChangeRequest.site_code.in_(_visible_site_codes(db, user)),
-        )
-        .order_by(CpmChangeRequest.id.desc())
-        .all()
-    )
     return [
         ActionItem(
             id=f"cpm:{cr.id}", category="cpm",
@@ -115,23 +107,8 @@ def _cpm_change_request_items(db: Session, user: User) -> list[ActionItem]:
             url=f"/admin?tab=validate&highlight={cr.id}",
             created_at=cr.created_at,
         )
-        for cr in pending
+        for cr in plan_sources.pending_change_requests(db, user)
     ]
-
-
-def _visible_site_codes(db: Session, user: User) -> Select:
-    """Site codes inside this user's province scope, as a subquery.
-
-    Change requests are keyed by site code rather than by work item, so they
-    cannot reuse ``visible_work_item_ids`` directly. A PM who sees every
-    province still sees every request; this only narrows a scoped user.
-    """
-    return (
-        select(Site.site_code)
-        .join(WorkItem, WorkItem.site_id == Site.id)
-        .where(WorkItem.id.in_(visible_work_item_ids(user, db)))
-        .distinct()
-    )
 
 
 def _health_check_items(db: Session, user: User) -> list[ActionItem]:
@@ -299,33 +276,16 @@ def _plan_url(plan, *, drawer: bool) -> str:
     return url
 
 
-def _plan_when(plan) -> datetime | None:
-    return plan.submitted_at or plan.decided_at or plan.updated_at
-
-
 def _pm_plan_items(db: Session, user: User) -> list[ActionItem]:
     """Plans and revisions waiting on the PM. PM only -- Admin does not decide
     plans (the Admin/PM separation), and a Coordinator reads but cannot."""
-    from app.models.monthly_plan import (
-        STATUS_REVISION_REQUESTED,
-        STATUS_SUBMITTED,
-        ContractorMonthlyPlan,
-    )
-    from app.models.reference import Contractor
+    from app.models.monthly_plan import STATUS_REVISION_REQUESTED
     from app.core import jalali
 
     if user.role.name != PM:
         return []
-    rows = db.execute(
-        select(ContractorMonthlyPlan, Contractor.name)
-        .join(Contractor, Contractor.id == ContractorMonthlyPlan.contractor_id)
-        .where(
-            ContractorMonthlyPlan.is_current.is_(True),
-            ContractorMonthlyPlan.status.in_([STATUS_SUBMITTED, STATUS_REVISION_REQUESTED]),
-        )
-    ).all()
     items = []
-    for plan, name in rows:
+    for plan, name in plan_sources.plans_awaiting_pm(db):
         month = f"{jalali.month_name(plan.shamsi_month)} {plan.shamsi_year}"
         stream = _STREAM_NAME.get(plan.stream, plan.stream)
         revision = plan.status == STATUS_REVISION_REQUESTED
@@ -338,7 +298,7 @@ def _pm_plan_items(db: Session, user: User) -> list[ActionItem]:
                 if revision else f"Plan awaiting approval: {plan.committed_count}"
             ),
             url=_plan_url(plan, drawer=True),
-            created_at=_plan_when(plan),
+            created_at=plan_sources.plan_clock(plan),
         ))
     return items
 
@@ -347,43 +307,24 @@ def _contractor_plan_items(db: Session, user: User) -> list[ActionItem]:
     """A contractor's own plans that need them: returned, or not filed.
 
     * **Returned** (a plan, or a revision request) with the PM's comment --
-      until they resubmit, or the window for it closes: the month the plan
-      covers has ended, or for a revision, the revision window (day 15).
+      until they resubmit, or the window for it closes.
     * **Not submitted** -- the running month, per stream, once its deadline
       (day 3) has passed with no plan filed. Clears when one is.
 
-    Only ever the caller's own company: every query is narrowed to it.
+    Built on ``contractor_plan_gaps``, the same read the board's "Monthly plan
+    to submit" ticket uses; this legacy feed only adds the deadline filter.
     """
     from app.core import jalali
-    from app.models.monthly_plan import (
-        PLAN_STREAMS,
-        STATUS_DRAFT,
-        STATUS_RETURNED,
-        STATUS_REVISION_RETURNED,
-        ContractorMonthlyPlan,
-    )
+    from app.models.monthly_plan import STATUS_REVISION_RETURNED
     from app.services import monthly_plan as plans
 
     if user.role.name != CONTRACTOR or user.contractor_id is None:
         return []
     today = jalali.tehran_today()
-    running = jalali.to_shamsi_date(today)[:2]
+    gaps = plan_sources.contractor_plan_gaps(db, user.contractor_id, today)
+    running = gaps.period
     items = []
-
-    returned = db.execute(
-        select(ContractorMonthlyPlan).where(
-            ContractorMonthlyPlan.contractor_id == user.contractor_id,
-            ContractorMonthlyPlan.is_current.is_(True),
-            ContractorMonthlyPlan.status.in_([STATUS_RETURNED, STATUS_REVISION_RETURNED]),
-        )
-    ).scalars().all()
-    for plan in returned:
-        period = (plan.shamsi_year, plan.shamsi_month)
-        if plan.status == STATUS_REVISION_RETURNED:
-            if not plans.revision_window_open(*period, today=today):
-                continue
-        elif period < running:
-            continue  # the month it covered is over
+    for plan in gaps.returned:
         month = f"{jalali.month_name(plan.shamsi_month)} {plan.shamsi_year}"
         stream = _STREAM_NAME.get(plan.stream, plan.stream)
         what = "Revision returned" if plan.status == STATUS_REVISION_RETURNED else "Plan returned"
@@ -393,26 +334,12 @@ def _contractor_plan_items(db: Session, user: User) -> list[ActionItem]:
             label=f"{stream} PIP, {month}",
             subtitle=f"{what}: {plan.return_comment}" if plan.return_comment else what,
             url=_plan_url(plan, drawer=False),
-            created_at=_plan_when(plan),
+            created_at=plan_sources.plan_clock(plan),
         ))
 
     if plans.deadline_has_passed(*running, today=today):
-        filed = {
-            stream
-            for stream, status in db.execute(
-                select(ContractorMonthlyPlan.stream, ContractorMonthlyPlan.status).where(
-                    ContractorMonthlyPlan.contractor_id == user.contractor_id,
-                    ContractorMonthlyPlan.shamsi_year == running[0],
-                    ContractorMonthlyPlan.shamsi_month == running[1],
-                    ContractorMonthlyPlan.is_current.is_(True),
-                )
-            ).all()
-            if status != STATUS_DRAFT
-        }
         month = f"{jalali.month_name(running[1])} {running[0]}"
-        for stream in PLAN_STREAMS:
-            if stream in filed:
-                continue
+        for stream in gaps.missing:
             items.append(ActionItem(
                 id=f"pip-missing:{stream}:{running[0]}-{running[1]}",
                 category="plan",

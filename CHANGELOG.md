@@ -1,5 +1,40 @@
 # Changelog
 
+## Action Center → Ticket Board
+
+The Action Center is one screen answering "what is pending for me, across the
+lifecycle, and how late is it?": one column per stage (Health Check, Drive
+Test, ICT, CRA, Plans & Data), one equal-size ticket per queue with its count,
+the oldest item's Shamsi date and how many are overdue. A ticket opens the
+queue screen holding exactly the items it counted.
+
+* **Who gets it:** PM, Coordinator, Contractor and problem owners, each
+  landing on it. Regional Manager lands on KPI & Performance and Viewer on the
+  Drive Test dashboard; the board answers them (and Admin) 403.
+* **One queue registry** (`services/action_queues`): every queue defined once,
+  each reading the list function behind its own screen. The board, the
+  per-owner breakdown, the daily snapshot and the digest all read it.
+* **SLA:** 14 days per queue by default, changed in Admin → Action SLA with no
+  deploy. Fixes follow their category's SLA; the monthly plan its deadline.
+  Undated items, and anything from before tracking began, start at 1 Mehr 1405.
+* **Daily email digest:** `python -m app.jobs.daily_digest`, run by cron.
+  Snapshots every board daily, emails Saturday to Wednesday, at most once per
+  user per day, failures logged and retried. Each user can turn it off from
+  their account menu. The platform's first outgoing mail.
+* **"Mark as sent to ICT / CRA"** in My Work records the request letter, and
+  a new staff tab, **With authority**, lists what is waiting on an answer —
+  the PM's "Follow up with ICT / CRA" ticket.
+* The HC Pool opens on a state from the URL (`?state=ready`) and My Drive
+  Tests on a row status (`?status=sent_back`), so the tickets can link to
+  exactly what they counted.
+
+New endpoints: `GET /action-center/board`, `GET /action-center/owners`,
+`GET`/`PUT /admin/action-sla`, `GET`/`PUT /me/notifications`,
+`POST /acceptance/authority-requests`. `GET /action-center/summary` is
+deprecated. Migration `a1c3e5f7b902` adds `action_queue_sla`,
+`action_daily_snapshot`, `digest_log`, `acceptance_authority_requests` and
+`users.email_digest_enabled`.
+
 ## Acceptance → My Work, rebuilt
 
 My Work is a one-screen workspace (1440×900 and 1280×800, the page never

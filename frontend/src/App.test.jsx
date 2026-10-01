@@ -31,6 +31,7 @@ vi.mock('./pages/ActionCenter', () => page('action-center'))
 vi.mock('./pages/mywork/MyWork', () => page('my-work'))
 vi.mock('./pages/monthlyplan/MonthlyPlan', () => page('monthly-plan'))
 vi.mock('./pages/reports/AcceptanceDashboard', () => page('acceptance'))
+vi.mock('./pages/reports/KpiPerformance', () => page('kpi'))
 vi.mock('./pages/mojri/MojriImport', () => page('mojri'))
 vi.mock('./pages/Admin', () => page('admin'))
 vi.mock('./pages/ChangePassword', () => page('change-password'))
@@ -90,6 +91,28 @@ describe('where "/" lands', () => {
       expect(await landOn('/')).toBe('action-center')
     },
   )
+
+  // Neither has an Action Center: the server refuses them the board.
+  it('sends a Regional Manager to KPI & Performance', async () => {
+    signedInAs('RegionalManager')
+    expect(await landOn('/')).toBe('kpi')
+  })
+
+  it('sends a Viewer to the Drive Test dashboard', async () => {
+    signedInAs('Viewer')
+    expect(await landOn('/')).toBe('dt-dashboard')
+  })
+})
+
+describe('the Action Center route', () => {
+  it.each([
+    ['RegionalManager', 'kpi'],
+    ['Viewer', 'dt-dashboard'],
+    ['Admin', 'admin'],
+  ])('sends %s home instead of to an Action Center they do not have', async (role, home) => {
+    signedInAs(role)
+    expect(await landOn('/action-center')).toBe(home)
+  })
 })
 
 describe('guarded routes', () => {
@@ -150,11 +173,16 @@ describe('guarded routes', () => {
     expect(await landOn('/mojri-tracker')).toBe('admin')
   })
 
-  it.each(['Coordinator', 'Contractor', 'RegionalManager', 'Viewer'])(
+  it.each([
+    ['Coordinator', 'action-center'],
+    ['Contractor', 'action-center'],
+    ['RegionalManager', 'kpi'],
+    ['Viewer', 'dt-dashboard'],
+  ])(
     'keeps %s off the Mojri import',
-    async (role) => {
+    async (role, home) => {
       signedInAs(role)
-      expect(await landOn('/mojri-tracker')).toBe('action-center')
+      expect(await landOn('/mojri-tracker')).toBe(home)
     },
   )
 })

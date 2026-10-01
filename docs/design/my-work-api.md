@@ -26,7 +26,7 @@ Role-neutral keys; the frontend owns every label.
 |---|---|
 | `Authority` | `ICT` · `CRA` |
 | `SideStatus` | `waiting` · `filled` · `returned` · `rejected` · `approved` (mapped 1:1 from the stored `NotFiled` · `Pending` · `Returned` · `Rejected` · `Approved`) |
-| `Tab` | `your_move` · `new_letter` · `returned` · `not_filed` · `filled` · `all` |
+| `Tab` | `your_move` · `new_letter` · `returned` · `not_filed` · `filled` · `with_authority` · `all` |
 | `ClaimResult` | `approved` · `rejected` |
 | `RoundResult` | `pending` · `approved` · `rejected` · `returned` · `withdrawn` |
 | `Scope` | `remaining` (default) · `universe` |
@@ -35,7 +35,7 @@ Role-neutral keys; the frontend owns every label.
 Tabs per role, in order (server-sent, so the frontend never hard-codes them):
 
 - contractor: `your_move` (default), `new_letter`, `returned`, `not_filed`, `filled`;
-- coordinator / PM / read-only: `filled` (default), `not_filed`, `new_letter`, `returned`, `all`;
+- coordinator / PM / read-only: `filled` (default), `not_filed`, `new_letter`, `returned`, `with_authority`, `all`;
 - `scope=universe` appends `all` for a contractor, because a fully approved village is in no other tab.
 
 Bucket rule (`services/my_work_status.py`, one table, Python and SQL generated from it):
@@ -47,6 +47,7 @@ Bucket rule (`services/my_work_status.py`, one table, Python and SQL generated f
 | `not_filed` | neither of the above, and any side `waiting` |
 | `your_move` | `new_letter` ∪ `returned` ∪ `not_filed` |
 | `filled` | any side `filled` (may overlap the three above) |
+| `with_authority` | staff only: a request letter to ICT/CRA is unanswered (`acceptance_requests.open_request_clause`; not a side status, so it overlaps `not_filed` and `new_letter`) |
 | `all` | every row in scope |
 
 The tabs are **not a partition**: their counts do not sum to the total.
@@ -354,3 +355,20 @@ the deprecated fields of `GET /villages/{id}`.
   button disables while sending. A durable idempotency key would need a table,
   and is proposed only if this shows up in practice.
 - **Abandoned scans leave one blob.** Content-addressed and small; noted for a future GC job.
+
+## 10. `POST /authority-requests` (added with the Action Center)
+
+Records that a request letter went to ICT or CRA, so the side shows under
+**With authority** and on the PM's Action Center follow-up ticket until the
+answer is filed (any non-withdrawn submission at or after it).
+
+```json
+{ "authority": "ICT", "village_ids": [101, 102], "letter_number": "OUT-1", "letter_date": "2026-09-30" }
+```
+
+Filing roles only (Contractor, Coordinator, PM). Answers `201` with
+`{ "recorded": 1, "outcomes": [ { "village_id": 101, "recorded": true, "reason": null }, … ] }`;
+a village not seen by the caller is `not_found`, one already with the authority
+`already_with_authority`, one that is filed, returned or approved
+`not_requestable`. The side's status does not change.
+

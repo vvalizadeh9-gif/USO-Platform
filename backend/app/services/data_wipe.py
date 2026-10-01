@@ -32,6 +32,7 @@ from app.models.acceptance import (
     letter_villages,
 )
 from app.models.acceptance_workflow import (
+    AcceptanceAuthorityRequest,
     AcceptanceEvidence,
     AcceptanceSubmission,
     AcceptanceSubmissionTech,
@@ -66,6 +67,8 @@ WIPE_ORDER: tuple[tuple[str, Table], ...] = (
     ("acceptance_evidence", AcceptanceEvidence.__table__),
     ("acceptance_submission_techs", AcceptanceSubmissionTech.__table__),
     ("acceptance_submissions", AcceptanceSubmission.__table__),
+    # Request letters sent to ICT / CRA, keyed by village.
+    ("acceptance_authority_requests", AcceptanceAuthorityRequest.__table__),
     # Health-check workflow. hc_remediations references hc_tasks (and
     # work_items) with no DB-level cascade, so it goes before hc_tasks.
     ("hc_task_technologies", HcTaskTechnology.__table__),

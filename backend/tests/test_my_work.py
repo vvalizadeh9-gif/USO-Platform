@@ -180,7 +180,7 @@ def test_tab_rule_python_and_sql_agree_on_every_status_pair(client):
         for ict, cra in itertools.product(S.STATUSES, repeat=2):
             expected = S.tabs_of([ict, cra])
             sides = (literal(S.stored_status(ict)), literal(S.stored_status(cra)))
-            for tab in S.TABS:
+            for tab in S.STATUS_TABS:
                 got = db.execute(select(case((S.tab_clause(tab, sides), 1), else_=0))).scalar()
                 assert bool(got) == (tab in expected), (ict, cra, tab)
     finally:

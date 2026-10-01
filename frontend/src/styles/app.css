@@ -204,6 +204,39 @@
   --dt-muted: #8391A7;
   --dt-pending-bar: #6B788D;
 
+  /* ---- Lifecycle stages (the Action Center's columns) ----
+     The same palette as Performance -> Lifecycle Gaps. Per stage: a solid
+     chip behind a white icon, a tint for the column header, an ink for its
+     words and every ticket number, and a line for the header border. Each ink
+     clears 4.5:1 on white and on its own tint. CRA's ink is --cra-ink:
+     --cra is never text. */
+  --stage-hc-chip: var(--dt-pending-bar);
+  --stage-hc-tint: #EDF1F6;
+  --stage-hc-ink: #475569;
+  --stage-hc-line: #DDE3EC;
+  --stage-dt-chip: var(--accent);
+  --stage-dt-tint: #E3EAFB;
+  --stage-dt-ink: #1D3F99;
+  --stage-dt-line: #D3DEF7;
+  --stage-ict-chip: var(--ict);
+  --stage-ict-tint: var(--ict-soft);
+  --stage-ict-ink: var(--ict);
+  --stage-ict-line: var(--ict-base);
+  --stage-cra-chip: var(--cra);
+  --stage-cra-tint: var(--cra-soft);
+  --stage-cra-ink: var(--cra-ink);
+  --stage-cra-line: var(--cra-base);
+  --stage-plans-chip: var(--dt-muted);
+  --stage-plans-tint: #F6F8FB;
+  --stage-plans-ink: #5F6B7E;
+  --stage-plans-line: #DDE3EC;
+
+  /* The ticket board's two oversized figures -- above the type scale on
+     purpose, and used nowhere else: the header totals and a ticket's count. */
+  --fs-board-total: 48px;   --lh-board-total: 52px;
+  --fs-ticket-count: 54px;  --lh-ticket-count: 56px;
+  --shadow-ticket: 0 2px 4px rgba(20, 27, 43, 0.06), 0 12px 24px -16px rgba(20, 27, 43, 0.4);
+
   /* ---- Shape ----
      6 buttons and inputs, 8 tiles and banners, 10 cards and dialogs. */
   --radius-sm: 6px;
@@ -4818,3 +4851,141 @@ a.lifecycle-step:focus-visible { outline: 2px solid var(--accent); outline-offse
 @media (prefers-reduced-motion: reduce) {
   .mw-toast { animation: none; }
 }
+
+
+/* ---------------------------------------------------------------------------
+   Action Center -- the ticket board (pages/ActionCenter.jsx)
+
+   One column per lifecycle stage that has work for this person, one
+   equal-size ticket per queue. A fill page: the board takes the height under
+   the header and a crowded column scrolls inside itself. Motion is the
+   entrance alone (pages/actioncenter/motion.js); nothing loops or pulses.
+   See design-system-cobalt.md, "Ticket board".
+   --------------------------------------------------------------------------- */
+.ac-page .page-body { padding: 24px 32px 20px; gap: 20px; overflow: hidden; }
+
+.ac-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; flex-shrink: 0; }
+.ac-today {
+  font-family: var(--font-farsi); font-size: var(--fs-meta); line-height: var(--lh-meta);
+  color: var(--text-tertiary);
+}
+.ac-title { font-size: var(--fs-display); line-height: var(--lh-display); font-weight: 600; color: var(--text); }
+.ac-figures { display: flex; align-items: baseline; gap: 28px; }
+.ac-figure {
+  font-size: var(--fs-board-total); line-height: var(--lh-board-total); font-weight: 600;
+  letter-spacing: -0.02em; color: var(--text); white-space: nowrap;
+}
+.ac-figure b { font-weight: 600; font-variant-numeric: tabular-nums; }
+.ac-figure-overdue { color: var(--danger-ink); }
+.ac-figure-placeholder { color: var(--text-tertiary); }
+
+.ac-board {
+  flex: 1 1 auto; min-height: 0;
+  display: grid; grid-template-columns: repeat(var(--ac-cols, 1), minmax(0, 1fr)); gap: 22px;
+}
+.ac-col { display: flex; flex-direction: column; min-height: 0; gap: 14px; }
+.ac-col-head {
+  display: flex; align-items: center; gap: 10px; flex-shrink: 0;
+  padding: 10px 14px; border-radius: var(--radius);
+  background: var(--stage-tint); color: var(--stage-ink); border: 1px solid var(--stage-line);
+}
+.ac-col-chip {
+  display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;
+  width: 32px; height: 32px; border-radius: var(--radius-md);
+  background: var(--stage-chip); color: var(--text-on-accent);
+}
+/* Up to two lines in a header of fixed height, so a long stage name never
+   pushes one column's tickets below its neighbours'. */
+.ac-col-head { height: 56px; }
+.ac-col-name {
+  flex: 1; min-width: 0; font-size: 15px; line-height: 17px; font-weight: 700;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.ac-col-total { font-size: 24px; line-height: 28px; font-weight: 700; font-variant-numeric: tabular-nums; }
+/* Room above for the hover lift and the entrance, room at the sides for the
+   shadow; the negative margin keeps the column edges where they were. */
+.ac-col-scroll {
+  flex: 1 1 auto; min-height: 0; overflow-y: auto;
+  display: flex; flex-direction: column; gap: 16px;
+  padding: 6px 6px 16px; margin: -6px -6px 0;
+}
+
+.ac-col[data-stage="hc"] { --stage-chip: var(--stage-hc-chip); --stage-tint: var(--stage-hc-tint); --stage-ink: var(--stage-hc-ink); --stage-line: var(--stage-hc-line); }
+.ac-col[data-stage="dt"] { --stage-chip: var(--stage-dt-chip); --stage-tint: var(--stage-dt-tint); --stage-ink: var(--stage-dt-ink); --stage-line: var(--stage-dt-line); }
+.ac-col[data-stage="ict"] { --stage-chip: var(--stage-ict-chip); --stage-tint: var(--stage-ict-tint); --stage-ink: var(--stage-ict-ink); --stage-line: var(--stage-ict-line); }
+.ac-col[data-stage="cra"] { --stage-chip: var(--stage-cra-chip); --stage-tint: var(--stage-cra-tint); --stage-ink: var(--stage-cra-ink); --stage-line: var(--stage-cra-line); }
+.ac-col[data-stage="plans"] { --stage-chip: var(--stage-plans-chip); --stage-tint: var(--stage-plans-tint); --stage-ink: var(--stage-plans-ink); --stage-line: var(--stage-plans-line); }
+
+/* The ticket: white, 172px whatever it says, never rotated, no layers
+   behind it. The whole card is the link. */
+.ac-ticket-slot { flex-shrink: 0; }
+.ac-ticket {
+  position: relative; display: flex; flex-direction: column;
+  height: 172px; border-radius: 12px; background: var(--surface);
+  box-shadow: var(--shadow-ticket); color: inherit; text-decoration: none;
+  transition: transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.ac-ticket:hover { transform: translateY(-4px); }
+.ac-ticket:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.ac-ticket-top { flex: 1 1 auto; display: flex; flex-direction: column; justify-content: space-between; padding: 16px 16px 12px; min-height: 0; }
+/* Clamped to two lines (40px). The overdue pill's 100px is held by a float
+   one line high, so only the line beside the pill gives way to it. */
+.ac-ticket-label {
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  min-height: 40px;
+  font-size: var(--fs-control); line-height: var(--lh-control); font-weight: 600; color: var(--text-secondary);
+}
+.ac-pill-room { float: right; width: 100px; height: var(--lh-control); }
+.ac-ticket-count {
+  font-size: var(--fs-ticket-count); line-height: var(--lh-ticket-count); font-weight: 800;
+  letter-spacing: -0.04em; color: var(--stage-ink); font-variant-numeric: tabular-nums;
+}
+/* The stub: a dashed tear line with a half-circle notch at each end, cut in
+   the canvas colour. */
+.ac-ticket-stub {
+  position: relative; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  height: 44px; padding: 0 16px; border-top: 2px dashed var(--border);
+  font-size: var(--fs-meta); line-height: var(--lh-meta); color: var(--text-secondary);
+}
+.ac-ticket-stub::before,
+.ac-ticket-stub::after {
+  content: ''; position: absolute; top: -11px; width: 20px; height: 20px;
+  border-radius: 50%; background: var(--bg);
+}
+.ac-ticket-stub::before { left: -10px; }
+.ac-ticket-stub::after { right: -10px; }
+.ac-ticket-stub svg { flex-shrink: 0; color: var(--text-tertiary); }
+.ac-ticket-date { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ac-date-fa { font-family: var(--font-farsi); font-weight: 600; color: var(--text); }
+
+/* Overdue: a flat status label, top right, never a stamp. */
+.ac-overdue {
+  position: absolute; top: 14px; right: 14px;
+  display: inline-flex; align-items: center; gap: 6px; padding: 2px 8px;
+  border-radius: 999px; background: var(--danger-soft); color: var(--danger-ink);
+  font-size: var(--fs-caption); line-height: var(--lh-caption); font-weight: 600; white-space: nowrap;
+}
+.ac-overdue-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--danger-ink); }
+
+.ac-ticket-placeholder { background: var(--surface); opacity: 0.6; box-shadow: var(--shadow-1); }
+
+.ac-empty {
+  flex: 1 1 auto; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 8px; text-align: center; color: var(--text-secondary);
+}
+.ac-empty svg { color: var(--success-ink); }
+.ac-empty h2 { font-size: var(--fs-heading); line-height: var(--lh-heading); font-weight: 600; color: var(--text); }
+.ac-empty p { max-width: 44ch; font-size: var(--fs-control); line-height: var(--lh-control); }
+
+@media (prefers-reduced-motion: reduce) {
+  .ac-ticket { transition: none; }
+}
+
+/* The account menu's on/off state (the email digest). */
+.account-menu-state { margin-inline-start: auto; font-size: var(--fs-caption); color: var(--text-secondary); }
+
+
+/* My Work: "Mark as sent to ICT / CRA" under a side's filing form. */
+.mw-send-authority { display: flex; flex-direction: column; gap: 8px; padding: 0 16px 12px; }
+.mw-send-authority-field { display: flex; flex-direction: column; gap: 4px; font-size: var(--fs-meta); color: var(--text-secondary); }

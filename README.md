@@ -222,6 +222,57 @@ database, so the site goes down instead of going wrong.
 
 **Take a backup first, every time.** `RUNBOOK.md` has the full procedure.
 
+### The Action Center digest
+
+Once a day a scheduled command snapshots every user's Action Center and, on
+digest days, emails each user a short version of their board. It runs **outside
+the API** (one API worker each would mean duplicate emails), and running it
+twice in a day is harmless: the snapshot is replaced and each user gets at most
+one email per day (see ARCHITECTURE.md, § 5e).
+
+1. **Mail settings** in `.env` (all in `backend/.env.example`):
+
+   | Setting | Meaning |
+   |---|---|
+   | `SMTP_HOST`, `SMTP_PORT` | The internal relay. Empty host means no email is sent; snapshots still are. |
+   | `SMTP_SECURITY` | `starttls` (default), `ssl` or `none` |
+   | `SMTP_USERNAME`, `SMTP_PASSWORD` | Only if the relay wants a login |
+   | `MAIL_FROM` | The sender, e.g. `UEP Action Center <uep-noreply@example.ir>` |
+   | `APP_BASE_URL` | Where UEP is opened; every link in the email starts here |
+   | `DIGEST_WEEKDAYS` | Days the email goes out, Tehran calendar. Default `sat,sun,mon,tue,wed` |
+
+2. **Schedule it daily at 07:30 Tehran time.** The command itself decides
+   whether today is a digest day, so run it every day (the snapshot is daily).
+   On the host, `crontab -e` (cronie honours `CRON_TZ`):
+
+   ```
+   CRON_TZ=Asia/Tehran
+   30 7 * * * cd /path/to/USO-Platform && docker compose exec -T backend python -m app.jobs.daily_digest >> backups/digest.log 2>&1
+   ```
+
+   Without `CRON_TZ`, a host clock on UTC needs `0 4 * * *` (Tehran is UTC+3:30
+   all year). On Kubernetes, a `CronJob` with `timeZone: Asia/Tehran`,
+   `schedule: "30 7 * * *"`, `concurrencyPolicy: Forbid`, running the same
+   command in the backend image.
+
+3. **Check a run** -- it prints one line, e.g.
+   `{"day": "2026-10-03", "snapshots": 41, "sent": 37, "skipped_empty": 4}`.
+   Failures are in the `digest_log` table with their error; the next run
+   retries them. `--no-email` writes the snapshot only, `--date YYYY-MM-DD`
+   runs for another day, `--force-email` sends on a non-digest day.
+
+Users who have no email address are skipped (and logged); each user can turn
+the email off from their account menu ("Daily email digest").
+
+### Changing an SLA
+
+Each Action Center queue counts an item overdue after 14 days unless an
+administrator says otherwise: **Admin Console → Action SLA**, change the days,
+Save. It applies on the next read; no deploy or restart. (The same is
+`PUT /api/v1/admin/action-sla` with `[{"queue_key": "dt_review", "sla_days":
+7}]`.) Fixes follow their problem category's own SLA (Admin → Problem
+Categories), and the monthly plan its day-3 deadline.
+
 ---
 
 ## Where to look

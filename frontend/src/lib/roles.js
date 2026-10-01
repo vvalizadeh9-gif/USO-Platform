@@ -102,3 +102,26 @@ export const KPI_ROLES = ['PM', 'RegionalManager', 'Coordinator', 'Contractor']
 export function canSeeKpi(user) {
   return KPI_ROLES.includes(user?.role?.name)
 }
+
+// The Action Center (the ticket board). The four roles that act on queues get
+// it; Regional Manager and Viewer do not -- they land on their dashboards --
+// and neither does Admin. Must agree with board_role() in
+// app/services/action_queues/context.py; the server answers 403 to the rest.
+export const ACTION_CENTER_ROLES = ['PM', 'Coordinator', 'Contractor', ...CATEGORY_OWNER_ROLES]
+
+export function hasActionCenter(roleName) {
+  return ACTION_CENTER_ROLES.includes(roleName)
+}
+
+// Where "/" lands for each role. Everyone who works a queue lands on the
+// Action Center; Regional Manager on KPI & Performance, Viewer on the Drive
+// Test dashboard, Admin on the Admin Console.
+const HOME_BY_ROLE = {
+  Admin: '/admin',
+  RegionalManager: '/reports/kpi',
+  Viewer: '/reports/drive-test',
+}
+
+export function homeFor(roleName) {
+  return HOME_BY_ROLE[roleName] || (hasActionCenter(roleName) ? '/action-center' : '/reports/drive-test')
+}

@@ -206,3 +206,36 @@ class AcceptanceEvidence(Base):
     )
 
     submission: Mapped[AcceptanceSubmission] = relationship(back_populates="evidence")
+
+
+class AcceptanceAuthorityRequest(Base):
+    """A request letter sent to ICT or CRA for one village, awaiting its answer.
+
+    The submissions above record what the authority *decided*. This records the
+    step before it: the letter that asked. Between the two the village is
+    neither the contractor's move nor the coordinator's -- it is with the
+    authority, and someone has to chase it. Without a row for that, nobody
+    could see what had been sent and was still unanswered.
+
+    A request is *open* while no submission for the same village and authority
+    has been recorded since it was sent (see
+    ``acceptance_requests.open_request_clause``). Rows are never updated or
+    deleted: re-filing after a rejection sends a second request.
+    """
+
+    __tablename__ = "acceptance_authority_requests"
+    __table_args__ = (
+        Index("ix_acc_req_village_authority", "village_id", "authority", "sent_at"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    village_id: Mapped[int] = mapped_column(
+        ForeignKey("villages.id"), nullable=False
+    )
+    authority: Mapped[str] = mapped_column(String(10), nullable=False)  # ICT|CRA
+    # The outgoing letter. Optional: not every office numbers what it receives.
+    letter_number: Mapped[str | None] = mapped_column(String(120))
+    letter_date: Mapped[date | None] = mapped_column(Date)
+    # When it was sent -- the clock the PM's follow-up ticket runs on.
+    sent_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    sent_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"))

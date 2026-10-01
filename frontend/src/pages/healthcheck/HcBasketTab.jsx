@@ -48,7 +48,7 @@ const DT_PILL = { Ongoing: 'pill-violet', Problematic: 'pill-red' }
 //: pool, so the cap never changes what the screen claims.
 const PAGE = 200
 
-export default function HcBasketTab({ onCountChange } = {}) {
+export default function HcBasketTab({ onCountChange, initialState } = {}) {
   const toast = useToast()
   const [basket, setBasket] = useState(null)
   const [contractors, setContractors] = useState([])
@@ -56,7 +56,11 @@ export default function HcBasketTab({ onCountChange } = {}) {
   const [contractorId, setContractorId] = useState('')
   const [query, setQuery] = useState('')
   const [provinceSel, setProvinceSel] = useState(new Set())
-  const [state, setState] = useState('all')
+  // ?state=ready (read by the page) opens the pool on one state -- the Action
+  // Center's "Sites to assign" ticket counts exactly the "Ready to assign" rows.
+  const [state, setState] = useState(() =>
+    STATES.some((s) => s.key === initialState) ? initialState : 'all',
+  )
   const [limit, setLimit] = useState(PAGE)
   const [busy, setBusy] = useState(false)
   const [assigned, setAssigned] = useState(0)

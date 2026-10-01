@@ -1,102 +1,118 @@
-import { motion } from 'framer-motion'
-import { Radio, ClipboardCheck, GitCompare, ClipboardList, Bell, MapPin, Wrench, ListChecks, Undo2, ShieldCheck, Landmark } from 'lucide-react'
-import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { CheckCircle2 } from 'lucide-react'
+import { useCallback, useEffect, useState } from 'react'
 import api from '../api/client'
-import { EmptyState, Loading, PageHead, fadeUp, stagger } from '../components/ui'
+import PageFrame from '../components/PageFrame'
+import { Banner } from '../components/ui'
+import { useAuth } from '../context/AuthContext'
+import { shamsiDayLabel } from '../lib/shamsi'
+import { useCountUp, usePrefersReducedMotion } from './actioncenter/motion'
+import StageColumn, { StageColumnPlaceholder } from './actioncenter/StageColumn'
+import { expectedStages } from './actioncenter/stages'
 
-// One card per queue: icon and accent color. Adding a new counter to the
-// backend registry (services/action_center.py) needs nothing here — an
-// unknown key falls back to the neutral bell below.
-const COUNTER_META = {
-  pool: { icon: ClipboardList, color: 'var(--signal)' },
-  in_progress: { icon: Radio, color: 'var(--text-dim)' },
-  hc_review: { icon: ClipboardCheck, color: 'var(--green)' },
-  remediation: { icon: Wrench, color: 'var(--amber)' },
-  reroutes: { icon: GitCompare, color: 'var(--amber)' },
-  dt_assignment: { icon: Radio, color: 'var(--violet, var(--signal-strong))' },
-  dt_review: { icon: ClipboardCheck, color: 'var(--signal)' },
-  hc_submit: { icon: ClipboardList, color: 'var(--signal)' },
-  my_fixes: { icon: Wrench, color: 'var(--amber)' },
-  assigned_sites: { icon: MapPin, color: 'var(--violet, var(--signal-strong))' },
-  ready_to_assign: { icon: ListChecks, color: 'var(--signal)' },
-  returned: { icon: Undo2, color: 'var(--amber)' },
-  cpm: { icon: GitCompare, color: 'var(--amber)' },
-  // Filed and sitting with the authority. These two are the only counters on
-  // the page that are not this user's own move — they are what they chase, so
-  // the age matters more than the count and the card says both.
-  awaiting_ict: { icon: ShieldCheck, color: 'var(--signal)' },
-  awaiting_cra: { icon: Landmark, color: 'var(--violet)' },
-  // Monthly plans: what the PM decides, and what a contractor answers.
-  plans_to_approve: { icon: ClipboardCheck, color: 'var(--blue)' },
-  revisions_to_approve: { icon: GitCompare, color: 'var(--violet)' },
-  plans_returned: { icon: Undo2, color: 'var(--amber)' },
-  plans_missing: { icon: ClipboardList, color: 'var(--amber)' },
-}
-
-// The counters are the page.
+// The Action Center: everything waiting on this person, across the lifecycle
+// from Health Check to acceptance, as one ticket per queue in one column per
+// stage. Every number comes from GET /action-center/board, which counts each
+// queue with the same read as the screen its ticket opens.
 //
-// It used to also list every pending row underneath — one card per site code.
-// That answered "what needs me now" badly at scale: thirty-seven review rows
-// filled the screen before the second queue appeared, so the question the page
-// exists to answer took scrolling to answer, and the per-site detail was a
-// worse version of the queue screen each number already links to. The numbers
-// are the whole answer; the queue behind a number is one click away.
+// One screen, never scrolled: a column with more tickets than fit scrolls
+// inside itself (see design-system-cobalt.md, "Ticket board").
 export default function ActionCenter() {
-  const [counters, setCounters] = useState(null)
-  const navigate = useNavigate()
+  const { user } = useAuth()
+  const [board, setBoard] = useState(null)
+  const [failed, setFailed] = useState(false)
+  const reduced = usePrefersReducedMotion()
 
-  useEffect(() => {
+  const load = useCallback(() => {
+    setFailed(false)
     api
-      // Counters only -- the page shows nothing else (see above).
-      .get('/action-center/summary', { params: { items: false } })
-      .then((r) => setCounters(r.data.counters || []))
-      .catch(() => setCounters([]))
+      .get('/action-center/board')
+      .then((r) => setBoard(r.data))
+      .catch(() => setFailed(true))
   }, [])
 
-  if (!counters) return <Loading label="Loading your actions" />
+  useEffect(load, [load])
+
+  // Animate once, on the first board shown; never on a reload or retry.
+  const [animate] = useState(() => !reduced)
 
   return (
-    <>
-      <PageHead
-        eyebrow="My work"
-        title="Action Center"
-        subtitle="What needs you now. Every number is counted from live state and clears itself the moment the work is done."
-      />
-
-      {counters.length === 0 ? (
-        <div className="card"><EmptyState title="You're all caught up" hint="Nothing pending right now." /></div>
+    <PageFrame className="ac-page">
+      <BoardHeader totals={board?.totals} animate={animate && !reduced} />
+      {failed ? (
+        <Banner tone="error" title="The Action Center could not be loaded">
+          <p>Your work is unchanged. Try again in a moment.</p>
+          <button type="button" className="btn btn-sm" onClick={load}>Retry</button>
+        </Banner>
+      ) : !board ? (
+        <BoardLoading roleName={user?.role?.name} />
+      ) : board.stages.length === 0 ? (
+        <AllCaughtUp />
       ) : (
-        <motion.div className="grid grid-kpi" variants={stagger} initial="hidden" animate="show">
-          {counters.map((c) => (
-            <QueueCounter key={c.key} counter={c} onOpen={() => navigate(c.url)} />
+        <div
+          className="ac-board"
+          style={{ '--ac-cols': board.stages.length }}
+          aria-label="Pending work by stage"
+        >
+          {board.stages.map((stage, column) => (
+            <StageColumn
+              key={stage.key}
+              stage={stage}
+              column={column}
+              animate={animate && !reduced}
+            />
           ))}
-        </motion.div>
+        </div>
       )}
-    </>
+    </PageFrame>
   )
 }
 
-// One queue, its size, and where the number leads.
-function QueueCounter({ counter, onOpen }) {
-  const meta = COUNTER_META[counter.key] || { icon: Bell, color: 'var(--text-dim)' }
-  const Icon = meta.icon
+function BoardHeader({ totals, animate }) {
+  const pending = useCountUp(totals?.pending ?? 0, { animate })
+  const overdue = useCountUp(totals?.overdue ?? 0, { animate })
+  const today = shamsiDayLabel(new Date())
   return (
-    <motion.div
-      className="stat"
-      variants={fadeUp}
-      style={{ '--accent-glow': meta.color, cursor: 'pointer' }}
-      whileHover={{ y: -3 }}
-      transition={{ type: 'spring', stiffness: 300, damping: 20 }}
-      onClick={onOpen}
-    >
-      <div className="label">
-        <Icon size={15} strokeWidth={2} style={{ color: meta.color }} /> {counter.label}
+    <header className="ac-head">
+      <div>
+        {today && <div className="ac-today" lang="fa">{today}</div>}
+        <h1 className="ac-title">Action Center</h1>
       </div>
-      <div className="value tnum">{counter.count}</div>
-      {counter.oldest_days != null && (
-        <div className="sub">oldest {counter.oldest_days}d</div>
-      )}
-    </motion.div>
+      <div className="ac-figures" aria-live="polite">
+        {totals ? (
+          <>
+            <span className="ac-figure" aria-label={`${totals.pending} pending`}>
+              <b aria-hidden="true">{pending}</b> <span aria-hidden="true">pending</span>
+            </span>
+            <span className="ac-figure ac-figure-overdue" aria-label={`${totals.overdue} overdue`}>
+              <b aria-hidden="true">{overdue}</b> <span aria-hidden="true">overdue</span>
+            </span>
+          </>
+        ) : (
+          <span className="ac-figure ac-figure-placeholder" aria-hidden="true">
+            <b>–</b> pending
+          </span>
+        )}
+      </div>
+    </header>
+  )
+}
+
+function BoardLoading({ roleName }) {
+  const stages = expectedStages(roleName)
+  return (
+    <div className="ac-board" style={{ '--ac-cols': stages.length }} aria-busy="true">
+      <span className="sr-only">Loading your Action Center</span>
+      {stages.map((key) => <StageColumnPlaceholder key={key} stageKey={key} />)}
+    </div>
+  )
+}
+
+function AllCaughtUp() {
+  return (
+    <div className="ac-empty">
+      <CheckCircle2 size={32} strokeWidth={1.75} aria-hidden="true" />
+      <h2>All caught up</h2>
+      <p>Nothing is waiting on you right now. New work appears here the moment it reaches you.</p>
+    </div>
   )
 }

@@ -256,6 +256,9 @@ class UserOut(ORMModel):
     # True while the account is working off a temporary password an
     # administrator issued, and can do nothing but replace it.
     must_change_password: bool = False
+    # Whether the daily Action Center email reaches this person. They change
+    # it themselves through PUT /me/notifications.
+    email_digest_enabled: bool = True
     last_login_at: datetime | None = None
     provinces: list[ProvinceOut] = []
 

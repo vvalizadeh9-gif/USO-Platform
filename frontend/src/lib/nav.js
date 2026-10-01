@@ -22,7 +22,7 @@ import {
   Users,
   Wrench,
 } from 'lucide-react'
-import { CATEGORY_OWNER_ROLES, KPI_ROLES, MONTHLY_PLAN_ROLES } from './roles'
+import { ACTION_CENTER_ROLES, CATEGORY_OWNER_ROLES, KPI_ROLES, MONTHLY_PLAN_ROLES } from './roles'
 
 // The sidebar, grouped by project: each project's dashboard sits beside the
 // screens where that project's work is done, so a person finds the numbers
@@ -35,7 +35,7 @@ import { CATEGORY_OWNER_ROLES, KPI_ROLES, MONTHLY_PLAN_ROLES } from './roles'
 // day-to-day work queues) while everyone else keeps seeing them.
 //
 // `key` names the badge count Layout computes for an item: 'action' from the
-// Action Center summary, and 'hc' / 'dt' / 'mydt' from /hc/queues/counts and
+// Action Center board's pending total, and 'hc' / 'dt' / 'mydt' from /hc/queues/counts and
 // /drive-tests/my/counts -- see D2-D4 -- and 'mywork' from My Work's own
 // list with limit=0 (its first tab: Your move, or To check).
 //
@@ -51,7 +51,9 @@ export const NAV_SECTIONS = [
     label: 'Today',
     items: [
       { to: '/my-fix-queue', label: 'My Fix Queue', icon: Wrench, roles: CATEGORY_OWNER_ROLES },
-      { to: '/action-center', label: 'Action Center', icon: Inbox, key: 'action' },
+      // Not for Regional Manager or Viewer (their home is a dashboard), nor
+      // Admin: ACTION_CENTER_ROLES is the list the server serves the board to.
+      { to: '/action-center', label: 'Action Center', icon: Inbox, key: 'action', roles: ACTION_CENTER_ROLES },
     ],
   },
   {

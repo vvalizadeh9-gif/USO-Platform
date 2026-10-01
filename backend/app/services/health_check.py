@@ -408,6 +408,13 @@ HC_ASSIGNABLE_STATES = frozenset(
 )
 
 
+#: The pool's "Ready to assign" filter: sites nobody has checked yet, and
+#: sites whose fixes are all closed and are due a re-check. The states above
+#: may be assigned as a judgement call; these are the ones waiting on it. The
+#: HC Pool tab's state filter (HcBasketTab.jsx, ``ready``) matches the same two.
+HC_READY_TO_ASSIGN_STATES = frozenset({HC_STATE_NEW, HC_STATE_READY_FOR_RECHECK})
+
+
 def _hc_state(wi: WorkItem, task: HcTask | None, busy: set[int]) -> tuple[str, int, str | None]:
     """Where this on-air site currently stands in the health-check loop.
 
@@ -927,6 +934,7 @@ def owner_queue(db: Session, user: User) -> list[dict]:
                 "issue": failed[0].comment if failed else None,
                 "days_open": days_open,
                 "days_late": days_late,
+                "opened_at": _as_aware(rem.opened_at),
                 "due_at": due,
                 "also_waiting_on": blocking,
                 "reroute_pending": rem.reroute_to_category_id is not None,
