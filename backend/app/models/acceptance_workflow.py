@@ -68,8 +68,15 @@ class AcceptanceSubmission(Base):
 
     __tablename__ = "acceptance_submissions"
     __table_args__ = (
-        # The queue, the basket and the history all filter on these.
-        Index("ix_acc_sub_village_authority", "village_id", "authority"),
+        # The queue, the basket and the history all filter on village and
+        # authority, and read the rounds newest first. Not unique: withdrawn
+        # duplicates keep their round number (see b7d3e5a1c826).
+        Index(
+            "ix_acc_sub_village_authority_round",
+            "village_id",
+            "authority",
+            "round_no",
+        ),
         Index("ix_acc_sub_review_status", "review_status"),
         # At most one submission awaiting review per village and authority.
         # services/acceptance_workflow.py checks this before inserting, but

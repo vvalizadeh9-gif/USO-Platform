@@ -544,7 +544,7 @@ def counters(db: Session, user: User) -> list[ActionCounter]:
             if village_ids:
                 out.append(ActionCounter(
                     key=key, label=label, count=len(village_ids),
-                    url=f"/my-work?awaiting={quote(authority)}",
+                    url=f"/my-work?tab=filled&authority={quote(authority)}",
                     oldest_days=flow.oldest_waiting_days(db, village_ids),
                 ))
 

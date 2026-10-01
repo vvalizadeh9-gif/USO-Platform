@@ -12,6 +12,7 @@ from app.api import (
     misc,
     mojri,
     monthly_plan,
+    my_work,
     work_items,
     workflow,
 )
@@ -23,6 +24,7 @@ api_router.include_router(workflow.router)
 api_router.include_router(health_check.router)
 api_router.include_router(drive_test.router)
 api_router.include_router(acceptance.router)
+api_router.include_router(my_work.router)
 api_router.include_router(kpi.router)
 api_router.include_router(gaps.router)
 api_router.include_router(mojri.router)

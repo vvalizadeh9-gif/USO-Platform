@@ -377,15 +377,24 @@ data change, not a migration.
 #### How a verdict is reached
 
 Nothing a contractor types reaches the `acceptances` table directly. A
-submission is a *claim*; a coordinator or PM turns it into a *fact*:
+contractor's filing is a *claim*; a coordinator or PM turns it into a *fact*:
 
 ```
-contractor or coordinator          coordinator or PM
-        submits              →         validates            →   acceptances
-  (letter + per-tech verdicts                                    (the record)
-   + scanned evidence)              or returns it
-                                    with a reason  →  submitter files round 2
+contractor                        coordinator or PM
+   files a letter    →    confirms           →   acceptances
+  (per-tech results        or returns it            (the record)
+   + scanned letter)       with a reason  →  contractor files round 2
+
+coordinator or PM
+   saves a letter    →   recorded decided at once   →   acceptances
+  (a letter they received themselves; reviewed_by = them, audited)
 ```
+
+The second path is the one sanctioned exception to "someone else agrees"
+(`acceptance_workflow.record_decided`, see §6): a coordinator or PM entering
+a letter the office sent *them* has no one else to confirm it, and the letter
+is the evidence. It never lets anyone confirm their own *pending* filing --
+`review()` still refuses that.
 
 Every round is kept. A village rejected, fixed and re-submitted has both rounds
 on the record, with who decided each and why — `acceptance_submissions`,
@@ -410,26 +419,7 @@ My Work                    where letters are actually filed and validated
 computes from current state on every request and writes nothing. See
 "The Acceptance Dashboard" below.
 
-**My Work** (`/my-work`) is the work surface. Its left pane is a queue of
-villages, its right pane is one village and the one thing to do about it. The
-same screen serves a contractor and a coordinator — only the buckets and the
-form differ, because a submitter filling in a letter and a reviewer reading it
-back are two sides of one object, and a coordinator does both jobs in the same
-afternoon.
-
-The queue groups villages into four buckets, which **partition** the list (a
-village is in exactly one, so the chip counts sum to the total):
-
-| Bucket | What it means | Whose move |
-|---|---|---|
-| Closed | ICT and CRA both approved | nobody's |
-| Needs attention | either authority Returned or Rejected | the submitter's |
-| Awaiting review | a submission is waiting on a PM or coordinator | the reviewer's |
-| Ready to file | drive test done, nothing in flight, not closed | the submitter's |
-
-They are evaluated in that order, so a village whose ICT was returned while CRA
-is awaiting review counts as needing attention: the contractor has to move
-before anyone else can.
+**My Work** (`/my-work`) is the work surface; see "My Work" below.
 
 #### The Acceptance Dashboard
 
@@ -546,15 +536,13 @@ when neither is.
 
 #### Every number opens the list it counted
 
-The Acceptance Dashboard counts verdicts, so its figures link into the queue by
-verdict — `/my-work?ict_verdict=Rejected`, served by `ict_verdict` /
-`cra_verdict` on `GET /acceptance/villages`. They were linked at the queue's
-`status` before, which is the other question above, and so opened a list with
-every already-re-filed refusal missing. The two parameters are independent, so
-the ICT-versus-CRA cross tab is `ict_verdict=Approved&cra_verdict=NotApproved`
-rather than an endpoint of its own. A figure counted across the whole universe
-carries `bucket=all`, because landing on a role's usual bucket shows a fraction
-of the number that was clicked.
+The Acceptance Dashboard counts its own universe -- DT done and هدف, whether
+or not the site is on air. A figure that links into My Work passes
+`scope=universe`, so the list holds exactly the villages the figure counted;
+the sidebar opens `scope=remaining` (§ My Work). Under `scope=universe` an
+**All** tab appears for every role, because a fully approved village is in no
+other tab. The Action Center's "awaiting ICT/CRA" counters link to
+`/my-work?tab=filled&authority=ICT`.
 
 #### The three rules that look wrong and are not
 
@@ -579,12 +567,22 @@ hundred villages — the letter number is a field on each submission rather than
 shared entity, because each village is judged on its own.
 
 Filing them one at a time is still a hundred identical forms, so
-`POST /acceptance/submissions/bulk` takes the letter, the verdicts and the scan
-once and writes one submission per village. It is all-or-nothing: every village
-goes through the same `flow.submit()` the single-village endpoint calls, and if
-any of them fails its rules the whole transaction rolls back and the response
-names which ones failed and why. A partly-filed batch would leave the submitter
-with no way to tell which villages went in.
+`POST /acceptance/letters` takes one authority, one letter number, one date and
+one scan for 1-500 villages, each with its own per-technology claims, and
+writes one round per village (`services/acceptance_letters.py`). It is
+all-or-nothing: every village goes through `flow.submit()` (or
+`record_decided()`), every failure is collected, and if there is any the
+transaction rolls back and the response names each village and field that
+failed. A partly-filed letter would leave the submitter with no way to tell
+which villages went in. The villages are row-locked in id order first, so two
+letters filed at once cannot both take the same round number.
+
+The scan is uploaded once, before the letter, by `POST /acceptance/scans`,
+which stores the file and returns a signed `scan_id`
+(`services/scan_tokens.py`: HMAC over the stored file's facts, valid 24
+hours, usable only by its uploader). Nothing is written to the database until
+the letter is filed; an upload that is never used leaves one content-addressed
+blob behind.
 
 Evidence is **content-addressed**: a file is stored under the SHA-256 of its
 contents, so that one letter scanned once and attached to a hundred villages is
@@ -594,6 +592,95 @@ extension.
 
 Letter dates are entered and displayed in Shamsi and stored Gregorian; the
 conversion lives only in `core/jalali.py`, never in the browser.
+
+#### My Work
+
+`/my-work`, the acceptance work surface. The API contract is
+`docs/design/my-work-api.md`; this is how it is put together.
+
+**Who sees which villages.** Rows are villages, never sites. Two scopes, each
+a Python rule with a SQL twin held to it by a test (`services/my_work_scope.py`):
+
+| Scope | Villages | Opened from |
+|---|---|---|
+| `remaining` (default) | DT done, **on air**, هدف, ICT or CRA not approved | the sidebar |
+| `universe` | the Acceptance Dashboard's universe: DT done, هدف | a dashboard figure |
+
+On air is `cpm_columns.is_onair_stage`, applied in SQL as `kpi.onair_values`
+does -- the distinct `last_stage` values are read and the Python rule picks
+them -- so the two cannot drift. Row visibility is `apply_work_item_scope`
+underneath: a contractor sees their own villages, a coordinator their granted
+provinces, a PM everything. Admin is refused (it does no operational work);
+Regional Manager and Viewer get the coordinator view, read-only.
+
+**One vocabulary** (`services/my_work_status.py`). Each village has two
+independent sides, ICT and CRA, each in one of five statuses, read from the
+cached `villages.ict_status` / `cra_status` (which keep their stored words):
+
+| Status | Stored | Whose move |
+|---|---|---|
+| waiting | `NotFiled` | contractor |
+| filled | `Pending` | coordinator / PM |
+| returned | `Returned` | contractor |
+| rejected | `Rejected` | contractor |
+| approved | `Approved` | nobody |
+
+The tabs are one table there, from which both the Python check and the SQL
+predicate are built: **New letter needed** = any side rejected; else
+**Returned** = any side returned; else **Not filed** = any side waiting;
+**Your move** = those three together; **With coordinator / To check** = any
+side filled. They are **not** a partition: a village with ICT filled and CRA
+waiting is in both. The browser never derives a tab; the server sends each
+row's side statuses and the counts. `pages/mywork/statusVocabulary.json` holds
+only labels and tones, and a backend test holds its keys to the server's.
+
+**One query** (`services/my_work_query.py`). `base_select` is the whole
+population (visibility, scope, search). The rows are it plus the tab
+predicate; the tab counts and the PageBar totals are `count(*) FILTER` over
+the very same select. The sidebar badge is `GET /my-work?limit=0` -- the
+first tab's count, "Your move" or "To check" -- so a badge, a tab and its list
+can never disagree. Pagination is an opaque cursor bound to its filters.
+
+**Rounds and carry-over** (`services/acceptance_rounds.py`). Every filing is
+a round per village per authority, numbered 1, 2, 3, and never changed once
+decided. A returned or rejected side is filed again as the next round. When
+a round was partly rejected, the next one claims **only the technologies
+still to file** (`acceptance_workflow.techs_to_file`, read from the
+`acceptances` projection so a seeded approval counts too); the approved ones
+carry over with their original approval and date. Claiming a carried tech
+again is refused (`tech_carried`).
+
+**Filing and deciding.** ICT and CRA are filed and sent separately -- one
+authority per request, and nothing in the path touches the other side. A
+contractor's letter creates pending rounds; a coordinator's or PM's is
+recorded decided (`record_decided`). A coordinator or PM decides a contractor's
+pending round with `POST /letters/review`: Confirm (approved if every claim
+was, otherwise rejected with the contractor's reasons), Return (a reason is
+required and is shown to the contractor), or Confirm all on the letter -- the
+pending rounds on the same authority and letter number in the viewer's scope,
+not filed by the viewer (`confirmable_on_letter`, which is also what the
+"Confirm all N" count is read from). An approved side is locked here;
+corrections go through an admin path.
+
+**Undo** holds every send and decision in the browser for six seconds
+(`pages/mywork/useDeferredSend.js`) and sends it only then; Undo simply never
+sends. Nothing decided ever has to be rolled back. A held send is never
+dropped: closing the tab sends it at once with `fetch(..., { keepalive })`,
+and leaving the page or dismissing the toast sends it immediately. While a
+send is held the row and card show the outcome it will have.
+
+**Digits.** Shamsi dates and letter numbers are shown in Persian digits and
+stored, validated and sent in Latin ones. `core/digits.py` and
+`lib/persianDigits.js` are the two readers and share their test vectors
+(`lib/digitVectors.json`); the server normalises again, because "Confirm all
+on this letter" matches on the letter number.
+
+**Retired.** The old workspace's endpoints (`GET /villages`,
+`/villages/bucket-counts`, `POST /villages/{id}/submissions`,
+`/submissions/bulk`, the per-submission update, withdraw, review and evidence
+routes) answer with `Deprecation: true` for one release and are then removed.
+`GET /villages/{id}` keeps its old fields beside the new ones for the same
+release.
 
 #### The CPM workbook is no longer the source of acceptance
 
@@ -1117,12 +1204,20 @@ Admin is a *systems* role. PM is an *operational* role. Admin deliberately
 | Review a drive test | **No** | No | Yes |
 | Submit an acceptance letter | **No** | Yes | Yes (contractor too) |
 | Validate an acceptance submission | **No** | Yes | Yes |
+| Record a received letter as decided | **No** | Yes | Yes |
 | Decide a CPM change request | Yes | Yes | No |
 | View baskets, results, reports | Yes | Yes | Yes |
 
 The reason is auditability. Whoever controls user accounts should not also be
 able to record operational results — otherwise one account can both perform an
 action and alter who appears to have performed it.
+
+**The one deliberate exception to four eyes.** A coordinator or PM who saves a
+letter on My Work records it decided at once -- approved, or rejected if any
+technology was -- with `reviewed_by` set to them and an audit entry that says
+so (`decided_by_filer`). They are entering a letter the authority sent them,
+and there is no one else in the loop. Confirming somebody else's *pending*
+filing is unchanged: nobody may confirm a round they filed themselves.
 
 > If you are writing a test and an admin token gets a `403`, the test is
 > probably wrong, not the permission. Several tests in this repository had that

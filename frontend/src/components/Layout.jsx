@@ -278,7 +278,10 @@ export default function Layout() {
   // dt: DT Assignment + DT Review (D3) -- In Progress waits on the contractor.
   // mydt: a contractor's own To do count (D4). My Health Check has no count
   // endpoint of its own today, so it carries no badge (see D4).
-  const [badges, setBadges] = useState({ action: 0, hc: 0, dt: 0, mydt: 0 })
+  // mywork: My Work's first tab -- "Your move" for a contractor, "To check"
+  //     for a coordinator or PM -- read from the list endpoint with limit=0,
+  //     the same select its tabs are counted from.
+  const [badges, setBadges] = useState({ action: 0, hc: 0, dt: 0, mydt: 0, mywork: 0 })
   const roleName = user?.role?.name
 
   useEffect(() => {
@@ -289,6 +292,12 @@ export default function Layout() {
   // their own tab badges use (see D2-D4), so a sidebar number can never
   // disagree with the tabs it summarises.
   const loadQueueBadges = useCallback(() => {
+    if (roleName && roleName !== 'Admin') {
+      api
+        .get('/acceptance/my-work', { params: { limit: 0 } })
+        .then((r) => setBadges((b) => ({ ...b, mywork: r.data?.tabs?.[0]?.count ?? 0 })))
+        .catch(() => {})
+    }
     if (roleName === 'PM' || roleName === 'Coordinator') {
       api
         .get('/hc/queues/counts')
