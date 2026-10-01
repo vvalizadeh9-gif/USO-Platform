@@ -458,3 +458,36 @@ def test_mojri_cleanup_empties_statuses_and_keeps_the_runs(engine):
     assert _counts() == (0, 1)
     _downgrade(engine, "c4f9a2e7d318")
     assert _counts() == (0, 1)
+
+
+def _submission_indexes(engine) -> dict[str, list[str]]:
+    inspector = sa.inspect(engine)
+    return {
+        i["name"]: i["column_names"]
+        for i in inspector.get_indexes("acceptance_submissions")
+    }
+
+
+def test_round_index_replaces_the_village_authority_index(engine):
+    """b7d3e5a1c826: (village_id, authority, round_no) replaces the index on
+    its own prefix, is not unique (withdrawn duplicates share a round), and
+    the downgrade puts the old one back."""
+    _wipe(engine)
+    _upgrade(engine, "e9a4c7b2d153")
+    before = _submission_indexes(engine)
+    assert before["ix_acc_sub_village_authority"] == ["village_id", "authority"]
+
+    _upgrade(engine)
+    after = _submission_indexes(engine)
+    assert "ix_acc_sub_village_authority" not in after
+    assert after["ix_acc_sub_village_authority_round"] == [
+        "village_id", "authority", "round_no",
+    ]
+    unique = {
+        i["name"]: i["unique"]
+        for i in sa.inspect(engine).get_indexes("acceptance_submissions")
+    }
+    assert not unique["ix_acc_sub_village_authority_round"]
+
+    _downgrade(engine, "e9a4c7b2d153")
+    assert _submission_indexes(engine) == before
