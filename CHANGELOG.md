@@ -1,5 +1,45 @@
 # Changelog
 
+## Acceptance → My Work, rebuilt
+
+My Work is a one-screen workspace (1440×900 and 1280×800, the page never
+scrolls): the village list on the left, what CPM requested for the focused
+village, then its ICT and CRA side by side, each filed, sent and checked on
+its own. Ticking two or more villages files one letter for all of them.
+
+* **Who is listed:** villages, never sites, that are DT done, on air, هدف and
+  not yet approved by both authorities. A dashboard figure opens the
+  dashboard's own universe instead (`scope=universe`).
+* **Tabs:** Your move · New letter needed · Returned · Not filed · With
+  coordinator for a contractor; To check · Not filed · New letter needed ·
+  Returned · All for a coordinator or PM. The counts, the totals in the page
+  header and the sidebar badge come from the same query as the list.
+* **Re-filing after a partial rejection** claims only the refused
+  technologies; the approved ones carry over with their original date.
+* **A coordinator's or PM's saved letter is recorded decided at once**,
+  reviewed by them, and audited as such. Confirming a contractor's filing is
+  unchanged, and nobody confirms their own.
+* **Confirm all on this letter** decides every filed village on the same
+  letter in one go. Return needs a reason.
+* **Undo** for six seconds after every send or decision: nothing is sent
+  until then.
+* Letter numbers and dates are shown in Persian digits and stored in Latin.
+
+New endpoints: `GET /acceptance/my-work`, `GET /acceptance/villages/{id}/suggestions`,
+`POST /acceptance/villages/resolve`, `POST /acceptance/scans`,
+`POST /acceptance/letters`, `POST /acceptance/letters/review`
+(docs/design/my-work-api.md). `GET /acceptance/villages/{id}` gains the new
+fields beside its old ones.
+
+**Deprecated, removed next release:** `GET /acceptance/villages`,
+`/villages/bucket-counts`, `POST /villages/{id}/submissions`,
+`/submissions/bulk`, and the per-submission update, withdraw, review and
+evidence routes. They answer with `Deprecation: true`.
+
+**Deploy note:** migration `b7d3e5a1c826` replaces the index on
+`acceptance_submissions (village_id, authority)` with one on
+`(village_id, authority, round_no)`. No data changes.
+
 ## Mojri import matches on site and village codes; "2G" in the 2G column reads registered
 
 After a Mojri import, **Lifecycle Gaps** showed every approved village as "Not

@@ -276,6 +276,53 @@ Vazirmatn (`.text-farsi`), `dir="rtl"` or `dir="auto"`.
   ("+17 vs due today", "−20 vs plan", "On pace"). No plan: a neutral "No plan
   set" ring and no pill.
 
+### My Work components (`frontend/src/pages/mywork/`)
+
+Every element that shows a status takes `data-tone` (pending, ongoing,
+success, danger, neutral), which sets `--tone-ink` and `--tone-soft` for it;
+no component picks a status colour itself. ICT and CRA colours appear only in
+`AuthorityChip`s.
+
+- **Status bar** (`StatusBar.jsx`) -- the three-segment traffic light for one
+  side: submitter ("You fill" / "Contractor"), checker ("Coordinator" / "You
+  check"), "Approved". Segments 8px, radius 4, 4px apart, each labelled 12/16;
+  the lit one is the status ink (600 label), the others their own soft tint
+  (pending, ongoing, success). Returned is the lit segment drawn as a 1.5px
+  `--danger-ink` outline on white; Rejected is solid. Segment 1 is renamed to
+  the trouble when the side came back ("Returned", "Rejected"). `role="img"`
+  with "Status: …". The **mini bar** in a list row is three 18 × 6 segments
+  over the status word (12/16 600 in its ink), 62px wide. A legend under the
+  list names each colour.
+- **Village row** -- 60px: a checkbox, the Farsi name (Vazirmatn 15/22 500,
+  ellipsis), an optional "Round N" neutral tag, and a 13/18 meta line (code,
+  the contractor for staff, then the days waiting, which turn `--pending-ink`
+  600 at 60 days or more and never truncate), then a mini bar per authority.
+  Focused: `--accent-wash` with a 2px inset `--accent` border; ticked:
+  `--accent-wash`.
+- **Outlined field** -- the letter number and date: 44px, radius 6, the
+  12/16 600 label sitting on the top border (white behind it). Invalid is a
+  `--danger-ink` border and label, and the field's own text says what is
+  wrong ("Missing", "Scan missing", "Reason missing") -- there is no helper
+  text under any field.
+- **Letter numbers and Shamsi dates** (`.mw-fa-ltr`, `.mw-digits`) -- Persian
+  digits in Vazirmatn, `direction: ltr; unicode-bidi: isolate-override`:
+  isolated from the sentence around them, *and* kept in typed order inside,
+  because a Persian letter in "۱۴۰۵/ص/۱۹۲۰" would otherwise reorder it.
+- **Review block** -- the filed letter on `--surface-subtle` (radius 8): the
+  letter number and date, who filed it, "View scan", then one pill per
+  technology ("2G approved" success, "4G rejected" danger) with its reason.
+  Actions: "Confirm all N on this letter" on its own full-width row when the
+  letter covers others, then Return (danger text) and Confirm (primary).
+- **History line** -- one per round, newest first, two visible and "Show all
+  N": a 20px tone mark (✓, ×, a returned ↩ outlined, • filed), R{n}, the
+  letter number, the short result in its tone, the date. The full text is the
+  line's hover title. In a card narrower than 300px (1280px screens) the date
+  drops from the line and stays in the title.
+- **Undo toast** -- the one `--shadow-2` on the page: success banner colours,
+  radius 8, pinned to the bottom of the work column, "Sent ICT for سرآسیاب"
+  with Undo and ×. Slides in 8px over 180ms; no motion under
+  `prefers-reduced-motion`.
+
 ### Lifecycle Gaps components (`frontend/src/components/`)
 
 Built for Lifecycle Gaps and free of it; any page with the same shape of data

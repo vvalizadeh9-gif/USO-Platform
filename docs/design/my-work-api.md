@@ -1,6 +1,6 @@
 # My Work API — design (step 4)
 
-Status: **for review**. Base path `/api/v1/acceptance`. Bearer auth on every
+Status: **implemented** (see ARCHITECTURE.md, "My Work"). Base path `/api/v1/acceptance`. Bearer auth on every
 route. This is the contract the backend (step 5) and frontend (step 6) are
 built and tested against.
 
@@ -103,6 +103,7 @@ GET /acceptance/my-work?scope=remaining&tab=your_move&authority=&q=&sort=waiting
 | `authority` | Optional. Narrows rows **and counts** to villages where that side matches the tab. Replaces the Action Center's `awaiting=ICT`, which becomes `tab=filled&authority=ICT`. |
 | `q` | Village name, village code, or site code (case-insensitive, digit-normalised). |
 | `cursor` | Opaque keyset cursor (sort key + id, bound to scope/tab/q/sort/authority). A mismatched or tampered cursor gives `400 invalid_cursor`. |
+| `ids` | Optional comma-separated village ids (≤ 500): exactly those rows, still inside the caller's scope, whatever the tab. The rows behind a paste or "+ N from SITE" that the current page did not load. |
 | `limit` | 0–500, default 100. **`limit=0` returns counts only**: the sidebar badge reads this, so it can never disagree with the tabs. |
 
 ```jsonc
@@ -141,7 +142,7 @@ GET /acceptance/my-work?scope=remaining&tab=your_move&authority=&q=&sort=waiting
   "refiling_round": 2,             // "Round N" tag; null unless a side is being re-filed
   "sides": {
     "ICT": { "status": "rejected", "round_no": 1, "next_round_no": 2,
-             "editable": true, "reviewable": false },
+             "editable": true, "reviewable": false, "to_file": ["4G"] },
     "CRA": { "status": "filled",   "round_no": 1, "next_round_no": null,
              "editable": false, "reviewable": false }
   }
@@ -165,6 +166,7 @@ The existing route, **extended additively**: the old fields (`village`,
 200 {
   "village_id": 812,
   "facts": {                       // the Requested card, six fields, in order
+    "work_item_id": 455,           // Site ID links to Work Items
     "site_id": 301, "site_code": "KHR-0417",
     "province_name": "خراسان رضوی",
     "village_code": "V-10422", "village_name": "سرآسیاب",
