@@ -26,6 +26,7 @@ from sqlalchemy import ColumnElement, Select, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.core.digits import to_latin
+from app.models.acceptance import Acceptance
 from app.models.acceptance_workflow import (
     AUTHORITIES,
     REVIEW_PENDING,
@@ -64,9 +65,12 @@ class ListRequest:
     sort: str = SORT_LONGEST
     cursor: str | None = None
     limit: int = 100
+    #: Exactly these villages (still inside the caller's scope), whatever
+    #: the tab -- the rows behind a paste or a same-site suggestion.
+    ids: tuple[int, ...] | None = None
 
     def fingerprint(self) -> str:
-        key = json.dumps([self.scope, self.tab, self.authority, self.q, self.sort])
+        key = json.dumps([self.scope, self.tab, self.authority, self.q, self.sort, self.ids])
         return hashlib.sha256(key.encode()).hexdigest()[:16]
 
 
@@ -77,6 +81,7 @@ class SideFacts:
     next_round_no: int | None
     editable: bool
     reviewable: bool
+    to_file: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -266,6 +271,7 @@ def side_facts(
     pending_by: int | None,
     *,
     viewer: User,
+    to_file: list[str] | None = None,
 ) -> SideFacts:
     """What one side lets this viewer do. Shared by the list and the detail."""
     read_only = S.is_read_only(viewer.role.name)
@@ -281,6 +287,7 @@ def side_facts(
         next_round_no=((latest_round or 0) + 1) if status in S.EDITABLE else None,
         editable=editable,
         reviewable=reviewable,
+        to_file=list(to_file or []),
     )
 
 
@@ -292,6 +299,19 @@ def refiling_round(sides: dict[str, SideFacts]) -> int | None:
         if s.status in S.REFILING and s.next_round_no
     ]
     return max(rounds) if rounds else None
+
+
+def _acceptances(db: Session, village_ids: list[int]) -> dict[int, list]:
+    rows = db.execute(
+        select(
+            Acceptance.village_id, Acceptance.technology,
+            Acceptance.ict_status, Acceptance.cra_status,
+        ).where(Acceptance.village_id.in_(village_ids))
+    ).all()
+    by_village: dict[int, list] = {}
+    for row in rows:
+        by_village.setdefault(row.village_id, []).append(row)
+    return by_village
 
 
 def _days(since) -> int | None:
@@ -319,6 +339,7 @@ def _rows(db: Session, village_ids: list[int], viewer: User) -> list[RowFacts]:
         .where(Village.id.in_(village_ids))
     ).all()
     by_id = {r[0]: r for r in records}
+    acceptances = _acceptances(db, village_ids)
     latest, pending_by = _round_facts(db, village_ids)
     activity = flow.last_activity(db, village_ids)
 
@@ -326,12 +347,14 @@ def _rows(db: Session, village_ids: list[int], viewer: User) -> list[RowFacts]:
     for village_id in village_ids:
         (vid, code, name, ict, cra, site_id, site_code, wi_id, province,
          contractor, requested, dt_date) = by_id[village_id]
+        techs = parse_technologies(requested)
         sides = {
             authority: side_facts(
                 S.display_status(stored),
                 latest.get((vid, authority)),
                 pending_by.get((vid, authority)),
                 viewer=viewer,
+                to_file=flow.techs_to_file_from(techs, acceptances.get(vid, []), authority),
             )
             for authority, stored in (("ICT", ict), ("CRA", cra))
         }
@@ -340,7 +363,7 @@ def _rows(db: Session, village_ids: list[int], viewer: User) -> list[RowFacts]:
             village_id=vid, village_code=code, village_name=name,
             site_id=site_id, site_code=site_code, work_item_id=wi_id,
             province_name=province, contractor_name=contractor,
-            requested_technologies=parse_technologies(requested),
+            requested_technologies=techs,
             dt_date=dt_date, days_waiting=days,
             long_wait=days is not None and days >= S.LONG_WAIT_DAYS,
             refiling_round=refiling_round(sides), sides=sides,
@@ -370,8 +393,13 @@ def list_my_work(db: Session, user: User, request: ListRequest) -> ListResult:
     rows: list[RowFacts] = []
     next_cursor = None
     if request.limit:
+        rows_of = (
+            base.where(Village.id.in_(request.ids))
+            if request.ids is not None
+            else base.where(S.tab_clause(request.tab, side_columns(request.authority)))
+        )
         stmt = (
-            base.where(S.tab_clause(request.tab, side_columns(request.authority)))
+            rows_of
             .order_by(*_ordering(request.sort))
             .offset(offset)
             .limit(request.limit + 1)
@@ -388,7 +416,7 @@ def list_my_work(db: Session, user: User, request: ListRequest) -> ListResult:
         tabs=[(t, counts[t]) for t in tabs],
         totals_kind=S.totals_kind(view),
         totals=totals,
-        total=counts[request.tab],
+        total=len(rows) if request.ids is not None else counts[request.tab],
         rows=rows,
         next_cursor=next_cursor,
     )

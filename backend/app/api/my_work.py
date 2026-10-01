@@ -90,6 +90,18 @@ def _scope(scope: str) -> str:
 # --------------------------------------------------------------------------
 # The list
 # --------------------------------------------------------------------------
+def _ids(raw: str | None) -> tuple[int, ...] | None:
+    if raw is None:
+        return None
+    try:
+        ids = tuple(dict.fromkeys(int(x) for x in raw.split(",") if x.strip()))
+    except ValueError:
+        raise _error(400, "invalid_ids", "ids must be comma-separated numbers") from None
+    if len(ids) > query.MAX_LIMIT:
+        raise _error(400, "invalid_ids", f"At most {query.MAX_LIMIT} ids")
+    return ids
+
+
 def _side_out(facts: query.SideFacts) -> SideOut:
     return SideOut(**vars(facts))
 
@@ -112,6 +124,7 @@ def my_work(
     sort: str = query.SORT_LONGEST,
     cursor: str | None = None,
     limit: int = 100,
+    ids: str | None = Query(None, description="Comma-separated village ids; overrides the tab"),
     db: Session = Depends(get_db),
     user: User = Depends(require_worker),
 ) -> MyWorkList:
@@ -122,7 +135,7 @@ def my_work(
     tab = tab or S.tabs_for(view, universe=scope == "universe")[0]
     request = query.ListRequest(
         scope=scope, tab=tab, authority=authority.upper() if authority else None,
-        q=q, sort=sort, cursor=cursor, limit=limit,
+        q=q, sort=sort, cursor=cursor, limit=limit, ids=_ids(ids),
     )
     try:
         result = query.list_my_work(db, user, request)
@@ -162,6 +175,7 @@ def _facts(village: Village) -> CpmFacts:
     work_item = village.work_item
     site = work_item.site if work_item else None
     return CpmFacts(
+        work_item_id=work_item.id if work_item else None,
         site_id=site.id if site else None,
         site_code=site.site_code if site else None,
         province_name=site.province.name if site and site.province else None,
@@ -197,8 +211,7 @@ def _round_out(r, names: dict[int, str]) -> RoundOut:
 def _side_detail_out(side: detail.SideDetail, names: dict[int, str]) -> SideDetailOut:
     h = side.history
     return SideDetailOut(
-        **vars(side.facts),
-        to_file=h.to_file,
+        **{**vars(side.facts), "to_file": h.to_file},
         carry_over=[CarriedOut(**vars(c)) for c in h.carry_over],
         last_reason=LastReasonOut(**vars(h.last_reason)) if h.last_reason else None,
         same_letter=(

@@ -4,6 +4,7 @@
 // a function of the request URL, for an answer that depends on its query.
 import * as F from './fixtures.js'
 import { villagesXlsx } from './xlsx.js'
+import { myWorkList, myWorkSuggestions, myWorkVillage } from './myWorkFixtures.js'
 
 const ROUTES = {
   '/auth/me': F.PM,
@@ -33,11 +34,21 @@ const ROUTES = {
 // only once. Every page must lay out right whatever order its reads land in.
 const LATE = { '/drive-test/overview': 400, '/drive-test/plan-delivery': 250, '/drive-test/trend': 250 }
 
-export async function signIn(page) {
-  await page.addInitScript((user) => {
+// Paths with an id in them, answered by a function of the URL and the
+// signed-in user's view.
+const PATTERNS = [
+  [/^\/acceptance\/villages\/\d+\/suggestions$/, myWorkSuggestions],
+  [/^\/acceptance\/villages\/\d+$/, myWorkVillage],
+  [/^\/acceptance\/my-work$/, myWorkList],
+]
+
+const viewOf = (user) => (user.role.name === 'Contractor' ? 'contractor' : 'staff')
+
+export async function signIn(page, user = F.PM) {
+  await page.addInitScript((u) => {
     localStorage.setItem('uep_token', 'e2e-token')
-    localStorage.setItem('uep_user', JSON.stringify(user))
-  }, F.PM)
+    localStorage.setItem('uep_user', JSON.stringify(u))
+  }, user)
   await page.route('**/api/v1/**', async (route) => {
     const path = new URL(route.request().url()).pathname.replace('/api/v1', '')
     if (path === '/gaps/villages.xlsx') {
@@ -48,6 +59,17 @@ export async function signIn(page) {
         headers: { 'content-disposition': `attachment; filename="uep-export-${count}.xlsx"` },
         body: villagesXlsx(count),
       })
+    }
+    const url = route.request().url()
+    const pattern = PATTERNS.find(([re]) => re.test(path))
+    if (pattern) {
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(pattern[1](url, viewOf(user))) })
+    }
+    if (path === '/auth/me') {
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(user) })
+    }
+    if (path === '/acceptance/scans') {
+      return route.fulfill({ status: 201, contentType: 'application/json', body: JSON.stringify({ scan_id: 'scan-token', filename: 'letter.pdf', content_type: 'application/pdf', size_bytes: 10, expires_at: '2030-01-01T00:00:00Z' }) })
     }
     const entry = path in ROUTES ? ROUTES[path] : []
     const body = typeof entry === 'function' ? entry(route.request().url()) : entry

@@ -1,0 +1,21 @@
+{
+  "statuses": {
+    "waiting":  { "label": "Waiting",  "tone": "pending", "slot": 0, "outline": false },
+    "returned": { "label": "Returned", "tone": "danger",  "slot": 0, "outline": true },
+    "rejected": { "label": "Rejected", "tone": "danger",  "slot": 0, "outline": false },
+    "filled":   { "label": "Filed",    "tone": "ongoing", "slot": 1, "outline": false },
+    "approved": { "label": "Approved", "tone": "success", "slot": 2, "outline": false }
+  },
+  "tabs": {
+    "your_move":  { "contractor": "Your move",         "staff": "Your move" },
+    "new_letter": { "contractor": "New letter needed", "staff": "New letter needed" },
+    "returned":   { "contractor": "Returned",          "staff": "Returned" },
+    "not_filed":  { "contractor": "Not filed",         "staff": "Not filed" },
+    "filled":     { "contractor": "With coordinator",  "staff": "To check" },
+    "all":        { "contractor": "All",               "staff": "All" }
+  },
+  "segments": {
+    "contractor": ["You fill", "Coordinator", "Approved"],
+    "staff":      ["Contractor", "You check", "Approved"]
+  }
+}

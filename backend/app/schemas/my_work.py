@@ -24,6 +24,7 @@ class SideOut(BaseModel):
     next_round_no: int | None
     editable: bool
     reviewable: bool
+    to_file: list[str] = []
 
 
 class MyWorkRow(BaseModel):
@@ -70,6 +71,7 @@ class MyWorkList(BaseModel):
 
 # ---------- Village detail ----------
 class CpmFacts(BaseModel):
+    work_item_id: int | None
     site_id: int | None
     site_code: str | None
     province_name: str | None
@@ -127,7 +129,6 @@ class SameLetterOut(BaseModel):
 
 
 class SideDetailOut(SideOut):
-    to_file: list[str]
     carry_over: list[CarriedOut]
     last_reason: LastReasonOut | None
     same_letter: SameLetterOut | None

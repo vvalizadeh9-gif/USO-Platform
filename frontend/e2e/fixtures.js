@@ -14,6 +14,15 @@ export const PM = {
   must_change_password: false,
 }
 
+export const CONTRACTOR = {
+  id: 2,
+  username: 'contractor',
+  full_name: 'Kerman DT',
+  role: { name: 'Contractor' },
+  contractor_id: 1,
+  must_change_password: false,
+}
+
 const PROVINCES = ['تهران', 'اصفهان', 'فارس', 'خراسان رضوی', 'کرمان', 'یزد', 'گیلان', 'مازندران']
 const CONTRACTORS = ['پیشرو فن', 'ارتباط گستر', 'نوآوران شبکه', 'پارس تل', 'آریا موج', 'راه ارتباط']
 const MONTHS = ['فروردین', 'اردیبهشت', 'خرداد', 'تیر', 'مرداد', 'شهریور', 'مهر', 'آبان', 'آذر', 'دی', 'بهمن', 'اسفند']

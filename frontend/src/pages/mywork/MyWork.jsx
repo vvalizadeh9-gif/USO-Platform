@@ -1,360 +1,217 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useMatch, useNavigate, useSearchParams } from 'react-router-dom'
-import { FileStack, PanelLeftOpen, X } from 'lucide-react'
-import api from '../../api/client'
+import PageFrame from '../../components/PageFrame'
+import { AuthorityChip, Banner, Loading, PageBar, Tabs } from '../../components/ui'
 import { useAuth } from '../../context/AuthContext'
 import { useToast } from '../../context/ToastContext'
-import { EmptyState, Loading, PageHead } from '../../components/ui'
-import BulkLetterModal from './BulkLetterModal'
-import QueuePane from './QueuePane'
-import VillagePane from './VillagePane'
-import { AUTHORITY_LABEL, GROUP_LABEL, REVIEW_ROLES, bucketsFor, errorText } from './status'
+import { fetchSuggestions } from './api'
+import { ManyAuthorityCard, SingleAuthorityCard } from './AuthorityCard'
+import { RequestedMany, RequestedOne } from './RequestedCard'
+import { AUTHORITIES, VIEW_STAFF, tabLabel } from './status'
+import UndoToast from './UndoToast'
+import VillageList from './VillageList'
+import { useDeferredSend } from './useDeferredSend'
+import { useFilingForms } from './useFilingForms'
+import { useLetterActions } from './useLetterActions'
+import { useMyWork } from './useMyWork'
 
-const PAGE_SIZE = 50
+const DECIDING_ROLES = ['Coordinator', 'PM']
 
 /**
- * My Work — the acceptance workspace.
+ * Acceptance → My Work: every village whose ICT or CRA letter still needs
+ * someone, and the one thing to do about it.
  *
- * One screen, two panes: a queue of villages on the left, the village being
- * worked on the right. It replaces a page of tabs that showed status, because
- * status is a reporting question and this is not a reporting screen — status
- * lives in Acceptance → Dashboard.
+ * Left, the village list (the only thing that scrolls). Right, what CPM
+ * requested for the focused village, then its ICT and CRA side by side --
+ * each filed, sent and checked on its own. Ticking two or more villages turns
+ * the right side into one letter for all of them.
  *
- * The same component serves a contractor filing letters and a coordinator
- * validating them. Only the buckets and the form differ; the layout is
- * deliberately identical, so someone who does both jobs does not learn two
- * screens.
+ * The server decides every rule; this page draws what it is told
+ * (docs/design/my-work-api.md).
  */
 export default function MyWork() {
   const { user } = useAuth()
   const toast = useToast()
-  const navigate = useNavigate()
-  const onVillage = useMatch('/my-work/v/:villageId')
-  const [params, setParams] = useSearchParams()
+  const decides = DECIDING_ROLES.includes(user?.role?.name)
+  const mw = useMyWork()
+  const [forms, formActions] = useFilingForms()
+  const deferred = useDeferredSend()
+  const letters = useLetterActions({ decides, forms, actions: formActions, deferred, refresh: mw.refresh, toast })
 
-  // Where a number on another screen lands. The Acceptance dashboard and the
-  // Action Center both open this one filtered to exactly what they counted —
-  // a figure the reader then has to re-derive by hand was never really an
-  // answer. `awaiting=ICT` is the older, narrower spelling of
-  // `authority=ICT&status=Pending`; both are honoured.
-  const drill = useMemo(() => {
-    const filters = {}
+  const view = mw.list?.view || (user?.role?.name === 'Contractor' ? 'contractor' : VIEW_STAFF)
+  const readOnly = Boolean(mw.list?.read_only)
+  const sendWord = decides ? 'Save' : 'Send'
 
-    const province = Number(params.get('province_id'))
-    if (province) filters.province_id = province
+  // A new selection starts the per-village answers over; the letter stays.
+  const selectionKey = `${mw.focusId}|${mw.ticked.join(',')}`
+  useEffect(() => { formActions.newSelection() }, [selectionKey, formActions])
 
-    // What the Acceptance dashboard's figures carry: a verdict per authority,
-    // which is where a village *stands*. The queue's own vocabulary below is
-    // a different question — whose move is it — and the two part company the
-    // moment a refused village is re-filed.
-    for (const authority of ['ict', 'cra']) {
-      const verdict = params.get(`${authority}_verdict`)
-      if (verdict) filters[`${authority}_verdict`] = verdict
+  const heldFor = useCallback((villageId, authority) => {
+    for (let i = deferred.held.length - 1; i >= 0; i -= 1) {
+      const overlay = deferred.held[i].overlay
+      if (overlay?.authority === authority && overlay.sides[villageId]) return overlay.sides[villageId]
     }
-
-    const raw = (params.get('awaiting') || '').toUpperCase()
-    if (['ICT', 'CRA'].includes(raw)) {
-      Object.assign(filters, { authority: raw, status: 'Pending' })
-    } else {
-      const authority = (params.get('authority') || '').toUpperCase()
-      const status = params.get('status')
-      if (['ICT', 'CRA'].includes(authority) && status) {
-        Object.assign(filters, { authority, status })
-      }
-    }
-    return Object.keys(filters).length ? filters : null
-  }, [params])
-
-  // What that filter is called on screen. Not part of `drill`, which is sent
-  // to the server as it stands: the province *name* is here to be read, and
-  // the server was given the id.
-  const drillLabel = useMemo(() => {
-    if (!drill) return null
-    const parts = []
-    if (drill.province_id) parts.push(params.get('province') || 'One province')
-    for (const authority of ['ict', 'cra']) {
-      const verdict = drill[`${authority}_verdict`]
-      if (verdict) {
-        parts.push(
-          `${authority.toUpperCase()} ${
-            verdict === 'NotApproved' ? 'not approved' : verdict.toLowerCase()
-          }`
-        )
-      }
-    }
-    if (drill.authority) {
-      parts.push(`${drill.authority} · ${AUTHORITY_LABEL[drill.status] || drill.status}`)
-    }
-    return parts.join(' · ')
-  }, [drill, params])
-
-  // A bucket named in the URL wins over this role's usual landing bucket —
-  // that is the whole point of the headline card's four figures being links.
-  // `bucket=all` is how a figure counted across every bucket opens every
-  // bucket. Without it the queue lands on this role's usual one and shows a
-  // fraction of the number that was clicked.
-  const rawBucket = params.get('bucket')
-  const urlBucket = rawBucket === 'all' ? null : rawBucket
-
-  const canReview = REVIEW_ROLES.includes(user?.role?.name)
-  const buckets = useMemo(() => bucketsFor(user?.role?.name), [user])
-
-  // Three ways to open this screen. Named bucket: show it. Authority filter:
-  // show no bucket, because "ICT approved" cuts across all of them and
-  // landing on this role's usual bucket would show an empty list. Otherwise:
-  // the role's first bucket, as before.
-  const [bucket, setBucket] = useState(
-    urlBucket || (drill || rawBucket === 'all' ? null : buckets[0].key)
-  )
-  // Until someone picks a chip themselves, the page is allowed to open on
-  // whichever bucket actually has work in it. Landing on an empty "Needs
-  // attention" tells a contractor with forty letters to file that there is
-  // nothing to do.
-  const [bucketPicked, setBucketPicked] = useState(false)
-  const [search, setSearch] = useState('')
-  const [query, setQuery] = useState('')
-  const [list, setList] = useState(null)
-  const [counts, setCounts] = useState(null)
-  const [bulkOpen, setBulkOpen] = useState(false)
-  const [queueOpen, setQueueOpen] = useState(true)
-
-  const selected = onVillage ? Number(onVillage.params.villageId) : null
-  const rows = list?.rows || []
-
-  // Typing filters the whole queue, so it waits for the typing to stop rather
-  // than firing a request per keystroke.
-  useEffect(() => {
-    const id = setTimeout(() => setQuery(search.trim()), 250)
-    return () => clearTimeout(id)
-  }, [search])
-
-  // The filter lives in the query string, so moving down the queue has to
-  // carry it — otherwise selecting the second village silently unfilters.
-  const suffix = params.toString() ? `?${params}` : ''
-  const select = useCallback(
-    (id) =>
-      navigate(id ? `/my-work/v/${id}${suffix}` : `/my-work${suffix}`, {
-        replace: !id,
-      }),
-    [navigate, suffix]
+    return null
+  }, [deferred.held])
+  const statusFor = useCallback(
+    (row, authority) => heldFor(row.village_id, authority)?.status || row.sides[authority].status,
+    [heldFor],
   )
 
-  const fetchList = useCallback(
-    async (which = bucket, text = query) => {
-      const { data } = await api.get('/acceptance/villages', {
-        params: {
-          bucket: which || undefined,
-          search: text || undefined,
-          ...(drill || {}),
-          limit: PAGE_SIZE,
-        },
-      })
-      setList(data)
-      return data
-    },
-    [bucket, query, drill]
+  const suggestion = useSuggestion(mw, readOnly)
+
+  const tabs = (mw.list?.tabs || []).map((t) => ({ key: t.key, label: tabLabel(t.key, view), count: t.count }))
+  const firstTab = mw.list?.tabs?.[0]?.key
+
+  const bar = (
+    <PageBar
+      eyebrow="Acceptance"
+      title="My Work"
+      context={mw.list && <AuthorityTotals totals={mw.list.authority_totals} />}
+      tabs={tabs.length > 0 && <Tabs label="Show villages" tabs={tabs} value={mw.tab} onChange={mw.setTab} />}
+    />
   )
-
-  const fetchCounts = useCallback(async () => {
-    // Counted under the same filter, so the chips describe the list the
-    // reader is actually looking at rather than the whole scope.
-    const { data } = await api.get('/acceptance/villages/bucket-counts', {
-      params: { ...(drill || {}) },
-    })
-    setCounts(data)
-    return data
-  }, [drill])
-
-  // Bucket or search changed: reload the queue. The current village is kept
-  // if it survived the change, so switching filters does not throw away what
-  // is half-typed on the right.
-  useEffect(() => {
-    let live = true
-    setList(null)
-    fetchList()
-      .then((data) => {
-        if (!live) return
-        const ids = data.rows.map((r) => r.village_id)
-        if (!selected || !ids.includes(selected)) select(ids[0] ?? null)
-      })
-      .catch(() => live && setList({ total: 0, rows: [] }))
-    return () => {
-      live = false
-    }
-    // `selected` is deliberately absent: this runs when the *queue* changes,
-    // not when the reader moves down it.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bucket, query, drill])
-
-  useEffect(() => {
-    fetchCounts()
-      .then((data) => {
-        if (bucketPicked || !bucket || (data[bucket] ?? 0) > 0) return
-        const first = buckets.find((b) => (data[b.key] ?? 0) > 0)
-        if (first) setBucket(first.key)
-      })
-      .catch(() => setCounts(null))
-    // Re-runs when the drill-down filter changes, because the chip counts are
-    // counted under it. The bucket is never moved once a filter is in play:
-    // the reader arrived from a number and expects to see that number's rows.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [drill])
-
-  /**
-   * Something was filed or decided: refresh both panes and move on.
-   *
-   * Landing on the next village rather than on what was just finished is the
-   * whole point of a queue — the person is here to get through a list, and a
-   * screen that stays put makes them find their place again every time.
-   */
-  const advance = useCallback(
-    async (message) => {
-      const index = rows.findIndex((r) => r.village_id === selected)
-      const preferred =
-        rows[index + 1]?.village_id ?? rows[index - 1]?.village_id ?? null
-
-      const [data] = await Promise.all([fetchList(), fetchCounts()])
-      const ids = data.rows.map((r) => r.village_id)
-      select(ids.includes(preferred) ? preferred : ids[0] ?? null)
-      if (message) toast.success(message)
-    },
-    [rows, selected, fetchList, fetchCounts, select, toast]
-  )
-
-  /** Skip: same movement, nothing recorded. */
-  const skip = useCallback(() => {
-    const index = rows.findIndex((r) => r.village_id === selected)
-    const next = rows[index + 1]?.village_id ?? rows[0]?.village_id ?? null
-    if (next && next !== selected) select(next)
-  }, [rows, selected, select])
-
-  const assigned = counts?.total
 
   return (
+    <PageFrame bar={bar} className="mw-page">
+      <div className="mw-body">
+        <VillageList
+          view={view}
+          rows={mw.rows}
+          total={mw.paste ? mw.rows.length : (mw.list?.total ?? 0)}
+          sort={mw.sort}
+          onSort={mw.setSort}
+          query={mw.query}
+          onQuery={mw.setQuery}
+          paste={mw.paste}
+          onTickPasted={() => mw.tick(mw.paste.ids)}
+          focusId={mw.focusId}
+          ticked={mw.ticked}
+          onFocus={mw.focus}
+          onTick={mw.toggleTick}
+          onTickAll={(all) => (all ? mw.clearTicks() : mw.tick(mw.rows.map((r) => r.village_id)))}
+          statusFor={statusFor}
+          hasMore={Boolean(mw.list?.next_cursor)}
+          onMore={mw.loadMore}
+          emptyHint={mw.query ? 'Nothing matches' : 'Nothing here'}
+          resetLabel={view === VIEW_STAFF ? 'Show to check' : 'Show your move'}
+          onReset={() => { mw.setQuery(''); if (firstTab) mw.setTab(firstTab) }}
+          error={mw.listError}
+        />
+        <div className="mw-work">
+          {mw.multi ? (
+            <MultiPane
+              mw={mw} decides={decides} readOnly={readOnly} forms={forms} formActions={formActions}
+              letters={letters} heldFor={heldFor} sendWord={sendWord}
+            />
+          ) : (
+            <SinglePane
+              mw={mw} view={view} decides={decides} forms={forms} formActions={formActions}
+              letters={letters} heldFor={heldFor} sendWord={sendWord} suggestion={suggestion}
+            />
+          )}
+          <UndoToast
+            entry={deferred.held[deferred.held.length - 1]}
+            onUndo={deferred.undo}
+            onSendNow={deferred.commit}
+          />
+        </div>
+      </div>
+    </PageFrame>
+  )
+}
+
+/** "ICT 9 not approved · CRA 9 not approved", or "… to check". */
+function AuthorityTotals({ totals }) {
+  const words = totals.kind === 'to_check' ? 'to check' : 'not approved'
+  return (
+    <div className="mw-totals">
+      {AUTHORITIES.map((authority) => (
+        <span key={authority} className="mw-total">
+          <AuthorityChip authority={authority} />
+          <span><strong className="tnum">{totals[authority]}</strong> {words}</span>
+        </span>
+      ))}
+    </div>
+  )
+}
+
+/** Same-site villages still waiting on the focused village's first open side. */
+function useSuggestion(mw, readOnly) {
+  const [suggestion, setSuggestion] = useState(null)
+  const detail = mw.detail
+  const authority = detail && AUTHORITIES.find((a) => detail.sides[a].editable)
+  useEffect(() => {
+    setSuggestion(null)
+    if (!detail || !authority || readOnly) return undefined
+    let live = true
+    fetchSuggestions(detail.village_id, authority, mw.scope)
+      .then((data) => { if (live) setSuggestion(data) })
+      .catch(() => {})
+    return () => { live = false }
+  }, [detail, authority, readOnly, mw.scope])
+  return suggestion
+}
+
+function SinglePane({ mw, view, decides, forms, formActions, letters, heldFor, sendWord, suggestion }) {
+  const detail = mw.detail
+  if (mw.detailError) return <Banner tone="error">{mw.detailError}</Banner>
+  if (!detail) return mw.rows.length ? <Loading label="Loading village" /> : null
+  return (
     <>
-      <PageHead
-        eyebrow="Regulatory"
-        title="My Work"
-        subtitle={
-          canReview
-            ? `Validate ICT and CRA letters, one village at a time.${
-                assigned != null ? ` ${assigned} in your scope.` : ''
-              }`
-            : `File ICT and CRA letters, one village at a time.${
-                assigned != null ? ` ${assigned} assigned to you.` : ''
-              }`
-        }
-        actions={
-          <button className="btn btn-primary" onClick={() => setBulkOpen(true)}>
-            <FileStack size={15} /> One letter, many villages
-          </button>
-        }
+      <RequestedOne
+        facts={detail.facts}
+        suggestion={suggestion}
+        onTakeSuggestion={() => mw.tick([detail.village_id, ...suggestion.villages.map((v) => v.village_id)])}
+        onPrev={() => mw.step(-1)}
+        onNext={() => mw.step(1)}
       />
-
-      <div className="row mb-16" style={{ gap: 8 }}>
-        <button
-          className="btn btn-sm queue-toggle"
-          onClick={() => setQueueOpen((open) => !open)}
-          aria-expanded={queueOpen}
-        >
-          <PanelLeftOpen size={14} /> Queue{list ? ` (${list.total})` : ''}
-        </button>
-
-        {drill && (
-          <button
-            className="btn btn-sm"
-            title="Show every village again"
-            onClick={() => {
-              const next = new URLSearchParams(params)
-              for (const key of [
-                'awaiting', 'authority', 'status',
-                'ict_verdict', 'cra_verdict', 'province_id', 'province', 'bucket',
-              ]) next.delete(key)
-              setParams(next, { replace: true })
-              setBucket(buckets[0].key)
-            }}
-          >
-            {drillLabel}
-            <X size={13} />
-          </button>
-        )}
-      </div>
-
-      <div className="mywork">
-        <QueuePane
-          collapsed={!queueOpen}
-          buckets={buckets}
-          bucket={bucket}
-          counts={counts}
-          onBucket={(key) => {
-            setBucketPicked(true)
-            setBucket(key)
-          }}
-          search={search}
-          onSearch={setSearch}
-          rows={rows}
-          loading={list === null}
-          selected={selected}
-          onSelect={select}
-        />
-
-        {list === null ? (
-          <div className="card">
-            <Loading label="Loading your queue" />
-          </div>
-        ) : selected ? (
-          <VillagePane
-            key={selected}
-            villageId={selected}
-            canReview={canReview}
-            onDone={advance}
-            onSkip={skip}
-            onError={(err, fallback) => toast.error(errorText(err, fallback))}
+      <div className="mw-cards">
+        {AUTHORITIES.map((authority) => (
+          <SingleAuthorityCard
+            key={authority}
+            authority={authority}
+            view={view}
+            decides={decides}
+            detail={detail}
+            side={detail.sides[authority]}
+            held={heldFor(detail.village_id, authority)}
+            form={forms[authority]}
+            actions={formActions}
+            letters={letters}
+            sendLabel={`${sendWord} ${authority}`}
           />
-        ) : (
-          <CaughtUp
-            bucket={bucket}
-            buckets={buckets}
-            counts={counts}
-            onBucket={(key) => {
-              setBucketPicked(true)
-              setBucket(key)
-            }}
-          />
-        )}
+        ))}
       </div>
-
-      {bulkOpen && (
-        <BulkLetterModal
-          onClose={() => setBulkOpen(false)}
-          onDone={(message) => {
-            setBulkOpen(false)
-            advance(message)
-          }}
-        />
-      )}
     </>
   )
 }
 
-/** Nothing left in this bucket — say so, and offer the ones that have work. */
-function CaughtUp({ bucket, buckets, counts, onBucket }) {
-  const elsewhere = buckets.filter((b) => b.key !== bucket && (counts?.[b.key] ?? 0) > 0)
+function MultiPane({ mw, decides, readOnly, forms, formActions, letters, heldFor, sendWord }) {
+  const rows = mw.tickedRows
+  const ids = useMemo(() => rows.map((r) => r.village_id), [rows])
   return (
-    <div className="card card-pad">
-      <EmptyState
-        title="You're all caught up in this bucket"
-        hint={`Nothing is in ${GROUP_LABEL[bucket]?.toLowerCase() || 'this bucket'} right now.`}
+    <>
+      <RequestedMany
+        rows={rows}
+        onUntick={(id) => mw.tick(ids.filter((x) => x !== id))}
+        onClear={mw.clearTicks}
       />
-      {elsewhere.length > 0 && (
-        <div className="row" style={{ gap: 8, justifyContent: 'center', paddingBottom: 24 }}>
-          {elsewhere.map((b) => (
-            <button key={b.key} className="btn btn-sm" onClick={() => onBucket(b.key)}>
-              {b.label} ({counts[b.key]})
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
+      <div className="mw-cards">
+        {AUTHORITIES.map((authority) => (
+          <ManyAuthorityCard
+            key={authority}
+            authority={authority}
+            decides={decides}
+            readOnly={readOnly}
+            rows={rows}
+            heldFor={(id) => heldFor(id, authority)}
+            form={forms[authority]}
+            actions={formActions}
+            letters={letters}
+            sendLabel={`${sendWord} ${authority}`}
+          />
+        ))}
+      </div>
+    </>
   )
 }

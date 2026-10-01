@@ -36,7 +36,8 @@ import { CATEGORY_OWNER_ROLES, KPI_ROLES, MONTHLY_PLAN_ROLES } from './roles'
 //
 // `key` names the badge count Layout computes for an item: 'action' from the
 // Action Center summary, and 'hc' / 'dt' / 'mydt' from /hc/queues/counts and
-// /drive-tests/my/counts -- see D2-D4.
+// /drive-tests/my/counts -- see D2-D4 -- and 'mywork' from My Work's own
+// list with limit=0 (its first tab: Your move, or To check).
 //
 // `step: true` marks the drive test lifecycle, drawn as a numbered rail
 // instead of icons. The numbers count the steps this person can see, so they
@@ -83,7 +84,7 @@ export const NAV_SECTIONS = [
     label: 'Acceptance',
     items: [
       { to: '/reports/acceptance', label: 'Dashboard', icon: ClipboardCheck },
-      { to: '/my-work', label: 'My Work', icon: Briefcase, hideRoles: ['Admin'] },
+      { to: '/my-work', label: 'My Work', icon: Briefcase, hideRoles: ['Admin'], key: 'mywork' },
     ],
   },
   {

@@ -307,13 +307,22 @@ def techs_to_file(village: Village, authority: str) -> list[str]:
     including verdicts seeded from the CPM workbook with no submission behind
     them -- so an approval can never be asked for twice.
     """
+    return techs_to_file_from(
+        requested_technologies(village), village.acceptances, authority
+    )
+
+
+def techs_to_file_from(requested: list[str], acceptances, authority: str) -> list[str]:
+    """:func:`techs_to_file` over plain rows, for callers reading in bulk.
+
+    ``acceptances`` is anything with ``.technology`` and ``.ict_status`` /
+    ``.cra_status`` -- ORM rows or result rows.
+    """
     field = f"{authority.lower()}_status"
-    by_tech = {a.technology: a for a in village.acceptances}
-    return [
-        t
-        for t in requested_technologies(village)
-        if t not in by_tech or getattr(by_tech[t], field) != APPROVED
-    ]
+    approved = {
+        a.technology for a in acceptances if getattr(a, field) == APPROVED
+    }
+    return [t for t in requested if t not in approved]
 
 
 def village_verdict(village: Village) -> str:

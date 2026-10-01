@@ -571,3 +571,21 @@ def test_old_endpoints_announce_their_retirement(client):
     pm = _user(client, "PM", "mw2_pm")
     r = client.get("/api/v1/acceptance/villages", headers=pm)
     assert r.status_code == 200 and r.headers["Deprecation"] == "true"
+
+
+def test_rows_carry_to_file_and_ids_fetch_rows_outside_the_tab_but_inside_scope(client):
+    _co, _p, _s, (vid,) = _seed("TOFILE")
+    _co2, _p2, _s2, (foreign,) = _seed("TOFILE-X")
+    pm = _user(client, "PM", "mw2_pm")
+    assert _letter(client, pm, "ICT", [{"village_id": vid, "claims": [
+        {"tech": "2G", "result": "approved"},
+        {"tech": "4G", "result": "rejected", "reason": "gap"},
+    ]}], number="TF-1").status_code == 201
+    row = _list(client, pm, ids=str(vid))["rows"][0]
+    assert row["sides"]["ICT"]["to_file"] == ["4G"]
+    assert row["sides"]["CRA"]["to_file"] == ["2G", "4G"]
+    assert row["refiling_round"] == 2
+
+    co_headers = _contractor(client, "tofile", _co)
+    got = _ids(_list(client, co_headers, tab="filled", ids=f"{vid},{foreign}"))
+    assert got == {vid}
