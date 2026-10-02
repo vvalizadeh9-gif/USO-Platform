@@ -31,7 +31,7 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import date as _date_cls, datetime as _dt, timedelta
+from datetime import date as _date_cls, datetime as _dt, timedelta, timezone
 
 import numpy as np
 import pandas as pd
@@ -46,6 +46,7 @@ from app.models.workitem import Site, Village, WorkItem
 from app.services import acceptance_tokens as tokens
 from app.services import cpm_columns as C
 from app.services.audit import record_audit
+from app.services.performance import onair_history
 
 logger = logging.getLogger(__name__)
 
@@ -161,6 +162,10 @@ class CpmImportService:
             acceptance_workflow.recompute_authority_statuses(
                 self._db, list(self._acceptance_touched)
             )
+
+        # The fallback on-air dates for Roles Performance: the first import
+        # that saw each site and village on air. Same transaction as the batch.
+        onair_history.record_on_air(self._db, batch.id, _dt.now(timezone.utc))
 
         record_audit(
             self._db,

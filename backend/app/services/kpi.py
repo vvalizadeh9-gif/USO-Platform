@@ -25,8 +25,10 @@ by the product owner and are followed exactly:
   provinces they happen to work in. It is the one figure on the page computed
   outside the viewer's scope, and it is an aggregate of thirty-one provinces —
   it identifies nobody.
-* **No ranking of people.** The heatmap ranks provinces; nothing on the page
-  ranks the four kinds of owner against each other.
+* **Only PM and Viewer compare people.** The old "never rank people" rule is
+  retired: Roles Performance ranks owners of one kind against each other, for
+  those two roles only (:func:`may_compare`). Everyone else is confined to
+  their own scope, so nothing they can open ranks anybody.
 
 Everything is aggregated with ``GROUP BY`` in the database. The only work done
 in Python is over the handful of rows a province-level GROUP BY returns.
@@ -47,7 +49,7 @@ from fastapi import HTTPException, status
 from sqlalchemy import Select, case, func, select
 from sqlalchemy.orm import Session
 
-from app.core.deps import ADMIN, COORDINATOR, CONTRACTOR, PM, REGIONAL
+from app.core.deps import ADMIN, COORDINATOR, CONTRACTOR, PM, REGIONAL, VIEWER
 from app.core.province_directory import ENGLISH_BY_PERSIAN, UNKNOWN_PROVINCE_LABEL
 from app.models.acceptance import CpmImportBatch
 from app.models.kpi import ProvinceMapping
@@ -63,8 +65,22 @@ LENS_CONTRACTOR = "contractor"
 LENS_REGION = "region"
 LENSES = (LENS_RM, LENS_COORDINATOR, LENS_CONTRACTOR, LENS_REGION)
 
-#: Which lens each role is confined to. PM is absent because PM has all four.
-#: Admin is absent because Admin has none — see :func:`require_kpi_access`.
+#: Two more scopes PM and Viewer may choose on Roles Performance: one
+#: province, and the whole country. Neither is an owner, so neither is in
+#: :data:`LENSES`, which Lifecycle Gaps partitions the country by.
+LENS_PROVINCE = "province"
+LENS_COUNTRY = "country"
+SCOPE_LENSES = (*LENSES, LENS_PROVINCE, LENS_COUNTRY)
+COUNTRY_KEY = "Whole country"
+
+#: The roles that may choose any scope and see other people's numbers side by
+#: side. Viewer is a read-only PM: every write route stays PM-only.
+COMPARERS = (PM, VIEWER)
+KPI_ROLES = (PM, VIEWER, REGIONAL, COORDINATOR, CONTRACTOR)
+
+#: Which lens each role is confined to. PM and Viewer are absent because they
+#: may choose. Admin is absent because Admin has none — see
+#: :func:`require_kpi_access`.
 LENS_BY_ROLE = {
     REGIONAL: LENS_RM,
     COORDINATOR: LENS_COORDINATOR,
@@ -99,14 +115,30 @@ class Scope:
     contractor_id: int | None = None
     province_names_fa: list[str] = field(default_factory=list)
     cra_regions: list[str] = field(default_factory=list)
-    #: True when the signed-in user chose this scope (PM); False when it was
-    #: forced from their own account. The page hides the lens row when forced.
+    #: True when the signed-in user chose this scope (PM, Viewer); False when
+    #: it was forced from their own account. The page hides the picker then.
     selectable: bool = False
+    #: A person who owned provinces once and owns none now. PM and Viewer may
+    #: still open their past months; their "today" is empty.
+    past: bool = False
+
+    @property
+    def is_country(self) -> bool:
+        return self.lens == LENS_COUNTRY
+
+    @property
+    def label(self) -> str:
+        """How the page names this scope: a person, a region or a province."""
+        if self.lens == LENS_PROVINCE:
+            return province_label(self.key)
+        return self.key
 
     @property
     def chip(self) -> str:
         if self.lens == LENS_CONTRACTOR:
             return f"{len(self.province_names_fa)} provinces"
+        if self.is_country:
+            return "31 provinces"
         provinces = len(self.province_ids or [])
         regions = len(self.cra_regions)
         return f"{provinces} provinces · {regions} CRA regions"
@@ -114,14 +146,30 @@ class Scope:
 
 def require_kpi_access(user: User) -> None:
     """Admin has no access to this page or its data; nor has any role that is
-    not one of the four the brief names.
+    not one of the five the brief names.
 
     Enforced here rather than only in the sidebar, because a hidden link is not
     an access rule — the same check runs on every endpoint in this module,
     including the exports.
     """
     role = user.role.name
-    if role == ADMIN or role not in (PM, REGIONAL, COORDINATOR, CONTRACTOR):
+    if role == ADMIN or role not in KPI_ROLES:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, _FORBIDDEN)
+
+
+def may_compare(user: User) -> bool:
+    """PM and Viewer: may choose any scope and see owners ranked side by side.
+
+    Everyone else is confined to their own scope. That is a server rule; the
+    interface hiding a picker is only the interface agreeing with it.
+    """
+    return user.role.name in COMPARERS
+
+
+def require_compare(user: User) -> None:
+    """403 unless the caller may see other people's numbers."""
+    require_kpi_access(user)
+    if not may_compare(user):
         raise HTTPException(status.HTTP_403_FORBIDDEN, _FORBIDDEN)
 
 
@@ -158,18 +206,21 @@ def resolve_scope(
 ) -> Scope:
     """Turn a requested lens and key into a scope this user may actually see.
 
-    PM may ask for any lens and any person. Everyone else gets their own, and
-    asking for somebody else's is a 403 rather than a silent substitution — a
-    silent substitution would show a regional manager a page headed with
-    another manager's name and let them believe it.
+    PM and Viewer may ask for any lens and any person, a single province or
+    the whole country. Everyone else gets their own, and asking for somebody
+    else's is a 403 rather than a silent substitution — a silent substitution
+    would show a regional manager a page headed with another manager's name
+    and let them believe it.
     """
     require_kpi_access(user)
     role = user.role.name
 
-    if role == PM:
+    if may_compare(user):
         lens = lens or LENS_RM
-        if lens not in LENSES:
+        if lens not in SCOPE_LENSES:
             raise HTTPException(422, f"Unknown lens {lens!r}")
+        if lens == LENS_COUNTRY:
+            return Scope(lens=lens, key=COUNTRY_KEY, selectable=True)
         key = key or _first_key(db, lens)
         if key is None:
             raise HTTPException(404, "There is nothing to show for that lens yet")
@@ -190,8 +241,20 @@ def _first_key(db: Session, lens: str) -> str | None:
     return options[0] if options else None
 
 
+_MAPPING_COLUMN = {
+    LENS_RM: ProvinceMapping.regional_manager,
+    LENS_COORDINATOR: ProvinceMapping.pso_coordinator,
+    LENS_REGION: ProvinceMapping.cra_region,
+}
+
+
 def lens_options(db: Session, lens: str) -> list[str]:
-    """Every person (or region, or contractor) this lens can be pointed at."""
+    """Every person (or region, contractor or province) this lens can be
+    pointed at today. A province is named by its Persian name, which is what
+    the data joins on; :func:`province_label` gives the English one."""
+    if lens == LENS_PROVINCE:
+        names = db.execute(select(Province.name)).scalars().all()
+        return sorted(names, key=province_label)
     if lens == LENS_CONTRACTOR:
         names = db.execute(
             select(Contractor.name)
@@ -202,11 +265,7 @@ def lens_options(db: Session, lens: str) -> list[str]:
         ).scalars().all()
         return list(names)
 
-    column = {
-        LENS_RM: ProvinceMapping.regional_manager,
-        LENS_COORDINATOR: ProvinceMapping.pso_coordinator,
-        LENS_REGION: ProvinceMapping.cra_region,
-    }[lens]
+    column = _MAPPING_COLUMN[lens]
     return list(
         db.execute(
             select(column)
@@ -217,7 +276,54 @@ def lens_options(db: Session, lens: str) -> list[str]:
     )
 
 
+def past_owners(db: Session, lens: str) -> list[str]:
+    """People (or regions) who owned a province once and own none today.
+
+    PM and Viewer may open their past months: reassigning a province never
+    rewrites history, so their results still exist. Empty for the lenses
+    that have no effective-dated owner.
+    """
+    if lens not in _MAPPING_COLUMN:
+        return []
+    column = _MAPPING_COLUMN[lens]
+    every = set(db.execute(select(column).distinct()).scalars().all())
+    current = {name.casefold() for name in lens_options(db, lens)}
+    return sorted(name for name in every if name.casefold() not in current)
+
+
+def _province_scope(db: Session, key: str, *, selectable: bool) -> Scope:
+    """One province, named in Persian (as the data has it) or English."""
+    wanted = key.strip()
+    persian = {v.casefold(): k for k, v in ENGLISH_BY_PERSIAN.items()}.get(
+        wanted.casefold(), wanted
+    )
+    province = db.execute(select(Province).where(Province.name == persian)).scalars().first()
+    if province is None:
+        raise HTTPException(404, f"No province named {key!r}")
+    return Scope(
+        lens=LENS_PROVINCE,
+        key=province.name,
+        province_ids=[province.id],
+        province_names_fa=[province.name],
+        cra_regions=_regions_for(db, [province.name]),
+        selectable=selectable,
+    )
+
+
+def _past_scope(db: Session, lens: str, key: str, *, selectable: bool) -> Scope:
+    """Somebody who owned provinces once and owns none today: no "today"."""
+    column = _MAPPING_COLUMN[lens]
+    found = db.execute(
+        select(column).where(func.lower(column) == key.lower())
+    ).scalars().first()
+    if found is None:
+        raise HTTPException(404, f"No provinces are mapped to {key!r}")
+    return Scope(lens=lens, key=found, province_ids=[], selectable=selectable, past=True)
+
+
 def _build_scope(db: Session, lens: str, key: str, *, selectable: bool) -> Scope:
+    if lens == LENS_PROVINCE:
+        return _province_scope(db, key, selectable=selectable)
     if lens == LENS_CONTRACTOR:
         contractor = db.execute(
             select(Contractor).where(func.lower(Contractor.name) == key.lower())
@@ -243,11 +349,7 @@ def _build_scope(db: Session, lens: str, key: str, *, selectable: bool) -> Scope
             selectable=selectable,
         )
 
-    column = {
-        LENS_RM: ProvinceMapping.regional_manager,
-        LENS_COORDINATOR: ProvinceMapping.pso_coordinator,
-        LENS_REGION: ProvinceMapping.cra_region,
-    }[lens]
+    column = _MAPPING_COLUMN[lens]
     rows = db.execute(
         select(ProvinceMapping.province_fa, ProvinceMapping.cra_region).where(
             ProvinceMapping.effective_to.is_(None),
@@ -255,6 +357,8 @@ def _build_scope(db: Session, lens: str, key: str, *, selectable: bool) -> Scope
         )
     ).all()
     if not rows:
+        if selectable:
+            return _past_scope(db, lens, key, selectable=selectable)
         raise HTTPException(404, f"No provinces are mapped to {key!r}")
 
     province_names = [r[0] for r in rows]
@@ -342,7 +446,7 @@ def count_if(condition) -> object:
 
 
 def _scope_conditions(scope: Scope | None) -> list:
-    if scope is None:
+    if scope is None or scope.is_country:
         return []
     if scope.lens == LENS_CONTRACTOR:
         return [WorkItem.dt_sc_contractor_id == scope.contractor_id]
@@ -673,7 +777,7 @@ def contractors(db: Session, user: User, key: str | None, mode: str) -> dict:
     """
     require_kpi_access(user)
     role = user.role.name
-    if role not in (PM, COORDINATOR):
+    if not (may_compare(user) or role == COORDINATOR):
         raise HTTPException(status.HTTP_403_FORBIDDEN, _FORBIDDEN)
     if mode not in ("ict", "cra"):
         raise HTTPException(422, "mode must be 'ict' or 'cra'")
@@ -684,7 +788,7 @@ def contractors(db: Session, user: User, key: str | None, mode: str) -> dict:
             raise HTTPException(status.HTTP_403_FORBIDDEN, _FORBIDDEN)
         key = own
 
-    scope = _build_scope(db, LENS_COORDINATOR, key, selectable=role == PM) if key else None
+    scope = _build_scope(db, LENS_COORDINATOR, key, selectable=may_compare(user)) if key else None
 
     approved_column = Village.ict_status if mode == "ict" else Village.cra_status
     targets = target_values(db)
@@ -734,7 +838,7 @@ def contractors(db: Session, user: User, key: str | None, mode: str) -> dict:
     return {
         "mode": mode,
         "key": scope.key if scope else None,
-        "selectable": role == PM,
+        "selectable": may_compare(user),
         "last_cpm_import": last_cpm_import(db),
         "rows": rows,
         "total": {

@@ -93,12 +93,25 @@ export function canSetAcceptancePlan(user) {
   return user?.role?.name === 'PM'
 }
 
-// KPI & Performance. Four roles see it, each confined to their own scope, and
-// Admin sees none of it -- the product owner's rule, and the same list
+// Roles Performance (and Lifecycle Gaps). Five roles see it and Admin sees
+// none of it -- the product owner's rule, and the same list
 // app/services/kpi.py enforces. This only shapes what the interface offers;
 // every KPI endpoint re-checks the role and re-derives the scope itself.
-export const KPI_ROLES = ['PM', 'RegionalManager', 'Coordinator', 'Contractor']
+export const KPI_ROLES = ['PM', 'Viewer', 'RegionalManager', 'Coordinator', 'Contractor']
 
 export function canSeeKpi(user) {
   return KPI_ROLES.includes(user?.role?.name)
+}
+
+// PM and Viewer may choose any scope and see owners ranked side by side.
+// Everyone else is confined to their own. Must agree with kpi.may_compare.
+export function canCompare(user) {
+  return ['PM', 'Viewer'].includes(user?.role?.name)
+}
+
+// Viewer is a read-only PM: the same numbers, no action of any kind. Hiding a
+// button is not the access rule -- every write route refuses Viewer -- it is
+// the interface not offering what would only answer 403.
+export function isReadOnlyKpi(user) {
+  return user?.role?.name === 'Viewer'
 }

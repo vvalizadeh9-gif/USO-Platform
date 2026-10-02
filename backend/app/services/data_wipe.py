@@ -38,6 +38,7 @@ from app.models.acceptance_workflow import (
 )
 from app.models.health_check import HcAssignment, HcRemediation, HcTask, HcTaskTechnology
 from app.models.mojri import MojriImportRun, MojriTrackerStatus
+from app.models.performance import LifecycleStatusHistory
 from app.models.workitem import (
     Assignment,
     DriveTest,
@@ -82,6 +83,10 @@ WIPE_ORDER: tuple[tuple[str, Table], ...] = (
     # surviving status would attach to whichever new village reused the id.
     ("mojri_tracker_status", MojriTrackerStatus.__table__),
     ("mojri_import_runs", MojriImportRun.__table__),
+    # Roles Performance's first-seen-on-air dates. Keyed by site and village
+    # id with no foreign key, so a surviving row would date whichever new
+    # entity reused the id; and it references cpm_import_batches.
+    ("lifecycle_status_history", LifecycleStatusHistory.__table__),
     # The CPM hierarchy itself.
     ("villages", Village.__table__),
     ("cpm_change_requests", CpmChangeRequest.__table__),

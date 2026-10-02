@@ -108,6 +108,21 @@ def load(db: Session, user: User, province_id: int | None = None) -> list[WorkIt
         scoped = scoped.where(
             WorkItem.site_id.in_(select(Site.id).where(Site.province_id == province_id))
         )
+    return load_ids(db, scoped)
+
+
+def load_all(db: Session) -> list[WorkItemRow]:
+    """Every live work item in the country, unscoped.
+
+    For Roles Performance, which needs the national figure beside every
+    scoped one and narrows to a scope itself (``services/kpi.resolve_scope``
+    decides who may see what before any of these rows reach a response).
+    """
+    return load_ids(db, select(WorkItem.id).where(WorkItem.deleted_at.is_(None)))
+
+
+def load_ids(db: Session, scoped) -> list[WorkItemRow]:
+    """The work items whose ids ``scoped`` selects, with their related rows."""
     # Straight to the connection: column reads gain nothing from the session's
     # ORM result handling but time.
     conn = db.connection()

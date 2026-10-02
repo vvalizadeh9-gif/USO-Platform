@@ -1,8 +1,9 @@
 """KPI & Performance endpoints.
 
 Every route here re-checks the role and re-derives the scope from the signed-in
-account. Nothing trusts ``lens`` or ``key`` from the query string except for a
-PM, who is the only role allowed to look at somebody else's numbers. A request
+account. Nothing trusts ``lens`` or ``key`` from the query string except for
+PM and Viewer, the only roles allowed to look at somebody else's numbers
+(Viewer read-only: every write route below stays PM-only). A request
 for data outside the caller's scope is a 403, not an empty result — an empty
 result reads as "there is nothing there", which is a different and misleading
 answer.
@@ -16,6 +17,7 @@ from __future__ import annotations
 from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -30,7 +32,18 @@ from app.schemas import (
     ProvinceMappingReassign,
     ProvinceMappingWrite,
 )
-from app.services import kpi, kpi_export, kpi_mapping
+from app.schemas.roles_performance import (
+    AreaPayload,
+    ComparePayload,
+    MonthPayload,
+    PerformancePayload,
+)
+from app.services import gap_export, kpi, kpi_export, kpi_mapping
+from app.services.performance import area as perf_area
+from app.services.performance import compare as perf_compare
+from app.services.performance import export as perf_export
+from app.services.performance import month as perf_month
+from app.services.performance import person as perf_person
 from app.services.audit import record_audit
 
 router = APIRouter(prefix="/kpi", tags=["kpi"])
@@ -49,16 +62,125 @@ def _lens_key(
     return lens, key
 
 
-@router.get("/summary")
-def kpi_summary(
-    lens_key: tuple[str | None, str | None] = Depends(_lens_key),
+# ----- Roles Performance: the four tabs -----------------------------------
+
+
+@router.get("/month", response_model=MonthPayload)
+def roles_month(
+    month: str | None = Query(None, description="YYYY-MM, Shamsi. Default: this month"),
+    by: str = Query("all", description="all | coordinator | contractor | rm"),
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> dict:
-    """The whole page for one scope: both funnels, the heatmap, the country
-    benchmark, and when CPM was last imported."""
+    """This month against last month up to the same day, section by section.
+    PM and Viewer only. With ``by``, one entry per owner, highest first."""
+    return perf_month.payload(db, user, month, by)
+
+
+@router.get("/area", response_model=AreaPayload)
+def roles_area(
+    lens_key: tuple[str | None, str | None] = Depends(_lens_key),
+    breakdown: str | None = Query(None, description="province | region | contractor"),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> dict:
+    """Where things stand today in one scope. ``breakdown=contractor`` is a
+    403 for a contractor."""
     lens, key = lens_key
-    return kpi.summary(db, user, lens, key)
+    return perf_area.payload(db, user, lens, key, breakdown)
+
+
+@router.get("/performance", response_model=PerformancePayload)
+def roles_performance(
+    lens_key: tuple[str | None, str | None] = Depends(_lens_key),
+    start: str | None = Query(None, alias="from", description="YYYY-MM, Shamsi"),
+    end: str | None = Query(None, alias="to", description="YYYY-MM, Shamsi"),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> dict:
+    """What one owner delivered month by month, and how fast."""
+    lens, key = lens_key
+    return perf_person.payload(db, user, lens, key, start, end)
+
+
+@router.get("/compare", response_model=ComparePayload)
+def roles_compare(
+    kind: str = Query("contractor", description="contractor | coordinator | rm | province | region"),
+    measure: str = Query("ict", description="dt | onair | ict | cra | speed"),
+    period: str = Query("all", description="all | month:YYYY-MM"),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> dict:
+    """Owners of one kind, ranked. PM and Viewer only."""
+    return perf_compare.payload(db, user, kind, measure, period)
+
+
+def _xlsx(built, filename: str) -> Response:
+    """Send a built workbook: whole when small, streamed above the threshold
+    Lifecycle Gaps uses."""
+    headers = {
+        "Content-Disposition": f'attachment; filename="{filename}"',
+        "X-Row-Count": str(built.rows),
+    }
+    if built.rows > gap_export.STREAM_THRESHOLD_ROWS:
+        return StreamingResponse(built.chunks(), media_type=_XLSX_MEDIA_TYPE, headers=headers)
+    try:
+        return Response(content=built.read(), media_type=_XLSX_MEDIA_TYPE, headers=headers)
+    finally:
+        built.file.close()
+
+
+@router.get("/month.xlsx")
+def roles_month_xlsx(
+    month: str | None = Query(None),
+    by: str = Query("all"),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> Response:
+    payload = perf_month.payload(db, user, month, by)
+    label = f"{payload['month']['year']}-{payload['month']['month']:02d}-{by}"
+    return _xlsx(perf_export.month(payload), perf_export.filename("month", label))
+
+
+@router.get("/area.xlsx")
+def roles_area_xlsx(
+    lens_key: tuple[str | None, str | None] = Depends(_lens_key),
+    breakdown: str | None = Query(None),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> Response:
+    lens, key = lens_key
+    payload = perf_area.payload(db, user, lens, key, breakdown)
+    return _xlsx(perf_export.area(payload), perf_export.filename("area", payload["scope"]["label"]))
+
+
+@router.get("/performance.xlsx")
+def roles_performance_xlsx(
+    lens_key: tuple[str | None, str | None] = Depends(_lens_key),
+    start: str | None = Query(None, alias="from"),
+    end: str | None = Query(None, alias="to"),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> Response:
+    lens, key = lens_key
+    payload = perf_person.payload(db, user, lens, key, start, end)
+    return _xlsx(
+        perf_export.performance(payload),
+        perf_export.filename("performance", payload["scope"]["label"]),
+    )
+
+
+@router.get("/compare.xlsx")
+def roles_compare_xlsx(
+    kind: str = Query("contractor"),
+    measure: str = Query("ict"),
+    period: str = Query("all"),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> Response:
+    payload = perf_compare.payload(db, user, kind, measure, period)
+    label = f"{payload['kind']}-{payload['measure']}-{payload['period']}"
+    return _xlsx(perf_export.compare(payload), perf_export.filename("compare", label))
 
 
 @router.get("/lenses")
@@ -66,23 +188,52 @@ def kpi_lenses(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> dict:
-    """What the lens row may offer this user.
+    """What the "whose?" picker may offer this user.
 
-    For PM, every person behind each of the four lenses. For everyone else,
-    only their own — the page shows it as a fixed chip, and the server would
-    refuse anything else anyway.
+    For PM and Viewer, every person behind each lens, every province and CRA
+    region, and (``past``) people who owned provinces once and own none now.
+    For everyone else only their own: the page shows it as a fixed chip, and
+    the server would refuse anything else anyway.
     """
     kpi.require_kpi_access(user)
-    if user.role.name == PM:
+    if kpi.may_compare(user):
+        lenses = (*kpi.LENSES, kpi.LENS_PROVINCE)
         return {
             "selectable": True,
-            "options": {lens: kpi.lens_options(db, lens) for lens in kpi.LENSES},
+            "options": {lens: kpi.lens_options(db, lens) for lens in lenses},
+            "past": {lens: kpi.past_owners(db, lens) for lens in kpi.LENSES},
+            "labels": {
+                kpi.LENS_PROVINCE: {
+                    fa: kpi.province_label(fa)
+                    for fa in kpi.lens_options(db, kpi.LENS_PROVINCE)
+                }
+            },
         }
     scope = kpi.resolve_scope(db, user, None, None)
     return {"selectable": False, "options": {scope.lens: [scope.key]}, "lens": scope.lens, "key": scope.key}
 
 
-@router.get("/contractors")
+# ----- The old single-scope page (deprecated) -----------------------------
+#
+# Served the KPI & Performance page that Roles Performance replaced. Kept for
+# one release so a cached frontend keeps working, then removed.
+
+
+@router.get("/summary", deprecated=True)
+def kpi_summary(
+    lens_key: tuple[str | None, str | None] = Depends(_lens_key),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> dict:
+    """Deprecated: use ``/kpi/area`` and ``/kpi/performance``.
+
+    The whole old page for one scope: both funnels, the heatmap, the country
+    benchmark, and when CPM was last imported."""
+    lens, key = lens_key
+    return kpi.summary(db, user, lens, key)
+
+
+@router.get("/contractors", deprecated=True)
 def kpi_contractors(
     key: str | None = Query(None, description="The PSO coordinator"),
     mode: str = Query("ict", description="ict | cra"),
@@ -97,7 +248,7 @@ def kpi_contractors(
     return kpi.contractors(db, user, key, mode)
 
 
-@router.get("/export.xlsx")
+@router.get("/export.xlsx", deprecated=True)
 def kpi_export_xlsx(
     lens_key: tuple[str | None, str | None] = Depends(_lens_key),
     mode: str = Query("ict", description="Which mode the contractors sheet uses"),
@@ -121,7 +272,7 @@ def kpi_export_xlsx(
     )
 
 
-@router.get("/export.pdf")
+@router.get("/export.pdf", deprecated=True)
 def kpi_export_pdf(
     lens_key: tuple[str | None, str | None] = Depends(_lens_key),
     mode: str = Query("ict", description="Which mode the contractors table uses"),
@@ -153,7 +304,7 @@ def _contractor_block(db: Session, user: User, payload: dict, mode: str) -> dict
     """
     if payload["lens"] != kpi.LENS_COORDINATOR:
         return None
-    if user.role.name not in (PM, COORDINATOR):
+    if not (kpi.may_compare(user) or user.role.name == COORDINATOR):
         return None
     return kpi.contractors(db, user, payload["key"], mode)
 
