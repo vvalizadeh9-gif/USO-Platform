@@ -22,7 +22,7 @@ const ActionCenter = lazy(() => import('./pages/ActionCenter'))
 const MyWork = lazy(() => import('./pages/mywork/MyWork'))
 const MonthlyPlan = lazy(() => import('./pages/monthlyplan/MonthlyPlan'))
 const AcceptanceDashboard = lazy(() => import('./pages/reports/AcceptanceDashboard'))
-const KpiPerformance = lazy(() => import('./pages/reports/KpiPerformance'))
+const RolesPerformance = lazy(() => import('./pages/reports/rolesPerformance/RolesPerformance'))
 const LifecycleGaps = lazy(() => import('./pages/reports/LifecycleGaps'))
 const MojriImport = lazy(() => import('./pages/mojri/MojriImport'))
 const KpiMapping = lazy(() => import('./pages/reports/KpiMapping'))
@@ -76,15 +76,25 @@ export default function App() {
           <Route path="/" element={<Navigate to={homeFor(user?.role?.name)} replace />} />
           <Route path="/reports/drive-test" element={<DriveTestProject />} />
           <Route path="/reports/acceptance" element={<AcceptanceDashboard />} />
-          {/* Admin is refused every KPI endpoint, so the route is closed to it
-              here as well -- otherwise the page loads and then fills with
-              permission errors, which reads as a fault rather than as a rule.
-              The four roles below are the ones the server serves. */}
+          {/* Roles Performance. Admin is refused every KPI endpoint, so the
+              route is closed to it here as well -- otherwise the page loads
+              and then fills with permission errors, which reads as a fault
+              rather than as a rule. /reports/kpi (and any old bookmark to it)
+              lands on the role's own first tab; /reports/kpi/mapping below is
+              a static path and wins over :tab. */}
           <Route
             path="/reports/kpi"
             element={
               <Protected allowedRoles={KPI_ROLES}>
-                <KpiPerformance />
+                <RolesPerformance />
+              </Protected>
+            }
+          />
+          <Route
+            path="/reports/kpi/:tab"
+            element={
+              <Protected allowedRoles={KPI_ROLES}>
+                <RolesPerformance />
               </Protected>
             }
           />

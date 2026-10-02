@@ -1,5 +1,57 @@
 # Changelog
 
+## Performance → Roles Performance, rebuilt
+
+The KPI & Performance page is replaced by five tabs at `/reports/kpi/…`. The
+sidebar keeps its one item, and `/reports/kpi` (and any old bookmark) opens
+the role's own first tab.
+
+| Role | Tabs | Lands on |
+|---|---|---|
+| PM, Viewer | Month · Area · Performance · Compare · Map | Month |
+| Regional manager, coordinator, contractor | My area · My performance · Map | My area |
+
+* **Month:** this month so far against last month up to the same day, in four
+  cards (project delivery, acceptance, full config, problematic). Each row is
+  shown as blocks, or as a ranked line of owners per coordinator, contractor
+  or regional manager.
+* **Area:** today's standing, with six cards, a breakdown by province, CRA
+  region or contractor, and the open work, each linking to Lifecycle Gaps.
+* **Performance:** result tiles against the national rate and the role
+  average, delivered per month, activity in UEP and three median response
+  times.
+* **Compare:** owners of one kind, ranked. Low-sample owners are "Not
+  compared" and listed last. Speed ranks contractors and coordinators by
+  median days.
+* **Map:** the Lifecycle Gaps coverage map, unchanged.
+
+Rule changes:
+
+* **Viewer (general manager) is a read-only PM.** Viewer reads Roles
+  Performance and Lifecycle Gaps for any scope and may download Excel. Every
+  write route still refuses Viewer.
+* **The "never rank people" rule is retired.** PM and Viewer may rank owners;
+  everyone else still sees only their own scope.
+* **Credit follows ownership at the time**: a province handed over mid-month
+  credits each owner with their own days.
+* **Before Mehr 1405, approvals, full config and problematic flows read "Not
+  recorded"**, never 0.
+
+New endpoints: `GET /kpi/month`, `/kpi/area`, `/kpi/performance`,
+`/kpi/compare` and their `.xlsx` exports. `GET /kpi/lenses` gains provinces,
+past owners and province labels (docs/design/roles-performance-api.md). User
+guide: docs/user-guide/roles-performance/.
+
+**Deprecated, removed next release:** `GET /kpi/summary`, `/kpi/contractors`,
+`/kpi/export.xlsx`, `/kpi/export.pdf`.
+
+**Deploy note:** migration `c2e8f4a6b913` adds `lifecycle_status_history`
+(additive). The first CPM import after deploy fills it and marks those rows
+`backfilled`. It is the fallback on-air date where CPM carries no launch date.
+The brief's `performance_event` table is **not** created: activity is read
+from `acceptance_submissions`, which already is that log (ARCHITECTURE.md
+5b). The CPM data wipe now also empties `lifecycle_status_history`.
+
 ## Action Center → Ticket Board
 
 The Action Center is one screen answering "what is pending for me, across the

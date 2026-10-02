@@ -113,6 +113,8 @@ const SIDEBAR_BY_ROLE = {
   Viewer: {
     'Drive Test': ['Dashboard', 'Monthly Plan', 'Work Items'],
     Acceptance: ['Dashboard', 'My Work'],
+    // The general manager: Roles Performance and Lifecycle Gaps, read-only.
+    Performance: ['Roles Performance', 'Lifecycle Gaps'],
   },
   RegionalManager: {
     'Drive Test': ['Dashboard', 'Monthly Plan', 'Work Items'],
@@ -145,7 +147,8 @@ const LINKS_BEFORE = {
   PM: [...ACTION, ...WORKERS, ...KPI, ...STAFF_LIFECYCLE, '/mojri-tracker'],
   Coordinator: [...ACTION, ...WORKERS, ...KPI, ...STAFF_LIFECYCLE],
   Contractor: [...ACTION, ...WORKERS, ...KPI, '/monthly-plan', '/my-health-check', '/my-drive-tests'],
-  Viewer: [...WORKERS, '/monthly-plan'],
+  // Viewer gained the two Performance pages with Roles Performance.
+  Viewer: [...WORKERS, ...KPI, '/monthly-plan'],
   RegionalManager: [...WORKERS, ...KPI, '/monthly-plan'],
   Admin: [...EVERYONE, '/admin'],
   CpgPower: [...ACTION, ...WORKERS, '/my-fix-queue'],
