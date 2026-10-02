@@ -34,6 +34,7 @@ from app.models.acceptance_workflow import (
 )
 from app.models.reference import Contractor, Province, User
 from app.models.workitem import Site, Village, WorkItem
+from app.services import acceptance_requests as requests
 from app.services import acceptance_workflow as flow
 from app.services import my_work_status as S
 from app.services.my_work_scope import SCOPE_UNIVERSE, scope_clause
@@ -150,13 +151,18 @@ def base_select(db: Session, user: User, *, scope: str, q: str | None = None) ->
     return stmt
 
 
-def _waiting_since() -> ColumnElement:
+def waiting_since(authority: str | None = None) -> ColumnElement:
     """When a village's acceptance last moved, else its drive-test date.
 
     The same clock as ``acceptance_workflow.last_activity`` / ``dt_age_days``:
     an untouched village is measured from its drive test, so it never sorts
-    as fresh.
+    as fresh. Narrowed to one ``authority`` it is that side's clock -- the
+    Action Center's tickets are per side, and a CRA decision must not restart
+    the ICT side's wait.
     """
+    clauses = [AcceptanceSubmission.village_id == Village.id]
+    if authority is not None:
+        clauses.append(AcceptanceSubmission.authority == authority)
     activity = (
         select(
             func.max(
@@ -165,17 +171,40 @@ def _waiting_since() -> ColumnElement:
                 )
             )
         )
-        .where(AcceptanceSubmission.village_id == Village.id)
+        .where(*clauses)
         .correlate(Village)
         .scalar_subquery()
     )
     return func.coalesce(activity, WorkItem.dt_date_gregorian)
 
 
+def tab_predicate(
+    tab: str,
+    authority: str | None,
+    *,
+    sides: tuple[ColumnElement, ...] | None = None,
+    village_id: ColumnElement | None = None,
+) -> ColumnElement[bool]:
+    """Whether a village is in ``tab``, narrowed to ``authority`` if given.
+
+    The single place a tab becomes SQL. Every status tab is
+    ``my_work_status.tab_clause`` over the side columns; ``with_authority`` is
+    the open-request rule over the village id. ``sides`` and ``village_id``
+    default to the ``Village`` table's own columns, and are passed explicitly
+    when the population is a subquery.
+    """
+    if tab == S.TAB_WITH_AUTHORITY:
+        authorities = (authority,) if authority else AUTHORITIES
+        return requests.open_request_clause(
+            Village.id if village_id is None else village_id, authorities
+        )
+    return S.tab_clause(tab, side_columns(authority) if sides is None else sides)
+
+
 def _ordering(sort: str) -> tuple:
     if sort == SORT_NAME:
         return (Village.village_name.asc(), Village.id.asc())
-    since = _waiting_since()
+    since = waiting_since()
     if sort == SORT_SHORTEST:
         return (since.desc().nulls_last(), Village.id.desc())
     return (since.asc().nulls_last(), Village.id.asc())
@@ -216,7 +245,11 @@ def _counts(
     ).subquery()
     tab_counts = [
         func.count()
-        .filter(S.tab_clause(tab, _subquery_sides(population, authority)))
+        .filter(tab_predicate(
+            tab, authority,
+            sides=_subquery_sides(population, authority),
+            village_id=population.c.id,
+        ))
         .label(tab)
         for tab in tabs
     ]
@@ -396,7 +429,7 @@ def list_my_work(db: Session, user: User, request: ListRequest) -> ListResult:
         rows_of = (
             base.where(Village.id.in_(request.ids))
             if request.ids is not None
-            else base.where(S.tab_clause(request.tab, side_columns(request.authority)))
+            else base.where(tab_predicate(request.tab, request.authority))
         )
         stmt = (
             rows_of

@@ -6,7 +6,7 @@
 // for anybody. Admin and the category owners see no Performance or Month-end
 // item at all, so an unguarded heading would give them a label pointing at
 // empty space.
-import { act, fireEvent, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { Link, MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -20,11 +20,13 @@ const HC_QUEUE_COUNTS = {
   reroutes: 1, dt_assignment: 6, dt_in_progress: 7, dt_review: 2,
 }
 const MY_DT_COUNTS = { todo: 4, submitted: 2 }
+const BOARD = vi.hoisted(() => ({ totals: { pending: 23, overdue: 5 }, stages: [] }))
 
 const mockApi = vi.hoisted(() => ({
   get: vi.fn((url) => {
     if (url === '/hc/queues/counts') return Promise.resolve({ data: HC_QUEUE_COUNTS })
     if (url === '/drive-tests/my/counts') return Promise.resolve({ data: MY_DT_COUNTS })
+    if (url === '/action-center/board') return Promise.resolve({ data: BOARD })
     return Promise.resolve({ data: { counters: [] } })
   }),
 }))
@@ -107,21 +109,19 @@ const SIDEBAR_BY_ROLE = {
     Acceptance: ['Dashboard', 'My Work'],
     Performance: ['Roles Performance', 'Lifecycle Gaps'],
   },
+  // No Action Center for Viewer, Regional Manager or Admin, so no "Today".
   Viewer: {
-    Today: ['Action Center'],
     'Drive Test': ['Dashboard', 'Monthly Plan', 'Work Items'],
     Acceptance: ['Dashboard', 'My Work'],
     // The general manager: Roles Performance and Lifecycle Gaps, read-only.
     Performance: ['Roles Performance', 'Lifecycle Gaps'],
   },
   RegionalManager: {
-    Today: ['Action Center'],
     'Drive Test': ['Dashboard', 'Monthly Plan', 'Work Items'],
     Acceptance: ['Dashboard', 'My Work'],
     Performance: ['Roles Performance', 'Lifecycle Gaps'],
   },
   Admin: {
-    Today: ['Action Center'],
     'Drive Test': ['Dashboard'],
     Acceptance: ['Dashboard'],
     Administration: ['Admin Console'],
@@ -136,19 +136,22 @@ const SIDEBAR_BY_ROLE = {
 // The links each role was offered before the sidebar was grouped by project
 // (Operations / Planning / Follow-up), written out from the old lists. The
 // regrouping moves links; it must not add or remove one for anybody.
-const EVERYONE = ['/action-center', '/reports/drive-test', '/reports/acceptance']
+// Since the ticket board, the Action Center is only for the roles that work a
+// queue; Viewer, Regional Manager and Admin lost that one link.
+const EVERYONE = ['/reports/drive-test', '/reports/acceptance']
+const ACTION = ['/action-center']
 const WORKERS = [...EVERYONE, '/work-items', '/my-work']
 const KPI = ['/reports/kpi', '/reports/gaps']
 const STAFF_LIFECYCLE = ['/monthly-plan', '/health-check', '/drive-test']
 const LINKS_BEFORE = {
-  PM: [...WORKERS, ...KPI, ...STAFF_LIFECYCLE, '/mojri-tracker'],
-  Coordinator: [...WORKERS, ...KPI, ...STAFF_LIFECYCLE],
-  Contractor: [...WORKERS, ...KPI, '/monthly-plan', '/my-health-check', '/my-drive-tests'],
+  PM: [...ACTION, ...WORKERS, ...KPI, ...STAFF_LIFECYCLE, '/mojri-tracker'],
+  Coordinator: [...ACTION, ...WORKERS, ...KPI, ...STAFF_LIFECYCLE],
+  Contractor: [...ACTION, ...WORKERS, ...KPI, '/monthly-plan', '/my-health-check', '/my-drive-tests'],
   // Viewer gained the two Performance pages with Roles Performance.
   Viewer: [...WORKERS, ...KPI, '/monthly-plan'],
   RegionalManager: [...WORKERS, ...KPI, '/monthly-plan'],
   Admin: [...EVERYONE, '/admin'],
-  CpgPower: [...WORKERS, '/my-fix-queue'],
+  CpgPower: [...ACTION, ...WORKERS, '/my-fix-queue'],
 }
 
 describe('the sidebar, grouped by project', () => {
@@ -319,13 +322,21 @@ describe('when the badges are re-read', () => {
 
   beforeEach(() => mockApi.get.mockClear())
 
-  it('asks for the Action Center counters without the item feed', async () => {
+  it("reads the Action Center badge from the board's pending total", async () => {
     await sidebarAs('PM')
-    expect(mockApi.get).toHaveBeenCalledWith(
-      '/action-center/summary',
-      { params: { items: false } },
-    )
+    expect(mockApi.get).toHaveBeenCalledWith('/action-center/board')
+    const link = document.querySelector('.sidebar-nav a[href="/action-center"]')
+    await waitFor(() => expect(link.querySelector('.badge')?.textContent).toBe('23'))
+    expect(mockApi.get).not.toHaveBeenCalledWith('/action-center/summary', expect.anything())
   })
+
+  it.each(['Viewer', 'RegionalManager', 'Admin'])(
+    'does not ask for a board %s would be refused',
+    async (roleName) => {
+      await sidebarAs(roleName)
+      expect(mockApi.get).not.toHaveBeenCalledWith('/action-center/board')
+    },
+  )
 
   it('does not re-read them on navigation', async () => {
     mockAuth.current = {

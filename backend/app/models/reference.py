@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, String, Table, Column, Integer, func
+from sqlalchemy import Boolean, DateTime, ForeignKey, String, Table, Column, Integer, func, true
 from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -184,6 +184,12 @@ class User(Base):
     )
 
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    # Whether this person gets the Action Center's daily email digest. On by
+    # default; each user may turn it off for themselves (PUT /me/notifications).
+    email_digest_enabled: Mapped[bool] = mapped_column(
+        Boolean, default=True, server_default=true(), nullable=False
+    )
 
     # Bumped whenever this account's credentials change. Access tokens carry
     # the value they were minted with, and a token whose value no longer

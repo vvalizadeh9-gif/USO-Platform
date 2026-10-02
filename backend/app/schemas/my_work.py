@@ -12,7 +12,9 @@ from pydantic import BaseModel, Field
 
 Authority = Literal["ICT", "CRA"]
 SideStatus = Literal["waiting", "filled", "returned", "rejected", "approved"]
-TabKey = Literal["your_move", "new_letter", "returned", "not_filed", "filled", "all"]
+TabKey = Literal[
+    "your_move", "new_letter", "returned", "not_filed", "filled", "with_authority", "all"
+]
 ClaimResult = Literal["approved", "rejected"]
 RoundResult = Literal["pending", "approved", "rejected", "returned", "withdrawn"]
 Scope = Literal["remaining", "universe"]

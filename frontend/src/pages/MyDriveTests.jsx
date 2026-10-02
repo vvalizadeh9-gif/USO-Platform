@@ -24,6 +24,12 @@ const TABS = [
 // this company (see hc_queues.contractor_dt_todo on the backend); Submitted
 // is read-only, because every row there is waiting on a reviewer, not on the
 // contractor looking at it.
+// The row states a link may narrow To do to, by the label the filter shows.
+const STATUS_FILTERS = {
+  with_contractor: 'sites still to drive test',
+  sent_back: 'drive tests returned to redo',
+}
+
 export default function MyDriveTests() {
   const toast = useToast()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -34,6 +40,16 @@ export default function MyDriveTests() {
   const [history, setHistory] = useState({ id: null, code: null })
   const [query, setQuery] = useState('')
   const [provinceSel, setProvinceSel] = useState(() => new Set())
+  // The Action Center's two drive-test tickets open this tab narrowed to one
+  // kind of row (?status=with_contractor or sent_back), so the list a ticket
+  // opens holds exactly the rows it counted.
+  const statusFilter = STATUS_FILTERS[searchParams.get('status')] ? searchParams.get('status') : null
+
+  function clearStatusFilter() {
+    const params = new URLSearchParams(searchParams)
+    params.delete('status')
+    setSearchParams(params, { replace: true })
+  }
 
   const loadCounts = useCallback(() => {
     api.get('/drive-tests/my/counts').then((r) => setCounts(r.data)).catch(() => {})
@@ -62,6 +78,7 @@ export default function MyDriveTests() {
     setProvinceSel(new Set())
     const params = new URLSearchParams(searchParams)
     params.set('tab', next)
+    params.delete('status')
     setSearchParams(params, { replace: true })
   }
 
@@ -74,11 +91,12 @@ export default function MyDriveTests() {
     if (!rows) return []
     const q = query.trim().toLowerCase()
     return rows.filter((r) => {
+      if (statusFilter && tab === 'todo' && r.status !== statusFilter) return false
       if (provinceSel.size && !provinceSel.has(r.province)) return false
       if (!q) return true
       return (r.site_code || '').toLowerCase().includes(q)
     })
-  }, [rows, query, provinceSel])
+  }, [rows, query, provinceSel, statusFilter, tab])
 
   function toggleProvince(p) {
     setProvinceSel((s) => {
@@ -160,6 +178,16 @@ export default function MyDriveTests() {
                   onClear={() => setProvinceSel(new Set())}
                 />
               </div>
+              {statusFilter && tab === 'todo' && (
+                <div className="row" style={{ marginTop: 8, gap: 8 }}>
+                  <span className="dim" style={{ fontSize: 'var(--fs-meta)' }}>
+                    Showing {STATUS_FILTERS[statusFilter]} only
+                  </span>
+                  <button type="button" className="btn btn-ghost btn-sm" onClick={clearStatusFilter}>
+                    Show all
+                  </button>
+                </div>
+              )}
               {(query.trim() || provinceSel.size > 0) && (
                 <div className="row" style={{ marginTop: 8, justifyContent: 'flex-end' }}>
                   <span className="dim" style={{ fontSize: 11.5 }}>

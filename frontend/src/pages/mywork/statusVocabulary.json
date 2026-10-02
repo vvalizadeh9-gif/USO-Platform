@@ -12,6 +12,7 @@
     "returned":   { "contractor": "Returned",          "staff": "Returned" },
     "not_filed":  { "contractor": "Not filed",         "staff": "Not filed" },
     "filled":     { "contractor": "With coordinator",  "staff": "To check" },
+    "with_authority": { "contractor": "With authority", "staff": "With authority" },
     "all":        { "contractor": "All",               "staff": "All" }
   },
   "segments": {

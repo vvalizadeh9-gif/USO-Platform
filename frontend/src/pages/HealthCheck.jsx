@@ -121,7 +121,9 @@ export default function HealthCheck() {
       {/* Opacity only, no exit: the old panel is gone the moment the new
           one mounts, so the page never collapses between them. */}
       <div key={tab} className="tab-panel">
-          {tab === 'pool' && <HcBasketTab onCountChange={setCount('pool')} />}
+          {tab === 'pool' && (
+            <HcBasketTab onCountChange={setCount('pool')} initialState={searchParams.get('state')} />
+          )}
           {tab === 'running' && <HcInProgressTab onCountChange={setCount('in_progress')} />}
           {tab === 'review' && (
             <HcResultsTab

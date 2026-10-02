@@ -3,6 +3,7 @@ from fastapi import APIRouter
 
 from app.api import (
     acceptance,
+    action_center,
     admin,
     auth,
     drive_test,
@@ -31,3 +32,4 @@ api_router.include_router(mojri.router)
 api_router.include_router(monthly_plan.router)
 api_router.include_router(admin.router)
 api_router.include_router(misc.router)
+api_router.include_router(action_center.router)

@@ -77,6 +77,27 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     log_format: str = "json"  # "json" for collectors, "text" for reading by eye
 
+    # Outgoing mail, used by the Action Center's daily digest only
+    # (``python -m app.jobs.daily_digest``). Empty ``smtp_host`` means no mail
+    # server is configured: the job still writes the daily snapshot, and logs
+    # each digest as failed with the reason, so a later run can send it.
+    smtp_host: str = ""
+    smtp_port: int = 25
+    # "starttls", "ssl" (implicit TLS, usually port 465) or "none" for an
+    # internal relay that does not offer TLS.
+    smtp_security: str = "starttls"
+    smtp_username: str = ""
+    smtp_password: str = ""
+    smtp_timeout_seconds: int = 30
+    mail_from: str = "UEP Action Center <uep-noreply@localhost>"
+
+    # Where links in an email point: the address people open UEP at.
+    app_base_url: str = "http://localhost"
+
+    # The Tehran-calendar weekdays the digest is emailed on. The snapshot is
+    # written every day the job runs; only the email follows this list.
+    digest_weekdays: str = "sat,sun,mon,tue,wed"
+
     @property
     def is_development(self) -> bool:
         return self.app_env.strip().lower() == DEVELOPMENT

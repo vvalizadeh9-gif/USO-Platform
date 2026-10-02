@@ -303,9 +303,10 @@ whole definition, and the pool quantity is the length of that list:
 `Ongoing` used to exclude a site too, on the reading that a site already with a
 drive-test contractor was somebody else's problem. That made the figure smaller
 than the thing it is labelled with by however many sites the last import marked
-`Ongoing`. The nav badge and the Action Center counter use `pool_assignable`
-instead — what a PM can act on now — because those two ask "what needs me",
-not "how much is there".
+`Ongoing`. The nav badge uses `pool_assignable` instead (what a PM can act on
+now), and the Action Center's "Sites to assign" ticket counts the pool's
+"Ready to assign" filter (never checked, or due a re-check), because those
+two ask "what needs me", not "how much is there".
 
 ---
 
@@ -541,8 +542,9 @@ or not the site is on air. A figure that links into My Work passes
 `scope=universe`, so the list holds exactly the villages the figure counted;
 the sidebar opens `scope=remaining` (§ My Work). Under `scope=universe` an
 **All** tab appears for every role, because a fully approved village is in no
-other tab. The Action Center's "awaiting ICT/CRA" counters link to
-`/my-work?tab=filled&authority=ICT`.
+other tab. The Action Center's ICT and CRA tickets each link to one tab
+narrowed to one authority, for example `/my-work?authority=ICT&tab=not_filed`
+(§ 5e).
 
 #### The three rules that look wrong and are not
 
@@ -946,9 +948,10 @@ modified.
   `require_roles(PM)`, so Viewer gets a 403 there. Lifecycle Gaps calls the
   same `require_kpi_access`, so Viewer reads it too, choosing the lens as PM
   does. Viewer may download Excel. It never sees the Mojri tracker or the
-  mapping screens, and both are refused on the server, not just hidden. On
-  this page Viewer also gets no "Open my Action Center" button, because a
-  Viewer has no queue to act on.
+  mapping screens, and both are refused on the server, not just hidden.
+* **"Open my Action Center"** on Area appears only for roles that have an
+  Action Center (`hasActionCenter`, the same list as the server's
+  `board_role()`): not for Viewer or Regional Manager.
 * **Month and Compare are PM's and Viewer's** (`kpi.require_compare`).
   Anyone else gets a 403 on them, exports included.
 * **Asking for another scope is a 403**, never an empty result and never a
@@ -1357,6 +1360,174 @@ is read by the Lifecycle Gaps overview's two "missing in Mojri" figures (§5c).
 
 ---
 
+## 5e. The Action Center
+
+Before this, people tracked their work in Excel and nobody could see what was
+waiting on whom. The Action Center is each person's one answer to **"what is
+pending for me, across the whole lifecycle from Health Check to acceptance,
+and how late is it?"** Each queue is a **ticket**: its name, how many items,
+the oldest item's date, and how many are past the SLA. A ticket is a link to
+the queue screen that holds those items.
+
+### Who gets it
+
+| Role | Action Center | Lands on |
+|---|---|---|
+| PM, Coordinator, Contractor | Yes | Action Center |
+| Problem owner (any `is_category_owner` role) | Yes | Action Center |
+| Regional Manager | No (board answers **403**) | KPI & Performance |
+| Viewer | No (board answers **403**) | Drive Test dashboard |
+| Admin | No (board answers **403**) | Admin Console |
+
+The board refuses those roles rather than showing them an empty board: an
+empty board reads as "nothing to do", which for them would be untrue. The
+deprecated `/action-center` and `/action-center/summary` are left exactly as
+they were (other code uses `/action-center` as a cheap signed-in check).
+`homeFor` in `frontend/src/lib/roles.js` is the
+landing table; `board_role` in `services/action_queues/context.py` is the
+server's.
+
+### One queue registry (`app/services/action_queues/`)
+
+Every queue is one frozen `QueueDefinition` in `registry.py`: key, stage,
+label, the URL of its screen, the roles that act on it, how its SLA is
+measured, whether its date reads "since" or "due", and a `fetch` that returns
+`PendingItem`s (`entity_id`, `started_at`, `due_at`, `owner`). The board, the
+per-owner breakdown, the daily snapshot and the digest all read the registry.
+**Adding a queue is adding one definition.**
+
+Each `fetch` (in `sources/`) is an adapter over **the list function behind the
+queue's own screen**: `get_basket`, `hc_queues.reroutes`, `dt_assignment`,
+`contractor_dt_todo`, My Work's own select and tab predicate, and so on. No
+queue condition is restated, so a ticket's count *is* the length of the list
+its link opens; `tests/test_action_board.py` holds that for every queue and
+every kind of user on a deliberately untidy programme. Scope is inherited
+from those functions: coordinators see their provinces, contractors their own
+sites, problem owners their own categories, the PM everything.
+
+The trade-off: building lists costs more than the column-only counts behind
+the tab badges (`hc_queues.counts`). The board is built once per user and
+shared for a few seconds through `count_cache` (emptied by every commit, so
+an action shows on the next read), and `QueueContext` loads the scoped work
+items once per build for the queues that walk them. Correctness by
+construction was worth more here than a second, faster definition of every
+queue held together by a parity test.
+
+| Stage | Ticket | Who | Clock starts | Opens |
+|---|---|---|---|---|
+| HC | Sites to assign | PM, Coord | pool waiting-since (on-air, or last fix closed) | HC Pool, "Ready to assign" |
+| HC | HC results to review | PM, Coord | `hc_tasks.completed_at` | HC Review |
+| HC | Re-route decisions | PM, Coord | `reroute_at` | Re-routes |
+| HC | HC to submit | Contractor | `hc_assignments.assigned_at` | My Health Check |
+| HC | Fixes assigned to me | Problem owner | `opened_at`; late after `due_at` (the category's SLA) | My Fix Queue |
+| DT | DT to assign | PM, Coord | HC review, or `returned_at` if handed back | Drive Test → Assignment |
+| DT | DT results to review | PM, Coord | `drive_tests.submitted_at` | Drive Test → Review |
+| DT | Sites to drive test | Contractor | `assignments.assigned_at` | My Drive Tests, `status=with_contractor` |
+| DT | Returned to redo | Contractor | `coordinator_reviewed_at` | My Drive Tests, `status=sent_back` |
+| ICT/CRA | Follow up with ICT / CRA | PM | request letter `sent_at` | My Work → With authority |
+| ICT/CRA | Villages to file | Coord, Contractor | last activity, else DT date | My Work → Not filed |
+| ICT/CRA | Contractor filings to validate | Coord | submission `submitted_at` | My Work → To check |
+| ICT/CRA | Rejected, to re-file | Contractor | rejection `reviewed_at` | My Work → New letter needed |
+| ICT/CRA | Returned, to correct | Contractor | return `reviewed_at` | My Work → Returned |
+| Plans | Plans to approve | PM | `submitted_at` (revisions too) | Monthly Plan → Plans |
+| Plans | CPM changes to validate | PM | `cpm_change_requests.created_at` | Admin → Validate CPM |
+| Plans | Monthly plan to submit | Contractor | **due** on the day-3 deadline | Monthly Plan |
+
+"Returned, to correct" is separate from "Rejected, to re-file" because they
+are separate My Work tabs, and a ticket must open exactly what it counted.
+
+### "With the authority": the one new clock
+
+Every queue already recorded when its clock starts, except one: nothing
+recorded that a request letter had gone to ICT or CRA. A side's status went
+from "not filed" straight to "filed" (the authority's answer, entered for the
+coordinator to check), so the time a village spent with the authority was
+invisible. `acceptance_authority_requests` records the outgoing letter
+(`POST /acceptance/authority-requests`, the "Mark as sent to ICT/CRA" action
+on a My Work side). A request is **open** until any non-withdrawn submission
+for the same village and authority is filed at or after it
+(`acceptance_requests.open_request_clause`); that rule is My Work's staff
+**With authority** tab and the PM's follow-up ticket, and nothing else
+restates it. Rows are never updated: asking again after a rejection is a
+second request. Sending one does not change the side's status, so the village
+stays on "Villages to file" until the answer is filed.
+
+### SLA and overdue (`sla.py`)
+
+- Default **14 days** per queue, stored in `action_queue_sla` (a missing row
+  is the default) and set by an Admin in **Admin → Action SLA** or
+  `PUT /admin/action-sla`. No deploy.
+- An item is overdue when `now − started_at > sla_days`, strictly: 14 days
+  exactly is on time.
+- **Fixes** are late after their own `due_at`, set from the problem category's
+  SLA when the fix opened. **Monthly plan to submit** is late after the end
+  (Tehran) of its deadline day. The configured days do not apply to either,
+  and the SLA screen shows them read-only.
+- **The tracking epoch.** CPM-imported data carries no dates from before
+  **1 Mehr 1405**. An item with no clock start, or one from before that day,
+  is measured from 1 Mehr 1405 (midnight, Tehran). That is a read rule, not a
+  backfill: stored dates are not rewritten.
+
+### The board API
+
+`GET /action-center/board` returns the role, a scope label (provinces, the
+contractor's name, or the owned category), `generated_at`, `totals`
+(`pending`, `overdue`) and `stages`, in lifecycle order. Each stage has a
+`total` and its `tickets` (`queue_key`, `label`, `count`, `overdue`,
+`oldest_started_at`, `earliest_due_at`, `date_kind`, `url`). Tickets reading
+0 are left out, and so are stages left with no tickets; a board with nothing
+pending says so once. Dates are ISO UTC; the browser shows them as Shamsi
+days in Tehran with Persian digits (`shamsiDayLabel`, display only).
+
+`GET /action-center/owners?queue=<key>` returns who holds a queue's items,
+worst first: `{owner_type, owner_id, name, count, overdue,
+oldest_started_at}`. The owner is the contractor for contractor work, the
+province's coordinator for staff work, the category for fixes, "PM" for the
+PM's own decisions, and "unassigned" when a province has no coordinator. A
+PM sees every owner; a coordinator only the contractors inside their own
+provinces; everyone else gets 403. The endpoint exists; **its UI is not built
+yet** (its design goes to the product owner first).
+
+`GET`/`PUT /me/notifications` (`{email_digest: bool}`) is each user's own
+digest opt-out, also offered in the account menu.
+
+### The daily digest (`python -m app.jobs.daily_digest`)
+
+A separate scheduled command, never a scheduler inside the API, because every
+API worker would run its own copy and send duplicates. One run:
+
+1. For every active user with an Action Center, builds the board and
+   **replaces** that day's rows in `action_daily_snapshot` (unique on date,
+   user, queue). This happens every day the job runs.
+2. On digest weekdays (`DIGEST_WEEKDAYS`, Saturday to Wednesday by default),
+   sends each user one email: the totals, then one line per ticket with its
+   count, overdue and date (Shamsi, Persian digits), linking into the app.
+   Users who opted out, have no email address, or have nothing pending are
+   skipped, and the reason is logged.
+3. **Exactly once per user per day.** `digest_log` is unique on (user, date).
+   A run *claims* a user by inserting that row (`sending`), so of two runs
+   only one sends. A failure is recorded (`failed`, with the error), and a
+   later run may claim a failed row back with a conditional update, which is
+   how a mail outage in the morning still gets everyone their digest.
+
+The job only adds outgoing mail. Password resets stay out of band (see
+`Login.jsx`). SMTP settings and the cron entry are in the README.
+
+### The page
+
+`frontend/src/pages/ActionCenter.jsx`, a one-screen page (`PageFrame`): the
+Shamsi date and title on the left, `N pending` and `N overdue` on the right,
+then a grid with one equal column per stage. Every ticket is the same height
+(172px) and is a real link. A column with more tickets than fit scrolls
+inside itself; the page never does (`e2e/noPageScroll.spec.js`,
+`e2e/actionCenter.spec.js`). The motion is one entrance, then nothing:
+tickets drop in staggered by column and by place, numbers count up, overdue
+pills fade in after. With `prefers-reduced-motion` the final state shows at
+once. The sidebar badge is the board's `totals.pending`. The component and
+its tokens are in `design-system-cobalt.md`, "Ticket board".
+
+---
+
 ## 6. Roles and permissions
 
 Ten roles. Six are staff and workflow roles; four exist solely to own health-check
@@ -1662,6 +1833,11 @@ above:
   typed letter date would let a late filing rewrite a closed month.
 - **Role average as a plain mean for geographic roles** — deliberate; a
   weighted average over a partition of the country is the national rate.
+- **Action Center tickets calling the screens' own list functions** instead
+  of fast counts — deliberate; a ticket must open exactly what it counted
+  (§ 5e).
+- **The tracking epoch (1 Mehr 1405)** flooring every clock — deliberate; CPM
+  data has no earlier dates, and a 2023 date would make everything overdue.
 - **The page itself never scrolling** — deliberate; see "The frontend layout
   contract" above. A page that needs to scroll does so inside `.page-outlet`
   (or its own card), never by giving the body a height.

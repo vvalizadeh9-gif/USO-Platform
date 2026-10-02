@@ -76,7 +76,15 @@ TAB_RETURNED = "returned"
 TAB_NOT_FILED = "not_filed"
 TAB_FILLED = "filled"
 TAB_ALL = "all"
-TABS = (TAB_YOUR_MOVE, TAB_NEW_LETTER, TAB_RETURNED, TAB_NOT_FILED, TAB_FILLED, TAB_ALL)
+#: Staff only: a request letter is with ICT or CRA and unanswered. Not a side
+#: status -- the side is still ``waiting`` or ``rejected`` -- so its clause is
+#: over the request table rather than the status columns (see
+#: ``acceptance_requests.open_request_clause``).
+TAB_WITH_AUTHORITY = "with_authority"
+#: The tabs decided by the side statuses alone -- :func:`tabs_of` and
+#: :func:`tab_clause` answer for exactly these.
+STATUS_TABS = (TAB_YOUR_MOVE, TAB_NEW_LETTER, TAB_RETURNED, TAB_NOT_FILED, TAB_FILLED, TAB_ALL)
+TABS = (*STATUS_TABS[:-1], TAB_WITH_AUTHORITY, TAB_ALL)
 
 #: Evaluated in order; a village lands in the first whose status any side holds.
 EXCLUSIVE_TABS: tuple[tuple[str, str], ...] = (
@@ -118,6 +126,8 @@ def tab_clause(tab: str, sides: Sequence[ColumnElement]) -> ColumnElement[bool]:
     ``sides`` is normally ``(Village.ict_status, Village.cra_status)``; one
     column when the list is narrowed to one authority.
     """
+    if tab not in STATUS_TABS:
+        raise ValueError(f"{tab!r} is not decided by side status; use my_work_query.tab_predicate")
     if tab == TAB_ALL:
         return true()
     if tab == TAB_FILLED:
@@ -139,7 +149,9 @@ VIEW_CONTRACTOR = "contractor"
 VIEW_STAFF = "staff"
 
 CONTRACTOR_TABS = (TAB_YOUR_MOVE, TAB_NEW_LETTER, TAB_RETURNED, TAB_NOT_FILED, TAB_FILLED)
-STAFF_TABS = (TAB_FILLED, TAB_NOT_FILED, TAB_NEW_LETTER, TAB_RETURNED, TAB_ALL)
+STAFF_TABS = (
+    TAB_FILLED, TAB_NOT_FILED, TAB_NEW_LETTER, TAB_RETURNED, TAB_WITH_AUTHORITY, TAB_ALL,
+)
 
 #: Roles that file letters, and the subset that also decides them.
 FILING_ROLES = (CONTRACTOR, COORDINATOR, PM)

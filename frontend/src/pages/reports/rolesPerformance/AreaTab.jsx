@@ -6,7 +6,7 @@ import { ArrowUpRight } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { SegmentedControl } from '../../../components/ui'
 import { useAuth } from '../../../context/AuthContext'
-import { isReadOnlyKpi } from '../../../lib/roles'
+import { hasActionCenter } from '../../../lib/roles'
 import { importStamp } from '../kpiTheme'
 import PerfHeader from './PerfHeader'
 import ScopePicker from './ScopePicker'
@@ -73,7 +73,7 @@ export default function AreaTab({ scope, onScope, search }) {
             {data && (
               <OpenWork
                 items={data.open_work}
-                actionCenter={!isReadOnlyKpi(user)}
+                actionCenter={hasActionCenter(user?.role?.name)}
               />
             )}
           </RpCard>

@@ -45,7 +45,13 @@ from app.schemas.my_work import (
     TabCount,
     VillageOutcomeOut,
 )
+from app.schemas.action_center import (
+    AuthorityRequestIn,
+    AuthorityRequestOutcome,
+    AuthorityRequestResult,
+)
 from app.services import acceptance_letters as letters
+from app.services import acceptance_requests as authority_requests
 from app.services import acceptance_workflow as flow
 from app.services import evidence_store, scan_tokens
 from app.services import my_work_detail as detail
@@ -358,4 +364,32 @@ def review_letter(
     return LetterReviewed(
         decision=outcome.decision, count=len(outcome.results),
         results=_outcomes(outcome.results),
+    )
+
+
+@router.post("/authority-requests", response_model=AuthorityRequestResult, status_code=201)
+def send_to_authority(
+    payload: AuthorityRequestIn,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_filer),
+) -> AuthorityRequestResult:
+    """Record that a request letter went to ICT or CRA for these villages.
+
+    From then until the authority's answer is filed the side is listed under
+    "With authority", and a PM sees it on the Action Center's follow-up ticket.
+    Villages already with the authority, or not in a state that needs asking,
+    are reported per village rather than failing the whole request.
+    """
+    try:
+        outcomes = authority_requests.record_requests(
+            db, user, village_ids=payload.village_ids, authority=payload.authority,
+            letter_number=payload.letter_number, letter_date=payload.letter_date,
+        )
+    except authority_requests.RequestError as exc:
+        db.rollback()
+        raise _error(422, exc.code, str(exc)) from None
+    db.commit()
+    return AuthorityRequestResult(
+        recorded=sum(o.recorded for o in outcomes),
+        outcomes=[AuthorityRequestOutcome(**vars(o)) for o in outcomes],
     )

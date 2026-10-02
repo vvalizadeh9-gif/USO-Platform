@@ -27,12 +27,12 @@ def to_latin(text: str) -> str:
     return text.translate(DIGIT_MAP)
 
 
-#: Latin digits mapped to their Persian digit, for Shamsi dates shown to people.
+#: Latin digits mapped to Persian, for text a person reads (the email digest).
 TO_PERSIAN = {ord(str(i)): PERSIAN_ZERO + i for i in range(10)}
 
 
 def to_persian(text: str) -> str:
-    """``text`` with every Latin digit replaced by its Persian digit."""
+    """``text`` with every Latin digit written as a Persian one."""
     return text.translate(TO_PERSIAN)
 
 

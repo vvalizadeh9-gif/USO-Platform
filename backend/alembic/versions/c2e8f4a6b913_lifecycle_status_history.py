@@ -16,14 +16,14 @@ The table starts empty. The first CPM import after this migration fills it and
 marks those rows ``backfilled``, so they never count as on-air events.
 
 Revision ID: c2e8f4a6b913
-Revises: b7d3e5a1c826
+Revises: a1c3e5f7b902
 Create Date: 2026-10-02
 """
 import sqlalchemy as sa
 from alembic import op
 
 revision = "c2e8f4a6b913"
-down_revision = "b7d3e5a1c826"
+down_revision = "a1c3e5f7b902"
 branch_labels = None
 depends_on = None
 

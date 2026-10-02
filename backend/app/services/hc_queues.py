@@ -171,6 +171,7 @@ def remediations(db: Session, user: User) -> list[dict]:
                 "issue": failed[0].comment if failed else None,
                 "days_open": _days_since(rem.opened_at) or 0,
                 "days_late": max((_now() - due).days, 0) if due else 0,
+                "opened_at": _aware(rem.opened_at),
                 "due_at": due,
                 "reroute_pending": rem.reroute_to_category_id is not None,
             }
@@ -281,6 +282,9 @@ def dt_assignment(
                 "ready_since": _aware(latest.reviewed_at),
                 "days_waiting": _days_since(latest.reviewed_at) or 0,
                 "returned_reason": active.return_reason if active else None,
+                # When the contractor handed it back, if they did: the clock
+                # for a returned site restarts there, not at the HC review.
+                "returned_at": _aware(active.returned_at) if active else None,
             }
         )
     out.sort(key=lambda r: -r["days_waiting"])
@@ -760,16 +764,44 @@ def _submitted_drive_tests_count():
     )
 
 
-def _hc_review_count(db: Session, user: User) -> int:
-    return (
-        db.query(HcTask)
-        .filter(
-            HcTask.completed_at.isnot(None),
-            HcTask.reviewed_at.is_(None),
-            HcTask.work_item_id.in_(visible_work_item_ids(user, db)),
-        )
-        .count()
+def hc_review_tasks(db: Session, user: User) -> list[HcTask]:
+    """Health check results awaiting review -- the HC Review tab's rows.
+
+    The same condition ``GET /hc/results?reviewed=false`` applies, held here
+    so the tab badge and the Action Center count one definition.
+    """
+    return list(
+        db.execute(
+            select(HcTask).where(
+                HcTask.completed_at.isnot(None),
+                HcTask.reviewed_at.is_(None),
+                HcTask.work_item_id.in_(visible_work_item_ids(user, db)),
+            )
+        ).scalars()
     )
+
+
+def open_hc_tasks(db: Session, user: User) -> list[tuple[HcTask, HcAssignment]]:
+    """Health checks a subcontractor still owes a result for.
+
+    A contractor gets their own company's, wherever the site is -- the rule
+    My Health Check has always used. Staff get every open task in their
+    province scope, which is what "who is holding health checks" asks.
+    """
+    stmt = (
+        select(HcTask, HcAssignment)
+        .join(HcAssignment, HcTask.hc_assignment_id == HcAssignment.id)
+        .where(HcTask.completed_at.is_(None))
+    )
+    if user.contractor_id is not None:
+        stmt = stmt.where(HcAssignment.contractor_id == user.contractor_id)
+    else:
+        stmt = stmt.where(HcTask.work_item_id.in_(visible_work_item_ids(user, db)))
+    return [tuple(row) for row in db.execute(stmt).all()]
+
+
+def _hc_review_count(db: Session, user: User) -> int:
+    return len(hc_review_tasks(db, user))
 
 
 # --------------------------------------------------------------------------

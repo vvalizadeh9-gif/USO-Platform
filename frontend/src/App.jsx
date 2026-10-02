@@ -3,7 +3,7 @@ import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import Layout from './components/Layout'
 import { useAuth } from './context/AuthContext'
 import { Loading } from './components/ui'
-import { CATEGORY_OWNER_ROLES, KPI_ROLES, MONTHLY_PLAN_ROLES } from './lib/roles'
+import { ACTION_CENTER_ROLES, CATEGORY_OWNER_ROLES, KPI_ROLES, MONTHLY_PLAN_ROLES, homeFor } from './lib/roles'
 import Login from './pages/Login'
 
 // Route pages are code-split so the initial load only ships the shell +
@@ -58,18 +58,8 @@ function Protected({ children, adminOnly, allowedRoles }) {
   return children
 }
 
-// Where "/" lands for each kind of user. Everyone who does the work lands on
-// the Action Center: it is the one screen that answers "what needs me now"
-// for every role, counted from live state, and it links on to whichever
-// queue holds the work. Admin is the exception -- they manage the platform
-// from the Admin Console and have no operational queue of their own.
-function homeFor(isAdmin) {
-  if (isAdmin) return '/admin'
-  return '/action-center'
-}
-
 export default function App() {
-  const { user, isAdmin } = useAuth()
+  const { user } = useAuth()
 
   return (
     <Suspense fallback={<Loading />}>
@@ -82,7 +72,8 @@ export default function App() {
             </Protected>
           }
         >
-          <Route path="/" element={<Navigate to={homeFor(isAdmin)} replace />} />
+          {/* Where each role lands: see homeFor in lib/roles.js. */}
+          <Route path="/" element={<Navigate to={homeFor(user?.role?.name)} replace />} />
           <Route path="/reports/drive-test" element={<DriveTestProject />} />
           <Route path="/reports/acceptance" element={<AcceptanceDashboard />} />
           {/* Roles Performance. Admin is refused every KPI endpoint, so the
@@ -155,7 +146,16 @@ export default function App() {
           />
           <Route path="/work-items" element={<WorkItems />} />
           <Route path="/work-items/:id" element={<WorkItemDetail />} />
-          <Route path="/action-center" element={<ActionCenter />} />
+          {/* The server refuses the board to every other role (403), so the
+              route is closed to them here too, and "/" sends them home. */}
+          <Route
+            path="/action-center"
+            element={
+              <Protected allowedRoles={ACTION_CENTER_ROLES}>
+                <ActionCenter />
+              </Protected>
+            }
+          />
           <Route path="/notifications" element={<Navigate to="/action-center" replace />} />
           {/* The acceptance workspace. /my-work/v/:villageId makes one
               village linkable, so "look at this one" is a URL rather than a

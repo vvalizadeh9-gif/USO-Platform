@@ -48,3 +48,6 @@ export async function viewScan(evidenceId, filename) {
   const r = await api.get(`${BASE}/evidence/${evidenceId}/download`, { responseType: 'blob' })
   saveBlob(r.data, filename)
 }
+
+/** Record that a request letter went to ICT or CRA (the "With authority" tab). */
+export const sendToAuthority = (body) => api.post(`${BASE}/authority-requests`, body).then((r) => r.data)

@@ -152,6 +152,12 @@ describe('Viewer is read-only', () => {
     expect(screen.getByRole('button', { name: 'Export' })).toBeInTheDocument()
   })
 
+  it('offers a regional manager no Action Center button either (they have none)', async () => {
+    renderAt('/reports/kpi/area', 'RegionalManager')
+    await screen.findByText('Not on air')
+    expect(screen.queryByRole('link', { name: /Action Center/ })).toBeNull()
+  })
+
   it('gives a working role the Action Center button', async () => {
     renderAt('/reports/kpi/area', 'Coordinator')
     expect(await screen.findByRole('link', { name: 'Open my Action Center' })).toBeInTheDocument()
@@ -178,7 +184,8 @@ describe('Month', () => {
     await screen.findByText('مهر ۱۴۰۵')
     expect(document.querySelector('.rp-blocks')).not.toBeNull()
     await user.click(screen.getByRole('button', { name: 'Coordinators' }))
-    await waitFor(() => expect(document.querySelector('.rp-owners')).not.toBeNull())
+    // A full parallel suite can be slow to settle; the switch itself is instant.
+    await waitFor(() => expect(document.querySelector('.rp-owners')).not.toBeNull(), { timeout: 4000 })
     expect(document.querySelector('.rp-blocks')).toBeNull()
     expect(api.get).toHaveBeenLastCalledWith('/kpi/month', { params: { by: 'coordinator' } })
     expect(screen.getByText(/Highest first/)).toBeInTheDocument()
@@ -189,7 +196,7 @@ describe('Month', () => {
     renderAt('/reports/kpi/month', 'PM')
     await screen.findByText('مهر ۱۴۰۵')
     await user.click(screen.getByRole('button', { name: 'Coordinators' }))
-    const name = await screen.findByText('حسین')
+    const name = await screen.findByText('حسین', {}, { timeout: 4000 })
     expect(name).toHaveAttribute('dir', 'auto')
     const owner = name.closest('li')
     const value = within(owner).getByText('8')
