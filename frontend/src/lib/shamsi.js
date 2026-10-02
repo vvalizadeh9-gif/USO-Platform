@@ -17,6 +17,8 @@
 // Shamsi month names in order, index 0 = month 1. The same list as
 // core/jalali.SHAMSI_MONTHS; a name that disagreed would be a label, not a
 // permission, and the server's name is what a response carries.
+import { toPersianDigits } from './persianDigits'
+
 export const SHAMSI_MONTHS = [
   'فروردین', 'اردیبهشت', 'خرداد', 'تیر', 'مرداد', 'شهریور',
   'مهر', 'آبان', 'آذر', 'دی', 'بهمن', 'اسفند',
@@ -135,4 +137,34 @@ export function monthProgress(year, month, now = new Date()) {
   }
   if (total === 0) return null
   return { elapsed: today.day, total, percent: (today.day / total) * 100 }
+}
+
+/**
+ * A moment as a Shamsi calendar day in Persian digits -- "۱۴۰۵/۰۷/۰۱" -- or
+ * null if this browser cannot say.
+ *
+ * Display only, like the defaults above: the Action Center receives ISO
+ * timestamps and shows them, and nothing converted here is ever sent back.
+ * The day is Tehran's, the same day the server's digest prints for the same
+ * moment, so the board and the email never name different days.
+ */
+export function shamsiDayLabel(value) {
+  if (value == null) return null
+  const moment = value instanceof Date ? value : new Date(value)
+  if (Number.isNaN(moment.getTime())) return null
+  let parts
+  try {
+    parts = new Intl.DateTimeFormat('en-u-ca-persian-nu-latn', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      timeZone: 'Asia/Tehran',
+    }).formatToParts(moment)
+  } catch {
+    return null
+  }
+  const part = (type) => parts.find((p) => p.type === type)?.value
+  const year = Number(part('year'))
+  if (!(year >= FIRST_SHAMSI_YEAR && year <= LAST_SHAMSI_YEAR)) return null
+  return toPersianDigits(`${year}/${part('month')}/${part('day')}`)
 }

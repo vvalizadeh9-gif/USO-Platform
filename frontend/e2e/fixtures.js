@@ -535,3 +535,47 @@ export const accProgress = {
   internal_visible: true,
   months: progressMonths(),
 }
+
+// ---------------------------------------------------------------------------
+// Action Center ticket board. The PM board is the widest (five columns) and
+// its Health Check column holds more tickets than fit at 1280x800, so the
+// layout test sees a column scroll inside itself while the page stays still.
+const acTicket = (queue_key, label, count, overdue, extra = {}) => ({
+  queue_key,
+  label,
+  count,
+  overdue,
+  oldest_started_at: '2026-09-22T20:30:00Z',
+  earliest_due_at: null,
+  date_kind: 'since',
+  url: '/action-center',
+  ...extra,
+})
+const acStage = (key, label, tickets) => ({
+  key, label, total: tickets.reduce((n, t) => n + t.count, 0), tickets,
+})
+
+export const actionBoardPm = {
+  role: 'PM',
+  scope_label: 'All provinces',
+  generated_at: '2026-10-01T08:00:00Z',
+  totals: { pending: 412, overdue: 57 },
+  stages: [
+    acStage('hc', 'Health Check', [
+      acTicket('hc_assign', 'Sites to assign', 112, 14),
+      acTicket('hc_review', 'HC results to review', 37, 9),
+      acTicket('hc_reroutes', 'Re-route decisions', 4, 0),
+      acTicket('hc_extra_a', 'A queue name long enough to wrap onto a second line', 3, 1),
+    ]),
+    acStage('dt', 'Drive Test', [
+      acTicket('dt_assign', 'DT to assign', 21, 3),
+      acTicket('dt_review', 'DT results to review', 8, 0),
+    ]),
+    acStage('ict', 'ICT Acceptance', [acTicket('ict_follow_up', 'Follow up with ICT', 96, 18)]),
+    acStage('cra', 'CRA Acceptance', [acTicket('cra_follow_up', 'Follow up with CRA', 77, 12)]),
+    acStage('plans', 'Plans & Data', [
+      acTicket('plans_approve', 'Plans to approve', 6, 0),
+      acTicket('cpm_changes', 'CPM changes to validate', 48, 0),
+    ]),
+  ],
+}

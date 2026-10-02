@@ -129,6 +129,33 @@ component chooses a colour itself.
 A page with the same shape of data can copy the pattern: one property
 block per tab, components that only read it.
 
+### Lifecycle stages — the Action Center's columns
+
+One set per stage of the lifecycle, the same palette as Performance →
+Lifecycle Gaps. The **chip** is solid behind a white icon; the **tint** fills
+the column header; the **ink** is the header's words and every ticket number
+in that column; the **line** is the header's 1px border. Every ink clears
+4.5:1 on white and on its own tint. As everywhere, `--cra` is never text, so
+CRA's ink is `--cra-ink`.
+
+| Stage | `--stage-*-chip` | `--stage-*-tint` | `--stage-*-ink` | `--stage-*-line` |
+|---|---|---|---|---|
+| Health Check (`hc`) | `#6B788D` (`--dt-pending-bar`) | `#EDF1F6` | `#475569` | `#DDE3EC` |
+| Drive Test (`dt`) | `#2F5FD0` (`--accent`) | `#E3EAFB` | `#1D3F99` | `#D3DEF7` |
+| ICT (`ict`) | `#8E2F74` (`--ict`) | `#F5E6F1` (`--ict-soft`) | `#8E2F74` (`--ict`) | `#EBD3E4` (`--ict-base`) |
+| CRA (`cra`) | `#23A396` (`--cra`) | `#DDF3F0` (`--cra-soft`) | `#0F6F66` (`--cra-ink`) | `#C9EAE5` (`--cra-base`) |
+| Plans & Data (`plans`) | `#8391A7` (`--dt-muted`) | `#F6F8FB` | `#5F6B7E` | `#DDE3EC` |
+
+A column sets `--stage-chip`, `--stage-tint`, `--stage-ink` and `--stage-line`
+from these through its `data-stage`, and its parts read only those four.
+
+**Approved exceptions, for this board only.** The stage chips are coloured,
+where rule 6 makes icon chips neutral: there the colour *is* the stage, it
+appears with the stage's name, and it matches Lifecycle Gaps. Two figures sit
+above the type scale: `--fs-board-total` / `--lh-board-total` (48 / 52, the
+header totals) and `--fs-ticket-count` / `--lh-ticket-count` (54 / 56, a
+ticket's count). Neither is for use elsewhere.
+
 ### Status — an ink on its own soft fill, always with a label
 
 | Status | Ink | Soft |
@@ -370,3 +397,48 @@ can use them.
   villages") or error (the server's reason) — in `ExportFeedback`'s fixed
   corner, so a download never scrolls or re-lays out the page. A zero is drawn
   as a plain number.
+
+### Ticket board (`frontend/src/pages/ActionCenter.jsx`, `pages/actioncenter/`)
+
+The Action Center. A one-screen page (`PageFrame`): **the browser page never
+scrolls**, at 1440×900 or at 1280×800; a column with more tickets than fit
+scrolls inside itself.
+
+- **Header** — left: today's Shamsi date (Vazirmatn, Persian digits, 13px,
+  `--text-tertiary`) over "Action Center" (28/36 600). Right: `N pending` in
+  `--text` and `N overdue` in `--danger-ink`, 48/52 600, letter-spacing
+  −0.02em.
+- **Board** — a CSS grid, one equal column per stage that has tickets for this
+  person (a coordinator has no Plans column, so four), gap 22px.
+- **Column header** (`StageColumn.jsx`) — the stage tint, ink and line, radius
+  10, padding 10 14, 56px high. A 32px chip in the stage colour with a white
+  18px stroke icon; the stage name, 15px 700, up to two lines ("ICT", "CRA",
+  "Plans & Data"); the stage total, 24/28 700, on the right.
+- **Ticket** (`Ticket.jsx`) — every ticket is the same: white, radius 12,
+  **172px high**, `--shadow-ticket` (`0 2px 4px rgba(20,27,43,.06), 0 12px
+  24px -16px rgba(20,27,43,.4)`). Never rotated, nothing stacked behind it.
+  - Top: the action name, 14/20 600 `--text-secondary`, clamped to two lines
+    (40px minimum); then the count, 54/56 800, letter-spacing −0.04em, in the
+    stage ink.
+  - Stub: a 2px dashed `--border` tear line with a 20px half-circle notch at
+    each end in the canvas colour (`--bg`). "since {date}" (13px; the date in
+    Vazirmatn, Persian digits, `--text`, 600), or "due {date}" for a deadline
+    queue, and an 18px arrow.
+  - The whole ticket is one `<a href>` to its queue. Hover lifts it 4px;
+    focus shows the Cobalt focus ring (2px `--accent`, offset 2px).
+- **Overdue pill** — only when something is overdue. 14px from the top and
+  right, flat: "{n} overdue", 12/16 600 `--danger-ink` on `--danger-soft`,
+  after a 6px `--danger-ink` dot. A status label, not a stamp: no rotation,
+  bounce or pulse. Its 100px is held by a one-line float beside the action
+  name, so only the line next to the pill gives way to it.
+- **Motion** — once, on load: tickets drop in from 40px above, staggered
+  140ms per column and 160ms per ticket, `cubic-bezier(.2,.8,.2,1)` over
+  0.7s; the counts and header totals count up from 0 over 1.3s
+  (ease-out-cubic); overdue pills fade in after their ticket lands. Then
+  nothing moves. With `prefers-reduced-motion` the final state shows at
+  once.
+- **States** — loading draws the role's columns in their final place with
+  empty tickets, so nothing jumps; an error is a Cobalt error `Banner` with
+  Retry; a board with nothing pending keeps the header (0 pending, 0 overdue)
+  and says "All caught up" once, centred. A queue reading 0 has no ticket.
+

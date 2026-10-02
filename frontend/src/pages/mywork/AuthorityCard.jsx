@@ -3,11 +3,16 @@ import FilingForm from './FilingForm'
 import ManyFilingForm from './ManyFilingForm'
 import ReviewBlock from './ReviewBlock'
 import RoundHistory from './RoundHistory'
+import SendToAuthority from './SendToAuthority'
 import { StatusBar } from './StatusBar'
 import { lastReasonText, shown } from './roundText'
 import { sideErrors } from './useLetterActions'
 
 const EDITABLE = new Set(['waiting', 'returned', 'rejected'])
+// A side whose request letter can go to the authority: nothing filed yet, or
+// rejected and to be asked again. Must agree with REQUESTABLE_STATUSES in
+// app/services/acceptance_requests.py.
+const REQUESTABLE = new Set(['waiting', 'rejected'])
 
 function singleTitle(side, status, held) {
   if (status === 'approved') return 'Done'
@@ -90,6 +95,9 @@ export function SingleAuthorityCard({
           />
         )}
       </div>
+      {editable && REQUESTABLE.has(status) && (
+        <SendToAuthority authority={authority} villageId={detail.village_id} />
+      )}
       <RoundHistory rounds={history} />
       {editable && side.last_reason && (
         <div className="mw-note" data-tone="danger">{lastReasonText(side.last_reason)}</div>

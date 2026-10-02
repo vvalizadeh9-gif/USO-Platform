@@ -10,6 +10,8 @@ const VIEWPORTS = [
 ]
 
 const PAGES = [
+  // Its crowded Health Check column scrolls inside itself (.ac-col-scroll).
+  { name: 'Action Center', path: '/action-center', ready: 'Action Center', fits: true },
   { name: 'DT dashboard', path: '/reports/drive-test', ready: 'Where this is going', fits: true },
   { name: 'Monthly Plan', path: '/monthly-plan', ready: 'By contractor', fits: true },
   { name: 'HC Pool', path: '/health-check', ready: /^Health Check Pool/, table: true, dock: true },

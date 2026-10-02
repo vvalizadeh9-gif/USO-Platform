@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from 'framer-motion'
-import { LayoutDashboard, UploadCloud, History, GitCompare, Users, ScrollText, Wrench, MapPin, FileSpreadsheet } from 'lucide-react'
+import { LayoutDashboard, UploadCloud, History, GitCompare, Users, ScrollText, Wrench, MapPin, FileSpreadsheet, Timer } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import api from '../api/client'
@@ -14,6 +14,7 @@ import AuditLogTab from './admin/AuditLogTab'
 import ProblemCategoriesTab from './admin/ProblemCategoriesTab'
 import ProvinceAssignmentsTab from './admin/ProvinceAssignmentsTab'
 import MojriTemplateTab from './admin/MojriTemplateTab'
+import ActionSlaTab from './admin/ActionSlaTab'
 
 // Every tab besides Validate CPM hits Admin-only endpoints (see backend
 // app/api/admin.py) — PM only ever sees Validate CPM, which the backend
@@ -26,6 +27,8 @@ const TABS = [
   { key: 'users', label: 'Users & Permissions', icon: Users, adminOnly: true },
   { key: 'categories', label: 'Problem Categories', icon: Wrench, adminOnly: true },
   { key: 'provinces', label: 'Province Assignments', icon: MapPin, adminOnly: true },
+  // Overdue thresholds for the Action Center's queues (default 14 days).
+  { key: 'action-sla', label: 'Action SLA', icon: Timer, adminOnly: true },
   // A download, and only a download: it reads villages we have already
   // approved and writes nothing, which is the only reason it may be Admin's.
   // The import that brings the filled file back is PM's alone.
@@ -105,6 +108,7 @@ export default function Admin() {
           {tab === 'users' && isAdmin && <UsersTab />}
           {tab === 'categories' && isAdmin && <ProblemCategoriesTab />}
           {tab === 'provinces' && isAdmin && <ProvinceAssignmentsTab />}
+          {tab === 'action-sla' && isAdmin && <ActionSlaTab />}
           {tab === 'mojri' && isAdmin && <MojriTemplateTab />}
           {tab === 'audit' && isAdmin && <AuditLogTab />}
         </motion.div>

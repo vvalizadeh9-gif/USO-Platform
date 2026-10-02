@@ -27,11 +27,11 @@ from app.services import action_center as action_center_service
 router = APIRouter(tags=["misc"])
 
 
-@router.get("/action-center", response_model=list[ActionItem])
+@router.get("/action-center", response_model=list[ActionItem], deprecated=True)
 def action_center(
     db: Session = Depends(get_db), user: User = Depends(get_current_user)
 ) -> list[ActionItem]:
-    """The flat item feed. Superseded by ``/action-center/summary``.
+    """The flat item feed. Deprecated: use ``/action-center/board``.
 
     Kept because it is what an older client asks for, and because several
     screens still deep-link from an individual item. New callers should use
@@ -40,7 +40,7 @@ def action_center(
     return action_center_service.build(db, user)
 
 
-@router.get("/action-center/summary", response_model=ActionCenterOut)
+@router.get("/action-center/summary", response_model=ActionCenterOut, deprecated=True)
 def action_center_summary(
     items: bool = Query(
         True,
@@ -50,6 +50,10 @@ def action_center_summary(
     user: User = Depends(get_current_user),
 ) -> ActionCenterOut:
     """Counts first, then the items behind them.
+
+    Deprecated: the ticket board (``/action-center/board``) replaces it, and
+    is what refuses Regional Manager and Viewer. Kept working, unchanged, for
+    clients that still ask for it.
 
     Both halves are derived from live state and clear themselves: an item
     exists exactly as long as its condition does, and is never written to a

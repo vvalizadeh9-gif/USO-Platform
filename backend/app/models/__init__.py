@@ -12,10 +12,12 @@ from app.models.acceptance import (
 )
 from app.models.acceptance_plan import AcceptanceMonthlyTarget
 from app.models.acceptance_workflow import (
+    AcceptanceAuthorityRequest,
     AcceptanceEvidence,
     AcceptanceSubmission,
     AcceptanceSubmissionTech,
 )
+from app.models.action_center import ActionDailySnapshot, ActionQueueSla, DigestLog
 from app.models.auth import LoginAttempt, PasswordResetRequest, SpentCaptcha
 from app.models.health_check import (
     HcAssignment,
@@ -47,6 +49,10 @@ from app.models.workitem import (
 
 __all__ = [
     "Acceptance",
+    "AcceptanceAuthorityRequest",
+    "ActionDailySnapshot",
+    "ActionQueueSla",
+    "DigestLog",
     "AcceptanceMonthlyTarget",
     "AcceptanceEvidence",
     "AcceptanceSubmission",

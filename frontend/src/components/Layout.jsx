@@ -1,12 +1,12 @@
 import { motion } from 'framer-motion'
-import { ChevronsUpDown, KeyRound, LogOut, Menu, Settings } from 'lucide-react'
+import { ChevronsUpDown, KeyRound, LogOut, Mail, Menu, Settings } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import BrandMark from './BrandMark'
 import { DATA_CHANGED_EVENT } from '../lib/dataChanged'
 import { NAV_SECTIONS, navItemVisible } from '../lib/nav'
-import { roleLabel } from '../lib/roles'
+import { hasActionCenter, roleLabel } from '../lib/roles'
 import { PAGE_MODE, PageModeContext } from './pageMode'
 import api from '../api/client'
 
@@ -140,8 +140,9 @@ function SidebarNav({ user, isAdmin, badges }) {
 }
 
 /**
- * The person signed in, and the two things they can do to their own session:
- * change the password and sign out. One button at the foot of the sidebar
+ * The person signed in, and what they can change about their own account:
+ * the password, the daily email digest (Action Center roles only -- nobody
+ * else is sent one), and signing out. One button at the foot of the sidebar
  * rather than a section of its own, because neither is a place in the work --
  * they belong with the name, not among the screens.
  *
@@ -149,6 +150,8 @@ function SidebarNav({ user, isAdmin, badges }) {
  * change of page, and focus goes back to the button whenever the menu takes
  * it away (Escape, or choosing an item).
  */
+const MENU_ITEMS = '[role="menuitem"], [role="menuitemcheckbox"]'
+
 function AccountMenu({ user, initials, logout }) {
   const [open, setOpen] = useState(false)
   const wrapRef = useRef(null)
@@ -156,6 +159,20 @@ function AccountMenu({ user, initials, logout }) {
   const menuRef = useRef(null)
   const location = useLocation()
   const navigate = useNavigate()
+  const { refreshUser } = useAuth()
+  const [digestSaving, setDigestSaving] = useState(false)
+  const digestOn = user?.email_digest_enabled !== false
+
+  // A checkbox item: it changes in place and leaves the menu open, so the new
+  // state is visible where it was set.
+  const toggleDigest = () => {
+    setDigestSaving(true)
+    api
+      .put('/me/notifications', { email_digest: !digestOn })
+      .then(() => refreshUser())
+      .catch(() => {})
+      .finally(() => setDigestSaving(false))
+  }
 
   const close = useCallback((refocus) => {
     setOpen(false)
@@ -170,7 +187,7 @@ function AccountMenu({ user, initials, logout }) {
   useEffect(() => {
     if (!open) return undefined
     // Focus the first item, so the keyboard lands inside what just opened.
-    menuRef.current?.querySelector('[role="menuitem"]')?.focus()
+    menuRef.current?.querySelector(MENU_ITEMS)?.focus()
     const onPointer = (e) => {
       if (!wrapRef.current?.contains(e.target)) close(false)
     }
@@ -190,7 +207,7 @@ function AccountMenu({ user, initials, logout }) {
     }
     if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
       e.preventDefault()
-      const items = [...menuRef.current.querySelectorAll('[role="menuitem"]')]
+      const items = [...menuRef.current.querySelectorAll(MENU_ITEMS)]
       const i = items.indexOf(document.activeElement)
       const step = e.key === 'ArrowDown' ? 1 : -1
       items[(i + step + items.length) % items.length]?.focus()
@@ -220,6 +237,20 @@ function AccountMenu({ user, initials, logout }) {
             <KeyRound size={16} strokeWidth={1.75} />
             <span>Change password</span>
           </button>
+          {hasActionCenter(user?.role?.name) && (
+            <button
+              type="button"
+              role="menuitemcheckbox"
+              aria-checked={digestOn}
+              className="account-menu-item"
+              disabled={digestSaving}
+              onClick={toggleDigest}
+            >
+              <Mail size={16} strokeWidth={1.75} />
+              <span>Daily email digest</span>
+              <span className="account-menu-state">{digestOn ? 'On' : 'Off'}</span>
+            </button>
+          )}
           <div className="account-menu-divider" role="separator" />
           <button
             type="button"
@@ -333,22 +364,18 @@ export default function Layout() {
     let active = true
     let pending = null
     const load = () => {
-      api
-        // Counters only: the badge reads nothing else, and the item feed
-        // costs the server a walk over every work item in scope.
-        .get('/action-center/summary', { params: { items: false } })
-        .then((r) => {
-          // The counters, and only the counters: the badge should say how many
-          // pieces of work are waiting, and one queue holding thirty sites is
-          // one thing to go and do, not thirty. Falling back to the item feed
-          // when there are no counters would put a number on a screen that
-          // now shows counters alone -- a badge reading 3 over a page saying
-          // "you're all caught up".
-          if (!active) return
-          const counters = r.data.counters || []
-          setActionCount(counters.reduce((n, c) => n + c.count, 0))
-        })
-        .catch(() => {})
+      // The board's pending total: the same figure the Action Center's header
+      // shows, and the same per-user read (the server shares it for a few
+      // seconds), so the badge and the page cannot disagree. Roles without an
+      // Action Center are not asked -- the server would answer 403.
+      if (hasActionCenter(roleName)) {
+        api
+          .get('/action-center/board')
+          .then((r) => {
+            if (active) setActionCount(r.data?.totals?.pending ?? 0)
+          })
+          .catch(() => {})
+      }
       loadQueueBadges()
     }
     // A bulk action can write several times in a row; answer the burst once.
@@ -365,7 +392,7 @@ export default function Layout() {
       clearTimeout(pending)
       window.removeEventListener(DATA_CHANGED_EVENT, onDataChanged)
     }
-  }, [mustChangePassword, loadQueueBadges])
+  }, [mustChangePassword, loadQueueBadges, roleName])
 
   const initials = (user?.full_name || 'U')
     .split(' ')
