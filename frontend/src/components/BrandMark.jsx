@@ -5,12 +5,12 @@
  * Decorative (`aria-hidden`) -- it always sits beside the "USO Platform"
  * wordmark, which is what names the product to a screen reader.
  */
-export default function BrandMark() {
+export default function BrandMark({ size = 34 }) {
   return (
     <svg
       className="brand-mark"
-      width="34"
-      height="34"
+      width={size}
+      height={size}
       viewBox="0 0 32 32"
       aria-hidden="true"
       focusable="false"

@@ -11,7 +11,7 @@
 """
 import os
 import sys
-from datetime import date
+from datetime import date, datetime, timedelta, timezone
 
 import pytest
 
@@ -28,6 +28,7 @@ from fastapi.testclient import TestClient  # noqa: E402
 from app.core import user_status  # noqa: E402
 from app.core.database import SessionLocal  # noqa: E402
 from app.core.security import hash_password  # noqa: E402
+from app.models.action_center import DEFAULT_SLA_DAYS  # noqa: E402
 from app.services import cpm_columns as C  # noqa: E402
 from tests.conftest import create_schema, login_form  # noqa: E402
 
@@ -158,9 +159,14 @@ def test_the_breakdown_is_for_pm_and_coordinator(client):
         assert r.status_code == 200, r.text
     rows = client.get(f"{API}/action-center/owners", params={"queue": "ict_to_file"},
                       headers=_headers(client, "a_coord")).json()
+    # The item is undated, so its clock started at 1 Mehr 1405 and it falls
+    # overdue once the default SLA has passed since then. Worked out from now
+    # rather than written down: a fixed 0 held only until 6 October 2026.
+    started = datetime.fromisoformat(rows[0]["oldest_started_at"].replace("Z", "+00:00"))
+    overdue = int(datetime.now(timezone.utc) - started > timedelta(days=DEFAULT_SLA_DAYS))
     assert rows == [{
         "owner_type": "contractor", "owner_id": rows[0]["owner_id"], "name": "Api Co",
-        "count": 1, "overdue": 0, "oldest_started_at": rows[0]["oldest_started_at"],
+        "count": 1, "overdue": overdue, "oldest_started_at": rows[0]["oldest_started_at"],
     }]
     for username in ("a_sc", "a_power", "a_rm", "a_viewer"):
         r = client.get(f"{API}/action-center/owners", params={"queue": "ict_to_file"},

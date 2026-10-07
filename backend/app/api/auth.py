@@ -12,6 +12,7 @@ from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 
 from app.core import audit_actions, user_status
+from app.core.config import get_settings
 from app.core.database import get_db
 from app.core.rate_limit import client_ip, login_rate_limiter
 from app.core.deps import get_current_user_allowing_password_change
@@ -37,6 +38,7 @@ from app.schemas import (
 from app.services.audit import record_audit, record_audit_now
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+settings = get_settings()
 
 # The module every entry in this file is filed under, so the audit screen can
 # show "everything that happened at the front door" as one filter.
@@ -84,8 +86,8 @@ def _record_failed_login(
 def login(
     request: Request,
     form: OAuth2PasswordRequestForm = Depends(),
-    captcha_token: str = Form(...),
-    captcha_answer: int = Form(...),
+    captcha_token: str | None = Form(None),
+    captcha_answer: int | None = Form(None),
     db: Session = Depends(get_db),
 ) -> TokenResponse:
     """Validate the captcha, then the credentials, and return a JWT plus the user profile.
@@ -94,6 +96,16 @@ def login(
     a short time locks that username (or that address) out for a while. Counting
     only failures, and clearing on success, keeps this invisible to people who
     know their password.
+
+    The captcha is demanded only once that username or address has
+    ``login_captcha_after_failures`` recent failures. It was never the defence
+    against guessing (see ``core/rate_limit.py``) -- a script reads the sum out
+    of the challenge -- so asking everyone for it on every sign-in was a cost to
+    every person and to anyone who finds arithmetic puzzles hard, for nothing a
+    script noticed. The decision is the server's, from its own counters: a
+    client that leaves the fields out once the threshold is passed gets a 400
+    with ``X-Captcha-Required``, which is the login form's cue to show it. A
+    captcha that is sent is always checked, required or not.
     """
     ip = client_ip(request)
     retry_after = login_rate_limiter.check(db, form.username, ip)
@@ -107,10 +119,22 @@ def login(
             headers={"Retry-After": str(retry_after)},
         )
 
-    if not verify_captcha(db, captcha_token, captcha_answer):
+    captcha_sent = captcha_token is not None and captcha_answer is not None
+    captcha_required = (
+        login_rate_limiter.recent_failures(db, form.username, ip)
+        >= settings.login_captcha_after_failures
+    )
+    if captcha_required and not captcha_sent:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Answer the security check to sign in",
+            headers={"X-Captcha-Required": "true"},
+        )
+    if captcha_sent and not verify_captcha(db, captcha_token, captcha_answer):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Captcha answer is incorrect or has expired",
+            headers={"X-Captcha-Required": "true"},
         )
     user = db.query(User).filter(User.username == form.username).one_or_none()
     if not verify_password_or_dummy(
