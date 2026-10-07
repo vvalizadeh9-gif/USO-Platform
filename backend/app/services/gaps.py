@@ -64,8 +64,8 @@ Access and scope are **not decided here**. ``services/kpi.py`` already answers
 "may this account see delivery numbers, and whose?" -- :func:`kpi.resolve_scope`
 forces a non-PM onto their own lens and their own key and answers 403 for
 anybody else's, and :func:`kpi.require_kpi_access` keeps Admin out entirely.
-This module calls both. PM is the only role that may switch lens, and the only
-role that sees more than one owner row.
+This module calls both. PM and Viewer are the only roles that may switch lens,
+and the only ones that see more than one owner row.
 """
 from __future__ import annotations
 
@@ -98,7 +98,7 @@ from app.services import acceptance_universe, kpi, mojri_tracker
 # every lens is a partition of the country, and province is the partition the
 # other four are built from.
 
-LENS_PROVINCE = "province"
+LENS_PROVINCE = kpi.LENS_PROVINCE
 LENSES = (*kpi.LENSES, LENS_PROVINCE)
 
 LENS_LABELS = {
@@ -607,7 +607,7 @@ def overview(db: Session, user, lens: str | None) -> dict:
     if lens is not None and lens not in LENSES:
         raise HTTPException(422, f"lens must be one of {', '.join(LENSES)}")
 
-    is_pm = user.role.name == kpi.PM
+    is_pm = kpi.may_compare(user)
     scope = None
     if is_pm:
         lens = lens or LENS_PROVINCE
@@ -761,7 +761,7 @@ def export_villages(
     # Whether the viewer's own confinement already is the lens/key asked for.
     lens_covered = False
 
-    if user.role.name != kpi.PM:
+    if not kpi.may_compare(user):
         lens_covered = lens == kpi.LENS_BY_ROLE[user.role.name]
         own = kpi.resolve_scope(
             db, user, lens if lens_covered else None, key if lens_covered else None
@@ -994,7 +994,7 @@ def coverage_map(db: Session, user) -> dict:
     """Every province and CRA region, with ICT and CRA figures. Reads only."""
     kpi.require_kpi_access(user)
 
-    is_pm = user.role.name == kpi.PM
+    is_pm = kpi.may_compare(user)
     scope = None if is_pm else kpi.resolve_scope(db, user, None, None)
 
     grid = _grid(db)

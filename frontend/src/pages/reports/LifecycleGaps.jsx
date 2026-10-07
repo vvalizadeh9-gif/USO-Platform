@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { AlertTriangle, ClipboardList, Hourglass, Scale } from 'lucide-react'
 import api from '../../api/client'
 import ExportNumber, { ExportFeedback } from '../../components/ExportNumber'
@@ -6,6 +7,7 @@ import GapDrawer from '../../components/GapDrawer'
 import PageFrame from '../../components/PageFrame'
 import WaffleTile from '../../components/WaffleTile'
 import { useAuth } from '../../context/AuthContext'
+import { canCompare } from '../../lib/roles'
 import { Banner, Card, EmptyState, PageBar, Tabs } from '../../components/ui'
 import CoverageMap from './CoverageMap'
 import {
@@ -44,7 +46,7 @@ import {
  * **The drawer adds up, visibly.** Its footer sums the rows it received and
  * says out loud whether they make the gap's total.
  *
- * **The lens is PM's.** Every other role is confined by the server to its own
+ * **The lens is PM's (and Viewer's).** Every other role is confined by the server to its own
  * villages, so the drawer shows their own row and no Group-by control.
  *
  * **The page never scrolls.** The cards fit; the drawer is fixed over a scrim
@@ -52,7 +54,11 @@ import {
  */
 export default function LifecycleGaps() {
   const { user } = useAuth()
-  const isPm = user?.role?.name === 'PM'
+  // PM and Viewer choose the lens (Viewer read-only); everyone else is told.
+  const isPm = canCompare(user)
+  // A Roles Performance breakdown row links here with the lens it was in.
+  const [search] = useSearchParams()
+  const askedLens = LENSES.some((l) => l.key === search.get('lens')) ? search.get('lens') : null
 
   const [lens, setLens] = useState(null)
   const [tab, setTab] = useState('gaps')
@@ -68,12 +74,12 @@ export default function LifecycleGaps() {
     let live = true
     api
       .get('/kpi/lenses')
-      .then((r) => live && setLens(r.data.selectable ? LENSES[0].key : r.data.lens))
+      .then((r) => live && setLens(r.data.selectable ? askedLens ?? LENSES[0].key : r.data.lens))
       .catch((err) => live && setError(readError(err, 'Could not work out your scope.')))
     return () => {
       live = false
     }
-  }, [])
+  }, [askedLens])
 
   useEffect(() => {
     if (!lens) return undefined

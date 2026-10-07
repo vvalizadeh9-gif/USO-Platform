@@ -695,105 +695,297 @@ in the app and the importer will not overwrite them.
 
 ---
 
-## 5b. KPI & Performance
+## 5b. Roles Performance
 
-One reporting page, added after the rest. It answers a question none of the
-dashboards above could: **how is one owner doing, against the country?** The
-owner is a Regional Manager, a PSO Coordinator, a Contractor or a CRA Region —
-four lenses over the same numbers.
+The reporting page about **people**, at `/reports/kpi` (sidebar: "Roles
+Performance", one item). It replaced the single-scope KPI & Performance page
+in 1405 and answers three questions, one tab each:
 
-### The mapping is new master data
+| Question | Tab |
+|---|---|
+| What happened this month compared with last month? | **Month** |
+| Where do things stand today? | **Area** (PM, Viewer) / **My area** (everyone else) |
+| What did a person deliver, month by month, and how fast? | **Performance** / **My performance** |
+
+PM and Viewer also get **Compare**, which ranks like with like. **Map** is the
+Lifecycle Gaps coverage map (`/gaps/map`, `CoverageMap.jsx`) embedded
+unchanged.
+
+| Role | Tabs, in order | Lands on |
+|---|---|---|
+| PM | Month · Area · Performance · Compare · Map | PM's existing landing |
+| Viewer | Month · Area · Performance · Compare · Map (read-only) | Month |
+| Regional Manager | My area · My performance · Map | My area |
+| Coordinator | My area · My performance · Map | My area |
+| Contractor | My area · My performance · Map | My area |
+| Admin | none: 403 on every route | n/a |
+
+### The mapping is master data
 
 `province_mapping` records who owns a province over a period of time: its CRA
-region, PSO coordinator and regional manager, between `effective_from` and
-`effective_to`. A reassignment closes the open row and opens a new one, so a
-figure computed for last quarter still belongs to whoever held the province
-then. A partial unique index enforces one open row per province — two rows in
-force at once would make every lens count that province twice, with no error
-anywhere.
+region, PSO coordinator and regional manager, valid over the half-open interval
+`[effective_from, effective_to)`. A reassignment closes the open row on the
+day the new one starts, so nothing is ever owned twice or by nobody. A partial
+unique index enforces one open row per province.
 
 It sits **beside** `provinces.coordinator_user_id` / `regional_manager_user_id`,
-not instead of them. Those columns are Admin's, are read by the Acceptance
-dashboard's filters, and carry neither a CRA region nor any history. The two
-can be set independently and can disagree; only this table decides the KPI page.
+not instead of them. Those are Admin's, carry no CRA region and no history,
+and only this table decides this page. `users.kpi_person_name` says which
+person in it an account is; contractors use `users.contractor_id`. An
+unlinked account is refused with a message saying so.
 
-`users.kpi_person_name` says which person in that table an account is — matched
-against `regional_manager` for a RegionalManager account and `pso_coordinator`
-for a Coordinator one. Contractors need nothing new: `users.contractor_id`
-already holds what CPM carries in DT SC. An unlinked account is refused the
-page with a message saying so.
+### One definitions module
 
-### The metric rules
+Every measure is defined once, in `services/performance/definitions.py`, and
+every tab and every export reads it. No tab computes a measure its own way;
+that is how two screens start disagreeing about the same number.
 
-Stated once, in `services/kpi.py`, and followed by the screen and both exports
-because all three read the same payload.
+| Measure | Unit | Dated by | Recorded from |
+|---|---|---|---|
+| On air | sites, villages | the site's CPM launch date (`launch_date_gregorian`, else the parsed `launch_date_shamsi`); failing both, `lifecycle_status_history.first_seen_at`. A village inherits its site's date. | wherever a date exists |
+| DT done | sites, villages | `work_items.dt_date_gregorian` (CPM) | wherever a date exists |
+| ICT approved | villages | `reviewed_at` of the validated submission that made the village's last requested technology ICT-approved | Mehr 1405 |
+| CRA approved | villages | the same, for CRA | Mehr 1405 |
+| Fully approved | villages | the later of the two | Mehr 1405 |
+| Became full config | sites | `hc_tasks.reviewed_at` of a confirmed `Ready` that follows anything but `Ready`: confirmation, not submission | Mehr 1405 |
+| Fell back | sites | `reviewed_at` of a confirmed `NotReady` whose previous confirmed result was `Ready` | Mehr 1405 |
+| Problematic, new / resolved | sites | the transitions in `drive_test_analytics.problem_events()` | Mehr 1405 |
+| Problematic basket | sites | `is_problematic()` today: a balance, not a flow | n/a |
+| Remaining | villages | not yet approved by **both** ICT and CRA | n/a |
 
-* **Final status only.** A village rejected and later approved counts as
-  approved. `villages.ict_status` / `cra_status` are current standing, and are
-  maintained in the same transaction as every change that could alter them.
-* **Two denominators, deliberately.** On air and DT done divide by the scope's
-  total. ICT and CRA approval and rejection divide by **DT-done villages** — a
-  village whose drive test is unfinished was never eligible for acceptance.
-  The "remained" counts keep the total-villages base.
-* **The country average is weighted**: the sum of every province's numerator
-  over the sum of their denominators, never the mean of 31 percentages.
-* **It is the whole country, always**, whatever the viewer can see. It is the
-  one figure computed outside the viewer's scope, and it is an aggregate of
-  thirty-one provinces, so it identifies nobody.
-* **Fewer than ten DT-done villages and a province is not compared.** It is
-  still shown, in grey, reading "not compared", taking no colour and sorting
-  last. Three approvals out of three is not a 23-point lead.
-* **Nothing ranks people.** The heatmap ranks provinces inside one scope.
+Some notes on the table:
 
-### Everything is one GROUP BY
+* **Approval is when UEP records it.** A village counts as approved when a PM
+  or coordinator validates someone else's filing, or files and decides it
+  themselves (`record_decided`). Both set `reviewed_at`. The letter date is
+  typed in and can be backdated, so using it would let a late filing change a
+  closed month.
+* **On air uses the launch date, not "first import seen on air".** The launch
+  date gives real history today. A history table that starts at deploy would
+  read "Not recorded" for all of Mehr. A site with neither date is counted in
+  no month, and the payload says how many such sites there are.
+* **Problematic flows come from dated per-site events, not
+  `MonthlySnapshot`.** The snapshot is one row per province per month,
+  refreshed on login. It cannot be cut at a day of the month, split by
+  contractor, or split by who owned a province mid-month. `problem_events()`
+  is the function the snapshot itself is built on, so both readings share
+  one definition. The snapshot stays as an independent cross-check.
+* **Before Mehr 1405, approvals and the HC/problematic flows have no
+  trustworthy dates.** Those months return `null` with `recorded: false`,
+  never `0`. "Nothing happened" and "nobody wrote it down" are different
+  facts.
 
-`last_stage`, `dt_status` and `target_classification` are free text that the
-import normalises on the way in, but rows written by earlier imports carry
-spacing and letter-form variants. The distinct values are read first — a few
-dozen across the whole table — and passed through the same `cpm_columns`
-helpers the rest of the platform uses, then used as an `IN` list. The
-aggregation stays a single pass and cannot disagree with what the other screens
-call on air, DT done or a target village.
+**Rates.** On air % and DT done % divide by the scope's villages (or sites).
+ICT % and CRA % divide by **DT-done villages**, because a village whose drive
+test is unfinished was never eligible for acceptance. Fully accepted % divides
+by villages in scope.
 
-### Sites with no province
+**Low sample.** Fewer than `LOW_SAMPLE_DT_DONE` (10) DT-done villages means the
+owner is "Not compared": shown in grey, unranked, sorted last. For speed, the
+same rule applies to fewer than 10 timed pairs.
 
-A CPM `استان` cell matching none of the 31 leaves `sites.province_id` NULL.
-Those work items have no province and therefore no owner, so they cannot appear
-in anybody's lens. They are counted in the **country total** and shown as one
-"Unknown province" row rather than dropped: otherwise the per-province rows
-would quietly fail to add up to the country figure, which is the one property
-that makes this page checkable.
+**Benchmarks.** *National* is always the whole country, weighted: the sum of
+numerators over the sum of denominators. *Role average* is the plain mean of
+the **compared** owners' rates, each person counting once. A weighted average
+over regional managers, coordinators or regions would just be the national
+rate again, because they partition the country. Contractors do not partition
+the country, so their role average is weighted.
+
+### Months, and the same-day comparison
+
+All months are Shamsi, bucketed with `core/jalali.py`. "Today" is
+`jalali.tehran_today()`. `services/performance/periods.py` turns a month into
+a window pair:
+
+* **The running month** is compared from day 1 up to today with the previous
+  month **up to the same day**, capped at that month's length (Mehr 10 vs
+  Shahrivar 10; Esfand 30 vs Bahman 30).
+* **A closed month** is compared whole against whole.
+
+Every comparison is returned as `{now, ref, delta, lower_is_better, recorded}`.
+
+### Ownership at the time
+
+A month's figure goes to whoever owned the province **on the event date**: the
+mapping row whose `[effective_from, effective_to)` contains it. Reassigning a
+province therefore never rewrites history. If a province changed hands
+mid-month, each owner is credited with their own days.
+`services/performance/ownership.py` loads the mapping rows once per request
+and finds each event's row with a binary search. There are 31 provinces and a
+handful of rows each, so this takes microseconds and reads more simply than a
+range join.
+
+* **Before the first row, the first row.** The seed rows open on the day the
+  table was created, but the CPM DT dates go back years. So a province's
+  earliest known owner is credited with the time before their row opened.
+  Otherwise every owner view would be empty before the deploy. Later
+  reassignments are exact.
+* A **contractor** is credited through the work item's DT SC
+  (`dt_sc_contractor_id`), as the old contractor lens was.
+* An event with no attributable owner (unknown province, unmapped province,
+  no DT SC) goes to an **"Unattributed"** bucket. It is never dropped, so the
+  owner splits always add up to the row total.
+* **Area is "today"** and uses the current mapping rows only.
+* PM and Viewer may open **past owners** in Performance and Compare.
+  `/kpi/lenses` lists them under `past`, and the picker marks them "(past)".
+  Their Area is empty, and the page says so.
+* On Month, an owner is listed when they have something in either window,
+  highest first. A roll-call of zeros is not a ranking.
+
+### Activity and response times come from `acceptance_submissions`
+
+**This deviates from the original brief, which asked for a new
+`performance_event` table.** The submission tables are already the event log.
+A round is never changed after review, and a re-filing is a new row
+(`round_no` + 1). The columns give every event:
+
+| Event | Read as |
+|---|---|
+| filed | a submission row: `submitted_at`, `submitted_by`, `letter_number` |
+| validated | `reviewed_at` / `reviewed_by` with `Validated` or `Returned`, where the reviewer is not the filer |
+| rejected | a validated round that claims `Rejected` for any technology: a refusal by the **authority**. A coordinator's `Returned` is not a rejection. |
+| refiled | the next round for the same village and authority, after a rejection, under a **different** letter number |
+
+A second table would have to be written in the same transaction as each of
+these and backfilled once. It could still drift from the rows it copies.
+`services/performance/activity.py` reads the facts in place instead, behind
+one `load()`, so a database view can replace it later without touching the
+API. The CPM-side facts (on air, DT done, approvals, health checks,
+problematic) come from `services/performance/facts.py` in the same way.
+
+The three response times are always **medians**:
+
+1. **Filing → validation.** From `submitted_at` to `reviewed_at`, credited to
+   the reviewer. Rounds a coordinator filed and decided themselves are
+   excluded, because they take zero time.
+2. **DT done → first filing.** From `dt_date_gregorian` to the first round per
+   village and authority, credited to the filer.
+3. **Rejection → re-filing with a new letter.** From the rejecting round's
+   `reviewed_at` to the next round's `submitted_at`, credited to the filer.
+
+Only contractors, coordinators and PM act in UEP, so only they get activity
+and speed. Regional managers, provinces and regions show results only. In
+Compare, **Speed** ranks contractors on measure 2 and coordinators on
+measure 1.
+
+### `lifecycle_status_history`
+
+`(entity_type, entity_id, status, first_seen_at, cpm_import_batch_id,
+backfilled)`, unique on the first three. The CPM import writes it after each
+batch, in the batch's transaction, for every site and village it sees on air
+for the first time. The first run marks its rows `backfilled = true`, because
+"first seen on the day the table was created" is not an on-air date. Those
+rows never feed a monthly flow. It is the fallback date for on air, used only
+when CPM carries no launch date.
+
+### No rollup tables
+
+Every figure is a live read. `facts.load()` reads the live work items through
+`dt_universe.load_all` (the Drive Test dashboard's own loader, so "on air",
+"DT done" and "problematic" use the same predicates). It also reads the
+target villages and the approval dates: a handful of queries, a few
+milliseconds at about 4.4k villages. Every tab then folds those rows:
+
+* Month and Performance count dated events;
+* Area folds today's counters, grouped by (province, contractor), so a region
+  agrees with its provinces and the rows agree with the headline.
+
+The one load is the one function a materialised view would replace, with no
+route changing. A CPM `استان` that matches none of the 31 provinces becomes an
+"Unknown province" row, so per-province rows always add up to the country.
+
+### Code layout
+
+```
+services/kpi.py                 Scope, require_kpi_access, may_compare, resolve_scope, lenses
+services/performance/
+  definitions.py                measures, units, rates, recorded-from, low-sample, lower-is-better
+  periods.py                    Shamsi months and the same-day cut
+  ownership.py                  who owned a province on a day
+  facts.py                      dated CPM-side facts and today's cells (the read model)
+  activity.py                   filings, validations, the three response times
+  common.py                     shared shapes: comparison, scope, role average
+  month.py  area.py             one payload builder per tab
+  person.py  compare.py         (person.py is the Performance tab)
+  export.py                     workbooks built from the same payloads
+  onair_history.py              writes lifecycle_status_history after a CPM import
+schemas/roles_performance.py    the response models
+api/kpi.py                      read routes; mapping and linking routes unchanged
+```
+
+```
+frontend/src/pages/reports/rolesPerformance/
+  RolesPerformance.jsx          tab router, role landing, scope in the URL
+  PerfHeader.jsx                eyebrow · title · tabs · date control · Export
+  ScopePicker.jsx               "whose?" (PM, Viewer)
+  MonthTab.jsx  AreaTab.jsx  PerformanceTab.jsx  CompareTab.jsx  MapTab.jsx
+  parts.jsx                     Num (LTR span), CountUp, DeltaChip, RpCard, RateBar
+  hooks.js                      useRpData, useExport, useCountUp
+  model.js                      tabs per role, row colours, block maths, formats
+  rolesPerformance.css          page-local Cobalt tokens, dark mode, motion
+```
+
+The logic module is `model.js`, not `rolesPerformance.js`. A file whose name
+differs from `RolesPerformance.jsx` only by case is resolved in its place on a
+case-insensitive disk (Windows, macOS), because `.js` is tried before `.jsx`.
+
+`MapTab.jsx` only renders the existing `CoverageMap`. The map itself is not
+modified.
 
 ### Who sees what
 
-| Role | Scope | Lenses | Contractor comparison |
-|---|---|---|---|
-| PM | All 31 provinces | All four, any person | All contractors |
-| Regional Manager | Own provinces | Own only | Hidden |
-| PSO Coordinator | Own CRA regions | Own only | All contractors in own regions |
-| Contractor | Own sites (DT SC) | Own only | Hidden |
-| Admin | **No access** | — | — |
+| Role | Scope | May choose whose? | Ranking | Writes |
+|---|---|---|---|---|
+| PM | the country | anyone, any province or CRA region, past owners too | yes | mapping, links |
+| Viewer | the country | same as PM | yes | **none** |
+| Regional Manager | own provinces | no | no | none |
+| Coordinator | own provinces and CRA regions | no | no | none |
+| Contractor | own sites (DT SC) | no | no | none |
+| Admin | **no access** | | | |
 
-Enforced on every endpoint, exports included. A non-PM asking for someone
-else's lens or key gets a **403**, not a silent substitution — a substitution
-would show a manager a page headed with another manager's name and let them
-believe it. Admin's absence here is the Admin/PM separation in section 6,
-applied to reporting.
+* **Viewer is a read-only PM.** It is in the KPI roles, and `resolve_scope`
+  gives it the PM's choice of lens and key. Every write route stays
+  `require_roles(PM)`, so Viewer gets a 403 there. Lifecycle Gaps calls the
+  same `require_kpi_access`, so Viewer reads it too, choosing the lens as PM
+  does. Viewer may download Excel. It never sees the Mojri tracker or the
+  mapping screens, and both are refused on the server, not just hidden.
+* **"Open my Action Center"** on Area appears only for roles that have an
+  Action Center (`hasActionCenter`, the same list as the server's
+  `board_role()`): not for Viewer or Regional Manager.
+* **Month and Compare are PM's and Viewer's** (`kpi.require_compare`).
+  Anyone else gets a 403 on them, exports included.
+* **Asking for another scope is a 403**, never an empty result and never a
+  silent substitution. A substituted page would be headed with someone
+  else's name.
+* **Contractor breakdown in Area.** PM, Viewer, coordinators and regional
+  managers get it, limited to contractors working in their own provinces and
+  not ranked. A contractor asking for it gets a 403.
+* **Ranking.** *The old "never rank people" rule is retired.* PM and Viewer
+  may rank owners in Month (owner views) and Compare. Every other role sees
+  only their own scope, so nothing on their page ranks anyone.
 
 ### Exports
 
-Built from the payload the screen already received, never from a second query,
-so a number in the file cannot differ from the one on screen. Excel uses
-`openpyxl`, already present. The PDF uses `reportlab` — a pure-Python renderer,
-no browser and no extra container, because this server has no route to the
-public internet.
+`/kpi/{month,area,performance,compare}.xlsx` are built from the payload the
+screen receives, never from a second query. A number in the file cannot
+differ from the one on screen, and the row counts match: each response says
+how many rows its main sheet has in `X-Row-Count`, and the tests compare that
+with the screen. They stream above the Lifecycle Gaps threshold. The access
+rules are the screen's.
+
+An Area breakdown row links to Lifecycle Gaps with `?lens=` set to the
+breakdown (province, region or contractor), so PM and Viewer land on the
+lens they were reading. Everyone else is confined there anyway.
+
+`GET /kpi/summary`, `/kpi/contractors` and `/kpi/export.{xlsx,pdf}` serve the
+old page. They stay for one release, marked deprecated, and are then removed.
 
 ---
 
 ## 5c. Lifecycle Gaps
 
 The second reporting page over the same villages, and it asks the opposite
-question to the one above it. KPI & Performance asks "how is this owner doing?"
+question to the one above it. Roles Performance asks "how is this owner doing?"
 Lifecycle Gaps asks **"where are villages stuck, and whose villages are they?"**
 
 `/reports/gaps` (Performance → Lifecycle Gaps; `/reports/lifecycle-gaps`
@@ -918,8 +1110,9 @@ shows them behind its "data note" button.
 
 Not decided here. `services/kpi.py` already answers "may this account see
 delivery numbers, and whose?", so this page calls `require_kpi_access` and
-`resolve_scope` rather than restating them: Admin is refused, PM sees the
-country under any of the five lenses, and every other role sees **only their
+`resolve_scope` rather than restating them: Admin is refused, PM and Viewer
+see the country under any of the five lenses (Viewer read-only: no Mojri
+tracker, no action buttons), and every other role sees **only their
 own villages**: totals, gaps and bases are all computed over the cells that
 roll up to their own key, and their one row therefore adds up to the totals they
 see. Asking for another lens is a 403, and the endpoint takes no key at all.
@@ -1347,7 +1540,7 @@ problem categories.
 | Coordinator | `Coordinator` | Assigns health checks, reviews drive tests |
 | Regional Manager | `RegionalManager` | Regional oversight, read-only |
 | Contractor | `Contractor` | Subcontractor doing the field work |
-| Viewer | `Viewer` | Read-only |
+| Viewer | `Viewer` | Read-only; the general manager. Reads Roles Performance and Lifecycle Gaps as a PM would, and writes nothing |
 | CPG Power | `CpgPower` | Owns Temporary Power fixes |
 | CPG Rollout PM | `CpgRolloutPM` | Owns Project Responsibility fixes |
 | Managed Service | `ManagedService` | Owns MS Responsibility fixes |
@@ -1528,6 +1721,8 @@ Services worth knowing:
 | `visibility.py` | Row-level scoping — the single source of truth |
 | `acceptance_analytics.py` | ICT/CRA reporting (the Acceptance Dashboard) |
 | `acceptance_workflow.py` | Acceptance submission, review, the derived verdicts and the queue-status cache |
+| `kpi.py` | Who may see delivery numbers, and whose: `require_kpi_access`, `resolve_scope` |
+| `performance/` | Roles Performance: the one definitions module, Shamsi windows, owner-at-date, the tab payloads |
 | `evidence_store.py` | Content-addressed storage for scanned letters |
 | `workflow.py` | Work-item stage transitions |
 | `audit.py` | Audit entries and notifications |
@@ -1632,6 +1827,12 @@ above:
 - **bcrypt still being verifiable** after the move to Argon2id — deliberate;
   removing it locks out every user at once.
 - **No route that deletes a user** — deliberate; see "Nothing is deleted" above.
+- **No `performance_event` table** — deliberate; `acceptance_submissions` is
+  already the append-only event log. See section 5b.
+- **Approvals dated by `reviewed_at`, not the letter date** — deliberate; a
+  typed letter date would let a late filing rewrite a closed month.
+- **Role average as a plain mean for geographic roles** — deliberate; a
+  weighted average over a partition of the country is the national rate.
 - **Action Center tickets calling the screens' own list functions** instead
   of fast counts — deliberate; a ticket must open exactly what it counted
   (§ 5e).

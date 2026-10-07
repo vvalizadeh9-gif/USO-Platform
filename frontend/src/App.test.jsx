@@ -31,7 +31,7 @@ vi.mock('./pages/ActionCenter', () => page('action-center'))
 vi.mock('./pages/mywork/MyWork', () => page('my-work'))
 vi.mock('./pages/monthlyplan/MonthlyPlan', () => page('monthly-plan'))
 vi.mock('./pages/reports/AcceptanceDashboard', () => page('acceptance'))
-vi.mock('./pages/reports/KpiPerformance', () => page('kpi'))
+vi.mock('./pages/reports/rolesPerformance/RolesPerformance', () => page('kpi'))
 vi.mock('./pages/mojri/MojriImport', () => page('mojri'))
 vi.mock('./pages/Admin', () => page('admin'))
 vi.mock('./pages/ChangePassword', () => page('change-password'))
@@ -93,7 +93,7 @@ describe('where "/" lands', () => {
   )
 
   // Neither has an Action Center: the server refuses them the board.
-  it('sends a Regional Manager to KPI & Performance', async () => {
+  it('sends a Regional Manager to Roles Performance (My area)', async () => {
     signedInAs('RegionalManager')
     expect(await landOn('/')).toBe('kpi')
   })

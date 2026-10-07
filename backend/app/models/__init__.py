@@ -27,6 +27,7 @@ from app.models.health_check import (
 )
 from app.models.kpi import ProvinceMapping
 from app.models.mojri import MojriImportRun, MojriTrackerStatus
+from app.models.performance import LifecycleStatusHistory
 from app.models.monthly_plan import ContractorMonthlyPlan
 from app.models.reference import (
     Contractor,
@@ -61,6 +62,7 @@ __all__ = [
     "CpmChangeRequest",
     "CpmImportBatch",
     "Letter",
+    "LifecycleStatusHistory",
     "MonthlySnapshot",
     "SnapshotContractorCompletion",
     "HcAssignment",
