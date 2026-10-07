@@ -341,3 +341,57 @@ def test_a_spent_captcha_is_recorded_in_the_database(client):
 
     replayed = client.post("/api/v1/auth/login", data=form)
     assert replayed.status_code == 400, replayed.text
+
+
+# ---------------------------------------------------------------------------
+# The captcha is asked for only after repeated failures
+# ---------------------------------------------------------------------------
+
+
+def _bare_attempt(client, password: str, username: str = "admin"):
+    """A sign-in with no captcha fields at all, as the form sends by default."""
+    return client.post(
+        "/api/v1/auth/login", data={"username": username, "password": password}
+    )
+
+
+def test_a_first_sign_in_needs_no_captcha(client):
+    assert _bare_attempt(client, "Admin@12345").status_code == 200
+
+
+def test_the_captcha_is_demanded_after_repeated_failures(client):
+    from app.core.config import get_settings
+
+    for _ in range(get_settings().login_captcha_after_failures):
+        assert _bare_attempt(client, "wrong").status_code == 401
+
+    refused = _bare_attempt(client, "Admin@12345")
+    assert refused.status_code == 400, refused.text
+    assert refused.headers.get("x-captcha-required") == "true"
+
+    # Solving it lets the right password through, and clears the counters.
+    assert _attempt(client, "Admin@12345").status_code == 200
+    assert _bare_attempt(client, "Admin@12345").status_code == 200
+
+
+def test_the_demand_is_the_same_for_a_username_that_does_not_exist(client):
+    """Otherwise the 400 would be a way to tell real accounts from made-up ones."""
+    from app.core.config import get_settings
+
+    for _ in range(get_settings().login_captcha_after_failures):
+        assert _bare_attempt(client, "wrong", "nobody-here").status_code == 401
+    assert _bare_attempt(client, "wrong", "nobody-here").status_code == 400
+
+
+def test_a_captcha_that_is_sent_is_checked_even_when_not_required(client):
+    challenge = client.get("/api/v1/auth/captcha").json()
+    response = client.post(
+        "/api/v1/auth/login",
+        data={
+            "username": "admin",
+            "password": "Admin@12345",
+            "captcha_token": challenge["token"],
+            "captcha_answer": challenge["num1"] + challenge["num2"] + 1,
+        },
+    )
+    assert response.status_code == 400

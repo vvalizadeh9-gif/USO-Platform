@@ -73,6 +73,26 @@ class LoginRateLimiter:
         remaining = (unlock_at - now).total_seconds()
         return int(remaining) + 1 if remaining > 0 else 0
 
+    def _failures(self, db: Session, key: str, now: datetime) -> int:
+        window_start = now - timedelta(seconds=settings.login_attempt_window_seconds)
+        return db.execute(
+            select(func.count(LoginAttempt.id)).where(
+                LoginAttempt.key == key, LoginAttempt.attempted_at > window_start
+            )
+        ).scalar_one()
+
+    def recent_failures(self, db: Session, username: str, ip: str) -> int:
+        """Failures inside the window, for whichever key has more.
+
+        Counted per username whether or not the account exists, so the answer
+        says nothing about who has an account here.
+        """
+        now = _now()
+        return max(
+            self._failures(db, f"user:{username.lower()}", now),
+            self._failures(db, f"ip:{ip}", now),
+        )
+
     def check(self, db: Session, username: str, ip: str) -> int:
         """Return 0 if this attempt may proceed, else seconds to wait."""
         now = _now()

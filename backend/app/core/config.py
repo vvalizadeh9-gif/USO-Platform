@@ -51,6 +51,10 @@ class Settings(BaseSettings):
     login_max_attempts_per_ip: int = 20
     login_attempt_window_seconds: int = 300  # 5 minutes
     login_lockout_seconds: int = 900  # 15 minutes
+    # Failures (per username or per address, inside the window above) after
+    # which the captcha is demanded. Below it the login form shows none -- see
+    # the login endpoint for why that costs nothing.
+    login_captcha_after_failures: int = 2
 
     # File uploads (letters, attachments)
     upload_dir: str = "/data/uploads"

@@ -1,5 +1,30 @@
 # Changelog
 
+## Sign-in redesign
+
+The login screen is now a cobalt brand panel beside the form (the panel gives
+way to a small brand row below 900px), built to WCAG 2.2 AA and NIST SP
+800-63B.
+
+* **Security check only after repeated failures.** The server asks for the
+  captcha once a username or address has 2 recent failed sign-ins
+  (`login_captcha_after_failures`), answering 400 with `X-Captcha-Required`
+  until it is solved. It does this for usernames that don't exist too, so the
+  400 doesn't reveal which accounts are real. Lockout is unchanged. The check
+  accepts Persian and Arabic digits and links to an administrator for anyone
+  who can't complete it.
+* **Errors:** a focused error summary whose entries jump to the field, inline
+  messages above each input, and one generic "The username or password is
+  incorrect". Lockout and suspension messages come from the server.
+* **Forms:** visible labels, no placeholders, paste allowed, a text
+  Show/Hide button in the tab order, Caps Lock in a live status region, and
+  focus moved to each view's heading on every view change.
+* **Motion:** four rings expand once and stop by 4.9s. With reduced motion
+  they are hidden.
+* The privacy notice and accessibility statement links are placeholders
+  (`PRIVACY_NOTICE_URL`, `ACCESSIBILITY_STATEMENT_URL` in `Login.jsx`) until
+  those documents exist.
+
 ## Action Center → Ticket Board
 
 The Action Center is one screen answering "what is pending for me, across the

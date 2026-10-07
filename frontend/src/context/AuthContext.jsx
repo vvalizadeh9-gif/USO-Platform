@@ -50,8 +50,12 @@ export function AuthProvider({ children }) {
     const form = new URLSearchParams()
     form.append('username', username)
     form.append('password', password)
-    form.append('captcha_token', captchaToken)
-    form.append('captcha_answer', captchaAnswer)
+    // The captcha is asked for only after repeated failures, so most sign-ins
+    // have none to send. The server decides when it is required.
+    if (captchaToken) {
+      form.append('captcha_token', captchaToken)
+      form.append('captcha_answer', captchaAnswer)
+    }
     const { data } = await api.post('/auth/login', form)
     localStorage.setItem('uep_token', data.access_token)
     store(data.user)
