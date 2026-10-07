@@ -1,5 +1,31 @@
 # Changelog
 
+## Action Center → Task Board
+
+The ticket board is replaced by an open task board (approved design "Action
+Center Final").
+
+* **One sentence, not figures.** The PageBar says "N items waiting on you, M
+  overdue", with when it was last updated and a Refresh button. Tabs: All
+  tasks and Overdue ("M late"), which keeps only queues with something late.
+* **A step rail** pinned under the PageBar draws the lifecycle once: Health
+  Check → Drive Test → ICT acceptance → CRA acceptance → Accepted, with
+  Plans & Data alongside. Every role sees all five steps.
+* **Minimal cards:** the count, "N overdue" in words when something is late,
+  the action verb first, and the oldest item's age. Sorted most overdue,
+  then oldest. The whole card is one link.
+* **Verb-first queue names** in the registry ("Assign sites", "Review HC
+  results", "File villages", …); the digest and the SLA screen use them too.
+* **Keyboard:** arrow keys between cards, O for Overdue, and a "Skip to
+  tasks" link.
+* **Layout:** the board may scroll in the page body; no column scrolls by
+  itself. Loading keeps the final layout; the error and all-caught-up states
+  are Cobalt banners.
+* Cobalt gains amendments D–G (open columns, one summary sentence, card
+  hover, step rail). The ticket-only tokens (`--fs-board-total`,
+  `--fs-ticket-count`, `--shadow-ticket`, the stage tints and lines) are
+  gone.
+
 ## Sign-in redesign
 
 The login screen is now a cobalt brand panel beside the form (the panel gives

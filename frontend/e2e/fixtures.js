@@ -562,20 +562,20 @@ export const actionBoardPm = {
   totals: { pending: 412, overdue: 57 },
   stages: [
     acStage('hc', 'Health Check', [
-      acTicket('hc_assign', 'Sites to assign', 112, 14),
-      acTicket('hc_review', 'HC results to review', 37, 9),
-      acTicket('hc_reroutes', 'Re-route decisions', 4, 0),
+      acTicket('hc_assign', 'Assign sites', 112, 14),
+      acTicket('hc_review', 'Review HC results', 37, 9),
+      acTicket('hc_reroutes', 'Decide re-routes', 4, 0),
       acTicket('hc_extra_a', 'A queue name long enough to wrap onto a second line', 3, 1),
     ]),
     acStage('dt', 'Drive Test', [
-      acTicket('dt_assign', 'DT to assign', 21, 3),
-      acTicket('dt_review', 'DT results to review', 8, 0),
+      acTicket('dt_assign', 'Assign drive tests', 21, 3),
+      acTicket('dt_review', 'Review DT results', 8, 0),
     ]),
     acStage('ict', 'ICT Acceptance', [acTicket('ict_follow_up', 'Follow up with ICT', 96, 18)]),
     acStage('cra', 'CRA Acceptance', [acTicket('cra_follow_up', 'Follow up with CRA', 77, 12)]),
     acStage('plans', 'Plans & Data', [
-      acTicket('plans_approve', 'Plans to approve', 6, 0),
-      acTicket('cpm_changes', 'CPM changes to validate', 48, 0),
+      acTicket('plans_approve', 'Approve plans', 6, 0),
+      acTicket('cpm_changes', 'Validate CPM changes', 48, 0),
     ]),
   ],
 }

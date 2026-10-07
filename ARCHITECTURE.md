@@ -304,7 +304,7 @@ whole definition, and the pool quantity is the length of that list:
 drive-test contractor was somebody else's problem. That made the figure smaller
 than the thing it is labelled with by however many sites the last import marked
 `Ongoing`. The nav badge uses `pool_assignable` instead (what a PM can act on
-now), and the Action Center's "Sites to assign" ticket counts the pool's
+now), and the Action Center's "Assign sites" ticket counts the pool's
 "Ready to assign" filter (never checked, or due a re-check), because those
 two ask "what needs me", not "how much is there".
 
@@ -1415,25 +1415,25 @@ queue held together by a parity test.
 
 | Stage | Ticket | Who | Clock starts | Opens |
 |---|---|---|---|---|
-| HC | Sites to assign | PM, Coord | pool waiting-since (on-air, or last fix closed) | HC Pool, "Ready to assign" |
-| HC | HC results to review | PM, Coord | `hc_tasks.completed_at` | HC Review |
-| HC | Re-route decisions | PM, Coord | `reroute_at` | Re-routes |
-| HC | HC to submit | Contractor | `hc_assignments.assigned_at` | My Health Check |
-| HC | Fixes assigned to me | Problem owner | `opened_at`; late after `due_at` (the category's SLA) | My Fix Queue |
-| DT | DT to assign | PM, Coord | HC review, or `returned_at` if handed back | Drive Test → Assignment |
-| DT | DT results to review | PM, Coord | `drive_tests.submitted_at` | Drive Test → Review |
-| DT | Sites to drive test | Contractor | `assignments.assigned_at` | My Drive Tests, `status=with_contractor` |
-| DT | Returned to redo | Contractor | `coordinator_reviewed_at` | My Drive Tests, `status=sent_back` |
+| HC | Assign sites | PM, Coord | pool waiting-since (on-air, or last fix closed) | HC Pool, "Ready to assign" |
+| HC | Review HC results | PM, Coord | `hc_tasks.completed_at` | HC Review |
+| HC | Decide re-routes | PM, Coord | `reroute_at` | Re-routes |
+| HC | Submit health checks | Contractor | `hc_assignments.assigned_at` | My Health Check |
+| HC | Fix assigned problems | Problem owner | `opened_at`; late after `due_at` (the category's SLA) | My Fix Queue |
+| DT | Assign drive tests | PM, Coord | HC review, or `returned_at` if handed back | Drive Test → Assignment |
+| DT | Review DT results | PM, Coord | `drive_tests.submitted_at` | Drive Test → Review |
+| DT | Drive-test sites | Contractor | `assignments.assigned_at` | My Drive Tests, `status=with_contractor` |
+| DT | Redo returned drive tests | Contractor | `coordinator_reviewed_at` | My Drive Tests, `status=sent_back` |
 | ICT/CRA | Follow up with ICT / CRA | PM | request letter `sent_at` | My Work → With authority |
-| ICT/CRA | Villages to file | Coord, Contractor | last activity, else DT date | My Work → Not filed |
-| ICT/CRA | Contractor filings to validate | Coord | submission `submitted_at` | My Work → To check |
-| ICT/CRA | Rejected, to re-file | Contractor | rejection `reviewed_at` | My Work → New letter needed |
-| ICT/CRA | Returned, to correct | Contractor | return `reviewed_at` | My Work → Returned |
-| Plans | Plans to approve | PM | `submitted_at` (revisions too) | Monthly Plan → Plans |
-| Plans | CPM changes to validate | PM | `cpm_change_requests.created_at` | Admin → Validate CPM |
-| Plans | Monthly plan to submit | Contractor | **due** on the day-3 deadline | Monthly Plan |
+| ICT/CRA | File villages | Coord, Contractor | last activity, else DT date | My Work → Not filed |
+| ICT/CRA | Validate contractor filings | Coord | submission `submitted_at` | My Work → To check |
+| ICT/CRA | Re-file rejected villages | Contractor | rejection `reviewed_at` | My Work → New letter needed |
+| ICT/CRA | Correct returned villages | Contractor | return `reviewed_at` | My Work → Returned |
+| Plans | Approve plans | PM | `submitted_at` (revisions too) | Monthly Plan → Plans |
+| Plans | Validate CPM changes | PM | `cpm_change_requests.created_at` | Admin → Validate CPM |
+| Plans | Submit monthly plan | Contractor | **due** on the day-3 deadline | Monthly Plan |
 
-"Returned, to correct" is separate from "Rejected, to re-file" because they
+"Correct returned villages" is separate from "Re-file rejected villages" because they
 are separate My Work tabs, and a ticket must open exactly what it counted.
 
 ### "With the authority": the one new clock
@@ -1450,7 +1450,7 @@ for the same village and authority is filed at or after it
 **With authority** tab and the PM's follow-up ticket, and nothing else
 restates it. Rows are never updated: asking again after a rejection is a
 second request. Sending one does not change the side's status, so the village
-stays on "Villages to file" until the answer is filed.
+stays on "File villages" until the answer is filed.
 
 ### SLA and overdue (`sla.py`)
 
@@ -1460,7 +1460,7 @@ stays on "Villages to file" until the answer is filed.
 - An item is overdue when `now − started_at > sla_days`, strictly: 14 days
   exactly is on time.
 - **Fixes** are late after their own `due_at`, set from the problem category's
-  SLA when the fix opened. **Monthly plan to submit** is late after the end
+  SLA when the fix opened. **Submit monthly plan** is late after the end
   (Tehran) of its deadline day. The configured days do not apply to either,
   and the SLA screen shows them read-only.
 - **The tracking epoch.** CPM-imported data carries no dates from before
@@ -1515,16 +1515,21 @@ The job only adds outgoing mail. Password resets stay out of band (see
 
 ### The page
 
-`frontend/src/pages/ActionCenter.jsx`, a one-screen page (`PageFrame`): the
-Shamsi date and title on the left, `N pending` and `N overdue` on the right,
-then a grid with one equal column per stage. Every ticket is the same height
-(172px) and is a real link. A column with more tickets than fit scrolls
-inside itself; the page never does (`e2e/noPageScroll.spec.js`,
-`e2e/actionCenter.spec.js`). The motion is one entrance, then nothing:
-tickets drop in staggered by column and by place, numbers count up, overdue
-pills fade in after. With `prefers-reduced-motion` the final state shows at
-once. The sidebar badge is the board's `totals.pending`. The component and
-its tokens are in `design-system-cobalt.md`, "Ticket board".
+`frontend/src/pages/ActionCenter.jsx`, a `PageFrame`: a `PageBar` whose
+context is one sentence ("N items waiting on you, M overdue"), with All tasks
+/ Overdue tabs; then a sticky step rail and one open column per lifecycle
+step under it, all five for every role (an empty step says "Nothing waiting
+on you"). One card per queue, a real link, sorted most overdue then oldest;
+its age ("Oldest 12 days", or "Due in 3 days" for a deadline queue) is worked
+out on the page from the ticket's `oldest_started_at` / `earliest_due_at`.
+The board scrolls in the page body when it is taller than the screen; the
+document never does and no column scrolls by itself
+(`e2e/noPageScroll.spec.js`, `e2e/actionCenter.spec.js`). Arrow keys move
+between cards and O toggles the Overdue tab. The motion is one entrance,
+done in about a second, with every number final on first paint; with
+`prefers-reduced-motion` nothing moves. The sidebar badge is the board's
+`totals.pending`. The component and its tokens are in
+`design-system-cobalt.md`, "Task board".
 
 ---
 

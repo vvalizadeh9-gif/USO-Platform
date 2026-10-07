@@ -206,38 +206,23 @@
   --dt-muted: #8391A7;
   --dt-pending-bar: #6B788D;
 
-  /* ---- Lifecycle stages (the Action Center's columns) ----
+  /* ---- Lifecycle stages (the Action Center's step markers) ----
      The same palette as Performance -> Lifecycle Gaps. Per stage: a solid
-     chip behind a white icon, a tint for the column header, an ink for its
-     words and every ticket number, and a line for the header border. Each ink
-     clears 4.5:1 on white and on its own tint. CRA's ink is --cra-ink:
-     --cra is never text. */
+     chip (the step marker behind its white number) and an ink (Plans & Data's
+     "+"). Each ink clears 4.5:1 on white. CRA's ink is --cra-ink:
+     --cra is never text. Stage colour is on the markers only (amendment D). */
   --stage-hc-chip: var(--dt-pending-bar);
-  --stage-hc-tint: #EDF1F6;
   --stage-hc-ink: #475569;
-  --stage-hc-line: #DDE3EC;
   --stage-dt-chip: var(--accent);
-  --stage-dt-tint: #E3EAFB;
   --stage-dt-ink: #1D3F99;
-  --stage-dt-line: #D3DEF7;
   --stage-ict-chip: var(--ict);
-  --stage-ict-tint: var(--ict-soft);
   --stage-ict-ink: var(--ict);
-  --stage-ict-line: var(--ict-base);
   --stage-cra-chip: var(--cra);
-  --stage-cra-tint: var(--cra-soft);
   --stage-cra-ink: var(--cra-ink);
-  --stage-cra-line: var(--cra-base);
   --stage-plans-chip: var(--dt-muted);
-  --stage-plans-tint: #F6F8FB;
   --stage-plans-ink: #5F6B7E;
-  --stage-plans-line: #DDE3EC;
-
-  /* The ticket board's two oversized figures -- above the type scale on
-     purpose, and used nowhere else: the header totals and a ticket's count. */
-  --fs-board-total: 48px;   --lh-board-total: 52px;
-  --fs-ticket-count: 54px;  --lh-ticket-count: 56px;
-  --shadow-ticket: 0 2px 4px rgba(20, 27, 43, 0.06), 0 12px 24px -16px rgba(20, 27, 43, 0.4);
+  /* The step rail's line and the dashed edge of Plans & Data. */
+  --step-line: #C4CCD8;
 
   /* ---- Shape ----
      6 buttons and inputs, 8 tiles and banners, 10 cards and dialogs. */
@@ -5050,132 +5035,200 @@ a.lifecycle-step:focus-visible { outline: 2px solid var(--accent); outline-offse
 
 
 /* ---------------------------------------------------------------------------
-   Action Center -- the ticket board (pages/ActionCenter.jsx)
+   Action Center -- the task board (pages/ActionCenter.jsx)
 
-   One column per lifecycle stage that has work for this person, one
-   equal-size ticket per queue. A fill page: the board takes the height under
-   the header and a crowded column scrolls inside itself. Motion is the
-   entrance alone (pages/actioncenter/motion.js); nothing loops or pulses.
-   See design-system-cobalt.md, "Ticket board".
+   A sticky step rail, then one open column per lifecycle step (all five, for
+   every role), one card per queue. The board scrolls in the page body when it
+   is taller than the screen; no column scrolls by itself. Stage colour is on
+   the step markers only. Motion is the entrance alone (.ac-animate, taken off
+   after it plays); nothing loops. See design-system-cobalt.md, "Task board".
    --------------------------------------------------------------------------- */
-.ac-page .page-body { padding: 24px 32px 20px; gap: 20px; overflow: hidden; }
+.ac-page .page-body {
+  padding: 0 32px 32px; gap: 0;
+  background: var(--surface); border-inline-start: 1px solid var(--border);
+}
+.ac-main { display: flex; flex-direction: column; outline: none; }
+.ac-main:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 
-.ac-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; flex-shrink: 0; }
-.ac-today {
-  font-family: var(--font-farsi); font-size: var(--fs-meta); line-height: var(--lh-meta);
-  color: var(--text-tertiary);
+/* Skip link: off screen until it has focus. */
+.ac-skip {
+  position: absolute; left: 12px; top: 12px; z-index: 60;
+  padding: 8px 14px; border-radius: var(--radius-sm);
+  background: var(--surface); color: var(--text-link); font-weight: 600;
+  box-shadow: var(--shadow-2);
+  transform: translateY(-200%);
 }
-.ac-title { font-size: var(--fs-display); line-height: var(--lh-display); font-weight: 600; color: var(--text); }
-.ac-figures { display: flex; align-items: baseline; gap: 28px; }
-.ac-figure {
-  font-size: var(--fs-board-total); line-height: var(--lh-board-total); font-weight: 600;
-  letter-spacing: -0.02em; color: var(--text); white-space: nowrap;
-}
-.ac-figure b { font-weight: 600; font-variant-numeric: tabular-nums; }
-.ac-figure-overdue { color: var(--danger-ink); }
-.ac-figure-placeholder { color: var(--text-tertiary); }
+.ac-skip:focus { transform: none; outline: 2px solid var(--accent); outline-offset: 2px; }
 
-.ac-board {
-  flex: 1 1 auto; min-height: 0;
-  display: grid; grid-template-columns: repeat(var(--ac-cols, 1), minmax(0, 1fr)); gap: 22px;
+/* PageBar: the summary sentence, freshness, refresh, keyboard hint. */
+.ac-summary {
+  font-size: var(--fs-heading); line-height: var(--lh-heading); color: var(--text-secondary);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.ac-col { display: flex; flex-direction: column; min-height: 0; gap: 14px; }
-.ac-col-head {
-  display: flex; align-items: center; gap: 10px; flex-shrink: 0;
-  padding: 10px 14px; border-radius: var(--radius);
-  background: var(--stage-tint); color: var(--stage-ink); border: 1px solid var(--stage-line);
+.ac-summary b { font-weight: 600; color: var(--text); }
+.ac-summary b.ac-summary-late { color: var(--danger-ink); }
+.ac-updated {
+  display: inline-flex; align-items: center; gap: 8px; white-space: nowrap;
+  font-size: var(--fs-control); line-height: var(--lh-control); color: var(--text-tertiary);
 }
-.ac-col-chip {
-  display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;
-  width: 32px; height: 32px; border-radius: var(--radius-md);
+.ac-updated-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--success-ink); }
+.ac-refresh { width: 44px; height: 44px; min-height: 44px; padding: 0; color: var(--text-secondary); }
+.ac-keys {
+  white-space: nowrap; font-size: var(--fs-meta); line-height: var(--lh-meta); color: var(--text-tertiary);
+}
+.ac-keys kbd {
+  display: inline-flex; align-items: center; height: 22px; padding: 0 6px; margin-inline: 2px;
+  border: 1px solid var(--control-border); border-bottom-width: 2px; border-radius: 4px;
+  background: var(--surface); color: var(--text-secondary);
+  font: inherit; font-size: var(--fs-caption); line-height: 18px; font-weight: 600;
+}
+@media (max-width: 1200px) {
+  .ac-keys { display: none; }
+}
+
+.ac-banner { margin-top: 20px; }
+.ac-banner-actions { margin-top: 10px; }
+.ac-retry { min-height: 40px; }
+
+/* The grid the rail and the columns share, so each step sits over its cards. */
+.ac-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr)) 92px minmax(0, 0.92fr);
+}
+
+/* ---- Step rail ---- */
+.ac-rail {
+  position: sticky; top: 0; z-index: 2;
+  padding: 18px 0 16px;
+  background: rgba(255, 255, 255, 0.94);
+  -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--divider);
+}
+/* From step 1's marker centre to the Accepted marker's. */
+.ac-rail-line {
+  position: absolute; left: 28px; top: 31px; height: 2px;
+  width: calc((100% - 92px) * 4 / 4.92 + 16px);
+  background: var(--step-line); transform-origin: left center;
+}
+.ac-step { position: relative; padding: 0 14px; min-width: 0; }
+.ac-step-marker-row { display: flex; align-items: center; gap: 10px; }
+.ac-marker {
+  position: relative; flex: none;
+  display: inline-grid; place-items: center; width: 28px; height: 28px; border-radius: 50%;
   background: var(--stage-chip); color: var(--text-on-accent);
+  box-shadow: 0 0 0 5px var(--surface);
+  font-size: 13px; line-height: 1; font-weight: 700;
 }
-/* Up to two lines in a header of fixed height, so a long stage name never
-   pushes one column's tickets below its neighbours'. */
-.ac-col-head { height: 56px; }
-.ac-col-name {
-  flex: 1; min-width: 0; font-size: 15px; line-height: 17px; font-weight: 700;
-  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+.ac-marker-alongside {
+  background: var(--surface); color: var(--stage-ink);
+  border: 1.5px dashed var(--stage-chip);
 }
-.ac-col-total { font-size: 24px; line-height: 28px; font-weight: 700; font-variant-numeric: tabular-nums; }
-/* Room above for the hover lift and the entrance, room at the sides for the
-   shadow; the negative margin keeps the column edges where they were. */
-.ac-col-scroll {
-  flex: 1 1 auto; min-height: 0; overflow-y: auto;
-  display: flex; flex-direction: column; gap: 16px;
-  padding: 6px 6px 16px; margin: -6px -6px 0;
+.ac-step-alongside { font-size: var(--fs-caption); line-height: var(--lh-caption); font-weight: 600; color: var(--text-tertiary); }
+.ac-step-name {
+  margin-top: 12px;
+  font-size: 20px; line-height: 26px; font-weight: 600; letter-spacing: -0.02em; color: var(--text);
+}
+.ac-step-sub { font-size: var(--fs-meta); line-height: var(--lh-meta); color: var(--text-tertiary); }
+.ac-nowrap { white-space: nowrap; }
+.ac-step-end { display: flex; flex-direction: column; align-items: center; text-align: center; padding: 0; }
+.ac-marker-end { background: var(--success-ink); }
+.ac-step-end-name {
+  margin-top: 12px; font-size: var(--fs-title); line-height: 26px; font-weight: 600; color: var(--success-ink);
 }
 
-.ac-col[data-stage="hc"] { --stage-chip: var(--stage-hc-chip); --stage-tint: var(--stage-hc-tint); --stage-ink: var(--stage-hc-ink); --stage-line: var(--stage-hc-line); }
-.ac-col[data-stage="dt"] { --stage-chip: var(--stage-dt-chip); --stage-tint: var(--stage-dt-tint); --stage-ink: var(--stage-dt-ink); --stage-line: var(--stage-dt-line); }
-.ac-col[data-stage="ict"] { --stage-chip: var(--stage-ict-chip); --stage-tint: var(--stage-ict-tint); --stage-ink: var(--stage-ict-ink); --stage-line: var(--stage-ict-line); }
-.ac-col[data-stage="cra"] { --stage-chip: var(--stage-cra-chip); --stage-tint: var(--stage-cra-tint); --stage-ink: var(--stage-cra-ink); --stage-line: var(--stage-cra-line); }
-.ac-col[data-stage="plans"] { --stage-chip: var(--stage-plans-chip); --stage-tint: var(--stage-plans-tint); --stage-ink: var(--stage-plans-ink); --stage-line: var(--stage-plans-line); }
+.ac-step[data-stage="hc"] { --stage-chip: var(--stage-hc-chip); --stage-ink: var(--stage-hc-ink); }
+.ac-step[data-stage="dt"] { --stage-chip: var(--stage-dt-chip); --stage-ink: var(--stage-dt-ink); }
+.ac-step[data-stage="ict"] { --stage-chip: var(--stage-ict-chip); --stage-ink: var(--stage-ict-ink); }
+.ac-step[data-stage="cra"] { --stage-chip: var(--stage-cra-chip); --stage-ink: var(--stage-cra-ink); }
+.ac-step[data-stage="plans"] { --stage-chip: var(--stage-plans-chip); --stage-ink: var(--stage-plans-ink); }
 
-/* The ticket: white, 172px whatever it says, never rotated, no layers
-   behind it. The whole card is the link. */
-.ac-ticket-slot { flex-shrink: 0; }
-.ac-ticket {
-  position: relative; display: flex; flex-direction: column;
-  height: 172px; border-radius: 12px; background: var(--surface);
-  box-shadow: var(--shadow-ticket); color: inherit; text-decoration: none;
-  transition: transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+/* ---- Columns: open, separated by space and hairlines (amendment D) ---- */
+.ac-columns { flex: none; align-items: start; }
+.ac-col {
+  display: flex; flex-direction: column; gap: 12px; min-width: 0;
+  padding: 16px 14px 8px; align-self: stretch;
 }
-.ac-ticket:hover { transform: translateY(-4px); }
-.ac-ticket:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.ac-ticket-top { flex: 1 1 auto; display: flex; flex-direction: column; justify-content: space-between; padding: 16px 16px 12px; min-height: 0; }
-/* Clamped to two lines (40px). The overdue pill's 100px is held by a float
-   one line high, so only the line beside the pill gives way to it. */
-.ac-ticket-label {
-  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
-  min-height: 40px;
-  font-size: var(--fs-control); line-height: var(--lh-control); font-weight: 600; color: var(--text-secondary);
+.ac-col[data-stage="dt"],
+.ac-col[data-stage="ict"],
+.ac-col[data-stage="cra"] { border-inline-start: 1px solid var(--divider); }
+.ac-col[data-stage="plans"] { border-inline-start: 1px dashed var(--step-line); }
+.ac-col-empty {
+  display: flex; align-items: center; gap: 8px;
+  font-size: var(--fs-control); line-height: var(--lh-control); color: var(--text-tertiary);
 }
-.ac-pill-room { float: right; width: 100px; height: var(--lh-control); }
-.ac-ticket-count {
-  font-size: var(--fs-ticket-count); line-height: var(--lh-ticket-count); font-weight: 800;
-  letter-spacing: -0.04em; color: var(--stage-ink); font-variant-numeric: tabular-nums;
+.ac-col-empty svg { flex: none; color: var(--success-ink); }
+
+/* ---- Task card ---- */
+.ac-card {
+  display: flex; flex-direction: column; gap: 6px; min-height: 44px;
+  padding: 16px 16px 14px; border-radius: var(--radius);
+  background: var(--surface); border: 1px solid var(--border);
+  color: inherit; text-decoration: none;
+  transition: transform 200ms cubic-bezier(0.2, 0.6, 0.4, 1),
+    border-color 200ms cubic-bezier(0.2, 0.6, 0.4, 1),
+    box-shadow 200ms cubic-bezier(0.2, 0.6, 0.4, 1);
 }
-/* The stub: a dashed tear line with a half-circle notch at each end, cut in
-   the canvas colour. */
-.ac-ticket-stub {
-  position: relative; flex-shrink: 0;
+.ac-card:hover {
+  transform: translateY(-3px); border-color: var(--text);
+  box-shadow: 0 12px 24px -12px rgba(20, 27, 43, 0.25);
+}
+.ac-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.ac-card-top {
+  display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 12px;
+}
+.ac-card-count {
+  font-size: 36px; line-height: 38px; font-weight: 600; letter-spacing: -0.04em;
+  font-variant-numeric: tabular-nums; color: var(--text);
+}
+.ac-card-count.is-late { color: var(--danger-ink); }
+.ac-card-overdue {
+  display: inline-flex; align-items: center; gap: 8px; white-space: nowrap;
+  font-size: var(--fs-meta); line-height: var(--lh-meta); font-weight: 600; color: var(--danger-ink);
+}
+.ac-card-dot {
+  width: 7px; height: 7px; border-radius: 50%; flex: none;
+  background: var(--danger-ink); box-shadow: 0 0 0 3px var(--danger-soft);
+}
+.ac-card-name {
+  font-size: 16px; line-height: 22px; font-weight: 600; letter-spacing: -0.01em;
+  color: var(--text); text-wrap: pretty;
+}
+.ac-card-meta {
   display: flex; align-items: center; justify-content: space-between; gap: 8px;
-  height: 44px; padding: 0 16px; border-top: 2px dashed var(--border);
-  font-size: var(--fs-meta); line-height: var(--lh-meta); color: var(--text-secondary);
+  font-size: var(--fs-meta); line-height: var(--lh-meta); color: var(--text-tertiary);
 }
-.ac-ticket-stub::before,
-.ac-ticket-stub::after {
-  content: ''; position: absolute; top: -11px; width: 20px; height: 20px;
-  border-radius: 50%; background: var(--bg);
-}
-.ac-ticket-stub::before { left: -10px; }
-.ac-ticket-stub::after { right: -10px; }
-.ac-ticket-stub svg { flex-shrink: 0; color: var(--text-tertiary); }
-.ac-ticket-date { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.ac-date-fa { font-family: var(--font-farsi); font-weight: 600; color: var(--text); }
+.ac-card-meta svg { flex: none; }
 
-/* Overdue: a flat status label, top right, never a stamp. */
-.ac-overdue {
-  position: absolute; top: 14px; right: 14px;
-  display: inline-flex; align-items: center; gap: 6px; padding: 2px 8px;
-  border-radius: 999px; background: var(--danger-soft); color: var(--danger-ink);
-  font-size: var(--fs-caption); line-height: var(--lh-caption); font-weight: 600; white-space: nowrap;
+/* Loading: a card's place, in its final size. */
+.ac-card-skeleton {
+  display: flex; flex-direction: column; gap: 10px;
+  padding: 16px 16px 14px; border-radius: var(--radius); border: 1px solid var(--divider);
 }
-.ac-overdue-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--danger-ink); }
+.ac-skel { display: block; border-radius: 4px; background: var(--divider); }
+.ac-skel-count { width: 48px; height: 32px; }
+.ac-skel-name { width: 80%; height: 14px; }
+.ac-skel-meta { width: 55%; height: 12px; }
 
-.ac-ticket-placeholder { background: var(--surface); opacity: 0.6; box-shadow: var(--shadow-1); }
-
-.ac-empty {
-  flex: 1 1 auto; display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: 8px; text-align: center; color: var(--text-secondary);
+/* ---- The entrance: once, on load, finished within about a second ---- */
+.ac-animate .ac-rail-line { animation: ac-draw 600ms cubic-bezier(0.6, 0, 0.2, 1) backwards; }
+.ac-animate .ac-marker {
+  animation: ac-pop 300ms cubic-bezier(0.3, 1.4, 0.5, 1) backwards;
+  animation-delay: calc(var(--ac-i, 0) * 100ms);
 }
-.ac-empty svg { color: var(--success-ink); }
-.ac-empty h2 { font-size: var(--fs-heading); line-height: var(--lh-heading); font-weight: 600; color: var(--text); }
-.ac-empty p { max-width: 44ch; font-size: var(--fs-control); line-height: var(--lh-control); }
+.ac-animate .ac-card {
+  animation: ac-rise 350ms cubic-bezier(0.2, 0.6, 0.4, 1) backwards;
+  animation-delay: var(--ac-delay, 0ms);
+}
+@keyframes ac-draw { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@keyframes ac-pop { from { transform: scale(0); } to { transform: scale(1); } }
+@keyframes ac-rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
 
 @media (prefers-reduced-motion: reduce) {
-  .ac-ticket { transition: none; }
+  .ac-card, .ac-skip { transition: none; }
+  .ac-card:hover { transform: none; }
+  .ac-animate .ac-rail-line,
+  .ac-animate .ac-marker,
+  .ac-animate .ac-card { animation: none; }
 }
 
 /* The account menu's on/off state (the email digest). */
