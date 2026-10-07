@@ -57,7 +57,7 @@ export default function HcBasketTab({ onCountChange, initialState } = {}) {
   const [query, setQuery] = useState('')
   const [provinceSel, setProvinceSel] = useState(new Set())
   // ?state=ready (read by the page) opens the pool on one state -- the Action
-  // Center's "Sites to assign" ticket counts exactly the "Ready to assign" rows.
+  // Center's "Assign sites" ticket counts exactly the "Ready to assign" rows.
   const [state, setState] = useState(() =>
     STATES.some((s) => s.key === initialState) ? initialState : 'all',
   )

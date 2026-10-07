@@ -1,16 +1,22 @@
 import { useEffect, useState } from 'react'
 
-// The board's one entrance, and nothing after it: tickets drop in from 40px
-// above, staggered by column then by place in the column; counts run up from
-// zero; overdue pills fade in once their ticket has landed. Nothing loops.
-export const EASE = [0.2, 0.8, 0.2, 1]
-export const DROP_SECONDS = 0.7
-export const COLUMN_STAGGER = 0.14
-export const TICKET_STAGGER = 0.16
-export const COUNT_MS = 1300
+// The board's one entrance, finished within about a second, and nothing
+// after it: the rail line draws in, the step markers pop in one after
+// another, and the cards rise into place. Numbers are final on first paint.
+// The keyframes are CSS (.ac-animate in app.css); this file holds the timing
+// a card's delay is built from. Under prefers-reduced-motion nothing moves.
+export const CARD_BASE_MS = 200
+export const CARD_COLUMN_MS = 50
+export const CARD_ROW_MS = 40
+// Cards far down a long column start no later than this row's would, so the
+// entrance still ends within about a second.
+const MAX_STAGGERED_ROW = 8
+// How long after the board arrives the entrance classes come off, so a
+// refresh never plays it again.
+export const ENTRANCE_MS = 1600
 
-export function ticketDelay(column, index) {
-  return column * COLUMN_STAGGER + index * TICKET_STAGGER
+export function cardDelay(column, row) {
+  return CARD_BASE_MS + column * CARD_COLUMN_MS + Math.min(row, MAX_STAGGERED_ROW) * CARD_ROW_MS
 }
 
 const REDUCED = '(prefers-reduced-motion: reduce)'
@@ -26,31 +32,4 @@ export function usePrefersReducedMotion() {
     return () => query.removeEventListener?.('change', onChange)
   }, [query])
   return reduced
-}
-
-const easeOutCubic = (t) => 1 - (1 - t) ** 3
-
-/**
- * `target`, counted up from 0 over COUNT_MS once, starting after `delayMs`.
- * With `animate` false it is `target` from the first render.
- */
-export function useCountUp(target, { animate = true, delayMs = 0 } = {}) {
-  const [value, setValue] = useState(animate ? 0 : target)
-  useEffect(() => {
-    if (!animate) {
-      setValue(target)
-      return undefined
-    }
-    let frame
-    let start
-    const tick = (now) => {
-      if (start === undefined) start = now + delayMs
-      const t = Math.min(Math.max((now - start) / COUNT_MS, 0), 1)
-      setValue(Math.round(easeOutCubic(t) * target))
-      if (t < 1) frame = requestAnimationFrame(tick)
-    }
-    frame = requestAnimationFrame(tick)
-    return () => cancelAnimationFrame(frame)
-  }, [target, animate, delayMs])
-  return value
 }

@@ -129,32 +129,29 @@ component chooses a colour itself.
 A page with the same shape of data can copy the pattern: one property
 block per tab, components that only read it.
 
-### Lifecycle stages — the Action Center's columns
+### Lifecycle stages — the Action Center's step markers
 
-One set per stage of the lifecycle, the same palette as Performance →
-Lifecycle Gaps. The **chip** is solid behind a white icon; the **tint** fills
-the column header; the **ink** is the header's words and every ticket number
-in that column; the **line** is the header's 1px border. Every ink clears
-4.5:1 on white and on its own tint. As everywhere, `--cra` is never text, so
-CRA's ink is `--cra-ink`.
+One pair per stage of the lifecycle, the same palette as Performance →
+Lifecycle Gaps. The **chip** fills the step's marker behind its white number;
+the **ink** draws Plans & Data's "+". Stage colour appears on the markers and
+nowhere else on the board (amendment D). As everywhere, `--cra` is never
+text, so CRA's ink is `--cra-ink`.
 
-| Stage | `--stage-*-chip` | `--stage-*-tint` | `--stage-*-ink` | `--stage-*-line` |
-|---|---|---|---|---|
-| Health Check (`hc`) | `#6B788D` (`--dt-pending-bar`) | `#EDF1F6` | `#475569` | `#DDE3EC` |
-| Drive Test (`dt`) | `#2F5FD0` (`--accent`) | `#E3EAFB` | `#1D3F99` | `#D3DEF7` |
-| ICT (`ict`) | `#8E2F74` (`--ict`) | `#F5E6F1` (`--ict-soft`) | `#8E2F74` (`--ict`) | `#EBD3E4` (`--ict-base`) |
-| CRA (`cra`) | `#23A396` (`--cra`) | `#DDF3F0` (`--cra-soft`) | `#0F6F66` (`--cra-ink`) | `#C9EAE5` (`--cra-base`) |
-| Plans & Data (`plans`) | `#8391A7` (`--dt-muted`) | `#F6F8FB` | `#5F6B7E` | `#DDE3EC` |
+| Stage | `--stage-*-chip` | `--stage-*-ink` |
+|---|---|---|
+| Health Check (`hc`) | `#6B788D` (`--dt-pending-bar`) | `#475569` |
+| Drive Test (`dt`) | `#2F5FD0` (`--accent`) | `#1D3F99` |
+| ICT (`ict`) | `#8E2F74` (`--ict`) | `#8E2F74` (`--ict`) |
+| CRA (`cra`) | `#23A396` (`--cra`) | `#0F6F66` (`--cra-ink`) |
+| Plans & Data (`plans`) | `#8391A7` (`--dt-muted`) | `#5F6B7E` |
 
-A column sets `--stage-chip`, `--stage-tint`, `--stage-ink` and `--stage-line`
-from these through its `data-stage`, and its parts read only those four.
+A rail step sets `--stage-chip` and `--stage-ink` from these through its
+`data-stage`. `--step-line` (`#C4CCD8`) is the rail's 2px line and the dashed
+edge of the Plans & Data column.
 
-**Approved exceptions, for this board only.** The stage chips are coloured,
+**Approved exception, for this board only.** The step markers are coloured,
 where rule 6 makes icon chips neutral: there the colour *is* the stage, it
-appears with the stage's name, and it matches Lifecycle Gaps. Two figures sit
-above the type scale: `--fs-board-total` / `--lh-board-total` (48 / 52, the
-header totals) and `--fs-ticket-count` / `--lh-ticket-count` (54 / 56, a
-ticket's count). Neither is for use elsewhere.
+appears with the stage's name, and it matches Lifecycle Gaps.
 
 ### Status — an ink on its own soft fill, always with a label
 
@@ -215,6 +212,22 @@ Vazirmatn (`.text-farsi`), `dir="rtl"` or `dir="auto"`.
 | `--radius` | 10px | cards, dialogs |
 | `--shadow-1` | faint | cards (with a 1px `--border`) |
 | `--shadow-2` | raised | menus, dialogs, drawers |
+
+## 2a. Amendments
+
+Approved additions to the rules above.
+
+- **D. Open columns.** Boards separate columns with space and 1px
+  `--divider` lines. No tinted header boxes, no column backgrounds. Stage
+  colour appears only on the step marker.
+- **E. Say it in a sentence.** Task pages open with one summary sentence
+  (17/24 `--text-secondary`, the figures 600 in `--text` or `--danger-ink`)
+  instead of KPI figure blocks. Dashboards keep `KpiCard`.
+- **F. Card hover.** Linked cards lift 3px, the border turns `--text`, and
+  the raised shadow appears (`0 12px 24px -12px rgba(20,27,43,.25)`), over
+  200ms `cubic-bezier(.2,.6,.4,1)`. Off under `prefers-reduced-motion`.
+- **G. Step rail.** Lifecycle order is drawn once, as numbered markers on a
+  2px `--step-line` ending at "Accepted", pinned under the PageBar.
 
 ---
 
@@ -398,47 +411,65 @@ can use them.
   corner, so a download never scrolls or re-lays out the page. A zero is drawn
   as a plain number.
 
-### Ticket board (`frontend/src/pages/ActionCenter.jsx`, `pages/actioncenter/`)
+### Task board (`frontend/src/pages/ActionCenter.jsx`, `pages/actioncenter/`)
 
-The Action Center. A one-screen page (`PageFrame`): **the browser page never
-scrolls**, at 1440×900 or at 1280×800; a column with more tickets than fit
-scrolls inside itself.
+The Action Center. One look says how much is waiting on this person, how
+much is overdue, and at which lifecycle step; every card opens the queue where
+the work is done. A `PageFrame` whose body is `--surface`, with a 1px
+`--border` line against the sidebar. **The board may scroll** in the page
+body when it is taller than the screen (B); the document never does, and no
+column scrolls by itself.
 
-- **Header** — left: today's Shamsi date (Vazirmatn, Persian digits, 13px,
-  `--text-tertiary`) over "Action Center" (28/36 600). Right: `N pending` in
-  `--text` and `N overdue` in `--danger-ink`, 48/52 600, letter-spacing
-  −0.02em.
-- **Board** — a CSS grid, one equal column per stage that has tickets for this
-  person (a coordinator has no Plans column, so four), gap 22px.
-- **Column header** (`StageColumn.jsx`) — the stage tint, ink and line, radius
-  10, padding 10 14, 56px high. A 32px chip in the stage colour with a white
-  18px stroke icon; the stage name, 15px 700, up to two lines ("ICT", "CRA",
-  "Plans & Data"); the stage total, 24/28 700, on the right.
-- **Ticket** (`Ticket.jsx`) — every ticket is the same: white, radius 12,
-  **172px high**, `--shadow-ticket` (`0 2px 4px rgba(20,27,43,.06), 0 12px
-  24px -16px rgba(20,27,43,.4)`). Never rotated, nothing stacked behind it.
-  - Top: the action name, 14/20 600 `--text-secondary`, clamped to two lines
-    (40px minimum); then the count, 54/56 800, letter-spacing −0.04em, in the
-    stage ink.
-  - Stub: a 2px dashed `--border` tear line with a 20px half-circle notch at
-    each end in the canvas colour (`--bg`). "since {date}" (13px; the date in
-    Vazirmatn, Persian digits, `--text`, 600), or "due {date}" for a deadline
-    queue, and an 18px arrow.
-  - The whole ticket is one `<a href>` to its queue. Hover lifts it 4px;
-    focus shows the Cobalt focus ring (2px `--accent`, offset 2px).
-- **Overdue pill** — only when something is overdue. 14px from the top and
-  right, flat: "{n} overdue", 12/16 600 `--danger-ink` on `--danger-soft`,
-  after a 6px `--danger-ink` dot. A status label, not a stamp: no rotation,
-  bounce or pulse. Its 100px is held by a one-line float beside the action
-  name, so only the line next to the pill gives way to it.
-- **Motion** — once, on load: tickets drop in from 40px above, staggered
-  140ms per column and 160ms per ticket, `cubic-bezier(.2,.8,.2,1)` over
-  0.7s; the counts and header totals count up from 0 over 1.3s
-  (ease-out-cubic); overdue pills fade in after their ticket lands. Then
-  nothing moves. With `prefers-reduced-motion` the final state shows at
-  once.
-- **States** — loading draws the role's columns in their final place with
-  empty tickets, so nothing jumps; an error is a Cobalt error `Banner` with
-  Retry; a board with nothing pending keeps the header (0 pending, 0 overdue)
-  and says "All caught up" once, centred. A queue reading 0 has no ticket.
+- **PageBar** — eyebrow "Today", title "Action Center". Context: one polite
+  live sentence (E), never wrapping: "**{N} items** waiting on you, **{M}
+  overdue**". Actions: a `--success-ink` dot with "Updated just now" /
+  "Updated at HH:MM" (14px `--text-tertiary`), then a 44×44 Refresh icon
+  button (`RefreshCw`). Tabs: "All tasks" with a count chip and "Overdue"
+  with a danger chip "{M} late"; Overdue keeps only queues with something
+  late. `tabsRight`: the keyboard hint, 13px `--text-tertiary`, with `kbd`
+  keys (22px high, 1px `--control-border` and a 2px bottom border, radius 4,
+  12/18 600).
+- **Grid** — the rail and the columns share
+  `repeat(4, minmax(0,1fr)) 92px minmax(0,0.92fr)`: Health Check, Drive
+  Test, ICT acceptance, CRA acceptance, Accepted (rail only), Plans & Data.
+  Columns have 14px side padding; Drive Test to CRA have a 1px `--divider`
+  start edge, Plans & Data a 1px dashed `--step-line` one (D).
+- **Step rail** (`StepRail.jsx`, G) — sticky at the top of the body,
+  `rgba(255,255,255,.94)` with an 8px backdrop blur and a `--divider` line
+  under it. A 2px `--step-line` runs from step 1's marker centre to
+  Accepted's. Each step: a 28px marker in the stage chip colour with a 5px
+  white ring and a white number (13px 700); the step's `h2` (20/26 600,
+  −0.02em); then "{n} pending · {o} overdue" or "Nothing waiting on you"
+  (13/18 `--text-tertiary`). Plans & Data's marker is white with a 1.5px
+  dashed border in its chip colour and a "+" in its ink, with "Runs
+  alongside" beside it. Accepted is a `--success-ink` marker with a white
+  check, "Accepted" (15px 600 `--success-ink`) and "End of lifecycle".
+- **Column** (`StageColumn.jsx`) — a `<section aria-labelledby>` the step's
+  heading; cards in a 12px-gap stack, most overdue first, then oldest. Every
+  role sees all five steps; an empty one says "Nothing waiting on you" (or
+  "Nothing overdue" under the Overdue tab) after a 16px green `CircleCheck`.
+- **Card** (`TaskCard.jsx`) — one `<a>` to the queue and nothing else to
+  click. `--surface`, 1px `--border`, radius 10, padding 16 16 14. Row 1: the
+  count (36/38 600, −0.04em, tabular; `--danger-ink` when something is late)
+  and, when late, "{o} overdue" (13px 600 `--danger-ink`) after a 7px danger
+  dot with a 3px `--danger-soft` ring. Row 2: the action, verb first (16/22
+  600, −0.01em, `text-wrap: pretty`). Row 3: "Oldest {d} days" or "Due in {d}
+  days" (13/18 `--text-tertiary`) and a 16px `ArrowUpRight`. Hover is F;
+  focus is the Cobalt ring. The visible parts are `aria-hidden`; the link's
+  label reads "{Action}, {Stage}: {n} pending, {o} overdue, oldest {d} days".
+- **Keyboard** — cards carry `data-col` / `data-row`. Up/Down move within a
+  column, Left/Right to the nearest card in the next column that has any,
+  Enter opens. **O** toggles the Overdue tab outside text fields. "Skip to
+  tasks" is the first focusable element and focuses the board.
+- **Motion** — once, on load, done within about a second: the rail line draws
+  in (600ms), the markers pop in 100ms apart (300ms), the cards rise 14px
+  with a fade (350ms, from 200ms + 50ms per column + 40ms per card). Numbers
+  are final on first paint (C). Under `prefers-reduced-motion` no animation
+  or transition runs.
+- **States** — loading draws the rail ("Loading…") and two skeleton cards per
+  column in their final place (1px `--divider`, radius 10; grey blocks
+  48×32, 80%×14, 55%×12), so nothing jumps. An error is a Cobalt error
+  `Banner` ("Your tasks didn't load. …") with a 40px Retry, and the board is
+  hidden. Nothing pending is a success `Banner` ("All caught up. …") over a
+  board whose every step says "Nothing waiting on you".
 
