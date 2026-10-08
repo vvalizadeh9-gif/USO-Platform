@@ -3,6 +3,7 @@ import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import Layout from './components/Layout'
 import { useAuth } from './context/AuthContext'
 import { Loading } from './components/ui'
+import { loginPathFor } from './lib/returnTo'
 import { ACTION_CENTER_ROLES, CATEGORY_OWNER_ROLES, KPI_ROLES, MONTHLY_PLAN_ROLES, homeFor } from './lib/roles'
 import Login from './pages/Login'
 
@@ -39,7 +40,8 @@ function Protected({ children, adminOnly, allowedRoles }) {
   const location = useLocation()
 
   if (loading) return <Loading />
-  if (!user) return <Navigate to="/login" replace />
+  // The page travels with them, so signing in brings them back to it.
+  if (!user) return <Navigate to={loginPathFor(location)} replace />
 
   // Decided by the path rather than by a prop, because most routes below are
   // not individually wrapped -- they sit inside the layout's guard. A prop

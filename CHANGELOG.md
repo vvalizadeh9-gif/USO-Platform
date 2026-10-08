@@ -1,5 +1,36 @@
 # Changelog
 
+## Sign-in refinements
+
+The sign-in screen, brought closer to Microsoft, Okta and Google.
+
+* **Quieter look.** The brand panel is solid cobalt with the product's name
+  only (no rings, no tagline). The form opens with the mark and "Sign in to
+  UEP", with no helper sentence. Links stand on their own without underlines
+  (underlined on hover and focus). The footer keeps only Privacy and
+  Accessibility.
+* **One route to help.** "Can't sign in?" beside the Password label opens the
+  administrator request; it replaces "Forgot your password?", the footer
+  mail address and the captcha's separate unlock link. It is also the
+  security check's non-puzzle alternative (WCAG 3.3.8).
+* **Errors as one line.** A refusal shows one red line under the password
+  and focus moves to the field to fix (the first empty field, or the
+  cleared password) instead of a boxed summary. The line is a live region,
+  so screen readers still hear it.
+* **Compact security check.** One row: "4 + 7 =", the answer, and a refresh
+  icon. Still only after 2 failures or when the server asks.
+* **Back to where you were.** Anyone sent to sign-in from a page (a
+  signed-out link, or a session that expired mid-task) returns to that page
+  afterwards. The page travels as `?next=` and is followed only when it is a
+  path on this site (`lib/returnTo.js`).
+* **Remember my username.** An opt-in checkbox, off by default because
+  contractors share laptops. A remembered name is pre-filled and the cursor
+  starts on the password. Only the username is stored; sign-out leaves it.
+* **Left-to-right fields.** Username, password, security check and the help
+  form's identifier are `dir="ltr"`, so a Farsi keyboard cannot flip them.
+* The skip link is shown only on the sign-in view, where its target exists
+  (it failed axe on the help views). `--signin-ring` is gone.
+
 ## Action Center → Task Board
 
 The ticket board is replaced by an open task board (approved design "Action

@@ -1,13 +1,13 @@
-import { AlertTriangle, ArrowLeft, CheckCircle2, LifeBuoy } from 'lucide-react'
+import { AlertCircle, AlertTriangle, ArrowLeft, CheckCircle2, RefreshCw } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import api from '../api/client'
 import BrandMark from '../components/BrandMark'
 import { useAuth } from '../context/AuthContext'
 import { toLatinDigits } from '../lib/persianDigits'
+import { forgetUsername, readRememberedUsername, rememberUsername } from '../lib/rememberedUsername'
+import { returnPathFrom } from '../lib/returnTo'
 
-const SUPPORT_EMAIL = 'vahid.val@mtnirancell.ir'
-const UNLOCK_MAILTO = `mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent('Please unlock my UEP account')}`
 // TODO: the privacy notice and accessibility statement are not published yet.
 // Point these at them once they are.
 const PRIVACY_NOTICE_URL = '#'
@@ -17,6 +17,9 @@ const ACCESSIBILITY_STATEMENT_URL = '#'
 // server decides for itself when it is required (and says so with a 400), so
 // this only saves the person a round trip; it is not the control.
 const CAPTCHA_AFTER_FAILURES = 2
+
+// The order focus looks for the first field with a problem in.
+const FIELD_ORDER = ['login-username', 'login-password', 'login-captcha']
 
 export default function Login() {
   // 'signin' | 'forgot' | 'sent'
@@ -39,39 +42,29 @@ export default function Login() {
 
   return (
     <div className="signin">
+      {/* Brand colour, the product's name and nothing else -- the way
+          Microsoft and Okta do it. Decoration here competes with the form. */}
       <header className="signin-panel">
-        <div className="signin-rings" aria-hidden="true">
-          <span />
-          <span />
-          <span />
-          <span />
-        </div>
-        <div className="signin-panel-brand">
-          <BrandMark size={40} />
-          <span>UEP</span>
-        </div>
-        <div className="signin-panel-copy">
-          {/* A paragraph, not a heading: the page's h1 is the form's. */}
-          <p className="signin-panel-title">USO Enterprise Platform</p>
-          <p className="signin-panel-lede">
-            One platform for the entire Universal Service Obligation project.
-          </p>
-        </div>
+        <span className="signin-panel-brand">UEP</span>
+        {/* A paragraph, not a heading: the page's h1 is the form's. */}
+        <p className="signin-panel-title">USO Enterprise Platform</p>
       </header>
 
       <div className="signin-column">
-        <a
-          className="signin-skip"
-          href="#login-username"
-          onClick={(e) => {
-            // The input may not be in the document (another view is showing);
-            // then the link has nowhere to go and does nothing.
-            e.preventDefault()
-            usernameRef.current?.focus()
-          }}
-        >
-          Skip to sign-in form
-        </a>
+        {/* Only while its target exists: on the help views there is no
+            username field to skip to, and a dead skip link fails WCAG. */}
+        {view === 'signin' && (
+          <a
+            className="signin-skip"
+            href="#login-username"
+            onClick={(e) => {
+              e.preventDefault()
+              usernameRef.current?.focus()
+            }}
+          >
+            Skip to sign-in form
+          </a>
+        )}
 
         <main className="signin-main">
           <div className="signin-mobile-brand">
@@ -98,19 +91,13 @@ export default function Login() {
         </main>
 
         <footer className="signin-footer">
-          <p className="signin-support">
-            <LifeBuoy size={16} aria-hidden="true" />
-            <span>
-              Trouble signing in? Contact <a href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</a>
-            </span>
-          </p>
           <nav aria-label="Legal">
             <ul className="signin-legal">
               <li>
-                <a href={PRIVACY_NOTICE_URL}>Privacy notice</a>
+                <a href={PRIVACY_NOTICE_URL}>Privacy</a>
               </li>
               <li>
-                <a href={ACCESSIBILITY_STATEMENT_URL}>Accessibility statement</a>
+                <a href={ACCESSIBILITY_STATEMENT_URL}>Accessibility</a>
               </li>
             </ul>
           </nav>
@@ -123,7 +110,11 @@ export default function Login() {
 function SignInForm({ usernameRef, onForgot }) {
   const { login } = useAuth()
   const navigate = useNavigate()
-  const [username, setUsername] = useState('')
+  const location = useLocation()
+  // Read once: the box starts ticked exactly when a name was remembered.
+  const [remembered] = useState(readRememberedUsername)
+  const [username, setUsername] = useState(remembered)
+  const [rememberMe, setRememberMe] = useState(Boolean(remembered))
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [capsLockOn, setCapsLockOn] = useState(false)
@@ -132,20 +123,27 @@ function SignInForm({ usernameRef, onForgot }) {
   const [captcha, setCaptcha] = useState(null)
   const [captchaAnswer, setCaptchaAnswer] = useState('')
   const [busy, setBusy] = useState(false)
-  // Field errors, keyed by input id, shown inline and listed in the summary.
+  // Field errors, keyed by input id, shown under their own field.
   const [errors, setErrors] = useState({})
-  // An error that belongs to no one field: wrong credentials, a lockout.
-  const [formError, setFormError] = useState(null)
-  // Bumped on every refused submit, so the summary takes focus each time, not
-  // only the first.
-  const [attempt, setAttempt] = useState(0)
-  const summaryRef = useRef(null)
+  // A problem that belongs to no one field: wrong credentials, a lockout.
+  const [formError, setFormError] = useState('')
+  // The field to focus after a refusal. Bumped on every refusal (with a fresh
+  // object), so focus moves each time, not only the first.
+  const [focusTarget, setFocusTarget] = useState(null)
   const passwordRef = useRef(null)
   const captchaInputRef = useRef(null)
 
+  const fieldRefs = {
+    'login-username': usernameRef,
+    'login-password': passwordRef,
+    'login-captcha': captchaInputRef,
+  }
+
   useEffect(() => {
-    if (attempt > 0) summaryRef.current?.focus()
-  }, [attempt])
+    if (focusTarget) fieldRefs[focusTarget.id]?.current?.focus()
+    // fieldRefs holds refs, which are stable; only a new target should move focus.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusTarget])
 
   async function refreshCaptcha() {
     setCaptcha(null)
@@ -169,10 +167,18 @@ function SignInForm({ usernameRef, onForgot }) {
     }
   }
 
-  function refuse(nextErrors, nextFormError = null) {
+  // Show what is wrong and put the person on the first field to fix: a field
+  // with its own problem, else the password, which a refusal has just cleared.
+  function refuse(nextErrors, nextFormError = '') {
     setErrors(nextErrors)
     setFormError(nextFormError)
-    setAttempt((n) => n + 1)
+    const first = FIELD_ORDER.find((id) => nextErrors[id]) || 'login-password'
+    setFocusTarget({ id: first })
+  }
+
+  function rememberChoice() {
+    if (rememberMe) rememberUsername(username.trim())
+    else forgetUsername()
   }
 
   async function onSubmit(e) {
@@ -198,7 +204,9 @@ function SignInForm({ usernameRef, onForgot }) {
     setBusy(true)
     try {
       await login(username, password, captchaShown ? captcha.token : undefined, answer)
-      navigate('/')
+      rememberChoice()
+      // Back to the page that sent them here, if one did.
+      navigate(returnPathFrom(location.search) ?? '/', { replace: true })
     } catch (err) {
       const status = err.response?.status
       setPassword('')
@@ -218,102 +226,89 @@ function SignInForm({ usernameRef, onForgot }) {
         // One message for an unknown username and a wrong password alike, as
         // the server does: anything more specific tells a stranger which
         // usernames are real.
-        refuse({}, { text: 'The username or password is incorrect', target: 'login-username' })
+        refuse({}, 'The username or password is incorrect')
       } else if (status === 429 || status === 403) {
         // A lockout, or an account an administrator has suspended. The server's
         // own sentence says which and for how long.
         if (captchaShown) refreshCaptcha()
-        refuse({}, { text: err.response?.data?.detail || 'You cannot sign in right now' })
+        refuse({}, err.response?.data?.detail || 'You cannot sign in right now')
       } else {
         if (captchaShown) refreshCaptcha()
-        refuse({}, { text: 'The platform could not be reached. Check your connection and try again' })
+        refuse({}, 'The platform could not be reached. Check your connection and try again')
       }
     } finally {
       setBusy(false)
     }
   }
 
-  const fieldRefs = {
-    'login-username': usernameRef,
-    'login-password': passwordRef,
-    'login-captcha': captchaInputRef,
-  }
-  const summaryItems = [
-    ...(formError ? [{ id: formError.target, text: formError.text }] : []),
-    ...Object.entries(errors).map(([id, text]) => ({ id, text })),
-  ]
-
   const describedBy = (...ids) => ids.filter(Boolean).join(' ') || undefined
+  const fieldError = (id) =>
+    errors[id] && (
+      <p className="signin-error" id={`${id}-error`}>
+        <span className="sr-only">Error: </span>
+        {errors[id]}
+      </p>
+    )
 
   return (
     <>
-      <h1 className="signin-heading">Sign in</h1>
-      <p className="signin-sub">Use the account your administrator gave you.</p>
-
-      {summaryItems.length > 0 && (
-        <div className="signin-summary" role="alert" tabIndex={-1} ref={summaryRef} aria-labelledby="login-summary-title">
-          <h2 id="login-summary-title">There is a problem</h2>
-          <ul>
-            {summaryItems.map((item) => (
-              <li key={item.text}>
-                {item.id ? (
-                  <button type="button" onClick={() => fieldRefs[item.id].current?.focus()}>
-                    {item.text}
-                  </button>
-                ) : (
-                  item.text
-                )}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
+      {/* Below 900px the brand row above the form already shows the mark. */}
+      <span className="signin-form-mark">
+        <BrandMark size={44} />
+      </span>
+      <h1 className="signin-heading">Sign in to UEP</h1>
 
       <form onSubmit={onSubmit} noValidate aria-busy={busy}>
         <div className="signin-field">
           <label htmlFor="login-username">Username</label>
-          {errors['login-username'] && (
-            <p className="signin-error" id="login-username-error">
-              <span className="sr-only">Error: </span>
-              {errors['login-username']}
-            </p>
-          )}
           <input
             id="login-username"
             ref={usernameRef}
             className={`signin-input${errors['login-username'] ? ' signin-input-invalid' : ''}`}
             value={username}
             onChange={(e) => setUsername(e.target.value)}
+            // Always left to right: switching to a Farsi keyboard must not flip
+            // a Latin username around the caret.
+            dir="ltr"
             autoComplete="username"
             autoCapitalize="none"
             spellCheck={false}
-            autoFocus
+            // With a remembered name the next thing to type is the password.
+            autoFocus={!remembered}
             aria-invalid={errors['login-username'] ? true : undefined}
             aria-describedby={describedBy(errors['login-username'] && 'login-username-error')}
           />
+          {fieldError('login-username')}
         </div>
 
         <div className="signin-field">
-          <label htmlFor="login-password">Password</label>
-          {errors['login-password'] && (
-            <p className="signin-error" id="login-password-error">
-              <span className="sr-only">Error: </span>
-              {errors['login-password']}
-            </p>
-          )}
+          <div className="signin-label-row">
+            <label htmlFor="login-password">Password</label>
+            {/* The one way to get help, and WCAG 3.3.8's way in that does not
+                depend on solving the security check: an administrator. */}
+            <button type="button" className="signin-text-btn" onClick={onForgot}>
+              Can&rsquo;t sign in?
+            </button>
+          </div>
           <div className="signin-password">
             <input
               id="login-password"
               ref={passwordRef}
-              className={`signin-input${errors['login-password'] ? ' signin-input-invalid' : ''}`}
+              className={`signin-input${errors['login-password'] || formError ? ' signin-input-invalid' : ''}`}
               type={showPassword ? 'text' : 'password'}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               onKeyDown={handlePasswordKeyEvent}
               onKeyUp={handlePasswordKeyEvent}
+              dir="ltr"
               autoComplete="current-password"
-              aria-invalid={errors['login-password'] ? true : undefined}
-              aria-describedby={describedBy(errors['login-password'] && 'login-password-error', 'login-capslock')}
+              autoFocus={Boolean(remembered)}
+              aria-invalid={errors['login-password'] || formError ? true : undefined}
+              aria-describedby={describedBy(
+                errors['login-password'] && 'login-password-error',
+                formError && 'login-form-error',
+                'login-capslock',
+              )}
             />
             <button
               type="button"
@@ -325,9 +320,18 @@ function SignInForm({ usernameRef, onForgot }) {
               {showPassword ? 'Hide' : 'Show'}
             </button>
           </div>
-          {/* Always in the document, so the live region exists before it has
-              anything to say -- one inserted with its message is often not
-              announced. */}
+          {fieldError('login-password')}
+          {/* Both regions are always in the document, so they exist before
+              they have anything to say -- one inserted with its message is
+              often not announced. */}
+          <div id="login-form-error" role="alert" className="signin-form-error">
+            {formError && (
+              <>
+                <AlertCircle size={16} aria-hidden="true" />
+                {formError}
+              </>
+            )}
+          </div>
           <div id="login-capslock" role="status" className="signin-capslock">
             {capsLockOn && (
               <>
@@ -336,47 +340,47 @@ function SignInForm({ usernameRef, onForgot }) {
               </>
             )}
           </div>
-          <button type="button" className="signin-text-btn" onClick={onForgot}>
-            Forgot your password?
-          </button>
         </div>
 
         {captchaShown && (
-          <div className="signin-captcha">
-            <label htmlFor="login-captcha">
-              {captcha ? `Security check: what is ${captcha.num1} + ${captcha.num2}?` : 'Loading the security check…'}
-            </label>
-            <p className="signin-hint" id="login-captcha-hint">Shown after repeated failed attempts.</p>
-            {errors['login-captcha'] && (
-              <p className="signin-error" id="login-captcha-error">
-                <span className="sr-only">Error: </span>
-                {errors['login-captcha']}
-              </p>
-            )}
+          <div className="signin-field">
+            <label htmlFor="login-captcha">Security check</label>
             <div className="signin-captcha-row">
+              <span className="signin-captcha-sum" id="login-captcha-question" dir="ltr">
+                {captcha ? `${captcha.num1} + ${captcha.num2} =` : 'Loading…'}
+              </span>
               <input
                 id="login-captcha"
                 ref={captchaInputRef}
-                className={`signin-input signin-input-short${errors['login-captcha'] ? ' signin-input-invalid' : ''}`}
+                className={`signin-input${errors['login-captcha'] ? ' signin-input-invalid' : ''}`}
                 type="text"
                 inputMode="numeric"
                 autoComplete="off"
+                dir="ltr"
                 value={captchaAnswer}
                 onChange={(e) => setCaptchaAnswer(e.target.value)}
                 disabled={!captcha}
                 aria-invalid={errors['login-captcha'] ? true : undefined}
-                aria-describedby={describedBy('login-captcha-hint', errors['login-captcha'] && 'login-captcha-error')}
+                aria-describedby={describedBy('login-captcha-question', errors['login-captcha'] && 'login-captcha-error')}
               />
-              <button type="button" className="signin-text-btn" onClick={refreshCaptcha} disabled={busy}>
-                New question
+              <button
+                type="button"
+                className="signin-icon-btn"
+                onClick={refreshCaptcha}
+                disabled={busy}
+                aria-label="New question"
+              >
+                <RefreshCw size={18} aria-hidden="true" />
               </button>
             </div>
-            {/* WCAG 3.3.8: a way in that does not depend on solving a puzzle. */}
-            <p className="signin-captcha-alt">
-              Can&rsquo;t complete this check? <a href={UNLOCK_MAILTO}>Ask an administrator to unlock your account</a>
-            </p>
+            {fieldError('login-captcha')}
           </div>
         )}
+
+        <label className="signin-check">
+          <input type="checkbox" checked={rememberMe} onChange={(e) => setRememberMe(e.target.checked)} />
+          Remember my username
+        </label>
 
         <button type="submit" className="signin-submit" aria-disabled={busy || undefined}>
           {busy ? (
@@ -404,7 +408,8 @@ function SignInForm({ usernameRef, onForgot }) {
 // unauthenticated endpoint that mints credentials — the largest new attack
 // surface in the system, for a few dozen internal users who all know their
 // administrator. So this posts a message, and an administrator issues a
-// temporary password.
+// temporary password. The same request is how a locked-out person, or one
+// who cannot complete the security check, asks to be let back in.
 //
 // The confirmation is deliberately non-committal about whether the account
 // exists, and the server answers identically either way: this form is
@@ -429,8 +434,7 @@ function ForgotPassword({ headingRef, onBack, onSent }) {
       await api.post('/auth/password-reset-request', { identifier: identifier.trim() })
     } catch {
       // Nothing here depends on the answer, and reporting a failure would say
-      // more about the account than the success case does. The administrator
-      // is reachable by the address in the footer either way.
+      // more about the account than the success case does.
     } finally {
       setBusy(false)
       onSent()
@@ -443,32 +447,33 @@ function ForgotPassword({ headingRef, onBack, onSent }) {
         <ArrowLeft size={16} aria-hidden="true" /> Back to sign in
       </button>
       <h1 className="signin-heading" tabIndex={-1} ref={headingRef}>
-        Ask for a password reset
+        Ask an administrator for help
       </h1>
       <p className="signin-sub">
-        An administrator will check who you are and give you a temporary password. Nothing is sent by email.
+        They will check who you are and give you a temporary password. Nothing is sent by email.
       </p>
       <form onSubmit={submit} noValidate aria-busy={busy}>
         <div className="signin-field">
           <label htmlFor="forgot-identifier">Username or email address</label>
-          {error && (
-            <p className="signin-error" id="forgot-identifier-error">
-              <span className="sr-only">Error: </span>
-              {error}
-            </p>
-          )}
           <input
             id="forgot-identifier"
             ref={inputRef}
             className={`signin-input${error ? ' signin-input-invalid' : ''}`}
             value={identifier}
             onChange={(e) => setIdentifier(e.target.value)}
+            dir="ltr"
             autoComplete="username"
             autoCapitalize="none"
             spellCheck={false}
             aria-invalid={error ? true : undefined}
             aria-describedby={error ? 'forgot-identifier-error' : undefined}
           />
+          {error && (
+            <p className="signin-error" id="forgot-identifier-error">
+              <span className="sr-only">Error: </span>
+              {error}
+            </p>
+          )}
         </div>
         <button type="submit" className="signin-submit" aria-disabled={busy || undefined}>
           {busy ? (
@@ -496,8 +501,8 @@ function RequestSent({ headingRef, onBack }) {
         Request sent
       </h1>
       <p className="signin-sub">
-        If that account exists, an administrator has been notified and will be in touch to reset the password. They
-        will give you a temporary one, and you will be asked to choose your own when you sign in.
+        If that account exists, an administrator has been notified and will be in touch. They will give you a
+        temporary password, and you will be asked to choose your own when you sign in.
       </p>
       <button type="button" className="signin-secondary" onClick={onBack}>
         Back to sign in
