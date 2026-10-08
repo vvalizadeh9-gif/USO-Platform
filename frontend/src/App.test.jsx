@@ -18,7 +18,19 @@ vi.mock('./components/Layout', () => ({
 }))
 
 const page = (name) => ({ default: () => <p data-testid="page">{name}</p> })
-vi.mock('./pages/Login', () => page('login'))
+// The login marker also shows the query it was reached with, so a test can see
+// which page travelled along to be returned to.
+vi.mock('./pages/Login', async () => {
+  const { useLocation } = await import('react-router-dom')
+  function LoginMarker() {
+    return (
+      <p data-testid="page" data-search={useLocation().search}>
+        login
+      </p>
+    )
+  }
+  return { default: LoginMarker }
+})
 vi.mock('./pages/drivetest/DriveTestProject', () => page('dt-dashboard'))
 vi.mock('./pages/DriveTest', () => page('drive-test'))
 vi.mock('./pages/HealthCheck', () => page('health-check'))
@@ -72,6 +84,19 @@ beforeEach(() => {
 describe('signed out', () => {
   it('sends anything to the login screen', async () => {
     expect(await landOn('/work-items')).toBe('login')
+  })
+
+  it('carries the page along, so signing in comes back to it', async () => {
+    await landOn('/my-work?village=12')
+    expect(screen.getByTestId('page')).toHaveAttribute(
+      'data-search',
+      `?next=${encodeURIComponent('/my-work?village=12')}`,
+    )
+  })
+
+  it('carries nothing for the home page', async () => {
+    await landOn('/')
+    expect(screen.getByTestId('page')).toHaveAttribute('data-search', '')
   })
 })
 

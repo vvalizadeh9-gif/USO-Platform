@@ -4,6 +4,7 @@
 import axios from 'axios'
 import { isPasswordChangeRequired } from '../lib/apiError'
 import { DATA_CHANGED_EVENT } from '../lib/dataChanged'
+import { loginPathFor } from '../lib/returnTo'
 
 const api = axios.create({ baseURL: '/api/v1' })
 
@@ -27,10 +28,12 @@ api.interceptors.response.use(
     return res
   },
   (err) => {
+    // A session that ran out mid-task. The page goes with them to sign-in, so
+    // they come back to where they were rather than to the home page.
     if (err.response?.status === 401 && localStorage.getItem('uep_token')) {
       localStorage.removeItem('uep_token')
       localStorage.removeItem('uep_user')
-      window.location.href = '/login'
+      window.location.href = loginPathFor(window.location)
     }
 
     // A 403 is normally "you may not do this", and the session survives it.
