@@ -289,15 +289,19 @@ def test_done_today_counts_only_this_users_own_acts(client):
     try:
         contractor = db.query(Contractor).filter_by(name="Home Co").one()
         wi = db.query(WorkItem).first()
-        a = HcAssignment(code="HOME-HC-1", contractor_id=contractor.id,
+        # One site per assignment (hc_tasks is unique on the pair), so two.
+        first, second = (
+            HcAssignment(code=f"HOME-HC-{n}", contractor_id=contractor.id,
                          assigned_by=coord, assigned_at=now - timedelta(days=5))
-        db.add(a)
+            for n in (1, 2)
+        )
+        db.add_all([first, second])
         db.flush()
         db.add_all([
-            HcTask(hc_assignment_id=a.id, work_item_id=wi.id, round_no=1,
+            HcTask(hc_assignment_id=first.id, work_item_id=wi.id, round_no=1,
                    completed_at=now, reviewed_by=pm, reviewed_at=now),
             # Reviewed by someone else: not the PM's.
-            HcTask(hc_assignment_id=a.id, work_item_id=wi.id, round_no=2,
+            HcTask(hc_assignment_id=second.id, work_item_id=wi.id, round_no=2,
                    completed_at=now, reviewed_by=coord, reviewed_at=now),
         ])
         db.commit()
