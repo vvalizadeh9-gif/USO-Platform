@@ -9,6 +9,7 @@ from app.api import (
     drive_test,
     gaps,
     health_check,
+    home,
     kpi,
     misc,
     mojri,
@@ -33,3 +34,4 @@ api_router.include_router(monthly_plan.router)
 api_router.include_router(admin.router)
 api_router.include_router(misc.router)
 api_router.include_router(action_center.router)
+api_router.include_router(home.router)

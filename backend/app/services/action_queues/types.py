@@ -39,6 +39,32 @@ STAGE_LABELS: dict[Stage, str] = {
 }
 
 
+class HomeGroup(str, Enum):
+    """Home's three cards. Coarser than the board's stages: the health check
+    is the step before a drive test, and ICT and CRA are one acceptance."""
+
+    ROLLOUT = "drive_test"
+    ACCEPTANCE = "acceptance"
+    PLANS = "plans"
+
+
+HOME_GROUP_ORDER: tuple[HomeGroup, ...] = (HomeGroup.ROLLOUT, HomeGroup.ACCEPTANCE, HomeGroup.PLANS)
+
+HOME_GROUP_LABELS: dict[HomeGroup, str] = {
+    HomeGroup.ROLLOUT: "Drive test",
+    HomeGroup.ACCEPTANCE: "Acceptance",
+    HomeGroup.PLANS: "Plans",
+}
+
+STAGE_GROUP: dict[Stage, HomeGroup] = {
+    Stage.HC: HomeGroup.ROLLOUT,
+    Stage.DT: HomeGroup.ROLLOUT,
+    Stage.ICT: HomeGroup.ACCEPTANCE,
+    Stage.CRA: HomeGroup.ACCEPTANCE,
+    Stage.PLANS: HomeGroup.PLANS,
+}
+
+
 # Who a board is for. Three are role names; a problem owner is any role
 # flagged ``is_category_owner``, so it gets a name of its own here.
 PM = "PM"
@@ -93,7 +119,12 @@ class PendingItem:
 class QueueDefinition:
     key: str
     stage: Stage
+    #: The action, verb first ("Review DT results"): the board's card and
+    #: Home's buttons.
     label: str
+    #: The queue as a noun ("DT review"): a row on Home, where the card
+    #: already says which part of the lifecycle it is.
+    short_label: str
     url: str
     roles: frozenset[str]
     sla: SlaKind
