@@ -1,10 +1,17 @@
+import { readFileSync } from 'node:fs'
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+
+// The version UEP Home's footer shows, from package.json at build time.
+const { version } = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf-8'))
 
 // Vite config. In dev, proxy /api to the backend so the frontend and
 // backend share an origin (mirrors the Nginx setup in production).
 export default defineConfig({
   plugins: [react()],
+  define: {
+    __APP_VERSION__: JSON.stringify(version),
+  },
   server: {
     port: 5173,
     proxy: {

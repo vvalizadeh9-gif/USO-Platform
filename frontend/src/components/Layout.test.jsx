@@ -91,20 +91,20 @@ function navHrefs() {
 
 const SIDEBAR_BY_ROLE = {
   PM: {
-    Today: ['Action Center'],
+    Today: ['Home', 'Action Center'],
     'Drive Test': ['Dashboard', 'Monthly Plan', 'Health Check', 'Drive Test', 'Work Items'],
     Acceptance: ['Dashboard', 'My Work'],
     Performance: ['Roles Performance', 'Lifecycle Gaps'],
     'Month-end': ['Mojri Tracker'],
   },
   Coordinator: {
-    Today: ['Action Center'],
+    Today: ['Home', 'Action Center'],
     'Drive Test': ['Dashboard', 'Monthly Plan', 'Health Check', 'Drive Test', 'Work Items'],
     Acceptance: ['Dashboard', 'My Work'],
     Performance: ['Roles Performance', 'Lifecycle Gaps'],
   },
   Contractor: {
-    Today: ['Action Center'],
+    Today: ['Home', 'Action Center'],
     'Drive Test': ['Dashboard', 'Monthly Plan', 'My Health Check', 'My Drive Tests', 'Work Items'],
     Acceptance: ['Dashboard', 'My Work'],
     Performance: ['Roles Performance', 'Lifecycle Gaps'],
@@ -127,7 +127,7 @@ const SIDEBAR_BY_ROLE = {
     Administration: ['Admin Console'],
   },
   CpgPower: {
-    Today: ['My Fix Queue', 'Action Center'],
+    Today: ['My Fix Queue', 'Home', 'Action Center'],
     'Drive Test': ['Dashboard', 'Work Items'],
     Acceptance: ['Dashboard', 'My Work'],
   },
@@ -139,7 +139,7 @@ const SIDEBAR_BY_ROLE = {
 // Since the ticket board, the Action Center is only for the roles that work a
 // queue; Viewer, Regional Manager and Admin lost that one link.
 const EVERYONE = ['/reports/drive-test', '/reports/acceptance']
-const ACTION = ['/action-center']
+const ACTION = ['/action-center', '/home']
 const WORKERS = [...EVERYONE, '/work-items', '/my-work']
 const KPI = ['/reports/kpi', '/reports/gaps']
 const STAFF_LIFECYCLE = ['/monthly-plan', '/health-check', '/drive-test']

@@ -579,3 +579,47 @@ export const actionBoardPm = {
     ]),
   ],
 }
+
+// UEP Home for the PM: a full Drive test card (with a queue past the
+// 30-item dot limit), acceptance all on time, and the month's plan.
+const homeTicket = (queue_key, short_label, label, url, { on_time = 0, due_soon = 0, late = 0, age = 5, owners = [], more = 0 } = {}) => ({
+  queue_key, short_label, label, url,
+  count: on_time + due_soon + late, on_time, due_soon, late,
+  oldest_started_at: new Date(Date.now() - age * 86400000).toISOString(),
+  earliest_due_at: null, date_kind: 'since', owners, owners_more: more,
+})
+
+export const homeSummaryPm = {
+  role: 'PM',
+  scope_label: 'All provinces',
+  generated_at: '2026-10-09T08:54:00Z',
+  due_soon_days: 3,
+  sla_uniform_days: 14,
+  sla_days: { hc_review: 14, dt_assign: 14, dt_review: 14 },
+  totals: {
+    pending: 268, queues: 6, overdue: 230, due_soon: 5,
+    pending_week_delta: 4, overdue_week_delta: -2, done_today: 6, done_yesterday: 4,
+  },
+  up_next: 'hc_assign',
+  groups: [
+    {
+      key: 'drive_test', label: 'Drive test',
+      tickets: [
+        homeTicket('hc_assign', 'HC assignment', 'Assign sites', '/health-check?tab=pool&state=ready', { late: 224, age: 16 }),
+        homeTicket('dt_review', 'DT review', 'Review DT results', '/drive-test?tab=review', { on_time: 6, late: 3, age: 21, owners: ['پیشرو فن', 'آرین ارتباط'], more: 7 }),
+        homeTicket('hc_review', 'HC review', 'Review HC results', '/health-check?tab=review', { on_time: 4, late: 2, age: 18 }),
+        homeTicket('dt_assign', 'DT assignment', 'Assign drive tests', '/drive-test?tab=assignment', { on_time: 18, due_soon: 3, late: 1, age: 16 }),
+      ],
+    },
+    {
+      key: 'acceptance', label: 'Acceptance',
+      tickets: [homeTicket('ict_follow_up', 'ICT follow-up', 'Follow up with ICT', '/my-work?authority=ICT&tab=with_authority', { on_time: 3, age: 4 })],
+    },
+    {
+      key: 'plans', label: 'Plans',
+      tickets: [homeTicket('plans_approve', 'Plan approvals', 'Approve plans', '/monthly-plan?tab=plans', { due_soon: 2, age: 12 })],
+    },
+  ],
+  plan: { stream: 'DT', shamsi_year: 1405, shamsi_month: 7, month_name: 'Mehr', pip: 64, delivered: 41, days_left: 13 },
+  app_badges: { '/health-check': 230, '/drive-test': 31, '/my-work': 3, '/monthly-plan': 2 },
+}

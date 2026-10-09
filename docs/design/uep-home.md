@@ -1,6 +1,6 @@
 # UEP Home — design
 
-Status: **proposed**, awaiting approval. Source brief: `uep-home-landing-prompt.md`;
+Status: **built** (`GET /home/summary` in #132; the page in the follow-up). Source brief: `uep-home-landing-prompt.md`;
 approved screen: `design-previews/home/uep-home-design-reference.html`.
 
 Home is the landing page for PM, Coordinator, Contractor and problem owners.
@@ -89,11 +89,11 @@ Same access rule as the board: `NotOnBoard` → **403** for Regional Manager, Vi
 
 | File | Change |
 |---|---|
-| `services/action_queues/types.py` | `QueueDefinition` gains `short_label` and `done: DoneRule \| None`. Add `HomeGroup` and `STAGE_GROUP` (stage → group). |
-| `services/action_queues/registry.py` | `short_label` and `done` for each queue. |
+| `services/action_queues/types.py` | `QueueDefinition` gains `short_label`. Add `HomeGroup` and `STAGE_GROUP` (stage → group). |
+| `services/action_queues/registry.py` | `short_label` for each queue. |
 | `services/action_queues/sla.py` | `due_at_for(item, kind, sla_days)` and `item_status(item, kind, sla_days, now, window) -> "late" \| "soon" \| "on_time"`. `is_overdue` is re-expressed through it, with identical behaviour. |
 | `services/action_queues/board.py` | `QueueSummary` gains `due_soon` and `top_owners` (default-valued, so existing callers are unchanged). `summarize` counts them. Add `up_next()`. |
-| `services/action_queues/done.py` | **new**. `done_counts(db, user, ctx_role, days) -> {day: n}`: one grouped query per distinct source table. |
+| `services/action_queues/done.py` | **new**. `RULES`, one per completing act, each naming the queues it drains; `done_by_day(db, user, role, today)`. |
 | `services/home.py` | **new**. Composes one summary pass, snapshot deltas, done counts, plan progress and app badges. Cached through `count_cache`, keyed like the board. |
 | `schemas/home.py`, `api/home.py` | **new**. A thin router, registered in `main.py`. |
 | `core/config.py` | `home_due_soon_days: int = 3`. |
@@ -104,7 +104,9 @@ Same access rule as the board: `NotOnBoard` → **403** for Regional Manager, Vi
 
 `home.summary(db, user)` builds a `QueueContext` once, fetches each of the role's queues once, and from those items derives the board summaries, the per-status counts and the owners. Plan progress is a single call to `running_month()`. Snapshot deltas are one query: this user's rows for today − 7. Done counts are about 8 grouped queries, whatever the data size. **The query count is constant in the number of sites**, and a test asserts it at two programme sizes (the pattern in `test_dashboard_query_counts.py`).
 
-### 3.3 "Done" per queue
+### 3.3 "Done"
+
+**As built:** rules are defined once per *completing act*, each naming the queues it drains, not once per queue. Filing, re-filing and correcting a village are three queues but one act (a submission); a rule per queue would count it three times. The acts are the ones below.
 
 | Queue | Done today when… |
 |---|---|

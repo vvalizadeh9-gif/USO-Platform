@@ -473,3 +473,73 @@ column scrolls by itself.
   hidden. Nothing pending is a success `Banner` ("All caught up. …") over a
   board whose every step says "Nothing waiting on you".
 
+
+### UEP Home (`frontend/src/pages/Home.jsx`, `pages/home/`, `styles/home.css`)
+
+The landing page. Its own full-width shell (no sidebar), with its own tokens
+added beside Cobalt's under `.uep-home`; no other page reads them.
+
+**Tokens.** Neutrals `--h-ink #111113`, `--h-ink-2 #3F3F46`, `--h-muted
+#5F5F6B`, `--h-faint #6B6B76` (darker than the mock's `#8A8A96`, which was
+3.4:1, so small labels clear 4.5:1), `--h-canvas #F0F0F2`, `--h-line
+#EAEAEE`, `--h-dot #DCDCE2` with `--h-dot-ring #B9B9C3`. Status: late
+`--late-ink #B91C1C` / `--late-soft #FEE2E2` / `--late-dot #E5484D`; due soon
+`--soon-ink #B45309` / `--soon-soft #FEF3C7` / `--soon-dot #F5A524`. Radii:
+cards 24, hero tile 18, Up-next row 16, pills and buttons 999. Font
+`--font-home`: Manrope as designed, falling back to the app's Inter until
+Manrope's files are bundled.
+
+**White-label rule.** A tenant (operator) changes only `--brand`,
+`--brand-hover`, `--brand-soft`, `--brand-ink` and `--brand-950`
+(`lib/theme.js`: `DEFAULT_BRAND`, `applyBrand`). The brand appears on the
+logo, the one primary button, the Up-next highlight, the hero tile and the
+focus ring, and nowhere else. Status, data and neutral colours never change
+per tenant.
+
+**The dot rule** (`components/ItemDots.jsx`, the one place it lives). Up to
+30 items: one 11px dot each, grey on time, amber due soon, red late, each
+with a 1px darker ring so it clears 3:1 on white. Above 30: one
+proportional segmented bar at the same height. Always `aria-hidden`; the row
+link's label says it in words ("9 items: 6 on time, 0 due soon, 3 late").
+
+**Components.**
+
+- **Header** — the mark in `--brand` and "UEP"; a 440 × 46 pill "Search
+  sites" (opens Work Items; ⌘K/Ctrl+K); Help (only when `VITE_HELP_URL` is
+  set); the 44px avatar, which opens the shared account menu
+  (`components/AccountMenu.jsx`, `variant="avatar"`).
+- **Greeting** — a 12.5px 800 uppercase eyebrow (Gregorian date in Tehran ·
+  role), "Good morning|afternoon|evening, {first name}" at 44/48 800,
+  −0.045em, and a quiet "View reports" pill. No primary button here.
+- **KPI strip** — one white card: the hero tile (300px, radius 18, brand
+  gradient; the pending figure at 64px) and three cells (Overdue in late
+  ink, Due soon in soon ink, Done today in ink), each with a 34px soft round
+  icon, hairlines between. Trend chips are neutral grey with an arrow: more
+  waiting is bad and more done is good, so colour would mislead.
+- **Work cards** — one per group, radius 24: a 38px soft round icon, the
+  title, a round ↗ to the top queue. One row per queue: its short name, a
+  tag in words ("3 late", "2 due soon"), the count (28/28 800), the dots,
+  then who holds the items (Farsi, Vazirmatn) and "Oldest N days". The
+  Up-next row has `--brand-soft` fill, a 2px brand outline and an "Up next"
+  badge, and its card holds the page's only primary button, "Start with
+  {queue}"; the other cards get a quiet outlined button. "All N on time"
+  when nothing in a card is late or due soon. The Plans card adds the
+  month's plan: one dot per planned site, filled as delivered (a meter above
+  100 sites). Long cards scroll inside themselves.
+- **Apps panel** — 300px, radius 24: groups (12px 800 uppercase
+  `--h-faint`), rows with a 34px soft round icon and a black count badge
+  when something is waiting there; "Browse all apps" opens a drawer of every
+  screen this role can see.
+- **Footer** — the API's health ("All systems normal", or "Service
+  unreachable" in late ink), "Data as of HH:MM", Help, the version.
+
+**Rules this page changes, deliberately.**
+
+- **Rule 6 (neutral icon chips)** — Home's cards, KPI cells and Apps rows
+  use soft tinted round icons (a 100 → 50 gradient behind a 600 icon). The
+  tint names the area, never a status, and always sits beside its label.
+  Home only.
+- **Nothing uppercase** — Home's eyebrow and Apps group headings are
+  uppercase with 0.08em tracking, as designed. Home only.
+- **Rule 12 (nothing below 12px)** holds: the mock's 11px "Up next" and
+  8.5px initials became 12px, and initials were replaced by owner names.
