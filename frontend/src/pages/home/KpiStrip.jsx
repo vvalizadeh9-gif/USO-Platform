@@ -55,11 +55,13 @@ export default function KpiStrip({ totals, slaDays, dueSoonDays }) {
           </span>
         </span>
       </div>
-      <Cell icon={ClockAlert} tint="red" label="Overdue" value={totals.overdue} tone="late">
+      {/* A status colour only when there is something to warn about: a red
+          or amber zero sends people looking for a problem that isn't there. */}
+      <Cell icon={ClockAlert} tint="red" label="Overdue" value={totals.overdue} tone={totals.overdue > 0 ? 'late' : ''}>
         <Trend delta={totals.overdue_week_delta} />
         {slaDays ? `past the ${slaDays}-day SLA` : 'past their SLA'}
       </Cell>
-      <Cell icon={Hourglass} tint="amber" label="Due soon" value={totals.due_soon} tone="soon">
+      <Cell icon={Hourglass} tint="amber" label="Due soon" value={totals.due_soon} tone={totals.due_soon > 0 ? 'soon' : ''}>
         within {dueSoonDays} {dueSoonDays === 1 ? 'day' : 'days'}
       </Cell>
       <Cell icon={CircleCheck} tint="slate" label="Done today" value={totals.done_today}>

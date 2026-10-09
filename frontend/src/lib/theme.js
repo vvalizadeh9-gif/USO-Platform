@@ -8,11 +8,13 @@
 
 /** UEP's own brand. The tokens in styles/home.css default to these. */
 export const DEFAULT_BRAND = Object.freeze({
-  brand: '#2563EB',
-  brandHover: '#1D4ED8',
-  brandSoft: '#EFF6FF',
-  brandInk: '#1E3A8A',
-  brand950: '#172554',
+  // Cobalt's accent family (styles/app.css), so Home and every other page
+  // share one blue.
+  brand: '#2F5FD0',
+  brandHover: '#2451C0',
+  brandSoft: '#F2F6FE',
+  brandInk: '#1D3F99',
+  brand950: '#16306F',
 })
 
 const PROPERTY = {
