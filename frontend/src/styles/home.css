@@ -18,9 +18,10 @@
   /* Fixed neutrals and status, never per tenant: Cobalt's own values, so Home
      reads as the same product as every other page. */
   --h-ink: #141B2B;       /* --text */
-  --h-ink-2: #334155;
-  --h-muted: #475569;     /* --text-secondary, 7.5:1 on white */
-  --h-faint: #5F6B7E;     /* --text-tertiary, 5.3:1 on white */
+  --h-ink-2: #273244;
+  --h-muted: #3E4A5E;     /* 9:1 on white: secondary text stays easy to read all day */
+  --h-faint: #475569;     /* --text-secondary, 7.5:1 on white */
+  --h-border: #D5DCE6;    /* every card's edge, so white cards stand off the canvas */
   --h-canvas: #EEF2F7;    /* --bg */
   --h-surface: #FFFFFF;
   --h-line: #EDF1F6;      /* --divider */
@@ -35,10 +36,15 @@
   --soon-dot: #E39B1B;
   /* Green means approved in UEP, so a healthy service is a quiet grey dot. */
   --ok-dot: #6B788D;
-  /* Icon chips are neutral (Cobalt rule 6): the icon names the thing, colour
-     is kept for status. */
+  /* Icon chips: a flat Cobalt tint per area (never green, which means
+     approved), so each card and app group is recognisable at a glance. */
   --chip-bg: #EDF1F6;     /* --neutral-soft */
   --chip-icon: #475569;
+  --tint-blue-bg: #E3EAFB;   --tint-blue: #2451C0;    /* Drive test, Rollout */
+  --tint-violet-bg: #EEE8FB; --tint-violet: #6A45C2;  /* Acceptance, Insights */
+  --tint-plum-bg: #F5E6F1;   --tint-plum: #8E2F74;    /* Plans, Programme office */
+  --tint-red-bg: #FBE6E4;    --tint-red: #B42F2A;
+  --tint-amber-bg: #FCF0D9;  --tint-amber: #8A5600;
   --h-radius-card: 24px;
   --h-radius-hero: 18px;
   --h-radius-row: 16px;
@@ -63,7 +69,11 @@
 .uep-home :focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
 .uep-home .fa { font-family: var(--font-farsi); }
 
-.h-card { background: var(--h-surface); border-radius: var(--h-radius-card); display: flex; flex-direction: column; min-width: 0; }
+.h-card {
+  background: var(--h-surface); border-radius: var(--h-radius-card); display: flex; flex-direction: column; min-width: 0;
+  /* A drawn edge (not a border, so no size changes) and a soft lift. */
+  box-shadow: 0 0 0 1px var(--h-border), 0 1px 3px rgba(20, 27, 43, 0.06);
+}
 
 /* Header -------------------------------------------------------------- */
 .h-header { height: 76px; flex-shrink: 0; display: flex; align-items: center; gap: 12px; padding: 0 var(--h-gutter); }
@@ -92,7 +102,7 @@
 .h-greet { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; flex-wrap: wrap; }
 /* Sentence case, as Cobalt asks everywhere ("nothing uppercase"). */
 .h-eyebrow { font-size: 13px; line-height: 18px; font-weight: 500; color: var(--h-muted); }
-.h-title { margin: 4px 0 0; font-size: 30px; font-weight: 600; letter-spacing: -0.02em; line-height: 38px; text-wrap: balance; }
+.h-title { margin: 4px 0 0; font-size: 24px; font-weight: 600; letter-spacing: -0.015em; line-height: 32px; text-wrap: balance; }
 
 .h-pill {
   height: 44px; padding: 0 20px; border: 0; border-radius: 999px;
@@ -108,33 +118,34 @@
 
 /* KPI strip ----------------------------------------------------------- */
 .h-kpis { flex-direction: row; padding: 8px; flex-shrink: 0; }
-.h-hero {
-  width: 300px; flex-shrink: 0; display: flex; flex-direction: column; justify-content: space-between; gap: 14px;
-  padding: 18px 22px; border-radius: var(--h-radius-hero); color: #fff;
-  /* Flat, no gradient: the international reference (Stripe) never washes a tile. */
-  background: var(--brand-ink);
-}
-.h-hero-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 14px; font-weight: 500; color: rgba(255, 255, 255, 0.9); }
-.h-hero-fig { display: flex; align-items: flex-end; gap: 12px; }
-.h-hero-fig b { font-size: 48px; font-weight: 600; letter-spacing: -0.03em; line-height: 52px; }
-.h-hero-fig span { font-size: 13px; font-weight: 500; color: rgba(255, 255, 255, 0.9); padding-bottom: 6px; }
 .h-k { flex: 1; display: flex; flex-direction: column; justify-content: space-between; gap: 8px; padding: 18px 22px; min-width: 0; }
 .h-k + .h-k { border-inline-start: 1px solid var(--h-line); }
-.h-kl { display: flex; align-items: center; gap: 10px; font-size: 14px; font-weight: 500; color: var(--h-ink-2); }
-.h-kv { font-size: 36px; font-weight: 600; letter-spacing: -0.02em; line-height: 44px; }
+/* "Waiting on you" is the same cell as the other three -- same label, figure
+   and footnote positions -- set apart only by a soft brand tile. */
+.h-hero { width: 300px; flex: none; border-radius: var(--h-radius-hero); background: var(--tint-blue-bg); }
+.h-hero + .h-k { border-inline-start: 0; }
+.h-hero .h-kl { color: var(--brand-ink); }
+.h-hero .h-kv { color: var(--brand-ink); }
+.h-hero .h-icon { background: var(--h-surface); }
+.h-hero .h-km { color: var(--brand-ink); }
+.h-hero .h-chip { background: var(--h-surface); color: var(--brand-ink); }
+.h-kl { display: flex; align-items: center; gap: 10px; font-size: 14px; font-weight: 600; color: var(--h-ink-2); }
+.h-kv { font-size: 34px; font-weight: 600; letter-spacing: -0.02em; line-height: 40px; color: var(--h-ink); }
 .h-kv.late { color: var(--late-ink); }
 .h-kv.soon { color: var(--soon-ink); }
 .h-km { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--h-muted); flex-wrap: wrap; }
 /* Trend chips are neutral both ways: more waiting is bad, more done is good,
    so the arrow says which way and colour says nothing. */
 .h-chip { display: inline-flex; align-items: center; gap: 3px; height: 24px; padding: 0 9px 0 7px; border-radius: 999px; background: var(--h-canvas); color: var(--h-ink-2); font-size: 12px; font-weight: 500; white-space: nowrap; }
-.h-hero .h-chip { background: rgba(255, 255, 255, 0.14); color: #fff; }
 
 .h-icon { border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; width: 34px; height: 34px; }
 .h-icon.lg { width: 38px; height: 38px; }
-/* One neutral chip for every icon; data-tint is kept in the markup but no
-   longer paints. */
 .h-icon { background: var(--chip-bg); color: var(--chip-icon); }
+.h-icon[data-tint='blue'] { background: var(--tint-blue-bg); color: var(--tint-blue); }
+.h-icon[data-tint='violet'] { background: var(--tint-violet-bg); color: var(--tint-violet); }
+.h-icon[data-tint='teal'] { background: var(--tint-plum-bg); color: var(--tint-plum); }
+.h-icon[data-tint='red'] { background: var(--tint-red-bg); color: var(--tint-red); }
+.h-icon[data-tint='amber'] { background: var(--tint-amber-bg); color: var(--tint-amber); }
 /* One stroke weight for every line icon on the page (lucide sets 2.0-2.6
    per call; 1.75 is the weight Stripe-like UIs use at 16-20px). */
 .uep-home .lucide { stroke-width: 1.75px; }
@@ -143,7 +154,7 @@
 /* Your work ----------------------------------------------------------- */
 .h-work { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 12px; }
 .h-work-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
-.h-work-head h2 { margin: 0; font-size: 20px; font-weight: 600; letter-spacing: -0.01em; }
+.h-work-head h2 { margin: 0; font-size: 18px; font-weight: 600; letter-spacing: -0.01em; }
 .h-sla { font-size: 13px; font-weight: 500; color: var(--h-muted); }
 .h-legend { margin-inline-start: auto; display: flex; gap: 14px; font-size: 13px; font-weight: 500; color: var(--h-muted); }
 .h-legend span { display: flex; align-items: center; gap: 6px; }
@@ -165,7 +176,7 @@
 .h-q.next { margin: 4px 10px; padding: 11px 12px; border: 0; border-radius: var(--h-radius-row); box-shadow: 0 0 0 2px var(--brand); background: var(--brand-soft); }
 .h-q.next + .h-q { border-top-color: transparent; }
 .h-qt { display: flex; align-items: center; gap: 8px; }
-.h-qn { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 600; }
+.h-qn { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 600; color: var(--h-ink); }
 .h-qn > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .h-next-badge { flex-shrink: 0; font-size: 12px; line-height: 16px; font-weight: 600; color: #fff; background: var(--brand); border-radius: 999px; padding: 2px 8px; }
 .h-qc { font-size: 26px; font-weight: 600; letter-spacing: -0.02em; line-height: 30px; }
@@ -173,8 +184,8 @@
 .h-tag { display: inline-flex; align-items: center; gap: 4px; height: 24px; padding: 0 9px; border-radius: 999px; font-size: 12px; font-weight: 600; white-space: nowrap; flex-shrink: 0; }
 .h-tag.late { background: var(--late-soft); color: var(--late-ink); }
 .h-tag.soon { background: var(--soon-soft); color: var(--soon-ink); }
-.h-qm { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--h-muted); white-space: nowrap; min-width: 0; }
-.h-owners { font-family: var(--font-farsi); font-size: 13px; font-weight: 500; color: var(--h-ink-2); overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.h-qm { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; font-size: 13px; color: var(--h-muted); white-space: nowrap; min-width: 0; }
+.h-owners { display: inline-flex; align-items: center; gap: 4px; font-weight: 500; color: var(--h-muted); cursor: default; }
 .h-sep { color: var(--h-dot-ring); }
 .h-allok { margin: 6px 20px 0; padding: 10px 14px; border-radius: 14px; background: var(--h-canvas); font-size: 13px; font-weight: 500; color: var(--h-ink-2); display: flex; align-items: center; gap: 8px; }
 .h-card-empty { padding: 14px 20px; display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--h-muted); }

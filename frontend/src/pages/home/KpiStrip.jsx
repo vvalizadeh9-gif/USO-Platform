@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowUp, CircleCheck, ClockAlert, Hourglass } from 'lucide-react'
+import { ArrowDown, ArrowUp, CircleCheck, ClockAlert, Hourglass, Inbox } from 'lucide-react'
 
 /**
  * A change, in a neutral chip: the arrow says which way, colour says nothing
@@ -21,9 +21,11 @@ function Trend({ delta, suffix = '' }) {
   )
 }
 
-function Cell({ icon: Icon, tint, label, value, tone, children }) {
+/** One KPI. All four share this shape -- icon and label, figure, one line
+ * of context -- so their labels, figures and footnotes line up. */
+function Cell({ icon: Icon, tint, label, value, tone, hero = false, children }) {
   return (
-    <div className="h-k">
+    <div className={`h-k ${hero ? 'h-hero' : ''}`.trim()}>
       <span className="h-kl">
         <span className="h-icon" data-tint={tint} aria-hidden="true">
           <Icon size={17} strokeWidth={2} />
@@ -41,20 +43,10 @@ export default function KpiStrip({ totals, slaDays, dueSoonDays }) {
   const doneDelta = totals.done_today - totals.done_yesterday
   return (
     <section className="h-card h-kpis" aria-label="Your numbers">
-      <div className="h-hero">
-        <span className="h-hero-top">
-          Waiting on you
-          <Trend delta={totals.pending_week_delta} suffix=" this week" />
-        </span>
-        <span className="h-hero-fig">
-          <b>{totals.pending}</b>
-          <span>
-            {totals.pending === 1 ? 'item' : 'items'} in
-            <br />
-            {queues}
-          </span>
-        </span>
-      </div>
+      <Cell icon={Inbox} tint="blue" label="Waiting on you" value={totals.pending} hero>
+        <Trend delta={totals.pending_week_delta} suffix=" this week" />
+        in {queues}
+      </Cell>
       {/* A status colour only when there is something to warn about: a red
           or amber zero sends people looking for a problem that isn't there. */}
       <Cell icon={ClockAlert} tint="red" label="Overdue" value={totals.overdue} tone={totals.overdue > 0 ? 'late' : ''}>

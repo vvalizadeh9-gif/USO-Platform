@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion'
-import { ArrowRight, ArrowUpRight, BadgeCheck, CalendarDays, CarFront, Check, CircleCheck, Clock3 } from 'lucide-react'
+import { ArrowRight, ArrowUpRight, BadgeCheck, CalendarDays, CarFront, Check, CircleCheck, Clock3, Users } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import ItemDots from '../../components/ItemDots'
 import { dotsLabel } from '../../lib/itemDots'
@@ -52,6 +52,19 @@ function StatusTag({ ticket }) {
   return null
 }
 
+/** How many owners hold the items: a count, not a list of names. The names
+ * stay one hover away. */
+function Owners({ ticket }) {
+  const total = ticket.owners.length + (ticket.owners_more || 0)
+  if (total === 0) return null
+  return (
+    <span className="h-owners" title={ticket.owners.join('، ')}>
+      <Users size={13} aria-hidden="true" />
+      {total}
+    </span>
+  )
+}
+
 function QueueRow({ ticket, isNext }) {
   const age = ageText(ticket)
   const label = [
@@ -69,26 +82,20 @@ function QueueRow({ ticket, isNext }) {
       aria-label={label}
       data-queue={ticket.queue_key}
     >
+      {/* The name and the count own the first line, so the name is never
+          squeezed into an ellipsis; tags go on the line under the dots. */}
       <span className="h-qt" aria-hidden="true">
         <span className="h-qn">
           <span>{ticket.short_label}</span>
-          {isNext && <span className="h-next-badge">Up next</span>}
         </span>
-        <StatusTag ticket={ticket} />
         <span className="h-qc">{ticket.count}</span>
       </span>
       <ItemDots onTime={ticket.on_time} dueSoon={ticket.due_soon} late={ticket.late} />
       <span className="h-qm" aria-hidden="true">
-        {ticket.owners.length > 0 && (
-          <>
-            <span className="h-owners" dir="auto" title={ticket.owners.join('، ')}>
-              {ticket.owners.join('، ')}
-            </span>
-            {ticket.owners_more > 0 && <span>+{ticket.owners_more}</span>}
-            {age && <span className="h-sep">·</span>}
-          </>
-        )}
+        {isNext && <span className="h-next-badge">Up next</span>}
+        <StatusTag ticket={ticket} />
         {age && <span>{age}</span>}
+        <Owners ticket={ticket} />
       </span>
     </Link>
   )

@@ -133,10 +133,11 @@ describe('UEP Home', () => {
     expect(within(row('dt_assign')).getByTestId('item-bar')).toBeInTheDocument()
   })
 
-  it('names who holds the items, in Farsi, with the rest as a count', async () => {
+  it('counts who holds the items, with their names on hover', async () => {
     await renderHome()
-    expect(screen.getByText('پیشرو فن، آرین')).toBeInTheDocument()
-    expect(screen.getByText('+7')).toBeInTheDocument()
+    const owners = document.querySelector('[data-queue="dt_review"] .h-owners')
+    expect(owners).toHaveTextContent('9')
+    expect(owners).toHaveAttribute('title', 'پیشرو فن، آرین')
   })
 
   it("shows the month's plan as delivered of planned", async () => {
