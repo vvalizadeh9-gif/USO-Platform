@@ -1,5 +1,32 @@
 # Changelog
 
+## UEP Home
+
+A new landing page for PM, Coordinator, Contractor and problem owners
+(`/home`), replacing the Action Center as where `/` lands for them. Design
+and rules: `docs/design/uep-home.md`.
+
+* **One glance.** How much is waiting on you, how much is overdue or due
+  within 3 days, what you finished today against yesterday, and the change
+  since last week (from the daily snapshot; no chip when there is none).
+* **Three cards.** Drive test (health check and drive test queues),
+  Acceptance (ICT and CRA) and Plans. Each queue is a row with its count, a
+  late or due-soon tag in words, one dot per item (a bar above 30 items),
+  who holds the items, and how old the oldest is.
+* **One thing next.** The queue with the most late items (then the oldest,
+  then the most items) is marked Up next, and its card holds the page's only
+  primary button, "Start with …". The server decides, so every reader of
+  "next" agrees.
+* **The month's plan.** The running Shamsi month's drive-test plan as one
+  dot per planned site, filled as delivered.
+* **Apps.** Every screen this role can open, grouped as Rollout, Insights
+  and Programme office, with a count where something is waiting. The list
+  and its visibility are the sidebar's own (`lib/nav.js`).
+* **The Action Center stays** at `/action-center`, one link away. Regional
+  Manager, Viewer and Admin land where they did.
+* `GET /home/summary` serves the page in one request; `GET
+  /action-center/board` is unchanged. No migration.
+
 ## Sign-in refinements
 
 The sign-in screen, brought closer to Microsoft, Okta and Google.

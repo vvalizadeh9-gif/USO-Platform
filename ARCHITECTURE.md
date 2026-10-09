@@ -1373,8 +1373,8 @@ the queue screen that holds those items.
 
 | Role | Action Center | Lands on |
 |---|---|---|
-| PM, Coordinator, Contractor | Yes | Action Center |
-| Problem owner (any `is_category_owner` role) | Yes | Action Center |
+| PM, Coordinator, Contractor | Yes | UEP Home (§5f) |
+| Problem owner (any `is_category_owner` role) | Yes | UEP Home (§5f) |
 | Regional Manager | No (board answers **403**) | KPI & Performance |
 | Viewer | No (board answers **403**) | Drive Test dashboard |
 | Admin | No (board answers **403**) | Admin Console |
@@ -1530,6 +1530,73 @@ done in about a second, with every number final on first paint; with
 `prefers-reduced-motion` nothing moves. The sidebar badge is the board's
 `totals.pending`. The component and its tokens are in
 `design-system-cobalt.md`, "Task board".
+
+---
+
+## 5f. UEP Home
+
+The landing page for everyone with an Action Center (`/home`; `homeFor` in
+`lib/roles.js`). It answers four questions at a glance: how much is waiting
+on me, what is late or due soon, what do I do next, and which apps can I
+open. The full board stays at `/action-center`. Design, decisions and
+trade-offs: `docs/design/uep-home.md`.
+
+### One read (`GET /home/summary`)
+
+`services/home.py` builds the page's whole answer from what already exists,
+so nothing on it can disagree with the board: the registry's own fetches
+(one per queue), `board.summarize`, the snapshot table, and
+`monthly_plan.running_month`. It is cached per user through `count_cache`,
+like the board, and refused (403) to the same roles. `/action-center/board`
+is unchanged; a test pins its shape.
+
+| Field | From |
+|---|---|
+| `totals.pending`, `overdue`, `queues` | the same summaries as the board |
+| `totals.due_soon`, per-ticket `on_time` / `due_soon` / `late` | `sla.item_status` (below) |
+| `totals.pending_week_delta`, `overdue_week_delta` | live totals less this user's `action_daily_snapshot` rows from 7 days ago; `null` when there are none |
+| `totals.done_today`, `done_yesterday` | `action_queues/done.py` (below) |
+| `up_next` | `board.up_next` (below) |
+| `groups` | Drive test (HC + DT), Acceptance (ICT + CRA), Plans: every group the role has a queue in, empty or not; zero-count tickets left off |
+| `tickets[].owners`, `owners_more` | up to two holders of the items, most items first; never the viewer, never "PM" |
+| `plan` | the running Shamsi month's DT plan (`pip` is `null`, never 0, without an approved plan); `null` for problem owners |
+| `app_badges` | ticket counts summed by the path each ticket opens; the page looks them up by a nav item's `to` |
+| `sla_uniform_days` | the SLA every configured queue on this board shares, else `null` |
+
+### Due soon, and the one "next"
+
+- **`sla.item_status`** makes every item exactly one of late, due soon or
+  on time. Late *is* `is_overdue`. Due soon is turning late within
+  `HOME_DUE_SOON_DAYS` (3, in `Settings`): for an SLA queue, `effective_start
+  + sla_days`; for fixes and the monthly plan, their own `due_at`. An item
+  with no due date is never due soon.
+- **`board.up_next`**: the most late items, then the oldest clock, then the
+  most items, then registry order, so a tie never flips between reads. It is
+  the one definition; the digest does not name a "next" today, and would
+  call this if it did.
+
+### "Done"
+
+Read from the actor and timestamp columns the tables already keep (no new
+table, no new write path). A rule is defined once per **completing act**, not
+per queue, and applies when the user's board has a queue it drains: filing,
+re-filing and correcting a village are three queues but one act (a
+submission), and a per-queue rule would count it three times. Days are
+Tehran days. **Decide re-routes** has no rule (`reroute_by` is the proposer;
+the decision records no actor), and neither does **Follow up with ICT/CRA**
+(an item leaves it when the authority answers, not by the PM's act).
+
+### The page
+
+`frontend/src/pages/Home.jsx`, outside `Layout`: its own header (the search
+pill opens Work Items; ⌘K/Ctrl+K), the greeting, the KPI strip, one card per
+group, the Apps panel and a footer (the API's health, "Data as of", the
+version). The Apps panel and its visibility are `lib/nav.js` (`app` on an
+item, `appsFor`), so it and the sidebar cannot disagree; the sidebar gains a
+Home item. It refreshes after any write (`DATA_CHANGED_EVENT`) and every
+minute. At 1440x900 and 1280x800 the document does not scroll; long cards
+scroll inside themselves. Tokens and components: `design-system-cobalt.md`,
+"UEP Home".
 
 ---
 

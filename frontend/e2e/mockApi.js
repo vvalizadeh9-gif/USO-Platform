@@ -10,6 +10,7 @@ const ROUTES = {
   '/auth/me': F.PM,
   '/action-center/summary': { counters: [], items: [] },
   '/action-center/board': F.actionBoardPm,
+  '/home/summary': F.homeSummaryPm,
   '/drive-test/overview': F.dtOverview,
   '/drive-test/plan-delivery': F.dtPlan,
   '/drive-test/trend': F.dtTrend,

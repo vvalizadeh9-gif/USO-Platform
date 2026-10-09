@@ -40,6 +40,7 @@ vi.mock('./pages/MyFixQueue', () => page('my-fix-queue'))
 vi.mock('./pages/WorkItems', () => page('work-items'))
 vi.mock('./pages/WorkItemDetail', () => page('work-item-detail'))
 vi.mock('./pages/ActionCenter', () => page('action-center'))
+vi.mock('./pages/Home', () => page('home'))
 vi.mock('./pages/mywork/MyWork', () => page('my-work'))
 vi.mock('./pages/monthlyplan/MonthlyPlan', () => page('monthly-plan'))
 vi.mock('./pages/reports/AcceptanceDashboard', () => page('acceptance'))
@@ -110,10 +111,10 @@ describe('where "/" lands', () => {
   // cleanup, so the second iteration is not querying a document that still
   // holds the first one's page.
   it.each(['Coordinator', 'PM', 'Contractor', 'CpgPower', 'CpgRolloutPM', 'ManagedService', 'NwgPlanning'])(
-    'sends %s to the Action Center, which counts whatever their role owes',
+    'sends %s to Home, which counts whatever their role owes',
     async (role) => {
       signedInAs(role)
-      expect(await landOn('/')).toBe('action-center')
+      expect(await landOn('/')).toBe('home')
     },
   )
 
@@ -126,6 +127,22 @@ describe('where "/" lands', () => {
   it('sends a Viewer to the Drive Test dashboard', async () => {
     signedInAs('Viewer')
     expect(await landOn('/')).toBe('dt-dashboard')
+  })
+})
+
+describe('the Home route', () => {
+  it.each([
+    ['RegionalManager', 'kpi'],
+    ['Viewer', 'dt-dashboard'],
+    ['Admin', 'admin'],
+  ])('sends %s to their own landing instead of a Home they do not have', async (role, home) => {
+    signedInAs(role)
+    expect(await landOn('/home')).toBe(home)
+  })
+
+  it('keeps the full board one link away', async () => {
+    signedInAs('PM')
+    expect(await landOn('/action-center')).toBe('action-center')
   })
 })
 
@@ -143,8 +160,8 @@ describe('the Action Center route', () => {
 describe('guarded routes', () => {
   it('keeps a non-owner out of the fix queue', async () => {
     signedInAs('Coordinator')
-    // Bounced to "/", which for everyone but Admin is the Action Center.
-    expect(await landOn('/my-fix-queue')).toBe('action-center')
+    // Bounced to "/", which for a queue-working role is Home.
+    expect(await landOn('/my-fix-queue')).toBe('home')
   })
 
   it('lets a category owner into the fix queue', async () => {
@@ -171,12 +188,12 @@ describe('guarded routes', () => {
 
   it('keeps a category owner off it too, as the server does', async () => {
     signedInAs('NwgPlanning')
-    expect(await landOn('/monthly-plan')).toBe('action-center')
+    expect(await landOn('/monthly-plan')).toBe('home')
   })
 
   it('keeps a contractor out of the admin console', async () => {
     signedInAs('Contractor')
-    expect(await landOn('/admin')).toBe('action-center')
+    expect(await landOn('/admin')).toBe('home')
   })
 
   it('lets a PM into the admin console, where the backend narrows what they see', async () => {
@@ -199,8 +216,8 @@ describe('guarded routes', () => {
   })
 
   it.each([
-    ['Coordinator', 'action-center'],
-    ['Contractor', 'action-center'],
+    ['Coordinator', 'home'],
+    ['Contractor', 'home'],
     ['RegionalManager', 'kpi'],
     ['Viewer', 'dt-dashboard'],
   ])(
@@ -238,7 +255,7 @@ describe('old paths people have bookmarked', () => {
 
   it('sends an unknown path home rather than showing nothing', async () => {
     signedInAs('Coordinator')
-    expect(await landOn('/no-such-page')).toBe('action-center')
+    expect(await landOn('/no-such-page')).toBe('home')
   })
 })
 

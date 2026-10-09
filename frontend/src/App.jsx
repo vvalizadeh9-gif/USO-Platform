@@ -20,6 +20,7 @@ const MyFixQueue = lazy(() => import('./pages/MyFixQueue'))
 const WorkItems = lazy(() => import('./pages/WorkItems'))
 const WorkItemDetail = lazy(() => import('./pages/WorkItemDetail'))
 const ActionCenter = lazy(() => import('./pages/ActionCenter'))
+const Home = lazy(() => import('./pages/Home'))
 const MyWork = lazy(() => import('./pages/mywork/MyWork'))
 const MonthlyPlan = lazy(() => import('./pages/monthlyplan/MonthlyPlan'))
 const AcceptanceDashboard = lazy(() => import('./pages/reports/AcceptanceDashboard'))
@@ -67,6 +68,18 @@ export default function App() {
     <Suspense fallback={<Loading />}>
       <Routes>
         <Route path="/login" element={user ? <Navigate to="/" replace /> : <Login />} />
+        {/* UEP Home is its own full-width shell (header, Apps panel, footer)
+            rather than a page inside the sidebar layout: its Apps panel is
+            the navigation there. The same roles as the board; the rest are
+            sent to their own landing. */}
+        <Route
+          path="/home"
+          element={
+            <Protected allowedRoles={ACTION_CENTER_ROLES}>
+              <Home />
+            </Protected>
+          }
+        />
         <Route
           element={
             <Protected>

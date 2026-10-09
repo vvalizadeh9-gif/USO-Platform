@@ -168,7 +168,9 @@ describe('Month', () => {
   it('shows the month, the same-day subtitle and the end values at once', async () => {
     renderAt('/reports/kpi/month', 'PM')
     expect(await screen.findByText('مهر ۱۴۰۵')).toBeInTheDocument()
-    expect(screen.getByText(/Day 10 of 30 · compared with/)).toBeInTheDocument()
+    // Awaited, not read at once: on a slow runner the month's name can paint
+    // a render before the rest of it, and this failed CI on that race alone.
+    expect(await screen.findByText(/Day 10 of 30 · compared with/)).toBeInTheDocument()
     // Reduced motion (the test setup's matchMedia): the final figure, not 0.
     const row = document.querySelector('[data-row="dt_done"]')
     expect(within(row).getByText('12')).toBeInTheDocument()

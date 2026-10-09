@@ -126,9 +126,11 @@ export function hasActionCenter(roleName) {
   return ACTION_CENTER_ROLES.includes(roleName)
 }
 
-// Where "/" lands for each role. Everyone who works a queue lands on the
-// Action Center; Regional Manager on Roles Performance (My area), Viewer on the Drive
-// Test dashboard, Admin on the Admin Console.
+// Where "/" lands for each role. Everyone who works a queue lands on UEP Home
+// (what is waiting, what is late, what to do next; the full board stays at
+// /action-center); Regional Manager on Roles Performance (My area), Viewer on
+// the Drive Test dashboard, Admin on the Admin Console. Home is served to the
+// same roles as the board -- GET /home/summary refuses the rest.
 const HOME_BY_ROLE = {
   Admin: '/admin',
   RegionalManager: '/reports/kpi',
@@ -136,5 +138,5 @@ const HOME_BY_ROLE = {
 }
 
 export function homeFor(roleName) {
-  return HOME_BY_ROLE[roleName] || (hasActionCenter(roleName) ? '/action-center' : '/reports/drive-test')
+  return HOME_BY_ROLE[roleName] || (hasActionCenter(roleName) ? '/home' : '/reports/drive-test')
 }

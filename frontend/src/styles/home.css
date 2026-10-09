@@ -1,0 +1,261 @@
+/* UEP Home (docs/design/uep-home.md). Everything is scoped to .uep-home: the
+   page's tokens are added beside Cobalt's, not over them, and no other page
+   reads them.
+
+   Tenant brand: the only values an operator changes (lib/theme.js). The brand
+   appears on the logo, the one primary button, the Up-next highlight, the hero
+   tile and the focus ring -- nowhere else. */
+:root {
+  --brand: #2563EB;
+  --brand-hover: #1D4ED8;
+  --brand-soft: #EFF6FF;
+  --brand-ink: #1E3A8A;
+  --brand-950: #172554;
+}
+
+.uep-home {
+  /* Fixed neutrals and status, never per tenant. --h-faint is darker than the
+     approved mock's #8A8A96 (3.4:1) so small labels clear 4.5:1 on white. */
+  --h-ink: #111113;
+  --h-ink-2: #3F3F46;
+  --h-muted: #5F5F6B;
+  --h-faint: #6B6B76;
+  --h-canvas: #F0F0F2;
+  --h-surface: #FFFFFF;
+  --h-line: #EAEAEE;
+  --h-outline: #D4D4DC;
+  --h-dot: #DCDCE2;
+  --h-dot-ring: #B9B9C3;
+  --late-ink: #B91C1C;
+  --late-soft: #FEE2E2;
+  --late-dot: #E5484D;
+  --soon-ink: #B45309;
+  --soon-soft: #FEF3C7;
+  --soon-dot: #F5A524;
+  --ok-dot: #16A34A;
+  /* Soft round icons: a Tailwind 100 -> 50 tint behind a 600 icon. A scoped
+     exception to Cobalt rule 6 (neutral icon chips), for Home only. */
+  --tint-blue-from: #DBEAFE; --tint-blue-to: #EFF6FF; --tint-blue-icon: #2563EB;
+  --tint-violet-from: #EDE9FE; --tint-violet-to: #F5F3FF; --tint-violet-icon: #7C3AED;
+  --tint-teal-from: #CCFBF1; --tint-teal-to: #F0FDFA; --tint-teal-icon: #0D9488;
+  --tint-slate-from: #E4E4E7; --tint-slate-to: #F4F4F5; --tint-slate-icon: #3F3F46;
+  --tint-red-from: #FEE2E2; --tint-red-to: #FFF1F2; --tint-red-icon: #DC2626;
+  --tint-amber-from: #FEF3C7; --tint-amber-to: #FFFBEB; --tint-amber-icon: #D97706;
+  --h-radius-card: 24px;
+  --h-radius-hero: 18px;
+  --h-radius-row: 16px;
+  /* Manrope as designed, once its files are bundled; until then the app's
+     own Inter, which is already loaded. */
+  --font-home: 'Manrope', var(--font-body);
+  --h-gutter: 32px;
+
+  height: 100dvh;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--h-canvas);
+  color: var(--h-ink);
+  font-family: var(--font-home);
+  font-feature-settings: 'tnum';
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+}
+.uep-home a { color: inherit; text-decoration: none; }
+.uep-home button { font-family: inherit; }
+.uep-home :focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+.uep-home .fa { font-family: var(--font-farsi); }
+
+.h-card { background: var(--h-surface); border-radius: var(--h-radius-card); display: flex; flex-direction: column; min-width: 0; }
+
+/* Header -------------------------------------------------------------- */
+.h-header { height: 76px; flex-shrink: 0; display: flex; align-items: center; gap: 12px; padding: 0 var(--h-gutter); }
+.h-brand { flex: 1 1 0; display: flex; align-items: center; gap: 10px; font-size: 20px; font-weight: 800; letter-spacing: -0.03em; border-radius: 10px; }
+.h-search {
+  flex: 0 1 440px; height: 46px; border: 0; border-radius: 999px; background: var(--h-surface);
+  display: flex; align-items: center; gap: 10px; padding: 0 18px;
+  font-size: 14px; color: var(--h-muted); cursor: pointer; text-align: start;
+}
+.h-search svg { color: var(--h-ink); flex-shrink: 0; }
+.h-search kbd { margin-inline-start: auto; font: 700 12px var(--font-home); color: var(--h-faint); }
+.h-tools { flex: 1 1 0; display: flex; justify-content: flex-end; align-items: center; gap: 10px; }
+.h-round { width: 44px; height: 44px; border: 0; border-radius: 50%; background: var(--h-surface); color: var(--h-ink); display: flex; align-items: center; justify-content: center; }
+.uep-home .account--avatar { position: relative; }
+.uep-home .account-avatar-button {
+  width: 44px; height: 44px; border: 0; border-radius: 50%; background: var(--h-ink); color: #fff;
+  font-size: 13.5px; font-weight: 800; cursor: pointer;
+}
+.uep-home .account--avatar .account-menu { top: calc(100% + 8px); bottom: auto; inset-inline: auto 0; width: 240px; }
+
+/* Body ---------------------------------------------------------------- */
+.h-body { flex: 1; min-height: 0; display: flex; gap: 24px; padding: 4px var(--h-gutter) 0; }
+.h-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 20px; }
+
+.h-greet { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; flex-wrap: wrap; }
+/* Uppercase eyebrows are a Home exception to Cobalt ("nothing uppercase"). */
+.h-eyebrow { font-size: 12.5px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: var(--h-muted); }
+.h-title { margin: 6px 0 0; font-size: 44px; font-weight: 800; letter-spacing: -0.045em; line-height: 48px; text-wrap: balance; }
+
+.h-pill {
+  height: 44px; padding: 0 20px; border: 0; border-radius: 999px;
+  font-size: 14.5px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  white-space: nowrap; cursor: pointer; transition: background 0.15s, box-shadow 0.15s;
+}
+.h-pill.quiet { background: var(--h-surface); color: var(--h-ink); }
+.h-pill.outline { width: 100%; background: var(--h-surface); color: var(--h-ink); box-shadow: inset 0 0 0 1.5px var(--h-outline); }
+.h-pill.outline:hover { box-shadow: inset 0 0 0 1.5px var(--h-ink); }
+.h-pill.primary { width: 100%; background: var(--brand); color: #fff; }
+.h-pill.primary:hover { background: var(--brand-hover); }
+.h-pill > span { overflow: hidden; text-overflow: ellipsis; }
+
+/* KPI strip ----------------------------------------------------------- */
+.h-kpis { flex-direction: row; padding: 8px; flex-shrink: 0; }
+.h-hero {
+  width: 300px; flex-shrink: 0; display: flex; flex-direction: column; justify-content: space-between; gap: 14px;
+  padding: 18px 22px; border-radius: var(--h-radius-hero); color: #fff;
+  background:
+    radial-gradient(120% 140% at 100% 0%, var(--brand) 0%, transparent 55%),
+    linear-gradient(160deg, var(--brand-ink), var(--brand-950));
+}
+.h-hero-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 14px; font-weight: 600; color: rgba(255, 255, 255, 0.85); }
+.h-hero-fig { display: flex; align-items: flex-end; gap: 12px; }
+.h-hero-fig b { font-size: 64px; font-weight: 800; letter-spacing: -0.05em; line-height: 60px; }
+.h-hero-fig span { font-size: 13.5px; font-weight: 500; color: rgba(255, 255, 255, 0.85); padding-bottom: 4px; }
+.h-k { flex: 1; display: flex; flex-direction: column; justify-content: space-between; gap: 8px; padding: 18px 22px; min-width: 0; }
+.h-k + .h-k { border-inline-start: 1px solid var(--h-line); }
+.h-kl { display: flex; align-items: center; gap: 10px; font-size: 14px; font-weight: 600; color: var(--h-ink-2); }
+.h-kv { font-size: 44px; font-weight: 800; letter-spacing: -0.045em; line-height: 46px; }
+.h-kv.late { color: var(--late-ink); }
+.h-kv.soon { color: var(--soon-ink); }
+.h-km { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--h-muted); flex-wrap: wrap; }
+/* Trend chips are neutral both ways: more waiting is bad, more done is good,
+   so the arrow says which way and colour says nothing. */
+.h-chip { display: inline-flex; align-items: center; gap: 3px; height: 24px; padding: 0 9px 0 7px; border-radius: 999px; background: var(--h-canvas); color: var(--h-ink-2); font-size: 12px; font-weight: 700; white-space: nowrap; }
+.h-hero .h-chip { background: rgba(255, 255, 255, 0.14); color: #fff; }
+
+.h-icon { border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; width: 34px; height: 34px; }
+.h-icon.lg { width: 38px; height: 38px; }
+.h-icon[data-tint='blue'] { background: linear-gradient(135deg, var(--tint-blue-from), var(--tint-blue-to)); color: var(--tint-blue-icon); }
+.h-icon[data-tint='violet'] { background: linear-gradient(135deg, var(--tint-violet-from), var(--tint-violet-to)); color: var(--tint-violet-icon); }
+.h-icon[data-tint='teal'] { background: linear-gradient(135deg, var(--tint-teal-from), var(--tint-teal-to)); color: var(--tint-teal-icon); }
+.h-icon[data-tint='slate'] { background: linear-gradient(135deg, var(--tint-slate-from), var(--tint-slate-to)); color: var(--tint-slate-icon); }
+.h-icon[data-tint='red'] { background: linear-gradient(135deg, var(--tint-red-from), var(--tint-red-to)); color: var(--tint-red-icon); }
+.h-icon[data-tint='amber'] { background: linear-gradient(135deg, var(--tint-amber-from), var(--tint-amber-to)); color: var(--tint-amber-icon); }
+
+/* Your work ----------------------------------------------------------- */
+.h-work { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 12px; }
+.h-work-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.h-work-head h2 { margin: 0; font-size: 22px; font-weight: 800; letter-spacing: -0.03em; }
+.h-sla { font-size: 14px; font-weight: 600; color: var(--h-muted); }
+.h-legend { margin-inline-start: auto; display: flex; gap: 14px; font-size: 12.5px; font-weight: 600; color: var(--h-muted); }
+.h-legend span { display: flex; align-items: center; gap: 6px; }
+.h-legend i { width: 10px; height: 10px; border-radius: 50%; }
+.h-grid { flex: 1; min-height: 0; display: grid; gap: 16px; }
+.h-grid[data-cols='1'] { grid-template-columns: minmax(0, 560px); }
+.h-grid[data-cols='2'] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.h-grid[data-cols='3'] { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.h-wc { min-height: 0; transition: transform 0.2s cubic-bezier(0.2, 0.6, 0.4, 1), box-shadow 0.2s; }
+.h-wc:hover { transform: translateY(-3px); box-shadow: 0 12px 24px -12px rgba(20, 27, 43, 0.25); }
+.h-ch { display: flex; align-items: center; gap: 12px; padding: 18px 20px 6px; }
+.h-ct { margin: 0; font-size: 17px; font-weight: 700; letter-spacing: -0.02em; }
+.h-go { margin-inline-start: auto; width: 36px; height: 36px; border-radius: 50%; background: var(--h-canvas); display: flex; align-items: center; justify-content: center; color: var(--h-ink); flex-shrink: 0; }
+/* Long content scrolls inside its card; the document never does. */
+.h-rows { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; padding-block: 2px; }
+.h-q { display: flex; flex-direction: column; gap: 9px; padding: 13px 20px; border-top: 1px solid var(--h-line); }
+.h-q:first-child { border-top: 0; }
+.h-q:hover { background: var(--h-canvas); }
+.h-q.next { margin: 4px 10px; padding: 11px 12px; border: 0; border-radius: var(--h-radius-row); box-shadow: 0 0 0 2px var(--brand); background: var(--brand-soft); }
+.h-q.next + .h-q { border-top-color: transparent; }
+.h-qt { display: flex; align-items: center; gap: 8px; }
+.h-qn { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 700; }
+.h-qn > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.h-next-badge { flex-shrink: 0; font-size: 12px; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; color: #fff; background: var(--brand); border-radius: 999px; padding: 2px 8px; }
+.h-qc { font-size: 28px; font-weight: 800; letter-spacing: -0.04em; line-height: 28px; }
+.h-qc small { font-size: 15px; font-weight: 700; color: var(--h-muted); }
+.h-tag { display: inline-flex; align-items: center; gap: 4px; height: 24px; padding: 0 9px; border-radius: 999px; font-size: 12px; font-weight: 700; white-space: nowrap; flex-shrink: 0; }
+.h-tag.late { background: var(--late-soft); color: var(--late-ink); }
+.h-tag.soon { background: var(--soon-soft); color: var(--soon-ink); }
+.h-qm { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--h-muted); white-space: nowrap; min-width: 0; }
+.h-owners { font-family: var(--font-farsi); font-size: 13px; font-weight: 500; color: var(--h-ink-2); overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.h-sep { color: var(--h-dot-ring); }
+.h-allok { margin: 6px 20px 0; padding: 10px 14px; border-radius: 14px; background: var(--h-canvas); font-size: 13px; font-weight: 600; color: var(--h-ink-2); display: flex; align-items: center; gap: 8px; }
+.h-card-empty { padding: 14px 20px; display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--h-muted); }
+.h-cf { padding: 12px 20px 20px; flex-shrink: 0; }
+
+/* The dot rule (components/ItemDots.jsx). Each dot has a 1px ring so it
+   clears 3:1 against white; status is also in the row's tag and label. */
+.uep-home .item-dots { display: flex; flex-wrap: wrap; gap: 4px; }
+.uep-home .item-dots i { width: 11px; height: 11px; border-radius: 50%; background: var(--h-dot); box-shadow: inset 0 0 0 1px var(--h-dot-ring); }
+.uep-home .item-dots i.due-soon { background: var(--soon-dot); box-shadow: inset 0 0 0 1px var(--soon-ink); }
+.uep-home .item-dots i.late { background: var(--late-dot); box-shadow: inset 0 0 0 1px var(--late-ink); }
+.uep-home .item-bar { display: flex; gap: 2px; height: 11px; border-radius: 6px; overflow: hidden; }
+.uep-home .item-bar i { flex-basis: 0; background: var(--h-dot); }
+.uep-home .item-bar i.due-soon { background: var(--soon-dot); }
+.uep-home .item-bar i.late { background: var(--late-dot); }
+.h-plan-dots { display: flex; flex-wrap: wrap; gap: 4px; max-width: 236px; }
+.h-plan-dots i { width: 11px; height: 11px; border-radius: 50%; background: var(--h-dot); box-shadow: inset 0 0 0 1px var(--h-dot-ring); }
+.h-plan-dots i.done { background: var(--h-ink); box-shadow: none; }
+.h-plan-meter { height: 11px; border-radius: 6px; background: var(--h-dot); overflow: hidden; }
+.h-plan-meter i { display: block; height: 100%; background: var(--h-ink); }
+
+/* Apps ---------------------------------------------------------------- */
+.h-apps { width: 300px; flex-shrink: 0; padding: 18px 12px 12px; overflow-y: auto; }
+.h-apps h2 { margin: 0; padding: 0 10px 2px; font-size: 20px; font-weight: 800; letter-spacing: -0.03em; }
+.h-gh { font-size: 12px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: var(--h-faint); padding: 14px 10px 6px; }
+.h-ap { display: flex; align-items: center; gap: 12px; height: 46px; padding: 0 10px; border-radius: 14px; font-size: 14.5px; font-weight: 600; }
+.h-ap:hover { background: var(--h-canvas); }
+.h-ap .h-badge { margin-inline-start: auto; min-width: 26px; height: 24px; padding: 0 8px; border-radius: 999px; background: var(--h-ink); color: #fff; font-size: 12px; font-weight: 800; display: flex; align-items: center; justify-content: center; }
+.h-spacer { flex: 1; }
+.h-browse { margin-top: 12px; display: flex; align-items: center; justify-content: center; gap: 6px; height: 46px; border: 0; border-radius: 999px; background: var(--h-canvas); font-size: 14px; font-weight: 700; color: var(--h-ink); cursor: pointer; flex-shrink: 0; }
+.h-all-section + .h-all-section { margin-top: 16px; }
+.h-all-section h3 { margin: 0 0 6px; font-size: 12px; font-weight: 700; color: var(--text-secondary); }
+.h-all-section a { display: block; padding: 8px 10px; border-radius: 8px; font-size: 14px; color: var(--text); text-decoration: none; }
+.h-all-section a:hover { background: var(--surface-subtle); }
+
+/* Footer -------------------------------------------------------------- */
+.h-footer { height: 44px; flex-shrink: 0; display: flex; align-items: center; gap: 20px; padding: 0 var(--h-gutter); font-size: 12.5px; font-weight: 500; color: var(--h-muted); }
+.h-status { display: flex; align-items: center; gap: 6px; }
+.h-status i { width: 7px; height: 7px; border-radius: 50%; background: var(--ok-dot); }
+.h-status.down i { background: var(--late-ink); }
+.h-status.down { color: var(--late-ink); font-weight: 700; }
+
+/* States -------------------------------------------------------------- */
+.h-skel { background: var(--h-line); border-radius: 8px; }
+.h-skel-text { display: block; height: 14px; }
+.h-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; text-align: center; padding: 24px; }
+.h-empty b { font-size: 20px; font-weight: 800; letter-spacing: -0.02em; }
+.h-empty span { font-size: 14px; color: var(--h-muted); }
+.h-error { display: flex; align-items: center; gap: 12px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .h-wc, .h-wc:hover { transition: none; transform: none; }
+}
+
+/* Narrower than the design (below 1180px): the Apps panel drops under the
+   work and the page scrolls inside .uep-home -- never the document. */
+@media (max-width: 1180px) {
+  .uep-home { overflow-y: auto; }
+  .h-body { flex: none; flex-direction: column; padding-bottom: 20px; }
+  .h-grid { flex: none; }
+  .h-rows { overflow: visible; }
+  .h-apps { width: auto; overflow: visible; }
+  .h-footer { height: auto; padding-block: 14px; flex-wrap: wrap; gap: 8px 20px; }
+}
+@media (max-width: 900px) {
+  .uep-home { --h-gutter: 20px; }
+  .h-kpis { flex-wrap: wrap; }
+  .h-hero { width: 100%; }
+  .h-k { flex: 1 1 30%; }
+  .h-k + .h-k { border-inline-start: 0; }
+  .h-grid[data-cols] { grid-template-columns: minmax(0, 1fr); }
+  .h-legend { margin-inline-start: 0; width: 100%; }
+}
+@media (max-width: 640px) {
+  .uep-home { --h-gutter: 16px; }
+  .h-header { height: 64px; }
+  .h-search { flex: 0 0 46px; padding: 0; justify-content: center; }
+  .h-search .label, .h-search kbd { display: none; }
+  .h-title { font-size: 32px; line-height: 36px; }
+  .h-k { flex: 1 1 100%; padding: 14px 16px; }
+  .h-kv { font-size: 36px; line-height: 40px; }
+  .h-greet .h-pill { width: 100%; }
+}
