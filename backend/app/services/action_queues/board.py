@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 
 from app.core import count_cache
 from app.models.reference import User
@@ -46,10 +46,16 @@ class QueueSummary:
     overdue: int
     oldest_started_at: datetime | None
     earliest_due_at: datetime | None
+    #: Items turning late within the due-soon window; 0 unless one was given.
+    due_soon: int = 0
 
     @property
     def date_kind(self) -> DateKind:
         return self.queue.date_kind
+
+    @property
+    def on_time(self) -> int:
+        return self.count - self.overdue - self.due_soon
 
 
 @dataclass(frozen=True)
@@ -83,16 +89,52 @@ class Board:
 # Summaries
 # --------------------------------------------------------------------------
 def summarize(
-    queue: QueueDefinition, items: list[PendingItem], sla_days: int, now: datetime
+    queue: QueueDefinition,
+    items: list[PendingItem],
+    sla_days: int,
+    now: datetime,
+    *,
+    due_soon_window: timedelta | None = None,
 ) -> QueueSummary:
+    """One queue's items as a ticket. With ``due_soon_window``, items that turn
+    late inside it are counted too (Home); the board leaves it out."""
     starts = [sla.effective_start(i.started_at) for i in items]
     dues = [d for d in (sla.as_datetime(i.due_at) for i in items) if d is not None]
+    due_soon = 0
+    if due_soon_window is not None:
+        due_soon = sum(
+            1 for i in items
+            if sla.item_status(i, queue.sla, sla_days, now, due_soon_window) == sla.DUE_SOON
+        )
     return QueueSummary(
         queue=queue,
         count=len(items),
         overdue=sum(1 for i in items if sla.is_overdue(i, queue.sla, sla_days, now)),
         oldest_started_at=min(starts) if starts else None,
         earliest_due_at=min(dues) if dues else None,
+        due_soon=due_soon,
+    )
+
+
+def up_next(summaries: list[QueueSummary]) -> QueueSummary | None:
+    """The one queue to start with: the most late items, then the oldest
+    clock, then the most items, then registry order (so a tie never flips
+    between two reads). None when nothing is pending.
+
+    The single definition of "next": anything that names one calls this.
+    """
+    order = {q.key: i for i, q in enumerate(QUEUES)}
+    live = [s for s in summaries if s.count]
+    if not live:
+        return None
+    return min(
+        live,
+        key=lambda s: (
+            -s.overdue,
+            s.oldest_started_at or datetime.max.replace(tzinfo=timezone.utc),
+            -s.count,
+            order[s.queue.key],
+        ),
     )
 
 

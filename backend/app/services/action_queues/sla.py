@@ -55,6 +55,36 @@ def is_overdue(item: PendingItem, kind: SlaKind, sla_days: int, now: datetime) -
     return due is not None and now > due
 
 
+# An item's standing on Home. Every item is exactly one of the three.
+LATE = "late"
+DUE_SOON = "due_soon"
+ON_TIME = "on_time"
+
+
+def due_at_for(item: PendingItem, kind: SlaKind, sla_days: int) -> datetime | None:
+    """When the item turns late: its clock start plus the queue's SLA, or its
+    own due date for queues measured against one. None if it never does."""
+    if kind is SlaKind.CONFIGURED:
+        return effective_start(item.started_at) + timedelta(days=sla_days)
+    return as_datetime(item.due_at)
+
+
+def item_status(
+    item: PendingItem, kind: SlaKind, sla_days: int, now: datetime, window: timedelta
+) -> str:
+    """Late, due soon (turns late within ``window``), or on time.
+
+    Late is decided by :func:`is_overdue` itself, so Home and the board can
+    never disagree on what is late; a late item is never also due soon.
+    """
+    if is_overdue(item, kind, sla_days, now):
+        return LATE
+    due = due_at_for(item, kind, sla_days)
+    if due is not None and due - now <= window:
+        return DUE_SOON
+    return ON_TIME
+
+
 def sla_days_by_queue(db: Session, keys: list[str]) -> dict[str, int]:
     """Each queue's SLA in days: its stored row, else the default."""
     stored = dict(

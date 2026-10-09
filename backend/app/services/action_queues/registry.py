@@ -24,10 +24,11 @@ from app.services.action_queues.types import (
 _STAFF = frozenset({PM, COORDINATOR})
 
 
-def _q(key, stage, label, url, roles, fetch, *, sla=SlaKind.CONFIGURED, date_kind="since"):
+def _q(key, stage, label, short_label, url, roles, fetch, *, sla=SlaKind.CONFIGURED,
+       date_kind="since"):
     return QueueDefinition(
-        key=key, stage=stage, label=label, url=url, roles=frozenset(roles),
-        sla=sla, date_kind=date_kind, fetch=fetch,
+        key=key, stage=stage, label=label, short_label=short_label, url=url,
+        roles=frozenset(roles), sla=sla, date_kind=date_kind, fetch=fetch,
     )
 
 
@@ -36,19 +37,19 @@ def _acceptance_queues(authority: str) -> list[QueueDefinition]:
     prefix = authority.lower()
     url = acceptance.my_work_url
     return [
-        _q(f"{prefix}_follow_up", stage, f"Follow up with {authority}",
+        _q(f"{prefix}_follow_up", stage, f"Follow up with {authority}", f"{authority} follow-up",
            url(authority, S.TAB_WITH_AUTHORITY), {PM},
            acceptance.queue(authority, S.TAB_WITH_AUTHORITY, contractor_owns=False)),
-        _q(f"{prefix}_to_file", stage, "File villages",
+        _q(f"{prefix}_to_file", stage, "File villages", f"{authority} to file",
            url(authority, S.TAB_NOT_FILED), {COORDINATOR, CONTRACTOR},
            acceptance.queue(authority, S.TAB_NOT_FILED, contractor_owns=True)),
-        _q(f"{prefix}_to_validate", stage, "Validate contractor filings",
+        _q(f"{prefix}_to_validate", stage, "Validate contractor filings", f"{authority} filings",
            url(authority, S.TAB_FILLED), {COORDINATOR},
            acceptance.queue(authority, S.TAB_FILLED, contractor_owns=False)),
-        _q(f"{prefix}_refile", stage, "Re-file rejected villages",
+        _q(f"{prefix}_refile", stage, "Re-file rejected villages", f"{authority} re-filing",
            url(authority, S.TAB_NEW_LETTER), {CONTRACTOR},
            acceptance.queue(authority, S.TAB_NEW_LETTER, contractor_owns=True)),
-        _q(f"{prefix}_returned", stage, "Correct returned villages",
+        _q(f"{prefix}_returned", stage, "Correct returned villages", f"{authority} corrections",
            url(authority, S.TAB_RETURNED), {CONTRACTOR},
            acceptance.queue(authority, S.TAB_RETURNED, contractor_owns=True)),
     ]
@@ -56,35 +57,35 @@ def _acceptance_queues(authority: str) -> list[QueueDefinition]:
 
 QUEUES: tuple[QueueDefinition, ...] = (
     # --- Health Check ----------------------------------------------------
-    _q("hc_assign", Stage.HC, "Assign sites",
+    _q("hc_assign", Stage.HC, "Assign sites", "HC assignment",
        "/health-check?tab=pool&state=ready", _STAFF, lifecycle.sites_to_assign),
-    _q("hc_review", Stage.HC, "Review HC results",
+    _q("hc_review", Stage.HC, "Review HC results", "HC review",
        "/health-check?tab=review", _STAFF, lifecycle.hc_results_to_review),
-    _q("hc_reroutes", Stage.HC, "Decide re-routes",
+    _q("hc_reroutes", Stage.HC, "Decide re-routes", "Re-routes",
        "/health-check?tab=reroutes", _STAFF, lifecycle.reroute_decisions),
-    _q("hc_submit", Stage.HC, "Submit health checks",
+    _q("hc_submit", Stage.HC, "Submit health checks", "Health checks",
        "/my-health-check", {CONTRACTOR}, lifecycle.hc_to_submit),
-    _q("hc_fixes", Stage.HC, "Fix assigned problems",
+    _q("hc_fixes", Stage.HC, "Fix assigned problems", "Fixes",
        "/my-fix-queue", {PROBLEM_OWNER}, lifecycle.fixes, sla=SlaKind.CATEGORY),
     # --- Drive Test ------------------------------------------------------
-    _q("dt_assign", Stage.DT, "Assign drive tests",
+    _q("dt_assign", Stage.DT, "Assign drive tests", "DT assignment",
        "/drive-test?tab=assignment", _STAFF, lifecycle.dt_to_assign),
-    _q("dt_review", Stage.DT, "Review DT results",
+    _q("dt_review", Stage.DT, "Review DT results", "DT review",
        "/drive-test?tab=review", _STAFF, lifecycle.dt_results_to_review),
-    _q("dt_todo", Stage.DT, "Drive-test sites",
+    _q("dt_todo", Stage.DT, "Drive-test sites", "Drive tests",
        "/my-drive-tests?tab=todo&status=with_contractor", {CONTRACTOR},
        lifecycle.sites_to_drive_test),
-    _q("dt_redo", Stage.DT, "Redo returned drive tests",
+    _q("dt_redo", Stage.DT, "Redo returned drive tests", "Returned drive tests",
        "/my-drive-tests?tab=todo&status=sent_back", {CONTRACTOR},
        lifecycle.returned_to_redo),
     # --- ICT, then CRA ---------------------------------------------------
     *(q for authority in AUTHORITIES for q in _acceptance_queues(authority)),
     # --- Plans & Data ----------------------------------------------------
-    _q("plans_approve", Stage.PLANS, "Approve plans",
+    _q("plans_approve", Stage.PLANS, "Approve plans", "Plan approvals",
        "/monthly-plan?tab=plans", {PM}, plans.plans_to_approve),
-    _q("cpm_changes", Stage.PLANS, "Validate CPM changes",
+    _q("cpm_changes", Stage.PLANS, "Validate CPM changes", "CPM changes",
        "/admin?tab=validate", {PM}, plans.cpm_changes),
-    _q("plan_submit", Stage.PLANS, "Submit monthly plan",
+    _q("plan_submit", Stage.PLANS, "Submit monthly plan", "Monthly plan",
        "/monthly-plan", {CONTRACTOR}, plans.monthly_plan_to_submit,
        sla=SlaKind.DEADLINE, date_kind="due"),
 )

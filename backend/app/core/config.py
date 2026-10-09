@@ -102,6 +102,9 @@ class Settings(BaseSettings):
     # written every day the job runs; only the email follows this list.
     digest_weekdays: str = "sat,sun,mon,tue,wed"
 
+    # Home's "due soon": an item that turns late within this many days.
+    home_due_soon_days: int = 3
+
     @property
     def is_development(self) -> bool:
         return self.app_env.strip().lower() == DEVELOPMENT
