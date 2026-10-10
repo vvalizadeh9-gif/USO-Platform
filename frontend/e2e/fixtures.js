@@ -582,44 +582,70 @@ export const actionBoardPm = {
 
 // UEP Home for the PM: a full Drive test card (with a queue past the
 // 30-item dot limit), acceptance all on time, and the month's plan.
-const homeTicket = (queue_key, short_label, label, url, { on_time = 0, due_soon = 0, late = 0, age = 5, owners = [], more = 0 } = {}) => ({
-  queue_key, short_label, label, url,
+const homeTicket = (queue_key, short_label, label, url, { on_time = 0, due_soon = 0, late = 0, age = 5, owners = [], more = 0, unit = 'sites' } = {}) => ({
+  queue_key, short_label, label, url, unit,
   count: on_time + due_soon + late, on_time, due_soon, late,
   oldest_started_at: new Date(Date.now() - age * 86400000).toISOString(),
-  earliest_due_at: null, date_kind: 'since', owners, owners_more: more,
+  earliest_due_at: null, date_kind: 'since', owners, owners_more: more, owners_total: owners.length + more,
 })
+
+const homeGroups = [
+  {
+    key: 'drive_test', label: 'Drive test', scope_label: null,
+    tickets: [
+      homeTicket('hc_assign', 'HC assignment', 'Assign sites', '/health-check?tab=pool&state=ready', { late: 224, age: 16 }),
+      homeTicket('dt_review', 'DT review', 'Review DT results', '/drive-test?tab=review', { on_time: 6, late: 3, age: 21, owners: ['پیشرو فن', 'آرین ارتباط'], more: 7 }),
+      homeTicket('hc_review', 'HC review', 'Review HC results', '/health-check?tab=review', { on_time: 4, late: 2, age: 18 }),
+      homeTicket('dt_assign', 'DT assignment', 'Assign drive tests', '/drive-test?tab=assignment', { on_time: 18, due_soon: 3, late: 1, age: 16 }),
+    ],
+  },
+  {
+    key: 'acceptance', label: 'Acceptance', scope_label: 'All project',
+    tickets: [
+      homeTicket('ict_pending', 'Pending ICT', 'Open ICT acceptance', '/my-work?authority=ICT', { on_time: 30, late: 12, age: 19, unit: 'villages', owners: ['پیشرو فن'], more: 4 }),
+      homeTicket('cra_pending', 'Pending CRA', 'Open CRA acceptance', '/my-work?authority=CRA', { on_time: 41, due_soon: 2, late: 7, age: 17, unit: 'villages', owners: ['آرین ارتباط'], more: 5 }),
+    ],
+  },
+  {
+    key: 'plans', label: 'Plans', scope_label: null,
+    tickets: [homeTicket('plans_approve', 'Plan approvals', 'Approve plans', '/monthly-plan?tab=plans', { due_soon: 2, age: 12 })],
+  },
+]
+
+// The headline and the badges are summed from the tickets, as the server
+// does: a hand-typed total here once read "268 in 6 queues" over cards that
+// held 266.
+const homeTickets = homeGroups.flatMap((g) => g.tickets)
+const homeSum = (key) => homeTickets.reduce((n, t) => n + t[key], 0)
+const homeBadges = {}
+for (const t of homeTickets.filter((x) => x.count)) {
+  const path = t.url.split('?')[0]
+  homeBadges[path] = homeBadges[path] || { count: 0, parts: [] }
+  homeBadges[path].count += t.count
+  homeBadges[path].parts.push({ label: t.short_label, count: t.count })
+}
+const homeDays = Array.from({ length: 14 }, (_, i) => new Date(Date.UTC(2026, 8, 26 + i)).toISOString().slice(0, 10))
 
 export const homeSummaryPm = {
   role: 'PM',
-  scope_label: 'All provinces',
+  scope_label: 'All project',
   generated_at: '2026-10-09T08:54:00Z',
+  shamsi_date: '1405-07-17',
   due_soon_days: 3,
   sla_uniform_days: 14,
   sla_days: { hc_review: 14, dt_assign: 14, dt_review: 14 },
   totals: {
-    pending: 268, queues: 6, overdue: 230, due_soon: 5,
-    pending_week_delta: 4, overdue_week_delta: -2, done_today: 6, done_yesterday: 4,
+    pending: homeSum('count'), queues: homeTickets.length, overdue: homeSum('late'), due_soon: homeSum('due_soon'),
+    pending_week_delta: 4, overdue_week_delta: -2, due_soon_week_delta: -1, done_today: 6, done_yesterday: 4,
   },
-  up_next: 'hc_assign',
-  groups: [
-    {
-      key: 'drive_test', label: 'Drive test',
-      tickets: [
-        homeTicket('hc_assign', 'HC assignment', 'Assign sites', '/health-check?tab=pool&state=ready', { late: 224, age: 16 }),
-        homeTicket('dt_review', 'DT review', 'Review DT results', '/drive-test?tab=review', { on_time: 6, late: 3, age: 21, owners: ['پیشرو فن', 'آرین ارتباط'], more: 7 }),
-        homeTicket('hc_review', 'HC review', 'Review HC results', '/health-check?tab=review', { on_time: 4, late: 2, age: 18 }),
-        homeTicket('dt_assign', 'DT assignment', 'Assign drive tests', '/drive-test?tab=assignment', { on_time: 18, due_soon: 3, late: 1, age: 16 }),
-      ],
-    },
-    {
-      key: 'acceptance', label: 'Acceptance',
-      tickets: [homeTicket('ict_follow_up', 'ICT follow-up', 'Follow up with ICT', '/my-work?authority=ICT&tab=with_authority', { on_time: 3, age: 4 })],
-    },
-    {
-      key: 'plans', label: 'Plans',
-      tickets: [homeTicket('plans_approve', 'Plan approvals', 'Approve plans', '/monthly-plan?tab=plans', { due_soon: 2, age: 12 })],
-    },
-  ],
+  trends: {
+    days: homeDays,
+    pending: [null, null, 340, 344, 351, 349, 355, 356, 352, 358, 361, 360, 364, homeSum('count')],
+    overdue: [null, null, 236, 238, 240, 245, 247, 246, 248, 249, 250, 251, 253, homeSum('late')],
+    due_soon: [null, null, 12, 11, 9, 10, 8, 9, 7, 8, 7, 8, 8, homeSum('due_soon')],
+    done: [3, 5, 2, 4, 6, 3, 5, 7, 4, 3, 5, 6, 4, 6],
+  },
+  groups: homeGroups,
   plan: { stream: 'DT', shamsi_year: 1405, shamsi_month: 7, month_name: 'Mehr', pip: 64, delivered: 41, days_left: 13 },
-  app_badges: { '/health-check': 230, '/drive-test': 31, '/my-work': 3, '/monthly-plan': 2 },
+  app_badges: homeBadges,
 }
