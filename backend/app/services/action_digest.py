@@ -40,7 +40,8 @@ from app.models.action_center import (
 )
 from app.models.reference import User
 from app.services.action_queues import board as boards
-from app.services.action_queues.context import QueueContext, board_role
+from app.services.action_queues import sla
+from app.services.action_queues.context import QueueContext, board_role, home_role
 from app.services.action_queues.registry import queues_for
 from app.services.action_queues.sla import TEHRAN
 from app.services.action_queues.types import STAGE_LABELS
@@ -80,7 +81,7 @@ def write_snapshot(
     db.add_all(
         ActionDailySnapshot(
             snapshot_date=day, user_id=user.id, queue_key=s.queue.key,
-            count=s.count, overdue=s.overdue,
+            count=s.count, overdue=s.overdue, due_soon=s.due_soon,
         )
         for s in summaries
     )
@@ -236,14 +237,19 @@ def is_digest_day(day: date) -> bool:
     return day.weekday() in {WEEKDAYS[n] for n in names if n in WEEKDAYS}
 
 
-def board_users(db: Session) -> list[User]:
+def home_users(db: Session) -> list[User]:
+    """Everyone with a Home: the board's users and Regional Managers, whose
+    snapshot feeds Home's trends."""
     users = db.execute(select(User).where(User.status == user_status.ACTIVE)).scalars()
-    return [u for u in users if board_role(u) is not None]
+    return [u for u in users if home_role(u) is not None]
 
 
 def run(db: Session, mailer: Mailer, *, day: date | None = None,
         now: datetime | None = None, send: bool | None = None) -> RunReport:
-    """Snapshot every Action Center user, then email those due a digest.
+    """Snapshot every Home user, then email the board's users due a digest.
+
+    The snapshot holds every queue Home shows, Home-only ones included, with
+    Home's due-soon count; the digest is the board, as before.
 
     ``send`` defaults to whether ``day`` is a digest weekday. One user's
     failure never stops the run: it is logged and recorded, and the next user
@@ -254,10 +260,13 @@ def run(db: Session, mailer: Mailer, *, day: date | None = None,
     send = is_digest_day(day) if send is None else send
     report = RunReport(day)
 
-    for user in board_users(db):
+    for user in home_users(db):
         try:
             ctx = QueueContext(db, user, now)
-            summaries = boards.queue_summaries(ctx, queues_for(board_role(user)))
+            summaries = boards.queue_summaries(
+                ctx, queues_for(home_role(user), home_only=True),
+                due_soon_window=sla.due_soon_window(),
+            )
             write_snapshot(db, user, day, summaries)
             db.commit()
             report.snapshots += 1
@@ -266,9 +275,10 @@ def run(db: Session, mailer: Mailer, *, day: date | None = None,
             log.exception("action snapshot for user %s failed", user.id)
             report.count("snapshot_failed")
             continue
-        if send:
+        if send and board_role(user) is not None:
+            on_board = [s for s in summaries if s.queue.on_board]
             try:
-                outcome = deliver(db, mailer, user, day, summaries)
+                outcome = deliver(db, mailer, user, day, on_board)
             except Exception:  # noqa: BLE001 -- e.g. the log row could not be written
                 db.rollback()
                 log.exception("digest bookkeeping for user %s failed", user.id)

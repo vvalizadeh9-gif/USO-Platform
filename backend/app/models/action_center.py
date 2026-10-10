@@ -75,6 +75,9 @@ class ActionDailySnapshot(Base):
     queue_key: Mapped[str] = mapped_column(String(50), nullable=False)
     count: Mapped[int] = mapped_column(Integer, nullable=False)
     overdue: Mapped[int] = mapped_column(Integer, nullable=False)
+    #: Items turning late within Home's due-soon window. NULL on rows from
+    #: before the column existed: not known, rather than none.
+    due_soon: Mapped[int | None] = mapped_column(Integer)
 
 
 class DigestLog(Base):
