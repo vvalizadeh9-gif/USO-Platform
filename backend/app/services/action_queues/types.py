@@ -56,6 +56,19 @@ HOME_GROUP_LABELS: dict[HomeGroup, str] = {
     HomeGroup.PLANS: "Plans",
 }
 
+#: The queues each Home card shows, by key; ``None`` shows every queue of the
+#: card's stages that the viewer's role has. The Acceptance card is the two
+#: headline queues for everyone: the detailed filing and checking queues stay
+#: on the Action Center board.
+HOME_QUEUES: dict[HomeGroup, tuple[str, ...] | None] = {
+    HomeGroup.ROLLOUT: None,
+    HomeGroup.ACCEPTANCE: ("ict_pending", "cra_pending"),
+    HomeGroup.PLANS: None,
+}
+
+#: Cards that show their queues even at zero, so their rows never move.
+HOME_KEEPS_EMPTY: frozenset[HomeGroup] = frozenset({HomeGroup.ACCEPTANCE})
+
 STAGE_GROUP: dict[Stage, HomeGroup] = {
     Stage.HC: HomeGroup.ROLLOUT,
     Stage.DT: HomeGroup.ROLLOUT,
@@ -72,6 +85,9 @@ COORDINATOR = "Coordinator"
 CONTRACTOR = "Contractor"
 PROBLEM_OWNER = "ProblemOwner"
 BOARD_ROLES = frozenset({PM, COORDINATOR, CONTRACTOR, PROBLEM_OWNER})
+#: Has Home but no Action Center board: Home's headline queues only.
+REGIONAL_MANAGER = "RegionalManager"
+HOME_ROLES = BOARD_ROLES | {REGIONAL_MANAGER}
 
 
 class SlaKind(str, Enum):
@@ -90,6 +106,9 @@ class SlaKind(str, Enum):
 
 
 DateKind = Literal["since", "due"]
+
+#: What one item of a queue is, as Home words its count ("9 sites").
+Unit = Literal["sites", "villages", "fixes", "plans", "changes"]
 
 
 @dataclass(frozen=True)
@@ -130,3 +149,7 @@ class QueueDefinition:
     sla: SlaKind
     date_kind: DateKind
     fetch: Callable[[QueueContext], list[PendingItem]]
+    unit: Unit = "sites"
+    #: False for a queue only Home shows (and the snapshot records): it
+    #: overlaps queues already on the board, which would count it twice.
+    on_board: bool = True

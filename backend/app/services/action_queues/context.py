@@ -21,6 +21,7 @@ from app.services.action_queues.types import (
     COORDINATOR,
     PM,
     PROBLEM_OWNER,
+    REGIONAL_MANAGER,
     OwnerRef,
 )
 from app.services.health_check import scoped_work_items
@@ -39,6 +40,15 @@ def board_role(user: User) -> str | None:
     if user.role.name == CONTRACTOR and user.contractor_id is not None:
         return CONTRACTOR
     return None
+
+
+def home_role(user: User) -> str | None:
+    """Which Home this user gets: their board's, or a Regional Manager's
+    (Home's headline queues, with no board behind them). None for the rest."""
+    role = board_role(user)
+    if role is None and user.role.name == REGIONAL_MANAGER:
+        return REGIONAL_MANAGER
+    return role
 
 
 @dataclass
