@@ -231,6 +231,25 @@ Full details, including how to practise this safely, are in `BACKUP-RUNBOOK.md`.
 
 ---
 
+## Later migrations
+
+### `d4b6f8a1c357` — Home's due-soon trend (UEP Home redesign)
+
+**Purely additive.** It adds one empty column, `due_soon`, to the
+`action_daily_snapshot` table. Nothing is changed or deleted, and it takes
+a moment even on a large database. Old rows keep the column empty, which
+Home reads as "not known" for those days; from the next nightly snapshot on,
+every row carries a number.
+
+It runs with every other migration (see "Running the migration" above).
+To undo it, step back one revision:
+
+```
+docker compose exec backend alembic downgrade c2e8f4a6b913
+```
+
+That drops the column again; nothing else depends on it.
+
 ## The `alembic_version` bookmark
 
 Alembic keeps a single row in a table called `alembic_version` recording which

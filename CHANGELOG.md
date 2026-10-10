@@ -1,5 +1,35 @@
 # Changelog
 
+## UEP Home: Microsoft 365 redesign
+
+Home restyled to Fluent 2 (light only), and its numbers made to reconcile.
+Design and rules: `docs/design/uep-home.md` §0.
+
+* **Totals are the cards.** Every headline figure and app badge is summed
+  from the tickets Home returns; badges carry their parts for a tooltip
+  ("HC assignment 224 + HC review 6").
+* **Acceptance is two rows for everyone:** Pending ICT and Pending CRA
+  villages (the acceptance universe, one per site, site type and village
+  code), scoped by role and labelled "All project", "Your regions" or "Your
+  sites". The detailed acceptance queues stay on the Action Center.
+* **Regional Managers get Home** from the sidebar (they still land on Roles
+  Performance), without "Done today".
+* **14-day trends** under each KPI, from the daily snapshot; missing days are
+  gaps. Change badges compare with last week (Done: with yesterday).
+* **No Up next**, and no status dots or bars: status is a red "late" or
+  orange "due soon" tag, and every card has the same neutral button.
+* **Look:** neutral page, white cards, gradient area tiles, two-tone icons,
+  sentence-case app labels, the Shamsi date in Persian digits. The Action
+  Center left the Apps list; the KPI figures open it, and Overdue opens
+  `/action-center?view=overdue`.
+* **Migration** `d4b6f8a1c357`: `action_daily_snapshot.due_soon` (nullable,
+  additive). The snapshot job now also covers Regional Managers and Home's
+  own queues; the email digest is unchanged.
+* `GET /home/summary` adds `shamsi_date`, `trends`,
+  `totals.due_soon_week_delta`, per-ticket `unit` and `owners_total`, and
+  per-group `scope_label`; `app_badges` becomes `{count, parts}`; `up_next`
+  is removed.
+
 ## UEP Home
 
 A new landing page for PM, Coordinator, Contractor and problem owners
