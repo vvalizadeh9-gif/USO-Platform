@@ -117,6 +117,7 @@ const SIDEBAR_BY_ROLE = {
     Performance: ['Roles Performance', 'Lifecycle Gaps'],
   },
   RegionalManager: {
+    Today: ['Home'],
     'Drive Test': ['Dashboard', 'Monthly Plan', 'Work Items'],
     Acceptance: ['Dashboard', 'My Work'],
     Performance: ['Roles Performance', 'Lifecycle Gaps'],
@@ -149,7 +150,9 @@ const LINKS_BEFORE = {
   Contractor: [...ACTION, ...WORKERS, ...KPI, '/monthly-plan', '/my-health-check', '/my-drive-tests'],
   // Viewer gained the two Performance pages with Roles Performance.
   Viewer: [...WORKERS, ...KPI, '/monthly-plan'],
-  RegionalManager: [...WORKERS, ...KPI, '/monthly-plan'],
+  // Regional Manager gained Home (not the Action Center) with UEP Home's
+  // acceptance headline.
+  RegionalManager: ['/home', ...WORKERS, ...KPI, '/monthly-plan'],
   Admin: [...EVERYONE, '/admin'],
   CpgPower: [...ACTION, ...WORKERS, '/my-fix-queue'],
 }

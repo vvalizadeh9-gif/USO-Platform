@@ -4,7 +4,7 @@ import Layout from './components/Layout'
 import { useAuth } from './context/AuthContext'
 import { Loading } from './components/ui'
 import { loginPathFor } from './lib/returnTo'
-import { ACTION_CENTER_ROLES, CATEGORY_OWNER_ROLES, KPI_ROLES, MONTHLY_PLAN_ROLES, homeFor } from './lib/roles'
+import { ACTION_CENTER_ROLES, CATEGORY_OWNER_ROLES, HOME_ROLES, KPI_ROLES, MONTHLY_PLAN_ROLES, homeFor } from './lib/roles'
 import Login from './pages/Login'
 
 // Route pages are code-split so the initial load only ships the shell +
@@ -70,12 +70,12 @@ export default function App() {
         <Route path="/login" element={user ? <Navigate to="/" replace /> : <Login />} />
         {/* UEP Home is its own full-width shell (header, Apps panel, footer)
             rather than a page inside the sidebar layout: its Apps panel is
-            the navigation there. The same roles as the board; the rest are
-            sent to their own landing. */}
+            the navigation there. The board's roles and Regional Managers;
+            the rest are sent to their own landing. */}
         <Route
           path="/home"
           element={
-            <Protected allowedRoles={ACTION_CENTER_ROLES}>
+            <Protected allowedRoles={HOME_ROLES}>
               <Home />
             </Protected>
           }

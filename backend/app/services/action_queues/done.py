@@ -126,15 +126,17 @@ def start_of_day(day: date) -> datetime:
     return datetime.combine(day, time.min, tzinfo=sla.TEHRAN)
 
 
-def done_by_day(db: Session, user: User, board_role: str, today: date) -> tuple[int, int]:
-    """(done today, done yesterday) for this user, in Tehran days.
+def done_per_day(
+    db: Session, user: User, board_role: str, first: date, last: date
+) -> dict[date, int]:
+    """Acts this user finished on each Tehran day from ``first`` to ``last``.
 
-    One query per select of each rule that applies -- a fixed handful,
-    whatever the size of the programme.
+    Every day in the range is a key, zero included. One query per select of
+    each rule that applies -- a fixed handful, whatever the size of the
+    programme or the length of the range.
     """
-    yesterday = today - timedelta(days=1)
-    since = start_of_day(yesterday)
-    counts = {today: 0, yesterday: 0}
+    counts = {first + timedelta(days=n): 0 for n in range((last - first).days + 1)}
+    since = start_of_day(first)
     for rule in rules_for(board_role):
         seen: set = set()
         for stmt in rule.selects(user, since):
@@ -145,4 +147,4 @@ def done_by_day(db: Session, user: User, board_role: str, today: date) -> tuple[
                 day = sla.as_datetime(when).astimezone(sla.TEHRAN).date()
                 if day in counts:
                     counts[day] += 1
-    return counts[today], counts[yesterday]
+    return counts

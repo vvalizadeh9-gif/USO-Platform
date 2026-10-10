@@ -8,7 +8,8 @@ import { useAuth } from '../context/AuthContext'
 import { DATA_CHANGED_EVENT } from '../lib/dataChanged'
 import { greetingFor, gregorianLabel } from '../lib/greeting'
 import { NAV_SECTIONS, navItemVisible } from '../lib/nav'
-import { homeFor, roleLabel } from '../lib/roles'
+import { hasActionCenter, homeFor, roleLabel } from '../lib/roles'
+import { shamsiLongLabel } from '../lib/shamsi'
 import AppsPanel from './home/AppsPanel'
 import HomeFooter from './home/HomeFooter'
 import HomeHeader from './home/HomeHeader'
@@ -17,10 +18,10 @@ import WorkCard from './home/WorkCard'
 import '../styles/home.css'
 
 /**
- * UEP Home: how much is waiting on you, what is late or due soon, the one
- * thing to do next, and every app you can open. One request
- * (GET /home/summary); every number on it is the Action Center's own.
- * See docs/design/uep-home.md.
+ * UEP Home: how much is waiting on you, what is late or due soon, the trend
+ * of each, and every app you can open. One request (GET /home/summary);
+ * every number on it is the Action Center's own, and the headline is the sum
+ * of the cards. See docs/design/uep-home.md.
  */
 
 const REFRESH_MS = 60000
@@ -37,24 +38,32 @@ function Skeleton() {
   // The final layout's geometry, so nothing moves when the numbers arrive.
   return (
     <>
-      <section className="h-card h-kpis" aria-hidden="true">
-        <div className="h-hero" style={{ opacity: 0.35 }} />
-        {[0, 1, 2].map((i) => (
-          <div key={i} className="h-k">
-            <span className="h-skel h-skel-text" style={{ width: '60%' }} />
-            <span className="h-skel" style={{ width: 64, height: 40 }} />
-            <span className="h-skel h-skel-text" style={{ width: '80%' }} />
-          </div>
-        ))}
-      </section>
+      <div className="h-kpi-wrap" aria-hidden="true">
+        <section className="h-card h-kpis">
+          <div className="h-k h-hero" style={{ opacity: 0.35 }} />
+          {[0, 1, 2].map((i) => (
+            <div key={i} className="h-k">
+              <span className="h-skel h-skel-text" style={{ width: '60%' }} />
+              <span className="h-skel" style={{ width: 72, height: 44 }} />
+              <span className="h-skel" style={{ width: '100%', height: 28 }} />
+            </div>
+          ))}
+        </section>
+        <p className="h-kpi-note">&nbsp;</p>
+      </div>
       <section className="h-work" aria-hidden="true">
-        <span className="h-skel h-skel-text" style={{ width: 160, height: 22 }} />
+        <span className="h-skel h-skel-text" style={{ width: 160, height: 24 }} />
         <div className="h-grid" data-cols="3">
           {[0, 1, 2].map((i) => (
-            <div key={i} className="h-card" style={{ padding: 20, gap: 14 }}>
-              <span className="h-skel h-skel-text" style={{ width: '50%', height: 20 }} />
-              <span className="h-skel h-skel-text" style={{ width: '90%' }} />
-              <span className="h-skel h-skel-text" style={{ width: '70%' }} />
+            <div key={i} className="h-card h-wc">
+              <div className="h-ch">
+                <span className="h-skel" style={{ width: 40, height: 40, borderRadius: 8 }} />
+                <span className="h-skel h-skel-text" style={{ width: '40%', height: 20 }} />
+              </div>
+              <div className="h-rows" style={{ padding: 16, gap: 14 }}>
+                <span className="h-skel h-skel-text" style={{ width: '90%' }} />
+                <span className="h-skel h-skel-text" style={{ width: '70%' }} />
+              </div>
             </div>
           ))}
         </div>
@@ -79,7 +88,7 @@ function YourWork({ data }) {
   // A coordinator's board has no Plans queue, but their month's plan still
   // belongs on the page: it gets a Plans card of its own.
   if (data.plan && !groups.some((g) => g.key === 'plans')) {
-    groups.push({ key: 'plans', label: 'Plans', tickets: [] })
+    groups.push({ key: 'plans', label: 'Plans', scope_label: null, tickets: [] })
   }
   const nothing = data.totals.pending === 0
 
@@ -88,15 +97,10 @@ function YourWork({ data }) {
       <div className="h-work-head">
         <h2 id="home-work">Your work</h2>
         <SlaLabel data={data} />
-        <span className="h-legend" aria-hidden="true">
-          <span><i style={{ background: 'var(--h-dot)' }} />On time</span>
-          <span><i style={{ background: 'var(--soon-dot)' }} />Due soon</span>
-          <span><i style={{ background: 'var(--late-dot)' }} />Late</span>
-        </span>
       </div>
       {nothing && !data.plan ? (
         <div className="h-card h-empty">
-          <CircleCheck size={28} strokeWidth={2} aria-hidden="true" />
+          <CircleCheck size={28} aria-hidden="true" />
           <b>Nothing waiting on you</b>
           <span>New work shows up here as soon as it reaches you.</span>
         </div>
@@ -112,7 +116,6 @@ function YourWork({ data }) {
             <WorkCard
               key={g.key}
               group={g}
-              upNext={data.up_next}
               plan={g.key === 'plans' ? data.plan : null}
             />
           ))}
@@ -160,6 +163,7 @@ export default function Home() {
   }, [load])
 
   const firstName = user?.first_name || (user?.full_name || '').split(' ')[0]
+  const shamsi = shamsiLongLabel(data?.shamsi_date)
 
   let body
   if (error === 'forbidden') {
@@ -173,7 +177,7 @@ export default function Home() {
       <Banner tone="error" title="Your work didn't load.">
         <span className="h-error">
           Check your connection and try again.
-          <button type="button" className="h-pill quiet" onClick={load}>
+          <button type="button" className="h-btn" onClick={load}>
             <RefreshCw size={16} aria-hidden="true" />
             Retry
           </button>
@@ -185,7 +189,7 @@ export default function Home() {
   } else {
     body = (
       <>
-        <KpiStrip totals={data.totals} slaDays={data.sla_uniform_days} dueSoonDays={data.due_soon_days} />
+        <KpiStrip totals={data.totals} trends={data.trends} linked={hasActionCenter(roleName)} />
         <YourWork data={data} />
       </>
     )
@@ -200,14 +204,22 @@ export default function Home() {
             <section className="h-greet">
               <div>
                 <div className="h-eyebrow">
-                  {gregorianLabel(now)} · {roleLabel(roleName)}
+                  {gregorianLabel(now)}
+                  {shamsi && (
+                    <>
+                      {' · '}
+                      <span lang="fa" dir="rtl" className="fa" data-testid="shamsi-date">{shamsi}</span>
+                    </>
+                  )}
+                  {' · '}
+                  {roleLabel(roleName)}
                 </div>
                 <h1 className="h-title">
                   {greetingFor(now)}{firstName ? `, ${firstName}` : ''}
                 </h1>
               </div>
-              <Link to={reportsPathFor(roleName)} className="h-pill quiet">
-                <ChartColumn size={16} strokeWidth={2.2} aria-hidden="true" />
+              <Link to={reportsPathFor(roleName)} className="h-btn">
+                <ChartColumn size={16} aria-hidden="true" />
                 View reports
               </Link>
             </section>

@@ -13,6 +13,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core import jalali
+from app.core.config import get_settings
 from app.models.action_center import DEFAULT_SLA_DAYS, ActionQueueSla
 from app.services.action_queues.types import PendingItem, SlaKind
 
@@ -59,6 +60,11 @@ def is_overdue(item: PendingItem, kind: SlaKind, sla_days: int, now: datetime) -
 LATE = "late"
 DUE_SOON = "due_soon"
 ON_TIME = "on_time"
+
+
+def due_soon_window() -> timedelta:
+    """How far ahead "due soon" looks: Home and the snapshot behind its trends."""
+    return timedelta(days=get_settings().home_due_soon_days)
 
 
 def due_at_for(item: PendingItem, kind: SlaKind, sla_days: int) -> datetime | None:

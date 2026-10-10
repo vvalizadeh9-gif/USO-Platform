@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 
 from app.core import count_cache
 from app.models.reference import User
@@ -116,32 +116,18 @@ def summarize(
     )
 
 
-def up_next(summaries: list[QueueSummary]) -> QueueSummary | None:
-    """The one queue to start with: the most late items, then the oldest
-    clock, then the most items, then registry order (so a tie never flips
-    between two reads). None when nothing is pending.
-
-    The single definition of "next": anything that names one calls this.
-    """
-    order = {q.key: i for i, q in enumerate(QUEUES)}
-    live = [s for s in summaries if s.count]
-    if not live:
-        return None
-    return min(
-        live,
-        key=lambda s: (
-            -s.overdue,
-            s.oldest_started_at or datetime.max.replace(tzinfo=timezone.utc),
-            -s.count,
-            order[s.queue.key],
-        ),
-    )
-
-
-def queue_summaries(ctx: QueueContext, queues: list[QueueDefinition]) -> list[QueueSummary]:
+def queue_summaries(
+    ctx: QueueContext,
+    queues: list[QueueDefinition],
+    *,
+    due_soon_window: timedelta | None = None,
+) -> list[QueueSummary]:
     """Every queue summarised for this user, zero counts included."""
     days = sla.sla_days_by_queue(ctx.db, [q.key for q in queues])
-    return [summarize(q, q.fetch(ctx), days[q.key], ctx.now) for q in queues]
+    return [
+        summarize(q, q.fetch(ctx), days[q.key], ctx.now, due_soon_window=due_soon_window)
+        for q in queues
+    ]
 
 
 def require_board_role(user: User) -> str:

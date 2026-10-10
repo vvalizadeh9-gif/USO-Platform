@@ -4,8 +4,11 @@ Nothing here is a second definition of anything:
 
 * queues, counts and lateness are the Action Center registry's own fetches,
   summarised by ``board.summarize`` -- the same function the board uses;
-* the next queue is ``board.up_next``;
-* the week's change is this user's ``action_daily_snapshot`` rows;
+* which queues each card shows is ``registry.home_queues_for``, read from the
+  declarative ``types.HOME_QUEUES``; every total is summed from exactly the
+  tickets returned, so the headline always equals what the cards show;
+* the trends and the week's change are this user's ``action_daily_snapshot``
+  rows (``home_trends``);
 * "done" is ``action_queues.done``;
 * the month's plan is ``monthly_plan.running_month``, already scoped by role.
 
@@ -15,24 +18,31 @@ seconds through ``count_cache`` (emptied by every commit), like the board.
 from __future__ import annotations
 
 from collections import Counter, defaultdict
-from datetime import date, datetime, timedelta
+from dataclasses import dataclass
+from datetime import date, datetime, timedelta, timezone
 
-from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core import count_cache, jalali
-from app.core.config import get_settings
-from app.models.action_center import ActionDailySnapshot
 from app.models.reference import User
+from app.services import home_trends
 from app.services.action_queues import board as boards
 from app.services.action_queues import done, sla
-from app.services.action_queues.context import QueueContext
-from app.services.action_queues.registry import queues_for
+from app.services.action_queues.board import NotOnBoard
+from app.services.action_queues.context import QueueContext, home_role
+from app.services.action_queues.registry import home_queues_for
 from app.services.action_queues.types import (
+    CONTRACTOR,
+    COORDINATOR,
     HOME_GROUP_LABELS,
     HOME_GROUP_ORDER,
+    HOME_KEEPS_EMPTY,
+    HOME_QUEUES,
+    PM,
     PROBLEM_OWNER,
+    REGIONAL_MANAGER,
     STAGE_GROUP,
+    HomeGroup,
     PendingItem,
     SlaKind,
 )
@@ -47,7 +57,7 @@ _UNNAMED_OWNER_TYPES = frozenset({"role"})
 PLAN_STREAM = "DT"
 
 
-def _owners(items: list[PendingItem], viewer: User) -> tuple[list[str], int]:
+def _owners(items: list[PendingItem], viewer: User) -> list[str]:
     """Who holds this queue's items, most items first, never the viewer's own
     company (on a contractor's board every item is theirs, so that names no
     one)."""
@@ -61,26 +71,7 @@ def _owners(items: list[PendingItem], viewer: User) -> tuple[list[str], int]:
         if owner.type == "coordinator" and owner.id == viewer.id:
             continue
         counts[owner.name] += 1
-    ranked = [name for name, _ in sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))]
-    return ranked[:MAX_OWNERS], max(0, len(ranked) - MAX_OWNERS)
-
-
-def _week_deltas(db: Session, user: User, today: date, pending: int, overdue: int):
-    """Live totals less this user's snapshot from seven days ago, or None
-    each when there is no snapshot that day (a new user, a missed cron run)."""
-    row = db.execute(
-        select(
-            func.count(ActionDailySnapshot.id),
-            func.coalesce(func.sum(ActionDailySnapshot.count), 0),
-            func.coalesce(func.sum(ActionDailySnapshot.overdue), 0),
-        ).where(
-            ActionDailySnapshot.user_id == user.id,
-            ActionDailySnapshot.snapshot_date == today - timedelta(days=7),
-        )
-    ).one()
-    if not row[0]:
-        return None, None
-    return pending - int(row[1]), overdue - int(row[2])
+    return [name for name, _ in sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))]
 
 
 def _plan(db: Session, user: User, role: str, today: date) -> dict | None:
@@ -108,98 +99,160 @@ def _path(url: str) -> str:
     return url.split("?", 1)[0]
 
 
+
+
+#: The scope every count on Home is inside, by role. A problem owner's Home is
+#: their category's fixes, worded as the board words it.
+SCOPE_LABELS: dict[str, str] = {
+    PM: "All project",
+    COORDINATOR: "Your regions",
+    REGIONAL_MANAGER: "Your regions",
+    CONTRACTOR: "Your sites",
+}
+
+#: Roles whose Home has no "Done today": nothing on it is theirs to finish.
+NO_DONE_ROLES = frozenset({REGIONAL_MANAGER})
+
+ROLE_DISPLAY = {**boards.ROLE_DISPLAY, REGIONAL_MANAGER: "Regional manager"}
+
+#: Sorts a queue with no clock start after every dated one.
+_NEVER = datetime.max.replace(tzinfo=timezone.utc)
+
+
+def require_home_role(user: User) -> str:
+    role = home_role(user)
+    if role is None:
+        raise NotOnBoard("Home is not available for this role")
+    return role
+
+
+@dataclass(frozen=True)
+class _Row:
+    """One queue as Home shows it: its summary and who holds its items."""
+
+    summary: boards.QueueSummary
+    owners: list[str]
+
+
+def _ticket(row: _Row) -> dict:
+    s = row.summary
+    return {
+        "queue_key": s.queue.key,
+        "label": s.queue.label,
+        "short_label": s.queue.short_label,
+        "unit": s.queue.unit,
+        "count": s.count,
+        "on_time": s.on_time,
+        "due_soon": s.due_soon,
+        "late": s.overdue,
+        "oldest_started_at": s.oldest_started_at,
+        "earliest_due_at": s.earliest_due_at,
+        "date_kind": s.date_kind,
+        "url": s.queue.url,
+        "owners": row.owners[:MAX_OWNERS],
+        "owners_more": max(0, len(row.owners) - MAX_OWNERS),
+        "owners_total": len(row.owners),
+    }
+
+
+def _shown(rows: list[_Row], group: HomeGroup) -> list[_Row]:
+    """The rows a card shows: its live queues, or all of them on a card that
+    keeps empty rows. Ranked worst first, unless the card fixes its order."""
+    kept = [r for r in rows if r.summary.count or group in HOME_KEEPS_EMPTY]
+    if HOME_QUEUES[group] is not None:
+        return kept
+    return sorted(
+        kept,
+        key=lambda r: (-r.summary.overdue, r.summary.oldest_started_at or _NEVER),
+    )
+
+
+def _badges(tickets: list[dict]) -> dict[str, dict]:
+    """Pending items per app (keyed by the path a ticket opens), with the
+    tickets each badge adds up, for its tooltip."""
+    badges: dict[str, dict] = {}
+    for t in tickets:
+        if not t["count"]:
+            continue
+        badge = badges.setdefault(_path(t["url"]), {"count": 0, "parts": []})
+        badge["count"] += t["count"]
+        badge["parts"].append({"label": t["short_label"], "count": t["count"]})
+    return badges
+
+
 def build(db: Session, user: User, now: datetime | None = None) -> dict:
-    role = boards.require_board_role(user)
+    role = require_home_role(user)
     ctx = QueueContext(db, user) if now is None else QueueContext(db, user, now=now)
     today = ctx.now.astimezone(sla.TEHRAN).date()
-    window = timedelta(days=get_settings().home_due_soon_days)
+    window = sla.due_soon_window()
 
-    queues = queues_for(role)
+    queues = home_queues_for(role)
     days = sla.sla_days_by_queue(db, [q.key for q in queues])
-    summaries: list[boards.QueueSummary] = []
-    owners: dict[str, tuple[list[str], int]] = {}
+    by_group: dict[HomeGroup, list[_Row]] = defaultdict(list)
     for queue in queues:
         items = queue.fetch(ctx)
-        summaries.append(
-            boards.summarize(queue, items, days[queue.key], ctx.now, due_soon_window=window)
-        )
-        owners[queue.key] = _owners(items, user)
+        summary = boards.summarize(queue, items, days[queue.key], ctx.now, due_soon_window=window)
+        by_group[STAGE_GROUP[queue.stage]].append(_Row(summary, _owners(items, user)))
 
-    live = [s for s in summaries if s.count]
-    by_group: dict = defaultdict(list)
-    for s in live:
-        by_group[STAGE_GROUP[s.queue.stage]].append(s)
+    scope = SCOPE_LABELS.get(role) or boards.scope_label(ctx, role)
     # The groups this role has queues in, empty or not, so the cards stay put.
-    role_groups = {STAGE_GROUP[q.stage] for q in queues}
+    groups = [
+        {
+            "key": group.value,
+            "label": HOME_GROUP_LABELS[group],
+            "scope_label": scope if group in HOME_KEEPS_EMPTY else None,
+            "tickets": [_ticket(r) for r in _shown(by_group[group], group)],
+        }
+        for group in HOME_GROUP_ORDER
+        if group in by_group
+    ]
+    tickets = [t for g in groups for t in g["tickets"]]
+    live = home_trends.DayFigures(
+        pending=sum(t["count"] for t in tickets),
+        overdue=sum(t["late"] for t in tickets),
+        due_soon=sum(t["due_soon"] for t in tickets),
+    )
 
-    pending = sum(s.count for s in live)
-    overdue = sum(s.overdue for s in live)
-    pending_delta, overdue_delta = _week_deltas(db, user, today, pending, overdue)
-    done_today, done_yesterday = done.done_by_day(db, user, role, today)
-    nxt = boards.up_next(summaries)
+    done_days = None
+    if role not in NO_DONE_ROLES:
+        done_days = done.done_per_day(
+            db, user, role, today - timedelta(days=home_trends.TREND_DAYS - 1), today
+        )
+    trends = home_trends.build_trends(db, user, [q.key for q in queues], today, live, done_days)
 
     configured = {q.key: days[q.key] for q in queues if q.sla is SlaKind.CONFIGURED}
     distinct_days = set(configured.values())
 
-    badges: dict[str, int] = defaultdict(int)
-    for s in live:
-        badges[_path(s.queue.url)] += s.count
-
-    def ticket(s: boards.QueueSummary) -> dict:
-        names, more = owners[s.queue.key]
-        return {
-            "queue_key": s.queue.key,
-            "label": s.queue.label,
-            "short_label": s.queue.short_label,
-            "count": s.count,
-            "on_time": s.on_time,
-            "due_soon": s.due_soon,
-            "late": s.overdue,
-            "oldest_started_at": s.oldest_started_at,
-            "earliest_due_at": s.earliest_due_at,
-            "date_kind": s.date_kind,
-            "url": s.queue.url,
-            "owners": names,
-            "owners_more": more,
-        }
-
-    def rank(s: boards.QueueSummary):
-        return (-s.overdue, s.oldest_started_at or ctx.now)
-
     return {
-        "role": boards.ROLE_DISPLAY.get(role, role),
-        "scope_label": boards.scope_label(ctx, role),
+        "role": ROLE_DISPLAY.get(role, role),
+        "scope_label": scope,
         "generated_at": ctx.now,
+        "shamsi_date": "{:04d}-{:02d}-{:02d}".format(*jalali.to_shamsi_date(today)),
         "due_soon_days": window.days,
         "sla_uniform_days": distinct_days.pop() if len(distinct_days) == 1 else None,
         "sla_days": configured,
         "totals": {
-            "pending": pending,
-            "queues": len(live),
-            "overdue": overdue,
-            "due_soon": sum(s.due_soon for s in live),
-            "pending_week_delta": pending_delta,
-            "overdue_week_delta": overdue_delta,
-            "done_today": done_today,
-            "done_yesterday": done_yesterday,
+            "pending": live.pending,
+            "queues": len(tickets),
+            "overdue": live.overdue,
+            "due_soon": live.due_soon,
+            "done_today": done_days[today] if done_days is not None else None,
+            "done_yesterday": (
+                done_days[today - timedelta(days=1)] if done_days is not None else None
+            ),
+            "pending_week_delta": home_trends.week_delta(trends["pending"]),
+            "overdue_week_delta": home_trends.week_delta(trends["overdue"]),
+            "due_soon_week_delta": home_trends.week_delta(trends["due_soon"]),
         },
-        "up_next": nxt.queue.key if nxt else None,
-        "groups": [
-            {
-                "key": group.value,
-                "label": HOME_GROUP_LABELS[group],
-                "tickets": [ticket(s) for s in sorted(by_group.get(group, []), key=rank)],
-            }
-            for group in HOME_GROUP_ORDER
-            if group in role_groups
-        ],
+        "trends": trends,
+        "groups": groups,
         "plan": _plan(db, user, role, today),
-        "app_badges": dict(badges),
+        "app_badges": _badges(tickets),
     }
 
 
 def summary_for(db: Session, user: User) -> dict:
     """This user's Home, shared by every read of it for a few seconds."""
-    boards.require_board_role(user)
+    require_home_role(user)
     key = ("home", user.id, user.role_id, user.contractor_id)
     return count_cache.get_or_compute(key, lambda: build(db, user))

@@ -1,20 +1,35 @@
 import { motion } from 'framer-motion'
-import { ArrowRight, ArrowUpRight, BadgeCheck, CalendarDays, CarFront, Check, CircleCheck, Clock3 } from 'lucide-react'
+import { ArrowRight, CircleCheck, Clock3 } from 'lucide-react'
 import { Link } from 'react-router-dom'
-import ItemDots from '../../components/ItemDots'
-import { dotsLabel } from '../../lib/itemDots'
 import { fadeUp } from '../../components/ui'
 import { daysSince, daysUntil } from '../../lib/greeting'
+import HomeIcon from './homeIcons'
 
-// Each card's soft round icon. The tint is the card's, never a status.
+// Each card's area: its glyph, and the colour family of its tile and header
+// band (home.css, [data-area]). The colour is the area's, never a status.
 const CARD_LOOK = {
-  drive_test: { icon: CarFront, tint: 'blue' },
-  acceptance: { icon: BadgeCheck, tint: 'violet' },
-  plans: { icon: CalendarDays, tint: 'teal' },
+  drive_test: { icon: 'car', area: 'blue' },
+  acceptance: { icon: 'documentCheck', area: 'indigo' },
+  plans: { icon: 'calendarBars', area: 'plum' },
 }
 
-/** Above this many planned sites the plan is a meter, not a dot per site. */
-const PLAN_DOTS_MAX = 100
+/** The one button under a card: what the card is for. Every card's button
+ * looks the same -- no queue is singled out. */
+function cardAction(group, plan) {
+  const top = group.tickets.find((t) => t.count > 0) || group.tickets[0]
+  if (group.key === 'acceptance' && top) return { to: top.url, label: 'Open acceptance' }
+  if (top) return { to: top.url, label: top.label }
+  if (group.key === 'plans' && plan) return { to: '/monthly-plan', label: 'Open monthly plan' }
+  return null
+}
+
+const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`
+
+/** The unit, in the singular for one ("1 site", "9 sites"). */
+function unitText(count, unit) {
+  const one = unit.endsWith('s') ? unit.slice(0, -1) : unit
+  return plural(count, one, unit)
+}
 
 /** "Oldest 21 days", or for a deadline queue "Due in 3 days" / "2 days late". */
 function ageText(ticket) {
@@ -23,176 +38,148 @@ function ageText(ticket) {
     if (d > 1) return `Due in ${d} days`
     if (d === 1) return 'Due tomorrow'
     if (d === 0) return 'Due today'
-    return `${-d} ${d === -1 ? 'day' : 'days'} late`
+    return `${plural(-d, 'day', 'days')} late`
   }
-  if (!ticket.oldest_started_at) return null
-  const d = daysSince(ticket.oldest_started_at)
-  return `Oldest ${d} ${d === 1 ? 'day' : 'days'}`
+  if (!ticket.count || !ticket.oldest_started_at) return null
+  return `Oldest ${plural(daysSince(ticket.oldest_started_at), 'day', 'days')}`
 }
 
-/** The status tag beside a queue's name: always words and an icon, never
- * colour alone. */
-function StatusTag({ ticket }) {
-  if (ticket.late > 0) {
-    return (
-      <span className="h-tag late">
-        <Clock3 size={12} strokeWidth={2.5} aria-hidden="true" />
-        {ticket.late} late
-      </span>
-    )
-  }
-  if (ticket.due_soon > 0) {
-    return (
-      <span className="h-tag soon">
-        <Clock3 size={12} strokeWidth={2.5} aria-hidden="true" />
-        {ticket.due_soon} due soon
-      </span>
-    )
-  }
-  return null
+/** The owners, as a count; the names are one hover away. */
+function ownersTitle(ticket) {
+  const names = ticket.owners.join('، ')
+  return ticket.owners_more ? `${names} +${ticket.owners_more} more` : names
 }
 
-function QueueRow({ ticket, isNext }) {
+/** Status is words in a tag, never a colour alone: red "late", orange
+ * "due soon". */
+function Tags({ ticket }) {
+  return (
+    <>
+      {ticket.late > 0 && (
+        <span className="h-tag late">
+          <Clock3 size={12} aria-hidden="true" />
+          {ticket.late} late
+        </span>
+      )}
+      {ticket.due_soon > 0 && (
+        <span className="h-tag soon">
+          <Clock3 size={12} aria-hidden="true" />
+          {ticket.due_soon} due soon
+        </span>
+      )}
+    </>
+  )
+}
+
+function QueueRow({ ticket }) {
   const age = ageText(ticket)
-  const label = [
+  const owners = ticket.owners_total || 0
+  const spoken = [
     ticket.short_label,
-    isNext ? 'up next' : null,
-    dotsLabel({ onTime: ticket.on_time, dueSoon: ticket.due_soon, late: ticket.late }),
+    unitText(ticket.count, ticket.unit || 'items'),
+    ticket.late ? `${ticket.late} late` : null,
+    ticket.due_soon ? `${ticket.due_soon} due soon` : null,
     age ? age.toLowerCase() : null,
+    owners ? plural(owners, 'owner', 'owners') : null,
   ]
     .filter(Boolean)
     .join(', ')
   return (
-    <Link
-      to={ticket.url}
-      className={`h-q ${isNext ? 'next' : ''}`.trim()}
-      aria-label={label}
-      data-queue={ticket.queue_key}
-    >
+    <Link to={ticket.url} className="h-q" aria-label={spoken} data-queue={ticket.queue_key}>
+      {/* The name and the count own the first line, so the name is never
+          squeezed into an ellipsis; tags, age and owners go on the line under. */}
       <span className="h-qt" aria-hidden="true">
-        <span className="h-qn">
-          <span>{ticket.short_label}</span>
-          {isNext && <span className="h-next-badge">Up next</span>}
-        </span>
-        <StatusTag ticket={ticket} />
+        <span className="h-qn">{ticket.short_label}</span>
         <span className="h-qc">{ticket.count}</span>
       </span>
-      <ItemDots onTime={ticket.on_time} dueSoon={ticket.due_soon} late={ticket.late} />
       <span className="h-qm" aria-hidden="true">
-        {ticket.owners.length > 0 && (
-          <>
-            <span className="h-owners" dir="auto" title={ticket.owners.join('، ')}>
-              {ticket.owners.join('، ')}
-            </span>
-            {ticket.owners_more > 0 && <span>+{ticket.owners_more}</span>}
-            {age && <span className="h-sep">·</span>}
-          </>
-        )}
+        <Tags ticket={ticket} />
         {age && <span>{age}</span>}
+        {owners > 0 && (
+          <span className="h-owners" title={ownersTitle(ticket)}>
+            {plural(owners, 'owner', 'owners')}
+          </span>
+        )}
       </span>
     </Link>
   )
 }
 
-/** The running month's drive-test plan: one dot per planned site, filled
- * as delivered (a meter beyond PLAN_DOTS_MAX sites). */
+/** The running month's drive-test plan: delivered against planned. */
 function PlanRow({ plan }) {
   const { pip, delivered, month_name: month, days_left: daysLeft } = plan
-  const left = `${daysLeft} ${daysLeft === 1 ? 'day' : 'days'} left`
+  const left = `${plural(daysLeft, 'day', 'days')} left`
   if (!pip) {
     return (
-      <Link to="/monthly-plan" className="h-q" aria-label={`${month} plan: no approved plan yet, ${delivered} sites delivered, ${left}`}>
+      <Link
+        to="/monthly-plan"
+        className="h-q"
+        aria-label={`${month} plan: no approved plan yet, ${delivered} sites delivered, ${left}`}
+      >
         <span className="h-qt" aria-hidden="true">
-          <span className="h-qn"><span>{month} plan</span></span>
+          <span className="h-qn">{month} plan</span>
         </span>
         <span className="h-qm" aria-hidden="true">No approved plan yet · {delivered} delivered · {left}</span>
       </Link>
     )
   }
-  const pct = Math.round((delivered / pip) * 100)
-  const filled = Math.min(delivered, pip)
+  const pct = Math.min(100, Math.round((delivered / pip) * 100))
   return (
     <Link
       to="/monthly-plan"
       className="h-q"
-      aria-label={`${month} plan: ${delivered} of ${pip} sites delivered, ${pct} percent, ${left}`}
+      aria-label={`${month} plan: ${delivered} of ${pip} sites delivered, ${left}`}
     >
       <span className="h-qt" aria-hidden="true">
-        <span className="h-qn"><span>{month} plan</span></span>
-        <span className="h-qc">{pct}<small>%</small></span>
+        <span className="h-qn">{month} plan</span>
       </span>
-      {pip <= PLAN_DOTS_MAX ? (
-        <span className="h-plan-dots" aria-hidden="true" data-testid="plan-dots">
-          {Array.from({ length: pip }, (_, i) => (
-            <i key={i} className={i < filled ? 'done' : undefined} />
-          ))}
-        </span>
-      ) : (
-        <span className="h-plan-meter" aria-hidden="true">
-          <i style={{ width: `${Math.min(100, pct)}%` }} />
-        </span>
-      )}
-      <span className="h-qm" aria-hidden="true">{delivered} of {pip} sites delivered · {left}</span>
+      <span className="h-plan-bar" aria-hidden="true" data-testid="plan-bar">
+        <i style={{ width: `${pct}%` }} />
+      </span>
+      <span className="h-qm" aria-hidden="true">
+        {delivered} of {pip} sites delivered · {left}
+      </span>
     </Link>
   )
 }
 
-export default function WorkCard({ group, upNext, plan }) {
+export default function WorkCard({ group, plan }) {
   const look = CARD_LOOK[group.key] || CARD_LOOK.drive_test
-  const Icon = look.icon
-  const tickets = group.tickets
-  const top = tickets[0]
-  const nextTicket = tickets.find((t) => t.queue_key === upNext)
-  const total = tickets.reduce((n, t) => n + t.count, 0)
-  const allOnTime = tickets.length > 0 && tickets.every((t) => t.late === 0 && t.due_soon === 0)
+  const action = cardAction(group, plan)
   const headingId = `home-card-${group.key}`
 
   return (
-    <motion.article className="h-card h-wc" aria-labelledby={headingId} variants={fadeUp}>
+    <motion.article
+      className="h-card h-wc"
+      data-area={look.area}
+      aria-labelledby={headingId}
+      variants={fadeUp}
+    >
       <div className="h-ch">
-        <span className="h-icon lg" data-tint={look.tint} aria-hidden="true">
-          <Icon size={19} strokeWidth={2} />
+        <span className="h-tile" aria-hidden="true">
+          <HomeIcon name={look.icon} size={24} tone="white" />
         </span>
         <h3 className="h-ct" id={headingId}>{group.label}</h3>
-        {top && (
-          <Link to={top.url} className="h-go" aria-label={`Open ${top.label}`}>
-            <ArrowUpRight size={16} strokeWidth={2.2} aria-hidden="true" />
-          </Link>
-        )}
+        {group.scope_label && <span className="h-scope">{group.scope_label}</span>}
       </div>
       <div className="h-rows">
-        {tickets.map((t) => (
-          <QueueRow key={t.queue_key} ticket={t} isNext={t.queue_key === upNext} />
+        {group.tickets.map((t) => (
+          <QueueRow key={t.queue_key} ticket={t} />
         ))}
-        {allOnTime && (
-          <span className="h-allok">
-            <Check size={15} strokeWidth={2.4} aria-hidden="true" />
-            All {total} on time
-          </span>
-        )}
-        {tickets.length === 0 && !plan && (
+        {group.tickets.length === 0 && !plan && (
           <span className="h-card-empty">
-            <CircleCheck size={16} strokeWidth={2} aria-hidden="true" />
+            <CircleCheck size={16} aria-hidden="true" />
             Nothing waiting on you
           </span>
         )}
         {plan && <PlanRow plan={plan} />}
       </div>
-      {top && (
+      {action && (
         <div className="h-cf">
-          {/* The page's one primary action lives in the card that holds the
-              Up-next queue; every other card gets a quiet button. */}
-          {nextTicket ? (
-            <Link to={nextTicket.url} className="h-pill primary" data-primary="true">
-              <span>Start with {nextTicket.short_label}</span>
-              <ArrowRight size={16} strokeWidth={2.4} aria-hidden="true" />
-            </Link>
-          ) : (
-            <Link to={top.url} className="h-pill outline">
-              <span>{top.label}</span>
-              <ArrowRight size={16} strokeWidth={2.4} aria-hidden="true" />
-            </Link>
-          )}
+          <Link to={action.to} className="h-btn">
+            <span>{action.label}</span>
+            <ArrowRight size={16} aria-hidden="true" />
+          </Link>
         </div>
       )}
     </motion.article>

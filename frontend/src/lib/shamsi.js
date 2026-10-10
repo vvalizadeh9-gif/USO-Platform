@@ -168,3 +168,14 @@ export function shamsiDayLabel(value) {
   if (!(year >= FIRST_SHAMSI_YEAR && year <= LAST_SHAMSI_YEAR)) return null
   return toPersianDigits(`${year}/${part('month')}/${part('day')}`)
 }
+
+/**
+ * "۱۷ مهر ۱۴۰۵" from the server's "1405-07-17": a label, not a conversion --
+ * the server's calendar decided the day. Null for anything else.
+ */
+export function shamsiLongLabel(isoShamsi) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(isoShamsi || '')
+  if (!m) return null
+  const [, year, month, day] = m
+  return toPersianDigits(`${Number(day)} ${shamsiMonthName(Number(month))} ${year}`)
+}

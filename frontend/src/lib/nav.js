@@ -12,10 +12,7 @@
  * endpoint re-checks the role server-side.
  */
 import {
-  Activity,
   Briefcase,
-  CalendarDays,
-  CarFront,
   ClipboardCheck,
   FileSpreadsheet,
   House,
@@ -26,7 +23,7 @@ import {
   Users,
   Wrench,
 } from 'lucide-react'
-import { ACTION_CENTER_ROLES, CATEGORY_OWNER_ROLES, KPI_ROLES, MONTHLY_PLAN_ROLES } from './roles'
+import { ACTION_CENTER_ROLES, CATEGORY_OWNER_ROLES, HOME_ROLES, KPI_ROLES, MONTHLY_PLAN_ROLES } from './roles'
 
 // The sidebar, grouped by project: each project's dashboard sits beside the
 // screens where that project's work is done, so a person finds the numbers
@@ -54,13 +51,13 @@ export const NAV_SECTIONS = [
     // process.
     label: 'Today',
     items: [
-      { to: '/my-fix-queue', label: 'My Fix Queue', icon: Wrench, roles: CATEGORY_OWNER_ROLES, app: { group: 'rollout', tint: 'red' } },
+      { to: '/my-fix-queue', label: 'My Fix Queue', icon: Wrench, roles: CATEGORY_OWNER_ROLES, app: { group: 'rollout', label: 'My fix queue', glyph: 'wrench' } },
       // UEP Home, the landing page. It is its own full-width shell, so this
       // is the way back to it from every other page.
-      { to: '/home', label: 'Home', icon: House, roles: ACTION_CENTER_ROLES },
+      { to: '/home', label: 'Home', icon: House, roles: HOME_ROLES },
       // Not for Regional Manager or Viewer (their home is a dashboard), nor
       // Admin: ACTION_CENTER_ROLES is the list the server serves the board to.
-      { to: '/action-center', label: 'Action Center', icon: Inbox, key: 'action', roles: ACTION_CENTER_ROLES, app: { group: 'rollout', tint: 'slate' } },
+      { to: '/action-center', label: 'Action Center', icon: Inbox, key: 'action', roles: ACTION_CENTER_ROLES },
     ],
   },
   {
@@ -70,21 +67,21 @@ export const NAV_SECTIONS = [
     // screens that happen to be next to each other.
     label: 'Drive Test',
     items: [
-      { to: '/reports/drive-test', label: 'Dashboard', icon: LayoutDashboard, app: { group: 'insights', label: 'Drive Test dashboard', tint: 'violet' } },
+      { to: '/reports/drive-test', label: 'Dashboard', icon: LayoutDashboard, app: { group: 'insights', label: 'Drive test dashboard', glyph: 'bars' } },
       // Two shapes behind Monthly Plan: the contractor's own form, and the
       // month's queue for everyone with an oversight interest in it. Admin is
       // absent from MONTHLY_PLAN_ROLES, which is what keeps it out of their
       // sidebar.
-      { to: '/monthly-plan', label: 'Monthly Plan', step: true, roles: MONTHLY_PLAN_ROLES, app: { group: 'office', icon: CalendarDays, tint: 'teal' } },
-      { to: '/health-check', label: 'Health Check', step: true, roles: ['PM', 'Coordinator'], key: 'hc', app: { group: 'rollout', icon: Activity, tint: 'blue' } },
-      { to: '/my-health-check', label: 'My Health Check', step: true, roles: ['Contractor'], app: { group: 'rollout', icon: Activity, tint: 'blue' } },
+      { to: '/monthly-plan', label: 'Monthly Plan', step: true, roles: MONTHLY_PLAN_ROLES, app: { group: 'office', label: 'Monthly plan', glyph: 'calendarSquare' } },
+      { to: '/health-check', label: 'Health Check', step: true, roles: ['PM', 'Coordinator'], key: 'hc', app: { group: 'rollout', label: 'Health check', glyph: 'pulse' } },
+      { to: '/my-health-check', label: 'My Health Check', step: true, roles: ['Contractor'], app: { group: 'rollout', label: 'My health check', glyph: 'pulse' } },
       // Same two roles as Health Check: assigning a drive test and approving
       // one are the same authority as reviewing a health check.
-      { to: '/drive-test', label: 'Drive Test', step: true, roles: ['PM', 'Coordinator'], key: 'dt', app: { group: 'rollout', icon: CarFront, tint: 'blue' } },
+      { to: '/drive-test', label: 'Drive Test', step: true, roles: ['PM', 'Coordinator'], key: 'dt', app: { group: 'rollout', label: 'Drive test', glyph: 'car' } },
       // One place for a contractor to work instead of knowing which sites to
       // open on Work Items -- the same reason My Health Check exists.
-      { to: '/my-drive-tests', label: 'My Drive Tests', step: true, roles: ['Contractor'], key: 'mydt', app: { group: 'rollout', icon: CarFront, tint: 'blue' } },
-      { to: '/work-items', label: 'Work Items', icon: ListChecks, end: true, hideRoles: ['Admin'], app: { group: 'rollout', tint: 'slate' } },
+      { to: '/my-drive-tests', label: 'My Drive Tests', step: true, roles: ['Contractor'], key: 'mydt', app: { group: 'rollout', label: 'My drive tests', glyph: 'car' } },
+      { to: '/work-items', label: 'Work Items', icon: ListChecks, end: true, hideRoles: ['Admin'], app: { group: 'rollout', label: 'Work items', glyph: 'checklist' } },
     ],
   },
   {
@@ -92,8 +89,8 @@ export const NAV_SECTIONS = [
     // village (pages/mywork/MyWork.jsx) -- so it sits with its dashboard.
     label: 'Acceptance',
     items: [
-      { to: '/reports/acceptance', label: 'Dashboard', icon: ClipboardCheck, app: { group: 'insights', label: 'Acceptance dashboard', tint: 'violet' } },
-      { to: '/my-work', label: 'My Work', icon: Briefcase, hideRoles: ['Admin'], key: 'mywork', app: { group: 'rollout', tint: 'violet' } },
+      { to: '/reports/acceptance', label: 'Dashboard', icon: ClipboardCheck, app: { group: 'insights', label: 'Acceptance dashboard', glyph: 'pie' } },
+      { to: '/my-work', label: 'My Work', icon: Briefcase, hideRoles: ['Admin'], key: 'mywork', app: { group: 'rollout', label: 'My work', glyph: 'briefcase' } },
     ],
   },
   {
@@ -101,11 +98,11 @@ export const NAV_SECTIONS = [
     items: [
       // Admin is absent from KPI_ROLES, which keeps this out of their sidebar
       // -- and the server refuses them every endpoint behind it.
-      { to: '/reports/kpi', label: 'Roles Performance', icon: Users, roles: KPI_ROLES, app: { group: 'insights', tint: 'violet' } },
+      { to: '/reports/kpi', label: 'Roles Performance', icon: Users, roles: KPI_ROLES, app: { group: 'insights', label: 'Roles performance', glyph: 'people' } },
       // Same roles, and for the same reason: it reads the same villages under
       // the same scope rule, and the server refuses Admin every endpoint
       // behind it.
-      { to: '/reports/gaps', label: 'Lifecycle Gaps', icon: Link2Off, roles: KPI_ROLES, app: { group: 'insights', tint: 'violet' } },
+      { to: '/reports/gaps', label: 'Lifecycle Gaps', icon: Link2Off, roles: KPI_ROLES, app: { group: 'insights', label: 'Lifecycle gaps', glyph: 'brokenLink' } },
     ],
   },
   {
@@ -114,24 +111,25 @@ export const NAV_SECTIONS = [
       // The monthly Mojri reconciliation. Unlike the dashboards, this one
       // writes. PM only, as the server has it -- Admin takes the template
       // from the Admin Console.
-      { to: '/mojri-tracker', label: 'Mojri Tracker', icon: FileSpreadsheet, roles: ['PM'], app: { group: 'office', tint: 'teal' } },
+      { to: '/mojri-tracker', label: 'Mojri Tracker', icon: FileSpreadsheet, roles: ['PM'], app: { group: 'office', label: 'Mojri tracker', glyph: 'grid' } },
     ],
   },
 ]
 
 // UEP Home's Apps panel: the same items, regrouped by what a person goes there
-// to do. An item with `app` is listed there under `app.group`, with an
-// optional `app.label` (the sidebar says "Dashboard" under a heading; the
-// panel has no heading to lean on), `app.icon` (the lifecycle steps have none
-// in the sidebar) and `app.tint`. Who sees it is still navItemVisible, so the
-// panel and the sidebar cannot disagree.
+// to do. An item with `app` is listed there under `app.group`, with its own
+// `app.label` in sentence case (the sidebar says "Dashboard" under a heading;
+// the panel has no heading to lean on) and `app.glyph`, a name from
+// pages/home/homeIcons.jsx drawn white on the group's colour tile. Who sees it
+// is still navItemVisible, so the panel and the sidebar cannot disagree. The
+// Action Center is not listed: Home's own figures open it.
 export const APP_GROUPS = [
   { key: 'rollout', label: 'Rollout' },
   { key: 'insights', label: 'Insights' },
   { key: 'office', label: 'Programme office' },
 ]
 
-/** The Apps panel for this role: [{ key, label, apps: [{to, label, icon, tint}] }],
+/** The Apps panel for this role: [{ key, label, apps: [{to, label, glyph}] }],
  * groups with nothing visible left out. */
 export function appsFor(roleName) {
   const items = NAV_SECTIONS.flatMap((section) => section.items).filter(
@@ -144,8 +142,7 @@ export function appsFor(roleName) {
       .map((item) => ({
         to: item.to,
         label: item.app.label || item.label,
-        icon: item.app.icon || item.icon,
-        tint: item.app.tint,
+        glyph: item.app.glyph,
       })),
   })).filter((group) => group.apps.length > 0)
 }

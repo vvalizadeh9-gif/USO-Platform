@@ -20,8 +20,8 @@ def home_summary(
 ) -> HomeSummaryOut:
     """Everything the Home page shows, in one response.
 
-    The same roles as the Action Center board, refused the same way: a
-    Regional Manager, Viewer or Admin gets 403, not an empty page.
+    The Action Center board's roles and Regional Managers; a Viewer or Admin
+    gets 403, not an empty page.
     """
     try:
         return HomeSummaryOut(**home.summary_for(db, user))

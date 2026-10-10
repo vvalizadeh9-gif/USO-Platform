@@ -3,10 +3,11 @@ import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 // UEP Home. Every figure comes from GET /home/summary; these tests hold the
-// page to the approved design's rules: exactly one primary button, in the
-// card that holds the Up-next queue (which the API names, not the page); the
-// dot rule with a spoken equivalent; apps listed by the sidebar's own rule;
-// and loading, empty and error states that keep the layout.
+// page to the approved design's rules: no queue singled out (no "Up next",
+// one neutral button per card), status as words in a tag, every KPI a link
+// with a 14-day trend described in words, owners as a count, badges that say
+// what they add up, the Shamsi date in Persian digits, and loading, empty and
+// error states that keep the layout.
 
 const mockApi = vi.hoisted(() => ({ get: vi.fn() }))
 vi.mock('../api/client', () => ({ default: mockApi }))
@@ -22,45 +23,67 @@ const Home = (await import('./Home')).default
 const DAY = 86400000
 const daysAgo = (d) => new Date(Date.now() - d * DAY - 3600000).toISOString()
 
-const ticket = (queue_key, short_label, label, { on_time = 0, due_soon = 0, late = 0, age = 3, url, owners = [], more = 0 } = {}) => ({
-  queue_key, short_label, label,
+const ticket = (queue_key, short_label, label, {
+  on_time = 0, due_soon = 0, late = 0, age = 3, url, owners = [], more = 0, unit = 'sites',
+} = {}) => ({
+  queue_key, short_label, label, unit,
   count: on_time + due_soon + late, on_time, due_soon, late,
   oldest_started_at: daysAgo(age), earliest_due_at: null, date_kind: 'since',
-  url: url || `/queue/${queue_key}`, owners, owners_more: more,
+  url: url || `/queue/${queue_key}`, owners, owners_more: more, owners_total: owners.length + more,
 })
 
+const series = (...values) => [...Array(14 - values.length).fill(null), ...values]
+
 function summary(overrides = {}) {
+  const scope = overrides.scope_label || 'All project'
   const groups = overrides.groups || [
     {
-      key: 'drive_test', label: 'Drive test',
+      key: 'drive_test', label: 'Drive test', scope_label: null,
       tickets: [
         ticket('dt_review', 'DT review', 'Review DT results', { on_time: 6, late: 3, age: 21, url: '/drive-test?tab=review', owners: ['پیشرو فن', 'آرین'], more: 7 }),
-        ticket('hc_review', 'HC review', 'Review HC results', { on_time: 4, late: 2, age: 18, url: '/health-check?tab=review' }),
-        ticket('dt_assign', 'DT assignment', 'Assign drive tests', { on_time: 28, due_soon: 3, late: 1, age: 16, url: '/drive-test?tab=assignment' }),
+        ticket('hc_review', 'HC review', 'Review HC results', { on_time: 4, due_soon: 2, age: 9, url: '/health-check?tab=review' }),
       ],
     },
     {
-      key: 'acceptance', label: 'Acceptance',
-      tickets: [ticket('ict_to_validate', 'ICT filings', 'Validate contractor filings', { on_time: 3, url: '/my-work?authority=ICT&tab=filled' })],
+      key: 'acceptance', label: 'Acceptance', scope_label: scope,
+      tickets: [
+        ticket('ict_pending', 'Pending ICT', 'Open ICT acceptance', { on_time: 5, late: 2, unit: 'villages', url: '/my-work?authority=ICT' }),
+        ticket('cra_pending', 'Pending CRA', 'Open CRA acceptance', { on_time: 0, unit: 'villages', url: '/my-work?authority=CRA' }),
+      ],
     },
     {
-      key: 'plans', label: 'Plans',
+      key: 'plans', label: 'Plans', scope_label: null,
       tickets: [ticket('plans_approve', 'Plan approvals', 'Approve plans', { due_soon: 2, url: '/monthly-plan?tab=plans' })],
     },
   ]
   const tickets = groups.flatMap((g) => g.tickets)
   const sum = (k) => tickets.reduce((n, t) => n + t[k], 0)
+  const badges = {}
+  for (const t of tickets.filter((x) => x.count)) {
+    const path = t.url.split('?')[0]
+    badges[path] = badges[path] || { count: 0, parts: [] }
+    badges[path].count += t.count
+    badges[path].parts.push({ label: t.short_label, count: t.count })
+  }
   return {
-    role: 'PM', scope_label: 'All provinces', generated_at: new Date().toISOString(),
+    role: 'PM', scope_label: scope, generated_at: new Date().toISOString(),
+    shamsi_date: '1405-07-17',
     due_soon_days: 3, sla_uniform_days: 14, sla_days: { dt_review: 14 },
     totals: {
       pending: sum('count'), queues: tickets.length, overdue: sum('late'), due_soon: sum('due_soon'),
-      pending_week_delta: 4, overdue_week_delta: -2, done_today: 6, done_yesterday: 4,
+      pending_week_delta: 4, overdue_week_delta: -2, due_soon_week_delta: null,
+      done_today: 6, done_yesterday: 4,
     },
-    up_next: 'dt_review',
+    trends: {
+      days: Array.from({ length: 14 }, (_, i) => `2026-09-${String(26 + i).padStart(2, '0')}`),
+      pending: series(20, 22, sum('count')),
+      overdue: series(9, 7, sum('late')),
+      due_soon: series(sum('due_soon')),
+      done: series(3, 4, 6),
+    },
     groups,
     plan: { stream: 'DT', shamsi_year: 1405, shamsi_month: 7, month_name: 'Mehr', pip: 64, delivered: 41, days_left: 13 },
-    app_badges: { '/drive-test': 41, '/health-check': 6, '/my-work': 3, '/monthly-plan': 2 },
+    app_badges: badges,
     ...overrides,
   }
 }
@@ -82,6 +105,8 @@ async function renderHome(data = summary()) {
   await screen.findByText('Your work')
 }
 
+const card = (name) => screen.getByRole('article', { name })
+
 beforeEach(() => {
   mockApi.get.mockReset()
   signedInAs('PM')
@@ -94,67 +119,130 @@ describe('UEP Home', () => {
     expect(mockApi.get).toHaveBeenCalledWith('/home/summary')
   })
 
-  it('shows the totals, with neutral trend chips', async () => {
+  it('dates the page in Shamsi too, in Persian digits', async () => {
+    await renderHome()
+    const shamsi = screen.getByTestId('shamsi-date')
+    expect(shamsi).toHaveTextContent('۱۷ مهر ۱۴۰۵')
+    expect(shamsi).toHaveAttribute('lang', 'fa')
+    expect(shamsi).toHaveAttribute('dir', 'rtl')
+  })
+
+  it('makes every figure a link to its list, with a neutral change badge', async () => {
     await renderHome()
     const kpis = screen.getByRole('region', { name: 'Your numbers' })
-    expect(within(kpis).getByText('52')).toBeInTheDocument()
-    expect(within(kpis).getByLabelText('up 4 this week')).toBeInTheDocument()
-    expect(within(kpis).getByLabelText('down 2')).toBeInTheDocument()
-    expect(within(kpis).getByText(/past the 14-day SLA/)).toBeInTheDocument()
+    const links = within(kpis).getAllByRole('link')
+    expect(links.map((a) => a.getAttribute('href'))).toEqual([
+      '/action-center', '/action-center?view=overdue', '/action-center', '/action-center',
+    ])
+    expect(within(links[0]).getByText('24')).toBeInTheDocument()
+    expect(within(kpis).getByLabelText('Up 4 on last week')).toHaveTextContent('▲ 4')
+    expect(within(kpis).getByLabelText('Down 2 on last week')).toHaveTextContent('▼ 2')
+    expect(within(kpis).getByLabelText('Up 2 on yesterday')).toBeInTheDocument()
+    // No comparison point, no badge.
+    expect(within(links[2]).queryByText(/▲|▼/)).toBeNull()
+    // The old captions are gone.
+    expect(within(kpis).queryByText(/SLA|within 3 days|queues|vs yesterday/)).toBeNull()
+    expect(screen.getByText('Trend lines show the last 14 days')).toBeInTheDocument()
   })
 
-  it('has exactly one primary button, in the card holding the Up-next queue', async () => {
+  it('draws a 14-day trend for each figure, described in words', async () => {
     await renderHome()
-    const primaries = document.querySelectorAll('.h-pill.primary')
-    expect(primaries).toHaveLength(1)
-    expect(primaries[0]).toHaveTextContent('Start with DT review')
-    expect(primaries[0]).toHaveAttribute('href', '/drive-test?tab=review')
-    expect(primaries[0].closest('article')).toHaveAccessibleName('Drive test')
+    const kpis = screen.getByRole('region', { name: 'Your numbers' })
+    expect(within(kpis).getByRole('img', { name: 'Overdue over the last 14 days, falling from 9 to 5' }))
+      .toBeInTheDocument()
+    expect(within(kpis).getByRole('img', { name: 'Waiting on you over the last 14 days, rising from 20 to 24' }))
+      .toBeInTheDocument()
+    expect(within(kpis).getAllByRole('img')).toHaveLength(4)
   })
 
-  it('highlights whichever queue the API names as next', async () => {
-    await renderHome(summary({ up_next: 'plans_approve' }))
-    expect(document.querySelector('[data-queue="plans_approve"]')).toHaveClass('next')
-    expect(document.querySelector('[data-queue="dt_review"]')).not.toHaveClass('next')
-    expect(document.querySelector('.h-pill.primary')).toHaveTextContent('Start with Plan approvals')
+  it('singles no queue out: no Up next, and one same button per card', async () => {
+    await renderHome()
+    expect(screen.queryByText(/up next/i)).toBeNull()
+    expect(document.querySelector('.h-pill.primary, [data-primary]')).toBeNull()
+    const buttons = ['Drive test', 'Acceptance', 'Plans'].map((name) => card(name).querySelector('.h-cf a'))
+    buttons.forEach((b) => expect(b).toHaveClass('h-btn'))
+    expect(buttons.map((b) => b.textContent)).toEqual(['Review DT results', 'Open acceptance', 'Approve plans'])
   })
 
   it('gives every queue row its figures in words', async () => {
     await renderHome()
     expect(
-      screen.getByRole('link', { name: 'DT review, up next, 9 items: 6 on time, 0 due soon, 3 late, oldest 21 days' }),
+      screen.getByRole('link', { name: 'DT review, 9 sites, 3 late, oldest 21 days, 9 owners' }),
     ).toHaveAttribute('href', '/drive-test?tab=review')
+    expect(screen.getByRole('link', { name: 'HC review, 6 sites, 2 due soon, oldest 9 days' })).toBeInTheDocument()
   })
 
-  it('draws dots up to 30 items and a bar beyond', async () => {
+  it('says status in words, in tags, and draws no dots or bars', async () => {
     await renderHome()
-    const row = (key) => document.querySelector(`[data-queue="${key}"]`)
-    expect(within(row('dt_review')).getByTestId('item-dots')).toBeInTheDocument()
-    expect(within(row('dt_assign')).getByTestId('item-bar')).toBeInTheDocument()
+    const row = document.querySelector('[data-queue="dt_review"]')
+    expect(within(row).getByText('3 late')).toHaveClass('h-tag', 'late')
+    expect(within(document.querySelector('[data-queue="hc_review"]')).getByText('2 due soon')).toHaveClass('h-tag', 'soon')
+    expect(document.querySelector('.item-dots, .item-bar, .h-plan-dots')).toBeNull()
   })
 
-  it('names who holds the items, in Farsi, with the rest as a count', async () => {
+  it('counts who holds the items, with their names on hover', async () => {
     await renderHome()
-    expect(screen.getByText('پیشرو فن، آرین')).toBeInTheDocument()
-    expect(screen.getByText('+7')).toBeInTheDocument()
+    const owners = document.querySelector('[data-queue="dt_review"] .h-owners')
+    expect(owners).toHaveTextContent('9 owners')
+    expect(owners).toHaveAttribute('title', 'پیشرو فن، آرین +7 more')
   })
 
-  it("shows the month's plan as delivered of planned", async () => {
+  it('shows Pending ICT and Pending CRA under Acceptance, with the scope', async () => {
     await renderHome()
-    expect(screen.getByRole('link', { name: 'Mehr plan: 41 of 64 sites delivered, 64 percent, 13 days left' }))
+    const acceptance = card('Acceptance')
+    expect([...acceptance.querySelectorAll('[data-queue]')].map((r) => r.dataset.queue))
+      .toEqual(['ict_pending', 'cra_pending'])
+    expect(within(acceptance).getByText('All project')).toHaveClass('h-scope')
+    expect(within(acceptance).getByRole('link', { name: 'Pending CRA, 0 villages' })).toBeInTheDocument()
+  })
+
+  it.each([
+    ['Coordinator', 'Your regions'],
+    ['Contractor', 'Your sites'],
+    ['RegionalManager', 'Your regions'],
+  ])('labels the Acceptance scope for a %s', async (role, scope) => {
+    signedInAs(role)
+    await renderHome(summary({ role, scope_label: scope }))
+    expect(within(card('Acceptance')).getByText(scope)).toBeInTheDocument()
+  })
+
+  it("shows the month's plan as delivered of planned, on a bar", async () => {
+    await renderHome()
+    expect(screen.getByRole('link', { name: 'Mehr plan: 41 of 64 sites delivered, 13 days left' }))
       .toBeInTheDocument()
-    expect(screen.getByTestId('plan-dots').querySelectorAll('i.done')).toHaveLength(41)
+    expect(screen.getByTestId('plan-bar').querySelector('i')).toHaveStyle({ width: '64%' })
   })
 
-  it('says all is on time when nothing in a card is late or due soon', async () => {
+  it('has no "all on time" block any more', async () => {
     await renderHome()
-    expect(screen.getByText('All 3 on time')).toBeInTheDocument()
+    expect(screen.queryByText(/on time$/)).toBeNull()
+  })
+
+  it('gives a regional manager plain figures and no Done today', async () => {
+    signedInAs('RegionalManager')
+    const data = summary({ role: 'Regional manager', scope_label: 'Your regions' })
+    data.groups = data.groups.filter((g) => g.key === 'acceptance')
+    data.totals = { ...data.totals, done_today: null, done_yesterday: null }
+    data.trends = { ...data.trends, done: null }
+    await renderHome(data)
+    const kpis = screen.getByRole('region', { name: 'Your numbers' })
+    expect(within(kpis).queryAllByRole('link')).toHaveLength(0)
+    expect(within(kpis).queryByText('Done today')).toBeNull()
+    expect(within(kpis).getAllByRole('img')).toHaveLength(3)
+  })
+
+  it('uses no green anywhere', async () => {
+    await renderHome()
+    const green = /#(0?[0-9a-f]{2})?(107C10|0E700E|13A10E|16A34A|22C55E|00FF00)|(^|\W)green(\W|$)/i
+    for (const el of document.querySelectorAll('*')) {
+      expect(el.getAttribute('style') || '').not.toMatch(green)
+      for (const attr of ['fill', 'stroke']) expect(el.getAttribute(attr) || '').not.toMatch(green)
+    }
   })
 
   it('says so when nothing is waiting', async () => {
-    await renderHome(summary({ groups: [], up_next: null, plan: null, app_badges: {} }))
+    await renderHome(summary({ groups: [], plan: null }))
     expect(screen.getByText('Nothing waiting on you')).toBeInTheDocument()
-    expect(document.querySelectorAll('.h-pill.primary')).toHaveLength(0)
   })
 
   it('draws the final layout while loading', async () => {
@@ -195,20 +283,28 @@ describe('UEP Home', () => {
 describe('the Apps panel', () => {
   const apps = () => screen.getByRole('complementary', { name: 'Apps' })
 
-  it("lists a PM's apps, with badges from the tickets", async () => {
+  it("lists a PM's apps in sentence case, with badges that say what they add up", async () => {
     await renderHome()
     const panel = apps()
-    expect(within(panel).getByRole('link', { name: 'Drive Test, 41 waiting' })).toBeInTheDocument()
-    expect(within(panel).getByRole('link', { name: 'Mojri Tracker' })).toBeInTheDocument()
-    expect(within(panel).queryByRole('link', { name: /My Drive Tests/ })).toBeNull()
+    const dt = within(panel).getByRole('link', { name: 'Drive test, 9 waiting: DT review 9' })
+    expect(dt.querySelector('.h-badge')).toHaveAttribute('title', 'DT review 9')
+    expect(within(panel).getByRole('link', { name: 'Mojri tracker' })).toBeInTheDocument()
+    expect(within(panel).getByRole('link', { name: 'Roles performance' })).toBeInTheDocument()
+    expect(within(panel).getByRole('link', { name: 'Drive test dashboard' })).toBeInTheDocument()
+    expect(within(panel).queryByRole('link', { name: /My drive tests/ })).toBeNull()
+  })
+
+  it('no longer lists the Action Center', async () => {
+    await renderHome()
+    expect(within(apps()).queryByRole('link', { name: /action center/i })).toBeNull()
   })
 
   it("lists a contractor's own apps and none of the staff's", async () => {
     signedInAs('Contractor')
-    await renderHome(summary({ role: 'Contractor' }))
+    await renderHome(summary({ role: 'Contractor', scope_label: 'Your sites' }))
     const panel = apps()
-    expect(within(panel).getByRole('link', { name: 'My Drive Tests' })).toBeInTheDocument()
-    expect(within(panel).queryByRole('link', { name: /^Drive Test(,|$)/ })).toBeNull()
-    expect(within(panel).queryByRole('link', { name: 'Mojri Tracker' })).toBeNull()
+    expect(within(panel).getByRole('link', { name: 'My drive tests' })).toBeInTheDocument()
+    expect(within(panel).queryByRole('link', { name: /^Drive test(,|$)/ })).toBeNull()
+    expect(within(panel).queryByRole('link', { name: 'Mojri tracker' })).toBeNull()
   })
 })

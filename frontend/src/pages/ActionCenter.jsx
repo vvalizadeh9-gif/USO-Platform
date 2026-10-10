@@ -1,5 +1,6 @@
 import { RefreshCw } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import api from '../api/client'
 import PageFrame from '../components/PageFrame'
 import { Banner, PageBar, Tabs } from '../components/ui'
@@ -22,7 +23,9 @@ export default function ActionCenter() {
   const [board, setBoard] = useState(null)
   const [failed, setFailed] = useState(false)
   const [loadedAt, setLoadedAt] = useState(null)
-  const [tab, setTab] = useState('all')
+  // ?view=overdue opens on the Overdue tab (Home's Overdue figure links here).
+  const [searchParams] = useSearchParams()
+  const [tab, setTab] = useState(() => (searchParams.get('view') === 'overdue' ? 'overdue' : 'all'))
   const reduced = usePrefersReducedMotion()
   const [entrance, setEntrance] = useState(() => !reduced)
   const animate = entrance && !reduced

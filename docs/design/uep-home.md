@@ -1,12 +1,138 @@
 # UEP Home — design
 
-Status: **built** (`GET /home/summary` in #132; the page in the follow-up). Source brief: `uep-home-landing-prompt.md`;
+Status: **built**, then redesigned to Microsoft 365 / Fluent 2 (§0). Source brief: `uep-home-landing-prompt.md`;
 approved screen: `design-previews/home/uep-home-design-reference.html`.
 
-Home is the landing page for PM, Coordinator, Contractor and problem owners.
+Home is the landing page for PM, Coordinator, Contractor and problem owners,
+and is open to Regional Managers from the sidebar.
 In one glance it shows how much is waiting on the user, what is late or due
-soon, the one thing to do next, and every app they can open. It reads the
+soon, how each has moved over 14 days, and every app they can open. It reads the
 Action Center's queue registry and adds nothing that could disagree with it.
+
+---
+
+## 0. The Microsoft 365 redesign (current)
+
+This section describes Home as it is now. Sections 1–9 below record the
+first build; where they disagree with this section, this section wins.
+
+### 0.1 Rules
+
+| Rule | What it means |
+|---|---|
+| **Status is text** | No coloured bars or dots. A row says "3 late" (red tag) or "2 due soon" (orange tag). Every number is black. |
+| **No green** | Green means approved in UEP, so nothing on Home is green, including the footer's status dot (grey). |
+| **No Up next** | No queue is singled out. Every card has one neutral button: Drive test → its top queue's action, Acceptance → "Open acceptance", Plans → "Approve plans" (or "Open monthly plan" with no queue). `board.up_next` was removed: Home was its only reader. |
+| **Totals are the cards** | `totals.pending == Σ ticket.count`, `totals.queues == number of tickets`, `overdue == Σ late`, `due_soon == Σ due_soon`; every app badge is the sum of its tickets and carries them as `parts`. The figures are summed from the tickets the response returns, never from the whole board. |
+| **SLA unchanged** | Late and due soon are the Action Center's rules, unchanged (`sla.item_status`). The product owner chose not to add a separate "backlog" status for items imported from CPM; that may come later. |
+
+### 0.2 Which queues Home shows
+
+Declared once, in `action_queues/types.py`:
+
+```python
+HOME_QUEUES = {
+    HomeGroup.ROLLOUT: None,                              # every board queue of HC + DT
+    HomeGroup.ACCEPTANCE: ("ict_pending", "cra_pending"), # the two headline queues only
+    HomeGroup.PLANS: None,
+}
+HOME_KEEPS_EMPTY = {HomeGroup.ACCEPTANCE}  # its two rows show even at 0
+```
+
+`registry.home_queues_for(role)` reads it. The detailed acceptance queues
+(follow-up, to file, to validate, re-file, corrections) stay on the Action
+Center board unchanged.
+
+**Pending ICT / Pending CRA** (`ict_pending`, `cra_pending`, unit
+*villages*, `on_board=False`): My Work's "remaining" population (هدف, drive
+test Done, on air; `my_work_query.base_select`, so each role's own scope)
+whose ICT (or CRA) side is not Approved, counted **once per site, site type
+and village code** (`sources/acceptance.one_per_village`: a village CPM lists
+for 3G and 4G on the same site is one village). Their clock is that side's
+own waiting clock (`my_work_query.waiting_since(authority)`: the last
+acceptance activity on that side, else the DT date); the codebase records no
+"entered pending" date. They are snapshotted daily like every queue but are
+not on the board or in the digest, where they would count villages twice.
+
+### 0.3 Roles and scope
+
+| Role | Home? | Lands on | Scope label | Done today |
+|---|---|---|---|---|
+| PM | yes | Home | All project | yes |
+| Coordinator | yes | Home | Your regions | yes |
+| Regional manager | **yes (new)** | Roles Performance (Home is in the sidebar) | Your regions (their provinces, `apply_work_item_scope`) | **hidden** |
+| Contractor | yes | Home | Your sites | yes |
+| Problem owner | unchanged | Home | "<role> fixes" | yes |
+| Viewer, Admin | no (403) | unchanged | — | — |
+
+A Regional Manager's Home is the Acceptance card (and the month's plan).
+They have no Action Center, so their KPI cells are figures, not links.
+`context.home_role(user)` decides; `board_role` is unchanged.
+
+### 0.4 Trends
+
+Each KPI has a 14-day series (`services/home_trends.py`), oldest first,
+ending today. Today's point is the live figure. An earlier day is `null`
+(drawn as a gap, never as zero) when that day's `action_daily_snapshot` rows
+do not cover **every** queue Home shows the user (no snapshot that day, or a
+day from before a queue existed), and, for due soon, when the rows predate
+the `due_soon` column (NULL). "Done" per day is
+`action_queues.done.done_per_day`, read from the domain tables, so it is
+known for all 14 days.
+
+Change badges: Waiting, Overdue and Due soon compare today with 7 days ago;
+Done today compares with yesterday. With no comparison point there is no
+badge.
+
+Migration `d4b6f8a1c357` adds `action_daily_snapshot.due_soon`. It is
+nullable on purpose: an old row's NULL means "not known", where 0 would
+claim "none were due soon".
+
+### 0.5 Tokens (Home scope, `styles/home.css`)
+
+| Token | Value |
+|---|---|
+| Page / card | `#F4F5F8` / `#FFFFFF`, edge `0 0 0 1px #DCDFE4, 0 2px 6px rgba(0,0,0,.05)` |
+| Lines | header `#E1E3E8`, inside cards `#ECEDEF`, button stroke `#C9CCD1` |
+| Neutral tint / row hover | `#EFF0F3` / `#F3F4F6` |
+| Text | primary `#1F1F1F`, secondary `#3D3D3D` (never lighter) |
+| Brand (`lib/theme.js`, overridable) | `#0F6CBD`, ink `#0C3B5E`, tint `#EBF3FC` |
+| Hero tile | `linear-gradient(135deg, #0F6CBD, #4F52B2)`, white text |
+| Tags | late `#B10E1C` on `#FDE7E9`; due soon `#A8420A` on `#FEEEE5` |
+| Area tiles | Drive test / Rollout `#2B88D8→#0F6CBD`; Acceptance / Insights `#7B83EB→#4F52B2`; Plans / Programme office `#C94FAE→#8E2483`, each with a 5–6% header band and a 14–16% band line |
+| Sparklines | `#0F6CBD` 2px over `rgba(15,108,189,.10)`; white over `rgba(255,255,255,.18)` on the hero |
+| Plan bar | delivered `#0F6CBD`, remaining `#E3E6EB`, 6px |
+| Radii | cards 12, hero 8, rows 8, buttons 6, tags/badges/search round |
+
+**Type** (Fluent 2 ramp, weights 400 and 600 only, `tabular-nums`):
+`'Segoe UI Variable Text', 'Segoe UI', 'Inter', system-ui`. Inter is bundled;
+no web font is ever fetched. Greeting 28/36, date 14/20, KPI label 16/22,
+KPI number 40/52, change badge 13/24, headings and card titles 20/28, queue
+name 16/22, queue count 28/36, tags 13, row text 14/20, buttons 14/20,
+captions 12–13. The Shamsi date is Vazirmatn in `<span lang="fa" dir="rtl">`.
+
+### 0.6 Icons
+
+`pages/home/homeIcons.jsx`: bold two-path line icons on a 24px grid, with a
+grey base stroke (`#616161`) and one accent (stroke or fill) in its own
+colour. The same drawing renders all white inside a colour tile. Apps pick
+theirs with `app.glyph` in `lib/nav.js`, beside a sentence-case `app.label`.
+`lucide-react` stays for small single-colour UI glyphs (search, arrows, the
+clock in a tag). The Action Center is no longer listed among the Apps: the
+KPI figures open it. Overdue opens `/action-center?view=overdue`; Due soon
+and Done open the whole board, which has no such views yet.
+
+### 0.7 The "268 in 6 queues" report
+
+The backend could not produce it: its totals were always the sum of the
+tickets it returned. The figures came from the hand-written e2e and
+screenshot fixture (`e2e/fixtures.js`). Its totals were typed in (268) while
+its tickets added up to 266, and its 4th Drive test row (DT assignment, 22)
+sat below the card's internal scroll fold: 266 − 22 = 244 visible. The
+fixture now sums its totals from its tickets, and an e2e test fails if any
+card hides a row at 1440×900. The new `HOME_QUEUES` rule is what could make
+the server disagree with its cards, and
+`test_queues_home_does_not_show_are_not_in_its_totals` holds it.
 
 ---
 

@@ -131,8 +131,14 @@ describe('where "/" lands', () => {
 })
 
 describe('the Home route', () => {
+  // A Regional Manager has a Home (the acceptance headline queues) but still
+  // lands on Roles Performance; Home is a link away.
+  it('opens Home for a Regional Manager who asks for it', async () => {
+    signedInAs('RegionalManager')
+    expect(await landOn('/home')).toBe('home')
+  })
+
   it.each([
-    ['RegionalManager', 'kpi'],
     ['Viewer', 'dt-dashboard'],
     ['Admin', 'admin'],
   ])('sends %s to their own landing instead of a Home they do not have', async (role, home) => {
