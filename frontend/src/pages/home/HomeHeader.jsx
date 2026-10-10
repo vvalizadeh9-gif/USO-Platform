@@ -18,7 +18,7 @@ function isMac() {
  * names the product. */
 function Mark() {
   return (
-    <svg width="34" height="34" viewBox="0 0 32 32" aria-hidden="true" focusable="false">
+    <svg width="30" height="30" viewBox="0 0 32 32" aria-hidden="true" focusable="false">
       <rect width="32" height="32" rx="10" fill="var(--brand)" />
       <g fill="none" stroke="#fff" strokeWidth="2.4" strokeLinecap="round">
         <path d="M9.5 15 A7.5 7.5 0 0 1 17 22.5" />
@@ -57,14 +57,14 @@ export default function HomeHeader({ user, logout }) {
         onClick={() => navigate(SEARCH_PATH)}
         aria-label={`Search sites (${shortcut})`}
       >
-        <Search size={18} strokeWidth={2.2} aria-hidden="true" />
+        <Search size={16} aria-hidden="true" />
         <span className="label">Search sites</span>
         <kbd aria-hidden="true">{shortcut}</kbd>
       </button>
       <div className="h-tools">
         {HELP_URL && (
           <a className="h-round" href={HELP_URL} target="_blank" rel="noreferrer" aria-label="Help">
-            <CircleHelp size={19} strokeWidth={2} aria-hidden="true" />
+            <CircleHelp size={18} aria-hidden="true" />
           </a>
         )}
         <AccountMenu user={user} initials={initialsOf(user?.full_name)} logout={logout} variant="avatar" />

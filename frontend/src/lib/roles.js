@@ -126,11 +126,21 @@ export function hasActionCenter(roleName) {
   return ACTION_CENTER_ROLES.includes(roleName)
 }
 
+// UEP Home: the board's roles, and Regional Managers (Home's headline
+// acceptance queues, inside their provinces). A Regional Manager still lands
+// on Roles Performance and opens Home from the navigation. Must agree with
+// home_role() in app/services/action_queues/context.py.
+export const HOME_ROLES = [...ACTION_CENTER_ROLES, 'RegionalManager']
+
+export function hasHome(roleName) {
+  return HOME_ROLES.includes(roleName)
+}
+
 // Where "/" lands for each role. Everyone who works a queue lands on UEP Home
 // (what is waiting, what is late, what to do next; the full board stays at
 // /action-center); Regional Manager on Roles Performance (My area), Viewer on
-// the Drive Test dashboard, Admin on the Admin Console. Home is served to the
-// same roles as the board -- GET /home/summary refuses the rest.
+// the Drive Test dashboard, Admin on the Admin Console. Home is served to
+// HOME_ROLES -- GET /home/summary refuses the rest.
 const HOME_BY_ROLE = {
   Admin: '/admin',
   RegionalManager: '/reports/kpi',

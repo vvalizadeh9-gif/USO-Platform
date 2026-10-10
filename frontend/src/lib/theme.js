@@ -2,19 +2,18 @@
 // nothing else. Status colours (late, due soon, done), data colours and
 // neutrals are fixed, so a tenant's theme can never make "late" look calm.
 //
-// The brand appears on the logo, the one primary button, the Up-next
-// highlight, the hero tile and the focus ring -- every one of them reads the
-// --brand* custom properties, so a theme is this one small object.
+// On UEP Home the brand appears on the logo, the hero tile, the sparklines,
+// the plan bar and the focus ring -- every one of them reads the --brand*
+// custom properties, so a theme is this one small object.
 
 /** UEP's own brand. The tokens in styles/home.css default to these. */
 export const DEFAULT_BRAND = Object.freeze({
-  // Cobalt's accent family (styles/app.css), so Home and every other page
-  // share one blue.
-  brand: '#2F5FD0',
-  brandHover: '#2451C0',
-  brandSoft: '#F2F6FE',
-  brandInk: '#1D3F99',
-  brand950: '#16306F',
+  // The Fluent 2 brand ramp (Microsoft 365's communication blue).
+  brand: '#0F6CBD',
+  brandHover: '#115EA3',
+  brandSoft: '#EBF3FC',
+  brandInk: '#0C3B5E',
+  brand950: '#0A2E4A',
 })
 
 const PROPERTY = {

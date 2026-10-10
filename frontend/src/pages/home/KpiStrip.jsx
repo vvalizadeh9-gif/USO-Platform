@@ -1,65 +1,88 @@
-import { ArrowDown, ArrowUp, CircleCheck, ClockAlert, Hourglass, Inbox } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import Sparkline from '../../components/Sparkline'
+import HomeIcon from './homeIcons'
 
 /**
- * A change, in a neutral chip: the arrow says which way, colour says nothing
- * (more waiting is bad, more done is good, so a colour would lie half the
- * time). Nothing at all when there is no figure to compare with.
+ * A change, in a neutral badge: the arrow says which way, colour says
+ * nothing (more waiting is bad, more done is good, so a colour would lie half
+ * the time). Nothing at all when there is no figure to compare with.
  */
-function Trend({ delta, suffix = '' }) {
+function Change({ delta, since }) {
   if (delta === null || delta === undefined) return null
-  if (delta === 0) {
-    return <span className="h-chip">No change{suffix}</span>
-  }
-  const Arrow = delta > 0 ? ArrowUp : ArrowDown
-  const words = `${delta > 0 ? 'up' : 'down'} ${Math.abs(delta)}${suffix}`
+  const words =
+    delta === 0 ? `No change on ${since}` : `${delta > 0 ? 'Up' : 'Down'} ${Math.abs(delta)} on ${since}`
   return (
-    <span className="h-chip" aria-label={words}>
-      <Arrow size={12} strokeWidth={2.6} aria-hidden="true" />
-      {Math.abs(delta)}
-      {suffix}
+    <span className="h-change" title={words} aria-label={words}>
+      {delta === 0 ? '0' : `${delta > 0 ? '▲' : '▼'} ${Math.abs(delta)}`}
     </span>
   )
 }
 
-/** One KPI. All four share this shape -- icon and label, figure, one line
- * of context -- so their labels, figures and footnotes line up. */
-function Cell({ icon: Icon, tint, label, value, tone, hero = false, children }) {
-  return (
-    <div className={`h-k ${hero ? 'h-hero' : ''}`.trim()}>
+/** One KPI: icon and label, the figure with its change, the 14-day line. A
+ * link to the list behind it, where this person has one. */
+function Cell({ icon, label, value, delta, since, series, to, hero = false }) {
+  const body = (
+    <>
       <span className="h-kl">
-        <span className="h-icon" data-tint={tint} aria-hidden="true">
-          <Icon size={17} strokeWidth={2} />
-        </span>
+        <HomeIcon name={icon} size={28} tone={hero ? 'white' : 'color'} />
         {label}
       </span>
-      <span className={`h-kv ${tone || ''}`.trim()}>{value}</span>
-      <span className="h-km">{children}</span>
-    </div>
+      <span className="h-kf">
+        <span className="h-kv">{value}</span>
+        <Change delta={delta} since={since} />
+      </span>
+      <Sparkline values={series} label={label} tone={hero ? 'white' : 'brand'} className="h-spark" />
+    </>
+  )
+  const className = `h-k ${hero ? 'h-hero' : ''}`.trim()
+  return to ? (
+    <Link to={to} className={className}>{body}</Link>
+  ) : (
+    <div className={className}>{body}</div>
   )
 }
 
-export default function KpiStrip({ totals, slaDays, dueSoonDays }) {
-  const queues = totals.queues === 1 ? '1 queue' : `${totals.queues} queues`
-  const doneDelta = totals.done_today - totals.done_yesterday
+// Where each figure opens. The Action Center has an Overdue view; it has no
+// due-soon or done view yet, so those open the whole board.
+const LINKS = {
+  pending: '/action-center',
+  overdue: '/action-center?view=overdue',
+  dueSoon: '/action-center',
+  done: '/action-center',
+}
+
+/**
+ * Home's four figures (three for a role with no "Done today"), each with its
+ * 14-day trend. `linked` is false for a role with no Action Center.
+ */
+export default function KpiStrip({ totals, trends, linked = true }) {
+  const to = (key) => (linked ? LINKS[key] : undefined)
+  const showDone = totals.done_today !== null && totals.done_today !== undefined
+  const doneDelta =
+    showDone && totals.done_yesterday !== null ? totals.done_today - totals.done_yesterday : null
   return (
-    <section className="h-card h-kpis" aria-label="Your numbers">
-      <Cell icon={Inbox} tint="blue" label="Waiting on you" value={totals.pending} hero>
-        <Trend delta={totals.pending_week_delta} suffix=" this week" />
-        in {queues}
-      </Cell>
-      {/* A status colour only when there is something to warn about: a red
-          or amber zero sends people looking for a problem that isn't there. */}
-      <Cell icon={ClockAlert} tint="red" label="Overdue" value={totals.overdue} tone={totals.overdue > 0 ? 'late' : ''}>
-        <Trend delta={totals.overdue_week_delta} />
-        {slaDays ? `past the ${slaDays}-day SLA` : 'past their SLA'}
-      </Cell>
-      <Cell icon={Hourglass} tint="amber" label="Due soon" value={totals.due_soon} tone={totals.due_soon > 0 ? 'soon' : ''}>
-        within {dueSoonDays} {dueSoonDays === 1 ? 'day' : 'days'}
-      </Cell>
-      <Cell icon={CircleCheck} tint="slate" label="Done today" value={totals.done_today}>
-        <Trend delta={doneDelta} />
-        vs yesterday
-      </Cell>
-    </section>
+    <div className="h-kpi-wrap">
+      <section className="h-card h-kpis" aria-label="Your numbers">
+        <Cell
+          hero icon="inbox" label="Waiting on you" value={totals.pending}
+          delta={totals.pending_week_delta} since="last week" series={trends.pending} to={to('pending')}
+        />
+        <Cell
+          icon="clock" label="Overdue" value={totals.overdue}
+          delta={totals.overdue_week_delta} since="last week" series={trends.overdue} to={to('overdue')}
+        />
+        <Cell
+          icon="hourglass" label="Due soon" value={totals.due_soon}
+          delta={totals.due_soon_week_delta} since="last week" series={trends.due_soon} to={to('dueSoon')}
+        />
+        {showDone && (
+          <Cell
+            icon="calendarCheck" label="Done today" value={totals.done_today}
+            delta={doneDelta} since="yesterday" series={trends.done || []} to={to('done')}
+          />
+        )}
+      </section>
+      <p className="h-kpi-note">Trend lines show the last {trends.days.length} days</p>
+    </div>
   )
 }

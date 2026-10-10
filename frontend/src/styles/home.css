@@ -1,56 +1,52 @@
-/* UEP Home (docs/design/uep-home.md). Everything is scoped to .uep-home: the
-   page's tokens are added beside Cobalt's, not over them, and no other page
-   reads them.
+/* UEP Home (docs/design/uep-home.md): Microsoft 365 / Fluent 2, light only.
+   Everything is scoped to .uep-home: the page's tokens sit beside Cobalt's,
+   not over them, and no other page reads them.
 
    Tenant brand: the only values an operator changes (lib/theme.js). The brand
-   appears on the logo, the one primary button, the Up-next highlight, the hero
-   tile and the focus ring -- nowhere else. */
+   appears on the logo, the hero tile, the sparklines, the plan bar and the
+   focus ring. Status is words in a tag -- red "late", orange "due soon" --
+   and every figure is black. No green anywhere: green means approved. */
 :root {
-  /* Cobalt's accent (app.css) is UEP's own brand. */
-  --brand: #2F5FD0;
-  --brand-hover: #2451C0;
-  --brand-soft: #F2F6FE;
-  --brand-ink: #1D3F99;
-  --brand-950: #16306F;
+  --brand: #0F6CBD;
+  --brand-hover: #115EA3;
+  --brand-soft: #EBF3FC;
+  --brand-ink: #0C3B5E;
+  --brand-950: #0A2E4A;
 }
 
 .uep-home {
-  /* Fixed neutrals and status, never per tenant: Cobalt's own values, so Home
-     reads as the same product as every other page. */
-  --h-ink: #141B2B;       /* --text */
-  --h-ink-2: #273244;
-  --h-muted: #3E4A5E;     /* 9:1 on white: secondary text stays easy to read all day */
-  --h-faint: #475569;     /* --text-secondary, 7.5:1 on white */
-  --h-border: #D5DCE6;    /* every card's edge, so white cards stand off the canvas */
-  --h-canvas: #EEF2F7;    /* --bg */
-  --h-surface: #FFFFFF;
-  --h-line: #EDF1F6;      /* --divider */
-  --h-outline: #C8D1DE;   /* --control-border */
-  --h-dot: #E4E9F1;       /* --track */
-  --h-dot-ring: #B5C0CF;
-  --late-ink: #B42F2A;    /* --danger-ink */
-  --late-soft: #FBE6E4;
-  --late-dot: #D64541;
-  --soon-ink: #8A5600;    /* --pending-ink */
-  --soon-soft: #FCF0D9;
-  --soon-dot: #E39B1B;
-  /* Green means approved in UEP, so a healthy service is a quiet grey dot. */
-  --ok-dot: #6B788D;
-  /* Icon chips: a flat Cobalt tint per area (never green, which means
-     approved), so each card and app group is recognisable at a glance. */
-  --chip-bg: #EDF1F6;     /* --neutral-soft */
-  --chip-icon: #475569;
-  --tint-blue-bg: #E3EAFB;   --tint-blue: #2451C0;    /* Drive test, Rollout */
-  --tint-violet-bg: #EEE8FB; --tint-violet: #6A45C2;  /* Acceptance, Insights */
-  --tint-plum-bg: #F5E6F1;   --tint-plum: #8E2F74;    /* Plans, Programme office */
-  --tint-red-bg: #FBE6E4;    --tint-red: #B42F2A;
-  --tint-amber-bg: #FCF0D9;  --tint-amber: #8A5600;
-  --h-radius-card: 24px;
-  --h-radius-hero: 18px;
-  --h-radius-row: 16px;
-  /* Inter is the font that is actually bundled (styles/fonts.css), in
-     weights 400-600. Asking for 700/800 made browsers fake a bold. */
-  --font-home: var(--font-body);
+  /* Neutrals: fixed, never per tenant. */
+  --h-ink: #1F1F1F;          /* text primary */
+  --h-muted: #3D3D3D;        /* text secondary; never lighter (>= 9:1 on white) */
+  --h-canvas: #F4F5F8;       /* page */
+  --h-surface: #FFFFFF;      /* cards */
+  --h-edge: #DCDFE4;         /* a card's drawn edge */
+  --h-rule: #E1E3E8;         /* the header's bottom line */
+  --h-line: #ECEDEF;         /* dividers inside cards */
+  --h-stroke: #C9CCD1;       /* buttons */
+  --h-tint: #EFF0F3;         /* chips, search, badges */
+  --h-hover: #F3F4F6;        /* row hover */
+  --h-track: #E3E6EB;        /* the plan bar's remaining part */
+  --h-shadow: 0 0 0 1px var(--h-edge), 0 2px 6px rgba(0, 0, 0, 0.05);
+  /* Status tags. */
+  --late-ink: #B10E1C;   --late-soft: #FDE7E9;
+  --soon-ink: #A8420A;   --soon-soft: #FEEEE5;
+  /* Area colours: tiles, and the tinted band at the top of a card. */
+  --area-blue: linear-gradient(135deg, #2B88D8, #0F6CBD);
+  --area-blue-band: rgba(15, 108, 189, 0.06);   --area-blue-line: rgba(15, 108, 189, 0.16);
+  --area-indigo: linear-gradient(135deg, #7B83EB, #4F52B2);
+  --area-indigo-band: rgba(79, 82, 178, 0.06);  --area-indigo-line: rgba(79, 82, 178, 0.16);
+  --area-plum: linear-gradient(135deg, #C94FAE, #8E2483);
+  --area-plum-band: rgba(142, 36, 131, 0.05);   --area-plum-line: rgba(142, 36, 131, 0.14);
+  --hero: linear-gradient(135deg, var(--brand) 0%, #4F52B2 100%);
+  /* Radii. */
+  --h-r-card: 12px;
+  --h-r-hero: 8px;
+  --h-r-row: 8px;
+  --h-r-btn: 6px;
+  /* Segoe UI where Windows has it; Inter, bundled (styles/fonts.css), where
+     not. The server has no internet: no web font is ever fetched. */
+  --font-home: 'Segoe UI Variable Text', 'Segoe UI', 'Inter', system-ui, sans-serif;
   --h-gutter: 32px;
 
   height: 100dvh;
@@ -60,185 +56,188 @@
   background: var(--h-canvas);
   color: var(--h-ink);
   font-family: var(--font-home);
-  font-feature-settings: 'tnum';
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
   -webkit-font-smoothing: antialiased;
   overflow: hidden;
 }
 .uep-home a { color: inherit; text-decoration: none; }
 .uep-home button { font-family: inherit; }
 .uep-home :focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+/* Inside a card, the ring is drawn inward so the card's edge never clips it. */
+.uep-home .h-q:focus-visible,
+.uep-home .h-k:focus-visible,
+.uep-home .h-ap:focus-visible { outline-offset: -2px; }
 .uep-home .fa { font-family: var(--font-farsi); }
+.uep-home .lucide { stroke-width: 2px; }
 
 .h-card {
-  background: var(--h-surface); border-radius: var(--h-radius-card); display: flex; flex-direction: column; min-width: 0;
-  /* A drawn edge (not a border, so no size changes) and a soft lift. */
-  box-shadow: 0 0 0 1px var(--h-border), 0 1px 3px rgba(20, 27, 43, 0.06);
+  background: var(--h-surface); border-radius: var(--h-r-card); display: flex; flex-direction: column; min-width: 0;
+  box-shadow: var(--h-shadow);
 }
 
 /* Header -------------------------------------------------------------- */
-.h-header { height: 76px; flex-shrink: 0; display: flex; align-items: center; gap: 12px; padding: 0 var(--h-gutter); }
-.h-brand { flex: 1 1 0; display: flex; align-items: center; gap: 10px; font-size: 18px; font-weight: 600; letter-spacing: -0.01em; border-radius: 10px; }
-.h-search {
-  flex: 0 1 440px; height: 46px; border: 0; border-radius: 999px; background: var(--h-surface);
-  display: flex; align-items: center; gap: 10px; padding: 0 18px;
-  font-size: 14px; color: var(--h-muted); cursor: pointer; text-align: start;
+.h-header {
+  height: 56px; flex-shrink: 0; display: flex; align-items: center; gap: 12px; padding: 0 var(--h-gutter);
+  background: var(--h-surface); border-bottom: 1px solid var(--h-rule);
 }
-.h-search svg { color: var(--h-muted); flex-shrink: 0; }
-.h-search kbd { margin-inline-start: auto; font: 500 12px var(--font-home); color: var(--h-faint); }
-.h-tools { flex: 1 1 0; display: flex; justify-content: flex-end; align-items: center; gap: 10px; }
-.h-round { width: 44px; height: 44px; border: 0; border-radius: 50%; background: var(--h-surface); color: var(--h-muted); display: flex; align-items: center; justify-content: center; }
+.h-brand { flex: 1 1 0; display: flex; align-items: center; gap: 10px; font-size: 16px; font-weight: 600; border-radius: var(--h-r-btn); }
+.h-search {
+  flex: 0 1 440px; height: 36px; border: 0; border-radius: 999px; background: var(--h-tint);
+  display: flex; align-items: center; gap: 8px; padding: 0 14px;
+  font-size: 14px; line-height: 20px; font-weight: 400; color: var(--h-muted); cursor: pointer; text-align: start;
+}
+.h-search svg { width: 16px; height: 16px; color: var(--h-muted); flex-shrink: 0; }
+.h-search kbd { margin-inline-start: auto; font: 400 12px var(--font-home); color: var(--h-muted); }
+.h-tools { flex: 1 1 0; display: flex; justify-content: flex-end; align-items: center; gap: 8px; }
+.h-round { width: 34px; height: 34px; border-radius: 50%; color: var(--h-muted); display: flex; align-items: center; justify-content: center; }
+.h-round:hover { background: var(--h-hover); }
 .uep-home .account--avatar { position: relative; }
 .uep-home .account-avatar-button {
-  width: 44px; height: 44px; border: 0; border-radius: 50%; background: var(--brand-soft); color: var(--brand-ink);
-  box-shadow: inset 0 0 0 1px var(--h-outline);
-  font-size: 14px; font-weight: 600; cursor: pointer;
+  width: 34px; height: 34px; border: 0; border-radius: 50%; background: var(--brand-soft); color: var(--brand-ink);
+  font-size: 13px; font-weight: 600; cursor: pointer;
 }
 .uep-home .account--avatar .account-menu { top: calc(100% + 8px); bottom: auto; inset-inline: auto 0; width: 240px; }
 
 /* Body ---------------------------------------------------------------- */
-.h-body { flex: 1; min-height: 0; display: flex; gap: 24px; padding: 4px var(--h-gutter) 0; }
-.h-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 20px; }
+.h-body { flex: 1; min-height: 0; display: flex; gap: 20px; padding: 16px var(--h-gutter) 0; }
+.h-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 16px; }
 
 .h-greet { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; flex-wrap: wrap; }
-/* Sentence case, as Cobalt asks everywhere ("nothing uppercase"). */
-.h-eyebrow { font-size: 13px; line-height: 18px; font-weight: 500; color: var(--h-muted); }
-.h-title { margin: 4px 0 0; font-size: 24px; font-weight: 600; letter-spacing: -0.015em; line-height: 32px; text-wrap: balance; }
+.h-title { margin: 0; font-size: 28px; line-height: 36px; font-weight: 600; text-wrap: balance; }
+.h-eyebrow { margin-top: 2px; font-size: 14px; line-height: 20px; font-weight: 400; color: var(--h-muted); }
+.h-eyebrow .fa { font-size: 14px; }
 
-.h-pill {
-  height: 44px; padding: 0 20px; border: 0; border-radius: 999px;
-  font-size: 14px; font-weight: 600; display: inline-flex; align-items: center; justify-content: center; gap: 8px;
-  white-space: nowrap; cursor: pointer; transition: background 0.15s, box-shadow 0.15s;
+/* The one button style on the page: white, a 1px stroke, 36px high. */
+.h-btn {
+  height: 36px; padding: 0 14px; border: 0; border-radius: var(--h-r-btn);
+  background: var(--h-surface); color: var(--h-ink); box-shadow: inset 0 0 0 1px var(--h-stroke);
+  font-size: 14px; line-height: 20px; font-weight: 600;
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  white-space: nowrap; cursor: pointer;
 }
-.h-pill.quiet { background: var(--h-surface); color: var(--h-ink); }
-.h-pill.outline { width: 100%; background: var(--h-surface); color: var(--h-ink); box-shadow: inset 0 0 0 1.5px var(--h-outline); }
-.h-pill.outline:hover { box-shadow: inset 0 0 0 1.5px var(--h-ink); }
-.h-pill.primary { width: 100%; background: var(--brand); color: #fff; }
-.h-pill.primary:hover { background: var(--brand-hover); }
-.h-pill > span { overflow: hidden; text-overflow: ellipsis; }
+.h-btn:hover { background: var(--h-hover); }
+.h-btn > span { overflow: hidden; text-overflow: ellipsis; }
 
-/* KPI strip ----------------------------------------------------------- */
-.h-kpis { flex-direction: row; padding: 8px; flex-shrink: 0; }
-.h-k { flex: 1; display: flex; flex-direction: column; justify-content: space-between; gap: 8px; padding: 18px 22px; min-width: 0; }
-.h-k + .h-k { border-inline-start: 1px solid var(--h-line); }
-/* "Waiting on you" is the same cell as the other three -- same label, figure
-   and footnote positions -- set apart only by a soft brand tile. */
-.h-hero { width: 300px; flex: none; border-radius: var(--h-radius-hero); background: var(--tint-blue-bg); }
+/* KPI bar ------------------------------------------------------------- */
+.h-kpi-wrap { flex-shrink: 0; display: flex; flex-direction: column; gap: 4px; }
+.h-kpis { flex-direction: row; padding: 6px; }
+.h-k {
+  flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px;
+  padding: 12px 18px 10px; border-radius: var(--h-r-hero);
+}
+a.h-k:hover { background: var(--h-hover); }
+.h-k + .h-k { border-inline-start: 1px solid var(--h-line); border-radius: 0; }
+.h-kl { display: flex; align-items: center; gap: 10px; font-size: 16px; line-height: 22px; font-weight: 600; }
+.h-kf { display: flex; align-items: center; gap: 10px; }
+.h-kv { font-size: 40px; line-height: 52px; font-weight: 600; color: var(--h-ink); }
+.h-change {
+  display: inline-flex; align-items: center; height: 24px; padding: 0 8px; border-radius: 999px;
+  background: var(--h-tint); color: var(--h-ink); font-size: 13px; line-height: 24px; font-weight: 600; white-space: nowrap;
+}
+.h-spark { display: block; width: 100%; height: 28px; }
+.h-hero { width: 300px; flex: none; background: var(--hero); color: #fff; }
+a.h-hero:hover { background: var(--hero); filter: brightness(1.06); }
+.h-hero .h-kv { color: #fff; }
+.h-hero .h-change { background: rgba(255, 255, 255, 0.2); color: #fff; }
 .h-hero + .h-k { border-inline-start: 0; }
-.h-hero .h-kl { color: var(--brand-ink); }
-.h-hero .h-kv { color: var(--brand-ink); }
-.h-hero .h-icon { background: var(--h-surface); }
-.h-hero .h-km { color: var(--brand-ink); }
-.h-hero .h-chip { background: var(--h-surface); color: var(--brand-ink); }
-.h-kl { display: flex; align-items: center; gap: 10px; font-size: 14px; font-weight: 600; color: var(--h-ink-2); }
-.h-kv { font-size: 34px; font-weight: 600; letter-spacing: -0.02em; line-height: 40px; color: var(--h-ink); }
-.h-kv.late { color: var(--late-ink); }
-.h-kv.soon { color: var(--soon-ink); }
-.h-km { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--h-muted); flex-wrap: wrap; }
-/* Trend chips are neutral both ways: more waiting is bad, more done is good,
-   so the arrow says which way and colour says nothing. */
-.h-chip { display: inline-flex; align-items: center; gap: 3px; height: 24px; padding: 0 9px 0 7px; border-radius: 999px; background: var(--h-canvas); color: var(--h-ink-2); font-size: 12px; font-weight: 500; white-space: nowrap; }
+.h-kpi-note { margin: 0; text-align: end; font-size: 12px; line-height: 16px; color: var(--h-muted); }
 
-.h-icon { border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; width: 34px; height: 34px; }
-.h-icon.lg { width: 38px; height: 38px; }
-.h-icon { background: var(--chip-bg); color: var(--chip-icon); }
-.h-icon[data-tint='blue'] { background: var(--tint-blue-bg); color: var(--tint-blue); }
-.h-icon[data-tint='violet'] { background: var(--tint-violet-bg); color: var(--tint-violet); }
-.h-icon[data-tint='teal'] { background: var(--tint-plum-bg); color: var(--tint-plum); }
-.h-icon[data-tint='red'] { background: var(--tint-red-bg); color: var(--tint-red); }
-.h-icon[data-tint='amber'] { background: var(--tint-amber-bg); color: var(--tint-amber); }
-/* One stroke weight for every line icon on the page (lucide sets 2.0-2.6
-   per call; 1.75 is the weight Stripe-like UIs use at 16-20px). */
-.uep-home .lucide { stroke-width: 1.75px; }
-.uep-home .h-tag .lucide, .uep-home .h-chip .lucide { stroke-width: 2.25px; }
+.sparkline { overflow: visible; }
+.sparkline-line { fill: none; stroke: var(--brand); stroke-width: 2px; vector-effect: non-scaling-stroke; stroke-linejoin: round; stroke-linecap: round; }
+.sparkline-area { fill: rgba(15, 108, 189, 0.1); stroke: none; }
+.sparkline--white .sparkline-line { stroke: #fff; }
+.sparkline--white .sparkline-area { fill: rgba(255, 255, 255, 0.18); }
 
 /* Your work ----------------------------------------------------------- */
-.h-work { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 12px; }
+.h-work { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 10px; }
 .h-work-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
-.h-work-head h2 { margin: 0; font-size: 18px; font-weight: 600; letter-spacing: -0.01em; }
-.h-sla { font-size: 13px; font-weight: 500; color: var(--h-muted); }
-.h-legend { margin-inline-start: auto; display: flex; gap: 14px; font-size: 13px; font-weight: 500; color: var(--h-muted); }
-.h-legend span { display: flex; align-items: center; gap: 6px; }
-.h-legend i { width: 10px; height: 10px; border-radius: 50%; }
+.h-work-head h2, .h-apps h2 { margin: 0; font-size: 20px; line-height: 28px; font-weight: 600; }
+.h-sla { font-size: 13px; line-height: 18px; color: var(--h-muted); }
 .h-grid { flex: 1; min-height: 0; display: grid; gap: 16px; }
 .h-grid[data-cols='1'] { grid-template-columns: minmax(0, 560px); }
 .h-grid[data-cols='2'] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .h-grid[data-cols='3'] { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-.h-wc { min-height: 0; transition: transform 0.2s cubic-bezier(0.2, 0.6, 0.4, 1), box-shadow 0.2s; }
-.h-wc:hover { transform: translateY(-3px); box-shadow: 0 12px 24px -12px rgba(20, 27, 43, 0.25); }
-.h-ch { display: flex; align-items: center; gap: 12px; padding: 18px 20px 6px; }
-.h-ct { margin: 0; font-size: 17px; font-weight: 600; letter-spacing: -0.01em; }
-.h-go { margin-inline-start: auto; width: 36px; height: 36px; border-radius: 50%; background: var(--h-canvas); display: flex; align-items: center; justify-content: center; color: var(--h-muted); flex-shrink: 0; }
+
+.h-wc { min-height: 0; overflow: hidden; }
+.h-wc[data-area='blue'] { --area: var(--area-blue); --band: var(--area-blue-band); --band-line: var(--area-blue-line); }
+.h-wc[data-area='indigo'] { --area: var(--area-indigo); --band: var(--area-indigo-band); --band-line: var(--area-indigo-line); }
+.h-wc[data-area='plum'] { --area: var(--area-plum); --band: var(--area-plum-band); --band-line: var(--area-plum-line); }
+.h-ch {
+  display: flex; align-items: center; gap: 12px; padding: 12px 16px; flex-shrink: 0;
+  background: var(--band); border-bottom: 1px solid var(--band-line);
+}
+.h-tile { width: 40px; height: 40px; border-radius: var(--h-r-hero); background: var(--area); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.h-ct { margin: 0; font-size: 20px; line-height: 28px; font-weight: 600; }
+.h-scope {
+  margin-inline-start: auto; height: 24px; padding: 0 10px; border-radius: 999px;
+  background: var(--h-surface); box-shadow: inset 0 0 0 1px var(--h-edge);
+  font-size: 13px; line-height: 24px; font-weight: 600; color: var(--h-ink); white-space: nowrap;
+}
 /* Long content scrolls inside its card; the document never does. */
-.h-rows { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; padding-block: 2px; }
-.h-q { display: flex; flex-direction: column; gap: 9px; padding: 13px 20px; border-top: 1px solid var(--h-line); }
-.h-q:first-child { border-top: 0; }
-.h-q:hover { background: var(--h-canvas); }
-.h-q.next { margin: 4px 10px; padding: 11px 12px; border: 0; border-radius: var(--h-radius-row); box-shadow: 0 0 0 2px var(--brand); background: var(--brand-soft); }
-.h-q.next + .h-q { border-top-color: transparent; }
+.h-rows { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; padding: 6px 8px; }
+.h-q { display: flex; flex-direction: column; gap: 4px; padding: 10px 10px; border-radius: var(--h-r-row); }
+.h-q + .h-q { margin-top: 2px; }
+.h-q:hover { background: var(--h-hover); }
 .h-qt { display: flex; align-items: center; gap: 8px; }
-.h-qn { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 600; color: var(--h-ink); }
-.h-qn > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.h-next-badge { flex-shrink: 0; font-size: 12px; line-height: 16px; font-weight: 600; color: #fff; background: var(--brand); border-radius: 999px; padding: 2px 8px; }
-.h-qc { font-size: 26px; font-weight: 600; letter-spacing: -0.02em; line-height: 30px; }
-.h-qc small { font-size: 14px; font-weight: 500; color: var(--h-muted); }
-.h-tag { display: inline-flex; align-items: center; gap: 4px; height: 24px; padding: 0 9px; border-radius: 999px; font-size: 12px; font-weight: 600; white-space: nowrap; flex-shrink: 0; }
+.h-qn { flex: 1; min-width: 0; font-size: 16px; line-height: 22px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.h-qc { font-size: 28px; line-height: 36px; font-weight: 600; color: var(--h-ink); }
+.h-qm { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 10px; font-size: 14px; line-height: 20px; color: var(--h-muted); min-width: 0; }
+.h-tag {
+  display: inline-flex; align-items: center; gap: 4px; height: 22px; padding: 0 8px; border-radius: 999px;
+  font-size: 13px; line-height: 22px; font-weight: 600; white-space: nowrap; flex-shrink: 0;
+}
 .h-tag.late { background: var(--late-soft); color: var(--late-ink); }
 .h-tag.soon { background: var(--soon-soft); color: var(--soon-ink); }
-.h-qm { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 10px; font-size: 13px; color: var(--h-muted); white-space: nowrap; min-width: 0; }
-.h-owners { display: inline-flex; align-items: center; gap: 4px; font-weight: 500; color: var(--h-muted); cursor: default; }
-.h-sep { color: var(--h-dot-ring); }
-.h-allok { margin: 6px 20px 0; padding: 10px 14px; border-radius: 14px; background: var(--h-canvas); font-size: 13px; font-weight: 500; color: var(--h-ink-2); display: flex; align-items: center; gap: 8px; }
-.h-card-empty { padding: 14px 20px; display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--h-muted); }
-.h-cf { padding: 12px 20px 20px; flex-shrink: 0; }
-
-/* The dot rule (components/ItemDots.jsx). Each dot has a 1px ring so it
-   clears 3:1 against white; status is also in the row's tag and label. */
-.uep-home .item-dots { display: flex; flex-wrap: wrap; gap: 4px; }
-.uep-home .item-dots i { width: 11px; height: 11px; border-radius: 50%; background: var(--h-dot); box-shadow: inset 0 0 0 1px var(--h-dot-ring); }
-.uep-home .item-dots i.due-soon { background: var(--soon-dot); box-shadow: inset 0 0 0 1px var(--soon-ink); }
-.uep-home .item-dots i.late { background: var(--late-dot); box-shadow: inset 0 0 0 1px var(--late-ink); }
-.uep-home .item-bar { display: flex; gap: 2px; height: 11px; border-radius: 6px; overflow: hidden; }
-.uep-home .item-bar i { flex-basis: 0; background: var(--h-dot); }
-.uep-home .item-bar i.due-soon { background: var(--soon-dot); }
-.uep-home .item-bar i.late { background: var(--late-dot); }
-.h-plan-dots { display: flex; flex-wrap: wrap; gap: 4px; max-width: 236px; }
-.h-plan-dots i { width: 11px; height: 11px; border-radius: 50%; background: var(--h-dot); box-shadow: inset 0 0 0 1px var(--h-dot-ring); }
-.h-plan-dots i.done { background: var(--brand); box-shadow: none; }
-.h-plan-meter { height: 11px; border-radius: 6px; background: var(--h-dot); overflow: hidden; }
-.h-plan-meter i { display: block; height: 100%; background: var(--brand); }
+.h-owners { cursor: default; }
+.h-plan-bar { display: block; height: 6px; border-radius: 999px; background: var(--h-track); overflow: hidden; margin: 4px 0 2px; }
+.h-plan-bar i { display: block; height: 100%; background: var(--brand); border-radius: 999px; }
+.h-card-empty { padding: 12px 10px; display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--h-muted); }
+.h-cf { padding: 10px 16px 14px; flex-shrink: 0; border-top: 1px solid var(--h-line); }
+.h-cf .h-btn { width: 100%; }
 
 /* Apps ---------------------------------------------------------------- */
-.h-apps { width: 300px; flex-shrink: 0; padding: 18px 12px 12px; overflow-y: auto; }
-.h-apps h2 { margin: 0; padding: 0 10px 2px; font-size: 17px; font-weight: 600; letter-spacing: -0.01em; }
-.h-gh { font-size: 13px; font-weight: 500; color: var(--h-faint); padding: 14px 10px 6px; }
-.h-ap { display: flex; align-items: center; gap: 12px; height: 46px; padding: 0 10px; border-radius: 14px; font-size: 14px; font-weight: 500; color: var(--h-ink); }
-.h-ap:hover { background: var(--h-canvas); }
-.h-ap .h-badge { margin-inline-start: auto; min-width: 26px; height: 22px; padding: 0 8px; border-radius: 999px; background: var(--h-canvas); color: var(--h-ink-2); font-size: 12px; font-weight: 600; display: flex; align-items: center; justify-content: center; }
+.h-apps { width: 300px; flex-shrink: 0; padding: 16px 10px 10px; overflow-y: auto; }
+.h-apps h2 { padding: 0 8px; }
+.h-apps nav[data-group='rollout'] { --area: var(--area-blue); }
+.h-apps nav[data-group='insights'] { --area: var(--area-indigo); }
+.h-apps nav[data-group='office'] { --area: var(--area-plum); }
+.h-gh { font-size: 12px; line-height: 16px; font-weight: 600; color: var(--h-muted); padding: 12px 8px 4px; }
+.h-ap { display: flex; align-items: center; gap: 10px; min-height: 40px; padding: 4px 8px; border-radius: var(--h-r-row); font-size: 14px; line-height: 20px; font-weight: 600; }
+.h-ap:hover { background: var(--h-hover); }
+.h-app-tile { width: 32px; height: 32px; border-radius: var(--h-r-btn); background: var(--area); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.h-badge {
+  margin-inline-start: auto; min-width: 26px; height: 22px; padding: 0 8px; border-radius: 999px;
+  background: var(--h-tint); color: var(--h-ink); font-size: 12px; font-weight: 600;
+  display: flex; align-items: center; justify-content: center; cursor: default;
+}
 .h-spacer { flex: 1; }
-.h-browse { margin-top: 12px; display: flex; align-items: center; justify-content: center; gap: 6px; height: 46px; border: 0; border-radius: 999px; background: var(--h-canvas); font-size: 14px; font-weight: 600; color: var(--h-ink); cursor: pointer; flex-shrink: 0; }
+.h-browse {
+  margin-top: 10px; display: flex; align-items: center; justify-content: center; gap: 6px; height: 36px;
+  border: 0; border-radius: var(--h-r-btn); background: var(--h-surface); box-shadow: inset 0 0 0 1px var(--h-stroke);
+  font-size: 14px; font-weight: 600; color: var(--h-ink); cursor: pointer; flex-shrink: 0;
+}
+.h-browse:hover { background: var(--h-hover); }
 .h-all-section + .h-all-section { margin-top: 16px; }
 .h-all-section h3 { margin: 0 0 6px; font-size: 12px; font-weight: 600; color: var(--text-secondary); }
 .h-all-section a { display: block; padding: 8px 10px; border-radius: 8px; font-size: 14px; color: var(--text); text-decoration: none; }
 .h-all-section a:hover { background: var(--surface-subtle); }
 
 /* Footer -------------------------------------------------------------- */
-.h-footer { height: 44px; flex-shrink: 0; display: flex; align-items: center; gap: 20px; padding: 0 var(--h-gutter); font-size: 13px; font-weight: 400; color: var(--h-muted); }
+.h-footer { height: 40px; flex-shrink: 0; display: flex; align-items: center; gap: 20px; padding: 0 var(--h-gutter); font-size: 12px; line-height: 16px; color: var(--h-muted); }
 .h-status { display: flex; align-items: center; gap: 6px; }
-.h-status i { width: 7px; height: 7px; border-radius: 50%; background: var(--ok-dot); }
+/* A healthy service is a quiet grey dot: green means approved in UEP. */
+.h-status i { width: 7px; height: 7px; border-radius: 50%; background: #8A8A8A; }
 .h-status.down i { background: var(--late-ink); }
 .h-status.down { color: var(--late-ink); font-weight: 600; }
 
 /* States -------------------------------------------------------------- */
-.h-skel { background: var(--h-line); border-radius: 8px; }
-.h-skel-text { display: block; height: 14px; }
+.h-skel { display: block; background: var(--h-tint); border-radius: var(--h-r-btn); }
+.h-skel-text { height: 14px; }
 .h-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; text-align: center; padding: 24px; }
-.h-empty b { font-size: 17px; font-weight: 600; letter-spacing: -0.01em; }
+.h-empty b { font-size: 20px; line-height: 28px; font-weight: 600; }
 .h-empty span { font-size: 14px; color: var(--h-muted); }
 .h-error { display: flex; align-items: center; gap: 12px; }
-
-@media (prefers-reduced-motion: reduce) {
-  .h-wc, .h-wc:hover { transition: none; transform: none; }
-}
 
 /* Narrower than the design (below 1180px): the Apps panel drops under the
    work and the page scrolls inside .uep-home -- never the document. */
@@ -257,15 +256,13 @@
   .h-k { flex: 1 1 30%; }
   .h-k + .h-k { border-inline-start: 0; }
   .h-grid[data-cols] { grid-template-columns: minmax(0, 1fr); }
-  .h-legend { margin-inline-start: 0; width: 100%; }
 }
 @media (max-width: 640px) {
   .uep-home { --h-gutter: 16px; }
-  .h-header { height: 64px; }
-  .h-search { flex: 0 0 46px; padding: 0; justify-content: center; }
+  .h-search { flex: 0 0 36px; padding: 0; justify-content: center; }
   .h-search .label, .h-search kbd { display: none; }
-  .h-title { font-size: 26px; line-height: 32px; }
-  .h-k { flex: 1 1 100%; padding: 14px 16px; }
-  .h-kv { font-size: 30px; line-height: 38px; }
-  .h-greet .h-pill { width: 100%; }
+  .h-title { font-size: 24px; line-height: 32px; }
+  .h-k { flex: 1 1 100%; }
+  .h-kv { font-size: 32px; line-height: 40px; }
+  .h-greet .h-btn { width: 100%; }
 }
