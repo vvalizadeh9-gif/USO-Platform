@@ -2624,7 +2624,7 @@ describe('PIP this month', () => {
   const tile = (card, label) =>
     within(card).getByText(label, { selector: 'dt' }).closest('.dt-pip-tile')
 
-  it('states plan, assigned, remaining and achieved, in that order, from the payload', async () => {
+  it('states plan, assigned, achieved and remaining, in that order, from the payload', async () => {
     // 16 planned, 9 assigned, 6 delivered. Remaining is the old card's
     // "Short by", arithmetic unchanged: 16 - 6 = 10.
     serve()
@@ -2632,7 +2632,7 @@ describe('PIP this month', () => {
 
     const card = await section('PIP this month')
     const labels = [...card.querySelectorAll('.dt-pip-tile dt')].map((d) => d.textContent)
-    expect(labels).toEqual(['Plan', 'Assigned', 'Remaining', 'Achieved'])
+    expect(labels).toEqual(['Plan', 'Assigned', 'Achieved', 'Remaining'])
     expect(within(tile(card, 'Plan')).getByText('16')).toBeInTheDocument()
     expect(within(tile(card, 'Assigned')).getByText('9')).toBeInTheDocument()
     expect(within(tile(card, 'Remaining')).getByText('10')).toBeInTheDocument()

@@ -9,7 +9,7 @@ describe('app registry role filtering', () => {
     expect(ids(apps)).not.toContain('data')
     expect(ids(apps)).not.toContain('admin')
     const dt = apps.find((a) => a.id === 'drive-test')
-    expect(dt.pages.map((p) => p.id)).toEqual(['hc-check', 'in-progress', 'all-sites'])
+    expect(dt.pages.map((p) => p.id)).toEqual(['dashboard', 'hc-check', 'in-progress', 'all-sites'])
   })
 
   it('gives Admin only the platform apps', () => {
