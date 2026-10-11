@@ -114,9 +114,9 @@ class CaptchaChallenge(BaseModel):
     num2: int
 
 
-class TokenResponse(BaseModel):
-    access_token: str
-    token_type: str = "bearer"
+class SessionResponse(BaseModel):
+    """A successful sign-in. The token itself is in the session cookie."""
+
     user: UserOut
 
 
@@ -2447,7 +2447,7 @@ class MonthlyPlanReturn(BaseModel):
 
 
 UserOut.model_rebuild()
-TokenResponse.model_rebuild()
+SessionResponse.model_rebuild()
 
 
 # ---------------------------------------------------------------------------

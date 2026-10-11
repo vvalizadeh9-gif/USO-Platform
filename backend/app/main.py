@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api import api_router
 from app.core.bootstrap import init_db
 from app.core.config import get_settings
+from app.core.csrf import CsrfMiddleware
 from app.core.logging_config import RequestLoggingMiddleware, configure_logging
 
 settings = get_settings()
@@ -37,6 +38,9 @@ app = FastAPI(
 # Added before CORS so that it wraps it: middleware runs in reverse order of
 # registration, so this one sees the request first and the response last, and
 # therefore times the whole thing.
+# Innermost of the three, so a refused write is still logged and still carries
+# CORS headers. See app/core/csrf.py.
+app.add_middleware(CsrfMiddleware)
 app.add_middleware(RequestLoggingMiddleware)
 
 # The origin list is validated at startup (app/core/config.py): in production it

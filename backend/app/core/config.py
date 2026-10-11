@@ -39,17 +39,33 @@ class Settings(BaseSettings):
     # Security / JWT
     jwt_secret_key: str = INSECURE_JWT_SECRET
     jwt_algorithm: str = "HS256"
+    # How long a sign-in lasts: the token's expiry and the session cookie's
+    # lifetime are both this.
     access_token_expire_minutes: int = 480  # 8 hours
+
+    # The browser session (see app/core/session_cookies.py). The access token
+    # travels in an HttpOnly cookie that page scripts cannot read, with a
+    # second, readable cookie carrying the CSRF token the page echoes back.
+    session_cookie_name: str = "uep_session"
+    csrf_cookie_name: str = "uep_csrf"
+    csrf_header_name: str = "X-CSRF-Token"
+    # Whether the cookies are marked Secure (sent over HTTPS only). Unset, it
+    # follows the scheme the request arrived on (nginx's X-Forwarded-Proto), so
+    # a TLS deployment gets Secure cookies without configuring anything and a
+    # plain-HTTP one can still sign in. Set it to true once TLS is in place to
+    # make that unconditional.
+    session_cookie_secure: bool | None = None
 
     # Signing key for the login captcha. Left empty it is derived from
     # jwt_secret_key rather than being the same value -- see captcha_key.
     captcha_secret_key: str = ""
 
     # Login throttling. Counts only failed attempts; a success clears the
-    # counter, so ordinary users never meet it.
+    # counter, so ordinary users never meet it. Five failures for one username
+    # inside fifteen minutes locks that username for fifteen minutes.
     login_max_attempts_per_username: int = 5
     login_max_attempts_per_ip: int = 20
-    login_attempt_window_seconds: int = 300  # 5 minutes
+    login_attempt_window_seconds: int = 900  # 15 minutes
     login_lockout_seconds: int = 900  # 15 minutes
     # Failures (per username or per address, inside the window above) after
     # which the captcha is demanded. Below it the login form shows none -- see

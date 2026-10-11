@@ -216,7 +216,7 @@ def test_overview_endpoint_requires_auth(client):
 
 def test_overview_endpoint_returns_payload(client):
     r = client.post("/api/v1/auth/login", data=login_form(client))
-    token = r.json()["access_token"]
+    token = r.cookies["uep_session"]
     r = client.get(
         "/api/v1/drive-test/overview",
         headers={"Authorization": f"Bearer {token}"},

@@ -91,7 +91,7 @@ def provinces(client):
 
 def _admin(client) -> dict:
     response = client.post("/api/v1/auth/login", data=login_form(client))
-    return {"Authorization": f"Bearer {response.json()['access_token']}"}
+    return {"Authorization": f"Bearer {response.cookies['uep_session']}"}
 
 
 def _overview(client, headers) -> dict:
@@ -143,7 +143,7 @@ def test_regional_manager_counts_only_their_provinces(client, provinces):
         "/api/v1/auth/login", data=login_form(client, "rm_prov_b", password)
     )
     assert login.status_code == 200, login.text
-    rm_h = {"Authorization": f"Bearer {login.json()['access_token']}"}
+    rm_h = {"Authorization": f"Bearer {login.cookies['uep_session']}"}
 
     kpis = _overview(client, rm_h)
     # ProvB only: V8 permanent, V9 temporary.

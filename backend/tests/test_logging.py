@@ -66,8 +66,8 @@ def test_an_anonymous_request_logs_no_user(client, captured):
 
 
 def test_an_authenticated_request_logs_who_made_it(client, captured):
-    token = client.post("/api/v1/auth/login", data=login_form(client)).json()[
-        "access_token"
+    token = client.post("/api/v1/auth/login", data=login_form(client)).cookies[
+        "uep_session"
     ]
 
     client.get("/api/v1/work-items", headers={"Authorization": f"Bearer {token}"})
@@ -93,8 +93,8 @@ def test_the_password_never_reaches_the_log(client, captured):
 
 
 def test_the_token_never_reaches_the_log(client, captured):
-    token = client.post("/api/v1/auth/login", data=login_form(client)).json()[
-        "access_token"
+    token = client.post("/api/v1/auth/login", data=login_form(client)).cookies[
+        "uep_session"
     ]
 
     client.get("/api/v1/work-items", headers={"Authorization": f"Bearer {token}"})
@@ -122,8 +122,8 @@ def test_an_unhandled_exception_is_logged_with_the_request_and_the_user(
     def _explode():
         raise RuntimeError("something went badly wrong")
 
-    token = client.post("/api/v1/auth/login", data=login_form(client)).json()[
-        "access_token"
+    token = client.post("/api/v1/auth/login", data=login_form(client)).cookies[
+        "uep_session"
     ]
 
     client.get("/api/v1/_test_explode", headers={"Authorization": f"Bearer {token}"})

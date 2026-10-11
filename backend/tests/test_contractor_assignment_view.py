@@ -44,7 +44,7 @@ def client():
 
 def _login(client, username="admin", password="Admin@12345") -> dict:
     r = client.post("/api/v1/auth/login", data=login_form(client, username, password))
-    return {"Authorization": f"Bearer {r.json()['access_token']}"}
+    return {"Authorization": f"Bearer {r.cookies['uep_session']}"}
 
 
 def _seed_assigned_site(*, contractor_name: str, site_code: str, days_ago: int) -> dict:

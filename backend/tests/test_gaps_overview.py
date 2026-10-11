@@ -262,7 +262,7 @@ def _seed() -> None:
 
 def _admin(client) -> dict:
     response = client.post("/api/v1/auth/login", data=login_form(client))
-    return {"Authorization": f"Bearer {response.json()['access_token']}"}
+    return {"Authorization": f"Bearer {response.cookies['uep_session']}"}
 
 
 def _token(client, role: str) -> dict:
@@ -329,7 +329,7 @@ def _contractor_account(client, admin_h) -> dict:
         data=login_form(client, "lifecycle_dt_alpha", password),
     )
     assert response.status_code == 200, response.text
-    return {"Authorization": f"Bearer {response.json()['access_token']}"}
+    return {"Authorization": f"Bearer {response.cookies['uep_session']}"}
 
 
 def _overview(client, headers, **params):

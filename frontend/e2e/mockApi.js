@@ -48,7 +48,6 @@ const viewOf = (user) => (user.role.name === 'Contractor' ? 'contractor' : 'staf
 
 export async function signIn(page, user = F.PM) {
   await page.addInitScript((u) => {
-    localStorage.setItem('uep_token', 'e2e-token')
     localStorage.setItem('uep_user', JSON.stringify(u))
   }, user)
   await page.route('**/api/v1/**', async (route) => {

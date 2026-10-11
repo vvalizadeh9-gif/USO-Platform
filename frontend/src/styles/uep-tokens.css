@@ -1,0 +1,156 @@
+/* ===================================================================
+   UEP design foundation: tokens.
+   The single source of truth for every colour, size, radius, shadow and
+   motion value on pages built on the UEP foundation (Sign-in first; other
+   pages move over one at a time). src/design/tokens.js mirrors these for
+   script, and a test keeps the two in step. Rules: docs/design-system.md.
+   =================================================================== */
+
+/* IBM Plex Sans (SIL OFL), bundled from node_modules and served by this
+   application: no request leaves the internal network. Vazirmatn, for
+   Persian data, is already self-hosted in fonts.css. */
+@import '@fontsource/ibm-plex-sans/400.css';
+@import '@fontsource/ibm-plex-sans/500.css';
+@import '@fontsource/ibm-plex-sans/600.css';
+
+:root {
+  /* ---- Colour. Bright cobalt means "click me"; deep cobalt means "this is
+     UEP" and is for large brand surfaces only. ---- */
+  --uep-accent: #1D4ED8;
+  --uep-accent-hover: #1E40AF;
+  --uep-accent-tint: #E8EEFC;
+  --uep-accent-on-tint: #DCE6FD;
+  --uep-brand-deep: #0F1F4B;
+  --uep-brand-wave: #93B2FF;
+  --uep-on-accent: #FFFFFF;
+  --uep-on-brand: #FFFFFF;
+
+  --uep-text: #14171F;
+  --uep-text-2: #3B4250;
+  --uep-text-3: #4B5260;  /* the lightest text allowed anywhere */
+
+  --uep-page: #F5F6F8;
+  --uep-surface: #FFFFFF;
+  --uep-border: #E3E6EC;
+  --uep-border-strong: #C9CFD9;
+  --uep-divider: #EEF0F3;
+
+  --uep-danger: #B42318;
+  --uep-danger-tint: #FDECEC;
+  --uep-approved: #146C2E;       /* Approved status only. Green means nothing else. */
+  --uep-approved-tint: #E7F5EC;
+  --uep-filed: #5B21B6;
+  --uep-filed-tint: #F1ECFB;
+
+  /* App identity: tile colour (white icon on it) and card-header tint. */
+  --uep-app-my-work: #1D4ED8;
+  --uep-app-drive-test: #0F766E;
+  --uep-app-drive-test-tint: #EDF6F5;
+  --uep-app-acceptance: #6D28D9;
+  --uep-app-acceptance-tint: #F3EFFC;
+  --uep-app-monthly-plan: #B45309;
+  --uep-app-monthly-plan-tint: #FBF3EA;
+  --uep-app-insights: #0369A1;
+  --uep-app-data: #475569;
+  --uep-app-admin: #57534E;
+  --uep-app-home: #14171F;
+
+  /* ---- Typography ---- */
+  --uep-font-sans: 'IBM Plex Sans', 'Segoe UI', sans-serif;
+  --uep-font-persian: 'Vazirmatn', 'IBM Plex Sans', 'Segoe UI', sans-serif;
+  --uep-weight-regular: 400;
+  --uep-weight-medium: 500;
+  --uep-weight-semibold: 600;
+  --uep-fs-caption: 12px;
+  --uep-fs-small: 13px;
+  --uep-fs-body: 14px;
+  --uep-fs-15: 15px;
+  --uep-fs-card-title: 16px;
+  --uep-fs-section: 18px;
+  --uep-fs-page-title: 24px;
+  --uep-fs-greeting: 26px;
+  --uep-fs-signin-title: 28px;
+  --uep-fs-kpi: 32px;
+  --uep-fs-brand: 64px;
+  --uep-lh-ui: 1.45;
+  --uep-lh-brand: 1.05;
+  --uep-tracking-heading: -0.02em;
+  --uep-tracking-brand: -0.03em;
+
+  /* ---- Shape ---- */
+  --uep-radius-control: 6px;  /* inputs, buttons */
+  --uep-radius-logo: 7px;
+  --uep-radius-tile: 8px;     /* tiles, rail items, KPI tiles */
+  --uep-radius-card: 12px;
+  --uep-radius-pill: 999px;
+  --uep-border-width: 1px;
+
+  /* ---- Spacing, named by their pixel value ---- */
+  --uep-space-4: 4px;
+  --uep-space-8: 8px;
+  --uep-space-12: 12px;
+  --uep-space-16: 16px;
+  --uep-space-20: 20px;
+  --uep-space-24: 24px;
+  --uep-space-32: 32px;
+  --uep-space-40: 40px;
+  --uep-space-48: 48px;
+  --uep-space-56: 56px;
+  --uep-space-64: 64px;
+
+  /* ---- Elevation and focus. Flat by default. ---- */
+  --uep-shadow-popover: 0 8px 24px rgba(20, 23, 31, 0.12);
+  --uep-shadow-card-hover: 0 4px 16px rgba(20, 23, 31, 0.06);
+  --uep-focus-ring: 0 0 0 3px rgba(29, 78, 216, 0.16);
+  --uep-danger-ring: 0 0 0 3px rgba(180, 35, 24, 0.16);
+  --uep-focus-outline-width: 2px;
+  --uep-focus-outline-offset: 2px;
+
+  /* ---- Icons (IBM Carbon) ---- */
+  --uep-icon-sm: 16px;
+  --uep-icon-md: 18px;
+  --uep-icon-lg: 20px;
+  --uep-icon-tile: 22px;
+  --uep-icon-muted-opacity: 0.55;
+
+  /* ---- Motion (IBM Carbon motion) ---- */
+  --uep-dur-fast: 150ms;    /* hover, focus, press */
+  --uep-dur-pop: 160ms;     /* menus, launcher */
+  --uep-dur-enter: 320ms;   /* page entry */
+  --uep-dur-slow: 900ms;    /* sparkline draw, progress fill, brand reveal */
+  --uep-ease-productive: cubic-bezier(0.2, 0, 0.38, 0.9);
+  --uep-ease-entrance: cubic-bezier(0, 0, 0.3, 1);
+  --uep-ease-expressive: cubic-bezier(0.16, 1, 0.3, 1);
+  --uep-enter-distance: 8px;
+  --uep-press-scale: 0.98;
+  --uep-pop-scale: 0.98;
+
+  /* ---- Component: sign-in ---- */
+  --uep-signin-half-basis: 520px;
+  --uep-signin-breakpoint: 960px;  /* documentation only: media queries cannot read it */
+  --uep-signin-form-width: 380px;
+  --uep-signin-input-height: 42px;
+  --uep-signin-input-icon-inset: 40px;
+  --uep-signin-button-height: 44px;
+  --uep-signin-logo-size: 28px;
+  --uep-signin-brand-rule-width: 72px;
+  --uep-signin-brand-rule-height: 3px;
+  --uep-signin-brand-rule-gap: 28px;
+  --uep-signin-wave-size: 1600px;
+  --uep-signin-wave-border: 1.5px;
+  --uep-signin-wave-peak-opacity: 0.5;
+  --uep-signin-wave-start-scale: 0.2;
+  --uep-signin-wave-cycle: 16s;
+  --uep-signin-wave-stagger: 4s;
+  --uep-signin-wave-ease: cubic-bezier(0.25, 0.1, 0.25, 1);
+  --uep-signin-enter-distance: 10px;
+  --uep-signin-enter-duration: 480ms;
+  --uep-signin-stagger-step: 80ms;
+  --uep-signin-panel-fade: 600ms;
+  --uep-signin-word-delay: 200ms;
+  --uep-signin-word-step: 120ms;
+  --uep-signin-rule-delay: 800ms;
+  --uep-signin-icon-nudge: 3px;
+  --uep-signin-icon-nudge-duration: 200ms;
+  --uep-signin-spinner-turn: 700ms;
+}

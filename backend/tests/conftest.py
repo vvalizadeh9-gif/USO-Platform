@@ -20,6 +20,12 @@ import pytest
 # any test module, which is what makes setting it here early enough.
 os.environ.setdefault("APP_ENV", "development")
 
+# Session cookies are marked Secure, so the test client (on http://testserver)
+# keeps them in its jar but never sends them back. Tests authenticate with the
+# Bearer header built from the login response's cookie; the ones that exercise
+# the cookie session itself use an https:// client. See test_session_cookies.py.
+os.environ.setdefault("SESSION_COOKIE_SECURE", "true")
+
 # Uploads go to a temporary directory, not to the production default of
 # /data/uploads.
 #
@@ -136,7 +142,7 @@ def login_as_role(client, admin_token: str, role_name: str) -> dict:
         "/api/v1/auth/login", data=login_form(client, username, password)
     )
     assert response.status_code == 200, response.text
-    return {"Authorization": f"Bearer {response.json()['access_token']}"}
+    return {"Authorization": f"Bearer {response.cookies['uep_session']}"}
 
 
 def login_form(client, username: str = "admin", password: str = "Admin@12345") -> dict:

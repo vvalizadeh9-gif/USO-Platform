@@ -96,7 +96,7 @@ def _seed() -> None:
 def _headers(client, username, password=PASSWORD):
     r = client.post(f"{API}/auth/login", data=login_form(client, username, password))
     assert r.status_code == 200, r.text
-    return {"Authorization": f"Bearer {r.json()['access_token']}"}
+    return {"Authorization": f"Bearer {r.cookies['uep_session']}"}
 
 
 def _admin(client):

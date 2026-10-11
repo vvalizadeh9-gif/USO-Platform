@@ -78,7 +78,7 @@ def _clean_throttle():
 def admin_headers(client):
     r = client.post("/api/v1/auth/login", data=login_form(client))
     assert r.status_code == 200, r.text
-    return {"Authorization": f"Bearer {r.json()['access_token']}"}
+    return {"Authorization": f"Bearer {r.cookies['uep_session']}"}
 
 
 def _role_id(client, admin_headers, name="Viewer") -> int:
@@ -109,7 +109,7 @@ def _login(client, username, password=PASSWORD):
 def _headers(client, username, password=PASSWORD) -> dict:
     r = _login(client, username, password)
     assert r.status_code == 200, r.text
-    return {"Authorization": f"Bearer {r.json()['access_token']}"}
+    return {"Authorization": f"Bearer {r.cookies['uep_session']}"}
 
 
 def _audit(client, admin_headers, **params) -> list[dict]:
@@ -413,7 +413,7 @@ def test_a_temporary_password_can_only_be_used_to_replace_itself(
     )
     assert changed.status_code == 200, changed.text
 
-    fresh = {"Authorization": f"Bearer {changed.json()['access_token']}"}
+    fresh = {"Authorization": f"Bearer {changed.cookies['uep_session']}"}
     assert client.get("/api/v1/action-center", headers=fresh).status_code == 200
     assert client.get("/api/v1/auth/me", headers=fresh).json()[
         "must_change_password"
@@ -450,7 +450,7 @@ def test_a_user_changes_their_own_password_and_keeps_working(client, admin_heade
     )
     assert r.status_code == 200, r.text
     # Handed a fresh token rather than signed out for succeeding.
-    fresh = {"Authorization": f"Bearer {r.json()['access_token']}"}
+    fresh = {"Authorization": f"Bearer {r.cookies['uep_session']}"}
     assert client.get("/api/v1/auth/me", headers=fresh).status_code == 200
     assert _login(client, "um_self_change", "another quiet village").status_code == 200
 

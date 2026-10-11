@@ -6,6 +6,7 @@ import { Loading } from './components/ui'
 import { loginPathFor } from './lib/returnTo'
 import { ACTION_CENTER_ROLES, CATEGORY_OWNER_ROLES, HOME_ROLES, KPI_ROLES, MONTHLY_PLAN_ROLES, homeFor } from './lib/roles'
 import Login from './pages/Login'
+import AuthPlaceholder from './pages/auth/AuthPlaceholder'
 
 // Route pages are code-split so the initial load only ships the shell +
 // current page. Each page's JS (and its heavy deps like charts) is fetched on
@@ -68,6 +69,10 @@ export default function App() {
     <Suspense fallback={<Loading />}>
       <Routes>
         <Route path="/login" element={user ? <Navigate to="/" replace /> : <Login />} />
+        {/* Linked from the sign-in page; designed later. Open to everyone. */}
+        {['forgot-password', 'request-access', 'privacy', 'terms', 'help'].map((page) => (
+          <Route key={page} path={`/${page}`} element={<AuthPlaceholder page={page} />} />
+        ))}
         {/* UEP Home is its own full-width shell (header, Apps panel, footer)
             rather than a page inside the sidebar layout: its Apps panel is
             the navigation there. The board's roles and Regional Managers;

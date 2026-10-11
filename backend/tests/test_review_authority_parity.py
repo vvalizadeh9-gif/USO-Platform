@@ -79,7 +79,7 @@ def _headers(client, role_name):
         data=login_form(client, f"parity_{role_name.lower()}", "Owner@12345"),
     )
     assert r.status_code == 200, r.text
-    return {"Authorization": f"Bearer {r.json()['access_token']}"}
+    return {"Authorization": f"Bearer {r.cookies['uep_session']}"}
 
 
 # Each entry is an endpoint both peers must reach. The ids are deliberately

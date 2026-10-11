@@ -13,6 +13,10 @@
 // `javascript:` URL -- is dropped and the person lands on the home page.
 const LOGIN_PATH = '/login'
 const NEXT_PARAM = 'next'
+const REASON_PARAM = 'reason'
+
+/** Why someone was sent to sign in: their session ran out. */
+export const SESSION_EXPIRED = 'expired'
 
 // Any origin will do as the base, as long as it is one no real path resolves
 // away from. If the resolved URL is still on it, the candidate was a path.
@@ -45,16 +49,30 @@ export function safeReturnPath(candidate) {
 }
 
 /**
- * The sign-in URL for someone leaving `location`, carrying it as `next`.
+ * The sign-in URL for someone leaving `location`, carrying it as `next`, and
+ * the reason they were sent when there is one.
  *
  * @param {{ pathname: string, search?: string, hash?: string }} location
+ * @param {{ reason?: string }} [options]
  * @returns {string}
  */
-export function loginPathFor({ pathname, search = '', hash = '' }) {
+export function loginPathFor({ pathname, search = '', hash = '' }, { reason } = {}) {
   const target = safeReturnPath(`${pathname}${search}${hash}`)
+  const params = new URLSearchParams()
   // The home page is where sign-in goes anyway; no need to say so.
-  if (!target || target === '/') return LOGIN_PATH
-  return `${LOGIN_PATH}?${NEXT_PARAM}=${encodeURIComponent(target)}`
+  if (target && target !== '/') params.set(NEXT_PARAM, target)
+  if (reason) params.set(REASON_PARAM, reason)
+  const query = params.toString()
+  return query ? `${LOGIN_PATH}?${query}` : LOGIN_PATH
+}
+
+/**
+ * True if the sign-in URL says the previous session expired.
+ * @param {string} search
+ * @returns {boolean}
+ */
+export function sessionExpiredFrom(search) {
+  return new URLSearchParams(search).get(REASON_PARAM) === SESSION_EXPIRED
 }
 
 /**

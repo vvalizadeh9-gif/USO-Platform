@@ -1,15 +1,18 @@
 """FastAPI dependencies: current user resolution and RBAC guards."""
 from collections.abc import Callable
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.security import decode_access_token
+from app.core.session_cookies import session_token
 from app.models.reference import User
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
+# Kept for the OpenAPI page's "Authorize" button and for API clients. Not an
+# error when absent: the browser authenticates with the session cookie instead.
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login", auto_error=False)
 
 # Role name constants (avoid magic strings scattered around the code).
 ADMIN = "Admin"
@@ -38,9 +41,15 @@ CATEGORY_OWNER_ROLES = (
 
 
 def get_current_user_allowing_password_change(
-    token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)
+    request: Request,
+    bearer: str | None = Depends(oauth2_scheme),
+    db: Session = Depends(get_db),
 ) -> User:
     """Resolve the authenticated user from the JWT, or raise 401.
+
+    The token comes from the ``Authorization: Bearer`` header when there is
+    one, and from the browser's session cookie otherwise (see
+    ``core/session_cookies.py``).
 
     This is the full authentication check and nothing more. Almost nothing
     should depend on it directly -- use :func:`get_current_user`, which adds the
@@ -54,7 +63,8 @@ def get_current_user_allowing_password_change(
         detail="Could not validate credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )
-    claims = decode_access_token(token)
+    token = bearer or session_token(request)
+    claims = decode_access_token(token) if token else None
     if claims is None or "sub" not in claims:
         raise credentials_error
 

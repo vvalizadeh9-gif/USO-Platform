@@ -33,6 +33,7 @@ from app.core.config import get_settings
 from app.core.rate_limit import client_ip
 from app.core.request_context import reset_client_ip, set_client_ip
 from app.core.security import decode_access_token
+from app.core.session_cookies import request_token
 
 settings = get_settings()
 
@@ -119,10 +120,10 @@ def _acting_user_id(request) -> int | None:
     thing that opens a database connection. Returns None for anonymous requests
     and for tokens that do not validate.
     """
-    header = request.headers.get("authorization", "")
-    if not header.lower().startswith("bearer "):
+    token = request_token(request)
+    if token is None:
         return None
-    claims = decode_access_token(header.split(" ", 1)[1].strip())
+    claims = decode_access_token(token)
     if not claims:
         return None
     try:

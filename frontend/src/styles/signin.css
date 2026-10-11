@@ -1,0 +1,436 @@
+/* ===================================================================
+   Sign-in, and the placeholder pages linked from it.
+   Every value is a token from uep-tokens.css.
+   =================================================================== */
+
+.uep-signin {
+  display: flex;
+  /* The app shell never scrolls the document (see app.css), so this page
+     scrolls itself when the window is shorter than the form. */
+  height: 100%;
+  overflow: auto;
+  font-family: var(--uep-font-sans);
+  font-size: var(--uep-fs-body);
+  line-height: var(--uep-lh-ui);
+  font-feature-settings: normal;
+  color: var(--uep-text);
+  background: var(--uep-surface);
+}
+
+/* ---------- Left half: the form ---------- */
+
+.uep-signin-side {
+  position: relative;
+  flex: 1 1 var(--uep-signin-half-basis);
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  padding: var(--uep-space-32) var(--uep-space-48);
+  background: var(--uep-surface);
+}
+
+.uep-signin-skip {
+  position: absolute;
+  top: var(--uep-space-8);
+  left: var(--uep-space-8);
+  padding: var(--uep-space-8) var(--uep-space-12);
+  border-radius: var(--uep-radius-control);
+  background: var(--uep-accent);
+  color: var(--uep-on-accent);
+  font-weight: var(--uep-weight-medium);
+  text-decoration: none;
+  transform: translateY(calc(-100% - var(--uep-space-16)));
+}
+.uep-signin-skip:focus {
+  transform: none;
+  outline: var(--uep-focus-outline-width) solid var(--uep-accent);
+  outline-offset: var(--uep-focus-outline-offset);
+}
+
+.uep-auth-logo {
+  display: flex;
+  align-items: center;
+  gap: var(--uep-space-8);
+}
+.uep-auth-logo-tile {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--uep-signin-logo-size);
+  height: var(--uep-signin-logo-size);
+  border-radius: var(--uep-radius-logo);
+  background: var(--uep-accent);
+  color: var(--uep-on-accent);
+  font-size: var(--uep-fs-caption);
+  font-weight: var(--uep-weight-semibold);
+}
+.uep-auth-wordmark {
+  font-size: var(--uep-fs-card-title);
+  font-weight: var(--uep-weight-semibold);
+}
+
+.uep-signin-center {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: var(--uep-space-32) 0;
+}
+
+.uep-signin-column {
+  width: 100%;
+  max-width: var(--uep-signin-form-width);
+  margin: 0 auto;
+}
+
+.uep-signin-title {
+  margin: 0;
+  font-size: var(--uep-fs-signin-title);
+  font-weight: var(--uep-weight-semibold);
+  letter-spacing: var(--uep-tracking-heading);
+  line-height: var(--uep-lh-ui);
+}
+.uep-signin-subtitle {
+  margin: var(--uep-space-4) 0 var(--uep-space-32);
+  color: var(--uep-text-3);
+}
+
+.uep-signin-notice {
+  margin: calc(-1 * var(--uep-space-16)) 0 var(--uep-space-24);
+  padding: var(--uep-space-12) var(--uep-space-16);
+  border: var(--uep-border-width) solid var(--uep-border);
+  border-radius: var(--uep-radius-control);
+  background: var(--uep-page);
+  color: var(--uep-text-2);
+  font-size: var(--uep-fs-small);
+}
+
+.uep-signin-field { margin-bottom: var(--uep-space-20); }
+
+.uep-signin-label {
+  display: block;
+  margin-bottom: var(--uep-space-8);
+  font-weight: var(--uep-weight-medium);
+}
+.uep-signin-label-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--uep-space-12);
+}
+
+.uep-signin-link {
+  color: var(--uep-accent);
+  font-weight: var(--uep-weight-medium);
+  text-decoration: none;
+  border-radius: var(--uep-space-4);
+  transition: color var(--uep-dur-fast) var(--uep-ease-productive);
+}
+.uep-signin-link:hover { color: var(--uep-accent-hover); text-decoration: underline; }
+.uep-signin-link:focus-visible,
+.uep-auth-legal a:focus-visible,
+.uep-auth-back:focus-visible {
+  outline: var(--uep-focus-outline-width) solid var(--uep-accent);
+  outline-offset: var(--uep-focus-outline-offset);
+}
+.uep-signin-forgot { font-size: var(--uep-fs-small); margin-bottom: var(--uep-space-8); }
+
+.uep-signin-input-wrap { position: relative; }
+
+.uep-signin-input-icon {
+  position: absolute;
+  top: 50%;
+  left: var(--uep-space-12);
+  transform: translateY(-50%);
+  color: var(--uep-text);
+  opacity: var(--uep-icon-muted-opacity);
+  pointer-events: none;
+}
+
+.uep-signin-input {
+  display: block;
+  width: 100%;
+  height: var(--uep-signin-input-height);
+  padding: 0 var(--uep-space-12) 0 var(--uep-signin-input-icon-inset);
+  border: var(--uep-border-width) solid var(--uep-border-strong);
+  border-radius: var(--uep-radius-control);
+  background: var(--uep-surface);
+  color: var(--uep-text);
+  font: inherit;
+  transition:
+    border-color var(--uep-dur-fast) var(--uep-ease-productive),
+    box-shadow var(--uep-dur-fast) var(--uep-ease-productive);
+}
+.uep-signin-input::placeholder { color: var(--uep-text-3); opacity: 1; }
+.uep-signin-input:focus {
+  outline: none;
+  border-color: var(--uep-accent);
+  box-shadow: var(--uep-focus-ring);
+}
+.uep-signin-input[aria-invalid='true'] { border-color: var(--uep-danger); }
+.uep-signin-input[aria-invalid='true']:focus { box-shadow: var(--uep-danger-ring); }
+.uep-signin-input:disabled { background: var(--uep-page); }
+.uep-signin-input-reveal { padding-right: var(--uep-signin-input-icon-inset); }
+.uep-signin-input-plain { padding-left: var(--uep-space-12); }
+
+.uep-signin-reveal,
+.uep-signin-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: var(--uep-radius-control);
+  background: transparent;
+  color: var(--uep-text-2);
+  cursor: pointer;
+  transition:
+    background-color var(--uep-dur-fast) var(--uep-ease-productive),
+    color var(--uep-dur-fast) var(--uep-ease-productive);
+}
+.uep-signin-reveal {
+  position: absolute;
+  top: var(--uep-space-4);
+  right: var(--uep-space-4);
+  bottom: var(--uep-space-4);
+  width: calc(var(--uep-signin-input-height) - 2 * var(--uep-space-4));
+}
+.uep-signin-reveal:hover,
+.uep-signin-icon-btn:hover { background: var(--uep-accent-tint); color: var(--uep-accent); }
+.uep-signin-reveal:focus-visible,
+.uep-signin-icon-btn:focus-visible,
+.uep-signin-submit:focus-visible {
+  outline: var(--uep-focus-outline-width) solid var(--uep-accent);
+  outline-offset: var(--uep-focus-outline-offset);
+}
+
+.uep-signin-error,
+.uep-signin-hint {
+  display: flex;
+  align-items: center;
+  gap: var(--uep-space-4);
+  margin: var(--uep-space-8) 0 0;
+  font-size: var(--uep-fs-small);
+}
+.uep-signin-error { color: var(--uep-danger); }
+.uep-signin-hint { color: var(--uep-text-2); }
+.uep-signin-error:empty,
+.uep-signin-hint:empty { display: none; }
+
+.uep-signin-captcha-row { display: flex; align-items: center; gap: var(--uep-space-8); }
+.uep-signin-captcha-row .uep-signin-input { flex: 1; min-width: 0; }
+.uep-signin-captcha-sum {
+  padding: 0 var(--uep-space-12);
+  height: var(--uep-signin-input-height);
+  display: inline-flex;
+  align-items: center;
+  border-radius: var(--uep-radius-control);
+  background: var(--uep-page);
+  font-weight: var(--uep-weight-semibold);
+  white-space: nowrap;
+}
+.uep-signin-icon-btn {
+  width: var(--uep-signin-input-height);
+  height: var(--uep-signin-input-height);
+}
+.uep-signin-icon-btn:disabled { cursor: not-allowed; opacity: var(--uep-icon-muted-opacity); }
+
+.uep-signin-check {
+  display: flex;
+  align-items: center;
+  gap: var(--uep-space-8);
+  margin-bottom: var(--uep-space-20);
+  color: var(--uep-text-2);
+  cursor: pointer;
+}
+.uep-signin-check input {
+  width: var(--uep-icon-sm);
+  height: var(--uep-icon-sm);
+  margin: 0;
+  accent-color: var(--uep-accent);
+  cursor: pointer;
+}
+.uep-signin-check input:focus-visible {
+  outline: var(--uep-focus-outline-width) solid var(--uep-accent);
+  outline-offset: var(--uep-focus-outline-offset);
+}
+
+.uep-signin-submit {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--uep-space-8);
+  width: 100%;
+  height: var(--uep-signin-button-height);
+  border: 0;
+  border-radius: var(--uep-radius-control);
+  background: var(--uep-accent);
+  color: var(--uep-on-accent);
+  font: inherit;
+  font-size: var(--uep-fs-15);
+  font-weight: var(--uep-weight-medium);
+  cursor: pointer;
+  transition:
+    background-color var(--uep-dur-fast) var(--uep-ease-productive),
+    transform var(--uep-dur-fast) var(--uep-ease-productive);
+}
+.uep-signin-submit:hover { background: var(--uep-accent-hover); }
+.uep-signin-submit:active { transform: scale(var(--uep-press-scale)); }
+.uep-signin-submit[aria-disabled='true'] { cursor: progress; }
+.uep-signin-submit-icon {
+  transition: transform var(--uep-signin-icon-nudge-duration) var(--uep-ease-productive);
+}
+.uep-signin-submit:hover .uep-signin-submit-icon { transform: translateX(var(--uep-signin-icon-nudge)); }
+
+.uep-signin-spinner {
+  width: var(--uep-icon-md);
+  height: var(--uep-icon-md);
+  border: var(--uep-focus-outline-width) solid currentColor;
+  border-right-color: transparent;
+  border-radius: var(--uep-radius-pill);
+  animation: uep-spin var(--uep-signin-spinner-turn) linear infinite;
+}
+
+.uep-signin-access {
+  margin: var(--uep-space-24) 0 0;
+  font-size: var(--uep-fs-small);
+  color: var(--uep-text-2);
+}
+
+.uep-auth-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--uep-space-16);
+  font-size: var(--uep-fs-caption);
+  color: var(--uep-text-3);
+}
+.uep-auth-legal { display: flex; flex-wrap: wrap; align-items: center; gap: var(--uep-space-8); }
+.uep-auth-legal a { color: var(--uep-text-3); text-decoration: none; border-radius: var(--uep-space-4); }
+.uep-auth-legal a:hover { color: var(--uep-text-2); text-decoration: underline; }
+
+.uep-auth-back {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--uep-space-8);
+  margin-bottom: var(--uep-space-24);
+  color: var(--uep-accent);
+  font-weight: var(--uep-weight-medium);
+  text-decoration: none;
+  border-radius: var(--uep-space-4);
+}
+.uep-auth-back:hover { color: var(--uep-accent-hover); }
+
+/* ---------- Right half: the brand ---------- */
+
+.uep-signin-brand {
+  position: relative;
+  flex: 1 1 var(--uep-signin-half-basis);
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: var(--uep-space-56) var(--uep-space-64);
+  overflow: hidden;
+  background: var(--uep-brand-deep);
+  color: var(--uep-on-brand);
+  animation: uep-fade-in var(--uep-signin-panel-fade) var(--uep-ease-entrance) both;
+}
+
+.uep-signin-statement {
+  position: relative;
+  z-index: 1;
+  margin: 0;
+  font-size: var(--uep-fs-brand);
+  font-weight: var(--uep-weight-semibold);
+  line-height: var(--uep-lh-brand);
+  letter-spacing: var(--uep-tracking-brand);
+}
+.uep-signin-word-mask { display: block; overflow: hidden; }
+.uep-signin-word {
+  display: block;
+  animation: uep-word-rise var(--uep-dur-slow) var(--uep-ease-expressive) both;
+  animation-delay: calc(var(--uep-signin-word-delay) + var(--uep-signin-word-step) * var(--uep-word, 0));
+}
+
+.uep-signin-rule {
+  position: relative;
+  z-index: 1;
+  display: block;
+  width: var(--uep-signin-brand-rule-width);
+  height: var(--uep-signin-brand-rule-height);
+  margin-top: var(--uep-signin-brand-rule-gap);
+  background: var(--uep-on-brand);
+  transform-origin: left center;
+  animation: uep-rule-draw var(--uep-dur-slow) var(--uep-ease-expressive) var(--uep-signin-rule-delay) both;
+}
+
+/* Signal waves, centred on the panel's bottom-right corner. */
+.uep-signin-waves { position: absolute; inset: 0; pointer-events: none; }
+.uep-signin-wave {
+  position: absolute;
+  right: calc(var(--uep-signin-wave-size) / -2);
+  bottom: calc(var(--uep-signin-wave-size) / -2);
+  width: var(--uep-signin-wave-size);
+  height: var(--uep-signin-wave-size);
+  border: var(--uep-signin-wave-border) solid var(--uep-brand-wave);
+  border-radius: var(--uep-radius-pill);
+  opacity: 0;
+  will-change: transform, opacity;
+  animation: uep-wave var(--uep-signin-wave-cycle) var(--uep-signin-wave-ease) infinite;
+  animation-delay: calc(var(--uep-signin-wave-stagger) * var(--uep-wave, 0));
+}
+
+/* ---------- Entrance (left side) ---------- */
+
+.uep-enter {
+  animation: uep-rise var(--uep-signin-enter-duration) var(--uep-ease-entrance) both;
+  animation-delay: calc(var(--uep-signin-stagger-step) * var(--uep-i, 0));
+}
+
+@keyframes uep-rise {
+  from { opacity: 0; transform: translateY(var(--uep-signin-enter-distance)); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes uep-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes uep-word-rise {
+  from { transform: translateY(105%); }
+  to { transform: none; }
+}
+@keyframes uep-rule-draw {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+@keyframes uep-wave {
+  0% { transform: scale(var(--uep-signin-wave-start-scale)); opacity: 0; }
+  12% { opacity: var(--uep-signin-wave-peak-opacity); }
+  100% { transform: scale(1); opacity: 0; }
+}
+@keyframes uep-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ---------- Reduced motion (see lib/motionPreference.js) ---------- */
+
+[data-uep-motion='reduce'] .uep-signin *,
+[data-uep-motion='reduce'] .uep-signin {
+  animation: none;
+  transition: none;
+}
+[data-uep-motion='reduce'] .uep-signin-waves { display: none; }
+/* A spinner that stops dead reads as frozen, so it only slows. */
+[data-uep-motion='reduce'] .uep-signin .uep-signin-spinner {
+  animation: uep-spin calc(var(--uep-signin-spinner-turn) * 3) linear infinite;
+}
+
+/* ---------- Narrow windows: the form stands alone ---------- */
+
+@media (max-width: 959.98px) {
+  .uep-signin-brand { display: none; }
+}
+@media (max-width: 599.98px) {
+  .uep-signin-side { padding: var(--uep-space-24) var(--uep-space-16); }
+  .uep-auth-footer { flex-direction: column; align-items: flex-start; }
+}

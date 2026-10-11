@@ -1,10 +1,12 @@
-// Central API client. Attaches the JWT to every request and handles the two
+// Central API client. The session is an HttpOnly cookie the browser sends on
+// its own; this adds the CSRF header to every write and handles the two
 // server answers that mean "you cannot continue on this page", so that auth
 // logic lives in one place (DRY).
 import axios from 'axios'
 import { isPasswordChangeRequired } from '../lib/apiError'
+import { csrfHeaders } from '../lib/csrf'
 import { DATA_CHANGED_EVENT } from '../lib/dataChanged'
-import { loginPathFor } from '../lib/returnTo'
+import { SESSION_EXPIRED, loginPathFor } from '../lib/returnTo'
 
 const api = axios.create({ baseURL: '/api/v1' })
 
@@ -12,8 +14,7 @@ const api = axios.create({ baseURL: '/api/v1' })
 const CHANGE_PASSWORD_PATH = '/change-password'
 
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('uep_token')
-  if (token) config.headers.Authorization = `Bearer ${token}`
+  Object.assign(config.headers, csrfHeaders(config.method))
   return config
 })
 
@@ -29,11 +30,12 @@ api.interceptors.response.use(
   },
   (err) => {
     // A session that ran out mid-task. The page goes with them to sign-in, so
-    // they come back to where they were rather than to the home page.
-    if (err.response?.status === 401 && localStorage.getItem('uep_token')) {
-      localStorage.removeItem('uep_token')
+    // they come back to where they were rather than to the home page, and the
+    // sign-in page says why they are there. Only when there was a session to
+    // lose: a failed sign-in is a 401 too.
+    if (err.response?.status === 401 && localStorage.getItem('uep_user')) {
       localStorage.removeItem('uep_user')
-      window.location.href = loginPathFor(window.location)
+      window.location.href = loginPathFor(window.location, { reason: SESSION_EXPIRED })
     }
 
     // A 403 is normally "you may not do this", and the session survives it.
