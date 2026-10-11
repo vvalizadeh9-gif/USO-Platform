@@ -20,36 +20,36 @@ export function StatusBar({ status, view }) {
   )
 }
 
-/** The row's per-authority bar: three small segments and the status word. */
-export function MiniBar({ authority, status, view }) {
-  const s = statusOf(status)
+const SYMBOLS = { waiting: '•', filled: '↑', approved: '✓', rejected: '✕', returned: '↩' }
+
+/** A status dot with its symbol: colour is never the only signal. */
+export function StatusDot({ status, small = false }) {
   return (
-    <span className="mw-mini" aria-label={`${authority}: ${s.label}`}>
-      <span className="mw-mini-segs" aria-hidden="true">
-        {segmentsFor(status, view).map((seg, i) => (
-          <span key={i} className="mw-seg mw-seg-mini" data-tone={seg.tone} data-lit={seg.lit} data-outline={seg.outline} />
-        ))}
-      </span>
-      <span className="mw-mini-label" data-tone={s.tone}>{s.label}</span>
+    <span className={`mw-dot${small ? ' mw-dot-sm' : ''}`} data-status={status} aria-hidden="true">
+      {SYMBOLS[status] || ''}
     </span>
   )
 }
 
-/** The legend under the village list. */
-export function BarLegend({ view }) {
-  const items = [
-    { tone: 'pending', label: view === 'staff' ? 'Contractor' : 'You' },
-    { tone: 'ongoing', label: view === 'staff' ? 'You check' : 'Coordinator' },
-    { tone: 'success', label: 'Approved' },
-    { tone: 'danger', label: 'Rejected' },
-    { tone: 'danger', label: 'Returned', outline: true },
-  ]
+/** The row's per-authority dot, named in its tooltip and aria-label. */
+export function MiniBar({ authority, status }) {
+  const text = `${authority}: ${statusOf(status).label}`
+  return (
+    <span className="mw-dot-cell" title={text} aria-label={text} role="img">
+      <StatusDot status={status} />
+    </span>
+  )
+}
+
+/** The key under the village list. */
+export function BarLegend() {
+  const items = ['waiting', 'filled', 'approved', 'rejected', 'returned']
   return (
     <div className="mw-legend">
-      {items.map((item) => (
-        <span key={item.label} className="mw-legend-item">
-          <span className="mw-seg mw-seg-key" data-tone={item.tone} data-lit="true" data-outline={Boolean(item.outline)} />
-          {item.label}
+      {items.map((key) => (
+        <span key={key} className="mw-legend-item">
+          <StatusDot status={key} small />
+          {statusOf(key).label}
         </span>
       ))}
     </div>

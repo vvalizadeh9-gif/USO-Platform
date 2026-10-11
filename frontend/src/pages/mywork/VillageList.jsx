@@ -1,7 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { Search, X } from 'lucide-react'
 import { BarLegend, MiniBar } from './StatusBar'
-import { SORTS } from './useMyWork'
 
 /** Loads the next page when the end of the list scrolls into view. */
 function useEndOfList(onEnd, enabled) {
@@ -19,9 +18,8 @@ function useEndOfList(onEnd, enabled) {
 }
 
 function VillageRow({ row, view, focused, ticked, onFocus, onTick, statusFor }) {
-  const meta = view === 'staff' && row.contractor_name
-    ? `${row.village_code} · ${row.contractor_name}`
-    : row.village_code
+  const other = view === 'staff' ? row.contractor_name : row.site_code
+  const meta = other ? `${row.village_code} · ${other}` : row.village_code
   return (
     <div className={`mw-row${focused ? ' is-focus' : ''}${ticked ? ' is-ticked' : ''}`}>
       <input
@@ -35,7 +33,7 @@ function VillageRow({ row, view, focused, ticked, onFocus, onTick, statusFor }) 
         <span className="mw-row-text">
           <span className="mw-row-name">
             <span className="mw-village-name" dir="auto">{row.village_name}</span>
-            {row.refiling_round && <span className="mw-round-tag">Round {row.refiling_round}</span>}
+            {row.refiling_round > 1 && <span className="mw-round-tag">R{row.refiling_round}</span>}
           </span>
           <span className="mw-row-meta">
             <span className="mw-meta-text">{meta}</span>
@@ -52,7 +50,7 @@ function VillageRow({ row, view, focused, ticked, onFocus, onTick, statusFor }) 
 
 /** The queue card on the left: the only part of the page that scrolls. */
 export default function VillageList({
-  view, rows, total, sort, onSort, query, onQuery, paste, onTickPasted,
+  view, rows, total, query, onQuery, paste, onTickPasted,
   focusId, ticked, onFocus, onTick, onTickAll, statusFor, hasMore, onMore, emptyHint, onReset, resetLabel, error,
 }) {
   const endRef = useEndOfList(onMore, hasMore)
@@ -61,14 +59,6 @@ export default function VillageList({
   return (
     <section className="ui-card mw-list" aria-label="Villages">
       <div className="mw-list-head">
-        <div className="mw-list-title-row">
-          <h2 className="mw-card-title">Villages</h2>
-          <span className="count-chip tnum">{total}</span>
-          <span className="mw-grow" />
-          <select className="mw-select" aria-label="Sort" value={sort} onChange={(e) => onSort(e.target.value)}>
-            {SORTS.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
-          </select>
-        </div>
         <label className="mw-search">
           <Search size={16} aria-hidden="true" />
           <input
@@ -101,7 +91,7 @@ export default function VillageList({
           onChange={() => onTickAll(allTicked)}
           aria-label="Tick every village in this list"
         />
-        <span className="mw-grow">{ticked.length ? `${ticked.length} ticked` : 'Village'}</span>
+        <span className="mw-grow">{ticked.length ? `${ticked.length} ticked` : `${total} villages`}</span>
         <span className="mw-col-auth">ICT</span>
         <span className="mw-col-auth">CRA</span>
       </div>
@@ -127,7 +117,7 @@ export default function VillageList({
         ))}
         {hasMore && <div ref={endRef} className="mw-list-more" aria-hidden="true" />}
       </div>
-      <BarLegend view={view} />
+      <BarLegend />
     </section>
   )
 }

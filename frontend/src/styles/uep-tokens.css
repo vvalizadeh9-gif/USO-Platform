@@ -42,6 +42,27 @@
   --uep-filed: #5B21B6;
   --uep-filed-tint: #F1ECFB;
 
+  /* Authorities (UEP-03). CRA is ocean blue everywhere; never teal. */
+  --uep-ict: #8E2F74;
+  --uep-ict-soft: #F5E6F1;
+  --uep-cra: #0369A1;
+  --uep-cra-soft: #E0F2FE;
+
+  /* Status tones: ink / soft / dot. Every dot carries its symbol. */
+  --uep-status-pending-ink: #8A5600;
+  --uep-status-pending-soft: #FCF0D9;
+  --uep-status-pending-dot: #EAB308;
+  --uep-status-pending-on-dot: #422006;
+  --uep-status-ongoing-ink: #5B21B6;
+  --uep-status-ongoing-soft: #F1ECFB;
+  --uep-status-ongoing-dot: #7C3AED;
+  --uep-status-success-ink: #146C2E;
+  --uep-status-success-soft: #E7F5EC;
+  --uep-status-success-dot: #16A34A;
+  --uep-status-danger-ink: #B42318;
+  --uep-status-danger-soft: #FDECEC;
+  --uep-status-danger-dot: #DC2626;
+
   /* App identity: tile colour (white icon on it) and card-header tint. */
   --uep-app-my-work: #1D4ED8;
   --uep-app-drive-test: #0F766E;

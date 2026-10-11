@@ -53,13 +53,13 @@
      check against each other and against --accent; against the status
      colours it sits just under the comfort line, which is why the label is
      mandatory. */
-  --ict: #8E2F74;
+  --ict: var(--uep-ict);
   --ict-base: #EBD3E4;        /* the faint "base" column behind a gap */
-  --ict-soft: #F5E6F1;        /* chip background */
-  --cra: #23A396;
-  --cra-ink: #0F6F66;
-  --cra-base: #C9EAE5;
-  --cra-soft: #DDF3F0;
+  --ict-soft: var(--uep-ict-soft); /* chip background */
+  --cra: var(--uep-cra);        /* ocean blue: the old teal read as green, and green means Approved */
+  --cra-ink: var(--uep-cra);
+  --cra-base: #BAE0F7;
+  --cra-soft: var(--uep-cra-soft);
 
   /* ---- Status: an ink on its own soft fill, always with a label ----
      Every ink clears 4.5:1 on white and on its soft fill (lowest: success,
@@ -4595,20 +4595,20 @@ a.lifecycle-step:focus-visible { outline: 2px solid var(--accent); outline-offse
   font-size: var(--fs-meta); line-height: var(--lh-meta);
 }
 .mw-list-header {
-  flex: none; display: flex; align-items: center; gap: 10px; height: 36px; padding: 0 16px;
+  flex: none; display: flex; align-items: center; gap: 10px; height: 34px; padding: 0 16px;
   background: var(--surface-subtle); border-bottom: 1px solid var(--divider);
   font-size: var(--fs-caption); line-height: var(--lh-caption); font-weight: 600; color: var(--text-tertiary);
 }
-.mw-col-auth { width: 62px; flex: none; }
+.mw-col-auth { width: 34px; flex: none; text-align: center; font-weight: 700; color: var(--uep-text); }
 .mw-check { width: 16px; height: 16px; margin: 0; flex: none; accent-color: var(--accent); }
 .mw-list-scroll { scrollbar-width: thin; scrollbar-color: var(--control-border) transparent; }
 .mw-row {
-  display: flex; align-items: center; gap: 10px; height: 60px; padding: 0 16px;
+  display: flex; align-items: center; gap: 10px; height: 54px; padding: 0 16px;
   border-bottom: 1px solid var(--divider); background: var(--surface);
 }
 .mw-row:hover { background: var(--surface-subtle); }
 .mw-row.is-ticked, .mw-row.is-ticked:hover { background: var(--accent-wash); }
-.mw-row.is-focus, .mw-row.is-focus:hover { background: var(--accent-wash); box-shadow: inset 0 0 0 2px var(--accent); }
+.mw-row.is-focus, .mw-row.is-focus:hover { background: var(--accent-wash); box-shadow: inset 3px 0 0 var(--accent); }
 .mw-row-main {
   flex: 1 1 auto; min-width: 0; align-self: stretch; display: flex; align-items: center; gap: 10px;
   padding: 0; border: none; background: transparent; color: inherit; text-align: left; cursor: pointer;
@@ -4629,7 +4629,7 @@ a.lifecycle-step:focus-visible { outline: 2px solid var(--accent); outline-offse
 }
 .mw-meta-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .mw-days { flex: none; }
-.mw-days.is-long { color: var(--pending-ink); font-weight: 600; }
+.mw-days.is-long { color: var(--uep-status-pending-ink); font-weight: 600; }
 .mw-list-empty {
   padding: 40px 16px; display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center;
   font-size: var(--fs-body); line-height: var(--lh-body);
@@ -5019,3 +5019,41 @@ a.lifecycle-step:focus-visible { outline: 2px solid var(--accent); outline-offse
 /* My Work: "Mark as sent to ICT / CRA" under a side's filing form. */
 .mw-send-authority { display: flex; flex-direction: column; gap: 8px; padding: 0 16px 12px; }
 .mw-send-authority-field { display: flex; flex-direction: column; gap: 4px; font-size: var(--fs-meta); color: var(--text-secondary); }
+
+/* ---- UEP-03: status dots (every dot carries its symbol, WCAG 1.4.1) ---- */
+.mw-dot-cell { width: 34px; flex: none; display: flex; justify-content: center; }
+.mw-dot {
+  width: 16px; height: 16px; flex: none; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--dot); color: var(--uep-on-accent);
+  font-size: 10px; line-height: 1; font-weight: 700;
+}
+.mw-dot-sm { width: 12px; height: 12px; font-size: 8px; }
+.mw-dot[data-status="waiting"]  { --dot: var(--uep-status-pending-dot); color: var(--uep-status-pending-on-dot); }
+.mw-dot[data-status="filled"]   { --dot: var(--uep-status-ongoing-dot); }
+.mw-dot[data-status="approved"] { --dot: var(--uep-status-success-dot); }
+.mw-dot[data-status="rejected"] { --dot: var(--uep-status-danger-dot); }
+.mw-dot[data-status="returned"] { --dot: var(--uep-surface); color: var(--uep-status-danger-ink); box-shadow: inset 0 0 0 1.5px var(--uep-status-danger-dot); }
+.mw-legend-item .mw-dot { margin-inline-end: 2px; }
+
+/* ---- UEP-03: the village record ---- */
+.mw-record.ui-card { flex: none; padding: 0; gap: 0; overflow: hidden; animation: mw-fade var(--uep-dur-record, 200ms) ease-out; }
+.mw-record-top { display: flex; align-items: center; gap: 12px; padding: 14px 20px; }
+.mw-record-label { font-size: 12px; font-weight: 500; color: var(--uep-text-3); }
+.mw-record-name { margin: 0; font-family: var(--uep-font-persian); font-size: 22px; line-height: 1.3; font-weight: 600; color: var(--uep-text); }
+.mw-record .mw-facts {
+  display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); column-gap: 0;
+  border-top: 1px solid var(--uep-border);
+}
+.mw-record .mw-facts > div { padding: 10px 20px; min-width: 0; }
+.mw-record .mw-facts > div + div { border-inline-start: 1px solid var(--uep-divider); }
+.mw-record .mw-facts dt { font-size: 12px; font-weight: 500; color: var(--uep-text-3); }
+.mw-record .mw-facts dd { font-size: 14px; font-weight: 500; }
+.mw-tech-chip {
+  display: inline-flex; align-items: center; height: 22px; padding: 0 8px; margin-inline-end: 4px;
+  border-radius: 6px; background: var(--uep-divider); color: var(--uep-text-2); font-size: 12px; font-weight: 600;
+}
+.mw-record-many-title { margin: 0; flex: 1 1 auto; font-size: 16px; font-weight: 600; }
+.mw-requested-many .mw-req-body { max-height: 160px; overflow: auto; }
+@keyframes mw-fade { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .mw-record.ui-card { animation: none; } }

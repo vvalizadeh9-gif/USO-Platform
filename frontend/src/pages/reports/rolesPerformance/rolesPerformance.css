@@ -19,7 +19,7 @@
   --rp-accent-wash: #F2F6FE;
   --rp-ict: #8E2F74;
   --rp-ict-soft: #F5E6F1;
-  --rp-cra: #0F6F66;
+  --rp-cra: var(--uep-cra);
   --rp-cra-soft: #DDF3F0;
   --rp-good: #1D7A4B;
   --rp-good-soft: #E2F3E9;

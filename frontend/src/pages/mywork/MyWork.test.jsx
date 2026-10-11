@@ -42,7 +42,7 @@ async function renderAs(name) {
   role.name = name
   const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
   const utils = render(<MemoryRouter initialEntries={['/my-work']}><MyWork /></MemoryRouter>)
-  await screen.findByRole('region', { name: 'Requested' })
+  await screen.findByRole('region', { name: 'Village' })
   return { user, ...utils }
 }
 
@@ -59,7 +59,6 @@ describe('tabs, counts and labels', () => {
     await renderAs('Contractor')
     const tabs = screen.getAllByRole('tab').map((t) => t.textContent)
     expect(tabs).toEqual(['Your move44', 'New letter needed10', 'Returned10', 'Not filed24', 'With coordinator13'])
-    expect(screen.getAllByText(/not approved/)).toHaveLength(2)
     expect(within(card('ICT')).getByRole('button', { name: 'Send ICT' })).toBeInTheDocument()
   })
 
@@ -67,7 +66,6 @@ describe('tabs, counts and labels', () => {
     await renderAs('Coordinator')
     expect(screen.getAllByRole('tab')[0]).toHaveTextContent('To check13')
     expect(screen.getAllByRole('tab')[0]).toHaveAttribute('aria-selected', 'true')
-    expect(screen.getAllByText(/to check/)).toHaveLength(2)
     expect(within(card('ICT')).getByRole('button', { name: 'Save ICT' })).toBeInTheDocument()
   })
 })
