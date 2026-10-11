@@ -378,3 +378,25 @@ At 1280×800 the main column is 1280 − 64 − 300 − 24 = **892px**, so each 
 - **Search pill.** It is deliberately reduced to sites and Work Items until a real search exists.
 - **The 300ms target.** Board builds already list items, and plan progress is a pass over work items. Both are cached for a few seconds per user. I will measure on the largest seed available and report the real number. I cannot verify production-sized data from here.
 - **The Manrope files** have to be downloaded once (OFL, from the official release) into `assets/fonts/`. I'll ask before downloading.
+
+## UEP-02: `GET /api/v1/me/home`
+
+The final Home and the shell read one response. It is `GET /home/summary`
+(below) plus:
+
+| Field | Meaning |
+|---|---|
+| `system.status` | `normal`, or `degraded` when the database does not answer |
+| `system.checked_at` | When that was checked |
+| `version` | The UEP version for the footer |
+| `groups[].tickets[].owner_type` | `contractors`, `coordinators` or `teams`; null when nobody is named |
+| `groups[].tickets[].oldest_days` | Whole days the oldest item has waited |
+
+The summary part is cached per user (`count_cache`, emptied on every
+commit); the status is checked on each call. The Acceptance card now also
+carries the coordinator's `ict_to_validate` / `cra_to_validate` queues, and
+empty rows are no longer kept: an empty row, and a card with none, is hidden.
+
+The trends come from the existing nightly `action_daily_snapshot` job
+(`jobs/daily_digest.py` → `action_digest.run`); until 14 days of rows exist a
+sparkline draws only the days it has.

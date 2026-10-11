@@ -29,6 +29,10 @@ class HomeTicketOut(BaseModel):
     owners_more: int
     #: How many distinct holders there are in all.
     owners_total: int
+    #: What the holders are, plural ("contractors"); None when none is named.
+    owner_type: str | None = None
+    #: Whole days the oldest item has waited.
+    oldest_days: int | None = None
 
 
 class HomeGroupOut(BaseModel):
@@ -105,3 +109,16 @@ class HomeSummaryOut(BaseModel):
     plan: HomePlanOut | None
     #: Pending items per app, keyed by the path a ticket opens.
     app_badges: dict[str, HomeBadgeOut]
+
+
+class SystemStatusOut(BaseModel):
+    #: "normal" when every dependency answered, otherwise "degraded".
+    status: Literal["normal", "degraded"]
+    checked_at: datetime
+
+
+class MeHomeOut(HomeSummaryOut):
+    """``GET /me/home``: the summary plus the footer's status and version."""
+
+    system: SystemStatusOut
+    version: str

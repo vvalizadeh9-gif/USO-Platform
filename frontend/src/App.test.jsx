@@ -13,7 +13,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 // The real pages pull in charts, animation and the API client. This is a test
 // about routing, so they are replaced with markers naming where we landed.
-vi.mock('./components/Layout', () => ({
+vi.mock('./shell/AppShell', () => ({
   default: () => <Outlet />,
 }))
 

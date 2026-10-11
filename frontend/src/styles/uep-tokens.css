@@ -125,6 +125,35 @@
   --uep-press-scale: 0.98;
   --uep-pop-scale: 0.98;
 
+  /* ---- Component: app shell (UEP-02) ---- */
+  --uep-header-height: 56px;
+  --uep-header-control: 36px;
+  --uep-logo-tile: 24px;
+  --uep-search-max: 520px;
+  --uep-search-height: 34px;
+  --uep-badge-size: 16px;
+  --uep-avatar-size: 32px;
+  --uep-launcher-width: 380px;
+  --uep-account-width: 260px;
+  --uep-rail-width: 232px;
+  --uep-backdrop: rgba(20, 23, 31, 0.16);
+  --uep-dur-card-hover: 200ms;
+
+  /* ---- Component: Home (UEP-02) ---- */
+  --uep-home-max: 1280px;
+  --uep-home-apps-basis: 280px;
+  --uep-home-main-basis: 640px;
+  --uep-home-card-min: 270px;
+  --uep-spark-height: 28px;
+  --uep-progress-height: 6px;
+  --uep-fs-queue-count: 20px;
+  --uep-fs-card-total: 24px;
+  --uep-kpi-stagger: 60ms;
+  --uep-spark-delay: 250ms;
+  --uep-progress-fill: 800ms;
+  --uep-hero-area-opacity: 0.14;
+  --uep-area-opacity: 0.08;
+
   /* ---- Component: sign-in ---- */
   --uep-signin-half-basis: 520px;
   --uep-signin-breakpoint: 960px;  /* documentation only: media queries cannot read it */

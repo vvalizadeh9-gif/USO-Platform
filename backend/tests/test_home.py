@@ -288,10 +288,11 @@ def test_a_contractor_is_never_shown_as_the_owner_of_their_own_work(client):
 def test_acceptance_is_pending_ict_and_cra_villages_in_scope(client, username, scope, ict, cra):
     body = _home(client, username)
     acceptance = next(g for g in body["groups"] if g["key"] == "acceptance")
-    assert [t["queue_key"] for t in acceptance["tickets"]] == ["ict_pending", "cra_pending"]
+    pending = [t for t in acceptance["tickets"] if t["queue_key"].endswith("_pending")]
+    assert [t["queue_key"] for t in pending] == ["ict_pending", "cra_pending"]
     assert acceptance["scope_label"] == scope
     assert body["scope_label"] == scope
-    assert [t["count"] for t in acceptance["tickets"]] == [ict, cra]
+    assert [t["count"] for t in pending] == [ict, cra]
     assert {t["unit"] for t in acceptance["tickets"]} == {"villages"}
 
 
@@ -446,3 +447,34 @@ def test_the_snapshot_job_records_due_soon_and_home_only_queues(client):
         assert {"ict_pending", "ict_to_file"} <= keys("h_sc")
     finally:
         db.close()
+
+
+# --------------------------------------------------------------------------
+# GET /me/home (UEP-02): the summary in one round-trip, plus the footer
+# --------------------------------------------------------------------------
+def test_me_home_is_the_summary_plus_status_and_version(client):
+    headers = _headers(client, "h_pm")
+    summary = client.get(f"{API}/home/summary", headers=headers).json()
+    me = client.get(f"{API}/me/home", headers=headers).json()
+    assert me["system"]["status"] == "normal"
+    assert me["version"]
+    assert me["totals"] == summary["totals"]
+    assert me["groups"] == summary["groups"]
+
+
+def test_every_ticket_carries_an_owner_type_and_its_oldest_age(client):
+    for t in _tickets(_home(client, "h_pm")):
+        assert t["owner_type"] in {None, "contractors", "coordinators", "teams"}
+        if t["count"] and t["oldest_started_at"]:
+            assert t["oldest_days"] >= 0
+
+
+def test_oldest_days_counts_whole_days():
+    from datetime import datetime, timedelta, timezone
+
+    from app.services.home import oldest_days
+
+    now = datetime(2026, 10, 10, 12, tzinfo=timezone.utc)
+    assert oldest_days(None, now) is None
+    assert oldest_days(now - timedelta(days=21, hours=3), now) == 21
+    assert oldest_days(now + timedelta(hours=1), now) == 0

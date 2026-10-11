@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.services.system_status import APP_VERSION
 from app.api import api_router
 from app.core.bootstrap import init_db
 from app.core.config import get_settings
@@ -31,7 +32,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="USO Enterprise Platform API",
-    version="1.0.0",
+    version=APP_VERSION,
     lifespan=lifespan,
 )
 

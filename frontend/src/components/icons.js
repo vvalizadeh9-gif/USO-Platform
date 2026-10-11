@@ -22,6 +22,8 @@ import errorFilled16 from '@carbon/icons/es/error--filled/16.js'
 import errorFilled20 from '@carbon/icons/es/error--filled/20.js'
 import home16 from '@carbon/icons/es/home/16.js'
 import home20 from '@carbon/icons/es/home/20.js'
+import logout16 from '@carbon/icons/es/logout/16.js'
+import logout20 from '@carbon/icons/es/logout/20.js'
 import login16 from '@carbon/icons/es/login/16.js'
 import login20 from '@carbon/icons/es/login/20.js'
 import notification16 from '@carbon/icons/es/notification/16.js'
@@ -71,6 +73,7 @@ export const ICONS = Object.freeze({
   user: { 16: user16, 20: user20 },
   password: { 16: password16, 20: password20 },
   login: { 16: login16, 20: login20 },
+  logout: { 16: logout16, 20: logout20 },
   view: { 16: view16, 20: view20 },
   'view--off': { 16: viewOff16, 20: viewOff20 },
   renew: { 16: renew16, 20: renew20 },

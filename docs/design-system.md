@@ -168,3 +168,26 @@ Help go to placeholder pages for now.
 > below the 3:1 that WCAG 1.4.11 asks of an input's boundary. The inputs are
 > still identifiable by their labels and icons, but if an audit flags it, the
 > fix is a darker input border token.
+
+## 8. App shell and Home (UEP-02)
+
+Navigation model and registry: [design/navigation.md](design/navigation.md).
+Home and `GET /me/home`: [design/uep-home.md](design/uep-home.md).
+
+| Component | File | Key tokens |
+|---|---|---|
+| Header | `shell/AppHeader.jsx` | `--uep-header-height`, `--uep-search-max`, `--uep-search-height` |
+| App launcher | `shell/AppLauncher.jsx` | `--uep-launcher-width`, `--uep-backdrop`, `--uep-dur-pop` |
+| Account menu | `shell/AccountPopover.jsx` | `--uep-account-width`, `--uep-dur-pop` |
+| App rail | `shell/AppRail.jsx` | `--uep-rail-width`, `--uep-accent-tint` (active) |
+| App tile | `shell/AppTile.jsx` | `--uep-app-*` |
+
+- The launcher and account menu pop from their corner in 160ms, close on Esc
+  or a backdrop click, trap focus while open and return it to the opener.
+  Arrow keys move between launcher tiles.
+- Home: page enter 320ms; KPI tiles stagger 60ms; sparklines draw in 900ms
+  after 250ms, the area fading in after the line; the PIP bar fills in 800ms;
+  card hover 200ms; press scales to 0.98. All of it stops under
+  `prefers-reduced-motion` or `html[data-uep-motion='reduce']`.
+- KPI deltas are `--uep-danger` only when the change is bad, otherwise
+  `--uep-text-3`. Never green.

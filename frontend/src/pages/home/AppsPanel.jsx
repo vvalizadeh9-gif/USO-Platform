@@ -1,69 +1,31 @@
-import { ArrowRight } from 'lucide-react'
-import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Drawer } from '../../components/ui'
-import { allVisibleItems, appsFor } from '../../lib/nav'
-import HomeIcon from './homeIcons'
+import AppTile from '../../shell/AppTile'
+import { appCount, appGroupsFor, appRoute } from '../../shell/appRegistry'
 
-/** "HC assignment 224 + HC review 6": what a badge adds up. */
-function badgeTitle(badge) {
-  return (badge?.parts || []).map((p) => `${p.label} ${p.count}`).join(' + ')
-}
-
-/**
- * Every app this person can open, grouped by what they go there to do. The
- * list and who sees it come from lib/nav.js, so this panel and the sidebar on
- * every other page cannot disagree. A badge counts what is waiting on them
- * there, from the same tickets as the cards; its tooltip says which.
- */
-export default function AppsPanel({ roleName, badges = {} }) {
-  const [browsing, setBrowsing] = useState(false)
-  const groups = appsFor(roleName)
+/** Every app this role may open, by group, with its pending count. Apps only:
+ * dashboards and trackers are pages inside apps. */
+export default function AppsPanel({ roleName, counts }) {
   return (
-    <aside className="h-card h-apps" aria-labelledby="home-apps">
+    <aside className="ha-panel" aria-labelledby="home-apps">
       <h2 id="home-apps">Apps</h2>
-      {groups.map((group) => (
-        <nav key={group.key} aria-label={group.label} data-group={group.key}>
-          <div className="h-gh" aria-hidden="true">{group.label}</div>
+      {appGroupsFor(roleName).map((group) => (
+        <section key={group.id} className="ha-group" aria-label={group.label}>
+          <h3>{group.label}</h3>
           {group.apps.map((app) => {
-            const badge = badges?.[app.to]
-            const count = badge?.count || 0
+            const count = appCount(app, counts)
             return (
-              <Link
-                key={app.to}
-                to={app.to}
-                className="h-ap"
-                aria-label={count ? `${app.label}, ${count} waiting: ${badgeTitle(badge)}` : app.label}
-              >
-                <span className="h-app-tile" aria-hidden="true">
-                  <HomeIcon name={app.glyph} size={20} tone="white" />
+              <Link key={app.id} to={appRoute(app)} className="ha-app" data-app={app.id}>
+                <AppTile app={app} size={36} />
+                <span className="ha-app-text">
+                  <span className="ha-app-name">{app.name}</span>
+                  <span className="ha-app-desc">{app.description}</span>
                 </span>
-                <span aria-hidden="true">{app.label}</span>
-                {count > 0 && (
-                  <span className="h-badge" title={badgeTitle(badge)} aria-hidden="true">
-                    {count}
-                  </span>
-                )}
+                {count > 0 && <span className="ha-pill" aria-label={`${count} pending`}>{count}</span>}
               </Link>
             )
           })}
-        </nav>
+        </section>
       ))}
-      <span className="h-spacer" />
-      <button type="button" className="h-browse" onClick={() => setBrowsing(true)}>
-        Browse all apps
-        <ArrowRight size={15} aria-hidden="true" />
-      </button>
-      <Drawer open={browsing} onClose={() => setBrowsing(false)} title="All apps">
-        {allVisibleItems(roleName).map((section) => (
-          <div key={section.label} className="h-all-section">
-            <h3>{section.label}</h3>
-            {section.items.map((item) => (
-              <Link key={item.to} to={item.to}>{item.app?.label || item.label}</Link>
-            ))}
-          </div>
-        ))}
-      </Drawer>
     </aside>
   )
 }

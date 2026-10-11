@@ -74,6 +74,30 @@ def _owners(items: list[PendingItem], viewer: User) -> list[str]:
     return [name for name, _ in sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))]
 
 
+#: The words a meta line uses for an owner type, plural ("5 contractors").
+OWNER_TYPE_PLURAL: dict[str, str] = {
+    "contractor": "contractors",
+    "coordinator": "coordinators",
+    "category": "teams",
+}
+
+
+def _owner_type(items: list[PendingItem]) -> str | None:
+    """The kind of holder most of a queue's items wait on, as a plural noun,
+    or None when the items name no one (a PM's own decisions)."""
+    kinds = Counter(
+        i.owner.type for i in items if i.owner and i.owner.type in OWNER_TYPE_PLURAL
+    )
+    return OWNER_TYPE_PLURAL[kinds.most_common(1)[0][0]] if kinds else None
+
+
+def oldest_days(oldest_started_at: datetime | None, now: datetime) -> int | None:
+    """Whole days the oldest item has waited; None when no clock started."""
+    if oldest_started_at is None:
+        return None
+    return max(0, (now - oldest_started_at).days)
+
+
 def _plan(db: Session, user: User, role: str, today: date) -> dict | None:
     """The running Shamsi month's drive-test plan, inside the user's scope."""
     if role == PROBLEM_OWNER:
@@ -132,6 +156,8 @@ class _Row:
 
     summary: boards.QueueSummary
     owners: list[str]
+    owner_type: str | None = None
+    oldest_days: int | None = None
 
 
 def _ticket(row: _Row) -> dict:
@@ -152,6 +178,8 @@ def _ticket(row: _Row) -> dict:
         "owners": row.owners[:MAX_OWNERS],
         "owners_more": max(0, len(row.owners) - MAX_OWNERS),
         "owners_total": len(row.owners),
+        "owner_type": row.owner_type,
+        "oldest_days": row.oldest_days,
     }
 
 
@@ -192,7 +220,14 @@ def build(db: Session, user: User, now: datetime | None = None) -> dict:
     for queue in queues:
         items = queue.fetch(ctx)
         summary = boards.summarize(queue, items, days[queue.key], ctx.now, due_soon_window=window)
-        by_group[STAGE_GROUP[queue.stage]].append(_Row(summary, _owners(items, user)))
+        by_group[STAGE_GROUP[queue.stage]].append(
+            _Row(
+                summary,
+                _owners(items, user),
+                _owner_type(items),
+                oldest_days(summary.oldest_started_at, ctx.now),
+            )
+        )
 
     scope = SCOPE_LABELS.get(role) or boards.scope_label(ctx, role)
     # The groups this role has queues in, empty or not, so the cards stay put.
@@ -200,7 +235,7 @@ def build(db: Session, user: User, now: datetime | None = None) -> dict:
         {
             "key": group.value,
             "label": HOME_GROUP_LABELS[group],
-            "scope_label": scope if group in HOME_KEEPS_EMPTY else None,
+            "scope_label": scope if group is HomeGroup.ACCEPTANCE else None,
             "tickets": [_ticket(r) for r in _shown(by_group[group], group)],
         }
         for group in HOME_GROUP_ORDER
