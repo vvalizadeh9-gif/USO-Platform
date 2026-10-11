@@ -1,5 +1,6 @@
 /**
- * The sidebar's contents, and the rule for who may see an item.
+ * The lifecycle pages and the rule for who may see one. The navigation itself
+ * is shell/appRegistry.js (UEP-02); this list now serves the lifecycle strip.
  *
  * In its own module rather than beside the sidebar because two things ask the
  * same question: the sidebar itself, and the lifecycle strip on the Health
@@ -51,7 +52,7 @@ export const NAV_SECTIONS = [
     // process.
     label: 'Today',
     items: [
-      { to: '/my-fix-queue', label: 'My Fix Queue', icon: Wrench, roles: CATEGORY_OWNER_ROLES, app: { group: 'rollout', label: 'My fix queue', glyph: 'wrench' } },
+      { to: '/my-fix-queue', label: 'My Fix Queue', icon: Wrench, roles: CATEGORY_OWNER_ROLES },
       // UEP Home, the landing page. It is its own full-width shell, so this
       // is the way back to it from every other page.
       { to: '/home', label: 'Home', icon: House, roles: HOME_ROLES },
@@ -67,21 +68,21 @@ export const NAV_SECTIONS = [
     // screens that happen to be next to each other.
     label: 'Drive Test',
     items: [
-      { to: '/reports/drive-test', label: 'Dashboard', icon: LayoutDashboard, app: { group: 'insights', label: 'Drive test dashboard', glyph: 'bars' } },
+      { to: '/reports/drive-test', label: 'Dashboard', icon: LayoutDashboard },
       // Two shapes behind Monthly Plan: the contractor's own form, and the
       // month's queue for everyone with an oversight interest in it. Admin is
       // absent from MONTHLY_PLAN_ROLES, which is what keeps it out of their
       // sidebar.
-      { to: '/monthly-plan', label: 'Monthly Plan', step: true, roles: MONTHLY_PLAN_ROLES, app: { group: 'office', label: 'Monthly plan', glyph: 'calendarSquare' } },
-      { to: '/health-check', label: 'Health Check', step: true, roles: ['PM', 'Coordinator'], key: 'hc', app: { group: 'rollout', label: 'Health check', glyph: 'pulse' } },
-      { to: '/my-health-check', label: 'My Health Check', step: true, roles: ['Contractor'], app: { group: 'rollout', label: 'My health check', glyph: 'pulse' } },
+      { to: '/monthly-plan', label: 'Monthly Plan', step: true, roles: MONTHLY_PLAN_ROLES },
+      { to: '/health-check', label: 'Health Check', step: true, roles: ['PM', 'Coordinator'], key: 'hc' },
+      { to: '/my-health-check', label: 'My Health Check', step: true, roles: ['Contractor'] },
       // Same two roles as Health Check: assigning a drive test and approving
       // one are the same authority as reviewing a health check.
-      { to: '/drive-test', label: 'Drive Test', step: true, roles: ['PM', 'Coordinator'], key: 'dt', app: { group: 'rollout', label: 'Drive test', glyph: 'car' } },
+      { to: '/drive-test', label: 'Drive Test', step: true, roles: ['PM', 'Coordinator'], key: 'dt' },
       // One place for a contractor to work instead of knowing which sites to
       // open on Work Items -- the same reason My Health Check exists.
-      { to: '/my-drive-tests', label: 'My Drive Tests', step: true, roles: ['Contractor'], key: 'mydt', app: { group: 'rollout', label: 'My drive tests', glyph: 'car' } },
-      { to: '/work-items', label: 'Work Items', icon: ListChecks, end: true, hideRoles: ['Admin'], app: { group: 'rollout', label: 'Work items', glyph: 'checklist' } },
+      { to: '/my-drive-tests', label: 'My Drive Tests', step: true, roles: ['Contractor'], key: 'mydt' },
+      { to: '/work-items', label: 'Work Items', icon: ListChecks, end: true, hideRoles: ['Admin'] },
     ],
   },
   {
@@ -89,8 +90,8 @@ export const NAV_SECTIONS = [
     // village (pages/mywork/MyWork.jsx) -- so it sits with its dashboard.
     label: 'Acceptance',
     items: [
-      { to: '/reports/acceptance', label: 'Dashboard', icon: ClipboardCheck, app: { group: 'insights', label: 'Acceptance dashboard', glyph: 'pie' } },
-      { to: '/my-work', label: 'My Work', icon: Briefcase, hideRoles: ['Admin'], key: 'mywork', app: { group: 'rollout', label: 'My work', glyph: 'briefcase' } },
+      { to: '/reports/acceptance', label: 'Dashboard', icon: ClipboardCheck },
+      { to: '/my-work', label: 'My Work', icon: Briefcase, hideRoles: ['Admin'], key: 'mywork' },
     ],
   },
   {
@@ -98,11 +99,11 @@ export const NAV_SECTIONS = [
     items: [
       // Admin is absent from KPI_ROLES, which keeps this out of their sidebar
       // -- and the server refuses them every endpoint behind it.
-      { to: '/reports/kpi', label: 'Roles Performance', icon: Users, roles: KPI_ROLES, app: { group: 'insights', label: 'Roles performance', glyph: 'people' } },
+      { to: '/reports/kpi', label: 'Roles Performance', icon: Users, roles: KPI_ROLES },
       // Same roles, and for the same reason: it reads the same villages under
       // the same scope rule, and the server refuses Admin every endpoint
       // behind it.
-      { to: '/reports/gaps', label: 'Lifecycle Gaps', icon: Link2Off, roles: KPI_ROLES, app: { group: 'insights', label: 'Lifecycle gaps', glyph: 'brokenLink' } },
+      { to: '/reports/gaps', label: 'Lifecycle Gaps', icon: Link2Off, roles: KPI_ROLES },
     ],
   },
   {
@@ -111,49 +112,10 @@ export const NAV_SECTIONS = [
       // The monthly Mojri reconciliation. Unlike the dashboards, this one
       // writes. PM only, as the server has it -- Admin takes the template
       // from the Admin Console.
-      { to: '/mojri-tracker', label: 'Mojri Tracker', icon: FileSpreadsheet, roles: ['PM'], app: { group: 'office', label: 'Mojri tracker', glyph: 'grid' } },
+      { to: '/mojri-tracker', label: 'Mojri Tracker', icon: FileSpreadsheet, roles: ['PM'] },
     ],
   },
 ]
-
-// UEP Home's Apps panel: the same items, regrouped by what a person goes there
-// to do. An item with `app` is listed there under `app.group`, with its own
-// `app.label` in sentence case (the sidebar says "Dashboard" under a heading;
-// the panel has no heading to lean on) and `app.glyph`, a name from
-// pages/home/homeIcons.jsx drawn white on the group's colour tile. Who sees it
-// is still navItemVisible, so the panel and the sidebar cannot disagree. The
-// Action Center is not listed: Home's own figures open it.
-export const APP_GROUPS = [
-  { key: 'rollout', label: 'Rollout' },
-  { key: 'insights', label: 'Insights' },
-  { key: 'office', label: 'Programme office' },
-]
-
-/** The Apps panel for this role: [{ key, label, apps: [{to, label, glyph}] }],
- * groups with nothing visible left out. */
-export function appsFor(roleName) {
-  const items = NAV_SECTIONS.flatMap((section) => section.items).filter(
-    (item) => item.app && navItemVisible(item, roleName),
-  )
-  return APP_GROUPS.map((group) => ({
-    ...group,
-    apps: items
-      .filter((item) => item.app.group === group.key)
-      .map((item) => ({
-        to: item.to,
-        label: item.app.label || item.label,
-        glyph: item.app.glyph,
-      })),
-  })).filter((group) => group.apps.length > 0)
-}
-
-/** Every item this role can see, for "Browse all apps". */
-export function allVisibleItems(roleName) {
-  return NAV_SECTIONS.map((section) => ({
-    label: section.label,
-    items: section.items.filter((item) => item.to !== '/home' && navItemVisible(item, roleName)),
-  })).filter((section) => section.items.length > 0)
-}
 
 /** Whether this user may see a nav item, from the item's own role lists. */
 export function navItemVisible(item, roleName) {

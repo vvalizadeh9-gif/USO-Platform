@@ -1,88 +1,76 @@
 import { Link } from 'react-router-dom'
-import Sparkline from '../../components/Sparkline'
-import HomeIcon from './homeIcons'
+import { describeSeries, segments } from '../../components/Sparkline'
+import { deltaText, deltaTone, weekDelta } from './homeLogic'
 
-/**
- * A change, in a neutral badge: the arrow says which way, colour says
- * nothing (more waiting is bad, more done is good, so a colour would lie half
- * the time). Nothing at all when there is no figure to compare with.
- */
-function Change({ delta, since }) {
-  if (delta === null || delta === undefined) return null
-  const words =
-    delta === 0 ? `No change on ${since}` : `${delta > 0 ? 'Up' : 'Down'} ${Math.abs(delta)} on ${since}`
+const W = 140
+const H = 28
+const PAD = 2
+
+/** A 14-day line drawn left to right, its area fading in after it. Gaps
+ * (days with no snapshot) stay gaps; with fewer than 14 days it shows what
+ * exists. */
+function Spark({ values, label }) {
+  const known = values.filter((v) => v !== null && v !== undefined)
+  const min = Math.min(0, ...known)
+  const max = Math.max(1, ...known)
+  const step = values.length > 1 ? W / (values.length - 1) : 0
+  const y = (v) => PAD + (1 - (v - min) / (max - min)) * (H - 2 * PAD)
+  const runs = segments(values).filter((r) => r.length > 1)
+  const line = (run) => run.map(([i, v], n) => `${n ? 'L' : 'M'}${i * step} ${y(v)}`).join('')
   return (
-    <span className="h-change" title={words} aria-label={words}>
-      {delta === 0 ? '0' : `${delta > 0 ? '▲' : '▼'} ${Math.abs(delta)}`}
-    </span>
+    <svg className="hk-spark" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" role="img" aria-label={describeSeries(label, values)}>
+      {runs.map((run) => (
+        <path key={`a${run[0][0]}`} className="hk-area" d={`${line(run)}L${run[run.length - 1][0] * step} ${H}L${run[0][0] * step} ${H}Z`} />
+      ))}
+      {runs.map((run) => (
+        <path key={`l${run[0][0]}`} className="hk-line" d={line(run)} pathLength="1" />
+      ))}
+    </svg>
   )
 }
 
-/** One KPI: icon and label, the figure with its change, the 14-day line. A
- * link to the list behind it, where this person has one. */
-function Cell({ icon, label, value, delta, since, series, to, hero = false }) {
-  const body = (
-    <>
-      <span className="h-kl">
-        <HomeIcon name={icon} size={28} tone={hero ? 'white' : 'color'} />
-        {label}
-      </span>
-      <span className="h-kf">
-        <span className="h-kv">{value}</span>
-        <Change delta={delta} since={since} />
-      </span>
-      <Sparkline values={series} label={label} tone={hero ? 'white' : 'brand'} className="h-spark" />
-    </>
-  )
-  const className = `h-k ${hero ? 'h-hero' : ''}`.trim()
-  return to ? (
-    <Link to={to} className={className}>{body}</Link>
-  ) : (
-    <div className={className}>{body}</div>
+function Tile({ kpi, label, value, series, delta, to, hero, index }) {
+  const text = deltaText(delta)
+  return (
+    <Link
+      to={to}
+      className={`hk-tile ${hero ? 'is-hero' : ''}`.trim()}
+      style={{ '--i': index }}
+      data-kpi={kpi}
+    >
+      <span className="hk-label">{label}</span>
+      <span className="hk-value">{value}</span>
+      <span className="hk-delta" data-tone={deltaTone(kpi, delta)}>{text ?? ' '}</span>
+      <Spark values={series} label={label} />
+    </Link>
   )
 }
 
-// Where each figure opens. The Action Center has an Overdue view; it has no
-// due-soon or done view yet, so those open the whole board.
+// Each tile opens My work filtered to its set.
 const LINKS = {
   pending: '/action-center',
   overdue: '/action-center?view=overdue',
-  dueSoon: '/action-center',
-  done: '/action-center',
+  dueSoon: '/action-center?view=due-soon',
+  done: '/action-center?view=done',
 }
 
-/**
- * Home's four figures (three for a role with no "Done today"), each with its
- * 14-day trend. `linked` is false for a role with no Action Center.
- */
-export default function KpiStrip({ totals, trends, linked = true }) {
-  const to = (key) => (linked ? LINKS[key] : undefined)
-  const showDone = totals.done_today !== null && totals.done_today !== undefined
-  const doneDelta =
-    showDone && totals.done_yesterday !== null ? totals.done_today - totals.done_yesterday : null
+/** Four tiles, scoped to the signed-in user's own actions. */
+export default function KpiStrip({ totals, trends }) {
+  const done = trends.done || []
+  const tiles = [
+    { kpi: 'pending', label: 'Waiting on you', value: totals.pending, series: trends.pending, delta: totals.pending_week_delta, hero: true },
+    { kpi: 'overdue', label: 'Overdue', value: totals.overdue, series: trends.overdue, delta: totals.overdue_week_delta },
+    { kpi: 'dueSoon', label: 'Due soon', value: totals.due_soon, series: trends.due_soon, delta: totals.due_soon_week_delta },
+    { kpi: 'done', label: 'Done today', value: totals.done_today ?? 0, series: done, delta: weekDelta(done) },
+  ]
   return (
-    <div className="h-kpi-wrap">
-      <section className="h-card h-kpis" aria-label="Your numbers">
-        <Cell
-          hero icon="inbox" label="Waiting on you" value={totals.pending}
-          delta={totals.pending_week_delta} since="last week" series={trends.pending} to={to('pending')}
-        />
-        <Cell
-          icon="clock" label="Overdue" value={totals.overdue}
-          delta={totals.overdue_week_delta} since="last week" series={trends.overdue} to={to('overdue')}
-        />
-        <Cell
-          icon="hourglass" label="Due soon" value={totals.due_soon}
-          delta={totals.due_soon_week_delta} since="last week" series={trends.due_soon} to={to('dueSoon')}
-        />
-        {showDone && (
-          <Cell
-            icon="calendarCheck" label="Done today" value={totals.done_today}
-            delta={doneDelta} since="yesterday" series={trends.done || []} to={to('done')}
-          />
-        )}
+    <div className="hk-wrap">
+      <section className="hk-strip" aria-label="Your numbers">
+        {tiles.map((t, i) => (
+          <Tile key={t.kpi} {...t} to={LINKS[t.kpi]} index={i} />
+        ))}
       </section>
-      <p className="h-kpi-note">Trend lines show the last {trends.days.length} days</p>
+      <p className="hk-caption">Trend lines show the last 14 days · change compared with 7 days ago</p>
     </div>
   )
 }

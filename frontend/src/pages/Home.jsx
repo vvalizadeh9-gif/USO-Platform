@@ -1,234 +1,139 @@
-import { motion, MotionConfig } from 'framer-motion'
-import { ChartColumn, CircleCheck, RefreshCw } from 'lucide-react'
-import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import api from '../api/client'
-import { Banner, stagger } from '../components/ui'
+import Icon from '../components/Icon'
 import { useAuth } from '../context/AuthContext'
-import { DATA_CHANGED_EVENT } from '../lib/dataChanged'
-import { greetingFor, gregorianLabel } from '../lib/greeting'
-import { NAV_SECTIONS, navItemVisible } from '../lib/nav'
-import { hasActionCenter, homeFor, roleLabel } from '../lib/roles'
-import { shamsiLongLabel } from '../lib/shamsi'
+import { homeFor } from '../lib/roles'
+import { useHomeData } from '../shell/HomeData'
 import AppsPanel from './home/AppsPanel'
 import HomeFooter from './home/HomeFooter'
-import HomeHeader from './home/HomeHeader'
 import KpiStrip from './home/KpiStrip'
 import WorkCard from './home/WorkCard'
+import { englishDate, greeting } from './home/homeLogic'
 import '../styles/home.css'
 
 /**
- * UEP Home: how much is waiting on you, what is late or due soon, the trend
- * of each, and every app you can open. One request (GET /home/summary);
- * every number on it is the Action Center's own, and the headline is the sum
- * of the cards. See docs/design/uep-home.md.
+ * UEP Home (UEP-02 §3): greeting, four KPIs, "Your work" cards and the Apps
+ * panel, from one GET /me/home that the whole shell shares. Fits 1440×900
+ * without page scrolling. See docs/design/uep-home.md.
  */
 
-const REFRESH_MS = 60000
-
-/** The first dashboard this role can open: where "View reports" goes. */
-function reportsPathFor(roleName) {
-  const item = NAV_SECTIONS.flatMap((s) => s.items).find(
-    (i) => i.to.startsWith('/reports/') && navItemVisible(i, roleName),
+function Retry({ what, onRetry }) {
+  return (
+    <div className="h-error" role="alert">
+      <Icon name="warning--alt" size={16} />
+      <span>{what} didn't load.</span>
+      <button type="button" onClick={onRetry}>Retry</button>
+    </div>
   )
-  return item?.to || '/reports/drive-test'
 }
 
-function Skeleton() {
-  // The final layout's geometry, so nothing moves when the numbers arrive.
+function KpiSkeleton() {
   return (
-    <>
-      <div className="h-kpi-wrap" aria-hidden="true">
-        <section className="h-card h-kpis">
-          <div className="h-k h-hero" style={{ opacity: 0.35 }} />
-          {[0, 1, 2].map((i) => (
-            <div key={i} className="h-k">
-              <span className="h-skel h-skel-text" style={{ width: '60%' }} />
-              <span className="h-skel" style={{ width: 72, height: 44 }} />
-              <span className="h-skel" style={{ width: '100%', height: 28 }} />
-            </div>
-          ))}
-        </section>
-        <p className="h-kpi-note">&nbsp;</p>
+    <div className="hk-wrap" aria-hidden="true">
+      <div className="hk-strip">
+        {[0, 1, 2, 3].map((i) => (
+          <div key={i} className={`hk-tile is-skel ${i === 0 ? 'is-hero' : ''}`.trim()}>
+            <span className="h-skel" style={{ width: '60%', height: 14 }} />
+            <span className="h-skel" style={{ width: 56, height: 40 }} />
+            <span className="h-skel" style={{ width: '50%', height: 14 }} />
+            <span className="h-skel" style={{ width: '100%', height: 28 }} />
+          </div>
+        ))}
       </div>
-      <section className="h-work" aria-hidden="true">
-        <span className="h-skel h-skel-text" style={{ width: 160, height: 24 }} />
-        <div className="h-grid" data-cols="3">
-          {[0, 1, 2].map((i) => (
-            <div key={i} className="h-card h-wc">
-              <div className="h-ch">
-                <span className="h-skel" style={{ width: 40, height: 40, borderRadius: 8 }} />
-                <span className="h-skel h-skel-text" style={{ width: '40%', height: 20 }} />
-              </div>
-              <div className="h-rows" style={{ padding: 16, gap: 14 }}>
-                <span className="h-skel h-skel-text" style={{ width: '90%' }} />
-                <span className="h-skel h-skel-text" style={{ width: '70%' }} />
-              </div>
-            </div>
-          ))}
-        </div>
-      </section>
-    </>
+      <p className="hk-caption">&nbsp;</p>
+    </div>
   )
 }
 
-function SlaLabel({ data }) {
-  if (data.sla_uniform_days) return <span className="h-sla">SLA {data.sla_uniform_days} days</span>
-  const days = Object.values(data.sla_days || {})
-  if (days.length === 0) return null
+function CardsSkeleton() {
   return (
-    <span className="h-sla" title={Object.entries(data.sla_days).map(([k, d]) => `${k}: ${d} days`).join('\n')}>
-      SLA per queue
-    </span>
+    <div className="hw-grid" aria-hidden="true">
+      {[0, 1, 2].map((i) => (
+        <div key={i} className="hw-card">
+          <div className="hw-head">
+            <span className="h-skel" style={{ width: 36, height: 36 }} />
+            <span className="h-skel" style={{ width: '40%', height: 18 }} />
+          </div>
+          <div className="hw-rows" style={{ padding: 16, gap: 16, display: 'grid' }}>
+            <span className="h-skel" style={{ width: '90%', height: 14 }} />
+            <span className="h-skel" style={{ width: '70%', height: 14 }} />
+          </div>
+        </div>
+      ))}
+    </div>
   )
 }
 
 function YourWork({ data }) {
-  const groups = [...data.groups]
-  // A coordinator's board has no Plans queue, but their month's plan still
-  // belongs on the page: it gets a Plans card of its own.
-  if (data.plan && !groups.some((g) => g.key === 'plans')) {
-    groups.push({ key: 'plans', label: 'Plans', scope_label: null, tickets: [] })
-  }
-  const nothing = data.totals.pending === 0
-
+  // A card shows only when its role has at least one live queue in it.
+  const cards = data.groups.filter((g) => g.tickets.some((t) => t.count > 0))
   return (
-    <section className="h-work" aria-labelledby="home-work">
-      <div className="h-work-head">
+    <section className="hw-section" aria-labelledby="home-work">
+      <div className="hw-title">
         <h2 id="home-work">Your work</h2>
-        <SlaLabel data={data} />
+        {data.sla_uniform_days && <span>SLA {data.sla_uniform_days} days</span>}
       </div>
-      {nothing && !data.plan ? (
-        <div className="h-card h-empty">
-          <CircleCheck size={28} aria-hidden="true" />
-          <b>Nothing waiting on you</b>
-          <span>New work shows up here as soon as it reaches you.</span>
+      {cards.length === 0 ? (
+        <div className="hw-empty">
+          <Icon name="task" size={20} />
+          <b>You're all caught up</b>
+          <span>New work will appear here.</span>
         </div>
       ) : (
-        <motion.div
-          className="h-grid"
-          data-cols={Math.min(3, groups.length)}
-          variants={stagger}
-          initial="hidden"
-          animate="show"
-        >
-          {groups.map((g) => (
+        <div className="hw-grid">
+          {cards.map((g) => (
             <WorkCard
               key={g.key}
-              group={g}
+              group={{ ...g, tickets: g.tickets.filter((t) => t.count > 0) }}
               plan={g.key === 'plans' ? data.plan : null}
             />
           ))}
-        </motion.div>
+        </div>
       )}
     </section>
   )
 }
 
 export default function Home() {
-  const { user, logout } = useAuth()
+  const { user } = useAuth()
+  const { data, error, counts, reload } = useHomeData()
   const roleName = user?.role?.name
-  const [data, setData] = useState(null)
-  const [error, setError] = useState(null)
-  const [now, setNow] = useState(() => new Date())
-
-  const load = useCallback(() => {
-    return api
-      .get('/home/summary')
-      .then((r) => {
-        setData(r.data)
-        setError(null)
-        setNow(new Date())
-      })
-      .catch((e) => setError(e?.response?.status === 403 ? 'forbidden' : 'failed'))
-  }, [])
-
-  // Once on open, after any write anywhere in the app (the counts move when
-  // an action does), and on a light interval -- the same rhythm as the
-  // sidebar's badges.
-  useEffect(() => {
-    let pending = null
-    const onChange = () => {
-      clearTimeout(pending)
-      pending = setTimeout(load, 300)
-    }
-    load()
-    const id = setInterval(load, REFRESH_MS)
-    window.addEventListener(DATA_CHANGED_EVENT, onChange)
-    return () => {
-      clearInterval(id)
-      clearTimeout(pending)
-      window.removeEventListener(DATA_CHANGED_EVENT, onChange)
-    }
-  }, [load])
-
+  const now = new Date()
   const firstName = user?.first_name || (user?.full_name || '').split(' ')[0]
-  const shamsi = shamsiLongLabel(data?.shamsi_date)
 
-  let body
+  let kpis
+  let work
   if (error === 'forbidden') {
-    body = (
-      <Banner tone="info" title="Home isn't available for your role">
-        <Link to={homeFor(roleName)}>Go to your start page</Link>
-      </Banner>
+    kpis = null
+    work = (
+      <p className="h-note">
+        Home isn't available for your role. <Link to={homeFor(roleName)}>Go to your start page</Link>
+      </p>
     )
-  } else if (error && !data) {
-    body = (
-      <Banner tone="error" title="Your work didn't load.">
-        <span className="h-error">
-          Check your connection and try again.
-          <button type="button" className="h-btn" onClick={load}>
-            <RefreshCw size={16} aria-hidden="true" />
-            Retry
-          </button>
-        </span>
-      </Banner>
-    )
+  } else if (!data && error) {
+    kpis = <Retry what="Your numbers" onRetry={reload} />
+    work = <Retry what="Your work" onRetry={reload} />
   } else if (!data) {
-    body = <Skeleton />
+    kpis = <KpiSkeleton />
+    work = <CardsSkeleton />
   } else {
-    body = (
-      <>
-        <KpiStrip totals={data.totals} trends={data.trends} linked={hasActionCenter(roleName)} />
-        <YourWork data={data} />
-      </>
-    )
+    kpis = <KpiStrip totals={data.totals} trends={data.trends} />
+    work = <YourWork data={data} />
   }
 
   return (
-    <MotionConfig reducedMotion="user">
-      <div className="uep-home">
-        <HomeHeader user={user} logout={logout} />
-        <div className="h-body">
-          <main className="h-main" aria-busy={!data && !error}>
-            <section className="h-greet">
-              <div>
-                <div className="h-eyebrow">
-                  {gregorianLabel(now)}
-                  {shamsi && (
-                    <>
-                      {' · '}
-                      <span lang="fa" dir="rtl" className="fa" data-testid="shamsi-date">{shamsi}</span>
-                    </>
-                  )}
-                  {' · '}
-                  {roleLabel(roleName)}
-                </div>
-                <h1 className="h-title">
-                  {greetingFor(now)}{firstName ? `, ${firstName}` : ''}
-                </h1>
-              </div>
-              <Link to={reportsPathFor(roleName)} className="h-btn">
-                <ChartColumn size={16} aria-hidden="true" />
-                View reports
-              </Link>
-            </section>
-            {body}
-          </main>
-          <AppsPanel roleName={roleName} badges={data?.app_badges} />
+    <div className="uep-home">
+      <div className="h-columns">
+        <div className="h-main" aria-busy={!data && !error}>
+          <section className="h-greet">
+            <p className="h-date">{englishDate(now)}</p>
+            <h1>{greeting(now)}{firstName ? `, ${firstName}` : ''}</h1>
+          </section>
+          {kpis}
+          {work}
         </div>
-        <HomeFooter generatedAt={data?.generated_at} />
+        <AppsPanel roleName={roleName} counts={counts} />
       </div>
-    </MotionConfig>
+      <HomeFooter data={data} failed={Boolean(error) && !data} />
+    </div>
   )
 }

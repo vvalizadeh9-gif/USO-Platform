@@ -62,12 +62,13 @@ HOME_GROUP_LABELS: dict[HomeGroup, str] = {
 #: on the Action Center board.
 HOME_QUEUES: dict[HomeGroup, tuple[str, ...] | None] = {
     HomeGroup.ROLLOUT: None,
-    HomeGroup.ACCEPTANCE: ("ict_pending", "cra_pending"),
+    HomeGroup.ACCEPTANCE: ("ict_pending", "cra_pending", "ict_to_validate", "cra_to_validate"),
     HomeGroup.PLANS: None,
 }
 
-#: Cards that show their queues even at zero, so their rows never move.
-HOME_KEEPS_EMPTY: frozenset[HomeGroup] = frozenset({HomeGroup.ACCEPTANCE})
+#: Cards that show their queues even at zero. None since UEP-02: an empty
+#: queue's row is hidden, and a card with no rows is hidden.
+HOME_KEEPS_EMPTY: frozenset[HomeGroup] = frozenset()
 
 STAGE_GROUP: dict[Stage, HomeGroup] = {
     Stage.HC: HomeGroup.ROLLOUT,

@@ -1,6 +1,7 @@
 import { lazy, Suspense } from 'react'
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
-import Layout from './components/Layout'
+import AppShell from './shell/AppShell'
+import { HomeDataProvider } from './shell/HomeData'
 import { useAuth } from './context/AuthContext'
 import { Loading } from './components/ui'
 import { loginPathFor, returnPathFrom } from './lib/returnTo'
@@ -83,25 +84,25 @@ export default function App() {
         {['forgot-password', 'request-access', 'privacy', 'terms', 'help'].map((page) => (
           <Route key={page} path={`/${page}`} element={<AuthPlaceholder page={page} />} />
         ))}
-        {/* UEP Home is its own full-width shell (header, Apps panel, footer)
-            rather than a page inside the sidebar layout: its Apps panel is
-            the navigation there. The board's roles and Regional Managers;
-            the rest are sent to their own landing. */}
-        <Route
-          path="/home"
-          element={
-            <Protected allowedRoles={HOME_ROLES}>
-              <Home />
-            </Protected>
-          }
-        />
         <Route
           element={
             <Protected>
-              <Layout />
+              <HomeDataProvider>
+                <AppShell />
+              </HomeDataProvider>
             </Protected>
           }
         >
+          {/* UEP Home: the landing page, inside the shell with no rail. The
+              board's roles and Regional Managers; the rest land elsewhere. */}
+          <Route
+            path="/home"
+            element={
+              <Protected allowedRoles={HOME_ROLES}>
+                <Home />
+              </Protected>
+            }
+          />
           {/* Where each role lands: see homeFor in lib/roles.js. */}
           <Route path="/" element={<Navigate to={homeFor(user?.role?.name)} replace />} />
           <Route path="/reports/drive-test" element={<DriveTestProject />} />
