@@ -3169,7 +3169,7 @@ a.dt-contractor-name:hover { text-decoration: underline; text-decoration-color: 
    gaps trimmed so the Overview still fits without its body scrolling. The
    type does not change. */
 @media (max-height: 820px) {
-  .dt-page .page-body { padding-block: 16px; }
+  .dt-page .page-body { padding-block: 14px; }
   .dt-page .dt-kpi-card { padding: 14px 20px; gap: 8px; }
   .dt-page .dt-kpi-ic { inline-size: 32px; block-size: 32px; }
   .dt-page .dt-stack > .dt-section { padding: 12px 20px; gap: 8px; }
