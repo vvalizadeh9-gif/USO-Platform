@@ -191,3 +191,15 @@ Home and `GET /me/home`: [design/uep-home.md](design/uep-home.md).
   `prefers-reduced-motion` or `html[data-uep-motion='reduce']`.
 - KPI deltas are `--uep-danger` only when the change is bad, otherwise
   `--uep-text-3`. Never green.
+
+## Card headers inside one app (UEP-04)
+
+When every card on a page belongs to the same app, such as the Drive Test dashboard, the header is white: padding 12px 16px, a 1px `--uep-divider` rule under it, and a 28px app tile (radius 7) holding a white 16px icon. Use Home's tinted header band only when the cards stand for different apps.
+
+## Chart alternatives
+
+Every UEP chart offers a "View as table" toggle (`aria-pressed`). The table has a sticky header on `--uep-page`, is ordered newest first and scrolls inside its card. It reads the same derived points as the plot.
+
+## Neutral data colour
+
+`--uep-neutral-data` (#9AA1AE) is used for "Not started" and for folded or uncategorized data. `--uep-track` (#F1F2F5) is the bar track.

@@ -1,4 +1,4 @@
-// The arithmetic behind "Where this is going", apart from the drawing.
+// The arithmetic behind "On air vs DT done", apart from the drawing.
 //
 // A module of its own because two places read it: the chart, and the card's
 // info note, which states where the chart's scale starts and how many sites

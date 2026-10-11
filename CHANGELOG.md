@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- **Drive Test dashboard (UEP-04):** Dashboard is now the first page of the Drive test app. Cards get white headers with a 28px app tile. "Where this is going" is renamed "On air vs DT done" and gains a "View as table" toggle. The PIP figures read Plan · Assigned · Achieved · Remaining, and the pace tick is labelled "Today".
+
 ## UEP Home: Microsoft 365 redesign
 
 Home restyled to Fluent 2 (light only), and its numbers made to reconcile.

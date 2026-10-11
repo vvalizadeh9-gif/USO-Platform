@@ -32,7 +32,7 @@ export default function AppRail({ app, activePage, counts }) {
             <Link
               key={page.id}
               to={page.route}
-              className={`uep-rail-item ${active ? 'is-active' : ''}`.trim()}
+              className={`uep-rail-item ${active ? 'is-active' : ''} ${page.divider ? 'has-divider' : ''}`.trim()}
               aria-current={active ? 'page' : undefined}
             >
               <span>{page.label}</span>

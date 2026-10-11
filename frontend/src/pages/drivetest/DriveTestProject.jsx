@@ -23,6 +23,7 @@ import ProvinceList, { ProvinceSearch } from './ProvinceList'
 import Section from './Section'
 import DashboardActions, { ProvinceScope } from './Toolbar'
 import FlowChart, { FlowLegend } from './charts/FlowChart'
+import FlowTable from './charts/FlowTable'
 import FlowViewControl from './charts/FlowViewControl'
 import { LAST_12, flowHasActivity, flowNotes, flowView, flowYears } from './charts/flowView'
 import FlowLedger, { flowNet } from './charts/FlowLedger'
@@ -91,6 +92,7 @@ export default function DriveTestProject() {
   // card header shows both the control that switches it and the note that
   // describes the view.
   const [flowScope, setFlowScope] = useState(LAST_12)
+  const [flowAsTable, setFlowAsTable] = useState(false)
   const [provinceSearch, setProvinceSearch] = useState('')
   const [exporting, setExporting] = useState(false)
   const toast = useToast()
@@ -310,7 +312,8 @@ export default function DriveTestProject() {
                     they did would jump under the reader. The sentence that used to
                     be its subtitle opens the info note. */}
                 <Section
-                  title="Where this is going"
+                  title="On air vs DT done"
+                  subtitle="Sites, cumulative · last 12 months"
                   icon={TrendingUp}
                   inline
                   state={flow}
@@ -330,11 +333,21 @@ export default function DriveTestProject() {
                   }
                   controls={
                     flowHasActivity(flow.data) && (
-                      <FlowViewControl
-                        years={flowYears(flow.data)}
-                        scope={flowScope}
-                        onScope={setFlowScope}
-                      />
+                      <>
+                        <button
+                          type="button"
+                          className="btn btn-ghost dt-flow-table-toggle"
+                          aria-pressed={flowAsTable}
+                          onClick={() => setFlowAsTable((v) => !v)}
+                        >
+                          {flowAsTable ? 'View as chart' : 'View as table'}
+                        </button>
+                        <FlowViewControl
+                          years={flowYears(flow.data)}
+                          scope={flowScope}
+                          onScope={setFlowScope}
+                        />
+                      </>
                     )
                   }
                 >
@@ -345,7 +358,11 @@ export default function DriveTestProject() {
                         <FlowLegend />
                         {/* Keyed on the view shown, so switching redraws the chart
                             rather than morphing one view's columns into the next. */}
-                        <FlowChart key={String(flowScope)} data={f} scope={flowScope} />
+                        {flowAsTable ? (
+                          <FlowTable data={f} scope={flowScope} />
+                        ) : (
+                          <FlowChart key={String(flowScope)} data={f} scope={flowScope} />
+                        )}
                       </>
                     ) : (
                       <div className="dt-empty">

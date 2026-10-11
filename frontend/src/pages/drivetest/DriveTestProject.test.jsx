@@ -1318,13 +1318,13 @@ describe('the order of the page', () => {
             'PIP this month',
             'Ongoing breakdown',
             'Problematic breakdown',
-            'Where this is going',
+            'On air vs DT done',
           ].includes(t),
         )
 
-    const trend = await section('Where this is going')
+    const trend = await section('On air vs DT done')
     expect(band.compareDocumentPosition(trend) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-    expect(headings()).toEqual(['Where this is going', 'PIP this month', 'What moved'])
+    expect(headings()).toEqual(['On air vs DT done', 'PIP this month', 'What moved'])
 
     const tabs = screen.getAllByRole('tab', { name: /Overview|Breakdowns|Contractors/ })
     expect(tabs.map((t) => t.textContent)).toEqual([
@@ -1341,7 +1341,7 @@ describe('the order of the page', () => {
     serve()
     draw()
 
-    const trend = await section('Where this is going')
+    const trend = await section('On air vs DT done')
     const moved = await section('What moved')
     const pip = await section('PIP this month')
     // One column, the two short cards together, PIP first, the trend in the
@@ -1549,7 +1549,7 @@ describe('drill-through', () => {
     serve()
     draw()
 
-    const flowCard = await section('Where this is going')
+    const flowCard = await section('On air vs DT done')
     const ledgerCard = await section('What moved')
     expect(within(flowCard).queryAllByRole('link')).toHaveLength(0)
     expect(within(ledgerCard).queryAllByRole('link')).toHaveLength(0)
@@ -1956,7 +1956,7 @@ function readTip(card) {
 }
 
 describe('the flow chart', () => {
-  // Replaces the old trailing-month trend chart in "Where this is going",
+  // Replaces the old trailing-month trend chart in "On air vs DT done",
   // which used to read `/trend` and carried a 6m/12m window picker. Neither
   // applies any more: this card now reads its own endpoint, `/drive-test/flow`,
   // and reads two ways -- cumulative or one year -- rather than over a
@@ -1965,7 +1965,7 @@ describe('the flow chart', () => {
     serve()
     draw()
 
-    const card = await section('Where this is going')
+    const card = await section('On air vs DT done')
     // Opening 50/20, plus the 3 not-placed on-air sites that belong to no
     // month and so open with the chart, plus four months of on-aired/dt_done:
     // 53 + 27 on-aired, 20 + 15 done. The chart has to end where the KPI
@@ -1985,7 +1985,7 @@ describe('the flow chart', () => {
     serve()
     draw()
 
-    const card = await section('Where this is going')
+    const card = await section('On air vs DT done')
     await userEvent.click(within(card).getByRole('button', { name: '1405' }))
 
     // Real totals at the end of 1405: 80 on air, 35 done, a gap of 45.
@@ -2001,7 +2001,7 @@ describe('the flow chart', () => {
     serve()
     draw()
 
-    const card = await section('Where this is going')
+    const card = await section('On air vs DT done')
     await userEvent.click(within(card).getByRole('button', { name: '1404' }))
 
     // End of 1404: 53 + 10 + 8 on air, 20 + 4 + 6 done. 1404 is the payload's
@@ -2016,7 +2016,7 @@ describe('the flow chart', () => {
     serve()
     draw()
 
-    const card = await section('Where this is going')
+    const card = await section('On air vs DT done')
     const header = card.querySelector('.dt-section-head')
     const period = within(header).getByRole('group', { name: 'Chart period' })
     const options = within(period).getAllByRole('button')
@@ -2049,7 +2049,7 @@ describe('the flow chart', () => {
     }))
     draw()
 
-    const card = await section('Where this is going')
+    const card = await section('On air vs DT done')
     const period = within(card).getByRole('group', { name: 'Chart period' })
     expect(within(period).getAllByRole('button').map((b) => b.textContent)).toEqual([
       'Last 12 months',
@@ -2064,7 +2064,7 @@ describe('the flow chart', () => {
     serve()
     draw()
 
-    const card = await section('Where this is going')
+    const card = await section('On air vs DT done')
     expect(card.querySelector('.dt-flowtiles')).toBeNull()
     expect(within(card).queryByTestId('dt-flow-readout')).toBeNull()
     expect(within(card).queryByText(/Running:/)).toBeNull()
@@ -2102,7 +2102,7 @@ describe('the flow chart', () => {
     }))
     draw()
 
-    const card = await section('Where this is going')
+    const card = await section('On air vs DT done')
     for (const view of ['1404', '1405', 'Cumulative']) {
       await userEvent.click(within(card).getByRole('button', { name: view }))
       const dots = [
@@ -2122,7 +2122,7 @@ describe('the flow chart', () => {
     serve()
     draw()
 
-    const card = await section('Where this is going')
+    const card = await section('On air vs DT done')
     // Cumulative draws all four months, the last still open: three filled
     // dots per series, one hollow.
     expect(within(card).getAllByTestId('dt-flow-dot')).toHaveLength(6)
@@ -2133,7 +2133,7 @@ describe('the flow chart', () => {
     serve()
     draw()
 
-    const card = await section('Where this is going')
+    const card = await section('On air vs DT done')
     // Cumulative: every month, the open one marked.
     expect(monthLabels(card)).toEqual(['فروردین', 'اردیبهشت', 'فروردین', 'اردیبهشت'])
     expect(within(card).getAllByTestId('dt-flow-month')[3]).toHaveClass('is-open')
@@ -2190,7 +2190,7 @@ describe('the flow chart', () => {
     )
     draw()
 
-    const card = await section('Where this is going')
+    const card = await section('On air vs DT done')
     const moved = await section('What moved')
     const band = await screen.findByLabelText('Programme totals')
     const cardFigure = (kpi) => band.querySelector(`[data-kpi="${kpi}"] .dt-kpi-figure`).textContent
@@ -2247,7 +2247,7 @@ describe('the flow chart', () => {
     serve()
     draw()
 
-    const card = await section('Where this is going')
+    const card = await section('On air vs DT done')
     const tipEl = within(card).getByTestId('dt-flow-tip')
     expect(tipEl).not.toHaveClass('is-on')
     expect(tipEl).toBeEmptyDOMElement()
@@ -2286,7 +2286,7 @@ describe('the flow chart', () => {
     serve()
     draw()
 
-    const card = await section('Where this is going')
+    const card = await section('On air vs DT done')
     const hits = card.querySelectorAll('.dt-flow-hit')
     expect(hits[0]).toHaveAccessibleName('فروردین 1404')
     act(() => hits[2].focus())
@@ -2313,7 +2313,7 @@ describe('the flow chart', () => {
     }))
     draw()
 
-    const card = await section('Where this is going')
+    const card = await section('On air vs DT done')
     const gapCell = (tip) => within(tip.tip).getByRole('rowheader', { name: 'Gap' }).nextElementSibling
     let tip = await hoverMonth(card, 0)
     expect(tip.gap[0]).toBe('+6')
@@ -2334,7 +2334,7 @@ describe('the flow chart', () => {
     }))
     draw()
 
-    const card = await section('Where this is going')
+    const card = await section('On air vs DT done')
     const tip = await hoverMonth(card, 0)
     expect(tip.gap[1]).toBe('−20')
   })
@@ -2343,7 +2343,7 @@ describe('the flow chart', () => {
     serve()
     draw()
 
-    const card = await section('Where this is going')
+    const card = await section('On air vs DT done')
     expect(card.querySelector('.dt-flowcard .dt-note')).toBeNull()
     expect(within(card).getByText(/^Showing the last 12 months, month by month\./)).not.toBeVisible()
     await userEvent.click(within(card).getByRole('button', { name: '1405' }))
@@ -2363,7 +2363,7 @@ describe('the flow chart', () => {
     serve()
     draw()
 
-    const card = await section('Where this is going')
+    const card = await section('On air vs DT done')
     // One per month drawn: all four in the cumulative view. 10 on air
     // against 4 done is +6 pending; 8 against 6, 5 against 3 and 4 against
     // 2 are +2 each.
@@ -2386,7 +2386,7 @@ describe('the flow chart', () => {
     }))
     draw()
 
-    const card = await section('Where this is going')
+    const card = await section('On air vs DT done')
     const cells = within(card).getAllByTestId('dt-flow-net')
     expect(cells.map((p) => p.getAttribute('data-tone'))).toEqual(['bad', 'good', 'flat'])
     expect(gapChanges(card)).toEqual(['+6', '−17', '0'])
@@ -2400,7 +2400,7 @@ describe('the flow chart', () => {
     serve()
     draw()
 
-    const card = await section('Where this is going')
+    const card = await section('On air vs DT done')
     const sum = gapChanges(card).reduce((total, v) => total + num(v), 0)
 
     // Cumulative opens on the opening balance plus the undated sites: 53 on
@@ -2419,7 +2419,7 @@ describe('the flow chart', () => {
     serve()
     draw()
 
-    const card = await section('Where this is going')
+    const card = await section('On air vs DT done')
     // Both series end on the month `flow()` marks `is_open`, so both get the
     // hollow open-end treatment rather than a solid closed dot.
     expect(within(card).getAllByTestId('dt-flow-open-dot')).toHaveLength(2)
@@ -2445,7 +2445,7 @@ describe('the flow chart', () => {
     })
     draw()
 
-    const card = await section('Where this is going')
+    const card = await section('On air vs DT done')
     expect(
       within(card).getByText(/No on-air or drive-test activity has been recorded yet/),
     ).toBeInTheDocument()
@@ -2455,7 +2455,7 @@ describe('the flow chart', () => {
     serve()
     draw()
 
-    const card = await section('Where this is going')
+    const card = await section('On air vs DT done')
     expect(
       within(card).getByText(
         /3 sites have no date to place them on the timeline, so they sit in the opening balance/,
@@ -2473,7 +2473,7 @@ describe('the flow chart', () => {
     serve(planDelivery(), overview, trend(), flow({ not_placed: { on_air: 0, dt_done: 7 } }))
     draw()
 
-    const card = await section('Where this is going')
+    const card = await section('On air vs DT done')
     // Opening 50/20 and four months of 27/15, with the 7 undated drive tests
     // on the done side: 77 on air, 20 + 15 + 7 done, so the gap is 7 smaller
     // than the 42 it would be with them dropped.
@@ -3283,7 +3283,7 @@ describe('Cobalt chrome', () => {
       expect(chip).toHaveAttribute('aria-hidden', 'true')
     }
     for (const title of [
-      'Where this is going',
+      'On air vs DT done',
       'What moved',
       'PIP this month',
     ]) {
@@ -3342,7 +3342,7 @@ describe('the three views', () => {
     expect(screen.getByRole('tab', { name: TAB })).toHaveAttribute('aria-selected', 'false')
     const band = await screen.findByLabelText('Programme totals')
     expect(band.closest('[role="tabpanel"]')).toHaveAttribute('aria-label', 'Overview')
-    await section('Where this is going')
+    await section('On air vs DT done')
     expect(screen.queryByRole('heading', { name: 'Ongoing breakdown' })).not.toBeInTheDocument()
     expect(screen.queryByRole('heading', { name: 'Contractor scorecard' })).not.toBeInTheDocument()
     expect(screen.queryByRole('heading', { name: 'Drive Test progress by province' })).not.toBeInTheDocument()
@@ -3369,7 +3369,7 @@ describe('the three views', () => {
     expect(await screen.findByRole('tab', { name: 'Breakdowns' })).toHaveAttribute('aria-selected', 'true')
     await section('Ongoing breakdown')
     await section('Problematic breakdown')
-    expect(screen.queryByRole('heading', { name: 'Where this is going' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'On air vs DT done' })).not.toBeInTheDocument()
     expect(screen.queryByRole('heading', { name: 'Contractor scorecard' })).not.toBeInTheDocument()
   })
 
@@ -3382,10 +3382,10 @@ describe('the three views', () => {
     expect(screen.getByRole('tab', { name: TAB })).toHaveAttribute('aria-selected', 'true')
     await section('Contractor scorecard')
     await section('Drive Test progress by province')
-    expect(screen.queryByRole('heading', { name: 'Where this is going' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'On air vs DT done' })).not.toBeInTheDocument()
 
     await userEvent.click(screen.getByRole('tab', { name: 'Overview' }))
-    await section('Where this is going')
+    await section('On air vs DT done')
     expect(screen.queryByRole('heading', { name: 'Contractor scorecard' })).not.toBeInTheDocument()
   })
 
@@ -3433,7 +3433,7 @@ describe('the three views', () => {
     await section('Ongoing breakdown')
     await userEvent.click(screen.getByRole('tab', { name: 'Overview' }))
 
-    await section('Where this is going')
+    await section('On air vs DT done')
     expect(
       screen.getByRole('button', { name: /Show every province again, not just Kerman/ }),
     ).toBeInTheDocument()

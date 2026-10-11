@@ -98,17 +98,17 @@ function PipTiles({ data, scoped, provinceName, canOpenPlan }) {
         <PipTile label="Plan" value={count(data.pip)} />
         <PipTile label="Assigned" value={count(data.assigned)} />
         <PipTile
-          label="Remaining"
-          value={remaining == null ? '—' : count(remaining)}
-          tone={remaining > 0 ? 'problem' : undefined}
-        />
-        <PipTile
           label="Achieved"
           value={count(data.actual)}
           tone={committed && data.actual > 0 ? 'done' : undefined}
           // The one figure here with a list of sites behind it: Plan and
           // Assigned count commitments and handovers, not sites.
           href={deliveredLink({ year: data.shamsi_year, month: data.shamsi_month })}
+        />
+        <PipTile
+          label="Remaining"
+          value={remaining == null ? '—' : count(remaining)}
+          tone={remaining > 0 ? 'problem' : undefined}
         />
       </dl>
 
@@ -135,7 +135,9 @@ function PipTiles({ data, scoped, provinceName, canOpenPlan }) {
                 className="dt-plan-pace"
                 style={{ left: `${Math.min(100, pace.percent)}%` }}
                 aria-hidden="true"
-              />
+              >
+                <span className="dt-plan-pace-label">Today</span>
+              </span>
             )}
           </span>
           {pace && <PacePill actual={data.actual} expected={(data.pip * pace.percent) / 100} />}

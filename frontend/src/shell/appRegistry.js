@@ -92,6 +92,9 @@ export const APPS = Object.freeze([
     group: 'rollout',
     roles: ['PM', 'Coordinator', 'Contractor', 'RegionalManager', 'Viewer'],
     pages: [
+      // The dashboard leads the rail, set off from the queues by a divider,
+      // and carries no count: it is a view, not a pile of work.
+      { id: 'dashboard', label: 'Dashboard', route: '/reports/drive-test', divider: true },
       { id: 'hc-check', label: 'HC check', route: '/my-health-check', roles: ['Contractor'], queues: ['hc_submit'] },
       { id: 'hc-pool', label: 'HC check', route: '/health-check?tab=pool', roles: STAFF, queues: ['hc_assign', 'hc_reroutes'] },
       { id: 'hc-review', label: 'HC review', route: '/health-check?tab=review', roles: STAFF, queues: ['hc_review'] },
