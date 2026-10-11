@@ -118,7 +118,7 @@ def test_requested_tech_change_is_blocked_then_applied(client):
 
     # Accept via API applies it.
     r = client.post("/api/v1/auth/login", data=login_form(client))
-    h = {"Authorization": f"Bearer {r.json()['access_token']}"}
+    h = {"Authorization": f"Bearer {r.cookies['uep_session']}"}
     r = client.post(
         f"/api/v1/admin/cpm/change-requests/{cr_id}/decide",
         headers=h,
@@ -136,7 +136,7 @@ def test_requested_tech_change_is_blocked_then_applied(client):
 
 def test_pending_count_endpoint(client):
     r = client.post("/api/v1/auth/login", data=login_form(client))
-    h = {"Authorization": f"Bearer {r.json()['access_token']}"}
+    h = {"Authorization": f"Bearer {r.cookies['uep_session']}"}
     r = client.get("/api/v1/admin/cpm/change-requests/count", headers=h)
     assert r.status_code == 200
     assert "pending" in r.json()
@@ -191,7 +191,7 @@ def test_ignored_change_is_not_applied(client):
     db.close()
 
     r = client.post("/api/v1/auth/login", data=login_form(client))
-    h = {"Authorization": f"Bearer {r.json()['access_token']}"}
+    h = {"Authorization": f"Bearer {r.cookies['uep_session']}"}
     r = client.post(
         f"/api/v1/admin/cpm/change-requests/{cr_id}/decide",
         headers=h,

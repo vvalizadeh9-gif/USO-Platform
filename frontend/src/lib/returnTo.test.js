@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { loginPathFor, returnPathFrom, safeReturnPath } from './returnTo'
+import { SESSION_EXPIRED, loginPathFor, returnPathFrom, safeReturnPath, sessionExpiredFrom } from './returnTo'
 
 describe('safeReturnPath', () => {
   it.each([
@@ -53,5 +53,22 @@ describe('returnPathFrom', () => {
 
   it('returns null when there is none', () => {
     expect(returnPathFrom('')).toBeNull()
+  })
+})
+
+describe('the session-expired reason', () => {
+  it('travels with the page they were on', () => {
+    expect(loginPathFor({ pathname: '/my-work' }, { reason: SESSION_EXPIRED })).toBe(
+      '/login?next=%2Fmy-work&reason=expired',
+    )
+  })
+
+  it('travels alone from the home page', () => {
+    expect(loginPathFor({ pathname: '/' }, { reason: SESSION_EXPIRED })).toBe('/login?reason=expired')
+  })
+
+  it('is read back by the sign-in page', () => {
+    expect(sessionExpiredFrom('?reason=expired')).toBe(true)
+    expect(sessionExpiredFrom('?next=%2Fx')).toBe(false)
   })
 })

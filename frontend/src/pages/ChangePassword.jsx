@@ -44,16 +44,13 @@ export default function ChangePassword() {
     setError('')
     setBusy(true)
     try {
-      const { data } = await api.post('/auth/me/password', {
+      // Changing a password ends every session the account has, this one
+      // included, so the server sets a fresh session cookie in its answer
+      // rather than signing someone out for succeeding.
+      await api.post('/auth/me/password', {
         current_password: current,
         new_password: next,
       })
-      // Changing a password ends every session the account has, this one
-      // included, so the endpoint hands back a replacement token rather than
-      // signing someone out for succeeding.
-      if (data.access_token) {
-        localStorage.setItem('uep_token', data.access_token)
-      }
       await refreshUser()
       toast.success(
         'Password changed',

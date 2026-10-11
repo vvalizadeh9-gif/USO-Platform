@@ -1,4 +1,5 @@
-// Auth context: single source of truth for the logged-in user and token.
+// Auth context: single source of truth for the signed-in user. The session
+// itself is an HttpOnly cookie that this code never sees.
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import api from '../api/client'
 
@@ -25,7 +26,6 @@ export function AuthProvider({ children }) {
       // clean rather than hitting the same value again.
       try {
         localStorage.removeItem('uep_user')
-        localStorage.removeItem('uep_token')
       } catch {
         // Storage is unavailable entirely; there is nothing to clear.
       }
@@ -56,8 +56,8 @@ export function AuthProvider({ children }) {
       form.append('captcha_token', captchaToken)
       form.append('captcha_answer', captchaAnswer)
     }
+    // The server answers with the session cookies and the profile.
     const { data } = await api.post('/auth/login', form)
-    localStorage.setItem('uep_token', data.access_token)
     store(data.user)
     return data.user
   }
@@ -78,7 +78,6 @@ export function AuthProvider({ children }) {
 
   function clearSession() {
     try {
-      localStorage.removeItem('uep_token')
       localStorage.removeItem('uep_user')
     } catch {
       // Nothing to clear.

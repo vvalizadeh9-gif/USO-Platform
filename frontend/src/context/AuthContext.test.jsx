@@ -61,13 +61,9 @@ describe('when localStorage cannot be trusted', () => {
 
   it('clears the bad value so the next load is not stuck on it too', async () => {
     localStorage.setItem('uep_user', '{not json at all')
-    localStorage.setItem('uep_token', 'a-stale-token')
     renderApp()
     await waitFor(() => expect(screen.getByTestId('who')).toBeInTheDocument())
     expect(localStorage.getItem('uep_user')).toBeNull()
-    // The token goes with it: a session whose user cannot be read is not a
-    // session, and leaving the token would send it on every request.
-    expect(localStorage.getItem('uep_token')).toBeNull()
   })
 
   it('survives storage that throws on read', async () => {
@@ -130,14 +126,12 @@ describe('signing out', () => {
     // holder stopped working, and "logout" is one of the events the audit
     // trail is required to carry.
     localStorage.setItem('uep_user', JSON.stringify({ username: 'maryam' }))
-    localStorage.setItem('uep_token', 'a-token')
     renderControls()
     await waitFor(() => expect(screen.getByTestId('who')).toHaveTextContent('maryam'))
 
     await act(async () => screen.getByText('sign out').click())
 
     expect(post).toHaveBeenCalledWith('/auth/logout')
-    expect(localStorage.getItem('uep_token')).toBeNull()
     expect(localStorage.getItem('uep_user')).toBeNull()
   })
 
@@ -146,7 +140,6 @@ describe('signing out', () => {
     // is a reason to trap someone in a session they asked to leave.
     post.mockRejectedValue(new Error('Network Error'))
     localStorage.setItem('uep_user', JSON.stringify({ username: 'maryam' }))
-    localStorage.setItem('uep_token', 'a-token')
     renderControls()
     await waitFor(() => expect(screen.getByTestId('who')).toHaveTextContent('maryam'))
 
@@ -154,7 +147,7 @@ describe('signing out', () => {
 
     await waitFor(() =>
       expect(screen.getByTestId('who')).toHaveTextContent('signed out'))
-    expect(localStorage.getItem('uep_token')).toBeNull()
+    expect(localStorage.getItem('uep_user')).toBeNull()
   })
 })
 

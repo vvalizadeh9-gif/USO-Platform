@@ -1,7 +1,6 @@
-// The sign-in screen: validation and where focus goes, the generic answer to
-// wrong credentials, the security check that appears only after repeated
-// failures, returning to the page that sent you, remembering the username,
-// and where focus goes on every change of view.
+// The sign-in page: validation, the password toggle, what each refusal says,
+// the security check after repeated failures, the session-expired notice,
+// returning to the page that sent you, and remembering the username.
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
@@ -18,7 +17,8 @@ vi.mock('react-router-dom', async (orig) => ({ ...(await orig()), useNavigate: (
 
 const Login = (await import('./Login')).default
 
-const refused = (status, detail) => Object.assign(new Error('refused'), { response: { status, data: { detail } } })
+const refused = (status, { detail, headers = {} } = {}) =>
+  Object.assign(new Error('refused'), { response: { status, data: { detail }, headers } })
 
 function renderLogin(url = '/login') {
   const user = userEvent.setup()
@@ -32,255 +32,176 @@ function renderLogin(url = '/login') {
 
 const usernameInput = () => screen.getByLabelText('Username')
 const passwordInput = () => screen.getByLabelText('Password')
+const submit = () => screen.getByRole('button', { name: 'Sign in' })
+const alertText = () => screen.getByRole('alert').textContent
 
 async function signIn(user, name = 'sara', password = 'pw') {
   await user.type(usernameInput(), name)
   await user.type(passwordInput(), password)
-  await user.click(screen.getByRole('button', { name: 'Sign in' }))
+  await user.click(submit())
 }
 
 beforeEach(() => {
-  vi.clearAllMocks()
   localStorage.clear()
-  api.get.mockResolvedValue({ data: { token: 'tok', num1: 4, num2: 7 } })
-  api.post.mockResolvedValue({ data: {} })
+  login.mockReset().mockResolvedValue({ username: 'sara' })
+  navigate.mockReset()
+  api.get.mockReset().mockResolvedValue({ data: { token: 'tok', num1: 4, num2: 7 } })
 })
 
-describe('the form', () => {
-  it('is labelled, has no placeholders or helper text, and no security check to begin with', () => {
+describe('the page', () => {
+  it('has the approved content and nothing about SSO', () => {
     renderLogin()
-    expect(screen.getByRole('heading', { level: 1, name: 'Sign in to UEP' })).toBeInTheDocument()
-    const username = usernameInput()
-    const password = passwordInput()
-    expect(username).toHaveAttribute('autocomplete', 'username')
-    expect(username).toHaveAttribute('autocapitalize', 'none')
-    expect(username).toHaveAttribute('spellcheck', 'false')
-    expect(password).toHaveAttribute('autocomplete', 'current-password')
-    for (const input of document.querySelectorAll('input')) expect(input).not.toHaveAttribute('placeholder')
-    expect(document.querySelector('.signin-sub')).toBeNull()
-    expect(screen.queryByLabelText('Security check')).not.toBeInTheDocument()
-    expect(api.get).not.toHaveBeenCalled()
+    expect(screen.getByRole('heading', { level: 1, name: 'Sign in' })).toBeInTheDocument()
+    expect(screen.getByText('Enter your UEP username and password.')).toBeInTheDocument()
+    expect(usernameInput()).toHaveAttribute('placeholder', 'v.valizadeh')
+    expect(usernameInput()).toHaveAttribute('autocomplete', 'username')
+    expect(passwordInput()).toHaveAttribute('autocomplete', 'current-password')
+    expect(screen.getByRole('link', { name: 'Forgot password?' })).toHaveAttribute('href', '/forgot-password')
+    expect(screen.getByRole('link', { name: 'Contact your UEP administrator' })).toHaveAttribute('href', '/request-access')
+    for (const word of ['USO', 'Enterprise', 'Platform']) expect(screen.getByText(word)).toBeInTheDocument()
+    expect(screen.queryByText(/organization/i)).not.toBeInTheDocument()
   })
 
-  it('keeps every typed field left to right, whatever the keyboard', () => {
-    renderLogin()
-    expect(usernameInput()).toHaveAttribute('dir', 'ltr')
-    expect(passwordInput()).toHaveAttribute('dir', 'ltr')
+  it('hides the waves from assistive technology', () => {
+    const { container } = render(
+      <MemoryRouter>
+        <Login />
+      </MemoryRouter>,
+    )
+    expect(container.querySelector('.uep-signin-waves')).toHaveAttribute('aria-hidden', 'true')
+    expect(container.querySelectorAll('.uep-signin-wave')).toHaveLength(4)
+  })
+})
+
+describe('validation', () => {
+  it('asks for both fields on an empty submit, without calling the server', async () => {
+    const user = renderLogin()
+    await user.click(submit())
+    expect(alertText()).toBe('Enter your username and password.')
+    expect(usernameInput()).toHaveAttribute('aria-invalid', 'true')
+    expect(usernameInput()).toHaveFocus()
+    expect(login).not.toHaveBeenCalled()
   })
 
-  it('signs in without a captcha and goes home', async () => {
-    login.mockResolvedValue({})
+  it('clears the message as soon as either field changes', async () => {
+    const user = renderLogin()
+    await user.click(submit())
+    await user.type(passwordInput(), 'x')
+    expect(alertText()).toBe('')
+  })
+
+  it('submits with the Enter key', async () => {
+    const user = renderLogin()
+    await user.type(usernameInput(), 'sara')
+    await user.type(passwordInput(), 'pw{Enter}')
+    expect(login).toHaveBeenCalledWith('sara', 'pw', undefined, '')
+  })
+})
+
+describe('the password toggle', () => {
+  it('shows and hides the password, and says which it will do', async () => {
+    const user = renderLogin()
+    await user.type(passwordInput(), 'secret')
+    expect(passwordInput()).toHaveAttribute('type', 'password')
+
+    await user.click(screen.getByRole('button', { name: 'Show password' }))
+    expect(passwordInput()).toHaveAttribute('type', 'text')
+
+    await user.click(screen.getByRole('button', { name: 'Hide password' }))
+    expect(passwordInput()).toHaveAttribute('type', 'password')
+  })
+})
+
+describe('refusals', () => {
+  it('gives one generic message for wrong credentials and clears the password', async () => {
+    login.mockRejectedValue(refused(401))
     const user = renderLogin()
     await signIn(user)
-    expect(login).toHaveBeenCalledWith('sara', 'pw', undefined, '')
+    expect(alertText()).toBe('Username or password is incorrect.')
+    expect(passwordInput()).toHaveValue('')
+    expect(passwordInput()).toHaveFocus()
+  })
+
+  it('says how long a lockout lasts', async () => {
+    login.mockRejectedValue(refused(429, { headers: { 'retry-after': '900' } }))
+    const user = renderLogin()
+    await signIn(user)
+    expect(alertText()).toBe('Too many attempts. Try again in 15 minutes.')
+  })
+
+  it('shows the security check after two wrong passwords', async () => {
+    login.mockRejectedValue(refused(401))
+    const user = renderLogin()
+    await signIn(user)
+    expect(screen.queryByLabelText('Security check')).not.toBeInTheDocument()
+    await user.type(passwordInput(), 'again')
+    await user.click(submit())
+    expect(await screen.findByText('4 + 7 =')).toBeInTheDocument()
+  })
+
+  it('shows the security check when the server asks for it', async () => {
+    login.mockRejectedValue(refused(400))
+    const user = renderLogin()
+    await signIn(user)
+    expect(await screen.findByText('Answer the security check to sign in.')).toBeInTheDocument()
+    expect(screen.getByLabelText('Security check')).toBeInTheDocument()
+  })
+})
+
+describe('while signing in', () => {
+  it('shows a spinner in place of the icon, keeps the label, and ignores a second submit', async () => {
+    let finish
+    login.mockReturnValue(new Promise((resolve) => { finish = resolve }))
+    const user = renderLogin()
+    await signIn(user)
+
+    expect(submit()).toHaveAttribute('aria-disabled', 'true')
+    expect(submit().querySelector('.uep-signin-spinner')).not.toBeNull()
+    expect(submit().querySelector('[data-icon="login"]')).toBeNull()
+
+    await user.click(submit())
+    expect(login).toHaveBeenCalledTimes(1)
+    finish({ username: 'sara' })
+    await waitFor(() => expect(navigate).toHaveBeenCalled())
+  })
+})
+
+describe('after signing in', () => {
+  it('goes to Home', async () => {
+    const user = renderLogin()
+    await signIn(user)
     expect(navigate).toHaveBeenCalledWith('/', { replace: true })
   })
 
-  it('shows and hides the password with a named, tabbable button', async () => {
-    const user = renderLogin()
-    const toggle = screen.getByRole('button', { name: 'Show password' })
-    expect(toggle).toHaveAttribute('aria-controls', 'login-password')
-    expect(toggle).not.toHaveAttribute('tabindex')
-    await user.click(toggle)
-    expect(passwordInput()).toHaveAttribute('type', 'text')
-    expect(screen.getByRole('button', { name: 'Hide password' })).toHaveTextContent('Hide')
-  })
-
-  it('warns when Caps Lock is on, in a status region tied to the password', async () => {
-    const user = renderLogin()
-    const password = passwordInput()
-    await user.click(password)
-    await user.keyboard('{CapsLock}A')
-    const status = document.getElementById('login-capslock')
-    expect(status).toHaveAttribute('role', 'status')
-    expect(password.getAttribute('aria-describedby')).toContain('login-capslock')
-    // jsdom reports modifier state from user-event's keyboard model.
-    await waitFor(() => expect(status).toHaveTextContent('Caps Lock is on'))
-  })
-})
-
-describe('returning to the page that sent you', () => {
-  it('goes back to it after signing in', async () => {
-    login.mockResolvedValue({})
-    const user = renderLogin(`/login?next=${encodeURIComponent('/my-work?village=12')}`)
+  it('returns to the page that sent them here', async () => {
+    const user = renderLogin('/login?next=%2Fmy-work%3Fvillage%3D12')
     await signIn(user)
     expect(navigate).toHaveBeenCalledWith('/my-work?village=12', { replace: true })
   })
 
   it('never follows a next that leaves the site', async () => {
-    login.mockResolvedValue({})
-    const user = renderLogin('/login?next=https://evil.example/phish')
+    const user = renderLogin('/login?next=https%3A%2F%2Fevil.example')
     await signIn(user)
     expect(navigate).toHaveBeenCalledWith('/', { replace: true })
   })
-})
 
-describe('remember my username', () => {
-  it('is off by default, and remembers nothing unless ticked', async () => {
-    login.mockResolvedValue({})
+  it('remembers the username only when asked to', async () => {
     const user = renderLogin()
-    expect(screen.getByRole('checkbox', { name: 'Remember my username' })).not.toBeChecked()
+    await user.click(screen.getByLabelText('Remember my username'))
     await signIn(user)
-    expect(localStorage.getItem('uep_remembered_username')).toBeNull()
-  })
-
-  it('remembers the name when ticked, and pre-fills it next time with focus on the password', async () => {
-    login.mockResolvedValue({})
-    const user = renderLogin()
-    await user.click(screen.getByRole('checkbox', { name: 'Remember my username' }))
-    await signIn(user, ' sara ')
     expect(localStorage.getItem('uep_remembered_username')).toBe('sara')
   })
-
-  it('pre-fills a remembered name, ticks the box and starts on the password', () => {
-    localStorage.setItem('uep_remembered_username', 'sara')
-    renderLogin()
-    expect(usernameInput()).toHaveValue('sara')
-    expect(screen.getByRole('checkbox', { name: 'Remember my username' })).toBeChecked()
-    expect(passwordInput()).toHaveFocus()
-  })
-
-  it('forgets the name when the box is unticked', async () => {
-    localStorage.setItem('uep_remembered_username', 'sara')
-    login.mockResolvedValue({})
-    const user = renderLogin()
-    await user.click(screen.getByRole('checkbox', { name: 'Remember my username' }))
-    await user.type(passwordInput(), 'pw')
-    await user.click(screen.getByRole('button', { name: 'Sign in' }))
-    await waitFor(() => expect(navigate).toHaveBeenCalled())
-    expect(localStorage.getItem('uep_remembered_username')).toBeNull()
-  })
-
-  it('remembers nothing when sign-in is refused', async () => {
-    login.mockRejectedValue(refused(401))
-    const user = renderLogin()
-    await user.click(screen.getByRole('checkbox', { name: 'Remember my username' }))
-    await signIn(user)
-    await screen.findByText('The username or password is incorrect')
-    expect(localStorage.getItem('uep_remembered_username')).toBeNull()
-  })
 })
 
-describe('errors', () => {
-  it('marks each empty field and moves focus to the first one', async () => {
-    const user = renderLogin()
-    await user.click(screen.getByRole('button', { name: 'Sign in' }))
-
-    const username = usernameInput()
-    expect(username).toHaveFocus()
-    expect(username).toHaveAttribute('aria-invalid', 'true')
-    expect(username).toHaveAccessibleDescription('Error: Enter your username')
-    expect(passwordInput()).toHaveAccessibleDescription(/Enter your password/)
-    expect(login).not.toHaveBeenCalled()
+describe('the session-expired notice', () => {
+  it('is shown, neutrally, when the session ran out', () => {
+    renderLogin('/login?next=%2Fmy-work&reason=expired')
+    expect(screen.getByText('Your session expired. Sign in again.')).toBeInTheDocument()
+    expect(alertText()).toBe('')
   })
 
-  it('says the same thing for any wrong credentials, as one line tied to the cleared password', async () => {
-    login.mockRejectedValue(refused(401, 'Incorrect username or password'))
-    const user = renderLogin()
-    await signIn(user)
-    expect(await screen.findByRole('alert')).toHaveTextContent('The username or password is incorrect')
-    const password = passwordInput()
-    expect(password).toHaveValue('')
-    expect(password).toHaveFocus()
-    expect(password).toHaveAccessibleDescription(/The username or password is incorrect/)
-    // No boxed summary any more.
-    expect(screen.queryByText('There is a problem')).not.toBeInTheDocument()
-    // One failure is not enough to ask for the check.
-    expect(screen.queryByLabelText('Security check')).not.toBeInTheDocument()
-  })
-
-  it('passes on what the server says about a lockout', async () => {
-    login.mockRejectedValue(refused(429, 'Too many failed sign-in attempts. Please wait about 15 minute(s) and try again.'))
-    const user = renderLogin()
-    await signIn(user)
-    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('Please wait about 15 minute(s)'))
-  })
-})
-
-describe('the security check', () => {
-  it('appears after two failed attempts, as one compact row', async () => {
-    login.mockRejectedValue(refused(401))
-    const user = renderLogin()
-    await signIn(user)
-    await user.type(passwordInput(), 'pw2')
-    await user.click(screen.getByRole('button', { name: 'Sign in' }))
-
-    const answer = await screen.findByLabelText('Security check')
-    await waitFor(() => expect(answer).toHaveAccessibleDescription('4 + 7 ='))
-    expect(answer).toHaveAttribute('inputmode', 'numeric')
-    expect(answer).toHaveAttribute('dir', 'ltr')
-    expect(screen.getByRole('button', { name: 'New question' })).toBeInTheDocument()
-  })
-
-  it('appears when the server asks for it, with focus on the answer', async () => {
-    login.mockRejectedValueOnce(refused(400, 'Answer the security check to sign in'))
-    const user = renderLogin()
-    await signIn(user)
-    const answer = await screen.findByLabelText('Security check')
-    await waitFor(() => expect(answer).toHaveAccessibleDescription(/Answer the security check to sign in/))
-  })
-
-  it('wants a number, and accepts Persian and Arabic digits', async () => {
-    login.mockRejectedValueOnce(refused(400)).mockResolvedValue({})
-    const user = renderLogin()
-    await signIn(user)
-    const answer = await screen.findByLabelText('Security check')
-    await waitFor(() => expect(answer).toBeEnabled())
-
-    await user.type(passwordInput(), 'pw')
-    await user.type(answer, 'eleven')
-    await user.click(screen.getByRole('button', { name: 'Sign in' }))
-    expect(answer).toHaveAccessibleDescription(/Enter the answer as a number/)
-
-    await user.clear(answer)
-    await user.type(answer, '۱١')
-    await user.click(screen.getByRole('button', { name: 'Sign in' }))
-    await waitFor(() => expect(login).toHaveBeenLastCalledWith('sara', 'pw', 'tok', '11'))
-  })
-})
-
-describe("can't sign in", () => {
-  it('moves focus to each view heading, and back to the username on return', async () => {
-    const user = renderLogin()
-    await user.click(screen.getByRole('button', { name: 'Can’t sign in?' }))
-    expect(screen.getByRole('heading', { level: 1, name: 'Ask an administrator for help' })).toHaveFocus()
-
-    await user.click(screen.getByRole('button', { name: 'Send request' }))
-    expect(screen.getByLabelText('Username or email address')).toHaveFocus()
-    expect(api.post).not.toHaveBeenCalled()
-
-    await user.type(screen.getByLabelText('Username or email address'), 'sara')
-    await user.click(screen.getByRole('button', { name: 'Send request' }))
-    expect(api.post).toHaveBeenCalledWith('/auth/password-reset-request', { identifier: 'sara' })
-    expect(await screen.findByRole('heading', { level: 1, name: 'Request sent' })).toHaveFocus()
-    expect(screen.getByText(/If that account exists/)).toBeInTheDocument()
-
-    await user.click(screen.getByRole('button', { name: 'Back to sign in' }))
-    expect(usernameInput()).toHaveFocus()
-  })
-
-  it('shows the same confirmation when the request fails', async () => {
-    api.post.mockRejectedValue(new Error('down'))
-    const user = renderLogin()
-    await user.click(screen.getByRole('button', { name: 'Can’t sign in?' }))
-    await user.type(screen.getByLabelText('Username or email address'), 'nobody')
-    await user.click(screen.getByRole('button', { name: 'Send request' }))
-    expect(await screen.findByRole('heading', { level: 1, name: 'Request sent' })).toBeInTheDocument()
-  })
-})
-
-describe('the page around the form', () => {
-  it('has a skip link to the username and legal links, and one route to help', async () => {
-    const user = renderLogin()
-    usernameInput().blur()
-    await user.click(screen.getByRole('link', { name: 'Skip to sign-in form' }))
-    expect(usernameInput()).toHaveFocus()
-    const legal = screen.getByRole('navigation', { name: 'Legal' })
-    expect(legal).toHaveTextContent('Privacy')
-    expect(legal).toHaveTextContent('Accessibility')
-    // Help is the one "Can't sign in?" route; no mail links beside it.
-    expect(document.querySelector('a[href^="mailto:"]')).toBeNull()
-    // The product name in the panel is not a heading; the only h1 is the form's.
-    expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1)
+  it('is not shown otherwise', () => {
+    renderLogin('/login?next=%2Fmy-work')
+    expect(screen.queryByText('Your session expired. Sign in again.')).not.toBeInTheDocument()
   })
 })

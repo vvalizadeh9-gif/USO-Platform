@@ -41,7 +41,7 @@ def client():
 
 def _admin(client) -> dict:
     r = client.post("/api/v1/auth/login", data=login_form(client))
-    return {"Authorization": f"Bearer {r.json()['access_token']}"}
+    return {"Authorization": f"Bearer {r.cookies['uep_session']}"}
 
 
 def _pm(client) -> dict:

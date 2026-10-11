@@ -18,7 +18,6 @@ describe('remembered username', () => {
 
   it('survives the session keys being cleared on sign-out', () => {
     rememberUsername('sara')
-    localStorage.removeItem('uep_token')
     localStorage.removeItem('uep_user')
     expect(readRememberedUsername()).toBe('sara')
   })

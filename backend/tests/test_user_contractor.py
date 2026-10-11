@@ -39,7 +39,7 @@ def client():
 
 def _login(client, username="admin", password="Admin@12345"):
     r = client.post("/api/v1/auth/login", data=login_form(client, username, password))
-    return r.json()["access_token"]
+    return r.cookies["uep_session"]
 
 
 def _role_id(client, h, name):

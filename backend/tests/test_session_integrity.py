@@ -61,7 +61,7 @@ def client():
 def _admin(client) -> dict:
     r = client.post("/api/v1/auth/login", data=login_form(client))
     assert r.status_code == 200, r.text
-    return {"Authorization": f"Bearer {r.json()['access_token']}"}
+    return {"Authorization": f"Bearer {r.cookies['uep_session']}"}
 
 
 def _make_user(client, admin_h, username: str) -> int:
@@ -86,7 +86,7 @@ def _make_user(client, admin_h, username: str) -> int:
 def _token_for(client, username: str, password: str = PASSWORD) -> dict:
     r = client.post("/api/v1/auth/login", data=login_form(client, username, password))
     assert r.status_code == 200, r.text
-    return {"Authorization": f"Bearer {r.json()['access_token']}"}
+    return {"Authorization": f"Bearer {r.cookies['uep_session']}"}
 
 
 def _still_works(client, headers) -> bool:
@@ -121,7 +121,7 @@ def _finish_reset(client, user_id: int, username: str, temporary: str) -> dict:
         json={"current_password": temporary, "new_password": NEW_PASSWORD},
     )
     assert r.status_code == 200, r.text
-    return {"Authorization": f"Bearer {r.json()['access_token']}"}
+    return {"Authorization": f"Bearer {r.cookies['uep_session']}"}
 
 
 # ---------------------------------------------------------------------------
@@ -310,7 +310,7 @@ def test_changing_your_own_password_works_and_rotates_the_token(client):
     assert client.get("/api/v1/auth/me", headers=old).status_code == 401
     # ...and the caller was handed a working one rather than signed out for
     # succeeding.
-    fresh = {"Authorization": f"Bearer {r.json()['access_token']}"}
+    fresh = {"Authorization": f"Bearer {r.cookies['uep_session']}"}
     assert client.get("/api/v1/auth/me", headers=fresh).status_code == 200
 
     # And the new password is the one that signs in.

@@ -75,10 +75,9 @@ def admin_login(client):
     """
     response = client.post("/api/v1/auth/login", data=login_form(client))
     assert response.status_code == 200, response.text
-    body = response.json()
     return {
-        "headers": {"Authorization": f"Bearer {body['access_token']}"},
-        "user": body["user"],
+        "headers": {"Authorization": f"Bearer {response.cookies['uep_session']}"},
+        "user": response.json()["user"],
     }
 
 

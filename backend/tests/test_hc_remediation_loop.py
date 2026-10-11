@@ -106,7 +106,7 @@ def _headers(client, username="pm", password="Owner@12345"):
         "/api/v1/auth/login", data=login_form(client, username, password)
     )
     assert r.status_code == 200, r.text
-    return {"Authorization": f"Bearer {r.json()['access_token']}"}
+    return {"Authorization": f"Bearer {r.cookies['uep_session']}"}
 
 
 def _contractor_id():

@@ -34,7 +34,7 @@ def client():
 
 def _login(client):
     r = client.post("/api/v1/auth/login", data=login_form(client))
-    return r.json()["access_token"]
+    return r.cookies["uep_session"]
 
 
 def _pm(client):

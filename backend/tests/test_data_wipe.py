@@ -62,7 +62,7 @@ def client():
 
 def _login(client):
     r = client.post("/api/v1/auth/login", data=login_form(client))
-    return r.json()["access_token"]
+    return r.cookies["uep_session"]
 
 
 def _import_sample(client, token):
@@ -109,7 +109,7 @@ def test_wipe_requires_admin_role(client):
 
 def _login_as(client, username, password):
     r = client.post("/api/v1/auth/login", data=login_form(client, username, password))
-    return r.json()["access_token"]
+    return r.cookies["uep_session"]
 
 
 def test_wipe_rejects_wrong_confirmation_phrase(client):

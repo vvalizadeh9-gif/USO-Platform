@@ -1,5 +1,6 @@
 // The My Work endpoints (docs/design/my-work-api.md), in one place.
 import api from '../../api/client'
+import { csrfHeaders } from '../../lib/csrf'
 import { saveBlob } from '../../lib/download'
 
 const BASE = '/acceptance'
@@ -33,17 +34,17 @@ export const reviewLetter = (body) => api.post(REVIEW_PATH, body).then((r) => r.
 /** Send a request the page is about to lose -- a held send when the tab is
  * closing. `keepalive` lets it outlive the page; axios cannot. */
 export function sendNow(path, body) {
-  const token = localStorage.getItem('uep_token')
   return fetch(`/api/v1${path}`, {
     method: 'POST',
     keepalive: true,
-    headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+    credentials: 'same-origin',
+    headers: { 'Content-Type': 'application/json', ...csrfHeaders('post') },
     body: JSON.stringify(body),
   })
 }
 
-/** "View scan": the evidence endpoint needs the bearer token, which a plain
- * link cannot send, so the file is fetched and saved. */
+/** "View scan": the file is fetched and saved rather than linked, so the
+ * download carries the same session and errors as every other request. */
 export async function viewScan(evidenceId, filename) {
   const r = await api.get(`${BASE}/evidence/${evidenceId}/download`, { responseType: 'blob' })
   saveBlob(r.data, filename)

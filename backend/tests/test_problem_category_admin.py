@@ -79,7 +79,7 @@ def _seed() -> None:
 def _admin(client):
     r = client.post("/api/v1/auth/login", data=login_form(client))
     assert r.status_code == 200, r.text
-    return {"Authorization": f"Bearer {r.json()['access_token']}"}
+    return {"Authorization": f"Bearer {r.cookies['uep_session']}"}
 
 
 def _as(client, role_name):
@@ -87,7 +87,7 @@ def _as(client, role_name):
         "/api/v1/auth/login",
         data=login_form(client, f"cat_{role_name.lower()}", "Owner@12345"),
     )
-    return {"Authorization": f"Bearer {r.json()['access_token']}"}
+    return {"Authorization": f"Bearer {r.cookies['uep_session']}"}
 
 
 def _role_id(name):

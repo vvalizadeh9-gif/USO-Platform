@@ -206,6 +206,29 @@ Generate a real signing key with:
 openssl rand -hex 32
 ```
 
+### Sign-in
+
+| Setting | Default | What it does |
+|---|---|---|
+| `ACCESS_TOKEN_EXPIRE_MINUTES` | `480` (8 hours) | How long a sign-in lasts. The session cookie expires with it; after that the person is sent to sign in with "Your session expired. Sign in again." and returned to the page they were on. |
+| `LOGIN_MAX_ATTEMPTS_PER_USERNAME` | `5` | Failed attempts for one username, inside the window, that lock it. |
+| `LOGIN_ATTEMPT_WINDOW_SECONDS` | `900` (15 min) | The window those failures are counted in. |
+| `LOGIN_LOCKOUT_SECONDS` | `900` (15 min) | How long the lock lasts. The page says "Too many attempts. Try again in N minutes." |
+| `LOGIN_MAX_ATTEMPTS_PER_IP` | `20` | The same limit per source address, against one password tried across many usernames. |
+| `LOGIN_CAPTCHA_AFTER_FAILURES` | `2` | Failures after which the security check is asked for. |
+| `SESSION_COOKIE_SECURE` | unset (follow the request) | Mark the session cookies Secure. Set `true` once TLS is in place. |
+
+Only failures count, and a successful sign-in clears them. Every success and
+failure, including a refusal during a lockout, is written to the audit log
+(Admin → Audit log, module "Auth"); the password never is.
+
+The session is an **HttpOnly, SameSite=Strict cookie** (`uep_session`, path
+`/api`) that page scripts cannot read. Writes are protected against CSRF twice:
+a request whose `Origin` names another site is refused, and a write made with
+the cookie must echo the readable `uep_csrf` cookie in an `X-CSRF-Token`
+header. API clients may still send `Authorization: Bearer <token>`; those need
+no CSRF header. See `backend/app/core/session_cookies.py` and `csrf.py`.
+
 ---
 
 ## Deploying

@@ -111,7 +111,7 @@ def _h(client):
         "/api/v1/auth/login", data=login_form(client, "poolpm", "Owner@12345")
     )
     assert r.status_code == 200, r.text
-    return {"Authorization": f"Bearer {r.json()['access_token']}"}
+    return {"Authorization": f"Bearer {r.cookies['uep_session']}"}
 
 
 def _pool(client):

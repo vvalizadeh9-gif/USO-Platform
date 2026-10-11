@@ -5,9 +5,10 @@ sign-out, a password change, and a request for a reset. The refused ones are
 the reason the audit log has a ``result`` column at all -- a trail that holds
 only what worked cannot show anybody trying to get in.
 """
+import math
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, Form, HTTPException, Request, status
+from fastapi import APIRouter, Depends, Form, HTTPException, Request, Response, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 
@@ -26,13 +27,14 @@ from app.core.security import (
     verify_password,
     verify_password_or_dummy,
 )
+from app.core.session_cookies import clear_session_cookies, set_session_cookies
 from app.models.auth import PasswordResetRequest
 from app.models.reference import User
 from app.schemas import (
     CaptchaChallenge,
     PasswordChange,
     PasswordResetRequestIn,
-    TokenResponse,
+    SessionResponse,
     UserOut,
 )
 from app.services.audit import record_audit, record_audit_now
@@ -43,6 +45,25 @@ settings = get_settings()
 # The module every entry in this file is filed under, so the audit screen can
 # show "everything that happened at the front door" as one filter.
 _MODULE = "Auth"
+
+# What the sign-in page shows. One sentence for an unknown username and a wrong
+# password alike: anything more specific tells a stranger which usernames exist.
+INCORRECT_CREDENTIALS = "Username or password is incorrect."
+
+
+def lockout_message(retry_after_seconds: int) -> str:
+    """The sentence for a locked-out sign-in, in whole minutes, rounded up."""
+    minutes = max(1, math.ceil(retry_after_seconds / 60))
+    unit = "minute" if minutes == 1 else "minutes"
+    return f"Too many attempts. Try again in {minutes} {unit}."
+
+
+def _refuse_locked_out(retry_after: int) -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+        detail=lockout_message(retry_after),
+        headers={"Retry-After": str(retry_after)},
+    )
 
 
 @router.get("/captcha", response_model=CaptchaChallenge)
@@ -82,15 +103,20 @@ def _record_failed_login(
     )
 
 
-@router.post("/login", response_model=TokenResponse)
+@router.post("/login", response_model=SessionResponse)
 def login(
     request: Request,
+    response: Response,
     form: OAuth2PasswordRequestForm = Depends(),
     captcha_token: str | None = Form(None),
     captcha_answer: int | None = Form(None),
     db: Session = Depends(get_db),
-) -> TokenResponse:
-    """Validate the captcha, then the credentials, and return a JWT plus the user profile.
+) -> SessionResponse:
+    """Validate the captcha, then the credentials, and start a session.
+
+    The session is a pair of cookies (see ``core/session_cookies.py``); the
+    body carries only the user's profile. The token is never in the body, so no
+    script on the page ever holds it.
 
     Failed attempts are counted per username and per source address; too many in
     a short time locks that username (or that address) out for a while. Counting
@@ -110,14 +136,15 @@ def login(
     ip = client_ip(request)
     retry_after = login_rate_limiter.check(db, form.username, ip)
     if retry_after:
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail=(
-                "Too many failed sign-in attempts. Please wait about "
-                f"{max(1, retry_after // 60)} minute(s) and try again."
-            ),
-            headers={"Retry-After": str(retry_after)},
+        # Recorded, so a run of refused attempts against a locked account is
+        # visible in the log and not only the five that caused the lock.
+        _record_failed_login(
+            db,
+            username=form.username,
+            user=db.query(User).filter(User.username == form.username).one_or_none(),
+            reason="Locked out after too many failed attempts",
         )
+        raise _refuse_locked_out(retry_after)
 
     captcha_sent = captcha_token is not None and captcha_answer is not None
     captcha_required = (
@@ -156,7 +183,7 @@ def login(
         )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect username or password",
+            detail=INCORRECT_CREDENTIALS,
         )
     if not user_status.may_sign_in(user.status):
         # The password was right. Recorded as a failure with the status named,
@@ -208,11 +235,14 @@ def login(
     token = create_access_token(
         user.id, {"role": user.role.name, "ver": user.token_version}
     )
-    return TokenResponse(access_token=token, user=UserOut.model_validate(user))
+    set_session_cookies(response, request, token)
+    return SessionResponse(user=UserOut.model_validate(user))
 
 
 @router.post("/logout")
 def logout(
+    request: Request,
+    response: Response,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user_allowing_password_change),
 ):
@@ -240,6 +270,8 @@ def logout(
         entity_id=user.id,
     )
     db.commit()
+    # This browser's session ends here; the token is gone from its jar.
+    clear_session_cookies(response, request)
     return {"status": "ok"}
 
 
@@ -266,6 +298,7 @@ def read_me(
 @router.post("/me/password")
 def change_my_password(
     request: Request,
+    response: Response,
     payload: PasswordChange,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user_allowing_password_change),
@@ -291,14 +324,7 @@ def change_my_password(
     ip = client_ip(request)
     retry_after = login_rate_limiter.check(db, user.username, ip)
     if retry_after:
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail=(
-                "Too many attempts. Please wait about "
-                f"{max(1, retry_after // 60)} minute(s) and try again."
-            ),
-            headers={"Retry-After": str(retry_after)},
-        )
+        raise _refuse_locked_out(retry_after)
 
     if not verify_password(payload.current_password, user.password_hash):
         login_rate_limiter.record_failure(db, user.username, ip)
@@ -350,12 +376,13 @@ def change_my_password(
     )
     db.commit()
 
-    # The caller's own token was just invalidated along with the rest, so hand
-    # back a fresh one rather than signing them out for succeeding.
+    # The caller's own token was just invalidated along with the rest, so start
+    # a fresh session rather than signing them out for succeeding.
     token = create_access_token(
         user.id, {"role": user.role.name, "ver": user.token_version}
     )
-    return {"status": "ok", "access_token": token, "token_type": "bearer"}
+    set_session_cookies(response, request, token)
+    return {"status": "ok"}
 
 
 @router.post("/password-reset-request")

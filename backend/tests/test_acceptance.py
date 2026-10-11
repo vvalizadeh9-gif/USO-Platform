@@ -228,7 +228,7 @@ def test_overview_endpoint(client):
     assert client.get("/api/v1/acceptance/overview").status_code == 401
 
     r = client.post("/api/v1/auth/login", data=login_form(client))
-    token = r.json()["access_token"]
+    token = r.cookies["uep_session"]
     r = client.get(
         "/api/v1/acceptance/overview",
         headers={"Authorization": f"Bearer {token}"},
@@ -740,7 +740,7 @@ def test_sites_endpoint_and_its_export(client):
 
     token = client.post(
         "/api/v1/auth/login", data=login_form(client)
-    ).json()["access_token"]
+    ).cookies["uep_session"]
     auth = {"Authorization": f"Bearer {token}"}
 
     r = client.get("/api/v1/acceptance/sites?metric=approved", headers=auth)
