@@ -11,6 +11,7 @@ const ROUTES = {
   '/action-center/summary': { counters: [], items: [] },
   '/action-center/board': F.actionBoardPm,
   '/home/summary': F.homeSummaryPm,
+  '/me/home': F.homeSummaryPm,
   '/drive-test/overview': F.dtOverview,
   '/drive-test/plan-delivery': F.dtPlan,
   '/drive-test/trend': F.dtTrend,

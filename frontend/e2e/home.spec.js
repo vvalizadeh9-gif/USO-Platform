@@ -35,7 +35,7 @@ for (const viewport of VIEWPORTS) {
       // Apps panel and the footer.
       await expect(page.getByRole('region', { name: 'Your numbers' })).toBeInViewport()
       await expect(page.getByRole('complementary', { name: 'Apps' })).toBeInViewport()
-      await expect(page.locator('.h-footer')).toBeInViewport()
+      await expect(page.locator('.hf-footer')).toBeInViewport()
       for (const button of await page.locator('.h-cf .h-btn').all()) {
         await expect(button).toBeInViewport()
       }

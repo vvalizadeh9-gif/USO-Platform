@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import PageFrame from '../../components/PageFrame'
-import { AuthorityChip, Banner, Loading, PageBar, Tabs } from '../../components/ui'
+import { Banner, Loading, PageBar, Tabs } from '../../components/ui'
 import { useAuth } from '../../context/AuthContext'
 import { useToast } from '../../context/ToastContext'
 import { fetchSuggestions } from './api'
@@ -64,9 +64,7 @@ export default function MyWork() {
 
   const bar = (
     <PageBar
-      eyebrow="Acceptance"
       title="My Work"
-      context={mw.list && <AuthorityTotals totals={mw.list.authority_totals} />}
       tabs={tabs.length > 0 && <Tabs label="Show villages" tabs={tabs} value={mw.tab} onChange={mw.setTab} />}
     />
   )
@@ -78,8 +76,6 @@ export default function MyWork() {
           view={view}
           rows={mw.rows}
           total={mw.paste ? mw.rows.length : (mw.list?.total ?? 0)}
-          sort={mw.sort}
-          onSort={mw.setSort}
           query={mw.query}
           onQuery={mw.setQuery}
           paste={mw.paste}
@@ -120,21 +116,6 @@ export default function MyWork() {
   )
 }
 
-/** "ICT 9 not approved · CRA 9 not approved", or "… to check". */
-function AuthorityTotals({ totals }) {
-  const words = totals.kind === 'to_check' ? 'to check' : 'not approved'
-  return (
-    <div className="mw-totals">
-      {AUTHORITIES.map((authority) => (
-        <span key={authority} className="mw-total">
-          <AuthorityChip authority={authority} />
-          <span><strong className="tnum">{totals[authority]}</strong> {words}</span>
-        </span>
-      ))}
-    </div>
-  )
-}
-
 /** Same-site villages still waiting on the focused village's first open side. */
 function useSuggestion(mw, readOnly) {
   const [suggestion, setSuggestion] = useState(null)
@@ -159,11 +140,10 @@ function SinglePane({ mw, view, decides, forms, formActions, letters, heldFor, s
   return (
     <>
       <RequestedOne
+        key={detail.village_id}
         facts={detail.facts}
         suggestion={suggestion}
         onTakeSuggestion={() => mw.tick([detail.village_id, ...suggestion.villages.map((v) => v.village_id)])}
-        onPrev={() => mw.step(-1)}
-        onNext={() => mw.step(1)}
       />
       <div className="mw-cards">
         {AUTHORITIES.map((authority) => (
