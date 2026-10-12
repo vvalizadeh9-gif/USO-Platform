@@ -1,33 +1,6 @@
 import { Link } from 'react-router-dom'
-import { describeSeries, segments } from '../../components/Sparkline'
+import KpiSpark from '../../components/KpiSpark'
 import { deltaText, deltaTone, weekDelta } from './homeLogic'
-
-const W = 140
-const H = 28
-const PAD = 2
-
-/** A 14-day line drawn left to right, its area fading in after it. Gaps
- * (days with no snapshot) stay gaps; with fewer than 14 days it shows what
- * exists. */
-function Spark({ values, label }) {
-  const known = values.filter((v) => v !== null && v !== undefined)
-  const min = Math.min(0, ...known)
-  const max = Math.max(1, ...known)
-  const step = values.length > 1 ? W / (values.length - 1) : 0
-  const y = (v) => PAD + (1 - (v - min) / (max - min)) * (H - 2 * PAD)
-  const runs = segments(values).filter((r) => r.length > 1)
-  const line = (run) => run.map(([i, v], n) => `${n ? 'L' : 'M'}${i * step} ${y(v)}`).join('')
-  return (
-    <svg className="hk-spark" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" role="img" aria-label={describeSeries(label, values)}>
-      {runs.map((run) => (
-        <path key={`a${run[0][0]}`} className="hk-area" d={`${line(run)}L${run[run.length - 1][0] * step} ${H}L${run[0][0] * step} ${H}Z`} />
-      ))}
-      {runs.map((run) => (
-        <path key={`l${run[0][0]}`} className="hk-line" d={line(run)} pathLength="1" />
-      ))}
-    </svg>
-  )
-}
 
 function Tile({ kpi, label, value, series, delta, to, hero, index }) {
   const text = deltaText(delta)
@@ -41,7 +14,7 @@ function Tile({ kpi, label, value, series, delta, to, hero, index }) {
       <span className="hk-label">{label}</span>
       <span className="hk-value">{value}</span>
       <span className="hk-delta" data-tone={deltaTone(kpi, delta)}>{text ?? ' '}</span>
-      <Spark values={series} label={label} />
+      <KpiSpark values={series} title={label} />
     </Link>
   )
 }

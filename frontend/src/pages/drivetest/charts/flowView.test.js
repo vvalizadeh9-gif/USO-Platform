@@ -6,6 +6,7 @@ import {
   flowNotes,
   flowView,
   flowViewName,
+  kpiSeries,
   netChanges,
 } from './flowView'
 
@@ -211,5 +212,31 @@ describe('flowNotes', () => {
   it('says the lines carry the running total, not a count restarted for the year', () => {
     const notes = flowNotes(data, 1404)
     expect(notes.join(' ')).toMatch(/Showing 1404, month by month\. The lines are the programme’s running totals, carried from the opening balance/)
+  })
+})
+
+describe('kpiSeries', () => {
+  // Twelve months, so the last-12 window is the whole series.
+  const data = {
+    opening: { on_air: 100, dt_done: 40 },
+    months: Array.from({ length: 12 }, (_, i) => ({
+      year: 1404,
+      month: i + 1,
+      on_aired: 10 + i,
+      dt_done: 7 + (i % 3),
+      is_open: i === 11,
+    })),
+  }
+
+  it('reconciles with the chart: Pending is On air minus DT done for every month', () => {
+    const s = kpiSeries(data)
+    const drawn = flowView(data, LAST_12).points.slice(1)
+    expect(s.onAir).toEqual(drawn.map((p) => p.onAir))
+    expect(s.dtDone).toEqual(drawn.map((p) => p.dtDone))
+    s.pending.forEach((v, i) => expect(v).toBe(s.onAir[i] - s.dtDone[i]))
+  })
+
+  it('has nothing to draw for a deployment with no activity', () => {
+    expect(kpiSeries({ opening: { on_air: 0, dt_done: 0 }, months: [] })).toBeNull()
   })
 })

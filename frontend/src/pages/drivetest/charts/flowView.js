@@ -180,6 +180,19 @@ export function flowView(data, scope = LAST_12) {
   return { years, selected, cumulative, yearMarks, points, months, floor, ceiling, ticks, notPlaced }
 }
 
+/** The KPI band's three sparkline series, from the same running totals the
+ * chart draws (last twelve months), so the sparklines and the chart always
+ * agree, and Pending is On air - DT done for every month by construction. */
+export function kpiSeries(data) {
+  if (!flowHasActivity(data)) return null
+  const drawn = flowView(data, LAST_12).points.slice(1)
+  return {
+    onAir: drawn.map((p) => p.onAir),
+    dtDone: drawn.map((p) => p.dtDone),
+    pending: drawn.map((p) => p.gap),
+  }
+}
+
 /** The view in words, for the chart's accessible name and the info note. */
 export function flowViewName({ selected }) {
   if (selected === CUMULATIVE) return 'every month since Farvardin 1404'

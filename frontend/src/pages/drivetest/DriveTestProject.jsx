@@ -25,7 +25,7 @@ import DashboardActions, { ProvinceScope } from './Toolbar'
 import FlowChart, { FlowLegend } from './charts/FlowChart'
 import FlowTable from './charts/FlowTable'
 import FlowViewControl from './charts/FlowViewControl'
-import { LAST_12, flowHasActivity, flowNotes, flowView, flowYears } from './charts/flowView'
+import { LAST_12, flowHasActivity, flowNotes, flowYears, kpiSeries } from './charts/flowView'
 import FlowLedger, { flowNet } from './charts/FlowLedger'
 import { flowScale } from './charts/flowScale'
 import { PROVINCE_LIMIT } from './constants'
@@ -138,15 +138,8 @@ export default function DriveTestProject() {
     [searchParams, setSearchParams],
   )
 
-  // On air over the last twelve months, for the On air card's sparkline:
-  // the same running totals the trend chart draws, so the two agree.
-  const onAirSeries = useMemo(
-    () =>
-      flowHasActivity(flow.data)
-        ? flowView(flow.data, LAST_12).points.slice(1).map((p) => p.onAir)
-        : null,
-    [flow.data],
-  )
+  // The KPI sparklines: the same running totals the trend chart draws.
+  const sparkSeries = useMemo(() => kpiSeries(flow.data), [flow.data])
 
   const contractorIdByName = useMemo(() => {
     const map = new Map()
@@ -296,7 +289,7 @@ export default function DriveTestProject() {
               {overview.loading && !data ? (
                 <KpiSkeleton />
               ) : (
-                data && <KpiBand kpis={data.kpis} provinceId={provinceId} onAirSeries={onAirSeries} />
+                data && <KpiBand kpis={data.kpis} provinceId={provinceId} series={sparkSeries} />
               )}
 
               {/* The trend and the month side by side: the chart takes the rest

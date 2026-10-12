@@ -1,14 +1,7 @@
 import { motion, useReducedMotion } from 'framer-motion'
-import {
-  CheckCircle2,
-  Hourglass,
-  Minus,
-  PieChart,
-  RadioTower,
-  TrendingDown,
-  TrendingUp,
-} from 'lucide-react'
-import { KPI_DIRECTION, STATE_COLOR } from './constants'
+import { Minus, TrendingDown, TrendingUp } from 'lucide-react'
+import KpiSpark from '../../components/KpiSpark'
+import { KPI_DIRECTION } from './constants'
 import { count, deltaTone, kpiPercent, share, TONE_COLOR } from './format'
 import {
   doneLink,
@@ -18,7 +11,7 @@ import {
   problematicLink,
   remainingLink,
 } from './links'
-import { AnimatedNumber, Sparkline } from './charts/primitives'
+import { AnimatedNumber } from './charts/primitives'
 import { DrillLink } from './DrillPanel'
 
 /** The month-over-month change on a KPI card, or beside a chart figure.
@@ -46,11 +39,13 @@ function DeltaChip({ delta, direction = 'up', small, pill }) {
   const text = delta === 0 ? '±0' : `${delta > 0 ? '+' : ''}${count(delta)}`
 
   if (pill) {
+    // The KPI tile's change line (UEP-04): "+64 vs last month", or "No
+    // change" for a flat month. Danger ink only when the change is bad.
     return (
       <span className="dt-delta dt-delta-pill">
-        <b data-tone={tone ?? 'flat'}>{text}</b>
+        <b data-tone={tone ?? 'flat'}>{delta === 0 ? 'No change' : text}</b>
         <span className="dt-sr-only">{TONE_WORD[tone ?? 'flat']}</span>
-        <span className="dt-delta-since">vs last month</span>
+        {delta !== 0 && <span className="dt-delta-since">vs last month</span>}
       </span>
     )
   }
@@ -106,23 +101,53 @@ function SplitBar({ segments, label }) {
   )
 }
 
-/** The shortest series the On air sparkline is drawn from. A line from four
+/** The shortest series a KPI sparkline is drawn from. A line from four
  * points is mostly the accident of where the series starts. */
 const SPARK_MIN_POINTS = 7
 
-/** A KPI card's header: the neutral icon chip and the title. */
-function KpiHead({ icon: Icon, title }) {
+/** The Pending-by-status colours: ongoing is the data colour, problematic
+ * the one bad colour, not started the neutral (never a fourth hue). */
+const STATUS_COLOR = {
+  ongoing: 'var(--uep-accent)',
+  problematic: 'var(--uep-danger)',
+  not_started: 'var(--uep-neutral-data)',
+}
+
+/**
+ * One KPI tile, the same anatomy as Home's strip (kpi-strip.css): label,
+ * figure, change line and a 12-month sparkline. The share of on air, where a
+ * tile has one, is the end of the change line rather than a meter of its own.
+ */
+function KpiTile({ kpi, direction, index, title, value, href, ariaLabel, metric, ofOnAir, series }) {
+  const tone = metric.delta == null ? null : deltaTone(metric.delta, direction)
   return (
-    <div className="dt-kpi-hd">
-      <span className="dt-kpi-ic" aria-hidden="true">
-        <Icon size={20} strokeWidth={1.9} />
+    <div className="hk-tile dt-kpi-card" data-kpi={kpi} style={{ '--i': index }}>
+      <span className="hk-label dt-kpi-title">{title}</span>
+      <DrillLink to={href} className="hk-value dt-kpi-figure tnum" aria-label={ariaLabel}>
+        <AnimatedNumber value={value} />
+      </DrillLink>
+      <span className="hk-delta dt-kpi-change" data-tone={tone ?? 'flat'}>
+        <DeltaChip pill delta={metric.delta} direction={direction} />
+        {ofOnAir != null && (
+          <span className="dt-kpi-pct tnum">
+            {metric.delta != null && ' · '}
+            {kpiPercent(ofOnAir)} of on air
+          </span>
+        )}
       </span>
-      <span className="dt-kpi-title">{title}</span>
+      {series?.length >= SPARK_MIN_POINTS && (
+        <KpiSpark
+          values={series}
+          baseline="fit"
+          testId="dt-spark"
+          label={`${title} over the last ${series.length} months`}
+        />
+      )}
     </div>
   )
 }
 
-export default function KpiBand({ kpis, provinceId, onAirSeries }) {
+export default function KpiBand({ kpis, provinceId, series }) {
   const scope = provinceId == null ? undefined : { provinceId }
 
   const onair = kpis.total_onair.value
@@ -132,9 +157,8 @@ export default function KpiBand({ kpis, provinceId, onAirSeries }) {
   const problematic = kpis.total_problematic.value
   const notStarted = kpis.total_not_started.value
 
-  // Unchanged from the band this restyles: the same two ratios, computed the
-  // same way, and reused by the split bars rather than worked out a second
-  // time. Two figures on one card that disagree about a percentage is the
+  // The same two ratios as before, computed once, now said in the change
+  // line. Two figures on one card that disagree about a percentage is the
   // failure this page is most often accused of.
   const donePct = onair ? (done / onair) * 100 : 0
   const pendingPct = onair ? (pending / onair) * 100 : 0
@@ -142,27 +166,9 @@ export default function KpiBand({ kpis, provinceId, onAirSeries }) {
   const shareOfPending = (v) => (pending ? share(v, pending) : '0%')
 
   const parts = [
-    {
-      key: 'ongoing',
-      label: 'Ongoing',
-      value: ongoing,
-      color: STATE_COLOR.ongoing,
-      href: ongoingLink(scope),
-    },
-    {
-      key: 'problematic',
-      label: 'Problematic',
-      value: problematic,
-      color: STATE_COLOR.problematic,
-      href: problematicLink(scope),
-    },
-    {
-      key: 'not_started',
-      label: 'Not started',
-      value: notStarted,
-      color: 'var(--dt-muted)',
-      href: notStartedLink(scope),
-    },
+    { key: 'ongoing', label: 'Ongoing', value: ongoing, href: ongoingLink(scope) },
+    { key: 'problematic', label: 'Problematic', value: problematic, href: problematicLink(scope) },
+    { key: 'not_started', label: 'Not started', value: notStarted, href: notStartedLink(scope) },
   ]
 
   // Named parts only, so the bar's accessible name says which states are in
@@ -173,133 +179,56 @@ export default function KpiBand({ kpis, provinceId, onAirSeries }) {
     .join(', ')}`
 
   return (
-    <section className="dt-kpi-band" aria-label="Programme totals">
-      {/* Card 1: Total On-air.
-          No bar. The one it used to carry read value against a maximum that
-          was the same number, so it filled the track every time and told a
-          reader nothing they could not see from the figure above it. */}
-      <div className="dt-kpi-card" data-kpi="onair">
-        <KpiHead icon={RadioTower} title="On air" />
-        <div className="dt-kpi-v">
-          <DrillLink
-            to={onairLink(scope)}
-            className="dt-kpi-figure tnum"
-            aria-label={`Total on-air: ${onair} sites`}
-          >
-            <AnimatedNumber value={onair} />
-          </DrillLink>
-          <DeltaChip pill delta={kpis.total_onair.delta} direction={KPI_DIRECTION.total_onair} />
-        </div>
-        {/* The last twelve months of the running total, in the reference
-            neutral: the same series as the trend chart below. */}
-        {onAirSeries?.length >= SPARK_MIN_POINTS && (
-          <div className="dt-kpi-spark">
-            <Sparkline
-              fluid
-              points={onAirSeries}
-              color="var(--dt-muted)"
-              height={28}
-              label={`On air over the last ${onAirSeries.length} months`}
-            />
-          </div>
-        )}
-      </div>
+    <section className="hk-strip dt-kpi-band" aria-label="Programme totals">
+      <KpiTile
+        kpi="onair"
+        direction={KPI_DIRECTION.total_onair}
+        index={0}
+        title="On air"
+        value={onair}
+        href={onairLink(scope)}
+        ariaLabel={`Total on-air: ${onair} sites`}
+        metric={kpis.total_onair}
+        series={series?.onAir}
+      />
+      <KpiTile
+        kpi="done"
+        direction={KPI_DIRECTION.total_dt_done}
+        index={1}
+        title="DT done"
+        value={done}
+        href={doneLink(scope)}
+        ariaLabel={`Total DT done: ${done} sites`}
+        metric={kpis.total_dt_done}
+        ofOnAir={donePct}
+        series={series?.dtDone}
+      />
+      <KpiTile
+        kpi="pending"
+        direction={KPI_DIRECTION.total_remaining}
+        index={2}
+        title="Pending"
+        value={pending}
+        href={remainingLink(scope)}
+        ariaLabel={`Total pending: ${pending} sites`}
+        metric={kpis.total_remaining}
+        ofOnAir={pendingPct}
+        series={series?.pending}
+      />
 
-      {/* Card 2: Total DT Done */}
-      <div className="dt-kpi-card" data-kpi="done">
-        <KpiHead icon={CheckCircle2} title="DT done" />
-        <div className="dt-kpi-v">
-          <DrillLink
-            to={doneLink(scope)}
-            className="dt-kpi-figure tnum"
-            aria-label={`Total DT done: ${done} sites`}
-          >
-            <AnimatedNumber value={done} />
-          </DrillLink>
-          <DeltaChip
-            pill
-            delta={kpis.total_dt_done.delta}
-            direction={KPI_DIRECTION.total_dt_done}
-          />
-        </div>
-        {/* The share sits at the end of its bar. "of on-air" is what it is
-            a share *of*; a bare percentage is ambiguous without it, so the
-            denominator stays in the accessible name. */}
-        <div className="dt-kpi-meter">
-          <SplitBar
-            segments={[
-              // The "done" series is the accent, on the plain track.
-              { key: 'done', pct: donePct, color: 'var(--accent)' },
-            ]}
-          />
-          <span className="dt-kpi-pct tnum" aria-label={`${kpiPercent(donePct)} of on-air`}>
-            {kpiPercent(donePct)}
-          </span>
-        </div>
-      </div>
-
-      {/* Card 3: Total Pending. The bar mirrors DT done's — same two ratios,
-          the other way round — so the pair reads as one split across two
-          cards rather than as two unrelated measurements. */}
-      <div className="dt-kpi-card" data-kpi="pending">
-        <KpiHead icon={Hourglass} title="Pending" />
-        <div className="dt-kpi-v">
-          <DrillLink
-            to={remainingLink(scope)}
-            className="dt-kpi-figure tnum"
-            aria-label={`Total pending: ${pending} sites`}
-          >
-            <AnimatedNumber value={pending} />
-          </DrillLink>
-          <DeltaChip
-            pill
-            delta={kpis.total_remaining.delta}
-            direction={KPI_DIRECTION.total_remaining}
-          />
-        </div>
-        <div className="dt-kpi-meter">
-          <SplitBar
-            segments={[
-              // A darker neutral, not red: the bar is a share, not a status.
-              { key: 'pending', pct: pendingPct, color: 'var(--dt-pending-bar)' },
-            ]}
-          />
-          <span className="dt-kpi-pct tnum" aria-label={`${kpiPercent(pendingPct)} of on-air`}>
-            {kpiPercent(pendingPct)}
-          </span>
-        </div>
-      </div>
-
-      {/* Card 4: Pending status.
-          The stack says how pending divides; the three parts below name each
-          one in words and figures. Both, never just the stack: green and
-          brick are not separable under deuteranopia (see app.css), so colour
-          on this page is the fast read and never the only one.
-
-          The parts sit as three columns rather than three rows wherever the
-          card is wide enough (a container query in app.css). As rows they
-          made this the tallest card by a clear margin, and a band of equal
-          cards takes the height of its tallest, so three cards carried a dead
-          strip through their middles to make room for this one. */}
-      <div className="dt-kpi-card" data-kpi="status">
-        <KpiHead icon={PieChart} title="Pending by status" />
-        <SplitBar
-          label={stackLabel}
-          segments={parts.map((p) => ({
-            key: p.key,
-            pct: pending ? (p.value / pending) * 100 : 0,
-            color: p.color,
-          }))}
-        />
+      {/* Pending by status: no headline figure, because it would repeat
+          Pending. Three rows in words and figures, then the stack -- colour
+          is the fast read here, never the only one. */}
+      <div className="hk-tile dt-kpi-card" data-kpi="status" style={{ '--i': 3 }}>
+        <span className="hk-label dt-kpi-title">Pending by status</span>
         <ul className="dt-status-list">
           {parts.map((p) => (
             <li key={p.key}>
-              {/* The swatch leads the label, as a legend does. */}
               <DrillLink to={p.href} className="dt-status-row">
                 <span className="dt-status-name">
                   <span
                     className="dt-kpi-part-dot"
-                    style={{ background: p.color }}
+                    style={{ background: STATUS_COLOR[p.key] }}
                     aria-hidden="true"
                   />
                   {p.label}
@@ -312,6 +241,14 @@ export default function KpiBand({ kpis, provinceId, onAirSeries }) {
             </li>
           ))}
         </ul>
+        <SplitBar
+          label={stackLabel}
+          segments={parts.map((p) => ({
+            key: p.key,
+            pct: pending ? (p.value / pending) * 100 : 0,
+            color: STATUS_COLOR[p.key],
+          }))}
+        />
       </div>
     </section>
   )
