@@ -1,7 +1,8 @@
-import { clock } from './homeLogic'
+import { clock } from '../pages/home/homeLogic'
 
-/** System status from GET /me/home's health check, data time and version. */
-export default function HomeFooter({ data, failed }) {
+/** System status from GET /me/home's health check, data time and version.
+ * Home's footer, shared by every page built on Home's frame. */
+export default function AppFooter({ data, failed }) {
   const degraded = failed || data?.system?.status === 'degraded'
   return (
     <footer className="hf-footer">

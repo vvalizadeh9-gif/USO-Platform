@@ -34,11 +34,12 @@ from sqlalchemy.orm import Session
 from app.api.work_items import MAX_EXPORT_ROWS
 from app.core import jalali
 from app.core.database import get_db
-from app.core.deps import get_current_user
+from app.core.deps import get_current_user, require_review_authority
 from app.models.reference import Province, User
 from app.schemas import (
     ChartPoint,
     ContractorAchievementRow,
+    ContractorLoadRow,
     ContractorScorecardRow,
     DriveTestFlow,
     DriveTestKpis,
@@ -52,6 +53,7 @@ from app.schemas import (
     KpiWithDelta,
     MonthFlows,
     OngoingBreakdown,
+    PipelineSummary,
     PlanAndDelivery,
     ProblematicBreakdown,
     ProvinceBreakdownRow,
@@ -60,12 +62,15 @@ from app.schemas import (
     TrendPoint,
 )
 from app.services import (
+    contractor_load,
     dt_site_export,
     dt_site_list,
     dt_trends,
     dt_workbook,
     monthly_plan as plans,
+    pipeline,
 )
+from app.services.action_queues.context import QueueContext
 from app.services.drive_test_analytics import (
     AGE_BAND_KEYS,
     AGE_BAND_LABEL_BY_KEY,
@@ -646,3 +651,24 @@ def _points(rows: list[dict]) -> list[ChartPoint]:
     return [
         ChartPoint(name=r["name"], value=r["value"], key=r.get("key")) for r in rows
     ]
+
+
+# ---------------- The work pages' pipeline ----------------
+@router.get("/pipeline/summary", response_model=PipelineSummary)
+def pipeline_summary(
+    db: Session = Depends(get_db),
+    user: User = Depends(require_review_authority),
+):
+    """The Health check → Drive test strip: each step's count, late count,
+    oldest wait and SLA. Counted by the queue service Home and the rail read,
+    so a step with a Home row always shows Home's number."""
+    return pipeline.summary(QueueContext(db, user))
+
+
+@router.get("/contractors/load", response_model=list[ContractorLoadRow])
+def dt_contractor_load(
+    db: Session = Depends(get_db),
+    user: User = Depends(require_review_authority),
+):
+    """Each contractor's drive-test workload, for the assign panel."""
+    return contractor_load.contractor_load(QueueContext(db, user), "dt")

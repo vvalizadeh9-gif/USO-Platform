@@ -428,6 +428,11 @@ class WorkItemListItem(ORMModel):
     requested_technology: str | None
     current_stage: str
     project_name: str | None
+    # The CPM on-air date as CPM wrote it (Shamsi text), and the site's first
+    # village by name with how many it has (hc_queues.with_villages).
+    launch_date_shamsi: str | None = None
+    village: str | None = None
+    village_count: int = 0
 
     # Assignment (latest active, else latest ever)
     assignment_date: datetime | None = None
@@ -827,12 +832,60 @@ class HcBasketItem(BaseModel):
     # health_check._pool_waiting_since) — never a substitute date.
     waiting_since: datetime | None = None
     days_waiting: int | None = None
+    # The first of the site's villages by name, and how many it has (see
+    # hc_queues.with_villages). Both empty when the site carries none.
+    village: str | None = None
+    village_count: int = 0
 
 
 class HcAssignmentCreate(BaseModel):
     contractor_id: int
     work_item_ids: list[int] = Field(min_length=1, max_length=MAX_BULK_IDS)
     remarks: str | None = None
+
+
+class HcConfirmRequest(BaseModel):
+    """Ready results to confirm in one go."""
+
+    task_ids: list[int] = Field(min_length=1, max_length=MAX_BULK_IDS)
+
+
+class ContractorProvinceShare(BaseModel):
+    province: str
+    share: float
+
+
+class ContractorLoadRow(BaseModel):
+    """One contractor's workload in a process (see services/contractor_load)."""
+
+    contractor_id: int
+    name: str
+    open: int = 0
+    late: int = 0
+    avg_submit_days: float | None = None
+    provinces: list[ContractorProvinceShare] = []
+
+
+class PipelineStep(BaseModel):
+    count: int = 0
+    late: int = 0
+    oldest_days: int | None = None
+    sla_days: int | None = None
+
+
+class PipelineSummary(BaseModel):
+    """The strip's counts, by key (see services/pipeline.STRIP)."""
+
+    hc1: PipelineStep
+    hc2: PipelineStep
+    hc3: PipelineStep
+    dt4: PipelineStep
+    dt5: PipelineStep
+    dt6: PipelineStep
+    done: PipelineStep
+    remediation: PipelineStep
+    reroutes: PipelineStep
+    sent_back: PipelineStep
 
 
 class HcTechResult(BaseModel):
@@ -944,6 +997,17 @@ class HcQueueCounts(BaseModel):
     dt_review: int = 0
 
 
+class HcPendingSite(BaseModel):
+    """One site still out with its health-check subcontractor."""
+
+    task_id: int
+    work_item_id: int
+    site_code: str | None = None
+    province: str | None = None
+    assigned_at: datetime | None = None
+    days_waiting: int = 0
+
+
 class HcInProgressRow(BaseModel):
     assignment_id: int
     code: str
@@ -955,6 +1019,8 @@ class HcInProgressRow(BaseModel):
     sites_submitted: int = 0
     sites_pending: int = 0
     pending_sites: list[str | None] = []
+    # The pending sites one by one, inside the caller's scope.
+    pending: list[HcPendingSite] = []
 
 
 class HcRemediationRow(BaseModel):
@@ -999,6 +1065,8 @@ class DtAssignmentRow(BaseModel):
     # Set when the site is back from a contractor who could not proceed.
     # Re-assigning is the same action, so it belongs in the same queue.
     returned_reason: str | None = None
+    village: str | None = None
+    village_count: int = 0
 
 
 class DtInProgressRow(BaseModel):
@@ -1129,6 +1197,9 @@ class HcResultRow(BaseModel):
     assignment_code: str
     contractor_name: str | None = None       # the subcontractor (SC) who did the HC
     technologies: list[HcTechnologyOut] = []  # per-technology Normal/NotNormal detail
+    # When the result came in: the review queue's clock.
+    completed_at: datetime | None = None
+    days_waiting: int = 0
 
 
 # ---------- Drive Test Project dashboard ----------

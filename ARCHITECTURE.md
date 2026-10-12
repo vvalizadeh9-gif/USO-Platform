@@ -1608,6 +1608,122 @@ scroll inside themselves. Tokens and components: `design-system-cobalt.md`,
 
 ---
 
+## 5g. The work pages: one pipeline (UEP-06)
+
+Health check (`/health-check`) and Drive test (`/drive-test`) are one
+pipeline on two pages: six steps, the DT done outcome and three side loops,
+drawn as one strip on both. The step is the URL's `?tab=`; the map from tab
+to step, the legacy keys and the redirects live in
+`frontend/src/lib/pipelineSteps.js`, and both pages render
+`pages/pipeline/PipelinePage.jsx`.
+
+### Pipeline summary: `GET /drive-test/pipeline/summary`
+
+`services/pipeline.py`. Per strip key, `{count, late, oldest_days, sla_days}`,
+each from `action_queues.board.summarize`, the function Home and the rail
+use. A step that also has a Home row is that queue, so its count **is** Home's
+and the rail's:
+
+| Key | Queue | On Home / rail |
+|---|---|---|
+| `hc1` | `hc_assign` (pool rows New or Ready for re-check) | yes |
+| `hc2` | `hc_in_check`: open HC tasks (`lifecycle.hc_to_submit`) | pipeline only |
+| `hc3` | `hc_review` | yes |
+| `dt4` | `dt_assign` (= `hc_queues.dt_assignment`) | yes |
+| `dt5` | `dt_in_test`: with a DT contractor (`lifecycle.sites_to_drive_test`) | pipeline only |
+| `dt6` | `dt_review` | yes |
+| `done` | on-air sites with DT done (the DT site list's `done` bucket) | never late |
+| `remediation` | `hc_remediation`: open fixes, late by their own due date | pipeline only |
+| `reroutes` | `hc_reroutes` | yes |
+| `sent_back` | `dt_sent_back` (`lifecycle.returned_to_redo`) | pipeline only |
+
+The pipeline-only queues are `QueueDefinition`s held in `pipeline.py`, not in
+the registry, because they are work held by somebody else and belong on
+neither Home nor the digest. Their SLA rows use the same `action_queue_sla`
+table under those keys and default to 14 days. `sla_days` is what the pages
+measure "late" against; the frontend never assumes 14.
+`tests/test_pipeline_work_pages.py` holds each Home-row step equal to Home's
+ticket and each pipeline-only step equal to the list its page shows.
+
+The pages no longer read `GET /hc/queues/counts`. It is marked deprecated and
+still answers.
+
+**Step 4 is the drive-test assignment queue, not the pool's "Health check
+passed" state.** The two differ: the pool state also holds Ready results not
+yet confirmed (step 3) and sites already with a DT contractor or in DT review
+(steps 5 and 6), while the queue has no on-air or DT-status filter. The queue
+is the one the assignment endpoint enforces, so it is the step.
+
+### Contractor load: `GET /hc/contractors/load`, `GET /drive-test/contractors/load`
+
+`services/contractor_load.py`. One row per active contractor, lowest open
+load first: `open` and `late` from the same queue fetches as steps 2 and 5
+(plus Sent back for drive tests), in the caller's scope; `avg_submit_days`,
+the mean of assigned → submitted over 90 days (null under five samples); and
+`provinces`, where at least 20% of their work in this process was assigned in
+90 days (at most five). It is used only to order the assign panel's cards and
+to suggest one. PM and Coordinator only, like the assign endpoints.
+
+### Undo, from the audit log
+
+`services/undo.py`. Nothing new is stored: the record of a batch is the audit
+entry the action already writes, and its id is the `batch_id`.
+
+| Action | Returns | Undo |
+|---|---|---|
+| `POST /hc/assignments` | the assignment (`id`) | `POST /hc/assignments/{id}/undo` |
+| `POST /work-items/assign` | `batch_id` (additive) | `POST /work-items/assign/{batch_id}/undo` |
+| `POST /hc/results/confirm` (new: Confirm ready / Confirm all) | `batch_id` | `POST /hc/results/confirm/{batch_id}/undo` |
+
+Allowed only to the user who acted, within two minutes, and while nothing has
+happened to the sites since: no result submitted (HC), no drive test filed and
+the assignment not handed back (DT), no drive-test assignment and no newer
+check (confirm). An undo restores the previous state exactly: a withdrawn HC
+assignment's untouched tasks are removed and the sites return to the pool; a
+DT batch's new assignments are removed and the ones it replaced reactivated;
+a confirmation's review is cleared and the site returns to HC review. The
+stage is recomputed and an `UNDONE` audit entry written. Otherwise the answer
+is **409** "Too late to undo; reassign the sites instead." (404 for a batch
+that is not the caller's). The bulk-assign audit entry's `new_value` now also
+carries `created` (work item → new assignment id) and `replaced` (work item →
+the active ids it deactivated).
+
+`POST /hc/results/confirm` is the one endpoint added beyond the prompt's
+list: confirming was one `POST /hc/tasks/{id}/review` per site, and a Confirm
+all that is undone as one needs one batch. It applies the same
+`review_task` with no categories, refuses a result that is not Ready (400) or
+already decided (409), and is all or nothing.
+
+### Additive row fields
+
+- `GET /hc/basket`, `GET /hc/queues/dt-assignment`, `GET /work-items`:
+  `village` (the first of the site's villages by name) and `village_count`,
+  attached at the API layer (`hc_queues.with_villages`), so Home's queue reads
+  never pay for it.
+- `GET /hc/queues/in-progress`: `pending`, the assignment's pending sites one
+  by one inside the caller's scope (task id, site, province, days waiting),
+  which is what step 2 lists.
+- `GET /hc/results`: `completed_at` and `days_waiting`.
+- `GET /work-items`: `launch_date_shamsi`, and a `q` search over site ID,
+  province and village (also on its export and counts).
+- `GET /work-items/counts` (new): visible sites per `current_stage` plus
+  `All`, with the list's `q` and `province_id`. This was chosen over adding a
+  counts field because the list answers a bare array.
+
+### Reassign: not built
+
+No reassign endpoint exists, so the Reassign button on late rows in steps 2
+and 5 is not shown. A `POST /hc/tasks/{id}/reassign` (and a drive-test
+equivalent) would need to: refuse a task with a result; close the task on the
+old assignment and open one on a new assignment for the chosen contractor,
+keeping the round; recompute the stage; write an audit entry; and decide
+whether the SLA clock restarts. That last point is a product decision.
+
+### Not changed
+
+There are no database changes. Every role guard, list scope, validation
+message and confirmation dialog is as it was. "Ready" is cobalt, never green.
+
 ## 6. Roles and permissions
 
 Ten roles. Six are staff and workflow roles; four exist solely to own health-check

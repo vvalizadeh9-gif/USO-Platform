@@ -23,8 +23,11 @@ def record_audit(
     reason: str | None = None,
     ip_address: str | None = None,
     result: str = audit_actions.SUCCESS,
-) -> None:
+) -> AuditLog:
     """Append an immutable audit entry. Caller commits the transaction.
+
+    Returns the entry, unflushed: a caller that hands its id out (an undoable
+    batch does) flushes first.
 
     ``action`` is required, and comes from ``core/audit_actions.py``. It is the
     column that says what happened, and it has no sensible default: an entry
@@ -44,20 +47,20 @@ def record_audit(
     matter -- a refused sign-in, a guard that said no -- pass Failure, and are
     the reason the column exists.
     """
-    db.add(
-        AuditLog(
-            user_id=user_id,
-            action=action,
-            module=module,
-            entity_type=entity_type,
-            entity_id=entity_id,
-            old_value=old_value,
-            new_value=new_value,
-            reason=reason,
-            ip_address=ip_address or current_client_ip(),
-            result=result,
-        )
+    entry = AuditLog(
+        user_id=user_id,
+        action=action,
+        module=module,
+        entity_type=entity_type,
+        entity_id=entity_id,
+        old_value=old_value,
+        new_value=new_value,
+        reason=reason,
+        ip_address=ip_address or current_client_ip(),
+        result=result,
     )
+    db.add(entry)
+    return entry
 
 
 def record_audit_now(db: Session, **kwargs) -> None:

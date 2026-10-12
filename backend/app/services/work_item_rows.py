@@ -118,6 +118,7 @@ def build_list_row(work_item: WorkItem, user_names: dict[int, str]) -> dict:
         ),
         "site_type": work_item.site_type,
         "requested_technology": work_item.requested_technology,
+        "launch_date_shamsi": work_item.launch_date_shamsi,
         "current_stage": work_item.current_stage,
         "project_name": work_item.project_name,
         "assignment_date": _as_aware(assignment.assigned_at) if assignment else None,

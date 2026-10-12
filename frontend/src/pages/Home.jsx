@@ -2,9 +2,9 @@ import { Link } from 'react-router-dom'
 import Icon from '../components/Icon'
 import { useAuth } from '../context/AuthContext'
 import { homeFor } from '../lib/roles'
+import AppFooter from '../shell/AppFooter'
 import { useHomeData } from '../shell/HomeData'
 import AppsPanel from './home/AppsPanel'
-import HomeFooter from './home/HomeFooter'
 import KpiStrip from './home/KpiStrip'
 import WorkCard from './home/WorkCard'
 import { englishDate, greeting } from './home/homeLogic'
@@ -133,7 +133,7 @@ export default function Home() {
         </div>
         <AppsPanel roleName={roleName} counts={counts} />
       </div>
-      <HomeFooter data={data} failed={Boolean(error) && !data} />
+      <AppFooter data={data} failed={Boolean(error) && !data} />
     </div>
   )
 }

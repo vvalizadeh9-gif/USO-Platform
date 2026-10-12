@@ -218,3 +218,56 @@ Home and the Drive Test dashboard share one strip (`styles/kpi-strip.css`, `comp
 ## Neutral data colour
 
 `--uep-neutral-data` (#9AA1AE) is used for "Not started" and for folded or uncategorized data, never for a status. `--uep-track` (#F1F2F5) is the bar track.
+
+## Work pages: the pipeline (UEP-06)
+
+The Health check and Drive test work pages are **one pipeline on two pages** (`pages/pipeline/`, `components/work/`, `styles/work.css`). They use Home's frame (`.uep-home`: max-width 1280, padding `20px 24px 14px`, gap 16, 12 under `max-height: 820px`) and Home's card, type, controls and footer (`shell/AppFooter.jsx` is Home's footer, moved rather than copied). Page order: `PageHeading` → `PipelineStrip` → the step's list → `AppFooter`. No page scrolls at 1440×900; lists scroll inside their card.
+
+**Colour roles (restated).** Cobalt `--uep-accent` is the selected step, primary actions, selection, checkboxes and the suggested contractor. Drive test teal is identity only: the card tool bar tint, the Health check volume bars and the contractor load bars. `--uep-danger` is late or rejected, and late is always written ("2 late"). **Ready is cobalt, not green**; `--uep-approved` is approved only (the DT done check). Everything else is grey.
+
+### Pipeline strip: the standard for staged workflows
+
+One white strip (1px `--uep-border`, radius 12, padding 6) in four groups split by 1px `--uep-divider` lines: Health check (flex 3, steps 1–3), Drive test (flex 3, steps 4–6), Outcome (flex 1, DT done) and Side loops (flex 1.35: Remediation, Re-routes, Sent back). Group captions are 12px/500 `--uep-text-3`, in sentence case.
+
+- **Step tile** (a button, radius 8, padding `6px 10px 10px`, hover `--uep-page`): an 18px number circle and the short name (13px/500, ellipsis); the figure (24px/600, 20px when tight) with "**N late**" beside it only when there are any; and a 6px **volume bar** showing the step's count ÷ the largest of the six (minimum 3%), teal for steps 1–3 and cobalt for 4–6, `aria-hidden`.
+- **DT done tile:** a green check circle, with "To acceptance" in place of the bar.
+- **Hero = the current step:** Home's hero tile (`--uep-accent` fill, white figure, `--uep-accent-on-tint` labels, number circle and bar in white). Its focus ring is `--uep-text`.
+- **Side loops:** full-width rows (label · "N late" · count). The selected one is cobalt with white text.
+- **Semantics:** one `role="tablist"` ("Site pipeline"). Every tile and row is a tab with `aria-selected`, `aria-controls` pointing at the list card (a `tabpanel` labelled by the tab), and a roving tab stop. ←/→ move in strip order, Home/End jump, and moving selects (the URL changes). Each tab's name is a sentence: "Step 5, In test: 263 sites, 4 late, with contractors".
+- Counts come from `GET /drive-test/pipeline/summary` and are read again after every action.
+
+### WorkListCard
+
+Home's card (white, 1px border, radius 12, hover shadow) whose header is a single tool bar on `--uep-app-drive-test-tint` (padding `10px 16px`, 1px bottom border). Tools sit on the left (search 220px, selects, toggles, all 34px high) and a 13px `--uep-text-3` description on the right. The body scrolls inside; the assign panel or pager sits at its foot.
+
+### SiteTable and WaitingCell
+
+`table-layout: fixed` with a `colgroup`, so the table fills its card at every width, with no empty right side and no horizontal scroll. The checkbox column is 52px with a 32px hit area; the header is 40px (12px/500, sticky); rows are 44px with `0 16px` padding, ellipsis, hover `--uep-row-hover` and selected `--uep-accent-tint`. The assign steps have no Type column and no province group rows. Clicking a row (not its buttons or links) toggles it; Shift-click selects a range; the header box selects the whole filtered set; selection survives filtering.
+
+**Sort:** longest waiting first. **"Sort by province"** (on by default, `aria-pressed`) orders provinces by their longest wait, then sites by wait (`lib/siteOrder.js`).
+
+**WaitingCell:** "21 d" (14px/600, min-width 36px, right-aligned) and a 120×4px bar filling toward the queue's SLA. Past the SLA both turn `--uep-danger` and a hidden " late" is read out. The SLA comes from the API and is never a constant; the header reads "Waiting · SLA 14 d".
+
+### AssignPanel
+
+A band at the foot of the list card (1px top border, padding `12px 16px`), on `--uep-selection-wash` with a `--uep-selection-edge` top border while sites are selected. A 190px lead block ("Contractors" or "Assign N sites to", the suggestion, Clear selection) sits beside one card per contractor in a one-row grid (`repeat(n, minmax(0, 1fr))`). Each card shows the name and open count, a 4px load bar (open ÷ the highest open), and "Suggested · 1 late · avg 5 d".
+
+- **Order:** lowest open load first. With sites selected, the suggested contractor comes first, with a cobalt 1px + 1px inset border.
+- **Suggestion rule** (`lib/suggestContractor.js`): the contractor whose 90-day coverage includes the most provinces of the selected sites. Ties go to the lower open load. There is no suggestion when nobody covers any of them.
+- **One click assigns.** Cards are `aria-disabled` until something is selected, and each card's accessible name is the full sentence.
+- **The confirmation persists:** "✓ 2 sites assigned to رعد." with Undo and a dismiss stays in the panel until it is dismissed or the next selection starts. It never runs on a timer (WCAG 2.2.1). The same text is announced through the page's one persistent `role="status"` region. A step without a panel shows it as a bottom-centre message with the same rules. Leaving a step clears it (WCAG 2.4.11); Undo stays in History.
+
+### ReviewPanel
+
+The 360px right panel of DT review: the Site ID (18px/600) with type, province and contractor; Carried out, Submitted (Shamsi, Persian digits) and Waiting; the report files or a "No report attached" note; **Comment for the contractor**, with help text linked by `aria-describedby`; and Approve (primary) and Send back (danger, `aria-disabled` until the comment has 3+ characters). The open row has a 3px cobalt inset. **J / K** move only while focus is in the list (WCAG 2.1.4). After a decision the next row opens.
+
+### RecentActions (History)
+
+`?tab=history` on either page (and `/work-items?view=history`): "Your recent actions. Each one can be undone for 2 minutes." Columns are Time · Action · Undo, with "{s} s left", then "Can no longer be undone" or "Undone". The server decides whether an undo is still allowed (same user, two minutes, nothing acted on since).
+
+### States
+
+- **Empty:** "Nothing here right now", centred in the card.
+- **Loading:** strip and row skeletons at their final size, never a spinner.
+- **Error:** "Couldn't load {step}." with Retry inside the card; the rest of the page still renders.
+- **Saving:** the pressed control is disabled with `aria-busy`.

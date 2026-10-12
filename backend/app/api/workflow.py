@@ -45,6 +45,7 @@ from app.services import acceptance_workflow as acceptance_flow
 from app.services import evidence_store
 from app.services import hc_queues
 from app.services import health_check as hc
+from app.services import undo
 from app.services.audit import notify_roles, record_audit
 from app.services.visibility import apply_work_item_scope, visible_work_item_ids
 from app.services.workflow import refresh_stage
@@ -255,36 +256,67 @@ def bulk_assign(
         raise HTTPException(400, "assignment_type must be 'first' or 'official'")
 
     assigned = 0
+    # What this batch created and what it replaced, per site: the record an
+    # undo restores from (services/undo.py).
+    created: dict[str, int] = {}
+    replaced: dict[str, list[int]] = {}
     for wid in dict.fromkeys(payload.work_item_ids):  # de-dupe, preserve order
         wi = _load_work_item(wid, db, user)
         _assert_assignable(db, wi, payload.assignment_type)
+        replaced[str(wi.id)] = [prev.id for prev in wi.assignments if prev.is_active]
         for prev in wi.assignments:
             if prev.is_active:
                 prev.is_active = False
         # Associate through the relationship (not a raw db.add) so the loaded
         # collection stays consistent and refresh_stage sees the new row.
-        wi.assignments.append(
-            Assignment(
-                assignment_type=payload.assignment_type,
-                contractor_id=payload.contractor_id,
-                assigned_by=user.id,
-                assigned_at=_now(),
-                remarks=payload.remarks,
-                is_active=True,
-            )
+        new = Assignment(
+            assignment_type=payload.assignment_type,
+            contractor_id=payload.contractor_id,
+            assigned_by=user.id,
+            assigned_at=_now(),
+            remarks=payload.remarks,
+            is_active=True,
         )
+        wi.assignments.append(new)
         db.flush()
+        created[str(wi.id)] = new.id
         refresh_stage(wi)
         assigned += 1
 
-    record_audit(
+    entry = record_audit(
         db, user_id=user.id, action=audit_actions.ASSIGNED,
-        module="Assignment", entity_type="WorkItemBulk",
+        module="Assignment", entity_type=undo.DT_ASSIGN_BATCH,
         entity_id=payload.contractor_id,
-        new_value={"contractor_id": payload.contractor_id, "count": assigned},
+        new_value={
+            "contractor_id": payload.contractor_id, "count": assigned,
+            "created": created, "replaced": replaced,
+        },
     )
+    db.flush()
     db.commit()
-    return {"status": "ok", "assigned": assigned}
+    # ``batch_id`` names this assignment for POST /work-items/assign/{id}/undo.
+    return {"status": "ok", "assigned": assigned, "batch_id": entry.id}
+
+
+@router.post("/work-items/assign/{batch_id}/undo")
+def undo_bulk_assign(
+    batch_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_review_authority),
+):
+    """Take back a bulk assignment: same user, within two minutes, nothing
+    filed since. Restores each site's previous assignment and stage."""
+    try:
+        undo.undo_dt_assignment(
+            db, user, batch_id, lambda wid: _load_work_item(wid, db, user)
+        )
+    except LookupError as exc:
+        raise HTTPException(404, str(exc)) from None
+    except undo.UndoRefused as exc:
+        db.rollback()
+        raise HTTPException(409, str(exc)) from None
+    db.commit()
+    return {"status": "ok"}
 
 
 @router.post("/work-items/{work_item_id}/drive-test")

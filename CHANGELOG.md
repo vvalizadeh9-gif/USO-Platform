@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- **Drive test app: Health check and Drive test share one pipeline strip with volume bars; full-width site lists with Village and Province; contractor workload cards with a suggested contractor; persistent confirmations with Undo and a History view; DT review side panel; All sites restyled. WCAG 2.2 AA (UEP-06).**
+  - Both pages show the same strip: steps 1–6, DT done, and the Remediation, Re-routes and Sent back loops. The step is the URL's `?tab=`, so Back and Forward work. Legacy `basket`, `results`, `dt-assign` and `dt-review` links still work. The old tab rows, the HC Pool state filter, `AssignDock` and its CSS are removed. `ProcessStepper` stays for Monthly plan only, and `LifecycleStrip` for the contractor pages.
+  - Step 4 is the drive-test assignment queue. The pool's "Health check passed" state is no longer a tile: its rows are in steps 3, 5 and 6.
+  - Assigning is: select sites, then click a contractor card. The suggested contractor is the one whose last 90 days cover the most of the selected provinces. Undo is available for two minutes, from the panel or from History.
+  - Waiting is measured against each queue's configured SLA. Ready is cobalt, not green. Late is always written.
+  - Reassign on late rows is not shown, because there is no reassign endpoint (see ARCHITECTURE §5g).
+  - API (additive): `GET /drive-test/pipeline/summary`, `GET /hc/contractors/load`, `GET /drive-test/contractors/load`, `GET /work-items/counts`, `POST /hc/results/confirm` and three undo endpoints. `POST /work-items/assign` returns `batch_id`. List rows gain `village`, `village_count`, `pending`, `completed_at` / `days_waiting` and `launch_date_shamsi`, and `GET /work-items` gains `q`. `GET /hc/queues/counts` is deprecated. New audit action: `UNDONE`.
+
 - **Drive Test dashboard: equal KPI tiles, chart always cumulative over all months, readout in place of the hover card, simpler PIP card (UEP-04a).**
   - The four KPI tiles are equal in width and lower (the dense dashboard variant). On air's line reads "+N this month". Home's KPI strip is unchanged.
   - "On air vs DT done" always shows every month cumulatively. The period switch, its subtitle and the net-change row under the chart are removed.

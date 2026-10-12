@@ -1,13 +1,14 @@
 """Work Item endpoints (list, detail & export) with row-level security."""
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
-from sqlalchemy import and_, or_, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.core.database import get_db
 from app.core.deps import get_current_user
-from app.models.reference import User
-from app.models.workitem import Assignment, Site, WorkItem
+from app.models.reference import Province, User
+from app.models.workitem import Assignment, Site, Village, WorkItem
 from app.schemas import WorkItemDetail, WorkItemListItem
+from app.services import hc_queues
 from app.services.visibility import apply_work_item_scope
 from app.services.work_item_export import build_assigned_sites_export
 from app.services.work_item_rows import (
@@ -39,6 +40,7 @@ def _scoped_work_items(
     offset: int = 0,
     province_id: int | None = None,
     contractor_id: int | None = None,
+    q: str | None = None,
 ) -> list[WorkItem]:
     """The work items this user may see, eager-loaded for row building.
 
@@ -62,6 +64,7 @@ def _scoped_work_items(
     stmt = apply_work_item_scope(stmt, user, db)
     if stage:
         stmt = stmt.where(WorkItem.current_stage == stage)
+    stmt = _matching(stmt, q)
     if province_id is not None:
         stmt = stmt.where(
             WorkItem.site_id.in_(
@@ -96,6 +99,23 @@ def _scoped_work_items(
     return list(db.execute(stmt).scalars().all())
 
 
+def _matching(stmt, q: str | None):
+    """Narrow to sites whose ID, province or village contains ``q``.
+
+    The All sites search box. Applied after the scope, like every filter here,
+    so it can only narrow what the caller may already see.
+    """
+    q = (q or "").strip()
+    if not q:
+        return stmt
+    like = f"%{q}%"
+    by_site = select(Site.id).outerjoin(Province, Site.province_id == Province.id).where(
+        or_(Site.site_code.ilike(like), Province.name.ilike(like))
+    )
+    by_village = select(Village.work_item_id).where(Village.village_name.ilike(like))
+    return stmt.where(or_(WorkItem.site_id.in_(by_site), WorkItem.id.in_(by_village)))
+
+
 def _rows_for(db: Session, user: User, work_items: list[WorkItem]) -> list[dict]:
     """Flatten work items into list rows, resolving user names in one query."""
     user_ids = referenced_user_ids(work_items)
@@ -103,7 +123,9 @@ def _rows_for(db: Session, user: User, work_items: list[WorkItem]) -> list[dict]
     if user_ids:
         rows = db.execute(select(User).where(User.id.in_(user_ids))).scalars().all()
         user_names = {u.id: u.full_name for u in rows}
-    return [build_list_row(wi, user_names) for wi in work_items]
+    return hc_queues.with_villages(
+        db, [build_list_row(wi, user_names) for wi in work_items], key="id"
+    )
 
 
 @router.get("", response_model=list[WorkItemListItem])
@@ -111,6 +133,7 @@ def list_work_items(
     stage: str | None = Query(default=None),
     province_id: int | None = Query(default=None),
     contractor_id: int | None = Query(default=None),
+    q: str | None = Query(default=None, max_length=100),
     limit: int = Query(default=100, le=500),
     offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
@@ -135,6 +158,7 @@ def list_work_items(
         offset=offset,
         province_id=province_id,
         contractor_id=contractor_id,
+        q=q,
     )
     return _rows_for(db, user, work_items)
 
@@ -144,6 +168,7 @@ def export_work_items(
     stage: str | None = Query(default=None),
     province_id: int | None = Query(default=None),
     contractor_id: int | None = Query(default=None),
+    q: str | None = Query(default=None, max_length=100),
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> Response:
@@ -163,6 +188,7 @@ def export_work_items(
         limit=MAX_EXPORT_ROWS,
         province_id=province_id,
         contractor_id=contractor_id,
+        q=q,
     )
     rows = _rows_for(db, user, work_items)
     content = build_assigned_sites_export(rows)
@@ -174,6 +200,34 @@ def export_work_items(
             "Content-Disposition": f'attachment; filename="{slug}_sites.xlsx"'
         },
     )
+
+
+@router.get("/counts")
+def count_work_items(
+    province_id: int | None = Query(default=None),
+    q: str | None = Query(default=None, max_length=100),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> dict:
+    """How many visible work items sit in each stage, plus ``All``.
+
+    The All sites page's stage chips. The same scope as the list, counted by
+    the same ``current_stage`` column the list's ``stage`` filter reads, and
+    the same ``q`` and ``province_id``, so a chip's number is the length of
+    the list it opens. Declared before
+    ``/{work_item_id}`` for the reason given on the export.
+    """
+    stmt = select(WorkItem.current_stage, func.count(WorkItem.id)).where(
+        WorkItem.deleted_at.is_(None)
+    )
+    stmt = _matching(apply_work_item_scope(stmt, user, db), q)
+    if province_id is not None:
+        stmt = stmt.where(
+            WorkItem.site_id.in_(select(Site.id).where(Site.province_id == province_id))
+        )
+    stmt = stmt.group_by(WorkItem.current_stage)
+    stages = {stage: n for stage, n in db.execute(stmt).all() if stage}
+    return {"All": sum(stages.values()), **stages}
 
 
 @router.get("/{work_item_id}", response_model=WorkItemDetail)

@@ -25,6 +25,9 @@ import {
  * @property {string} label
  * @property {string} route      Path, optionally with the query that selects a tab.
  * @property {string[]} [roles]  Who sees it; absent means everyone who sees the app.
+ * @property {string[]} [also]  Other routes that make this page the active one,
+ *                               matched on their path and exact `tab` (the
+ *                               pipeline's steps and loops; see UEP-06 §1).
  * @property {string[] | '*'} [queues] Home queue keys ('*' for all of them) whose counts make its pending
  *                               count (the count query). Read from GET /me/home,
  *                               so a rail count always equals Home's.
@@ -82,9 +85,17 @@ export const APPS = Object.freeze([
       // and carries no count: it is a view, not a pile of work.
       { id: 'dashboard', label: 'Dashboard', route: '/reports/drive-test', roles: DT_ROLES, divider: true },
       { id: 'hc-check', label: 'HC check', route: '/my-health-check', roles: ['Contractor'], queues: ['hc_submit'] },
-      { id: 'hc-pool', label: 'HC check', route: '/health-check?tab=pool', roles: STAFF, queues: ['hc_assign', 'hc_reroutes'] },
-      { id: 'hc-review', label: 'HC review', route: '/health-check?tab=review', roles: STAFF, queues: ['hc_review'] },
-      { id: 'assignment', label: 'Assignment', route: '/drive-test?tab=assignment', roles: STAFF, queues: ['dt_assign'] },
+      // The pipeline's steps and side loops each light the rail item of the
+      // part of the work they belong to; History lights none.
+      {
+        id: 'hc-pool', label: 'HC check', route: '/health-check?tab=pool', roles: STAFF, queues: ['hc_assign', 'hc_reroutes'],
+        also: ['/health-check', '/health-check?tab=basket', '/health-check?tab=running', '/health-check?tab=remediation', '/health-check?tab=reroutes'],
+      },
+      { id: 'hc-review', label: 'HC review', route: '/health-check?tab=review', roles: STAFF, queues: ['hc_review'], also: ['/health-check?tab=results'] },
+      {
+        id: 'assignment', label: 'Assignment', route: '/drive-test?tab=assignment', roles: STAFF, queues: ['dt_assign'],
+        also: ['/drive-test', '/drive-test?tab=in-progress', '/drive-test?tab=sent-back'],
+      },
       { id: 'dt-review', label: 'DT review', route: '/drive-test?tab=review', roles: STAFF, queues: ['dt_review'] },
       { id: 'in-progress', label: 'In progress', route: '/my-drive-tests', roles: ['Contractor'], queues: ['dt_todo', 'dt_redo'] },
       { id: 'all-sites', label: 'All sites', route: '/work-items', roles: DT_ROLES },
@@ -209,12 +220,23 @@ function matchScore(route, pathname, search) {
   return score
 }
 
+/** An `also` route matches on its path and on exactly its `tab` (none when it
+ * names none), scoring as a page route with a tab does. */
+function aliasScore(route, pathname, search) {
+  const { path, params } = splitRoute(route)
+  if (pathname !== path) return -1
+  return new URLSearchParams(search).get('tab') === params.get('tab') ? 1 : -1
+}
+
 /** The app and page a location belongs to, among this role's apps. */
 export function locate(apps, pathname, search = '') {
   let best = { app: null, page: null, score: -1 }
   for (const app of apps) {
     for (const page of app.pages) {
-      const score = matchScore(page.route, pathname, search)
+      const score = Math.max(
+        matchScore(page.route, pathname, search),
+        ...(page.also || []).map((r) => aliasScore(r, pathname, search)),
+      )
       if (score > best.score) best = { app, page, score }
     }
   }

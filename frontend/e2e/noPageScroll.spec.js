@@ -12,9 +12,7 @@ const VIEWPORTS = [
 const PAGES = [
   { name: 'DT dashboard', path: '/reports/drive-test', ready: 'On air vs DT done', fits: true },
   { name: 'Monthly Plan', path: '/monthly-plan', ready: 'By contractor', fits: true },
-  { name: 'HC Pool', path: '/health-check', ready: /^Health Check Pool/, table: true, dock: true },
-  { name: 'HC In Progress', path: '/health-check?tab=running', ready: 'Health checks in progress', table: true },
-  { name: 'DT Assignment', path: '/drive-test', ready: 'Assignment', table: true, dock: true },
+  // The Health check, Drive test and All sites work pages: workPages.spec.js.
   { name: 'Acceptance Village', path: '/reports/acceptance', ready: 'Villages fully accepted against plan', fits: true },
   { name: 'Acceptance ICT', path: '/reports/acceptance?tab=ict', ready: 'ICT approvals against plan', fits: true },
   { name: 'Acceptance CRA', path: '/reports/acceptance?tab=cra', ready: 'CRA approvals against plan', fits: true },

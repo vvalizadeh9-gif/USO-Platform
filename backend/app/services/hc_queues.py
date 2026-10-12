@@ -31,7 +31,7 @@ from sqlalchemy.orm import Session, selectinload
 from app.core import count_cache
 from app.models.health_check import HcAssignment, HcRemediation, HcTask
 from app.models.reference import Contractor, User
-from app.models.workitem import Assignment, DriveTest, Site, WorkItem
+from app.models.workitem import Assignment, DriveTest, Site, Village, WorkItem
 from app.services.health_check import build_assignment_stats, scoped_work_items
 from app.services.tech_parser import parse_technologies
 from app.services.visibility import visible_work_item_ids
@@ -58,6 +58,11 @@ def _days_since(dt: datetime | None) -> int | None:
     return max((_now() - dt).days, 0) if dt else None
 
 
+def days_since(dt: datetime | None) -> int:
+    """Whole days since ``dt``, 0 when unknown: the queues' waiting figure."""
+    return _days_since(dt) or 0
+
+
 def _site_of(wi: WorkItem | None) -> tuple[str | None, str | None]:
     if wi is None or wi.site is None:
         return None, None
@@ -77,10 +82,12 @@ def in_progress(db: Session, user: User) -> list[dict]:
     was the assignment-level history tab, which the Coordinator could not open.
     "Who is late" was unanswerable without opening each assignment.
     """
+    scoped = visible_work_item_ids(user, db)
     visible = select(HcTask.hc_assignment_id).where(
-        HcTask.work_item_id.in_(visible_work_item_ids(user, db)),
+        HcTask.work_item_id.in_(scoped),
         HcTask.completed_at.is_(None),
     )
+    in_scope = set(db.execute(scoped).scalars())
     assignments = (
         db.execute(
             select(HcAssignment)
@@ -114,6 +121,22 @@ def in_progress(db: Session, user: User) -> list[dict]:
                 "pending_sites": [
                     (t.work_item.site.site_code if t.work_item and t.work_item.site else None)
                     for t in pending
+                ],
+                # The same pending sites one by one, narrowed to the caller's
+                # scope: the per-site list the pipeline's "In check" step
+                # shows, which is exactly the open tasks its count counts
+                # (``lifecycle.hc_to_submit``).
+                "pending": [
+                    {
+                        "task_id": t.id,
+                        "work_item_id": t.work_item_id,
+                        "site_code": _site_of(t.work_item)[0],
+                        "province": _site_of(t.work_item)[1],
+                        "assigned_at": stats["assigned_at"],
+                        "days_waiting": _days_since(assignment.assigned_at) or 0,
+                    }
+                    for t in pending
+                    if t.work_item_id in in_scope
                 ],
             }
         )
@@ -802,6 +825,33 @@ def open_hc_tasks(db: Session, user: User) -> list[tuple[HcTask, HcAssignment]]:
 
 def _hc_review_count(db: Session, user: User) -> int:
     return len(hc_review_tasks(db, user))
+
+
+# --------------------------------------------------------------------------
+# Village names, for the pipeline's site lists
+# --------------------------------------------------------------------------
+def with_villages(db: Session, rows: list[dict], key: str = "work_item_id") -> list[dict]:
+    """Add ``village`` and ``village_count`` to each row, in place.
+
+    A site carries a village row only for its هدف villages, and may carry
+    none or several. The list shows the first by name and says how many more
+    there are, so one site is still one row. Loaded for the rows given and no
+    others: the queue services behind Home never pay for it.
+    """
+    ids = {r[key] for r in rows}
+    names: dict[int, list[str]] = {}
+    if ids:
+        for wi_id, name in db.execute(
+            select(Village.work_item_id, Village.village_name)
+            .where(Village.work_item_id.in_(ids), Village.village_name.isnot(None))
+            .order_by(Village.village_name.asc(), Village.id.asc())
+        ):
+            names.setdefault(wi_id, []).append(name)
+    for row in rows:
+        mine = names.get(row[key], [])
+        row["village"] = mine[0] if mine else None
+        row["village_count"] = len(mine)
+    return rows
 
 
 # --------------------------------------------------------------------------

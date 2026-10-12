@@ -23,7 +23,7 @@
 | `color`, `tint` | CSS custom properties for the tile and card-header tint |
 | `group` | `rollout`, `planning`, `insights` or `platform` |
 | `roles` | Who sees the app (absent: everyone) |
-| `pages[]` | `id`, `label`, `route`, `roles`, `queues`, `divider` |
+| `pages[]` | `id`, `label`, `route`, `roles`, `queues`, `divider`, `also` |
 
 `pages[].queues` is the page's count query: the Home queue keys whose counts
 it sums (`'*'` for all of them). Counts are read from the one `GET /me/home`
@@ -39,7 +39,34 @@ In progress · All sites (pages filtered by role as usual).
 
 The launcher, the Apps panel and every rail are generated from this list with
 `appsFor(role)`. The rail's active page is the page whose route best matches
-the URL (`locate`): same path, and the most query params in common.
+the URL (`locate`): same path, and the most query params in common. A page's
+`also` routes make it active too, matched on their path and exact `tab`.
+
+### Drive test rail and the pipeline (UEP-06)
+
+Health check and Drive test are one pipeline on two pages, and the step is the
+URL's `?tab=` (`lib/pipelineSteps.js`). The rail is unchanged; each step
+lights the rail item for its part of the work:
+
+| Step | Route | Rail item |
+|---|---|---|
+| 1 · Assign health check | `/health-check?tab=pool` (legacy `basket`; also `/health-check`) | HC check |
+| 2 · In health check | `/health-check?tab=running` | HC check |
+| 3 · Review results | `/health-check?tab=review` (legacy `results`) | HC review |
+| 4 · Assign drive test | `/drive-test?tab=assignment` (also `/drive-test`) | Assignment |
+| 5 · With contractor | `/drive-test?tab=in-progress` | Assignment |
+| 6 · Review drive test | `/drive-test?tab=review` | DT review |
+| DT done | `/drive-test?tab=done` (links to `/drive-test/sites?bucket=done`) | — |
+| Loop · Remediation | `/health-check?tab=remediation` | HC check |
+| Loop · Re-routes | `/health-check?tab=reroutes` | HC check |
+| Loop · Sent back | `/drive-test?tab=sent-back` | Assignment |
+| History | `?tab=history` on either page | — |
+
+`/health-check?tab=dt-assign` and `?tab=dt-review` redirect to the Drive test
+page's steps and keep the rest of the query. Rail counts still come from
+`GET /me/home`. The strip's counts come from `GET /drive-test/pipeline/summary`,
+which counts through the same queue service.
+
 
 ### Adding an app or a page
 

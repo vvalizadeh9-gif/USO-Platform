@@ -1,327 +1,368 @@
-import { motion } from 'framer-motion'
-import { Download } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import api from '../api/client'
+import { useFillPage } from '../components/pageMode'
+import AssignPanel from '../components/work/AssignPanel'
+import PageHeading from '../components/work/PageHeading'
+import RecentActions from '../components/work/RecentActions'
+import SiteTable from '../components/work/SiteTable'
+import { WorkProvider, useWork } from '../components/work/WorkContext'
+import { EmptyStep, Fa, SearchBox, StepError, TechChips, WorkListCard } from '../components/work/parts'
 import { useAuth } from '../context/AuthContext'
-import { canReview } from '../lib/roles'
 import { useToast } from '../context/ToastContext'
-import { EmptyState, Loading, PageHead, StatusPill } from '../components/ui'
+import { describeBlobError, saveBlob } from '../lib/download'
+import { toPersianDigits } from '../lib/persianDigits'
+import { canReview } from '../lib/roles'
+import AppFooter from '../shell/AppFooter'
+import { useHomeData } from '../shell/HomeData'
+import '../styles/home.css'
+import '../styles/work.css'
 
-// The stage tabs, in lifecycle order. Approval IS completion — there is no
-// separate "DT Completed" step — so an approved drive test terminates at
-// "DT Done" (see services/workflow.py).
-//
-// "HC In Progress" and "HC Review" fill the gap where a site being checked, or
-// waiting on a review decision, previously read as New or kept the stage it
-// carried before — visible in no queue at all.
+// The stages, in lifecycle order: chip label and the `current_stage` value.
+// Approval IS completion, so an approved drive test terminates at DT Done.
 const STAGES = [
-  'All',
-  'HC In Progress',
-  'HC Review',
-  'Ready for Assignment',
-  'Assigned',
-  'Returned by Contractor',
-  'DT Submitted',
-  'DT Done',
-  'Problematic',
+  { label: 'All', value: 'All' },
+  { label: 'HC in progress', value: 'HC In Progress' },
+  { label: 'HC review', value: 'HC Review' },
+  { label: 'Ready for assignment', value: 'Ready for Assignment' },
+  { label: 'Assigned', value: 'Assigned' },
+  { label: 'Returned', value: 'Returned by Contractor' },
+  { label: 'DT submitted', value: 'DT Submitted' },
+  { label: 'DT done', value: 'DT Done' },
+  { label: 'Problematic', value: 'Problematic' },
 ]
 
-// Contractors never act on the assignment queue itself — they only see work
-// once it has been assigned to them.
-const STAGES_HIDDEN_FOR_CONTRACTOR = new Set(['Ready for Assignment'])
+// Contractors never act on the assignment queue itself.
+const HIDDEN_FOR_CONTRACTOR = new Set(['Ready for Assignment'])
 
-// ---------------------------------------------------------------------------
-// Per-stage column sets.
-//
-// Each tab shows exactly the columns that carry information at that point in
-// the lifecycle — an assignment date is meaningless on an unassigned site, an
-// approval user is meaningless before approval. The list endpoint returns the
-// union of every field; this table decides what each tab renders.
-// ---------------------------------------------------------------------------
-const COL = {
-  id: { label: 'ID', render: (r) => <span className="tnum dim">#{r.id}</span> },
-  site_code: { label: 'Site ID', render: (r) => <span className="text-data">{r.site_code || '—'}</span> },
-  site_type: { label: 'Site Type', render: (r) => <span style={{ fontWeight: 500 }}>{r.site_type}</span> },
-  requested_technology: { label: 'Requested Tech', render: (r) => r.requested_technology || '—' },
-  province: { label: 'Province', render: (r) => r.province || '—' },
-  assignment_date: { label: 'Assignment Date', render: (r) => fmtDate(r.assignment_date) },
-  assignment_user: { label: 'Assignment User', render: (r) => <span className="muted">{r.assignment_user || '—'}</span> },
-  contractor_name: { label: 'Contractor', render: (r) => <span className="text-data">{r.contractor_name || '—'}</span> },
-  returned_date: { label: 'Returned Date', render: (r) => fmtDate(r.returned_date) },
-  dt_submission_date: { label: 'DT Submission Date', render: (r) => fmtDate(r.dt_submission_date) },
-  aging_days: {
-    label: 'Aging (days)',
-    render: (r) => (r.aging_days == null ? '—' : <span className="tnum">{r.aging_days}</span>),
-  },
-  // Aging that runs while the work is still open — the number a site is
-  // judged on before anything has been submitted.
-  assigned_aging_days: {
-    label: 'Aging (days)',
-    render: (r) => <AgingCell days={r.assigned_aging_days} />,
-  },
-  dt_approval_date: { label: 'DT Approval Date', render: (r) => fmtDate(r.dt_approval_date) },
-  dt_approval_user: { label: 'DT Approval User', render: (r) => <span className="muted">{r.dt_approval_user || '—'}</span> },
-  stage: { label: 'Stage', render: (r) => <StatusPill status={r.current_stage} /> },
+/** The stages bulk assignment applies to: the sites awaiting one. */
+const ASSIGNABLE = new Set(['Ready for Assignment', 'Returned by Contractor'])
+
+const PAGE = 100
+
+/** "2G/4G" as chips. The server's parser (tech_parser) is what decides a
+ * site's technologies; this only splits the stored text for display. */
+const techsOf = (text) => (text || '').split(/[\s,/+&]+/).filter(Boolean)
+
+const STAGE_TONE = {
+  Problematic: 'is-problem',
+  'DT Done': 'is-done',
+  Assigned: 'is-ongoing',
+  'DT Submitted': 'is-ongoing',
+  'Ready for Assignment': 'is-pending',
+  'Returned by Contractor': 'is-pending',
 }
 
-const BASE = ['id', 'site_code', 'site_type', 'requested_technology']
-
-const STAGE_COLUMNS = {
-  All: [...BASE, 'stage'],
-  'HC In Progress': [...BASE, 'stage'],
-  'HC Review': [...BASE, 'stage'],
-  'Ready for Assignment': [...BASE, 'stage'],
-  Assigned: [...BASE, 'province', 'assignment_date', 'assigned_aging_days', 'assignment_user', 'stage'],
-  'Returned by Contractor': [...BASE, 'assignment_date', 'assignment_user', 'returned_date', 'stage'],
-  'DT Submitted': [...BASE, 'assignment_date', 'contractor_name', 'dt_submission_date', 'stage'],
-  'DT Done': [
-    ...BASE, 'assignment_date', 'contractor_name', 'dt_submission_date',
-    'aging_days', 'dt_approval_date', 'dt_approval_user', 'stage',
-  ],
-  Problematic: [...BASE, 'stage'],
-}
-
-function fmtDate(value) {
+const fmtDate = (value) => {
   if (!value) return '—'
   const d = new Date(value)
-  if (Number.isNaN(d.getTime())) return '—'
-  return <span className="tnum">{d.toISOString().slice(0, 10)}</span>
+  return Number.isNaN(d.getTime()) ? '—' : <span className="uw-num">{d.toISOString().slice(0, 10)}</span>
 }
 
+// The columns each stage adds after the common ones: only the dates that
+// carry information at that point in the lifecycle.
+const STAGE_EXTRA = {
+  Assigned: [
+    { key: 'assignment_date', label: 'Assigned', render: (r) => fmtDate(r.assignment_date) },
+    { key: 'assigned_aging_days', label: 'Aging (days)', render: (r) => <span className="uw-num">{r.assigned_aging_days ?? '—'}</span> },
+    { key: 'assignment_user', label: 'Assigned by', render: (r) => r.assignment_user || '—' },
+  ],
+  'Returned by Contractor': [
+    { key: 'assignment_date', label: 'Assigned', render: (r) => fmtDate(r.assignment_date) },
+    { key: 'returned_date', label: 'Returned', render: (r) => fmtDate(r.returned_date) },
+  ],
+  'DT Submitted': [
+    { key: 'assignment_date', label: 'Assigned', render: (r) => fmtDate(r.assignment_date) },
+    { key: 'dt_submission_date', label: 'DT submitted', render: (r) => fmtDate(r.dt_submission_date) },
+  ],
+  'DT Done': [
+    { key: 'dt_submission_date', label: 'DT submitted', render: (r) => fmtDate(r.dt_submission_date) },
+    { key: 'aging_days', label: 'Aging (days)', render: (r) => <span className="uw-num">{r.aging_days ?? '—'}</span> },
+    { key: 'dt_approval_date', label: 'Approved', render: (r) => fmtDate(r.dt_approval_date) },
+    { key: 'dt_approval_user', label: 'Approved by', render: (r) => r.dt_approval_user || '—' },
+  ],
+}
+
+const BASE_COLUMNS = [
+  { key: 'site', label: 'Site ID', width: '13%', render: (r) => <Link className="uw-site-id" to={`/work-items/${r.id}`}>{r.site_code || `#${r.id}`}</Link> },
+  { key: 'province', label: 'Province', width: '15%', render: (r) => <Fa>{r.province}</Fa> },
+  { key: 'type', label: 'Type', width: '10%', render: (r) => r.site_type || '—' },
+  { key: 'tech', label: 'Requested tech', width: '17%', render: (r) => <TechChips techs={techsOf(r.requested_technology)} /> },
+  {
+    key: 'stage', label: 'Stage', width: '19%',
+    render: (r) => (
+      <span className={`uw-stage ${STAGE_TONE[r.current_stage] || ''}`.trim()}>
+        <i aria-hidden="true" />
+        {r.current_stage}
+      </span>
+    ),
+  },
+  { key: 'contractor', label: 'Contractor', width: '14%', render: (r) => <Fa>{r.contractor_name}</Fa> },
+  { key: 'onair', label: 'On air', render: (r) => <Fa>{r.launch_date_shamsi ? toPersianDigits(r.launch_date_shamsi) : null}</Fa> },
+]
+
+/**
+ * All sites (UEP-06 §9): every site in scope, by stage. The stage chips are
+ * a tab list over the one list card; a stage adds its own date columns. Sites
+ * awaiting an assignment can be bulk-assigned with the same selection and
+ * contractor cards as the Drive test page. Kept generic: this page becomes
+ * Explorer.
+ */
 export default function WorkItems() {
+  useFillPage()
+  return (
+    <WorkProvider>
+      <AllSites />
+    </WorkProvider>
+  )
+}
+
+function useJson(url, params, version) {
+  const [state, setState] = useState({ data: null, error: false })
+  const [attempt, setAttempt] = useState(0)
+  const key = JSON.stringify(params)
+  useEffect(() => {
+    let live = true
+    setState((s) => ({ data: s.data, error: false, loading: true }))
+    api
+      .get(url, { params })
+      .then((r) => live && setState({ data: r.data, error: false }))
+      .catch(() => live && setState({ data: null, error: true }))
+    return () => {
+      live = false
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [url, key, version, attempt])
+  return { ...state, retry: () => setAttempt((n) => n + 1) }
+}
+
+function AllSites() {
   const { user } = useAuth()
   const toast = useToast()
   const navigate = useNavigate()
-  const canAssign = canReview(user)
-  const isContractor = user?.role?.name === 'Contractor'
-  const visibleStages = STAGES.filter(
-    (s) => !isContractor || !STAGES_HIDDEN_FOR_CONTRACTOR.has(s)
-  )
-
-  // The stage lives in the URL so a counter on the Action Center can land on
-  // the tab it counted, and so a filtered list is a link someone can send.
+  const { headingRef, version, confirmAction, notice, clearNotice } = useWork()
+  const { data: home, error: homeError } = useHomeData()
   const [searchParams, setSearchParams] = useSearchParams()
+  const isContractor = user?.role?.name === 'Contractor'
+  const stages = STAGES.filter((s) => !isContractor || !HIDDEN_FOR_CONTRACTOR.has(s.value))
   const requested = searchParams.get('stage')
-  const stage = visibleStages.includes(requested) ? requested : 'All'
-  const setStage = (next) =>
-    setSearchParams(next === 'All' ? {} : { stage: next }, { replace: true })
+  const stage = stages.some((s) => s.value === requested) ? requested : 'All'
+  const historyOpen = searchParams.get('view') === 'history'
 
-  const [items, setItems] = useState(null)
-  const [contractors, setContractors] = useState([])
+  const [query, setQuery] = useState('')
+  const [q, setQ] = useState('')
+  const [provinceId, setProvinceId] = useState('')
+  const [offset, setOffset] = useState(0)
+  const [provinces, setProvinces] = useState([])
   const [selected, setSelected] = useState(() => new Set())
+  const [busyId, setBusyId] = useState(null)
   const [exporting, setExporting] = useState(false)
 
-  const load = () => {
-    setItems(null)
+  // The search reaches the server a moment after typing stops.
+  useEffect(() => {
+    const t = setTimeout(() => setQ(query.trim()), 300)
+    return () => clearTimeout(t)
+  }, [query])
+  useEffect(() => {
+    setOffset(0)
     setSelected(new Set())
-    const params = stage === 'All' ? {} : { stage }
-    api.get('/work-items', { params }).then((r) => setItems(r.data)).catch(() => setItems([]))
+  }, [stage, q, provinceId])
+  useEffect(() => {
+    api.get('/reference/provinces').then((r) => Array.isArray(r.data) && setProvinces(r.data)).catch(() => {})
+  }, [])
+
+  const filters = { q: q || undefined, province_id: provinceId || undefined }
+  const counts = useJson('/work-items/counts', filters, version)
+  const list = useJson('/work-items', { ...filters, stage: stage === 'All' ? undefined : stage, limit: PAGE, offset }, version)
+  const rows = list.data
+  const total = counts.data ? counts.data[stage] ?? (stage === 'All' ? counts.data.All : 0) : null
+
+  const selectable = canReview(user) && ASSIGNABLE.has(stage)
+  const columns = useMemo(() => [...BASE_COLUMNS, ...(STAGE_EXTRA[stage] || [])], [stage])
+  const byId = useMemo(() => new Map((rows || []).map((r) => [r.id, r])), [rows])
+
+  const setStage = (next) => {
+    clearNotice()
+    setSearchParams(next === 'All' ? {} : { stage: next }, { replace: true })
   }
 
-  useEffect(load, [stage])
-  useEffect(() => {
-    if (canAssign) api.get('/reference/contractors').then((r) => setContractors(r.data)).catch(() => {})
-  }, [canAssign])
+  const onSelect = useCallback(
+    (ids, on) => {
+      if (notice) clearNotice()
+      setSelected((prev) => {
+        const next = new Set(prev)
+        for (const id of ids) on ? next.add(id) : next.delete(id)
+        return next
+      })
+    },
+    [notice, clearNotice],
+  )
 
-  // The list as a spreadsheet: the same rows, the same scope, five columns.
-  // A contractor plans a week of driving from this file, so it carries what
-  // they need to reach a site and nothing about who assigned it.
+  async function assign(contractor) {
+    const ids = [...selected]
+    setBusyId(contractor.contractor_id)
+    try {
+      const { data } = await api.post('/work-items/assign', {
+        work_item_ids: ids, contractor_id: contractor.contractor_id, assignment_type: 'official',
+      })
+      setSelected(new Set())
+      confirmAction({
+        text: `✓ ${ids.length} ${ids.length === 1 ? 'site' : 'sites'} assigned to ${contractor.name}.`,
+        undoUrl: `/work-items/assign/${data.batch_id}/undo`,
+      })
+    } catch (err) {
+      toast.error('Assign failed', err.response?.data?.detail || 'Please try again.')
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  // The list as a spreadsheet: the same rows, the same scope and filters.
   async function exportExcel() {
     setExporting(true)
     try {
       const res = await api.get('/work-items/export', {
-        params: stage === 'All' ? {} : { stage },
+        params: { ...filters, stage: stage === 'All' ? undefined : stage },
         responseType: 'blob',
       })
-      const url = URL.createObjectURL(res.data)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `${stage.toLowerCase().replace(/ /g, '_')}_sites.xlsx`
-      a.click()
-      URL.revokeObjectURL(url)
-    } catch {
-      toast.error('Export failed', 'Could not generate the file. Please try again.')
+      saveBlob(res.data, `${stage.toLowerCase().replace(/ /g, '_')}_sites.xlsx`)
+    } catch (err) {
+      toast.error('Export failed', await describeBlobError(err))
     } finally {
       setExporting(false)
     }
   }
 
-  const toggle = (id) =>
-    setSelected((prev) => {
-      const next = new Set(prev)
-      next.has(id) ? next.delete(id) : next.add(id)
-      return next
-    })
-
-  const allVisibleIds = useMemo(() => (items || []).map((i) => i.id), [items])
-  const allSelected = allVisibleIds.length > 0 && allVisibleIds.every((id) => selected.has(id))
-  const toggleAll = () => setSelected(allSelected ? new Set() : new Set(allVisibleIds))
-
-  // Bulk assignment only makes sense on sites that are actually awaiting one.
-  const canBulkAssign = canAssign && ['All', 'Ready for Assignment', 'Returned by Contractor'].includes(stage)
-  const columns = STAGE_COLUMNS[stage] || STAGE_COLUMNS.All
-
   return (
-    <>
-      <PageHead
-        eyebrow="Operations"
-        title="Work Items"
-        subtitle={
-          isContractor
-            ? 'Every site assigned to you, and where each one stands.'
-            : 'Every deployment unit (Site + Type) within your assigned provinces.'
-        }
-        actions={
-          <button
-            className="btn"
-            onClick={exportExcel}
-            disabled={exporting || !items?.length}
-            title="Download these sites as an Excel file"
-          >
-            {exporting ? <div className="spinner" /> : <><Download size={15} /> Export Excel</>}
-          </button>
-        }
+    <div className="uep-home uw-page">
+      <PageHeading
+        title="All sites"
+        count={counts.data?.All}
+        headingRef={headingRef}
+        historyOpen={historyOpen}
+        onHistory={() => navigate(historyOpen ? '/work-items' : '/work-items?view=history')}
+        onExport={historyOpen ? undefined : exportExcel}
+        exporting={exporting}
       />
-
-      <div className="row wrap mb-16" style={{ gap: 8 }}>
-        {visibleStages.map((s) => (
-          <button
-            key={s}
-            className={`btn btn-sm ${stage === s ? 'btn-primary' : ''}`}
-            onClick={() => setStage(s)}
-          >
-            {s}
-          </button>
-        ))}
-      </div>
-
-      {canBulkAssign && selected.size > 0 && (
-        <BulkAssignBar
-          count={selected.size}
-          contractors={contractors}
-          onClear={() => setSelected(new Set())}
-          onAssign={async (contractorId) => {
-            try {
-              await api.post('/work-items/assign', {
-                work_item_ids: [...selected],
-                contractor_id: contractorId,
-                assignment_type: 'official',
-              })
-              toast.success(`${selected.size} site(s) assigned`)
-              load()
-            } catch (err) {
-              toast.error('Assign failed', err.response?.data?.detail || 'Please try again.')
-            }
-          }}
-        />
-      )}
-
-      {!items ? (
-        <Loading label="Loading work items" />
-      ) : items.length === 0 ? (
-        <div className="card"><EmptyState title="No work items found" hint="Try a different stage filter, or import a CPM file." /></div>
-      ) : (
-        <div className="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                {canBulkAssign && (
-                  <th style={{ width: 32 }}>
-                    <input type="checkbox" checked={allSelected} onChange={toggleAll} />
-                  </th>
-                )}
-                {columns.map((key) => (
-                  <th key={key}>{COL[key].label}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((it, i) => (
-                <motion.tr
-                  key={it.id}
-                  initial={{ opacity: 0, y: 6 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: Math.min(i * 0.02, 0.4) }}
-                  style={{ cursor: 'pointer' }}
-                  onClick={() => navigate(`/work-items/${it.id}`)}
-                >
-                  {canBulkAssign && (
-                    <td onClick={(e) => e.stopPropagation()}>
-                      <input
-                        type="checkbox"
-                        checked={selected.has(it.id)}
-                        onChange={() => toggle(it.id)}
-                      />
-                    </td>
-                  )}
-                  {columns.map((key) => (
-                    <td key={key}>{COL[key].render(it)}</td>
-                  ))}
-                </motion.tr>
-              ))}
-            </tbody>
-          </table>
+      {historyOpen ? (
+        <div className="uw-content">
+          <RecentActions panelProps={{ id: 'sites-panel', 'aria-label': 'History' }} />
         </div>
+      ) : (
+        <>
+          <StageChips stages={stages} value={stage} counts={counts.data} onChange={setStage} />
+          <div className="uw-content">
+            <WorkListCard
+              id="sites-panel"
+              role="tabpanel"
+              aria-labelledby={`stage-chip-${stage.replace(/\W+/g, '-')}`}
+              busy={!rows && !list.error}
+              tools={
+                <>
+                  <SearchBox value={query} onChange={setQuery} label="Search site ID, village or province" placeholder="Search site, village, province…" />
+                  <select className="uw-select" aria-label="Province" value={provinceId} onChange={(e) => setProvinceId(e.target.value)}>
+                    <option value="">All provinces</option>
+                    {provinces.map((p) => (
+                      <option key={p.id} value={p.id}>{p.name}</option>
+                    ))}
+                  </select>
+                </>
+              }
+              description={total != null ? `${total.toLocaleString('en-US')} ${total === 1 ? 'site' : 'sites'}` : null}
+              foot={
+                <>
+                  <Pager offset={offset} shown={rows?.length ?? 0} total={total} onMove={setOffset} />
+                  {selectable && (
+                    <AssignPanel
+                      process="dt"
+                      selectedCount={selected.size}
+                      selectedProvinces={[...selected].map((id) => byId.get(id)?.province)}
+                      onClear={() => setSelected(new Set())}
+                      onAssign={assign}
+                      busyId={busyId}
+                    />
+                  )}
+                </>
+              }
+            >
+              {list.error && !rows ? (
+                <StepError stepName="All sites" onRetry={list.retry} />
+              ) : rows && rows.length === 0 ? (
+                <EmptyStep stepName={stage === 'All' ? 'this list' : stage} />
+              ) : (
+                <SiteTable
+                  label={`Sites: ${stage}`}
+                  rows={rows || []}
+                  rowId={(r) => r.id}
+                  columns={columns}
+                  selected={selected}
+                  onSelect={selectable ? onSelect : undefined}
+                  siteLabel={(r) => r.site_code}
+                  loading={!rows}
+                />
+              )}
+            </WorkListCard>
+          </div>
+        </>
       )}
-    </>
-  )
-}
-
-// Days a site has been sitting with its contractor, coloured by how long.
-// A column of plain numbers makes the reader do the comparison; the point of
-// the number is the two or three rows that have gone quiet.
-const AGING_AMBER = 14
-const AGING_RED = 30
-
-function AgingCell({ days }) {
-  if (days == null) return '—'
-  const color =
-    days >= AGING_RED ? 'var(--red)'
-      : days >= AGING_AMBER ? 'var(--amber)'
-      : undefined
-  return (
-    <span className="tnum" style={{ color, fontWeight: color ? 600 : undefined }}>
-      {days}
-    </span>
-  )
-}
-
-function BulkAssignBar({ count, contractors, onAssign, onClear }) {
-  const [contractorId, setContractorId] = useState('')
-  const [busy, setBusy] = useState(false)
-
-  const assign = async () => {
-    if (!contractorId) return
-    setBusy(true)
-    await onAssign(Number(contractorId))
-    setBusy(false)
-    setContractorId('')
-  }
-
-  return (
-    <div
-      className="card card-pad mb-16 row between wrap"
-      style={{ gap: 12, alignItems: 'center', borderColor: 'var(--signal)' }}
-    >
-      <span style={{ fontWeight: 500 }}>{count} selected</span>
-      <div className="row" style={{ gap: 8, alignItems: 'center' }}>
-        <select
-          className="input"
-          style={{ minWidth: 200 }}
-          value={contractorId}
-          onChange={(e) => setContractorId(e.target.value)}
-        >
-          <option value="">Assign to contractor…</option>
-          {contractors.map((c) => (
-            <option key={c.id} value={c.id}>{c.name}</option>
-          ))}
-        </select>
-        <button className="btn btn-primary" disabled={!contractorId || busy} onClick={assign}>
-          {busy ? 'Assigning…' : 'Assign (official)'}
-        </button>
-        <button className="btn" onClick={onClear}>Clear</button>
-      </div>
+      <AppFooter data={home} failed={Boolean(homeError) && !home} />
     </div>
+  )
+}
+
+/** The stage chips: a tab list with arrow, Home and End keys and a roving
+ * tab stop. Scrolls sideways inside itself when it does not fit. */
+function StageChips({ stages, value, counts, onChange }) {
+  const ref = useRef(null)
+  const index = stages.findIndex((s) => s.value === value)
+  const onKeyDown = (e) => {
+    const last = stages.length - 1
+    const next = { ArrowRight: Math.min(last, index + 1), ArrowLeft: Math.max(0, index - 1), Home: 0, End: last }[e.key]
+    if (next === undefined) return
+    e.preventDefault()
+    onChange(stages[next].value)
+    ref.current?.querySelectorAll('[role="tab"]')[next]?.focus()
+  }
+  return (
+    <div className="uw-chip-row" role="tablist" aria-label="Stage" ref={ref} onKeyDown={onKeyDown}>
+      {stages.map((s) => {
+        const on = s.value === value
+        const n = counts ? counts[s.value] ?? 0 : null
+        return (
+          <button
+            key={s.value}
+            id={`stage-chip-${s.value.replace(/\W+/g, '-')}`}
+            type="button"
+            role="tab"
+            aria-selected={on}
+            aria-controls="sites-panel"
+            tabIndex={on ? 0 : -1}
+            className={`uw-stage-chip ${on ? 'is-selected' : ''}`.trim()}
+            onClick={() => !on && onChange(s.value)}
+          >
+            {s.label}
+            {n != null && <span className="uw-stage-count">{n.toLocaleString('en-US')}</span>}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+function Pager({ offset, shown, total, onMove }) {
+  if (!total || total <= PAGE) return null
+  const last = Math.min(offset + shown, total)
+  return (
+    <nav className="uw-pager" aria-label="Pages">
+      <span className="uw-muted uw-num">
+        {(offset + 1).toLocaleString('en-US')}–{last.toLocaleString('en-US')} of {total.toLocaleString('en-US')}
+      </span>
+      <button type="button" className="uw-btn uw-btn-sm" disabled={offset === 0} onClick={() => onMove(Math.max(0, offset - PAGE))}>
+        Previous
+      </button>
+      <button type="button" className="uw-btn uw-btn-sm" disabled={last >= total} onClick={() => onMove(offset + PAGE)}>
+        Next
+      </button>
+    </nav>
   )
 }
