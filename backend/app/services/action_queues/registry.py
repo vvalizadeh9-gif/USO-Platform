@@ -1,11 +1,11 @@
-"""Every Action Center queue, defined once.
+"""Every pending-work queue, defined once.
 
-The board, the per-owner breakdown, the daily snapshot and the digest all
-read :data:`QUEUES`. Adding a queue is adding one definition here; its SLA
+Home, the app rail counts, the daily snapshot, the digest and the Admin SLA
+settings all read :data:`QUEUES`. Adding a queue is adding one definition here; its SLA
 defaults to 14 days until an administrator changes it.
 
 A queue with ``on_board=False`` is Home's alone (with the snapshot that feeds
-Home's trends): the board and the digest leave it out.
+Home's trends): the digest leaves it out.
 
 Order matters: within a stage, tickets appear in the order listed.
 """

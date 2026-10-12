@@ -39,7 +39,6 @@ vi.mock('./pages/MyDriveTests', () => page('my-drive-tests'))
 vi.mock('./pages/MyFixQueue', () => page('my-fix-queue'))
 vi.mock('./pages/WorkItems', () => page('work-items'))
 vi.mock('./pages/WorkItemDetail', () => page('work-item-detail'))
-vi.mock('./pages/ActionCenter', () => page('action-center'))
 vi.mock('./pages/Home', () => page('home'))
 vi.mock('./pages/mywork/MyWork', () => page('my-work'))
 vi.mock('./pages/monthlyplan/MonthlyPlan', () => page('monthly-plan'))
@@ -118,7 +117,7 @@ describe('where "/" lands', () => {
     },
   )
 
-  // Neither has an Action Center: the server refuses them the board.
+  // Neither owns queues of their own.
   it('sends a Regional Manager to Roles Performance (My area)', async () => {
     signedInAs('RegionalManager')
     expect(await landOn('/')).toBe('kpi')
@@ -146,21 +145,16 @@ describe('the Home route', () => {
     expect(await landOn('/home')).toBe(home)
   })
 
-  it('keeps the full board one link away', async () => {
-    signedInAs('PM')
-    expect(await landOn('/action-center')).toBe('action-center')
-  })
 })
 
-describe('the Action Center route', () => {
-  it.each([
-    ['RegionalManager', 'kpi'],
-    ['Viewer', 'dt-dashboard'],
-    ['Admin', 'admin'],
-  ])('sends %s home instead of to an Action Center they do not have', async (role, home) => {
-    signedInAs(role)
-    expect(await landOn('/action-center')).toBe(home)
-  })
+describe('the removed Action Center', () => {
+  it.each(['/action-center', '/action-center?view=overdue', '/notifications'])(
+    '%s redirects to Home',
+    async (path) => {
+      signedInAs('PM')
+      expect(await landOn(path)).toBe('home')
+    },
+  )
 })
 
 describe('guarded routes', () => {
@@ -253,7 +247,6 @@ describe('old paths people have bookmarked', () => {
   it.each([
     ['/acceptance', 'my-work'],
     ['/my-acceptance', 'my-work'],
-    ['/notifications', 'action-center'],
   ])('%s still answers', async (path, expected) => {
     signedInAs('Coordinator')
     expect(await landOn(path)).toBe(expected)

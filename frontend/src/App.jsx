@@ -5,7 +5,7 @@ import { HomeDataProvider } from './shell/HomeData'
 import { useAuth } from './context/AuthContext'
 import { Loading } from './components/ui'
 import { loginPathFor, returnPathFrom } from './lib/returnTo'
-import { ACTION_CENTER_ROLES, CATEGORY_OWNER_ROLES, HOME_ROLES, KPI_ROLES, MONTHLY_PLAN_ROLES, homeFor } from './lib/roles'
+import { CATEGORY_OWNER_ROLES, HOME_ROLES, KPI_ROLES, MONTHLY_PLAN_ROLES, homeFor } from './lib/roles'
 import Login from './pages/Login'
 import AuthPlaceholder from './pages/auth/AuthPlaceholder'
 
@@ -21,7 +21,6 @@ const MyDriveTests = lazy(() => import('./pages/MyDriveTests'))
 const MyFixQueue = lazy(() => import('./pages/MyFixQueue'))
 const WorkItems = lazy(() => import('./pages/WorkItems'))
 const WorkItemDetail = lazy(() => import('./pages/WorkItemDetail'))
-const ActionCenter = lazy(() => import('./pages/ActionCenter'))
 const Home = lazy(() => import('./pages/Home'))
 const MyWork = lazy(() => import('./pages/mywork/MyWork'))
 const MonthlyPlan = lazy(() => import('./pages/monthlyplan/MonthlyPlan'))
@@ -177,17 +176,10 @@ export default function App() {
           />
           <Route path="/work-items" element={<WorkItems />} />
           <Route path="/work-items/:id" element={<WorkItemDetail />} />
-          {/* The server refuses the board to every other role (403), so the
-              route is closed to them here too, and "/" sends them home. */}
-          <Route
-            path="/action-center"
-            element={
-              <Protected allowedRoles={ACTION_CENTER_ROLES}>
-                <ActionCenter />
-              </Protected>
-            }
-          />
-          <Route path="/notifications" element={<Navigate to="/action-center" replace />} />
+          {/* The Action Center was removed (UEP-05): Home shows each user's
+              pending work. Old bookmarks, with or without ?view=, land there. */}
+          <Route path="/action-center" element={<Navigate to="/home" replace />} />
+          <Route path="/notifications" element={<Navigate to="/home" replace />} />
           {/* The acceptance workspace. /my-work/v/:villageId makes one
               village linkable, so "look at this one" is a URL rather than a
               description of where to click.

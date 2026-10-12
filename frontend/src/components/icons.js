@@ -4,6 +4,16 @@
 // component picks the one drawn for the size asked for.
 import arrowLeft16 from '@carbon/icons/es/arrow--left/16.js'
 import arrowLeft20 from '@carbon/icons/es/arrow--left/20.js'
+import arrowRight16 from '@carbon/icons/es/arrow--right/16.js'
+import arrowRight20 from '@carbon/icons/es/arrow--right/20.js'
+import checkmark16 from '@carbon/icons/es/checkmark/16.js'
+import checkmark20 from '@carbon/icons/es/checkmark/20.js'
+import directionFork16 from '@carbon/icons/es/direction--fork/16.js'
+import directionFork20 from '@carbon/icons/es/direction--fork/20.js'
+import time16 from '@carbon/icons/es/time/16.js'
+import time20 from '@carbon/icons/es/time/20.js'
+import tools16 from '@carbon/icons/es/tools/16.js'
+import tools20 from '@carbon/icons/es/tools/20.js'
 import calendar16 from '@carbon/icons/es/calendar/16.js'
 import calendar20 from '@carbon/icons/es/calendar/20.js'
 import cellTower16 from '@carbon/icons/es/cell-tower/16.js'
@@ -79,6 +89,11 @@ export const ICONS = Object.freeze({
   renew: { 16: renew16, 20: renew20 },
   'warning--alt': { 16: warningAlt16, 20: warningAlt20 },
   'error--filled': { 16: errorFilled16, 20: errorFilled20 },
+  'arrow--right': { 16: arrowRight16, 20: arrowRight20 },
+  'checkmark': { 16: checkmark16, 20: checkmark20 },
+  'direction--fork': { 16: directionFork16, 20: directionFork20 },
+  'time': { 16: time16, 20: time20 },
+  'tools': { 16: tools16, 20: tools20 },
 })
 
 /** @typedef {keyof typeof ICONS} IconName */

@@ -1,12 +1,13 @@
-"""The Action Center ticket board, its per-owner breakdown, the SLA settings
-and each user's digest opt-out.
+"""The pending-work settings: each queue's SLA days (Admin) and each user's
+digest opt-out.
 
-Thin by design: every rule is in ``services/action_queues``. This module
-resolves the caller, maps "not your board" onto 403 and shapes the response.
+Thin by design: every rule is in ``services/action_queues``, which also feeds
+Home, the app rail counts and the daily digest. Home is each user's view of
+their pending work; there is no separate board screen.
 """
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.core import audit_actions
@@ -15,89 +16,17 @@ from app.core.deps import ADMIN, get_current_user, require_roles
 from app.models.action_center import ActionQueueSla
 from app.models.reference import User
 from app.schemas.action_center import (
-    BoardOut,
     NotificationsIn,
     NotificationsOut,
-    OwnerRowOut,
     QueueSlaIn,
     QueueSlaOut,
-    StageOut,
-    TicketOut,
-    Totals,
 )
-from app.services.action_queues import board as boards
 from app.services.action_queues import sla
-from app.services.action_queues.context import QueueContext
 from app.services.action_queues.registry import QUEUES, QUEUES_BY_KEY
 from app.services.action_queues.types import STAGE_LABELS, SlaKind
 from app.services.audit import record_audit
 
-router = APIRouter(tags=["action-center"])
-
-
-def _forbidden(message: str) -> HTTPException:
-    return HTTPException(status.HTTP_403_FORBIDDEN, message)
-
-
-def _board_out(board: boards.Board) -> BoardOut:
-    return BoardOut(
-        role=board.role,
-        scope_label=board.scope_label,
-        generated_at=board.generated_at,
-        totals=Totals(pending=board.pending, overdue=board.overdue),
-        stages=[
-            StageOut(
-                key=stage.key, label=stage.label, total=stage.total,
-                tickets=[
-                    TicketOut(
-                        queue_key=t.queue.key, label=t.queue.label, count=t.count,
-                        overdue=t.overdue, oldest_started_at=t.oldest_started_at,
-                        earliest_due_at=t.earliest_due_at, date_kind=t.date_kind,
-                        url=t.queue.url,
-                    )
-                    for t in stage.tickets
-                ],
-            )
-            for stage in board.stages
-        ],
-    )
-
-
-@router.get("/action-center/board", response_model=BoardOut)
-def action_center_board(
-    db: Session = Depends(get_db), user: User = Depends(get_current_user)
-) -> BoardOut:
-    """Every queue this user acts on, as tickets grouped by lifecycle stage.
-
-    PM, Coordinator, Contractor and problem owners only. Everyone else is
-    refused rather than shown an empty board: an empty board reads as "nothing
-    to do", which for a Regional Manager or Viewer would be untrue -- the
-    Action Center is simply not their screen.
-    """
-    try:
-        return _board_out(boards.board_for(db, user))
-    except boards.NotOnBoard as exc:
-        raise _forbidden(str(exc)) from None
-
-
-@router.get("/action-center/owners", response_model=list[OwnerRowOut])
-def action_center_owners(
-    queue: str = Query(..., description="A queue key from the board"),
-    db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
-) -> list[OwnerRowOut]:
-    """Who holds this queue's pending items, worst first.
-
-    A PM sees every owner; a coordinator sees the contractors inside their own
-    provinces. Everyone else gets 403.
-    """
-    try:
-        rows = boards.owners_breakdown(QueueContext(db, user), queue)
-    except boards.NotOnBoard as exc:
-        raise _forbidden(str(exc)) from None
-    except boards.UnknownQueue:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, f"Unknown queue {queue!r}") from None
-    return [OwnerRowOut(**vars(r)) for r in rows]
+router = APIRouter(tags=["work-queues"])
 
 
 # --------------------------------------------------------------------------

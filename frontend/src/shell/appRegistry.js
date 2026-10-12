@@ -10,7 +10,6 @@
  * re-checks the role server-side.
  */
 import {
-  ACTION_CENTER_ROLES,
   CATEGORY_OWNER_ROLES,
   KPI_ROLES,
   MONTHLY_PLAN_ROLES,
@@ -45,6 +44,9 @@ import {
 const STAFF = REVIEW_AUTHORITY_ROLES // PM, Coordinator
 const NOT_ADMIN = ['PM', 'Coordinator', 'RegionalManager', 'Contractor', 'Viewer', ...CATEGORY_OWNER_ROLES]
 const ACCEPTANCE_ROLES = ['PM', 'Coordinator', 'RegionalManager', 'Contractor', 'Viewer']
+// Drive test's own users. Category owners open the app for the Fix queue
+// only, so every other Drive test page names these roles explicitly.
+const DT_ROLES = ['PM', 'Coordinator', 'Contractor', 'RegionalManager', 'Viewer']
 
 /** @type {{ id: AppGroup, label: string }[]} */
 export const APP_GROUPS = [
@@ -67,22 +69,6 @@ export const HOME_APP = Object.freeze({
 /** @type {readonly AppDef[]} */
 export const APPS = Object.freeze([
   {
-    id: 'my-work',
-    name: 'My work',
-    description: 'Everything waiting on you',
-    icon: 'task',
-    color: '--uep-app-my-work',
-    group: 'rollout',
-    roles: ACTION_CENTER_ROLES,
-    pages: [
-      { id: 'all', label: 'All my work', route: '/action-center', queues: '*' },
-      { id: 'overdue', label: 'Overdue', route: '/action-center?view=overdue' },
-      { id: 'due-soon', label: 'Due soon', route: '/action-center?view=due-soon' },
-      { id: 'done', label: 'Done this week', route: '/action-center?view=done' },
-      { id: 'fixes', label: 'Fix queue', route: '/my-fix-queue', roles: CATEGORY_OWNER_ROLES, queues: ['hc_fixes'] },
-    ],
-  },
-  {
     id: 'drive-test',
     name: 'Drive test',
     description: 'Health checks and drive tests per site',
@@ -90,18 +76,21 @@ export const APPS = Object.freeze([
     color: '--uep-app-drive-test',
     tint: '--uep-app-drive-test-tint',
     group: 'rollout',
-    roles: ['PM', 'Coordinator', 'Contractor', 'RegionalManager', 'Viewer'],
+    roles: [...DT_ROLES, ...CATEGORY_OWNER_ROLES],
     pages: [
       // The dashboard leads the rail, set off from the queues by a divider,
       // and carries no count: it is a view, not a pile of work.
-      { id: 'dashboard', label: 'Dashboard', route: '/reports/drive-test', divider: true },
+      { id: 'dashboard', label: 'Dashboard', route: '/reports/drive-test', roles: DT_ROLES, divider: true },
       { id: 'hc-check', label: 'HC check', route: '/my-health-check', roles: ['Contractor'], queues: ['hc_submit'] },
       { id: 'hc-pool', label: 'HC check', route: '/health-check?tab=pool', roles: STAFF, queues: ['hc_assign', 'hc_reroutes'] },
       { id: 'hc-review', label: 'HC review', route: '/health-check?tab=review', roles: STAFF, queues: ['hc_review'] },
       { id: 'assignment', label: 'Assignment', route: '/drive-test?tab=assignment', roles: STAFF, queues: ['dt_assign'] },
       { id: 'dt-review', label: 'DT review', route: '/drive-test?tab=review', roles: STAFF, queues: ['dt_review'] },
       { id: 'in-progress', label: 'In progress', route: '/my-drive-tests', roles: ['Contractor'], queues: ['dt_todo', 'dt_redo'] },
-      { id: 'all-sites', label: 'All sites', route: '/work-items' },
+      { id: 'all-sites', label: 'All sites', route: '/work-items', roles: DT_ROLES },
+      // A fix is health-check remediation, so it lives here. A category owner
+      // sees this page and no other in the rail.
+      { id: 'fixes', label: 'Fix queue', route: '/my-fix-queue', roles: CATEGORY_OWNER_ROLES, queues: ['hc_fixes'] },
     ],
   },
   {

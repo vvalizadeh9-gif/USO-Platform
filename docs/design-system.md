@@ -57,7 +57,6 @@ App identity (tiles: white icon on the colour; tint for card headers):
 
 | App | Tile token | Tile | Header tint |
 |---|---|---|---|
-| My work | `--uep-app-my-work` | `#1D4ED8` | — |
 | Drive test | `--uep-app-drive-test` | `#0F766E` | `#EDF6F5` |
 | Acceptance | `--uep-app-acceptance` | `#6D28D9` | `#F3EFFC` |
 | Monthly plan | `--uep-app-monthly-plan` | `#B45309` | `#FBF3EA` |
@@ -102,7 +101,6 @@ used up to 16px, its 20px glyph above.
 | Purpose | Carbon icon |
 |---|---|
 | Home | `home` |
-| My work | `task` |
 | Drive test | `cell-tower` |
 | Acceptance | `certificate--check` |
 | Monthly plan | `calendar` |

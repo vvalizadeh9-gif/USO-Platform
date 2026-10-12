@@ -90,7 +90,7 @@ def _token_for(client, username: str, password: str = PASSWORD) -> dict:
 
 
 def _still_works(client, headers) -> bool:
-    return client.get("/api/v1/action-center", headers=headers).status_code == 200
+    return client.get("/api/v1/me/notifications", headers=headers).status_code == 200
 
 
 def _admin_reset(client, admin_h, user_id: int, password: str | None = None):
@@ -140,7 +140,7 @@ def test_changing_a_password_invalidates_tokens_already_issued(client):
     assert not _still_works(client, stolen), (
         "the token issued before the password change must be refused"
     )
-    assert client.get("/api/v1/action-center", headers=stolen).status_code == 401
+    assert client.get("/api/v1/me/notifications", headers=stolen).status_code == 401
 
 
 def test_the_user_can_sign_in_again_with_the_new_password(client):

@@ -1,17 +1,14 @@
-"""The Action Center's endpoints: who may read what, and the writes behind them.
+"""The pending-work endpoints (``api/work_queues.py``) and what was removed.
 
-* the board is served to PM, Coordinator, Contractor and problem owners and
-  refused (403, not an empty board) to Regional Manager, Viewer and Admin;
-* the legacy feed is deprecated and otherwise unchanged;
-* the per-owner breakdown is PM and Coordinator only;
-* SLA days are an Admin setting, and a change shows on the next board read;
+* the Action Center's board, owners, feed and summary endpoints are gone (404);
+* SLA days are an Admin setting, and a change shows on the next read;
 * every user can turn their own digest off;
 * a request letter sent to ICT moves a village onto My Work's "With
-  authority" tab and onto the PM's follow-up ticket, until it is answered.
+  authority" tab and onto the PM's follow-up queue, until it is answered.
 """
 import os
 import sys
-from datetime import date, datetime, timedelta, timezone
+from datetime import date
 
 import pytest
 
@@ -28,7 +25,6 @@ from fastapi.testclient import TestClient  # noqa: E402
 from app.core import user_status  # noqa: E402
 from app.core.database import SessionLocal  # noqa: E402
 from app.core.security import hash_password  # noqa: E402
-from app.models.action_center import DEFAULT_SLA_DAYS  # noqa: E402
 from app.services import cpm_columns as C  # noqa: E402
 from tests.conftest import create_schema, login_form  # noqa: E402
 
@@ -104,80 +100,21 @@ def _admin(client):
 
 
 # --------------------------------------------------------------------------
-# Access
+# The Action Center is gone
 # --------------------------------------------------------------------------
 @pytest.mark.parametrize(
-    ("username", "role"),
-    [("a_pm", "PM"), ("a_coord", "Coordinator"), ("a_sc", "Contractor"),
-     ("a_power", "Problem owner")],
+    "path",
+    ["/action-center/board", "/action-center/owners?queue=dt_review",
+     "/action-center", "/action-center/summary"],
 )
-def test_the_board_is_served_to_the_four_working_roles(client, username, role):
-    r = client.get(f"{API}/action-center/board", headers=_headers(client, username))
-    assert r.status_code == 200, r.text
-    body = r.json()
-    assert body["role"] == role
-    assert body["totals"]["pending"] == sum(s["total"] for s in body["stages"])
-    assert body["scope_label"]
+def test_the_action_center_endpoints_are_gone(client, path):
+    assert client.get(f"{API}{path}", headers=_headers(client, "a_pm")).status_code == 404
 
 
-@pytest.mark.parametrize("username", ["a_rm", "a_viewer"])
-def test_regional_manager_and_viewer_are_refused_not_shown_an_empty_board(client, username):
-    headers = _headers(client, username)
-    assert client.get(f"{API}/action-center/board", headers=headers).status_code == 403
-
-
-def test_admin_has_no_board(client):
-    assert client.get(f"{API}/action-center/board", headers=_admin(client)).status_code == 403
-
-
-def test_the_legacy_summary_still_works_and_is_marked_deprecated(client):
-    r = client.get(f"{API}/action-center/summary", headers=_headers(client, "a_pm"),
-                   params={"items": False})
-    assert r.status_code == 200
+def test_the_router_is_tagged_work_queues(client):
     spec = client.get("/openapi.json").json()["paths"]
-    assert spec[f"{API}/action-center/summary"]["get"]["deprecated"] is True
-
-
-def test_the_board_lists_the_villages_to_file_with_its_link(client):
-    body = client.get(f"{API}/action-center/board", headers=_headers(client, "a_sc")).json()
-    ict = next(s for s in body["stages"] if s["key"] == "ict")
-    ticket = next(t for t in ict["tickets"] if t["queue_key"] == "ict_to_file")
-    assert ticket["count"] == 1
-    assert ticket["url"] == "/my-work?authority=ICT&tab=not_filed"
-    assert ticket["date_kind"] == "since"
-    # Undated (no drive-test date): the clock starts at 1 Mehr 1405.
-    assert ticket["oldest_started_at"].startswith("2026-09-22T20:30")
-
-
-# --------------------------------------------------------------------------
-# Per-owner breakdown
-# --------------------------------------------------------------------------
-def test_the_breakdown_is_for_pm_and_coordinator(client):
-    for username in ("a_pm", "a_coord"):
-        r = client.get(f"{API}/action-center/owners", params={"queue": "ict_to_file"},
-                       headers=_headers(client, username))
-        assert r.status_code == 200, r.text
-    rows = client.get(f"{API}/action-center/owners", params={"queue": "ict_to_file"},
-                      headers=_headers(client, "a_coord")).json()
-    # The item is undated, so its clock started at 1 Mehr 1405 and it falls
-    # overdue once the default SLA has passed since then. Worked out from now
-    # rather than written down: a fixed 0 held only until 6 October 2026.
-    started = datetime.fromisoformat(rows[0]["oldest_started_at"].replace("Z", "+00:00"))
-    overdue = int(datetime.now(timezone.utc) - started > timedelta(days=DEFAULT_SLA_DAYS))
-    assert rows == [{
-        "owner_type": "contractor", "owner_id": rows[0]["owner_id"], "name": "Api Co",
-        "count": 1, "overdue": overdue, "oldest_started_at": rows[0]["oldest_started_at"],
-    }]
-    for username in ("a_sc", "a_power", "a_rm", "a_viewer"):
-        r = client.get(f"{API}/action-center/owners", params={"queue": "ict_to_file"},
-                       headers=_headers(client, username))
-        assert r.status_code == 403, username
-
-
-def test_an_unknown_queue_is_404(client):
-    r = client.get(f"{API}/action-center/owners", params={"queue": "nope"},
-                   headers=_headers(client, "a_pm"))
-    assert r.status_code == 404
+    assert spec[f"{API}/admin/action-sla"]["get"]["tags"] == ["work-queues"]
+    assert not [p for p in spec if p.startswith(f"{API}/action-center")]
 
 
 # --------------------------------------------------------------------------
@@ -232,16 +169,25 @@ def _village_id():
         db.close()
 
 
-def _follow_up(client):
-    body = client.get(f"{API}/action-center/board", headers=_headers(client, "a_pm")).json()
-    tickets = {t["queue_key"]: t for s in body["stages"] for t in s["tickets"]}
-    return tickets.get("ict_follow_up", {}).get("count", 0)
+def _follow_up():
+    """The PM's ICT follow-up queue, as Home and the digest count it."""
+    from app.models.reference import User
+    from app.services.action_queues.board import queue_summaries
+    from app.services.action_queues.context import QueueContext
+    from app.services.action_queues.registry import QUEUES_BY_KEY
+
+    db = SessionLocal()
+    try:
+        pm = db.query(User).filter(User.username == "a_pm").one()
+        return queue_summaries(QueueContext(db, pm), [QUEUES_BY_KEY["ict_follow_up"]])[0].count
+    finally:
+        db.close()
 
 
 def test_sending_a_request_letter_puts_the_village_with_the_authority(client):
     vid = _village_id()
     sc = _headers(client, "a_sc")
-    assert _follow_up(client) == 0
+    assert _follow_up() == 0
 
     r = client.post(f"{API}/acceptance/authority-requests", headers=sc, json={
         "authority": "ICT", "village_ids": [vid, 999999],
@@ -258,7 +204,7 @@ def test_sending_a_request_letter_puts_the_village_with_the_authority(client):
                         json={"authority": "ICT", "village_ids": [vid]}).json()
     assert again["outcomes"][0]["reason"] == "already_with_authority"
 
-    assert _follow_up(client) == 1
+    assert _follow_up() == 1
     pm = _headers(client, "a_pm")
     tab = client.get(f"{API}/acceptance/my-work", headers=pm,
                      params={"tab": "with_authority", "authority": "ICT"}).json()

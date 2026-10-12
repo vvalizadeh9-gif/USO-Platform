@@ -3,7 +3,6 @@ from fastapi import APIRouter
 
 from app.api import (
     acceptance,
-    action_center,
     admin,
     auth,
     drive_test,
@@ -16,6 +15,7 @@ from app.api import (
     monthly_plan,
     my_work,
     work_items,
+    work_queues,
     workflow,
 )
 
@@ -33,5 +33,5 @@ api_router.include_router(mojri.router)
 api_router.include_router(monthly_plan.router)
 api_router.include_router(admin.router)
 api_router.include_router(misc.router)
-api_router.include_router(action_center.router)
+api_router.include_router(work_queues.router)
 api_router.include_router(home.router)

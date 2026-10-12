@@ -211,11 +211,6 @@ def test_admin_is_refused(client):
     assert r.status_code == 403
 
 
-def test_a_regional_manager_still_has_no_board(client):
-    r = client.get(f"{API}/action-center/board", headers=_headers(client, "h_rm"))
-    assert r.status_code == 403
-
-
 @pytest.mark.parametrize("username", HOME_USERS)
 def test_the_figures_add_up(client, username):
     body = _home(client, username)
@@ -242,28 +237,18 @@ def test_the_figures_add_up(client, username):
 
 
 def test_queues_home_does_not_show_are_not_in_its_totals(client):
-    """The headline is the cards, not the whole board: a contractor's board
-    has the detailed filing queues, Home only Pending ICT and Pending CRA."""
+    """The headline is the cards, not every queue: a contractor owns the
+    detailed filing queues, Home shows only Pending ICT and Pending CRA."""
+    from app.services.action_queues.registry import queues_for
+    from app.services.action_queues.types import CONTRACTOR
+
     headers = _headers(client, "h_sc")
-    board = client.get(f"{API}/action-center/board", headers=headers).json()
     home = client.get(f"{API}/home/summary", headers=headers).json()
-    board_keys = {t["queue_key"] for s in board["stages"] for t in s["tickets"]}
+    owned = {q.key for q in queues_for(CONTRACTOR)}
     home_keys = {t["queue_key"] for t in _tickets(home)}
-    assert {"ict_to_file", "cra_to_file"} <= board_keys
+    assert {"ict_to_file", "cra_to_file"} <= owned
     assert not {"ict_to_file", "cra_to_file"} & home_keys
     assert home["totals"]["pending"] == sum(t["count"] for t in _tickets(home))
-
-
-def test_the_board_response_is_unchanged(client):
-    board = client.get(f"{API}/action-center/board", headers=_headers(client, "h_sc")).json()
-    assert set(board) == {"role", "scope_label", "generated_at", "totals", "stages"}
-    ticket = board["stages"][0]["tickets"][0]
-    assert set(ticket) == {
-        "queue_key", "label", "count", "overdue", "oldest_started_at",
-        "earliest_due_at", "date_kind", "url",
-    }
-    keys = {t["queue_key"] for s in board["stages"] for t in s["tickets"]}
-    assert not keys & {"ict_pending", "cra_pending"}, "Home's own queues stay off the board"
 
 
 def test_a_contractor_is_never_shown_as_the_owner_of_their_own_work(client):

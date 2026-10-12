@@ -2,8 +2,8 @@
 
 Nothing here is a second definition of anything:
 
-* queues, counts and lateness are the Action Center registry's own fetches,
-  summarised by ``board.summarize`` -- the same function the board uses;
+* queues, counts and lateness are the pending-work registry's own fetches,
+  summarised by ``board.summarize`` -- the same function the digest uses;
 * which queues each card shows is ``registry.home_queues_for``, read from the
   declarative ``types.HOME_QUEUES``; every total is summed from exactly the
   tickets returned, so the headline always equals what the cards show;
@@ -13,7 +13,7 @@ Nothing here is a second definition of anything:
 * the month's plan is ``monthly_plan.running_month``, already scoped by role.
 
 Each queue is fetched once per build, and the whole answer is shared for a few
-seconds through ``count_cache`` (emptied by every commit), like the board.
+seconds through ``count_cache`` (emptied by every commit).
 """
 from __future__ import annotations
 

@@ -18,10 +18,6 @@ export default function AccountPopover({ user, tenant, onClose, onSignOut, opene
           <Icon name="password" size={16} />
           Profile and security
         </Link>
-        <Link to="/action-center" className="uep-account-item" onClick={onClose}>
-          <Icon name="notification" size={16} />
-          Notifications and daily digest
-        </Link>
         <button type="button" className="uep-account-item" onClick={onSignOut}>
           <Icon name="logout" size={16} />
           Sign out

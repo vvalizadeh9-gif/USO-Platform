@@ -4,7 +4,7 @@
 // script needs (a chart colour, an animation length) so they are never typed
 // in by hand. tokens.test.js fails if the two disagree.
 
-/** @typedef {'home'|'myWork'|'driveTest'|'acceptance'|'monthlyPlan'|'insights'|'data'|'admin'} AppId */
+/** @typedef {'home'|'driveTest'|'acceptance'|'monthlyPlan'|'insights'|'data'|'admin'} AppId */
 
 export const color = Object.freeze({
   accent: '#1D4ED8',
@@ -31,7 +31,6 @@ export const color = Object.freeze({
 
 /** @type {Readonly<Record<AppId, { tile: string, tint: string | null }>>} */
 export const appColor = Object.freeze({
-  myWork: { tile: '#1D4ED8', tint: null },
   driveTest: { tile: '#0F766E', tint: '#EDF6F5' },
   acceptance: { tile: '#6D28D9', tint: '#F3EFFC' },
   monthlyPlan: { tile: '#B45309', tint: '#FBF3EA' },

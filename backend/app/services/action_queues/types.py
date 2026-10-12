@@ -1,9 +1,9 @@
-"""The vocabulary every Action Center consumer shares.
+"""The vocabulary every pending-work consumer shares.
 
 A :class:`QueueDefinition` is the one place a queue is described: its stage,
 label, the screen it opens, who acts on it, how its SLA is measured and how
-its items are fetched. The board, the per-owner breakdown, the daily snapshot
-and the digest all read the registry built from these, so adding a queue is
+its items are fetched. Home, the daily snapshot and the digest all read the
+registry built from these, so adding a queue is
 adding one definition.
 """
 from __future__ import annotations
@@ -19,7 +19,7 @@ if TYPE_CHECKING:
 
 
 class Stage(str, Enum):
-    """The board's columns, in lifecycle order."""
+    """Lifecycle stages, in order (the digest groups by them)."""
 
     HC = "hc"
     DT = "dt"
@@ -58,8 +58,8 @@ HOME_GROUP_LABELS: dict[HomeGroup, str] = {
 
 #: The queues each Home card shows, by key; ``None`` shows every queue of the
 #: card's stages that the viewer's role has. The Acceptance card is the two
-#: headline queues for everyone: the detailed filing and checking queues stay
-#: on the Action Center board.
+#: headline queues for everyone: the detailed filing and checking queues are
+#: worked in the Acceptance app and listed in the digest.
 HOME_QUEUES: dict[HomeGroup, tuple[str, ...] | None] = {
     HomeGroup.ROLLOUT: None,
     HomeGroup.ACCEPTANCE: ("ict_pending", "cra_pending", "ict_to_validate", "cra_to_validate"),
@@ -86,7 +86,7 @@ COORDINATOR = "Coordinator"
 CONTRACTOR = "Contractor"
 PROBLEM_OWNER = "ProblemOwner"
 BOARD_ROLES = frozenset({PM, COORDINATOR, CONTRACTOR, PROBLEM_OWNER})
-#: Has Home but no Action Center board: Home's headline queues only.
+#: Has Home but owns no queues of their own: Home's headline queues only.
 REGIONAL_MANAGER = "RegionalManager"
 HOME_ROLES = BOARD_ROLES | {REGIONAL_MANAGER}
 

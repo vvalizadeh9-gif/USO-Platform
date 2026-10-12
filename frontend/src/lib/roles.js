@@ -116,29 +116,28 @@ export function isReadOnlyKpi(user) {
   return user?.role?.name === 'Viewer'
 }
 
-// The Action Center (the ticket board). The four roles that act on queues get
-// it; Regional Manager and Viewer do not -- they land on their dashboards --
-// and neither does Admin. Must agree with board_role() in
-// app/services/action_queues/context.py; the server answers 403 to the rest.
-export const ACTION_CENTER_ROLES = ['PM', 'Coordinator', 'Contractor', ...CATEGORY_OWNER_ROLES]
+// The roles that own pending work (queues). Regional Manager, Viewer and
+// Admin own none. Must agree with board_role() in
+// app/services/action_queues/context.py.
+export const WORK_ROLES = ['PM', 'Coordinator', 'Contractor', ...CATEGORY_OWNER_ROLES]
 
-export function hasActionCenter(roleName) {
-  return ACTION_CENTER_ROLES.includes(roleName)
+export function hasWorkQueues(roleName) {
+  return WORK_ROLES.includes(roleName)
 }
 
-// UEP Home: the board's roles, and Regional Managers (Home's headline
+// UEP Home: the work roles, and Regional Managers (Home's headline
 // acceptance queues, inside their provinces). A Regional Manager still lands
 // on Roles Performance and opens Home from the navigation. Must agree with
 // home_role() in app/services/action_queues/context.py.
-export const HOME_ROLES = [...ACTION_CENTER_ROLES, 'RegionalManager']
+export const HOME_ROLES = [...WORK_ROLES, 'RegionalManager']
 
 export function hasHome(roleName) {
   return HOME_ROLES.includes(roleName)
 }
 
 // Where "/" lands for each role. Everyone who works a queue lands on UEP Home
-// (what is waiting, what is late, what to do next; the full board stays at
-// /action-center); Regional Manager on Roles Performance (My area), Viewer on
+// (what is waiting, what is late, what to do next -- each user's one view of
+// their pending work); Regional Manager on Roles Performance (My area), Viewer on
 // the Drive Test dashboard, Admin on the Admin Console. Home is served to
 // HOME_ROLES -- GET /home/summary refuses the rest.
 const HOME_BY_ROLE = {
@@ -148,5 +147,5 @@ const HOME_BY_ROLE = {
 }
 
 export function homeFor(roleName) {
-  return HOME_BY_ROLE[roleName] || (hasActionCenter(roleName) ? '/home' : '/reports/drive-test')
+  return HOME_BY_ROLE[roleName] || (hasWorkQueues(roleName) ? '/home' : '/reports/drive-test')
 }

@@ -411,68 +411,24 @@ can use them.
   corner, so a download never scrolls or re-lays out the page. A zero is drawn
   as a plain number.
 
-### Task board (`frontend/src/pages/ActionCenter.jsx`, `pages/actioncenter/`)
+### Action list rows: the Fix queue (`frontend/src/pages/MyFixQueue.jsx`, `styles/fix-queue.css`)
 
-The Action Center. One look says how much is waiting on this person, how
-much is overdue, and at which lifecycle step; every card opens the queue where
-the work is done. A `PageFrame` whose body is `--surface`, with a 1px
-`--border` line against the sidebar. **The board may scroll** in the page
-body when it is taller than the screen (B); the document never does, and no
-column scrolls by itself.
+The standard pattern for a list of things to act on (UEP-05). One card fills
+the page height; only the list scrolls inside it.
 
-- **PageBar** — eyebrow "Today", title "Action Center". Context: one polite
-  live sentence (E), never wrapping: "**{N} items** waiting on you, **{M}
-  overdue**". Actions: a `--success-ink` dot with "Updated just now" /
-  "Updated at HH:MM" (14px `--text-tertiary`), then a 44×44 Refresh icon
-  button (`RefreshCw`). Tabs: "All tasks" with a count chip and "Overdue"
-  with a danger chip "{M} late"; Overdue keeps only queues with something
-  late. `tabsRight`: the keyboard hint, 13px `--text-tertiary`, with `kbd`
-  keys (22px high, 1px `--control-border` and a 2px bottom border, radius 4,
-  12/18 600).
-- **Grid** — the rail and the columns share
-  `repeat(4, minmax(0,1fr)) 92px minmax(0,0.92fr)`: Health Check, Drive
-  Test, ICT acceptance, CRA acceptance, Accepted (rail only), Plans & Data.
-  Columns have 14px side padding; Drive Test to CRA have a 1px `--divider`
-  start edge, Plans & Data a 1px dashed `--step-line` one (D).
-- **Step rail** (`StepRail.jsx`, G) — sticky at the top of the body,
-  `rgba(255,255,255,.94)` with an 8px backdrop blur and a `--divider` line
-  under it. A 2px `--step-line` runs from step 1's marker centre to
-  Accepted's. Each step: a 28px marker in the stage chip colour with a 5px
-  white ring and a white number (13px 700); the step's `h2` (20/26 600,
-  −0.02em); then "{n} pending · {o} overdue" or "Nothing waiting on you"
-  (13/18 `--text-tertiary`). Plans & Data's marker is white with a 1.5px
-  dashed border in its chip colour and a "+" in its ink, with "Runs
-  alongside" beside it. Accepted is a `--success-ink` marker with a white
-  check, "Accepted" (15px 600 `--success-ink`) and "End of lifecycle".
-- **Column** (`StageColumn.jsx`) — a `<section aria-labelledby>` the step's
-  heading; cards in a 12px-gap stack, most overdue first, then oldest. Every
-  role sees all five steps; an empty one says "Nothing waiting on you" (or
-  "Nothing overdue" under the Overdue tab) after a 16px green `CircleCheck`.
-- **Card** (`TaskCard.jsx`) — one `<a>` to the queue and nothing else to
-  click. `--surface`, 1px `--border`, radius 10, padding 16 16 14. Row 1: the
-  count (36/38 600, −0.04em, tabular; `--danger-ink` when something is late)
-  and, when late, "{o} overdue" (13px 600 `--danger-ink`) after a 7px danger
-  dot with a 3px `--danger-soft` ring. Row 2: the action, verb first (16/22
-  600, −0.01em, `text-wrap: pretty`). Row 3: "Oldest {d} days" or "Due in {d}
-  days" (13/18 `--text-tertiary`) and a 16px `ArrowUpRight`. Hover is F;
-  focus is the Cobalt ring. The visible parts are `aria-hidden`; the link's
-  label reads "{Action}, {Stage}: {n} pending, {o} overdue, oldest {d} days".
-- **Keyboard** — cards carry `data-col` / `data-row`. Up/Down move within a
-  column, Left/Right to the nearest card in the next column that has any,
-  Enter opens. **O** toggles the Overdue tab outside text fields. "Skip to
-  tasks" is the first focusable element and focuses the board.
-- **Motion** — once, on load, done within about a second: the rail line draws
-  in (600ms), the markers pop in 100ms apart (300ms), the cards rise 14px
-  with a fade (350ms, from 200ms + 50ms per column + 40ms per card). Numbers
-  are final on first paint (C). Under `prefers-reduced-motion` no animation
-  or transition runs.
-- **States** — loading draws the rail ("Loading…") and two skeleton cards per
-  column in their final place (1px `--divider`, radius 10; grey blocks
-  48×32, 80%×14, 55%×12), so nothing jumps. An error is a Cobalt error
-  `Banner` ("Your tasks didn't load. …") with a 40px Retry, and the board is
-  hidden. Nothing pending is a success `Banner` ("All caught up. …") over a
-  board whose every step says "Nothing waiting on you".
-
+- **Row:** grid `3px 1fr auto`, gap 16px, padding `16px 20px 16px 16px`, 1px
+  `--uep-divider` between rows.
+- **Status bar:** 3px, radius 3; `--uep-danger` only when late, `--uep-divider`
+  otherwise. Always paired with the "N days late" text.
+- **Top line:** the site code (15px 600 `--uep-accent`, underline on hover),
+  the province in Vazirmatn, an optional chip (20px, radius 6).
+- **Issue line:** 14px `--uep-text-2`, max 72ch, the technology in
+  `--uep-text` 600, the note in Vazirmatn with `dir="auto"`.
+- **Actions:** a 32px primary button and a quiet underlined text button.
+- **Inline form:** opens in place of the actions, max 540px, column, 8px gap;
+  every control has a visible label; Cancel returns focus to the opener.
+- **Urgency:** right column, 13px 600: late in `--uep-danger`, due within two
+  days in `--uep-status-pending-ink`, otherwise nothing. No green.
 
 ### UEP Home (`frontend/src/pages/Home.jsx`, `pages/home/`, `styles/home.css`)
 

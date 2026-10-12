@@ -1,8 +1,7 @@
 """Monthly plans and CPM changes, as pending items.
 
-The queries behind them live here once: the legacy Action Center feed
-(``services/action_center.py``) builds its plan and CPM rows on these same
-functions, so the old feed and the board cannot count differently.
+The queries behind them live here once, so Home, the digest and the screens
+that list these items cannot count differently.
 """
 from __future__ import annotations
 

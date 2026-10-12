@@ -28,7 +28,9 @@ from app.services.health_check import scoped_work_items
 
 
 def board_role(user: User) -> str | None:
-    """Which board this user gets, or None if the Action Center is not theirs.
+    """Which queues this user owns, or None if they own no pending work.
+
+    The frontend's WORK_ROLES (``lib/roles.js``) must agree with this.
 
     A problem owner is recognised by ``Role.is_category_owner`` rather than by
     name, so a new category-owner role needs no change here.

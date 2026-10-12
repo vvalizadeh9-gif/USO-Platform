@@ -17,14 +17,13 @@ import {
   ClipboardCheck,
   FileSpreadsheet,
   House,
-  Inbox,
   LayoutDashboard,
   Link2Off,
   ListChecks,
   Users,
   Wrench,
 } from 'lucide-react'
-import { ACTION_CENTER_ROLES, CATEGORY_OWNER_ROLES, HOME_ROLES, KPI_ROLES, MONTHLY_PLAN_ROLES } from './roles'
+import { CATEGORY_OWNER_ROLES, HOME_ROLES, KPI_ROLES, MONTHLY_PLAN_ROLES } from './roles'
 
 // The sidebar, grouped by project: each project's dashboard sits beside the
 // screens where that project's work is done, so a person finds the numbers
@@ -36,8 +35,7 @@ import { ACTION_CENTER_ROLES, CATEGORY_OWNER_ROLES, HOME_ROLES, KPI_ROLES, MONTH
 // sidebar (Admin manages the platform from the Admin Console, not the
 // day-to-day work queues) while everyone else keeps seeing them.
 //
-// `key` names the badge count Layout computes for an item: 'action' from the
-// Action Center board's pending total, and 'hc' / 'dt' / 'mydt' from /hc/queues/counts and
+// `key` names the badge count Layout computes for an item: 'hc' / 'dt' / 'mydt' from /hc/queues/counts and
 // /drive-tests/my/counts -- see D2-D4 -- and 'mywork' from My Work's own
 // list with limit=0 (its first tab: Your move, or To check).
 //
@@ -56,9 +54,6 @@ export const NAV_SECTIONS = [
       // UEP Home, the landing page. It is its own full-width shell, so this
       // is the way back to it from every other page.
       { to: '/home', label: 'Home', icon: House, roles: HOME_ROLES },
-      // Not for Regional Manager or Viewer (their home is a dashboard), nor
-      // Admin: ACTION_CENTER_ROLES is the list the server serves the board to.
-      { to: '/action-center', label: 'Action Center', icon: Inbox, key: 'action', roles: ACTION_CENTER_ROLES },
     ],
   },
   {

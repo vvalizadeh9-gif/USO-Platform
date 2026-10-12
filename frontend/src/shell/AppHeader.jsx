@@ -95,7 +95,7 @@ export default function AppHeader({ user, apps, crumbs, pending, onSignOut }) {
         <Icon name="chevron--down" size={16} />
       </button>
       <GlobalSearch apps={apps} />
-      <Link to="/action-center" className="uep-icon-btn uep-notify" aria-label={`Notifications${pending ? `, ${pending} pending` : ''}`}>
+      <Link to="/home" className="uep-icon-btn uep-notify" aria-label={`Notifications${pending ? `, ${pending} pending` : ''}`}>
         <Icon name="notification" size={20} />
         {pending > 0 && <span className="uep-notify-badge" data-testid="notify-badge">{pending > 99 ? '99+' : pending}</span>}
       </Link>

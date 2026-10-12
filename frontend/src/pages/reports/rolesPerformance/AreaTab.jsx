@@ -6,7 +6,7 @@ import { ArrowUpRight } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { SegmentedControl } from '../../../components/ui'
 import { useAuth } from '../../../context/AuthContext'
-import { hasActionCenter } from '../../../lib/roles'
+import { hasWorkQueues } from '../../../lib/roles'
 import { importStamp } from '../kpiTheme'
 import PerfHeader from './PerfHeader'
 import ScopePicker from './ScopePicker'
@@ -73,7 +73,7 @@ export default function AreaTab({ scope, onScope, search }) {
             {data && (
               <OpenWork
                 items={data.open_work}
-                actionCenter={hasActionCenter(user?.role?.name)}
+                hasWork={hasWorkQueues(user?.role?.name)}
               />
             )}
           </RpCard>
@@ -181,7 +181,7 @@ function AuthorityRate({ cell, low, colour }) {
   )
 }
 
-function OpenWork({ items, actionCenter }) {
+function OpenWork({ items, hasWork }) {
   return (
     <>
       <ul className="rp-open">
@@ -195,9 +195,9 @@ function OpenWork({ items, actionCenter }) {
           </li>
         ))}
       </ul>
-      {actionCenter && (
-        <Link to="/action-center" className="rp-button rp-button-block">
-          Open my Action Center
+      {hasWork && (
+        <Link to="/home" className="rp-button rp-button-block">
+          Open my work
         </Link>
       )}
     </>

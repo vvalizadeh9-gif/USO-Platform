@@ -20,7 +20,7 @@ def home_summary(
 ) -> HomeSummaryOut:
     """Everything the Home page shows, in one response.
 
-    The Action Center board's roles and Regional Managers; a Viewer or Admin
+    The roles that own pending work, and Regional Managers; a Viewer or Admin
     gets 403, not an empty page.
     """
     try:

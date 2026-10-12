@@ -146,7 +146,7 @@ describe('Viewer is read-only', () => {
   it('offers no Action Center button and no mapping', async () => {
     renderAt('/reports/kpi/area', 'Viewer')
     await screen.findByText('Not on air')
-    expect(screen.queryByRole('link', { name: /Action Center/ })).toBeNull()
+    expect(screen.queryByRole('link', { name: /Open my work/ })).toBeNull()
     expect(screen.queryByRole('link', { name: /Mapping/ })).toBeNull()
     // Export is a read, and the general manager may download it.
     expect(screen.getByRole('button', { name: 'Export' })).toBeInTheDocument()
@@ -155,12 +155,12 @@ describe('Viewer is read-only', () => {
   it('offers a regional manager no Action Center button either (they have none)', async () => {
     renderAt('/reports/kpi/area', 'RegionalManager')
     await screen.findByText('Not on air')
-    expect(screen.queryByRole('link', { name: /Action Center/ })).toBeNull()
+    expect(screen.queryByRole('link', { name: /Open my work/ })).toBeNull()
   })
 
   it('gives a working role the Action Center button', async () => {
     renderAt('/reports/kpi/area', 'Coordinator')
-    expect(await screen.findByRole('link', { name: 'Open my Action Center' })).toBeInTheDocument()
+    expect(await screen.findByRole('link', { name: 'Open my work' })).toBeInTheDocument()
   })
 })
 
