@@ -199,33 +199,6 @@ def test_detail_no_longer_carries_villages(client, world):
 
 
 # ---------------------------------------------------------------------------
-# The KPI card
-# ---------------------------------------------------------------------------
-def test_contractor_gets_an_assigned_sites_counter(client, world):
-    summary = client.get(
-        "/api/v1/action-center/summary", headers=world["contractor"]
-    ).json()
-    counter = next(
-        (c for c in summary["counters"] if c["key"] == "assigned_sites"), None
-    )
-    assert counter is not None, "a contractor must be told how many sites they hold"
-    assert counter["count"] == 1  # theirs, never Beta's
-    assert counter["url"] == "/work-items?stage=Assigned"
-
-
-def test_the_counter_counts_only_this_contractors_sites(client, world):
-    """A second site for the same contractor moves the number by exactly one."""
-    _seed_assigned_site(
-        contractor_name="Alpha DT", site_code="CV-MINE-2", days_ago=1
-    )
-    summary = client.get(
-        "/api/v1/action-center/summary", headers=world["contractor"]
-    ).json()
-    counter = next(c for c in summary["counters"] if c["key"] == "assigned_sites")
-    assert counter["count"] == 2
-
-
-# ---------------------------------------------------------------------------
 # The export
 # ---------------------------------------------------------------------------
 def _sheet(response):
@@ -234,6 +207,11 @@ def _sheet(response):
 
 
 def test_export_has_exactly_the_five_requested_columns(client, world):
+    # A second site for the same contractor: the export lists both, and the
+    # tests after this one rely on it being there.
+    _seed_assigned_site(
+        contractor_name="Alpha DT", site_code="CV-MINE-2", days_ago=1
+    )
     ws = _sheet(
         client.get(
             "/api/v1/work-items/export",

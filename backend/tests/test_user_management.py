@@ -402,7 +402,7 @@ def test_a_temporary_password_can_only_be_used_to_replace_itself(
     # Reading your own profile and signing out stay open; everything else does
     # not, and says why in a form the frontend can act on.
     assert client.get("/api/v1/auth/me", headers=headers).status_code == 200
-    blocked = client.get("/api/v1/action-center", headers=headers)
+    blocked = client.get("/api/v1/me/notifications", headers=headers)
     assert blocked.status_code == 403
     assert blocked.json()["detail"]["code"] == "password_change_required"
 
@@ -414,7 +414,7 @@ def test_a_temporary_password_can_only_be_used_to_replace_itself(
     assert changed.status_code == 200, changed.text
 
     fresh = {"Authorization": f"Bearer {changed.cookies['uep_session']}"}
-    assert client.get("/api/v1/action-center", headers=fresh).status_code == 200
+    assert client.get("/api/v1/me/notifications", headers=fresh).status_code == 200
     assert client.get("/api/v1/auth/me", headers=fresh).json()[
         "must_change_password"
     ] is False

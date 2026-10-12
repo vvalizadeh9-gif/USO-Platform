@@ -799,46 +799,6 @@ class NotificationOut(ORMModel):
     created_at: datetime
 
 
-# ---------- Action Center ----------
-class ActionItem(BaseModel):
-    """One concrete thing a user needs to do or knows about, live-derived
-    from current state (self-clearing) or a past event folded in from the
-    notification log. Never a static/aggregate row — every item points at
-    exactly one entity via ``url`` so clicking it goes straight there."""
-
-    id: str
-    category: str  # drive_test | assignment | cpm | health_check | plan | event
-    label: str
-    subtitle: str | None = None
-    url: str
-    created_at: datetime | None = None
-    source: str = "action"  # "action" (derived, clears itself) | "event" (dismissible)
-
-
-class ActionCounter(BaseModel):
-    """One queue, its size, and where to go to work it.
-
-    The Action Center's job is answering "what needs me now", and a flat list
-    of every item answered it badly at scale: thirty-seven review rows filled
-    the page before the second category appeared. The counters go first and the
-    items sit behind them.
-    """
-
-    key: str
-    label: str
-    count: int
-    url: str
-    # How long the oldest item in this queue has been waiting, when the queue
-    # has an age to report. "12 waiting, oldest 31d" is a different sentence
-    # from "12 waiting", and it is the one that decides what gets chased.
-    oldest_days: int | None = None
-
-
-class ActionCenterOut(BaseModel):
-    counters: list[ActionCounter] = []
-    items: list[ActionItem] = []
-
-
 # ---------- Health Check workflow (Phase A) ----------
 class HcBasketItem(BaseModel):
     work_item_id: int

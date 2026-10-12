@@ -55,10 +55,9 @@ test('at 1440×900 no row hides below a card’s fold', async ({ page }) => {
   expect(clipped).toBe(0)
 })
 
-test('the Overdue figure opens the Action Center on its Overdue tab', async ({ page }) => {
+test('the KPI figures are static, not links', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 })
   await signIn(page)
   await page.goto('/home')
-  await page.getByRole('region', { name: 'Your numbers' }).getByRole('link', { name: /Overdue/ }).click()
-  await expect(page).toHaveURL(/\/action-center\?view=overdue$/)
+  await expect(page.getByRole('region', { name: 'Your numbers' }).getByRole('link')).toHaveCount(0)
 })

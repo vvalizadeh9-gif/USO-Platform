@@ -111,9 +111,9 @@ def render(user: User, day: date, summaries: list[boards.QueueSummary]) -> Messa
     overdue = sum(s.overdue for s in live)
     today = shamsi(day)
 
-    subject = f"UEP Action Center — {pending} pending, {overdue} overdue"
+    subject = f"UEP — {pending} pending, {overdue} overdue"
     lines = [
-        f"{user.full_name}, your Action Center for {today}:",
+        f"{user.full_name}, your pending work for {today}:",
         f"{pending} pending, {overdue} overdue.",
         "",
     ]
@@ -135,7 +135,7 @@ def render(user: User, day: date, summaries: list[boards.QueueSummary]) -> Messa
             f"{html.escape(_ticket_date(s))}</td>"
             "</tr>"
         )
-    lines += ["", f"Open the Action Center: {base}/action-center",
+    lines += ["", f"Open Home: {base}/home",
               "You can turn this email off in UEP under your notification settings."]
 
     body = (
@@ -144,7 +144,7 @@ def render(user: User, day: date, summaries: list[boards.QueueSummary]) -> Messa
         f"<p><strong>{pending} pending</strong>, "
         f"<strong style='color:#B42F2A'>{overdue} overdue</strong></p>"
         f"<table style='border-collapse:collapse'>{''.join(rows)}</table>"
-        f"<p><a href='{html.escape(base)}/action-center'>Open the Action Center</a></p>"
+        f"<p><a href='{html.escape(base)}/home'>Open Home</a></p>"
         "<p style='color:#5F6B7E;font-size:12px'>You can turn this email off in UEP "
         "under your notification settings.</p></div>"
     )
@@ -238,7 +238,7 @@ def is_digest_day(day: date) -> bool:
 
 
 def home_users(db: Session) -> list[User]:
-    """Everyone with a Home: the board's users and Regional Managers, whose
+    """Everyone with a Home: the queue owners and Regional Managers, whose
     snapshot feeds Home's trends."""
     users = db.execute(select(User).where(User.status == user_status.ACTIVE)).scalars()
     return [u for u in users if home_role(u) is not None]
@@ -246,10 +246,10 @@ def home_users(db: Session) -> list[User]:
 
 def run(db: Session, mailer: Mailer, *, day: date | None = None,
         now: datetime | None = None, send: bool | None = None) -> RunReport:
-    """Snapshot every Home user, then email the board's users due a digest.
+    """Snapshot every Home user, then email the queue owners due a digest.
 
     The snapshot holds every queue Home shows, Home-only ones included, with
-    Home's due-soon count; the digest is the board, as before.
+    Home's due-soon count; the digest lists every queue the user owns.
 
     ``send`` defaults to whether ``day`` is a digest weekday. One user's
     failure never stops the run: it is logged and recorded, and the next user

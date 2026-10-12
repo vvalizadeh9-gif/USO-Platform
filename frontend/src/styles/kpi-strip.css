@@ -22,14 +22,11 @@
   padding: var(--uep-space-12) var(--uep-space-16) var(--uep-space-8);
   border-radius: var(--uep-radius-tile);
   color: var(--uep-text);
-  text-decoration: none;
   animation: hk-enter var(--uep-dur-enter) var(--uep-ease-entrance) both;
   animation-delay: calc(var(--i, 0) * var(--uep-kpi-stagger));
-  transition: background var(--uep-dur-fast) var(--uep-ease-productive);
   --spark: var(--uep-accent);
   --spark-area: var(--uep-area-opacity);
 }
-.hk-tile:not(.is-hero):hover { background: var(--uep-page); }
 .hk-tile.is-hero { background: var(--uep-accent); color: var(--uep-on-accent); --spark: var(--uep-on-accent); --spark-area: var(--uep-hero-area-opacity); }
 .hk-label { font-size: var(--uep-fs-small); font-weight: var(--uep-weight-medium); }
 .hk-value { font-size: var(--uep-fs-kpi); font-weight: var(--uep-weight-semibold); line-height: 1.15; }

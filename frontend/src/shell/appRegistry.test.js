@@ -38,8 +38,13 @@ describe('counts come from the one /me/home response', () => {
     expect(appCount(dt, counts)).toBe(6)
   })
 
-  it('My work counts everything waiting, once', () => {
-    const myWork = appsFor('PM').find((a) => a.id === 'my-work')
-    expect(appCount(myWork, counts)).toBe(9)
+  it('has no My work app', () => {
+    expect(ids(appsFor('PM'))).not.toContain('my-work')
+  })
+
+  it('gives a category owner a Drive test rail of exactly the Fix queue', () => {
+    const dt = appsFor('CpgPower').find((a) => a.id === 'drive-test')
+    expect(dt.pages.map((p) => p.id)).toEqual(['fixes'])
+    expect(appsFor('PM').find((a) => a.id === 'drive-test').pages.map((p) => p.id)).not.toContain('fixes')
   })
 })

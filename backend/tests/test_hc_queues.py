@@ -683,18 +683,3 @@ def test_both_peers_see_the_queues_and_nobody_else_does(client):
         assert client.get(
             "/api/v1/hc/queues/counts", headers=_h(client, username)
         ).status_code == 403
-
-
-def test_action_center_counters_lead_to_the_queues(client):
-    r = client.get("/api/v1/action-center/summary", headers=_h(client))
-    assert r.status_code == 200, r.text
-    body = r.json()
-    assert "counters" in body and "items" in body
-
-    counts = _counts(client)
-    for counter in body["counters"]:
-        if counter["key"] in counts:
-            assert counter["count"] == counts[counter["key"]], counter
-        # Every counter points somewhere, and never at a zero queue.
-        assert counter["url"].startswith("/")
-        assert counter["count"] > 0

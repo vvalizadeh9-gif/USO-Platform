@@ -1,4 +1,4 @@
-"""The Action Center's daily run: snapshot every board, then email digests.
+"""The daily pending-work run: snapshot every Home user, then email digests.
 
     python -m app.jobs.daily_digest              # today, Tehran calendar
     python -m app.jobs.daily_digest --date 2026-10-03

@@ -1,5 +1,5 @@
-"""Action Center and reference data endpoints."""
-from fastapi import APIRouter, Depends, Query
+"""Notification and reference data endpoints."""
+from fastapi import APIRouter, Depends
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -14,61 +14,14 @@ from app.models.reference import (
     User,
 )
 from app.schemas import (
-    ActionCenterOut,
-    ActionItem,
     ContractorOut,
     ProblemCategoryOut,
     ProvinceOut,
     RoleOut,
     UserOptionOut,
 )
-from app.services import action_center as action_center_service
 
 router = APIRouter(tags=["misc"])
-
-
-@router.get("/action-center", response_model=list[ActionItem], deprecated=True)
-def action_center(
-    db: Session = Depends(get_db), user: User = Depends(get_current_user)
-) -> list[ActionItem]:
-    """The flat item feed. Deprecated: use ``/action-center/board``.
-
-    Kept because it is what an older client asks for, and because several
-    screens still deep-link from an individual item. New callers should use
-    the summary, which leads with the counts.
-    """
-    return action_center_service.build(db, user)
-
-
-@router.get("/action-center/summary", response_model=ActionCenterOut, deprecated=True)
-def action_center_summary(
-    items: bool = Query(
-        True,
-        description="Also build the item feed. Pass false for the counters alone.",
-    ),
-    db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
-) -> ActionCenterOut:
-    """Counts first, then the items behind them.
-
-    Deprecated: the ticket board (``/action-center/board``) replaces it, and
-    is what refuses Regional Manager and Viewer. Kept working, unchanged, for
-    clients that still ask for it.
-
-    Both halves are derived from live state and clear themselves: an item
-    exists exactly as long as its condition does, and is never written to a
-    table or dismissed. The counters come from the same reads the queue
-    screens use, so a badge cannot disagree with the list behind it.
-
-    ``items=false`` skips the feed. The sidebar badge and the Action Center
-    page read the counters and nothing else, and building the feed walks
-    every work item in scope -- on a timer, for every signed-in user. It stays
-    on by default because an older client may still read it.
-    """
-    return ActionCenterOut(
-        counters=action_center_service.counters(db, user),
-        items=action_center_service.build(db, user) if items else [],
-    )
 
 
 @router.post("/notifications/{notification_id}/read")

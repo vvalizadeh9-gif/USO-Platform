@@ -12,13 +12,13 @@ ticket              the screen's read
 hc_assign           the HC Pool, "Ready to assign" filter
 hc_review           ``GET /hc/results?reviewed=false``
 hc_reroutes         the Re-routes tab
-hc_submit           the legacy "Health Checks To Submit" counter
+hc_submit           the contractor's open HC tasks
 hc_fixes            My Fix Queue
 dt_assign / review  the Drive Test tabs
 dt_todo / redo      My Drive Tests' To Do tab, by row status
 ict_* / cra_*       My Work's tab count for that authority (``limit=0``)
-plans_approve       the legacy "Plans To Approve" rows
-cpm_changes         the legacy CPM rows
+plans_approve       the plans awaiting the PM's decision
+cpm_changes         the pending CPM change requests in scope
 plan_submit         the contractor's open plan gaps
 ==================  ========================================================
 
@@ -181,7 +181,6 @@ def _my_work_count(db, user, authority, tab):
 
 def _screen_count(db, user, key):  # noqa: C901 -- one branch per screen
     from app.api.health_check import hc_results
-    from app.services import action_center as legacy
     from app.services import hc_queues
     from app.services import health_check as hc
     from app.services.action_queues.sources import plans
@@ -195,7 +194,13 @@ def _screen_count(db, user, key):  # noqa: C901 -- one branch per screen
     if key == "hc_reroutes":
         return len(hc_queues.reroutes(db, user))
     if key == "hc_submit":
-        return next((c.count for c in legacy.counters(db, user) if c.key == "hc_submit"), 0)
+        from app.models.health_check import HcAssignment, HcTask
+
+        return (
+            db.query(HcTask).join(HcAssignment)
+            .filter(HcAssignment.contractor_id == user.contractor_id, HcTask.completed_at.is_(None))
+            .count()
+        )
     if key == "hc_fixes":
         return len(hc.owner_queue(db, user))
     if key == "dt_assign":
@@ -212,9 +217,9 @@ def _screen_count(db, user, key):  # noqa: C901 -- one branch per screen
         }[key[4:]]
         return _my_work_count(db, user, key[:3].upper(), tab)
     if key == "plans_approve":
-        return len(legacy._pm_plan_items(db, user))
+        return len(plans.plans_awaiting_pm(db))
     if key == "cpm_changes":
-        return len(legacy._cpm_change_request_items(db, user))
+        return len(plans.pending_change_requests(db, user))
     if key == "plan_submit":
         gaps = plans.contractor_plan_gaps(db, user.contractor_id, jalali.tehran_today())
         return len(gaps.missing) + len(gaps.returned)
@@ -237,7 +242,7 @@ USERS = ["p_pm", "p_coord_home", "p_sc0", "p_sc1", "p_power"]
 def test_every_ticket_matches_the_screen_it_opens(db, username):
     user = _user(db, username)
     tickets = _tickets(db, user)
-    assert tickets, "every one of these roles has an Action Center"
+    assert tickets, "every one of these roles owns queues"
     for key, ticket in tickets.items():
         assert ticket.count == _screen_count(db, user, key), key
 
@@ -316,46 +321,8 @@ def test_a_contractor_only_ever_holds_their_own_work(db, username):
 
 
 # --------------------------------------------------------------------------
-# Board shape and the per-owner breakdown
+# SLA
 # --------------------------------------------------------------------------
-def test_the_board_hides_empty_tickets_and_keeps_stage_order(db):
-    from app.services.action_queues.board import build_board
-    from app.services.action_queues.context import QueueContext
-
-    board = build_board(QueueContext(db, _user(db, "p_coord_home")))
-    keys = [s.key for s in board.stages]
-    assert keys == [k for k in ("hc", "dt", "ict", "cra", "plans") if k in keys]
-    assert "plans" not in keys, "a coordinator has no Plans column"
-    for stage in board.stages:
-        assert stage.tickets and all(t.count > 0 for t in stage.tickets)
-        assert stage.total == sum(t.count for t in stage.tickets)
-    assert board.pending == sum(s.total for s in board.stages)
-
-
-def test_the_pm_sees_every_owner_and_a_coordinator_only_contractors(db):
-    from app.services.action_queues.board import owners_breakdown
-    from app.services.action_queues.context import QueueContext
-
-    pm_rows = owners_breakdown(QueueContext(db, _user(db, "p_pm")), "dt_review")
-    assert {r.owner_type for r in pm_rows} == {"coordinator"}
-    assert len(pm_rows) == 2
-
-    rows = owners_breakdown(QueueContext(db, _user(db, "p_coord_home")), "dt_todo")
-    assert rows and {r.owner_type for r in rows} == {"contractor"}
-    pm_todo = owners_breakdown(QueueContext(db, _user(db, "p_pm")), "dt_todo")
-    assert sum(r.count for r in rows) <= sum(r.count for r in pm_todo)
-    assert rows == sorted(rows, key=lambda r: (-r.overdue, -r.count, r.name))
-
-
-def test_the_breakdown_is_refused_to_everyone_else(db):
-    from app.services.action_queues.board import NotOnBoard, owners_breakdown
-    from app.services.action_queues.context import QueueContext
-
-    for username in ("p_sc0", "p_power"):
-        with pytest.raises(NotOnBoard):
-            owners_breakdown(QueueContext(db, _user(db, username)), "dt_todo")
-
-
 def test_overdue_follows_the_configured_sla(db):
     from app.models.action_center import ActionQueueSla
     from app.services.action_queues.board import queue_summaries

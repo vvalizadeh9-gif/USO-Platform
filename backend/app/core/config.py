@@ -97,7 +97,7 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     log_format: str = "json"  # "json" for collectors, "text" for reading by eye
 
-    # Outgoing mail, used by the Action Center's daily digest only
+    # Outgoing mail, used by the daily pending-work digest only
     # (``python -m app.jobs.daily_digest``). Empty ``smtp_host`` means no mail
     # server is configured: the job still writes the daily snapshot, and logs
     # each digest as failed with the reason, so a later run can send it.
@@ -109,7 +109,7 @@ class Settings(BaseSettings):
     smtp_username: str = ""
     smtp_password: str = ""
     smtp_timeout_seconds: int = 30
-    mail_from: str = "UEP Action Center <uep-noreply@localhost>"
+    mail_from: str = "UEP <uep-noreply@localhost>"
 
     # Where links in an email point: the address people open UEP at.
     app_base_url: str = "http://localhost"

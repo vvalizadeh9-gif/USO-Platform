@@ -1360,7 +1360,15 @@ is read by the Lifecycle Gaps overview's two "missing in Mojri" figures (§5c).
 
 ---
 
-## 5e. The Action Center
+## 5e. Pending work (queues)
+
+> **UEP-05:** the Action Center screen and its board endpoints were removed.
+> Home (`/home`) is each user's single view of their pending work. The queue
+> services in `services/action_queues/` (registry, SLA, done, context) feed
+> Home, the app rail counts, the daily digest and the Admin *SLA and digest*
+> tab; the settings endpoints are in `api/work_queues.py`. Where the text below
+> says "Action Center" or "board", read "the pending-work queues". The Fix
+> queue lives in the Drive test app, and is a category owner's only page there.
 
 Before this, people tracked their work in Excel and nobody could see what was
 waiting on whom. The Action Center is each person's one answer to **"what is

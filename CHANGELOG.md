@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- **Removed the Action Center; Home shows each user's pending work. Fix queue moved to the Drive test app and restyled (UEP-05).**
+  - `/action-center` (with or without `?view=`) and `/notifications` redirect to `/home`. The header bell links to Home; the account menu's Action Center item is gone; Home's KPI tiles are static figures.
+  - The *My work* app is removed. Fix queue (`/my-fix-queue`) is in the Drive test app, and a category owner's Drive test rail shows only Fix queue.
+  - API: `GET /action-center`, `/action-center/summary`, `/action-center/board` and `/action-center/owners` are removed (404). `/admin/action-sla` and `/me/notifications` are unchanged and now live in `api/work_queues.py` (tag `work-queues`).
+  - The queue services still feed Home, the rail counts, the daily digest (which now links to Home) and the Admin SLA settings.
+  - `ACTION_CENTER_ROLES` / `hasActionCenter` are renamed `WORK_ROLES` / `hasWorkQueues`.
+
 - **Drive Test dashboard refresh (UEP-04):** the dashboard now matches Home, with the same figures, drill-throughs and API calls.
   - Dashboard is the first page of the Drive test app.
   - Cards have white headers with a 28px app tile.

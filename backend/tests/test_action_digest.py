@@ -144,7 +144,7 @@ def test_who_is_skipped_and_why(db):
     assert log["d_optout"] == "skipped_opted_out"
     assert log["d_noemail"] == "skipped_no_email"
     assert log["d_empty"] == "skipped_empty"
-    assert "d_viewer" not in log, "a Viewer has no Action Center, so no digest"
+    assert "d_viewer" not in log, "a Viewer owns no queues, so no digest"
 
 
 def test_the_snapshot_records_each_queue(db):
@@ -164,7 +164,7 @@ def test_no_email_on_a_thursday_but_the_snapshot_is_written(db):
     mailer = FakeMailer()
     report = action_digest.run(db, mailer, day=THURSDAY, now=NOW)
     assert mailer.sent == [] and report.outcomes == {}
-    assert report.snapshots == 4  # the four users with an Action Center
+    assert report.snapshots == 4  # the four users who own queues
     assert _snapshot_rows(db, THURSDAY) > 0
 
 
@@ -182,12 +182,12 @@ def test_the_email_reads_in_shamsi_with_persian_digits_and_absolute_links(db, mo
 
     # Two villages to file (one per authority), and four monthly plan streams
     # unfiled past the day-3 deadline.
-    assert message.subject == "UEP Action Center — 6 pending, 4 overdue"
+    assert message.subject == "UEP — 6 pending, 4 overdue"
     assert "۱۴۰۵/۰۷/۱۱" in message.text  # 3 October 2026
     assert "since ۱۴۰۵/۰۷/۰۱" in message.text  # floored to the tracking epoch
     assert "due ۱۴۰۵/۰۷/۰۳" in message.text  # the plan deadline, day 3
     assert "https://uep.example.ir/my-work?authority=ICT&tab=not_filed" in message.text
-    assert "https://uep.example.ir/action-center" in message.html
+    assert "https://uep.example.ir/home" in message.html
     assert "Rejected" not in message.text, "zero-count tickets are left out"
 
 

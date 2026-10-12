@@ -226,7 +226,20 @@ export default function SiteHistoryDrawer({ workItemId, siteCode, onClose }) {
 }
 
 /** Renders a site code that opens the history drawer when clicked. */
-export function SiteCodeButton({ workItemId, siteCode, onOpen }) {
+export function SiteCodeButton({ workItemId, siteCode, onOpen, className }) {
+  // A page with its own styling (the Fix queue) passes a class instead.
+  if (className) {
+    return (
+      <button
+        type="button"
+        className={className}
+        onClick={() => onOpen(workItemId, siteCode)}
+        title="View this site's health-check history"
+      >
+        {siteCode || `Site ${workItemId}`}
+      </button>
+    )
+  }
   return (
     <button
       onClick={() => onOpen(workItemId, siteCode)}

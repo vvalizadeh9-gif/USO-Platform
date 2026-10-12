@@ -1,12 +1,11 @@
-import { Link } from 'react-router-dom'
 import KpiSpark from '../../components/KpiSpark'
 import { deltaText, deltaTone, weekDelta } from './homeLogic'
 
-function Tile({ kpi, label, value, series, delta, to, hero, index }) {
+// Static figures: the queue rows on Home's work cards are the way into the work.
+function Tile({ kpi, label, value, series, delta, hero, index }) {
   const text = deltaText(delta)
   return (
-    <Link
-      to={to}
+    <div
       className={`hk-tile ${hero ? 'is-hero' : ''}`.trim()}
       style={{ '--i': index }}
       data-kpi={kpi}
@@ -15,16 +14,8 @@ function Tile({ kpi, label, value, series, delta, to, hero, index }) {
       <span className="hk-value">{value}</span>
       <span className="hk-delta" data-tone={deltaTone(kpi, delta)}>{text ?? ' '}</span>
       <KpiSpark values={series} title={label} />
-    </Link>
+    </div>
   )
-}
-
-// Each tile opens My work filtered to its set.
-const LINKS = {
-  pending: '/action-center',
-  overdue: '/action-center?view=overdue',
-  dueSoon: '/action-center?view=due-soon',
-  done: '/action-center?view=done',
 }
 
 /** Four tiles, scoped to the signed-in user's own actions. */
@@ -40,7 +31,7 @@ export default function KpiStrip({ totals, trends }) {
     <div className="hk-wrap">
       <section className="hk-strip" aria-label="Your numbers">
         {tiles.map((t, i) => (
-          <Tile key={t.kpi} {...t} to={LINKS[t.kpi]} index={i} />
+          <Tile key={t.kpi} {...t} index={i} />
         ))}
       </section>
       <p className="hk-caption">Trend lines show the last 14 days · change compared with 7 days ago</p>
