@@ -1,53 +1,45 @@
 import { Fragment, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { toPersianDigits } from '../../../lib/persianDigits'
 import { shamsiMonthName } from '../../../lib/shamsi'
 import { count } from '../format'
-import { LAST_12, flowView, flowViewName, netChanges } from './flowView'
+import { flowView } from './flowView'
 import { FadeArea } from './primitives'
 
 /**
- * Sites on air against drive tests done -- every month, or one year at a
- * time -- with each month's change in the gap under its column, and its
- * figures in a card that appears on hover.
+ * Sites on air against drive tests done, every month since the opening
+ * balance, with a readout beside the key that reads one month's figures.
  *
  * WHAT THIS ANSWERS. The KPI band already says how many sites are on air and
  * how many are done, as of right now. It cannot say whether the gap between
  * them has been closing or widening, or whether this month looks like the
- * last one. This chart is the trailing shape behind those two totals, and
- * the row under it says what each month did to the gap.
+ * last one. This chart is the whole shape behind those two totals.
  *
- * ONE COLUMN PER MONTH. Every month in view gets a column, with its point at
- * the column's centre and its name under it. The rows under the plot share
- * its left gutter and the same columns, so each month's name and change sit
- * straight under its dots. The plot is drawn in columns, not a fixed canvas:
- * the lines stretch with the card while the labels, dots and figures stay at
- * their true size.
+ * ALWAYS CUMULATIVE (UEP-04a). There is no view to choose: the chart draws
+ * every month the trend endpoint returns, with each new year marked, so the
+ * whole programme is on one screen.
  *
- * THE HOVER CARD. Hovering, focusing or tapping a column marks it and shows
- * its figures -- this month's and the running totals -- in a card pinned to
- * the plot's top-left corner. Both lines only ever rise left to right, so
- * that corner is always empty: the card never covers a line, and it does
- * not follow the pointer or take its events, so moving from one month to the
- * next is never blocked. It is the only place the per-month figures appear.
+ * ONE COLUMN PER MONTH. Every month gets a column, with its point at the
+ * column's centre and its name under it. The name row shares the plot's left
+ * gutter and the same columns. Names are thinned, counting back from the
+ * current month, so none overlap; the current month is always named.
+ *
+ * THE READOUT, NOT A TOOLTIP. A month's figures are shown in a readout at the
+ * right end of the key row, never over the plot, so nothing covers the lines
+ * it describes. It reads the latest month by default and follows hover and
+ * keyboard focus; the vertical rule and the two dots mark the month on the
+ * chart. Its values are the same points the chart and the table draw.
  *
  * RUNNING TOTALS, CARRIED. The lines are the programme's real running totals,
  * carried from the opening balance on 1 Farvardin 1404 (see `flowView`), so
- * the last point is the KPI cards' figure and the gap is the real backlog. A
- * year view does not reset them to zero on 1 Farvardin.
+ * the last point is the KPI cards' figure and the gap is the real backlog.
  *
  * THE OPEN MONTH. A month still in progress gets hollow dots, a dashed last
  * segment and a light column highlight.
  *
  * COBALT COLOURS. DT done is the "done" series, so it takes the accent; On
  * air is the reference series and takes the muted neutral; the gap between
- * them is the accent's soft fill. A month's gap change is green where the
- * backlog shrank and brick where it grew, with its sign kept, so the colour
- * is never the only signal.
- *
- * THE PAGE CHOOSES THE VIEW. Which months are on screen is a prop, because
- * the card header carries both the control that switches it and the info
- * note that describes the view (where its scale starts), and those must
- * agree with what is drawn. The arithmetic is in `flowView.js` for the same
- * reason: the chart and the note read one copy.
+ * them is the accent's soft fill. A gap that grew is the one figure in danger
+ * ink, with its sign and a word, so colour is never the only signal.
  */
 
 /** The two series. DT done is the "done" series (the accent); On-aired is the
@@ -63,10 +55,8 @@ const GAP_WORD = { good: 'shrank', bad: 'grew', flat: 'no change' }
 const withSign = (v) => (v > 0 ? `+${count(v)}` : v < 0 ? `−${count(-v)}` : '0')
 const withMinus = (v) => (v < 0 ? `−${count(-v)}` : count(v))
 
-/** The chart's key, on its own row under the card's title row: the two
- * series and the gap between them (UEP-04). The open month says "so far" in
- * the tooltip, and a month's change in the gap carries its sign and word. */
-export function FlowLegend() {
+/** The chart's key: the two series and the gap between them. */
+function FlowLegend() {
   return (
     <ul className="dt-flow-legend" aria-label="Chart key">
       <li className="dt-flow-legend-item">
@@ -85,14 +75,84 @@ export function FlowLegend() {
   )
 }
 
-export default function FlowChart({ data, scope = LAST_12 }) {
-  const view = flowView(data, scope)
-  const { yearMarks, points, months, floor, ceiling, ticks } = view
-  const shown = flowViewName(view)
+/** The key row under the card header: the key on the left, the readout on
+ * the right (UEP-04a). `index` is the month the readout reads; it defaults to
+ * the latest. The page draws it on its own above the table view. */
+export function FlowKey({ view, index }) {
+  const j = index ?? view.months.length - 1
+  return (
+    <div className="dt-flow-keyrow">
+      <FlowLegend />
+      <Readout month={view.months[j]} point={view.points[j + 1]} change={view.changes[j]} />
+    </div>
+  )
+}
+
+/** One month's figures: its running totals and what it changed. A polite
+ * live region, so a screen reader hears the month the arrow keys move to. */
+function Readout({ month, point, change }) {
+  const gapTone = toneOf(change.gap)
+  return (
+    <div className="dt-flow-readout" data-testid="dt-flow-readout" role="status" aria-live="polite">
+      <span className="dt-flow-readout-month">
+        <span className="dt-farsi" data-testid="dt-flow-readout-month">
+          {shamsiMonthName(month.month)} {toPersianDigits(String(month.year))}
+        </span>
+        {month.is_open && <span className="dt-flow-readout-open"> · so far</span>}
+      </span>
+      <ReadoutFigure
+        row="onair"
+        label="On air"
+        dot={SERIES_COLOR.onAir}
+        value={point.onAir}
+        change={change.onAir}
+      />
+      <ReadoutFigure
+        row="done"
+        label="DT done"
+        dot={SERIES_COLOR.dtDone}
+        value={point.dtDone}
+        change={change.dtDone}
+      />
+      <ReadoutFigure row="gap" label="Gap" value={point.gap} change={change.gap} tone={gapTone}>
+        <span className="dt-sr-only"> ({GAP_WORD[gapTone]})</span>
+      </ReadoutFigure>
+    </div>
+  )
+}
+
+/** A dot, a running total and the month's change. The dot is the series
+ * colour, or the gap's swatch when no colour is given. */
+function ReadoutFigure({ row, label, dot, value, change, tone, children }) {
+  return (
+    <span className="dt-flow-readout-fig" data-row={row}>
+      <i
+        className={dot ? 'dt-flow-readout-dot' : 'dt-flow-readout-dot is-gap'}
+        style={dot ? { background: dot } : undefined}
+        aria-hidden="true"
+      />
+      <span className="dt-sr-only">{label} </span>
+      <b className="tnum" data-testid="dt-flow-readout-value">
+        {withMinus(value)}
+      </b>
+      <span
+        className="dt-flow-readout-change tnum"
+        data-tone={tone}
+        data-testid="dt-flow-readout-change"
+      >
+        {withSign(change)}
+        {children}
+      </span>
+    </span>
+  )
+}
+
+export default function FlowChart({ data }) {
+  const view = flowView(data)
+  const { points, months, floor, ceiling, ticks } = view
   const n = months.length
-  // points[0] is the balance the year opened on; points[j + 1] is month j.
+  // points[0] is the opening balance; points[j + 1] is month j.
   const drawn = points.slice(1)
-  const nets = netChanges(points)
   const last = drawn[n - 1]
   const openTail = last.isOpen && n > 1
 
@@ -116,19 +176,17 @@ export default function FlowChart({ data, scope = LAST_12 }) {
           .map((p, i) => `L${x(n - 1 - i)},${yPct(p.dtDone)}`)
           .join(' ')} Z`
 
-  // Month names alternate onto two lines when a column is narrower than
-  // 54px (19 months beside the side column at 1440 wide), rather than
-  // shrinking or overlapping.
+  // Every `labelEvery`th month is named, counting back from the current one,
+  // so the current month is always named and no two names overlap.
   const plotRef = useRef(null)
   const plotWidth = useWidth(plotRef)
-  const stagger = plotWidth > 0 && plotWidth / n < STAGGER_BELOW
+  const labelEvery = plotWidth > 0 ? Math.max(1, Math.ceil(LABEL_MIN / (plotWidth / n))) : 1
   useFitHeight(plotRef)
 
   // The month under the pointer, the keyboard focus or the last tap. With
-  // nothing active the tooltip reads the latest month, unmarked.
+  // nothing active the readout reads the latest month, unmarked.
   const [active, setActive] = useState(null)
   const hovered = active != null && active < n ? active : null
-  const shownMonth = hovered ?? n - 1
 
   // One tab stop for the whole plot: arrows move a month, Home and End jump
   // to the ends, and focusing it starts on the latest month.
@@ -146,55 +204,55 @@ export default function FlowChart({ data, scope = LAST_12 }) {
   }
 
   return (
-    <div className="dt-flowcard" style={{ '--dt-flow-cols': n }}>
-      <div className="dt-flow-scroll">
-        <div
-          className="dt-flow-frame"
-          tabIndex={0}
-          role="group"
-          aria-label="On air vs DT done chart. Use the left and right arrow keys to read each month."
-          onKeyDown={onKeyDown}
-          onFocus={(e) => e.target === e.currentTarget && setActive(n - 1)}
-          onBlur={(e) => !e.currentTarget.contains(e.relatedTarget) && setActive(null)}
-          // A touch ends with a leave; the tapped month keeps its card until
-          // another is tapped or the focus moves on.
-          onPointerLeave={(e) => e.pointerType !== 'touch' && setActive(null)}
-        >
+    <>
+      <FlowKey view={view} index={hovered} />
+      <div className="dt-flowcard" style={{ '--dt-flow-cols': n }}>
+        <div className="dt-flow-scroll">
           <div
-            className="dt-flowchart"
-            role="img"
-            aria-label={
-              `On air vs drive tests done, running totals, ${shown}. ` +
-              `On air ${last.onAir}, DT done ${last.dtDone}, gap ${last.gap}.` +
-              (last.isOpen ? ' The latest month is still in progress.' : '')
-            }
+            className="dt-flow-frame"
+            tabIndex={0}
+            role="group"
+            aria-label="On air vs DT done chart. Use the left and right arrow keys to read each month."
+            onKeyDown={onKeyDown}
+            onFocus={(e) => e.target === e.currentTarget && setActive(n - 1)}
+            onBlur={(e) => !e.currentTarget.contains(e.relatedTarget) && setActive(null)}
+            // A touch ends with a leave; the tapped month stays in the readout
+            // until another is tapped or the focus moves on.
+            onPointerLeave={(e) => e.pointerType !== 'touch' && setActive(null)}
           >
-            <div className="dt-flow-yaxis" aria-hidden="true">
-              {ticks.map((t) => (
-                <span key={t} className="dt-flow-ytick tnum" style={{ top: `${yPct(t)}%` }}>
-                  {count(t)}
-                </span>
-              ))}
-            </div>
-            <div className="dt-flow-plot" ref={plotRef}>
-              {ticks.map((t) => (
-                <i
-                  key={t}
-                  className={t === floor ? 'dt-flow-baseline' : 'dt-flow-grid'}
-                  style={{ top: `${yPct(t)}%` }}
-                />
-              ))}
-              {last.isOpen && (
-                <i
-                  className="dt-flow-opencol"
-                  style={{ left: `${((n - 1) / n) * 100}%`, width: `${100 / n}%` }}
-                />
-              )}
-              {/* A window that spans years (cumulative, last 12 months): a
-                  dashed line where each new year starts, and its label at
-                  the top of the plot beside it. */}
-              {yearMarks &&
-                months.map(
+            <div
+              className="dt-flowchart"
+              role="img"
+              aria-label={
+                'On air vs drive tests done, running totals, every month since Farvardin 1404. ' +
+                `On air ${last.onAir}, DT done ${last.dtDone}, gap ${last.gap}.` +
+                (last.isOpen ? ' The latest month is still in progress.' : '')
+              }
+            >
+              <div className="dt-flow-yaxis" aria-hidden="true">
+                {ticks.map((t) => (
+                  <span key={t} className="dt-flow-ytick tnum" style={{ top: `${yPct(t)}%` }}>
+                    {count(t)}
+                  </span>
+                ))}
+              </div>
+              <div className="dt-flow-plot" ref={plotRef}>
+                {ticks.map((t) => (
+                  <i
+                    key={t}
+                    className={t === floor ? 'dt-flow-baseline' : 'dt-flow-grid'}
+                    style={{ top: `${yPct(t)}%` }}
+                  />
+                ))}
+                {last.isOpen && (
+                  <i
+                    className="dt-flow-opencol"
+                    style={{ left: `${((n - 1) / n) * 100}%`, width: `${100 / n}%` }}
+                  />
+                )}
+                {/* The chart spans years: a dashed line where each new year
+                    starts, and its label at the top of the plot beside it. */}
+                {months.map(
                   (m, j) =>
                     (j === 0 || m.month === 1) && (
                       <Fragment key={`year-${m.year}`}>
@@ -211,141 +269,124 @@ export default function FlowChart({ data, scope = LAST_12 }) {
                       </Fragment>
                     ),
                 )}
-              {hovered != null && (
-                <>
-                  <i
-                    className="dt-flow-hovercol"
-                    data-testid="dt-flow-hovercol"
-                    style={{ left: `${(hovered / n) * 100}%`, width: `${100 / n}%` }}
-                  />
-                  <i className="dt-flow-cross" style={{ left: xPct(hovered) }} />
-                </>
-              )}
-              <svg
-                className="dt-flowchart-svg"
-                viewBox={`0 0 ${n} 100`}
-                preserveAspectRatio="none"
-                aria-hidden="true"
-              >
-                {areaPath && <FadeArea d={areaPath} fill="var(--uep-accent-tint)" />}
-                {/* Plain paths: the stroke keeps its screen width however the
-                    plot is stretched (non-scaling), which a draw-on animation's
-                    dash would break into pieces. */}
-                {['onAir', 'dtDone'].map((key) => (
-                  <g
-                    key={key}
-                    fill="none"
-                    stroke={SERIES_COLOR[key]}
-                    strokeWidth={SERIES_WIDTH[key]}
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <path d={lineFor(key, 0, openTail ? n - 1 : n)} vectorEffect="non-scaling-stroke" />
-                    {openTail && (
-                      <path
-                        d={lineFor(key, n - 2, n)}
-                        vectorEffect="non-scaling-stroke"
-                        strokeDasharray="5 5"
-                      />
-                    )}
-                  </g>
-                ))}
-              </svg>
-              {['onAir', 'dtDone'].map((key) =>
-                drawn.map((p, j) => {
-                  const open = p.isOpen
-                  const cls = [
-                    'dt-flow-dot',
-                    open && 'dt-flow-dot-open',
-                    j === hovered && 'is-active',
-                  ].filter(Boolean)
-                  return (
+                {hovered != null && (
+                  <>
                     <i
-                      key={`${key}-${j}`}
-                      data-testid={open ? 'dt-flow-open-dot' : 'dt-flow-dot'}
-                      className={cls.join(' ')}
-                      style={{ left: xPct(j), top: `${yPct(p[key])}%`, '--dt-dot': SERIES_COLOR[key] }}
+                      className="dt-flow-hovercol"
+                      data-testid="dt-flow-hovercol"
+                      style={{ left: `${(hovered / n) * 100}%`, width: `${100 / n}%` }}
                     />
-                  )
-                }),
-              )}
+                    <i className="dt-flow-cross" style={{ left: xPct(hovered) }} />
+                  </>
+                )}
+                <svg
+                  className="dt-flowchart-svg"
+                  viewBox={`0 0 ${n} 100`}
+                  preserveAspectRatio="none"
+                  aria-hidden="true"
+                >
+                  {areaPath && <FadeArea d={areaPath} fill="var(--uep-accent-tint)" />}
+                  {/* Plain paths: the stroke keeps its screen width however the
+                      plot is stretched (non-scaling), which a draw-on animation's
+                      dash would break into pieces. */}
+                  {['onAir', 'dtDone'].map((key) => (
+                    <g
+                      key={key}
+                      fill="none"
+                      stroke={SERIES_COLOR[key]}
+                      strokeWidth={SERIES_WIDTH[key]}
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path
+                        d={lineFor(key, 0, openTail ? n - 1 : n)}
+                        vectorEffect="non-scaling-stroke"
+                      />
+                      {openTail && (
+                        <path
+                          d={lineFor(key, n - 2, n)}
+                          vectorEffect="non-scaling-stroke"
+                          strokeDasharray="5 5"
+                        />
+                      )}
+                    </g>
+                  ))}
+                </svg>
+                {['onAir', 'dtDone'].map((key) =>
+                  drawn.map((p, j) => {
+                    const open = p.isOpen
+                    const cls = [
+                      'dt-flow-dot',
+                      open && 'dt-flow-dot-open',
+                      j === hovered && 'is-active',
+                    ].filter(Boolean)
+                    return (
+                      <i
+                        key={`${key}-${j}`}
+                        data-testid={open ? 'dt-flow-open-dot' : 'dt-flow-dot'}
+                        className={cls.join(' ')}
+                        style={{
+                          left: xPct(j),
+                          top: `${yPct(p[key])}%`,
+                          '--dt-dot': SERIES_COLOR[key],
+                        }}
+                      />
+                    )
+                  }),
+                )}
+              </div>
             </div>
-          </div>
 
-          {/* Each month's name, straight under its dots. */}
-          <div
-            className={stagger ? 'dt-flow-row dt-flow-labels is-staggered' : 'dt-flow-row dt-flow-labels'}
-            aria-hidden="true"
-          >
-            {months.map((m, j) => (
-              <span
-                key={`${m.year}-${m.month}`}
-                data-testid="dt-flow-month"
-                className={[
-                  'dt-flow-month dt-farsi',
-                  m.is_open && 'is-open',
-                  j === hovered && 'is-active',
-                ]
-                  .filter(Boolean)
-                  .join(' ')}
-              >
-                {shamsiMonthName(m.month)}
-              </span>
-            ))}
-          </div>
-
-          {/* What each month did to the gap, under its name, as a signed pill:
-              green where the backlog shrank, brick where it grew. */}
-          <div className="dt-flow-row dt-flow-nets">
-            {months.map((m, j) => {
-              const tone = toneOf(nets[j])
-              return (
+            {/* Each month's name, straight under its dots. A thinned-out name
+                keeps its column but is not drawn. */}
+            <div className="dt-flow-row dt-flow-labels" aria-hidden="true">
+              {months.map((m, j) => (
                 <span
                   key={`${m.year}-${m.month}`}
-                  data-testid="dt-flow-net"
-                  data-tone={tone}
-                  className={m.is_open ? 'dt-flow-net is-open tnum' : 'dt-flow-net tnum'}
+                  data-testid="dt-flow-month"
+                  className={[
+                    'dt-flow-month dt-farsi',
+                    m.is_open && 'is-open',
+                    j === n - 1 && 'is-current',
+                    j === hovered && 'is-active',
+                    (n - 1 - j) % labelEvery !== 0 && 'is-skipped',
+                  ]
+                    .filter(Boolean)
+                    .join(' ')}
                 >
-                  {withSign(nets[j])}
-                  <span className="dt-sr-only"> ({GAP_WORD[tone]})</span>
+                  {shamsiMonthName(m.month)}
                 </span>
-              )
-            })}
-          </div>
+              ))}
+            </div>
 
-          {/* The pointer targets: each whole column, plot, name and change
-              together. Out of the tab order -- the keyboard reads the months
-              with the arrow keys on the plot's one tab stop. */}
-          <div className="dt-flow-hits">
-            {months.map((m, j) => (
-              <button
-                key={`${m.year}-${m.month}`}
-                type="button"
-                className="dt-flow-hit"
-                tabIndex={-1}
-                aria-label={`${shamsiMonthName(m.month)} ${m.year}`}
-                onPointerEnter={() => setActive(j)}
-                onPointerDown={() => setActive(j)}
-                onFocus={() => setActive(j)}
-                onBlur={() => setActive(null)}
-              />
-            ))}
+            {/* The pointer targets: each whole column, plot and name together.
+                Out of the tab order -- the keyboard reads the months with the
+                arrow keys on the plot's one tab stop. */}
+            <div className="dt-flow-hits">
+              {months.map((m, j) => (
+                <button
+                  key={`${m.year}-${m.month}`}
+                  type="button"
+                  className="dt-flow-hit"
+                  tabIndex={-1}
+                  aria-label={`${shamsiMonthName(m.month)} ${m.year}`}
+                  onPointerEnter={() => setActive(j)}
+                  onPointerDown={() => setActive(j)}
+                  onFocus={() => setActive(j)}
+                  onBlur={() => setActive(null)}
+                />
+              ))}
+            </div>
           </div>
-
-          <HoverCard
-            on={hovered != null}
-            month={months[shownMonth]}
-            point={drawn[shownMonth]}
-            net={nets[shownMonth]}
-          />
         </div>
       </div>
-    </div>
+    </>
   )
 }
 
-/** Month names alternate onto two lines below this column width. */
-const STAGGER_BELOW = 54
+/** The narrowest column a month's name is drawn in; below it, every second
+ * (third, ...) month is named instead, counting back from the current one. */
+const LABEL_MIN = 52
 
 /** An element's width, kept current as it resizes. Zero until measured (and
  * always in a test DOM, which has no layout). */
@@ -427,68 +468,4 @@ function useFitHeight(ref) {
       observer?.disconnect()
     }
   }, [ref])
-}
-
-/** The active month's figures -- or the latest month's when none is active
- * -- pinned to the plot's top-left corner: this month's own movement, and the
- * running totals at its end. A polite live region, so a screen reader hears
- * the figures as the arrow keys move. */
-function HoverCard({ on, month, point, net }) {
-  const tone = month && toneOf(net)
-  return (
-    <div
-      className={on ? 'dt-flow-tip is-on' : 'dt-flow-tip'}
-      data-testid="dt-flow-tip"
-      role="status"
-      aria-live="polite"
-    >
-      {month && (
-        <>
-          <div className="dt-flow-tip-head">
-            <span className="dt-flow-tip-month dt-farsi">{shamsiMonthName(month.month)}</span>
-            <span className="dt-flow-tip-year tnum">{month.year}</span>
-            {month.is_open && <span className="dt-flow-tip-open">· so far</span>}
-          </div>
-          <table className="dt-flow-tip-table">
-            <thead>
-              <tr>
-                <td />
-                <th scope="col">This month</th>
-                <th scope="col">Cumulative</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr data-row="onair">
-                <th scope="row">
-                  <i className="dt-flow-tip-sw" style={{ background: SERIES_COLOR.onAir }} />
-                  On air
-                </th>
-                <td className="tnum">{count(month.on_aired)}</td>
-                <td className="tnum">{count(point.onAir)}</td>
-              </tr>
-              <tr data-row="done">
-                <th scope="row">
-                  <i className="dt-flow-tip-sw" style={{ background: SERIES_COLOR.dtDone }} />
-                  DT done
-                </th>
-                <td className="tnum">{count(month.dt_done)}</td>
-                <td className="tnum">{count(point.dtDone)}</td>
-              </tr>
-              <tr data-row="gap">
-                <th scope="row">
-                  <i className="dt-flow-tip-sw dt-flow-tip-sw-gap" />
-                  Gap
-                </th>
-                <td className="tnum" data-tone={tone}>
-                  {withSign(net)}
-                  <span className="dt-sr-only"> ({GAP_WORD[tone]})</span>
-                </td>
-                <td className="tnum">{withMinus(point.gap)}</td>
-              </tr>
-            </tbody>
-          </table>
-        </>
-      )}
-    </div>
-  )
 }

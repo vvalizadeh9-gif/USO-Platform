@@ -2767,9 +2767,6 @@ a.dt-contractor-name:hover { text-decoration: underline; text-decoration-color: 
   font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; min-width: 5ch;
   color: var(--text);
 }
-.dt-pip-note {
-  margin: 12px 0 0; font-size: 13px; line-height: 18px; color: var(--text-secondary);
-}
 .dt-pip-section .dt-scope-note { margin-block-end: 12px; }
 /* The scorecard's two PIP columns: a dash where nothing was committed, and
    the delivered count followed by its rate where something was. */
@@ -2793,18 +2790,6 @@ a.dt-contractor-name:hover { text-decoration: underline; text-decoration-color: 
   width: 14px; height: 10px; border-radius: 2px; flex: none;
   background: var(--accent-soft);
 }
-/* The open month: a hollow dot, as it is drawn. */
-.dt-flow-legend-open {
-  width: 9px; height: 9px; border-radius: 50%; flex: none;
-  background: var(--surface); border: 2px solid var(--dt-muted);
-}
-/* A month's change in the gap, as the pills under the plot draw it. */
-.dt-flow-legend-pill {
-  font-style: normal; font-size: 12px; line-height: 16px; font-weight: 600;
-  padding: 0 6px; border-radius: 8px; flex: none;
-}
-.dt-flow-legend-pill[data-tone='good'] { color: var(--dt-gap-shrank); background: var(--dt-gap-shrank-soft); }
-.dt-flow-legend-pill[data-tone='bad'] { color: var(--dt-gap-grew); background: var(--dt-gap-grew-soft); }
 
 /* The chart and the rows under it share one grid: a 56px gutter (the y-axis
    labels) and one equal column per month, so each month's name and change
@@ -2875,23 +2860,6 @@ a.dt-contractor-name:hover { text-decoration: underline; text-decoration-color: 
 }
 .dt-flow-month.is-open { font-weight: 600; color: var(--accent-ink); }
 .dt-flow-month.is-active { font-weight: 700; color: var(--text); }
-/* Too narrow for every name on one line: every other one drops 16px. */
-.dt-flow-labels.is-staggered { padding-block-end: 16px; }
-.dt-flow-labels.is-staggered .dt-flow-month:nth-child(even) { transform: translateY(16px); }
-.dt-flow-nets { margin-block-start: 6px; }
-/* Gap change pills: green where the backlog shrank, brick where it grew,
-   neutral at zero. The sign is always shown, so colour is never the only
-   signal. The month in progress is white with a dashed border in its tone. */
-.dt-flow-net {
-  display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box;
-  height: 24px; min-width: min(42px, calc(100% - 6px)); max-width: calc(100% - 6px); padding: 0 4px;
-  border: 1.5px solid transparent; border-radius: 999px;
-  font-size: 13px; line-height: 16px; font-weight: 600; white-space: nowrap;
-}
-.dt-flow-net[data-tone='good'] { color: var(--dt-gap-shrank); background: var(--dt-gap-shrank-soft); }
-.dt-flow-net[data-tone='bad'] { color: var(--dt-gap-grew); background: var(--dt-gap-grew-soft); }
-.dt-flow-net[data-tone='flat'] { color: var(--text-secondary); background: var(--neutral-soft); }
-.dt-flow-net.is-open { background: var(--surface); border: 1.5px dashed currentColor; }
 
 /* The hover targets: every column, full height, plot and rows together. */
 .dt-flow-hits {
@@ -2904,52 +2872,6 @@ a.dt-contractor-name:hover { text-decoration: underline; text-decoration-color: 
 }
 .dt-flow-hit:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 
-/* The hover card: pinned 10px right of the y-axis and 24px below the top
-   gridline, never following the pointer and never taking its events. Both
-   lines rise left to right, so that corner is always empty. */
-.dt-flow-tip {
-  position: absolute; z-index: 5; pointer-events: none;
-  inset-block-start: calc(8px + 24px);
-  inset-inline-start: calc(var(--dt-flow-gutter) + 10px);
-  padding: 10px 12px; border-radius: 10px;
-  background: var(--surface); box-shadow: var(--shadow-2);
-  opacity: 0; transition: opacity 120ms ease;
-}
-.dt-flow-tip.is-on { opacity: 1; }
-@media (prefers-reduced-motion: reduce) { .dt-flow-tip { transition: none; } }
-.dt-flow-tip-head { display: flex; align-items: baseline; gap: 8px; margin-block-end: 6px; }
-.dt-flow-tip-month {
-  unicode-bidi: isolate;
-  font-size: 15px; line-height: 22px; font-weight: 600; color: var(--text);
-}
-.dt-flow-tip-year { font-size: 12px; line-height: 16px; color: var(--text-tertiary); }
-.dt-flow-tip-open { font-size: 12px; line-height: 16px; color: var(--accent-ink); margin-inline-start: auto; }
-.dt-flow-tip-table { border-collapse: collapse; font-size: 13px; line-height: 18px; }
-.dt-flow-tip-table th, .dt-flow-tip-table td {
-  border: 0; background: transparent; text-transform: none; letter-spacing: 0;
-}
-.dt-flow-tip-table thead th {
-  padding: 0 0 4px 16px; text-align: end;
-  font-size: 12px; line-height: 16px; font-weight: 600; color: var(--text-tertiary);
-}
-.dt-flow-tip-table tbody th {
-  padding: 3px 0; text-align: start; white-space: nowrap;
-  font-size: 13px; font-weight: 400; color: var(--text-secondary);
-}
-.dt-flow-tip-table tbody td {
-  padding: 3px 0 3px 16px; text-align: end;
-  font-size: 13px; font-weight: 600; color: var(--text); font-variant-numeric: tabular-nums;
-}
-.dt-flow-tip-table tr[data-row='gap'] > * { border-top: 1px solid var(--divider); }
-.dt-flow-tip-table td[data-tone='good'] { color: var(--dt-gap-shrank); }
-.dt-flow-tip-table td[data-tone='bad'] { color: var(--dt-gap-grew); }
-.dt-flow-tip-sw {
-  display: inline-block; width: 8px; height: 8px; border-radius: 50%;
-  margin-inline-end: 6px; vertical-align: 1px;
-}
-.dt-flow-tip-sw-gap {
-  border-radius: 2px; background: var(--accent-soft); box-shadow: inset 0 0 0 1px #C5D5F5;
-}
 
 /* Two readings of the same figure, side by side. Also what keeps a five-row
    bar chart from stretching its marks across a 1280px page. */
@@ -3042,7 +2964,7 @@ a.dt-contractor-name:hover { text-decoration: underline; text-decoration-color: 
 .dt-page .dt-stack > .dt-section { padding: 16px 20px; gap: 10px; }
 .dt-page .dt-wf { padding-block-start: 8px; }
 .dt-page .dt-pip-tile { padding-block: 6px; }
-.dt-page .dt-pip-rate, .dt-page .dt-pip-note { margin-block-start: 10px; }
+.dt-page .dt-pip-rate { margin-block-start: 10px; }
 /* Tighter rows in the breakdown bars. */
 /* ---------- the Breakdowns tab ----------
    Header: chip, title, then the total in ink beside it. The view switch is
@@ -3059,11 +2981,6 @@ a.dt-contractor-name:hover { text-decoration: underline; text-decoration-color: 
 .dt-page .dt-muted .dt-bar-label { font-weight: 400; }
 .dt-page .dt-breakdown-foot { margin-block-start: 12px; }
 .dt-page .dt-kpi-band { gap: 12px; }
-/* Pending by status names three states side by side; a slightly wider column
-   keeps "Problematic" whole. Only where the band is one row of four. */
-@media (min-width: 1101px) {
-  .dt-page .dt-kpi-band { grid-template-columns: 1fr 1fr 1fr 1.25fr; }
-}
 .dt-page .dt-kpi-card {
   position: relative;
   background: var(--surface);
@@ -3155,16 +3072,6 @@ a.dt-contractor-name:hover { text-decoration: underline; text-decoration-color: 
 /* The dashboard is laid out to fit one screen at 1280x800 and up. If a
    payload ever makes it taller, its body scrolls inside the frame rather than
    being clipped -- the document itself still never scrolls. */
-.dt-pip-open {
-  display: inline-flex; align-items: center; gap: 4px; white-space: nowrap;
-  color: var(--text-link); font-weight: 600;
-}
-.dt-pip-open:hover { text-decoration: underline; }
-.dt-pip-open:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 2px; }
-/* The trend card's header holds the title, the info icon and four period
-   options on one line at 1280: compact options, and a legend that fits one
-   line. */
-.dt-trend-section .ui-seg-option { height: 30px; padding: 0 8px; }
 /* A short office screen (1280x800): the same layout, with the padding and
    gaps trimmed so the Overview still fits without its body scrolling. The
    type does not change. */

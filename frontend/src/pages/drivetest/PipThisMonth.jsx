@@ -1,10 +1,7 @@
-import { ArrowRight } from 'lucide-react'
-import { Link } from 'react-router-dom'
-import { useAuth } from '../../context/AuthContext'
-import { MONTHLY_PLAN_ROLES } from '../../lib/roles'
 import { monthProgress } from '../../lib/shamsi'
 import { DrillLink } from './DrillPanel'
 import InfoTip from './InfoTip'
+import MonthLabel from './MonthLabel'
 import Section from './Section'
 import { achievement, count } from './format'
 import { deliveredLink } from './links'
@@ -28,12 +25,13 @@ import { deliveredLink } from './links'
  *
  * A MONTH WITH NOTHING COMMITTED IS DRAWN AS ONE. With no approved PIP,
  * every figure is set in the softest text colour, so a zero reads as "nothing
- * was committed" rather than as a measured result of nothing delivered. The
- * sentence underneath says which of the two it is in words.
+ * was committed" rather than as a measured result of nothing delivered, and a
+ * sentence in place of the bar says so in words.
  *
- * The rate and its pace tick come back only when there is something to pace:
- * "37.5%" means nothing without knowing the month is 60% gone, and in a month
- * with nothing committed there is no rate at all, so there is no bar.
+ * The rate and its "Today" pace tick come only when there is something to
+ * pace: "37.5%" means nothing without knowing the month is 60% gone. There is
+ * no note under the bar (UEP-04a): the card ends on the bar, and What moved
+ * below takes the space.
  *
  * A PIP CARRIES NO PROVINCE, so this card is not narrowed by the province
  * filter and says so when one is applied -- see the note in `useDashboard`.
@@ -45,17 +43,11 @@ import { deliveredLink } from './links'
  * by the endpoint; this component shows whatever it was given.
  */
 export default function PipThisMonth({ state, onRetry, scoped, provinceName }) {
-  const { user } = useAuth()
-  // The same list the sidebar uses for its Monthly Plan entry, so this link
-  // is offered to exactly the roles that can already reach the page, and
-  // never to one that would be turned away at it.
-  const canOpenPlan = MONTHLY_PLAN_ROLES.includes(user?.role?.name)
-
   return (
     <Section
       title="PIP this month"
       tile="calendar"
-      subtitle={state.data?.month_label}
+      subtitle={state.data?.month_label && <MonthLabel label={state.data.month_label} />}
       inline
       // The month's achievement, as the card's total on the right.
       actions={
@@ -78,20 +70,18 @@ export default function PipThisMonth({ state, onRetry, scoped, provinceName }) {
       }
     >
       {(data) => (
-        <PipTiles data={data} scoped={scoped} provinceName={provinceName} canOpenPlan={canOpenPlan} />
+        <PipTiles data={data} scoped={scoped} provinceName={provinceName} />
       )}
     </Section>
   )
 }
 
-function PipTiles({ data, scoped, provinceName, canOpenPlan }) {
+function PipTiles({ data, scoped, provinceName }) {
   const pct = data.achievement_percent
   const committed = pct != null
   const remaining = committed ? Math.max(0, data.pip - data.actual) : null
   const expected = data.committed_contractors + data.uncommitted_contractors
   const pace = committed ? monthProgress(data.shamsi_year, data.shamsi_month) : null
-  const programme = data.programme_achievement_percent
-  const behind = pace ? sitesBehindPace(data.actual, data.pip, pace.percent) : 0
 
   return (
     <>
@@ -149,31 +139,13 @@ function PipTiles({ data, scoped, provinceName, canOpenPlan }) {
         </div>
       )}
 
-      <p className="dt-pip-note">
-        {behind > 0 && (
-          <>
-            <b className="dt-pip-behind tnum">{count(behind)} behind pace</b>
-            {' · '}
-          </>
-        )}
-        {committed
-          ? `${count(data.committed_contractors)} of ${count(expected)} contractors approved.`
-          : `${count(data.committed_contractors)} of ${count(expected)} contractors have an approved PIP, so nothing is committed and nothing is scored.`}
-        {programme != null && (
-          <> Programme average {achievement(programme)} across all contractors.</>
-        )}
-        {/* On the note's line rather than in the header, where it took a
-            row of its own beside the title in a 380px column. */}
-        {canOpenPlan && (
-          <>
-            {' '}
-            <Link to="/monthly-plan" className="dt-pip-open">
-              Monthly plan
-              <ArrowRight size={14} strokeWidth={2} aria-hidden="true" />
-            </Link>
-          </>
-        )}
-      </p>
+      {/* Nothing committed is a state, not a note: no bar, and why. */}
+      {!committed && (
+        <p className="dt-pip-uncommitted">
+          {count(data.committed_contractors)} of {count(expected)} contractors have an approved
+          PIP, so nothing is committed and nothing is scored.
+        </p>
+      )}
     </>
   )
 }
@@ -193,11 +165,4 @@ function PipTile({ label, value, tone, href }) {
       </dd>
     </div>
   )
-}
-
-/** How many sites delivery is behind an even pace through the month, or 0
- * when it is on or ahead of it. Only "behind" is ever coloured: being ahead
- * is not a status this card needs to shout about. */
-export function sitesBehindPace(actual, pip, pacePercent) {
-  return Math.max(0, Math.round((pip * pacePercent) / 100) - actual)
 }

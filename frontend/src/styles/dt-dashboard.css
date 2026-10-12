@@ -67,16 +67,23 @@
 /* Section error: inside the failed card only. */
 .dt-page .dt-failed { margin: 0; }
 
-/* ---------- KPI strip (shared .hk-* anatomy, kpi-strip.css) ---------- */
+/* ---------- KPI strip (shared .hk-* anatomy, kpi-strip.css) ----------
+   The dense dashboard variant (UEP-04a): four equal tiles, each label,
+   figure, exactly one 18px line, then the visual pinned to the bottom. Scoped
+   to .dt-page, so Home's strip keeps the standard sizes. */
 .dt-page .hk-strip.dt-kpi-band { gap: 6px; }
+@media (min-width: 1101px) {
+  .dt-page .hk-strip.dt-kpi-band { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
 .dt-page .hk-strip .dt-kpi-card {
-  border: 0; box-shadow: none; background: none; padding: 12px 16px 8px;
+  display: flex; flex-direction: column; min-width: 0;
+  border: 0; box-shadow: none; background: none; padding: 10px 16px 8px;
   border-radius: var(--uep-radius-tile);
 }
 .dt-page .hk-strip .dt-kpi-card:hover { background: var(--uep-page); }
 .dt-page .hk-strip .dt-kpi-title { font-size: 13px; font-weight: var(--uep-weight-medium); color: var(--uep-text-2); }
 .dt-page .hk-strip .dt-kpi-figure {
-  font-family: inherit; font-size: 32px; font-weight: var(--uep-weight-semibold);
+  font-family: inherit; font-size: 28px; font-weight: var(--uep-weight-semibold);
   letter-spacing: -0.02em; line-height: 1.15; color: var(--uep-text);
   align-self: flex-start;
 }
@@ -84,8 +91,14 @@
 .dt-page .hk-strip a.dt-kpi-figure:focus-visible,
 .dt-page .hk-strip a.dt-status-row:focus-visible { outline: 2px solid var(--uep-accent); outline-offset: 2px; }
 
-/* The change line: neutral, danger only for a bad change. */
-.dt-page .dt-kpi-change { display: flex; align-items: baseline; flex-wrap: wrap; gap: 0 4px; font-size: 12px; font-weight: var(--uep-weight-medium); color: var(--uep-text-3); }
+/* The one line under the figure: neutral, danger only for a bad change, in a
+   fixed 18px line box so every tile's visual starts at the same height. */
+.dt-page .dt-kpi-change {
+  display: flex; align-items: baseline; flex-wrap: nowrap; gap: 0 4px;
+  height: 18px; line-height: 18px; overflow: hidden; white-space: nowrap;
+  font-size: 12px; font-weight: var(--uep-weight-medium); color: var(--uep-text-3);
+}
+.dt-page .hk-strip .dt-kpi-card .hk-spark { height: 24px; margin-top: auto; padding-top: 4px; box-sizing: content-box; }
 .dt-page .dt-kpi-change .dt-delta { display: inline-flex; gap: 4px; }
 .dt-page .dt-delta-pill b,
 .dt-page .dt-delta-pill b[data-tone='good'],
@@ -96,17 +109,20 @@
 .dt-page .dt-delta-since { color: inherit; font-size: 12px; }
 .dt-page .hk-strip .dt-kpi-pct { font-size: 12px; font-weight: var(--uep-weight-medium); color: var(--uep-text-3); }
 
-/* Tile 4, Pending by status: three rows over a 6px stack with 2px gaps. */
-.dt-page .hk-strip .dt-status-list { display: grid; grid-template-columns: 1fr; gap: 0; padding-block-start: 4px; margin: 0; }
-.dt-page .hk-strip .dt-status-row {
-  flex-direction: row; align-items: center; justify-content: space-between; gap: 8px;
-  padding: 2px 4px; border-radius: 6px; font-size: 13px;
+/* Tile 4, Pending by status: three 20px rows with a 2px gap, each a grid of
+   swatch, name, count and a fixed 34px share so the columns line up, over a
+   6px stack pinned to the bottom with the sparklines' bottom edge. */
+.dt-page .hk-strip .dt-status-list {
+  display: grid; grid-template-columns: 1fr; gap: 2px; padding: 0; margin: 2px 0 0; list-style: none;
 }
-.dt-page .hk-strip .dt-status-name { display: inline-flex; align-items: center; gap: 6px; color: var(--uep-text); }
+.dt-page .hk-strip .dt-status-row {
+  display: grid; grid-template-columns: 8px minmax(0, 1fr) auto 34px; align-items: center; gap: 6px;
+  padding: 0 4px; border-radius: 6px; font-size: 13px; line-height: 20px;
+}
+.dt-page .hk-strip .dt-status-name { color: var(--uep-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dt-page .hk-strip .dt-kpi-part-dot { width: 8px; height: 8px; border-radius: 2px; }
-.dt-page .hk-strip .dt-status-figs { display: inline-flex; align-items: baseline; gap: 6px; }
 .dt-page .hk-strip .dt-status-num { font-weight: var(--uep-weight-semibold); color: var(--uep-text); }
-.dt-page .hk-strip .dt-status-pct { font-size: 12px; color: var(--uep-text-3); }
+.dt-page .hk-strip .dt-status-pct { font-size: 12px; color: var(--uep-text-3); text-align: right; }
 .dt-page .hk-strip .dt-kpi-split { height: 6px; gap: 2px; background: none; margin-block-start: auto; border-radius: 3px; }
 .dt-page .hk-strip .dt-kpi-split > i { border-radius: 2px; }
 
@@ -117,8 +133,8 @@
   animation-delay: calc(var(--i, 0) * 80ms);
 }
 .dt-skel[data-part='label'] { width: 40%; height: 13px; margin-block: 2px 6px; }
-.dt-skel[data-part='figure'] { width: 55%; height: 32px; margin-block-end: 6px; }
-.dt-skel[data-part='spark'] { width: 100%; height: var(--uep-spark-height); }
+.dt-skel[data-part='figure'] { width: 55%; height: 28px; margin-block-end: 24px; }
+.dt-skel[data-part='spark'] { width: 100%; height: 24px; }
 @keyframes dt-pulse { 50% { opacity: 0.5; } }
 
 /* ---------- On air vs DT done ---------- */
@@ -131,23 +147,35 @@
 .dt-page .dt-flow-ytick { font-size: 12px; color: var(--uep-text-3); }
 .dt-page .dt-flow-month { color: var(--uep-text-3); }
 .dt-page .dt-flow-month.is-open { color: var(--uep-text); font-weight: var(--uep-weight-medium); }
+/* The current month is always named, in ink; thinned names keep their column. */
+.dt-page .dt-flow-month.is-current { color: var(--uep-text); font-weight: var(--uep-weight-semibold); }
+.dt-page .dt-flow-month.is-skipped { visibility: hidden; }
+
+/* The key row: the key on the left, the readout on the right (UEP-04a). The
+   readout replaces the floating tooltip, so nothing ever covers the lines. */
+.dt-page .dt-flow-keyrow {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 16px;
+  padding: 8px 16px; margin-block-end: 8px; border-block-end: 1px solid var(--uep-divider);
+}
+.dt-page .dt-flow-keyrow .dt-flow-legend { margin: 0; }
+.dt-page .dt-flow-readout {
+  display: inline-flex; align-items: center; gap: 12px; white-space: nowrap;
+  padding: 4px 10px; border: 1px solid var(--uep-border); border-radius: 8px;
+  background: var(--uep-page); font-size: 12px; line-height: 16px; color: var(--uep-text-3);
+}
+.dt-page .dt-flow-readout-month .dt-farsi { font-weight: var(--uep-weight-semibold); color: var(--uep-text); }
+.dt-page .dt-flow-readout-fig { display: inline-flex; align-items: center; gap: 4px; }
+.dt-page .dt-flow-readout-dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+.dt-page .dt-flow-readout-dot.is-gap {
+  border-radius: 2px; background: var(--uep-accent-tint); box-shadow: inset 0 0 0 1px var(--uep-accent);
+}
+.dt-page .dt-flow-readout-fig b { font-weight: var(--uep-weight-semibold); color: var(--uep-text); }
+.dt-page .dt-flow-readout-change { color: var(--uep-text-3); }
+.dt-page .dt-flow-readout-change[data-tone='bad'] { color: var(--uep-danger); }
 .dt-page .dt-flow-cross { width: 1px; background: var(--uep-border-strong); }
 .dt-page .dt-flow-dot.is-active { width: 8px; height: 8px; background: var(--uep-surface); border: 2px solid var(--dt-dot); }
 /* One tab stop for the plot; the accent ring sits 4px out. */
 .dt-page .dt-flow-frame:focus-visible { outline: 2px solid var(--uep-accent); outline-offset: 4px; border-radius: 4px; }
-.dt-page .dt-flow-tip {
-  background: var(--uep-surface); border: 1px solid var(--uep-border);
-  border-radius: 8px; box-shadow: var(--uep-shadow-popover);
-  opacity: 1;
-}
-.dt-page .dt-flow-tip-open { color: var(--uep-text-3); margin-inline-start: 0; }
-/* A month's change in the gap carries its sign and a hidden word. Danger
-   only when it grew; a shrinking gap is plain, never green. */
-.dt-page .dt-flow-net[data-tone='good'],
-.dt-page .dt-flow-net[data-tone='flat'],
-.dt-page .dt-flow-tip-table td[data-tone='good'] { color: var(--uep-text-2); background: var(--uep-page); }
-.dt-page .dt-flow-net[data-tone='bad'] { color: var(--uep-danger); background: var(--uep-danger-tint); }
-.dt-page .dt-flow-tip-table td[data-tone='bad'] { color: var(--uep-danger); }
 
 /* View as table: scrolls inside the card under a sticky header. */
 .dt-flow-table-wrap { max-height: 320px; overflow: auto; }
@@ -199,8 +227,7 @@
   font-size: 11px; line-height: 14px; font-weight: var(--uep-weight-medium);
   color: var(--uep-text); white-space: nowrap;
 }
-.dt-page .dt-pip-note { font-size: 12px; line-height: 16px; color: var(--uep-text-3); margin: 0; }
-.dt-pip-behind { color: var(--uep-danger); font-weight: var(--uep-weight-medium); }
+.dt-page .dt-pip-uncommitted { font-size: 12px; line-height: 16px; color: var(--uep-text-3); margin: 10px 0 0; }
 @keyframes dt-grow { from { transform: scaleX(0); } to { transform: none; } }
 
 /* ---------- What moved: four rows, waterfall along the track ---------- */
@@ -309,6 +336,11 @@
 .dt-drill-table tbody tr:hover { background: var(--uep-page); }
 @keyframes dt-pop { from { opacity: 0; transform: translateX(12px); } to { opacity: 1; transform: none; } }
 
+/* A card header's month (PIP this month, What moved): the month in 600 ink,
+   the rest of the note in its own 12px / 400 / tertiary style. */
+.dt-page .dt-section-note { font-size: 12px; font-weight: 400; color: var(--uep-text-3); }
+.dt-page .dt-month-label { font-family: var(--font-farsi); font-weight: var(--uep-weight-semibold); color: var(--uep-text); }
+
 /* Button press. */
 .dt-page .btn:active { transform: scale(0.98); }
 
@@ -321,7 +353,7 @@
   .dt-page .dt-pip-section .dt-section-body { padding-block: 6px 8px; }
   .dt-page .hk-strip .dt-kpi-card { padding: 6px 12px 4px; }
   .dt-page .hk-strip .dt-kpi-figure { font-size: 26px; }
-  .dt-page .hk-strip .hk-spark { height: 22px; margin-top: 2px; }
+  .dt-page .hk-strip .dt-kpi-card .hk-spark { height: 22px; padding-top: 2px; }
   .dt-page .dt-pip-section .dt-plan-progress { margin-block: 8px 15px; }
   .dt-wf-row { padding-block: 2px; }
   .dt-page .dt-tables { gap: 12px; }

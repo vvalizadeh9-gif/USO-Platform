@@ -30,7 +30,7 @@ import { DrillLink } from './DrillPanel'
  * default is the inline icon-and-number form, which is what
  * `charts/FlowChart` draws beside the gap figure.
  */
-function DeltaChip({ delta, direction = 'up', small, pill }) {
+function DeltaChip({ delta, direction = 'up', small, pill, period }) {
   if (delta == null) return null
   const tone = deltaTone(delta, direction)
   const color = tone ? TONE_COLOR[tone] : TONE_COLOR.flat
@@ -41,11 +41,15 @@ function DeltaChip({ delta, direction = 'up', small, pill }) {
   if (pill) {
     // The KPI tile's change line (UEP-04): "+64 vs last month", or "No
     // change" for a flat month. Danger ink only when the change is bad.
+    // `period` names a different comparison: "+57 this month", and "No
+    // change this month" when flat (UEP-04a, the On air tile).
     return (
       <span className="dt-delta dt-delta-pill">
         <b data-tone={tone ?? 'flat'}>{delta === 0 ? 'No change' : text}</b>
         <span className="dt-sr-only">{TONE_WORD[tone ?? 'flat']}</span>
-        {delta !== 0 && <span className="dt-delta-since">vs last month</span>}
+        {(delta !== 0 || period) && (
+          <span className="dt-delta-since">{period ?? 'vs last month'}</span>
+        )}
       </span>
     )
   }
@@ -115,10 +119,24 @@ const STATUS_COLOR = {
 
 /**
  * One KPI tile, the same anatomy as Home's strip (kpi-strip.css): label,
- * figure, change line and a 12-month sparkline. The share of on air, where a
- * tile has one, is the end of the change line rather than a meter of its own.
+ * figure, exactly one line under it, and a 12-month sparkline pinned to the
+ * tile's bottom (the dense dashboard variant, dt-dashboard.css). The share of
+ * on air, where a tile has one, is the end of that line rather than a meter of
+ * its own. `period` relabels the change ("this month" on On air).
  */
-function KpiTile({ kpi, direction, index, title, value, href, ariaLabel, metric, ofOnAir, series }) {
+function KpiTile({
+  kpi,
+  direction,
+  index,
+  title,
+  value,
+  href,
+  ariaLabel,
+  metric,
+  period,
+  ofOnAir,
+  series,
+}) {
   const tone = metric.delta == null ? null : deltaTone(metric.delta, direction)
   return (
     <div className="hk-tile dt-kpi-card" data-kpi={kpi} style={{ '--i': index }}>
@@ -127,7 +145,7 @@ function KpiTile({ kpi, direction, index, title, value, href, ariaLabel, metric,
         <AnimatedNumber value={value} />
       </DrillLink>
       <span className="hk-delta dt-kpi-change" data-tone={tone ?? 'flat'}>
-        <DeltaChip pill delta={metric.delta} direction={direction} />
+        <DeltaChip pill delta={metric.delta} direction={direction} period={period} />
         {ofOnAir != null && (
           <span className="dt-kpi-pct tnum">
             {metric.delta != null && ' · '}
@@ -188,7 +206,10 @@ export default function KpiBand({ kpis, provinceId, series }) {
         value={onair}
         href={onairLink(scope)}
         ariaLabel={`Total on-air: ${onair} sites`}
-        metric={kpis.total_onair}
+        // This month's change, from the same running totals as the sparkline,
+        // so the line and the line drawing under it cannot disagree.
+        metric={{ delta: series?.onAirThisMonth ?? null }}
+        period="this month"
         series={series?.onAir}
       />
       <KpiTile
@@ -217,26 +238,24 @@ export default function KpiBand({ kpis, provinceId, series }) {
       />
 
       {/* Pending by status: no headline figure, because it would repeat
-          Pending. Three rows in words and figures, then the stack -- colour
-          is the fast read here, never the only one. */}
+          Pending. Three rows in words and figures, each a grid of swatch,
+          name, count and a fixed-width share so the columns line up, then the
+          stack pinned to the bottom -- colour is the fast read here, never the
+          only one. */}
       <div className="hk-tile dt-kpi-card" data-kpi="status" style={{ '--i': 3 }}>
         <span className="hk-label dt-kpi-title">Pending by status</span>
         <ul className="dt-status-list">
           {parts.map((p) => (
             <li key={p.key}>
               <DrillLink to={p.href} className="dt-status-row">
-                <span className="dt-status-name">
-                  <span
-                    className="dt-kpi-part-dot"
-                    style={{ background: STATUS_COLOR[p.key] }}
-                    aria-hidden="true"
-                  />
-                  {p.label}
-                </span>
-                <span className="dt-status-figs">
-                  <span className="dt-status-num tnum">{count(p.value)}</span>
-                  <span className="dt-status-pct tnum">{shareOfPending(p.value)}</span>
-                </span>
+                <span
+                  className="dt-kpi-part-dot"
+                  style={{ background: STATUS_COLOR[p.key] }}
+                  aria-hidden="true"
+                />
+                <span className="dt-status-name">{p.label}</span>
+                <span className="dt-status-num tnum">{count(p.value)}</span>
+                <span className="dt-status-pct tnum">{shareOfPending(p.value)}</span>
               </DrillLink>
             </li>
           ))}

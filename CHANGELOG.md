@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- **Drive Test dashboard: equal KPI tiles, chart always cumulative over all months, readout in place of the hover card, simpler PIP card (UEP-04a).**
+  - The four KPI tiles are equal in width and lower (the dense dashboard variant). On air's line reads "+N this month". Home's KPI strip is unchanged.
+  - "On air vs DT done" always shows every month cumulatively. The period switch, its subtitle and the net-change row under the chart are removed.
+  - A readout beside the chart key shows the latest month, or the hovered or focused one, in place of the floating hover card.
+  - PIP this month drops the pace and approval note (and the Monthly plan link). The bar and its "Today" tick stay. The month is bold in the PIP this month and What moved headers.
+
 - **Removed the Action Center; Home shows each user's pending work. Fix queue moved to the Drive test app and restyled (UEP-05).**
   - `/action-center` (with or without `?view=`) and `/notifications` redirect to `/home`. The header bell links to Home; the account menu's Action Center item is gone; Home's KPI tiles are static figures.
   - The *My work* app is removed. Fix queue (`/my-fix-queue`) is in the Drive test app, and a category owner's Drive test rail shows only Fix queue.
