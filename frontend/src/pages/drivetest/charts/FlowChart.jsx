@@ -52,7 +52,9 @@ import { FadeArea } from './primitives'
 
 /** The two series. DT done is the "done" series (the accent); On-aired is the
  * reference it is read against (the muted neutral). */
-const SERIES_COLOR = { onAir: 'var(--dt-muted)', dtDone: 'var(--accent)' }
+const SERIES_COLOR = { onAir: 'var(--uep-text-2)', dtDone: 'var(--uep-accent)' }
+/** On air is the thinner reference line; DT done the heavier data line. */
+const SERIES_WIDTH = { onAir: 2, dtDone: 2.5 }
 
 /** Which way a month moved the backlog. Falling is the good direction. */
 const toneOf = (v) => (v < 0 ? 'good' : v > 0 ? 'bad' : 'flat')
@@ -62,8 +64,8 @@ const withSign = (v) => (v > 0 ? `+${count(v)}` : v < 0 ? `−${count(-v)}` : '0
 const withMinus = (v) => (v < 0 ? `−${count(-v)}` : count(v))
 
 /** The chart's key, on its own row under the card's title row: the two
- * series, the gap between them, the hollow dot that marks a month still in
- * progress, and the two tones of a month's change in the gap. */
+ * series and the gap between them (UEP-04). The open month says "so far" in
+ * the tooltip, and a month's change in the gap carries its sign and word. */
 export function FlowLegend() {
   return (
     <ul className="dt-flow-legend" aria-label="Chart key">
@@ -78,22 +80,6 @@ export function FlowLegend() {
       <li className="dt-flow-legend-item">
         <i className="dt-flow-legend-swatch" />
         Gap
-      </li>
-      <li className="dt-flow-legend-item">
-        <i className="dt-flow-legend-open" />
-        Month in progress
-      </li>
-      <li className="dt-flow-legend-item">
-        <i className="dt-flow-legend-pill" data-tone="good" aria-hidden="true">
-          −
-        </i>
-        Gap shrank
-      </li>
-      <li className="dt-flow-legend-item">
-        <i className="dt-flow-legend-pill" data-tone="bad" aria-hidden="true">
-          +
-        </i>
-        Gap grew
       </li>
     </ul>
   )
@@ -138,15 +124,38 @@ export default function FlowChart({ data, scope = LAST_12 }) {
   const stagger = plotWidth > 0 && plotWidth / n < STAGGER_BELOW
   useFitHeight(plotRef)
 
-  // The month under the pointer, the keyboard focus or the last tap.
+  // The month under the pointer, the keyboard focus or the last tap. With
+  // nothing active the tooltip reads the latest month, unmarked.
   const [active, setActive] = useState(null)
   const hovered = active != null && active < n ? active : null
+  const shownMonth = hovered ?? n - 1
+
+  // One tab stop for the whole plot: arrows move a month, Home and End jump
+  // to the ends, and focusing it starts on the latest month.
+  const onKeyDown = (e) => {
+    const from = hovered ?? n - 1
+    const to = {
+      ArrowLeft: Math.max(0, from - 1),
+      ArrowRight: Math.min(n - 1, from + 1),
+      Home: 0,
+      End: n - 1,
+    }[e.key]
+    if (to == null) return
+    e.preventDefault()
+    setActive(to)
+  }
 
   return (
     <div className="dt-flowcard" style={{ '--dt-flow-cols': n }}>
       <div className="dt-flow-scroll">
         <div
           className="dt-flow-frame"
+          tabIndex={0}
+          role="group"
+          aria-label="On air vs DT done chart. Use the left and right arrow keys to read each month."
+          onKeyDown={onKeyDown}
+          onFocus={(e) => e.target === e.currentTarget && setActive(n - 1)}
+          onBlur={(e) => !e.currentTarget.contains(e.relatedTarget) && setActive(null)}
           // A touch ends with a leave; the tapped month keeps its card until
           // another is tapped or the focus moves on.
           onPointerLeave={(e) => e.pointerType !== 'touch' && setActive(null)}
@@ -218,7 +227,7 @@ export default function FlowChart({ data, scope = LAST_12 }) {
                 preserveAspectRatio="none"
                 aria-hidden="true"
               >
-                {areaPath && <FadeArea d={areaPath} fill="var(--accent-soft)" />}
+                {areaPath && <FadeArea d={areaPath} fill="var(--uep-accent-tint)" />}
                 {/* Plain paths: the stroke keeps its screen width however the
                     plot is stretched (non-scaling), which a draw-on animation's
                     dash would break into pieces. */}
@@ -227,7 +236,7 @@ export default function FlowChart({ data, scope = LAST_12 }) {
                     key={key}
                     fill="none"
                     stroke={SERIES_COLOR[key]}
-                    strokeWidth={2.5}
+                    strokeWidth={SERIES_WIDTH[key]}
                     strokeLinecap="round"
                     strokeLinejoin="round"
                   >
@@ -304,14 +313,16 @@ export default function FlowChart({ data, scope = LAST_12 }) {
             })}
           </div>
 
-          {/* The hover targets: each whole column, plot, name and change
-              together. Focusable, so the keyboard gets the same card. */}
+          {/* The pointer targets: each whole column, plot, name and change
+              together. Out of the tab order -- the keyboard reads the months
+              with the arrow keys on the plot's one tab stop. */}
           <div className="dt-flow-hits">
             {months.map((m, j) => (
               <button
                 key={`${m.year}-${m.month}`}
                 type="button"
                 className="dt-flow-hit"
+                tabIndex={-1}
                 aria-label={`${shamsiMonthName(m.month)} ${m.year}`}
                 onPointerEnter={() => setActive(j)}
                 onPointerDown={() => setActive(j)}
@@ -322,9 +333,10 @@ export default function FlowChart({ data, scope = LAST_12 }) {
           </div>
 
           <HoverCard
-            month={hovered == null ? null : months[hovered]}
-            point={hovered == null ? null : drawn[hovered]}
-            net={hovered == null ? null : nets[hovered]}
+            on={hovered != null}
+            month={months[shownMonth]}
+            point={drawn[shownMonth]}
+            net={nets[shownMonth]}
           />
         </div>
       </div>
@@ -417,14 +429,15 @@ function useFitHeight(ref) {
   }, [ref])
 }
 
-/** The hovered month's figures, pinned to the plot's top-left corner: this
- * month's own movement, and the running totals at its end. Always in the
- * page, so a screen reader hears the figures when a column takes focus. */
-function HoverCard({ month, point, net }) {
+/** The active month's figures -- or the latest month's when none is active
+ * -- pinned to the plot's top-left corner: this month's own movement, and the
+ * running totals at its end. A polite live region, so a screen reader hears
+ * the figures as the arrow keys move. */
+function HoverCard({ on, month, point, net }) {
   const tone = month && toneOf(net)
   return (
     <div
-      className={month ? 'dt-flow-tip is-on' : 'dt-flow-tip'}
+      className={on ? 'dt-flow-tip is-on' : 'dt-flow-tip'}
       data-testid="dt-flow-tip"
       role="status"
       aria-live="polite"
@@ -434,7 +447,7 @@ function HoverCard({ month, point, net }) {
           <div className="dt-flow-tip-head">
             <span className="dt-flow-tip-month dt-farsi">{shamsiMonthName(month.month)}</span>
             <span className="dt-flow-tip-year tnum">{month.year}</span>
-            {month.is_open && <span className="dt-flow-tip-open">In progress</span>}
+            {month.is_open && <span className="dt-flow-tip-open">· so far</span>}
           </div>
           <table className="dt-flow-tip-table">
             <thead>

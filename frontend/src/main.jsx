@@ -6,6 +6,8 @@ import { AuthProvider } from './context/AuthContext'
 import { ToastProvider } from './context/ToastContext'
 import { applyMotionPreference } from './lib/motionPreference'
 import './styles/app.css'
+import './styles/kpi-strip.css'
+import './styles/dt-dashboard.css'
 import './styles/uep-tokens.css'
 import './styles/signin.css'
 

@@ -1,4 +1,4 @@
-import { ArrowRight, Target } from 'lucide-react'
+import { ArrowRight } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import { MONTHLY_PLAN_ROLES } from '../../lib/roles'
@@ -54,9 +54,17 @@ export default function PipThisMonth({ state, onRetry, scoped, provinceName }) {
   return (
     <Section
       title="PIP this month"
-      icon={Target}
+      tile="calendar"
       subtitle={state.data?.month_label}
       inline
+      // The month's achievement, as the card's total on the right.
+      actions={
+        state.data?.achievement_percent != null && (
+          <span className="dt-section-total tnum">
+            <b>{achievement(state.data.achievement_percent)}</b>
+          </span>
+        )
+      }
       state={state}
       onRetry={onRetry}
       skeletonRows={3}
@@ -83,6 +91,7 @@ function PipTiles({ data, scoped, provinceName, canOpenPlan }) {
   const expected = data.committed_contractors + data.uncommitted_contractors
   const pace = committed ? monthProgress(data.shamsi_year, data.shamsi_month) : null
   const programme = data.programme_achievement_percent
+  const behind = pace ? sitesBehindPace(data.actual, data.pip, pace.percent) : 0
 
   return (
     <>
@@ -98,11 +107,6 @@ function PipTiles({ data, scoped, provinceName, canOpenPlan }) {
         <PipTile label="Plan" value={count(data.pip)} />
         <PipTile label="Assigned" value={count(data.assigned)} />
         <PipTile
-          label="Remaining"
-          value={remaining == null ? '—' : count(remaining)}
-          tone={remaining > 0 ? 'problem' : undefined}
-        />
-        <PipTile
           label="Achieved"
           value={count(data.actual)}
           tone={committed && data.actual > 0 ? 'done' : undefined}
@@ -110,41 +114,51 @@ function PipTiles({ data, scoped, provinceName, canOpenPlan }) {
           // Assigned count commitments and handovers, not sites.
           href={deliveredLink({ year: data.shamsi_year, month: data.shamsi_month })}
         />
+        <PipTile
+          label="Remaining"
+          value={remaining == null ? '—' : count(remaining)}
+          tone={remaining > 0 ? 'problem' : undefined}
+        />
       </dl>
 
       {committed && (
-        <div className="dt-pip-rate">
-          <span className="dt-pip-rate-value tnum">
-            {achievement(pct)}
-          </span>
+        <div
+          className="dt-plan-progress"
+          role="img"
+          aria-label={`Achievement ${achievement(pct)}${
+            pace ? `, ${pace.elapsed} of ${pace.total} days into the month` : ''
+          }`}
+        >
           <span
-            className="dt-plan-progress"
-            role="img"
-            aria-label={`Achievement ${achievement(pct)}${
-              pace ? `, ${pace.elapsed} of ${pace.total} days into the month` : ''
-            }`}
-          >
+            data-testid="dt-pip-progress-fill"
+            className="dt-plan-progress-fill"
+            style={{ width: `${Math.min(100, pct)}%` }}
+          />
+          {/* Where an even pace through the month would be today, labelled
+              in words under the tick (UEP-04). */}
+          {pace && (
             <span
-              data-testid="dt-pip-progress-fill"
-              className="dt-plan-progress-fill"
-              style={{ width: `${Math.min(100, pct)}%` }}
-            />
-            {pace && (
-              <span
-                data-testid="dt-pip-pace"
-                className="dt-plan-pace"
-                style={{ left: `${Math.min(100, pace.percent)}%` }}
-                aria-hidden="true"
-              />
-            )}
-          </span>
-          {pace && <PacePill actual={data.actual} expected={(data.pip * pace.percent) / 100} />}
+              data-testid="dt-pip-pace"
+              className="dt-plan-pace"
+              style={{ left: `${Math.min(100, pace.percent)}%` }}
+              aria-hidden="true"
+            >
+              <span className="dt-plan-pace-label">Today</span>
+            </span>
+          )}
         </div>
       )}
 
       <p className="dt-pip-note">
-        {`${count(data.committed_contractors)} of ${count(expected)} contractors have an approved PIP`}
-        {committed ? '.' : ', so nothing is committed and nothing is scored.'}
+        {behind > 0 && (
+          <>
+            <b className="dt-pip-behind tnum">{count(behind)} behind pace</b>
+            {' · '}
+          </>
+        )}
+        {committed
+          ? `${count(data.committed_contractors)} of ${count(expected)} contractors approved.`
+          : `${count(data.committed_contractors)} of ${count(expected)} contractors have an approved PIP, so nothing is committed and nothing is scored.`}
         {programme != null && (
           <> Programme average {achievement(programme)} across all contractors.</>
         )}
@@ -181,15 +195,9 @@ function PipTile({ label, value, tone, href }) {
   )
 }
 
-/** Delivery against where an even pace through the month would have it by
- * today -- the tick on the bar, said in words. A status, so it is an ink on
- * its soft fill with the word: Ahead, Behind, or On pace. */
-export function PacePill({ actual, expected }) {
-  const diff = actual - Math.round(expected)
-  if (diff === 0) return <span className="pill pill-dim dt-pace-pill">On pace</span>
-  return diff > 0 ? (
-    <span className="pill pill-green dt-pace-pill tnum">Ahead +{count(diff)}</span>
-  ) : (
-    <span className="pill pill-red dt-pace-pill tnum">Behind −{count(-diff)}</span>
-  )
+/** How many sites delivery is behind an even pace through the month, or 0
+ * when it is on or ahead of it. Only "behind" is ever coloured: being ahead
+ * is not a status this card needs to shout about. */
+export function sitesBehindPace(actual, pip, pacePercent) {
+  return Math.max(0, Math.round((pip * pacePercent) / 100) - actual)
 }

@@ -53,7 +53,7 @@ export default function RankedBars({ points, total, color, hrefFor, emptyLabel =
                 data-testid="dt-bar"
                 className="dt-track-fill"
                 style={{
-                  background: folded ? 'var(--dt-pending-bar)' : colorAt(p, i),
+                  background: folded ? 'var(--uep-neutral-data)' : colorAt(p, i),
                   width: `${(p.value / widest) * 100}%`,
                   transformOrigin: 'left center',
                 }}

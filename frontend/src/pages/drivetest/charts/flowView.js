@@ -1,4 +1,4 @@
-// The arithmetic behind "Where this is going", apart from the drawing.
+// The arithmetic behind "On air vs DT done", apart from the drawing.
 //
 // A module of its own because two places read it: the chart, and the card's
 // info note, which states where the chart's scale starts and how many sites
@@ -178,6 +178,19 @@ export function flowView(data, scope = LAST_12) {
   // because a site can be missing both dates and be counted on both sides.
   const notPlaced = Math.max(data.not_placed?.on_air ?? 0, data.not_placed?.dt_done ?? 0)
   return { years, selected, cumulative, yearMarks, points, months, floor, ceiling, ticks, notPlaced }
+}
+
+/** The KPI band's three sparkline series, from the same running totals the
+ * chart draws (last twelve months), so the sparklines and the chart always
+ * agree, and Pending is On air - DT done for every month by construction. */
+export function kpiSeries(data) {
+  if (!flowHasActivity(data)) return null
+  const drawn = flowView(data, LAST_12).points.slice(1)
+  return {
+    onAir: drawn.map((p) => p.onAir),
+    dtDone: drawn.map((p) => p.dtDone),
+    pending: drawn.map((p) => p.gap),
+  }
 }
 
 /** The view in words, for the chart's accessible name and the info note. */

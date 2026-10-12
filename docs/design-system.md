@@ -191,3 +191,23 @@ Home and `GET /me/home`: [design/uep-home.md](design/uep-home.md).
   `prefers-reduced-motion` or `html[data-uep-motion='reduce']`.
 - KPI deltas are `--uep-danger` only when the change is bad, otherwise
   `--uep-text-3`. Never green.
+
+## Card headers inside one app (UEP-04)
+
+When every card on a page belongs to the same app, such as the Drive Test dashboard, the header is white: padding 12px 16px, a 1px `--uep-divider` rule under it, and a 28px app tile (radius 7) holding a white 16px icon. Use Home's tinted header band only when the cards stand for different apps.
+
+Implementation: `Section` in `pages/drivetest` draws the tile from a Carbon icon name (`tile`, default `cell-tower`); the colour comes from `styles/dt-dashboard.css`. Inside a page that belongs to one app, figures are `--uep-text`, cobalt is the data colour for "done", `--uep-danger` is only for something bad, and nothing is green or teal in a chart.
+
+## KPI strip
+
+Home and the Drive Test dashboard share one strip (`styles/kpi-strip.css`, `components/KpiSpark.jsx`): a white container holding four transparent tiles. Each tile has a label, a 32px figure, a 12px change line and a 28px sparkline that draws in over 900ms, after which its 8% area fades in. The change line uses `--uep-danger` only when the change is bad, and a flat month reads "No change". Home lifts its first tile as the hero; the dashboard has no hero.
+
+## Chart interaction (standard for every UEP chart)
+
+- **Hover:** a 1px `--uep-border-strong` rule at the month, 8px white dots with a 2px stroke on each line, and a tooltip card (white, 1px border, radius 8, `--uep-shadow-popover`). With nothing hovered, the tooltip reads the latest month, and an open month is labelled "· so far".
+- **Keyboard:** the plot is one tab stop (`tabindex="0"`, `role="group"`) whose label explains the arrow keys. ← and → move a month; Home and End jump to the first and last. The tooltip is a polite live region, and focus shows the accent ring 4px out.
+- **View as table:** a toggle (`aria-pressed`) swaps the plot for a table of the same derived points, newest first. The table has a sticky header on `--uep-page`, scrolls inside its card and has a visually hidden caption.
+
+## Neutral data colour
+
+`--uep-neutral-data` (#9AA1AE) is used for "Not started" and for folded or uncategorized data, never for a status. `--uep-track` (#F1F2F5) is the bar track.

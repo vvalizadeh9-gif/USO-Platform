@@ -71,44 +71,43 @@ export default function FlowLedger({ flows, monthLabel }) {
         `${completed} drive tests were completed, closed at ${closing} remaining.`
       }
     >
+      {/* Four rows (UEP-04): label, the bar on its track, the figure. The
+          bars keep the waterfall -- each starts where the previous step
+          finished -- laid along the track instead of up a column, and a
+          dashed connector drops from the level the step before it left. */}
       {bars.map((bar, i) => {
         const lo = Math.min(bar.top, bar.bottom)
         const hi = Math.max(bar.top, bar.bottom)
         return (
           <div
             key={bar.key}
-            className={`dt-wf-col dt-wf-${bar.kind}`}
+            className={`dt-wf-row dt-wf-${bar.kind}`}
             data-testid="dt-flow-bar"
             data-step={bar.key}
           >
-            <div className="dt-wf-plot">
+            <span className="dt-flow-step-label">{bar.label}</span>
+            <div className="dt-wf-track">
               {linkLevel[i] != null && (
                 <i
                   data-testid="dt-flow-connector"
                   className="dt-wf-link"
-                  style={{ bottom: `${at(linkLevel[i])}%` }}
+                  style={{ left: `${at(linkLevel[i])}%` }}
                   aria-hidden="true"
                 />
               )}
               <motion.span
                 className="dt-wf-bar"
                 style={{
-                  bottom: `${at(lo)}%`,
-                  height: `${at(hi) - at(lo)}%`,
-                  transformOrigin: 'bottom',
+                  left: `${at(lo)}%`,
+                  width: `${at(hi) - at(lo)}%`,
+                  transformOrigin: bar.kind === 'down' ? 'right' : 'left',
                 }}
-                initial={reduced ? false : { scaleY: 0 }}
-                animate={{ scaleY: 1 }}
-                transition={{ delay: 0.08 + i * 0.1, duration: 0.45, ease: [0.16, 1, 0.3, 1] }}
+                initial={reduced ? false : { scaleX: 0 }}
+                animate={{ scaleX: 1 }}
+                transition={{ delay: 0.12 * i, duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
               />
-              <span
-                className="dt-flow-figure-text tnum"
-                style={{ bottom: `calc(${at(hi)}% + 3px)` }}
-              >
-                {bar.figure}
-              </span>
             </div>
-            <span className="dt-flow-step-label">{bar.label}</span>
+            <span className="dt-flow-figure-text tnum">{bar.figure}</span>
           </div>
         )
       })}

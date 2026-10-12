@@ -1,0 +1,72 @@
+/* KPI strip, shared by Home and the Drive Test dashboard (UEP-04).
+   One white container holding a 4-column grid of transparent tiles; a tile
+   is label, figure, change line and a 28px sparkline that draws in and then
+   fades its area up. Home lifts its first tile as the hero. */
+@keyframes hk-enter {
+  from { opacity: 0; transform: translateY(var(--uep-enter-distance)); }
+  to { opacity: 1; transform: none; }
+}
+.hk-strip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+  padding: 6px;
+  background: var(--uep-surface);
+  border: var(--uep-border-width) solid var(--uep-border);
+  border-radius: var(--uep-radius-card);
+}
+.hk-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--uep-space-12) var(--uep-space-16) var(--uep-space-8);
+  border-radius: var(--uep-radius-tile);
+  color: var(--uep-text);
+  text-decoration: none;
+  animation: hk-enter var(--uep-dur-enter) var(--uep-ease-entrance) both;
+  animation-delay: calc(var(--i, 0) * var(--uep-kpi-stagger));
+  transition: background var(--uep-dur-fast) var(--uep-ease-productive);
+  --spark: var(--uep-accent);
+  --spark-area: var(--uep-area-opacity);
+}
+.hk-tile:not(.is-hero):hover { background: var(--uep-page); }
+.hk-tile.is-hero { background: var(--uep-accent); color: var(--uep-on-accent); --spark: var(--uep-on-accent); --spark-area: var(--uep-hero-area-opacity); }
+.hk-label { font-size: var(--uep-fs-small); font-weight: var(--uep-weight-medium); }
+.hk-value { font-size: var(--uep-fs-kpi); font-weight: var(--uep-weight-semibold); line-height: 1.15; }
+.hk-delta { font-size: var(--uep-fs-caption); font-weight: var(--uep-weight-medium); color: var(--uep-text-3); }
+.hk-delta[data-tone='bad'] { color: var(--uep-danger); }
+.is-hero .hk-label, .is-hero .hk-delta, .is-hero .hk-delta[data-tone='bad'] { color: var(--uep-accent-on-tint); }
+.hk-spark { width: 100%; height: var(--uep-spark-height); margin-top: var(--uep-space-4); overflow: visible; }
+.hk-line {
+  fill: none;
+  stroke: var(--spark);
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: hk-draw var(--uep-dur-slow) var(--uep-ease-expressive) var(--uep-spark-delay) forwards;
+}
+.hk-area {
+  fill: var(--spark);
+  opacity: 0;
+  animation: hk-fill var(--uep-dur-enter) var(--uep-ease-entrance) calc(var(--uep-spark-delay) + var(--uep-dur-slow)) forwards;
+}
+@keyframes hk-draw { to { stroke-dashoffset: 0; } }
+@keyframes hk-fill { to { opacity: var(--spark-area); } }
+
+/* 1366x768: tighter, nothing hidden. */
+@media (max-height: 820px) {
+  .hk-tile { padding: var(--uep-space-8) var(--uep-space-12) 6px; }
+  .hk-value { font-size: var(--uep-fs-page-title); }
+}
+@media (max-width: 720px) {
+  .hk-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hk-tile { animation: none; }
+  .hk-line { animation: none; stroke-dashoffset: 0; }
+  .hk-area { animation: none; opacity: var(--spark-area); }
+}
+html[data-uep-motion='reduce'] .hk-tile { animation: none; }
+html[data-uep-motion='reduce'] .hk-line { animation: none; stroke-dashoffset: 0; }
+html[data-uep-motion='reduce'] .hk-area { animation: none; opacity: var(--spark-area); }

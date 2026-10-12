@@ -1,4 +1,4 @@
-import { ChevronRight, Search } from 'lucide-react'
+import { Search } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useAuth } from '../../context/AuthContext'
 import { count, percent } from './format'
@@ -27,6 +27,14 @@ const ACTION_COLUMN = { key: 'action', label: '', numeric: false }
  * search shows every match: a reader who typed a name is looking for that
  * row, wherever it ranks. */
 export const PROVINCE_ROWS = 8
+
+/** The rows a province search keeps. One function for the table and for the
+ * card subtitle's "{n} of 31 provinces", so the two always agree. */
+export function matchProvinces(rows, search) {
+  const q = search.trim().toLowerCase()
+  if (!q) return rows
+  return rows.filter((r) => r.name.toLowerCase().includes(q))
+}
 
 /** The province search box, for the card header. Its value lives with the
  * page, which passes it back to the table. */
@@ -62,11 +70,7 @@ export default function ProvinceList({ rows, provinces, onProvince, search = '' 
     return map
   }, [provinces])
 
-  const filtered = useMemo(() => {
-    if (!search.trim()) return rows
-    const q = search.trim().toLowerCase()
-    return rows.filter((r) => r.name.toLowerCase().includes(q))
-  }, [rows, search])
+  const filtered = useMemo(() => matchProvinces(rows, search), [rows, search])
 
   const sorted = useMemo(() => {
     const copy = [...filtered]
@@ -132,6 +136,13 @@ export default function ProvinceList({ rows, provinces, onProvince, search = '' 
             </tr>
           </thead>
           <tbody>
+            {visible.length === 0 && (
+              <tr className="dt-empty-row">
+                <td colSpan={COLUMNS.length}>
+                  No province matches &ldquo;<span className="dt-farsi">{search.trim()}</span>&rdquo;.
+                </td>
+              </tr>
+            )}
             {visible.map((row, idx) => {
               const id = byName.get(row.name)
               const hasProblem = row.problematic > 0
@@ -140,20 +151,11 @@ export default function ProvinceList({ rows, provinces, onProvince, search = '' 
                 <tr
                   key={row.name}
                   className="dt-province-card"
-                  role={id ? 'button' : undefined}
-                  tabIndex={id ? 0 : undefined}
+                  // A click anywhere on the row narrows, as a convenience for
+                  // the pointer. The row is not itself a button -- it holds
+                  // the figure links -- so the keyboard and screen readers use
+                  // the "Narrow" button at its end.
                   onClick={id ? () => onProvince(id) : undefined}
-                  onKeyDown={
-                    id
-                      ? (e) => {
-                          if (e.key === 'Enter' || e.key === ' ') {
-                            e.preventDefault()
-                            onProvince(id)
-                          }
-                        }
-                      : undefined
-                  }
-                  aria-label={id ? `Narrow the whole dashboard to ${row.name}` : undefined}
                 >
                   <td className="tnum dt-rank" style={{ textAlign: 'right' }}>
                     {idx + 1}
@@ -215,7 +217,17 @@ export default function ProvinceList({ rows, provinces, onProvince, search = '' 
                   {!isViewer && (
                     <td className="dt-action-cell">
                       {id && (
-                        <ChevronRight size={15} strokeWidth={2} className="dt-action-arrow" />
+                        <button
+                          type="button"
+                          className="btn btn-ghost btn-sm dt-narrow"
+                          aria-label={`Narrow the whole dashboard to ${row.name}`}
+                          onClick={(e) => {
+                            stop(e)
+                            onProvince(id)
+                          }}
+                        >
+                          Narrow
+                        </button>
                       )}
                     </td>
                   )}

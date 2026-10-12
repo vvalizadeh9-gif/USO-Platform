@@ -12,7 +12,7 @@ const VIEWPORTS = [
 const PAGES = [
   // A tall board scrolls in its page body (amendment B), never the document.
   { name: 'Action Center', path: '/action-center', ready: 'Action Center' },
-  { name: 'DT dashboard', path: '/reports/drive-test', ready: 'Where this is going', fits: true },
+  { name: 'DT dashboard', path: '/reports/drive-test', ready: 'On air vs DT done', fits: true },
   { name: 'Monthly Plan', path: '/monthly-plan', ready: 'By contractor', fits: true },
   { name: 'HC Pool', path: '/health-check', ready: /^Health Check Pool/, table: true, dock: true },
   { name: 'HC In Progress', path: '/health-check?tab=running', ready: 'Health checks in progress', table: true },

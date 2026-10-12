@@ -2,7 +2,7 @@ import { SegmentedControl } from '../../../components/ui'
 import { CUMULATIVE, LAST_12 } from './flowView'
 
 /**
- * Which months "Where this is going" shows, as one segmented control in the
+ * Which months "On air vs DT done" shows, as one segmented control in the
  * card's title row: Last 12 months (the default), Cumulative (every month
  * since Farvardin 1404), then one option per Shamsi year the payload covers,
  * oldest first. The years come from the data, so a new year appears on its
