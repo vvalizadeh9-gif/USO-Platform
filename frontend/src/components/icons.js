@@ -2,6 +2,20 @@
 // icon is fetched at run time. No other pack is mixed in on UEP-foundation
 // pages. Each icon has Carbon's 16px glyph and its 20px glyph; the Icon
 // component picks the one drawn for the size asked for.
+import close16 from '@carbon/icons/es/close/16.js'
+import close20 from '@carbon/icons/es/close/20.js'
+import download16 from '@carbon/icons/es/download/16.js'
+import download20 from '@carbon/icons/es/download/20.js'
+import undo16 from '@carbon/icons/es/undo/16.js'
+import undo20 from '@carbon/icons/es/undo/20.js'
+import document16 from '@carbon/icons/es/document/16.js'
+import document20 from '@carbon/icons/es/document/20.js'
+import recentlyViewed16 from '@carbon/icons/es/recently-viewed/16.js'
+import recentlyViewed20 from '@carbon/icons/es/recently-viewed/20.js'
+import attachment16 from '@carbon/icons/es/attachment/16.js'
+import attachment20 from '@carbon/icons/es/attachment/20.js'
+import checkmarkFilled16 from '@carbon/icons/es/checkmark--filled/16.js'
+import checkmarkFilled20 from '@carbon/icons/es/checkmark--filled/20.js'
 import arrowLeft16 from '@carbon/icons/es/arrow--left/16.js'
 import arrowLeft20 from '@carbon/icons/es/arrow--left/20.js'
 import arrowRight16 from '@carbon/icons/es/arrow--right/16.js'
@@ -94,6 +108,13 @@ export const ICONS = Object.freeze({
   'direction--fork': { 16: directionFork16, 20: directionFork20 },
   'time': { 16: time16, 20: time20 },
   'tools': { 16: tools16, 20: tools20 },
+  'close': { 16: close16, 20: close20 },
+  'download': { 16: download16, 20: download20 },
+  'undo': { 16: undo16, 20: undo20 },
+  'document': { 16: document16, 20: document20 },
+  'recently-viewed': { 16: recentlyViewed16, 20: recentlyViewed20 },
+  'attachment': { 16: attachment16, 20: attachment20 },
+  'checkmark--filled': { 16: checkmarkFilled16, 20: checkmarkFilled20 },
 })
 
 /** @typedef {keyof typeof ICONS} IconName */

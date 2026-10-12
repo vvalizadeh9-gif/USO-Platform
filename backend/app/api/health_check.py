@@ -36,7 +36,9 @@ from app.schemas import (
     DtReviewRow,
     HcAssignmentCreate,
     HcAssignmentListItem,
+    ContractorLoadRow,
     HcAssignmentOut,
+    HcConfirmRequest,
     HcBasketItem,
     HcHistoryEvent,
     HcInProgressRow,
@@ -54,7 +56,8 @@ from app.schemas import (
 )
 from app.services import hc_queues
 from app.services import health_check as hc
-from app.services import evidence_store
+from app.services import contractor_load, evidence_store, undo
+from app.services.action_queues.context import QueueContext
 from app.services.audit import record_audit
 from app.services.tech_parser import parse_technologies
 from app.services.visibility import visible_work_item_ids
@@ -109,7 +112,7 @@ def hc_basket(
     user: User = Depends(require_roles(ADMIN, PM, COORDINATOR)),
 ):
     """On-air sites still needing a health check, in the user's provinces."""
-    return hc.get_basket(db, user)
+    return hc_queues.with_villages(db, hc.get_basket(db, user))
 
 
 @router.post("/assignments", response_model=HcAssignmentOut, status_code=201)
@@ -141,6 +144,35 @@ def create_hc_assignment(
     db.commit()
     db.refresh(assignment)
     return hc.build_assignment_out(assignment)
+
+
+@router.post("/assignments/{assignment_id}/undo")
+def undo_hc_assignment(
+    assignment_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_roles(PM, COORDINATOR)),
+):
+    """Withdraw an assignment you made in the last two minutes, before any of
+    its sites reported back. The sites return to the pool."""
+    assignment = _load_assignment(db, user, assignment_id)
+    try:
+        undo.undo_hc_assignment(db, user, assignment)
+    except LookupError as exc:
+        raise HTTPException(404, str(exc)) from None
+    except undo.UndoRefused as exc:
+        db.rollback()
+        raise HTTPException(409, str(exc)) from None
+    db.commit()
+    return {"status": "ok"}
+
+
+@router.get("/contractors/load", response_model=list[ContractorLoadRow])
+def hc_contractor_load(
+    db: Session = Depends(get_db),
+    user: User = Depends(require_roles(PM, COORDINATOR)),
+):
+    """Each contractor's health-check workload, for the assign panel."""
+    return contractor_load.contractor_load(QueueContext(db, user), "hc")
 
 
 @router.get("/assignments", response_model=list[HcAssignmentListItem])
@@ -264,6 +296,8 @@ def hc_results(
             technologies=[
                 HcTechnologyOut.model_validate(t) for t in task.technologies
             ],
+            completed_at=task.completed_at,
+            days_waiting=hc_queues.days_since(task.completed_at),
         )
         for task, wi, site, assignment, contractor in rows
     ]
@@ -333,12 +367,17 @@ def hc_results_export(
 # table, nothing is pushed and nothing is dismissed: an item is in a queue
 # exactly while its condition holds, which is why the pool has never gone
 # wrong and why the rest of the lifecycle is now modelled the same way.
-@router.get("/queues/counts", response_model=HcQueueCounts)
+@router.get("/queues/counts", response_model=HcQueueCounts, deprecated=True)
 def queue_counts(
     db: Session = Depends(get_db),
     user: User = Depends(require_review_authority),
 ):
-    """How many items wait in each queue, for the tab badges."""
+    """How many items wait in each queue.
+
+    Deprecated: the Health check and Drive test pages read
+    ``GET /drive-test/pipeline/summary``, which counts through the queue
+    service Home shares. Kept working for any other caller.
+    """
     return hc_queues.counts(db, user)
 
 
@@ -375,7 +414,7 @@ def queue_dt_assignment(
     user: User = Depends(require_review_authority),
 ):
     """Confirmed-Ready sites awaiting an official drive-test assignment."""
-    return hc_queues.dt_assignment(db, user)
+    return hc_queues.with_villages(db, hc_queues.dt_assignment(db, user))
 
 
 @router.get("/queues/dt-in-progress", response_model=list[DtInProgressRow])
@@ -504,6 +543,55 @@ def review_hc_result(
         "problem_category": task.problem_category,
         "reviewed": True,
     }
+
+
+@router.post("/results/confirm")
+def confirm_ready_results(
+    payload: HcConfirmRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_roles(PM, COORDINATOR)),
+):
+    """Confirm several Ready results at once (Confirm ready, Confirm all).
+
+    The same decision ``POST /tasks/{id}/review`` records with no categories,
+    taken for each task in one transaction, so a batch is confirmed whole or
+    not at all. ``batch_id`` names it for the undo below.
+    """
+    tasks = [_load_task(db, user, tid) for tid in dict.fromkeys(payload.task_ids)]
+    for task in tasks:
+        if task.completed_at is None or task.overall_result != "Ready":
+            raise HTTPException(400, "Only Ready results can be confirmed this way.")
+        if task.reviewed_at is not None:
+            raise HTTPException(409, "One of those results was already decided. Refresh and try again.")
+    for task in tasks:
+        hc.review_task(db, task=task, problem_categories=[], user=user)
+    entry = record_audit(
+        db, user_id=user.id, action=audit_actions.REVIEWED,
+        module="HealthCheck", entity_type=undo.HC_CONFIRM_BATCH, entity_id=None,
+        new_value={"task_ids": [t.id for t in tasks], "reviewed": True},
+    )
+    db.flush()
+    db.commit()
+    return {"status": "ok", "confirmed": len(tasks), "batch_id": entry.id}
+
+
+@router.post("/results/confirm/{batch_id}/undo")
+def undo_confirm_ready(
+    batch_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_roles(PM, COORDINATOR)),
+):
+    """Put a confirmed batch back in HC Review: same user, within two
+    minutes, and none of its sites sent for a drive test since."""
+    try:
+        undo.undo_hc_confirm(db, user, batch_id, lambda tid: _load_task(db, user, tid))
+    except LookupError as exc:
+        raise HTTPException(404, str(exc)) from None
+    except undo.UndoRefused as exc:
+        db.rollback()
+        raise HTTPException(409, str(exc)) from None
+    db.commit()
+    return {"status": "ok"}
 
 
 # ---------------- Category owners: the fix queue ----------------

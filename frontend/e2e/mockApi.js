@@ -3,6 +3,7 @@
 // still renders, and a test that cares about it adds it here. A route may be
 // a function of the request URL, for an answer that depends on its query.
 import * as F from './fixtures.js'
+import * as W from './workFixtures.js'
 import { villagesXlsx } from './xlsx.js'
 import { myWorkList, myWorkSuggestions, myWorkVillage } from './myWorkFixtures.js'
 
@@ -16,11 +17,10 @@ const ROUTES = {
   '/drive-test/flow': F.dtFlow,
   '/pip/overview': F.pipOverview,
   '/pip/queue': F.pipQueue,
-  '/hc/basket': F.hcBasket,
-  '/hc/queues/counts': F.hcCounts,
-  '/hc/queues/in-progress': F.hcInProgress,
-  '/hc/queues/dt-assignment': F.dtAssignment,
-  '/hc/queues/dt-in-progress': F.dtInProgress,
+  '/hc/basket': W.hcBasket,
+  '/hc/queues/in-progress': W.hcInProgress,
+  '/hc/queues/dt-assignment': W.dtAssignment,
+  '/hc/queues/dt-in-progress': W.dtInProgress,
   '/reference/contractors': F.contractors,
   '/kpi/lenses': F.kpiLenses,
   '/gaps/overview': F.gapsOverview,
@@ -28,6 +28,15 @@ const ROUTES = {
   '/acceptance/overview': F.accOverview,
   '/acceptance/progress': F.accProgress,
   '/reference/provinces': [],
+  '/drive-test/pipeline/summary': W.pipelineSummary,
+  '/hc/contractors/load': W.contractorLoad,
+  '/drive-test/contractors/load': W.contractorLoad,
+  '/hc/results': W.hcResults,
+  '/hc/queues/dt-review': W.dtReview,
+  '/hc/queues/remediations': W.remediations,
+  '/hc/queues/reroutes': W.reroutes,
+  '/work-items': W.workItems,
+  '/work-items/counts': W.workItemCounts,
 }
 
 // Endpoints answered late, on purpose: the dashboard's side cards arriving

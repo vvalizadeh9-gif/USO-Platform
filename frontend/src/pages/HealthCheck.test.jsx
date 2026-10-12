@@ -1,138 +1,147 @@
-// What the Health Check page does with the `?tab=` it is handed.
+// What the Health check and Drive test pages do with the URL (UEP-06 §1).
 //
-// Three kinds of key arrive there: the current ones, the renamed ones the
-// LEGACY_TABS map covers, and the two that are not on this page at all any
-// more because the drive test became its own screen. The last kind is the one
-// worth a test: the Action Center URLs the server builds still say
-// ?tab=dt-assign, so the redirect is what keeps those links working — and it
-// is invisible from the backend's side if it breaks.
+// The step lives in `?tab=`, so Back and Forward walk through it, and every
+// key people already hold keeps working: the renamed ones open their step in
+// place, and the two that moved to the Drive test page are sent on there --
+// the server built links with ?tab=dt-assign for years, and a broken redirect
+// is invisible from the backend's side.
 import { act, fireEvent, render, screen } from '@testing-library/react'
-import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
-import { describe, expect, it, vi } from 'vitest'
+import { MemoryRouter, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const COUNTS = vi.hoisted(() => ({
-  pool: 1012, in_progress: 320, hc_in_progress_late: 4, hc_review: 12, remediation: 9, reroutes: 0,
+const SUMMARY = vi.hoisted(() => ({
+  hc1: { count: 196, late: 3, oldest_days: 40, sla_days: 14 },
+  hc2: { count: 98, late: 0, oldest_days: 9, sla_days: 14 },
+  hc3: { count: 12, late: 0, oldest_days: 2, sla_days: 14 },
+  dt4: { count: 49, late: 1, oldest_days: 20, sla_days: 14 },
+  dt5: { count: 263, late: 4, oldest_days: 30, sla_days: 14 },
+  dt6: { count: 7, late: 0, oldest_days: 1, sla_days: 14 },
+  done: { count: 1200, late: 0, oldest_days: null, sla_days: null },
+  remediation: { count: 9, late: 2, oldest_days: 30, sla_days: null },
+  reroutes: { count: 0, late: 0, oldest_days: null, sla_days: 14 },
+  sent_back: { count: 5, late: 0, oldest_days: 3, sla_days: 14 },
 }))
 vi.mock('../api/client', () => ({
   default: {
-    get: vi.fn((url) => Promise.resolve({ data: url === '/hc/queues/counts' ? COUNTS : {} })),
+    get: vi.fn((url) => Promise.resolve({ data: url === '/drive-test/pipeline/summary' ? SUMMARY : [] })),
+    post: vi.fn(),
   },
 }))
+vi.mock('../context/AuthContext', () => ({ useAuth: () => ({ user: { role: { name: 'Coordinator' } } }) }))
+vi.mock('../shell/HomeData', () => ({ useHomeData: () => ({ data: null, error: null }) }))
+// The History view's archive fetches its own assignments.
+vi.mock('./healthcheck/HcHistoryTab', () => ({ default: () => <p>archive</p> }))
 
-// The tab bodies each fetch their own queue. This is a test about which tab
-// the URL selects, so they are replaced with markers.
-const stub = (name) => ({ default: () => <p data-testid="tab">{name}</p> })
-vi.mock('./healthcheck/HcBasketTab', () => stub('pool'))
-vi.mock('./healthcheck/HcInProgressTab', () => stub('running'))
-vi.mock('./healthcheck/HcResultsTab', () => stub('review'))
-vi.mock('./healthcheck/HcHistoryTab', () => stub('history'))
-vi.mock('./healthcheck/RemediationTab', () => stub('remediation'))
-vi.mock('./healthcheck/ReroutesTab', () => stub('reroutes'))
-
-vi.mock('../context/AuthContext', () => ({
-  useAuth: () => ({ user: { role: { name: 'Coordinator' } } }),
-}))
-
-
+const api = (await import('../api/client')).default
 const HealthCheck = (await import('./HealthCheck')).default
+const DriveTest = (await import('./DriveTest')).default
+const { ToastProvider } = await import('../context/ToastContext')
 
-/** Stands in for the Drive Test page, reporting the URL it was reached at. */
-function DriveTestStandIn() {
+let nav
+function Where() {
   const { pathname, search } = useLocation()
-  return <p data-testid="landed">{`${pathname}${search}`}</p>
+  nav = useNavigate()
+  return <p data-testid="where">{`${pathname}${search}`}</p>
 }
 
 async function landOn(path) {
   render(
     <MemoryRouter initialEntries={[path]}>
-      <Routes>
-        <Route path="/health-check" element={<HealthCheck />} />
-        <Route path="/drive-test" element={<DriveTestStandIn />} />
-      </Routes>
+      <ToastProvider>
+        <Routes>
+          <Route path="/health-check" element={<HealthCheck />} />
+          <Route path="/drive-test" element={<DriveTest />} />
+        </Routes>
+        <Where />
+      </ToastProvider>
     </MemoryRouter>,
   )
-  // The page fetches its badge counts on mount. Settling that here keeps the
-  // assertions below free of act() warnings about a state update they did not
-  // ask for.
   await act(async () => {})
 }
 
-describe('tab keys that moved to the Drive Test page', () => {
+const heading = () => screen.getByRole('heading', { level: 1 })
+
+beforeEach(() => vi.clearAllMocks())
+
+describe('every route opens its step', () => {
   it.each([
-    ['dt-assign', 'assignment'],
-    ['dt-review', 'review'],
-  ])('?tab=%s is sent on to the drive test %s tab', async (from, to) => {
-    await landOn(`/health-check?tab=${from}`)
-    expect(screen.getByTestId('landed')).toHaveTextContent(`/drive-test?tab=${to}`)
+    ['/health-check?tab=pool', 'Assign health check'],
+    ['/health-check?tab=basket', 'Assign health check'],
+    ['/health-check', 'Assign health check'],
+    ['/health-check?tab=pool&state=ready', 'Assign health check'],
+    ['/health-check?tab=running', 'In health check'],
+    ['/health-check?tab=review', 'Review results'],
+    ['/health-check?tab=results', 'Review results'],
+    ['/health-check?tab=remediation', 'Remediation'],
+    ['/health-check?tab=reroutes', 'Re-routes'],
+    ['/health-check?tab=history', 'History'],
+    ['/drive-test', 'Assign drive test'],
+    ['/drive-test?tab=assignment', 'Assign drive test'],
+    ['/drive-test?tab=in-progress', 'With contractor'],
+    ['/drive-test?tab=review', 'Review drive test'],
+    ['/drive-test?tab=done', 'DT done'],
+    ['/drive-test?tab=sent-back', 'Sent back'],
+    ['/drive-test?tab=history', 'History'],
+  ])('%s → %s', async (path, title) => {
+    await landOn(path)
+    expect(heading()).toHaveTextContent(title)
   })
 
-  it('keeps the other query params when it redirects', async () => {
-    await landOn('/health-check?tab=dt-review&site=ABC123')
-    const landed = screen.getByTestId('landed').textContent
-    expect(landed).toContain('tab=review')
-    expect(landed).toContain('site=ABC123')
+  it.each([
+    ['dt-assign', 'assignment', 'Assign drive test'],
+    ['dt-review', 'review', 'Review drive test'],
+  ])('?tab=%s on Health check is sent on to the drive test %s step', async (from, to, title) => {
+    await landOn(`/health-check?tab=${from}&site=ABC123`)
+    expect(screen.getByTestId('where').textContent).toContain(`/drive-test?tab=${to}`)
+    expect(screen.getByTestId('where').textContent).toContain('site=ABC123')
+    expect(heading()).toHaveTextContent(title)
   })
 })
 
-describe('tab keys that only got renamed', () => {
-  it.each([
-    ['basket', 'pool'],
-    ['results', 'review'],
-  ])('?tab=%s still opens the %s tab in place', async (from, to) => {
-    await landOn(`/health-check?tab=${from}`)
-    expect(screen.getByTestId('tab')).toHaveTextContent(to)
+describe('the heading and the strip', () => {
+  it('names the step, its sites and how many are late', async () => {
+    await landOn('/health-check')
+    expect(heading()).toHaveTextContent('Assign health check')
+    expect(screen.getByText('196 sites')).toBeInTheDocument()
+    expect(screen.getByText('3 late', { selector: '.uw-heading-meta b' })).toHaveClass('uw-late')
+    expect(heading()).toHaveAttribute('tabindex', '-1')
+    expect(api.get).toHaveBeenCalledWith('/drive-test/pipeline/summary')
+    expect(api.get).not.toHaveBeenCalledWith('/hc/queues/counts')
   })
 
-  it('defaults to the pool when no tab is named', async () => {
-    await landOn('/health-check')
-    expect(screen.getByTestId('tab')).toHaveTextContent('pool')
-  })
-})
-
-describe('the tab row reads as an order', () => {
-  const tab = (name) => screen.getByRole('tab', { name })
-
-  it('puts the fix loop in one group and History at the far end', async () => {
-    await landOn('/health-check')
-
-    const group = document.querySelector('.ui-tab-group')
-    expect(group).toHaveTextContent('Fix loop')
-    expect([...group.querySelectorAll('[role="tab"]')].map((b) => b.textContent)).toEqual([
-      'Remediation9',
-      'Re-routes',
-    ])
-    // No chevron inside the group: neither queue follows the other.
-    expect(group.querySelector('.ui-tab-sep')).toBeNull()
-    expect(document.querySelector('.ui-tab-end')).toHaveTextContent('History')
+  it('shows the same strip on both pages, the list card as its panel', async () => {
+    await landOn('/drive-test?tab=in-progress')
+    const selected = screen.getByRole('tab', { selected: true })
+    expect(selected.dataset.step).toBe('dt5')
+    const panel = document.getElementById(selected.getAttribute('aria-controls'))
+    expect(panel).toHaveAttribute('role', 'tabpanel')
+    expect(panel).toHaveAttribute('aria-labelledby', selected.id)
   })
 
-  it('separates the steps before the group with a chevron each', async () => {
-    await landOn('/health-check')
-    // Three steps: the first has no separator, so two chevrons between them,
-    // plus one before the fix loop.
-    expect(document.querySelectorAll('.ui-tabs > .ui-tab-sep')).toHaveLength(3)
+  it('crosses pages when a step on the other one is chosen, and Back returns', async () => {
+    await landOn('/health-check?tab=review')
+    fireEvent.keyDown(screen.getByRole('tab', { selected: true }), { key: 'ArrowRight' })
+    await act(async () => {})
+    expect(screen.getByTestId('where')).toHaveTextContent('/drive-test?tab=assignment')
+    expect(heading()).toHaveTextContent('Assign drive test')
+    await act(async () => nav(-1))
+    expect(screen.getByTestId('where')).toHaveTextContent('/health-check?tab=review')
+    expect(heading()).toHaveTextContent('Review results')
+    await act(async () => nav(1))
+    expect(heading()).toHaveTextContent('Assign drive test')
   })
 
-  it('counts each queue, and puts the late health checks on In Progress', async () => {
-    await landOn('/health-check')
-    expect(tab(/HC Pool/)).toHaveTextContent('1012')
-    const running = tab(/In Progress/)
-    expect(running.querySelector('.ui-tab-count')).toHaveTextContent('320')
-    expect(running.querySelector('.ui-tab-alert')).toHaveTextContent('4 late')
-    // A queue at zero carries no chip.
-    expect(tab('Re-routes').querySelector('.ui-tab-count')).toBeNull()
+  it('opens History from the heading, marked as the current view', async () => {
+    await landOn('/drive-test')
+    fireEvent.click(screen.getByRole('button', { name: 'History' }))
+    await act(async () => {})
+    expect(screen.getByTestId('where')).toHaveTextContent('/drive-test?tab=history')
+    expect(screen.getByRole('button', { name: 'History' })).toHaveAttribute('aria-current', 'page')
+    expect(screen.queryByRole('tab', { selected: true })).toBeNull()
   })
 
-  it('sits under a PageBar with the process stepper on step 2', async () => {
+  it('has one persistent status region from page load', async () => {
     await landOn('/health-check')
-    expect(screen.getByRole('heading', { level: 1, name: 'Health Check' }).closest('.page-bar')).not.toBeNull()
-    expect(screen.getByText('Health Check', { selector: '.stepper-label' }).closest('[aria-current="step"]')).not.toBeNull()
-  })
-
-  it('switches tabs with the keyboard', async () => {
-    await landOn('/health-check')
-    tab(/HC Pool/).focus()
-    fireEvent.keyDown(tab(/HC Pool/), { key: 'ArrowRight' })
-    expect(screen.getByTestId('tab')).toHaveTextContent('running')
+    expect(screen.getAllByRole('status').filter((s) => s.dataset.testid === 'work-live')).toHaveLength(1)
   })
 })

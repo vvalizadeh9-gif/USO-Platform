@@ -178,68 +178,6 @@ export const pipOverview = {
 
 export const pipQueue = { label: '', stream: 'DT', rows: [], current_month: {} }
 
-const HC_STATES = ['New', 'New', 'New', 'In health check', 'Awaiting triage', 'Fix in progress', 'Health check passed']
-export const hcBasket = Array.from({ length: 1012 }, (_, i) => {
-  const state = HC_STATES[i % HC_STATES.length]
-  return {
-    work_item_id: i + 1,
-    site_code: `SITE-${String(10000 + i)}`,
-    province: PROVINCES[i % PROVINCES.length],
-    site_type: i % 3 ? 'Macro' : 'Micro',
-    requested_technologies: i % 2 ? ['2G', '4G'] : ['3G'],
-    dt_status: i % 5 ? null : 'Ongoing',
-    hc_state: state,
-    assignable: state !== 'In health check',
-    round_no: 1,
-    returning_reason: null,
-    days_waiting: (i * 7) % 90,
-  }
-})
-
-export const hcInProgress = Array.from({ length: 40 }, (_, i) => ({
-  assignment_id: i + 1,
-  code: `HC-${1400 + i}`,
-  contractor_id: (i % CONTRACTORS.length) + 1,
-  contractor_name: CONTRACTORS[i % CONTRACTORS.length],
-  assigned_at: new Date(Date.now() - (i + 2) * 86400000).toISOString(),
-  days_outstanding: 40 - i,
-  sites_total: 12,
-  sites_submitted: 4,
-  sites_pending: 8,
-  pending_sites: Array.from({ length: 8 }, (_, j) => `SITE-${20000 + i * 10 + j}`),
-}))
-
-export const hcCounts = {
-  pool: 1012, pool_assignable: 868, in_progress: 320, hc_in_progress_late: 26,
-  hc_review: 12, remediation: 9, reroutes: 2, dt_assignment: 38, dt_in_progress: 96, dt_review: 7,
-}
-
-export const dtAssignment = Array.from({ length: 38 }, (_, i) => ({
-  work_item_id: 5000 + i,
-  site_code: `SITE-${30000 + i}`,
-  province: PROVINCES[i % PROVINCES.length],
-  requested_technologies: ['2G', '4G'],
-  rounds_taken: i % 4 === 0 ? 2 : 1,
-  hc_contractor: CONTRACTORS[i % CONTRACTORS.length],
-  days_waiting: 20 - (i % 20),
-  returned_reason: null,
-}))
-
-export const dtInProgress = Array.from({ length: 96 }, (_, i) => ({
-  work_item_id: 6000 + i,
-  site_code: `SITE-${40000 + i}`,
-  site_type: 'Macro',
-  province: PROVINCES[i % PROVINCES.length],
-  requested_technologies: ['4G'],
-  contractor_id: (i % CONTRACTORS.length) + 1,
-  contractor_name: CONTRACTORS[i % CONTRACTORS.length],
-  assigned_at: new Date(Date.now() - i * 86400000).toISOString(),
-  days_since_assigned: i % 30,
-  status: i % 9 ? 'with_contractor' : 'sent_back',
-  sent_back_comment: null,
-  sent_back_at: null,
-}))
-
 // ----- Lifecycle Gaps ------------------------------------------------------
 //
 // The national totals are the design's; the owners are placeholders and the

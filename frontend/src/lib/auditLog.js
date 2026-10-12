@@ -57,6 +57,7 @@ const ACTION_PHRASES = {
   RETURNED: 'returned',
   ASSIGNED: 'assigned',
   REVIEWED: 'reviewed',
+  UNDONE: 'undid',
   DATA_WIPED: 'erased',
 }
 
@@ -87,6 +88,7 @@ export const ACTION_LABELS = {
   RETURNED: 'Returned',
   ASSIGNED: 'Assigned',
   REVIEWED: 'Reviewed',
+  UNDONE: 'Undone',
   DATA_WIPED: 'Data erased',
 }
 
@@ -105,7 +107,7 @@ export const ACCOUNT_ACTIONS = [
 
 export const PORTAL_ACTIONS = [
   'CREATED', 'UPDATED', 'DELETED', 'IMPORTED', 'SUBMITTED',
-  'APPROVED', 'REJECTED', 'RETURNED', 'ASSIGNED', 'REVIEWED', 'DATA_WIPED',
+  'APPROVED', 'REJECTED', 'RETURNED', 'ASSIGNED', 'REVIEWED', 'UNDONE', 'DATA_WIPED',
 ]
 
 // An action the backend has added and this file has not: MY_NEW_ACTION becomes

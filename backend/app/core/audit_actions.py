@@ -58,6 +58,8 @@ REJECTED = "REJECTED"
 RETURNED = "RETURNED"
 ASSIGNED = "ASSIGNED"
 REVIEWED = "REVIEWED"
+#: An assignment or confirmation taken back within its undo window.
+UNDONE = "UNDONE"
 DATA_WIPED = "DATA_WIPED"
 
 # ---------------------------------------------------------------------------

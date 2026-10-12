@@ -176,6 +176,42 @@
   --uep-hero-area-opacity: 0.14;
   --uep-area-opacity: 0.08;
 
+  /* ---- Component: work pages (UEP-06) ----
+     The Health check and Drive test pipeline pages, and All sites. */
+  --uep-control-height: 34px;
+  --uep-row-hover: #F8F9FB;          /* a site row under the pointer */
+  --uep-selection-wash: #F7F9FE;     /* the assign panel while sites are selected */
+  --uep-selection-edge: #C9D6F8;     /* its top border then */
+  --uep-on-accent-soft: rgba(255, 255, 255, 0.2);   /* number circle on the hero tile */
+  --uep-on-accent-track: rgba(255, 255, 255, 0.25); /* volume-bar track on the hero tile */
+  --uep-strip-bar: 6px;
+  --uep-strip-number: 18px;
+  --uep-fs-strip-figure: 24px;
+  --uep-fs-strip-figure-tight: 20px;
+  --uep-table-head: 40px;
+  --uep-table-row: 44px;
+  --uep-col-check: 52px;
+  --uep-col-icon: 56px;
+  --uep-hit-check: 32px;
+  --uep-waiting-bar-width: 120px;
+  --uep-waiting-bar-height: 4px;
+  --uep-waiting-figure: 36px;
+  --uep-load-bar: 4px;
+  --uep-search-width: 220px;
+  --uep-assign-lead: 190px;
+  --uep-review-panel: 360px;
+  --uep-selected-inset: 3px;
+  --uep-control-sm: 28px;          /* row buttons and icon buttons */
+  --uep-target-min: 24px;          /* WCAG 2.5.8 */
+  --uep-dot: 8px;
+  --uep-check-box: 16px;
+  --uep-state-icon: 36px;
+  --uep-state-min: 160px;
+  --uep-assign-card-min: 72px;
+  --uep-assign-card-min-tight: 64px;
+  --uep-notice-max: 640px;
+  --uep-kbd-radius: 4px;
+
   /* ---- Component: sign-in ---- */
   --uep-signin-half-basis: 520px;
   --uep-signin-breakpoint: 960px;  /* documentation only: media queries cannot read it */
