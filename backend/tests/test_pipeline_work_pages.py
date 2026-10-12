@@ -294,7 +294,7 @@ def test_load_avg_comes_from_submissions(client, pm):
     other = _contractors()[-1]
     sites = _ready_to_assign(client, pm, 5)
     assignment = _assign_hc(client, pm, sites, contractor_id=other)
-    for task, site in zip(assignment["tasks"], sites):
+    for task, site in zip(assignment["tasks"], sites, strict=True):
         _submit_ready(client, pm, task, site["requested_technologies"])
     row = next(r for r in client.get(f"{API}/hc/contractors/load", headers=pm).json()
                if r["contractor_id"] == other)

@@ -77,7 +77,7 @@ describe('the assign panel', () => {
     const user = userEvent.setup()
     await draw()
     await user.click(screen.getByText('do'))
-    expect(screen.getByText('✓ 2 sites assigned to رعد.')).toBeInTheDocument()
+    expect(screen.getByText('✓ 2 sites assigned to رعد.', { selector: '.uw-notice-text' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /Undo/ })).toBeInTheDocument()
     await act(async () => {
       await new Promise((r) => requestAnimationFrame(r))

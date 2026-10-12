@@ -1,5 +1,5 @@
 // Steps 3 and 6 (UEP-06 §5): HC review and DT review.
-import { act, fireEvent, render, screen, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -69,7 +69,8 @@ describe('HC review', () => {
     await draw(HcReviewStep, 'hc3')
     await user.click(screen.getByRole('button', { name: 'Confirm all 2 Ready' }))
     expect(api.post).toHaveBeenCalledWith('/hc/results/confirm', { task_ids: [1, 3] })
-    expect(await screen.findByText('✓ 2 sites confirmed ready.')).toBeInTheDocument()
+    // The step alone has no on-screen notice; the page's live region says it.
+    await waitFor(() => expect(screen.getByTestId('work-live')).toHaveTextContent('✓ 2 sites confirmed ready.'))
   })
 
   it('opens a failed row by default, and the chevron says so', async () => {
