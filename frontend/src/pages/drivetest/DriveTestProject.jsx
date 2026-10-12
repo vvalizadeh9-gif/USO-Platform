@@ -1,11 +1,4 @@
-import {
-  ArrowLeftRight,
-  Building2,
-  Hourglass,
-  MapPinned,
-  OctagonAlert,
-  TrendingUp,
-} from 'lucide-react'
+import Icon from '../../components/Icon'
 import { useCallback, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import api from '../../api/client'
@@ -19,7 +12,7 @@ import ContractorScorecard from './ContractorScorecard'
 import InfoTip from './InfoTip'
 import KpiBand from './KpiBand'
 import PipThisMonth from './PipThisMonth'
-import ProvinceList, { ProvinceSearch } from './ProvinceList'
+import ProvinceList, { ProvinceSearch, matchProvinces } from './ProvinceList'
 import Section from './Section'
 import DashboardActions, { ProvinceScope } from './Toolbar'
 import FlowChart, { FlowLegend } from './charts/FlowChart'
@@ -58,7 +51,7 @@ const VIEW_KEYS = new Set(VIEW_TABS.map((t) => t.key))
 /** Every breakdown bar is the accent, on the track: the bars are a share, and
  * the card's title names the state. Folded and uncategorized rows take the
  * darker neutral (see RankedBars). */
-const BAR_COLOR = 'var(--accent)'
+const BAR_COLOR = 'var(--uep-accent)'
 
 const PROBLEMATIC_TABS = [
   { key: 'category', label: 'Category' },
@@ -277,14 +270,16 @@ export default function DriveTestProject() {
               className="dt-page-error"
               title="Could not load the Drive Test figures."
             >
-              <p>Everything on this page comes from that request, so there is nothing to show.</p>
+              <p>Everything on this tab comes from that request, so there is nothing to show.</p>
               <button type="button" className="btn" onClick={refresh}>
                 Try again
               </button>
             </Banner>
           )}
 
-          {view === OVERVIEW ? (
+          {provinceId != null && data?.kpis.total_onair.value === 0 ? (
+            <EmptyProvince name={provinceName} onShowAll={() => setProvince(null)} />
+          ) : view === OVERVIEW ? (
             <div className="dt-view" role="tabpanel" aria-label="Overview">
               {overview.loading && !data ? (
                 <KpiSkeleton />
@@ -307,7 +302,6 @@ export default function DriveTestProject() {
                 <Section
                   title="On air vs DT done"
                   subtitle="Sites, cumulative · last 12 months"
-                  icon={TrendingUp}
                   inline
                   state={flow}
                   onRetry={refresh}
@@ -379,7 +373,7 @@ export default function DriveTestProject() {
                   {trend.data?.latest_flows && (
                     <Section
                       title="What moved"
-                      icon={ArrowLeftRight}
+                      tile="chart--column"
                       subtitle={`${trend.data.latest_flows.label} ${trend.data.latest_flows.shamsi_year}${
                         trend.data.latest_flows.is_open ? ' · in progress' : ''
                       }`}
@@ -410,7 +404,6 @@ export default function DriveTestProject() {
                 {has('ongoing_breakdown') && (
                   <Section
                     title="Ongoing breakdown"
-                    icon={Hourglass}
                     inline
                     className="dt-breakdown-section"
                     state={overview}
@@ -441,7 +434,6 @@ export default function DriveTestProject() {
                 {has('problematic_breakdown') && (
                   <Section
                     title="Problematic breakdown"
-                    icon={OctagonAlert}
                     inline
                     className="dt-breakdown-section"
                     state={overview}
@@ -480,8 +472,15 @@ export default function DriveTestProject() {
                 {has('contractor_scorecard') && (
                   <Section
                     title="Contractor scorecard"
-                    icon={Building2}
+                    subtitle={`Assignment = DT done + Ongoing${
+                      plan.data?.month_label ? ` · PIP for ${plan.data.month_label}` : ''
+                    }`}
                     inline
+                    actions={
+                      data && (
+                        <SectionTotal value={data.contractor_scorecard.length} label="contractors" />
+                      )
+                    }
                     state={overview}
                     onRetry={refresh}
                     info={
@@ -513,7 +512,14 @@ export default function DriveTestProject() {
                   <div className="dt-tables-cell">
                     <Section
                       title="Drive Test progress by province"
-                      icon={MapPinned}
+                      subtitle={
+                        data &&
+                        `Gap = On air − DT done · ${
+                          provinceSearch.trim()
+                            ? `${count(matchProvinces(data.province_breakdown, provinceSearch).length)} of `
+                            : ''
+                        }${count(data.province_breakdown.length)} provinces`
+                      }
                       inline
                       state={overview}
                       onRetry={refresh}
@@ -582,12 +588,36 @@ function SectionTotal({ value, label }) {
 }
 
 function KpiSkeleton() {
+  // The strip at its final size: four tiles of label, figure and sparkline,
+  // staggered 80ms (pulse and stagger in dt-dashboard.css).
   return (
-    <div className="dt-kpi-band dt-kpi-skeleton" aria-hidden="true">
-      <span className="dt-skeleton-row" style={{ height: 110 }} />
-      <span className="dt-skeleton-row" style={{ height: 110, animationDelay: '0.08s' }} />
-      <span className="dt-skeleton-row" style={{ height: 110, animationDelay: '0.16s' }} />
-      <span className="dt-skeleton-row" style={{ height: 110, animationDelay: '0.24s' }} />
+    <div className="hk-strip dt-kpi-band dt-kpi-skeleton" aria-hidden="true">
+      {[0, 1, 2, 3].map((i) => (
+        <div key={i} className="hk-tile dt-kpi-skel" style={{ '--i': i }}>
+          <span className="dt-skel" data-part="label" />
+          <span className="dt-skel" data-part="figure" />
+          <span className="dt-skel" data-part="spark" />
+        </div>
+      ))}
+    </div>
+  )
+}
+
+/** A province with nothing on air: one centred card in place of the tab's
+ * content, with the way back to the whole programme. */
+function EmptyProvince({ name, onShowAll }) {
+  return (
+    <div className="dt-empty-province" role="status">
+      <span className="ui-card-chip dt-card-tile" aria-hidden="true">
+        <Icon name="cell-tower" size={16} />
+      </span>
+      <h2>
+        No on-air sites in <span className="dt-farsi">{name ?? 'this province'}</span> yet
+      </h2>
+      <p>Drive test figures appear here once a site in this province goes on air.</p>
+      <button type="button" className="btn" onClick={onShowAll}>
+        Show all provinces
+      </button>
     </div>
   )
 }

@@ -431,17 +431,17 @@ describe('breakdown chrome', () => {
 
     const ongoing = await section('Ongoing breakdown')
     for (const bar of within(ongoing).getAllByTestId('dt-bar')) {
-      expect(bar).toHaveStyle({ background: 'var(--accent)' })
+      expect(bar).toHaveStyle({ background: 'var(--uep-accent)' })
     }
     await userEvent.click(within(ongoing).getByRole('tab', { name: 'How long' }))
     for (const bar of within(ongoing).getAllByTestId('dt-bar')) {
-      expect(bar).toHaveStyle({ background: 'var(--accent)' })
+      expect(bar).toHaveStyle({ background: 'var(--uep-accent)' })
     }
 
     const problematic = await section('Problematic breakdown')
     const uncategorized = within(problematic).getByText('Uncategorized').closest('.dt-bar-row')
     expect(uncategorized).toHaveClass('dt-muted')
-    expect(within(uncategorized).getByTestId('dt-bar')).toHaveStyle({ background: 'var(--dt-pending-bar)' })
+    expect(within(uncategorized).getByTestId('dt-bar')).toHaveStyle({ background: 'var(--uep-neutral-data)' })
     // Still a link: there is a list of uncategorized sites behind it.
     expect(within(uncategorized).getByText('Uncategorized').closest('a')).toHaveAttribute(
       'href',
@@ -1764,6 +1764,24 @@ describe('the province filter', () => {
         params: { province_id: 7 },
       }),
     )
+  })
+
+  it('says a province with nothing on air is empty, and offers the whole programme', async () => {
+    serve(planDelivery(), {
+      ...overview,
+      kpis: { ...overview.kpis, total_onair: kpi(0), total_dt_done: kpi(0), total_remaining: kpi(0) },
+    })
+    draw('/reports/drive-test?province=7')
+
+    const empty = await screen.findByText(/No on-air sites in/)
+    expect(empty).toHaveTextContent('No on-air sites in Kerman yet')
+    expect(screen.queryByLabelText('Programme totals')).toBeNull()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Show all provinces' }))
+    // Re-requested for the whole programme: no province_id.
+    const overviewCalls = () => api.get.mock.calls.filter(([url]) => url === '/drive-test/overview')
+    await waitFor(() => expect(overviewCalls().at(-1)[1]).toEqual({ params: {} }))
+    expect(screen.queryByRole('button', { name: /not just Kerman/ })).toBeNull()
   })
 
   it('says which province it is showing, and offers a way out of it', async () => {

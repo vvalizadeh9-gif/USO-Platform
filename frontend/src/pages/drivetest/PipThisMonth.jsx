@@ -1,4 +1,4 @@
-import { ArrowRight, Target } from 'lucide-react'
+import { ArrowRight } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import { MONTHLY_PLAN_ROLES } from '../../lib/roles'
@@ -54,7 +54,7 @@ export default function PipThisMonth({ state, onRetry, scoped, provinceName }) {
   return (
     <Section
       title="PIP this month"
-      icon={Target}
+      tile="calendar"
       subtitle={state.data?.month_label}
       inline
       // The month's achievement, as the card's total on the right.

@@ -1,5 +1,6 @@
 import { motion } from 'framer-motion'
 import { AlertCircle, RefreshCw } from 'lucide-react'
+import Icon from '../../components/Icon'
 
 /**
  * Card chrome with its three states in one place: loading, failed, loaded.
@@ -22,7 +23,7 @@ export default function Section({
   controls,
   info,
   inline = false,
-  icon: Icon,
+  tile = 'cell-tower',
   state,
   onRetry,
   children,
@@ -31,11 +32,12 @@ export default function Section({
   className = '',
 }) {
   const { data, error, loading } = state
-  // The Cobalt card header's icon chip (see Card in components/ui.jsx):
-  // neutral, never a status colour and never cobalt.
-  const chip = Icon && (
-    <span className="ui-card-chip" aria-hidden="true">
-      <Icon size={20} strokeWidth={1.9} />
+  // The 28px app tile (UEP-04): the app's colour with a white Carbon icon.
+  // White headers and one tile colour, because every card here is Drive test
+  // (PIP is the exception, in Monthly plan amber -- see dt-dashboard.css).
+  const chip = (
+    <span className="ui-card-chip dt-card-tile" aria-hidden="true">
+      <Icon name={tile} size={16} />
     </span>
   )
 
@@ -104,7 +106,7 @@ export default function Section({
                   .join(' ')}
                 .
               </b>{' '}
-              The rest of this page is unaffected.
+              The rest of the dashboard is up to date.
             </span>
             {onRetry && (
               <button type="button" className="btn" onClick={onRetry}>

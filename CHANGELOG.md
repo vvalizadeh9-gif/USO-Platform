@@ -2,7 +2,16 @@
 
 ## Unreleased
 
-- **Drive Test dashboard (UEP-04):** Dashboard is now the first page of the Drive test app. Cards get white headers with a 28px app tile. "Where this is going" is renamed "On air vs DT done" and gains a "View as table" toggle. The PIP figures read Plan · Assigned · Achieved · Remaining, and the pace tick is labelled "Today".
+- **Drive Test dashboard refresh (UEP-04):** the dashboard now matches Home, with the same figures, drill-throughs and API calls.
+  - Dashboard is the first page of the Drive test app.
+  - Cards have white headers with a 28px app tile.
+  - The KPI strip is shared with Home: three tiles with 12-month sparklines, the "% of on air" in the change line, and Pending by status as the fourth tile.
+  - "Where this is going" is renamed **"On air vs DT done"**. It gains keyboard reading (← → Home End), a tooltip that defaults to the latest month, and a "View as table" toggle.
+  - PIP this month reads Plan · Assigned · Achieved · Remaining. The pace tick is labelled "Today", and "N behind pace" replaces the green Ahead/Behind pill.
+  - What moved is four rows. Breakdown bars have column captions.
+  - The tables have sticky headers, and the province table says when no province matches the search.
+  - New empty-province state, and KPI skeletons at their final size.
+  - Nothing on the page is green, and no chart uses teal.
 
 ## UEP Home: Microsoft 365 redesign
 

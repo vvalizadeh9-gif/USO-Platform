@@ -1,0 +1,334 @@
+/* Drive Test dashboard, UEP-04 visual refinement.
+   Loaded after app.css and scoped under .dt-page, so it restyles the page's
+   existing components without forking them, and the Acceptance dashboard
+   (which shares some .dt-kpi-* classes) is left as it was.
+   Every value comes from uep-tokens.css. */
+
+/* ---------- page and title row ---------- */
+.dt-page .page-body { max-width: 1280px; padding: 20px 24px 14px; }
+.dt-page .page-bar-title { font-size: 22px; line-height: 28px; font-weight: var(--uep-weight-semibold); letter-spacing: -0.015em; }
+.dt-page .dt-bench { animation: dt-enter var(--uep-dur-enter) var(--uep-ease-entrance) both; }
+@keyframes dt-enter {
+  from { opacity: 0; transform: translateY(var(--uep-enter-distance)); }
+  to { opacity: 1; transform: none; }
+}
+
+/* Underline tabs: 36px, 24px apart, accent text and a 2px accent rule on the
+   active one. */
+.dt-page .ui-tabs { gap: 24px; }
+.dt-page .ui-tab {
+  height: 36px; padding: 0; background: none;
+  color: var(--uep-text-2); font-weight: var(--uep-weight-medium);
+}
+.dt-page .ui-tab:hover { background: none; color: var(--uep-text); }
+.dt-page .ui-tab[aria-selected='true'] { color: var(--uep-accent); font-weight: var(--uep-weight-semibold); }
+.dt-page .ui-tab[aria-selected='true']::after { background: var(--uep-accent); height: 2px; }
+
+/* ---------- cards ---------- */
+.dt-page .dt-section,
+.dt-page .dt-stack > .dt-section {
+  background: var(--uep-surface);
+  border: 1px solid var(--uep-border);
+  border-radius: var(--uep-radius-card);
+  box-shadow: none;
+  overflow: hidden;
+  padding: 0;
+  gap: 0;
+  transition: border-color 200ms var(--uep-ease-productive), box-shadow 200ms var(--uep-ease-productive);
+}
+.dt-page .dt-section:hover { border-color: var(--uep-border-strong); box-shadow: var(--uep-shadow-card-hover); }
+.dt-page .dt-section-head {
+  padding: 12px 16px;
+  background: var(--uep-surface);
+  border-bottom: 1px solid var(--uep-divider);
+  gap: 4px 10px;
+}
+.dt-page .dt-section-body { padding: 12px 16px; min-height: 0; }
+.dt-page .dt-section-title { font-size: 16px; line-height: 22px; font-weight: var(--uep-weight-semibold); color: var(--uep-text); }
+.dt-page .dt-section-sub,
+.dt-page .dt-section-note { font-size: 12px; line-height: 16px; color: var(--uep-text-3); }
+.dt-page .dt-section-total { display: inline-flex; align-items: baseline; gap: 6px; }
+.dt-page .dt-section-total b,
+.dt-page .dt-section-head-inline .dt-section-total b,
+.dt-page .dt-breakdown-section .dt-section-total b {
+  font-size: 24px; line-height: 28px; font-weight: var(--uep-weight-semibold); color: var(--uep-text);
+}
+.dt-page .dt-section-total > span { font-size: 13px; color: var(--uep-text-3); }
+
+/* The 28px app tile: Drive test teal with a white icon; PIP in Monthly plan
+   amber. Teal never appears in a chart. */
+.dt-card-tile {
+  width: 28px; height: 28px; border-radius: 7px; flex: none;
+  display: grid; place-items: center;
+  background: var(--uep-app-drive-test); color: var(--uep-surface);
+}
+.dt-pip-section .dt-card-tile { background: var(--uep-app-monthly-plan); }
+
+/* Section error: inside the failed card only. */
+.dt-page .dt-failed { margin: 0; }
+
+/* ---------- KPI strip (shared .hk-* anatomy, kpi-strip.css) ---------- */
+.dt-page .hk-strip.dt-kpi-band { gap: 6px; }
+.dt-page .hk-strip .dt-kpi-card {
+  border: 0; box-shadow: none; background: none; padding: 12px 16px 8px;
+  border-radius: var(--uep-radius-tile);
+}
+.dt-page .hk-strip .dt-kpi-card:hover { background: var(--uep-page); }
+.dt-page .hk-strip .dt-kpi-title { font-size: 13px; font-weight: var(--uep-weight-medium); color: var(--uep-text-2); }
+.dt-page .hk-strip .dt-kpi-figure {
+  font-family: inherit; font-size: 32px; font-weight: var(--uep-weight-semibold);
+  letter-spacing: -0.02em; line-height: 1.15; color: var(--uep-text);
+  align-self: flex-start;
+}
+.dt-page .hk-strip a.dt-kpi-figure:hover { text-decoration-color: var(--uep-accent); }
+.dt-page .hk-strip a.dt-kpi-figure:focus-visible,
+.dt-page .hk-strip a.dt-status-row:focus-visible { outline: 2px solid var(--uep-accent); outline-offset: 2px; }
+
+/* The change line: neutral, danger only for a bad change. */
+.dt-page .dt-kpi-change { display: flex; align-items: baseline; flex-wrap: wrap; gap: 0 4px; font-size: 12px; font-weight: var(--uep-weight-medium); color: var(--uep-text-3); }
+.dt-page .dt-kpi-change .dt-delta { display: inline-flex; gap: 4px; }
+.dt-page .dt-delta-pill b,
+.dt-page .dt-delta-pill b[data-tone='good'],
+.dt-page .dt-delta-pill b[data-tone='bad'] {
+  background: none; padding: 0; font-size: 12px; font-weight: var(--uep-weight-medium); color: inherit;
+}
+.dt-page .dt-kpi-change[data-tone='bad'] .dt-delta { color: var(--uep-danger); }
+.dt-page .dt-delta-since { color: inherit; font-size: 12px; }
+.dt-page .hk-strip .dt-kpi-pct { font-size: 12px; font-weight: var(--uep-weight-medium); color: var(--uep-text-3); }
+
+/* Tile 4, Pending by status: three rows over a 6px stack with 2px gaps. */
+.dt-page .hk-strip .dt-status-list { display: grid; grid-template-columns: 1fr; gap: 0; padding-block-start: 4px; margin: 0; }
+.dt-page .hk-strip .dt-status-row {
+  flex-direction: row; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 2px 4px; border-radius: 6px; font-size: 13px;
+}
+.dt-page .hk-strip .dt-status-name { display: inline-flex; align-items: center; gap: 6px; color: var(--uep-text); }
+.dt-page .hk-strip .dt-kpi-part-dot { width: 8px; height: 8px; border-radius: 2px; }
+.dt-page .hk-strip .dt-status-figs { display: inline-flex; align-items: baseline; gap: 6px; }
+.dt-page .hk-strip .dt-status-num { font-weight: var(--uep-weight-semibold); color: var(--uep-text); }
+.dt-page .hk-strip .dt-status-pct { font-size: 12px; color: var(--uep-text-3); }
+.dt-page .hk-strip .dt-kpi-split { height: 6px; gap: 2px; background: none; margin-block-start: auto; border-radius: 3px; }
+.dt-page .hk-strip .dt-kpi-split > i { border-radius: 2px; }
+
+/* Loading: the strip at its final size, pulsing at 1.4s, staggered 80ms. */
+.dt-skel {
+  display: block; border-radius: 4px; background: var(--uep-divider);
+  animation: dt-pulse 1.4s ease-in-out infinite;
+  animation-delay: calc(var(--i, 0) * 80ms);
+}
+.dt-skel[data-part='label'] { width: 40%; height: 13px; margin-block: 2px 6px; }
+.dt-skel[data-part='figure'] { width: 55%; height: 32px; margin-block-end: 6px; }
+.dt-skel[data-part='spark'] { width: 100%; height: var(--uep-spark-height); }
+@keyframes dt-pulse { 50% { opacity: 0.5; } }
+
+/* ---------- On air vs DT done ---------- */
+.dt-page .dt-flow-legend { font-size: 12px; color: var(--uep-text-2); }
+.dt-page .dt-flow-legend-item:nth-child(1) .dt-flow-legend-line { height: 2px; }
+.dt-page .dt-flow-legend-item:nth-child(2) .dt-flow-legend-line { height: 3px; }
+.dt-page .dt-flow-legend-swatch { width: 10px; height: 10px; border-radius: 2px; background: var(--uep-accent-tint); }
+.dt-page .dt-flow-grid { border-color: var(--uep-divider); background: var(--uep-divider); }
+.dt-page .dt-flow-baseline { background: var(--uep-border-strong); }
+.dt-page .dt-flow-ytick { font-size: 12px; color: var(--uep-text-3); }
+.dt-page .dt-flow-month { color: var(--uep-text-3); }
+.dt-page .dt-flow-month.is-open { color: var(--uep-text); font-weight: var(--uep-weight-medium); }
+.dt-page .dt-flow-cross { width: 1px; background: var(--uep-border-strong); }
+.dt-page .dt-flow-dot.is-active { width: 8px; height: 8px; background: var(--uep-surface); border: 2px solid var(--dt-dot); }
+/* One tab stop for the plot; the accent ring sits 4px out. */
+.dt-page .dt-flow-frame:focus-visible { outline: 2px solid var(--uep-accent); outline-offset: 4px; border-radius: 4px; }
+.dt-page .dt-flow-tip {
+  background: var(--uep-surface); border: 1px solid var(--uep-border);
+  border-radius: 8px; box-shadow: var(--uep-shadow-popover);
+  opacity: 1;
+}
+.dt-page .dt-flow-tip-open { color: var(--uep-text-3); margin-inline-start: 0; }
+/* A month's change in the gap carries its sign and a hidden word. Danger
+   only when it grew; a shrinking gap is plain, never green. */
+.dt-page .dt-flow-net[data-tone='good'],
+.dt-page .dt-flow-net[data-tone='flat'],
+.dt-page .dt-flow-tip-table td[data-tone='good'] { color: var(--uep-text-2); background: var(--uep-page); }
+.dt-page .dt-flow-net[data-tone='bad'] { color: var(--uep-danger); background: var(--uep-danger-tint); }
+.dt-page .dt-flow-tip-table td[data-tone='bad'] { color: var(--uep-danger); }
+
+/* View as table: scrolls inside the card under a sticky header. */
+.dt-flow-table-wrap { max-height: 320px; overflow: auto; }
+.dt-flow-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.dt-flow-table thead th {
+  position: sticky; top: 0; background: var(--uep-page);
+  font-size: 12px; font-weight: var(--uep-weight-medium); color: var(--uep-text-2);
+  text-align: right; padding: 6px 12px;
+}
+.dt-flow-table thead th:first-child,
+.dt-flow-table tbody th { text-align: left; }
+.dt-flow-table tbody th,
+.dt-flow-table td { padding: 6px 12px; border-bottom: 1px solid var(--uep-divider); font-weight: 400; }
+.dt-flow-table td { text-align: right; color: var(--uep-text); font-variant-numeric: tabular-nums; }
+
+/* ---------- PIP this month ---------- */
+.dt-page .dt-pip-section .dt-section-body { padding: 10px 16px 12px; }
+.dt-page .dt-pip-tiles { gap: 0; margin: 0; }
+.dt-page .dt-pip-tile,
+.dt-page .dt-pip-tile[data-tone] {
+  border: 0; border-radius: 0; background: none; padding: 0 12px; text-align: left;
+}
+.dt-page .dt-pip-tile + .dt-pip-tile { border-inline-start: 1px solid var(--uep-divider); }
+.dt-page .dt-pip-tile:first-child { padding-inline-start: 0; }
+.dt-page .dt-pip-tile dt { font-size: 12px; color: var(--uep-text-3); }
+.dt-page .dt-pip-tile dd { font-size: 20px; line-height: 26px; font-weight: var(--uep-weight-semibold); color: var(--uep-text); margin: 0; }
+.dt-page .dt-pip-tiles.is-uncommitted dd { color: var(--uep-text-3); }
+.dt-page .dt-pip-section .dt-plan-progress {
+  position: relative; display: block; height: 6px; border-radius: 3px;
+  margin-block: 12px 18px; padding-block-start: 0;
+  background: var(--uep-divider);
+  border-block-start: 0;
+}
+.dt-page .dt-pip-section .dt-plan-progress::before {
+  content: ''; position: absolute; inset-inline: 0; top: -12px;
+  border-block-start: 1px solid var(--uep-divider);
+}
+.dt-page .dt-pip-section .dt-plan-progress-fill {
+  position: absolute; inset-block: 0; inset-inline-start: 0; border-radius: 3px;
+  background: var(--uep-app-monthly-plan);
+  transform-origin: left; animation: dt-grow 800ms var(--uep-ease-productive) both;
+}
+.dt-page .dt-plan-pace {
+  position: absolute; top: -4px; width: 2px; height: 14px;
+  background: var(--uep-text); border-radius: 1px; transform: translateX(-1px);
+}
+.dt-plan-pace-label {
+  position: absolute; top: 15px; left: 50%; transform: translateX(-50%);
+  font-size: 11px; line-height: 14px; font-weight: var(--uep-weight-medium);
+  color: var(--uep-text); white-space: nowrap;
+}
+.dt-page .dt-pip-note { font-size: 12px; line-height: 16px; color: var(--uep-text-3); margin: 0; }
+.dt-pip-behind { color: var(--uep-danger); font-weight: var(--uep-weight-medium); }
+@keyframes dt-grow { from { transform: scaleX(0); } to { transform: none; } }
+
+/* ---------- What moved: four rows, waterfall along the track ---------- */
+.dt-page .dt-wf { display: grid; grid-template-columns: 1fr; gap: 0; padding: 0; }
+.dt-wf-row {
+  display: grid; grid-template-columns: 112px minmax(0, 1fr) 44px;
+  align-items: center; gap: 10px; padding-block: 7px;
+}
+.dt-wf-row + .dt-wf-row { border-block-start: 1px solid var(--uep-divider); }
+.dt-page .dt-wf-row .dt-flow-step-label {
+  margin: 0; text-align: left; font-size: 13px; font-weight: var(--uep-weight-medium); color: var(--uep-text);
+}
+.dt-wf-track { position: relative; height: 8px; border-radius: 4px; background: var(--uep-track); }
+.dt-page .dt-wf-row .dt-wf-bar {
+  position: absolute; inset-block: 0; inset-inline-end: auto; min-block-size: 0; min-inline-size: 2px;
+  border-radius: 4px;
+}
+.dt-page .dt-wf-row.dt-wf-balance .dt-wf-bar { background: var(--uep-text-2); }
+.dt-page .dt-wf-row.dt-wf-up .dt-wf-bar { background: var(--uep-neutral-data); }
+.dt-page .dt-wf-row.dt-wf-down .dt-wf-bar { background: var(--uep-accent); }
+.dt-page .dt-wf-row .dt-wf-link {
+  inset-inline-start: auto; inline-size: 0; block-size: 23px; bottom: 8px; top: auto;
+  border-block-start: 0; border-inline-start: 1px dashed var(--uep-text-3); opacity: 0.6;
+}
+.dt-page .dt-wf-row .dt-flow-figure-text {
+  position: static; text-align: right; font-size: 14px; line-height: 20px; font-weight: var(--uep-weight-semibold);
+}
+.dt-page .dt-wf-down .dt-flow-figure-text { color: var(--uep-accent); }
+
+/* ---------- Breakdowns ---------- */
+.dt-page .ui-seg {
+  background: var(--uep-page); border: 1px solid var(--uep-border); border-radius: 8px; padding: 2px;
+}
+.dt-page .ui-seg-option[aria-selected='true'],
+.dt-page .ui-seg-option[aria-pressed='true'] {
+  background: var(--uep-surface); color: var(--uep-text); font-weight: var(--uep-weight-semibold);
+  box-shadow: 0 1px 1px rgba(20, 23, 31, 0.08);
+}
+.dt-bars-caption {
+  display: grid; grid-template-columns: 150px minmax(0, 1fr) 48px 44px;
+  gap: 10px; padding: 0 8px 4px; font-size: 12px; font-weight: var(--uep-weight-medium); color: var(--uep-text-3);
+}
+.dt-bars-caption span:nth-child(2) { grid-column: 3; text-align: right; }
+.dt-bars-caption span:nth-child(3) { text-align: right; }
+.dt-page .dt-bar-row + .dt-bar-row { border-block-start: 0; }
+.dt-page .dt-bar-link {
+  display: grid; grid-template-columns: 150px minmax(0, 1fr) 48px 44px 14px;
+  align-items: center; gap: 10px; min-block-size: 0; padding: 6px 8px; border-radius: 6px;
+}
+.dt-page a.dt-bar-link:hover { background: var(--uep-page); }
+.dt-page .dt-bar-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+.dt-page .dt-track { height: 8px; border-radius: 4px; background: var(--uep-track); }
+.dt-page .dt-bar-value { text-align: right; font-weight: var(--uep-weight-semibold); }
+.dt-page .dt-bar-share { text-align: right; font-size: 12px; color: var(--uep-text-3); }
+.dt-page .dt-breakdown-foot .dt-note { font-size: 12px; color: var(--uep-text-3); }
+
+/* ---------- Contractors & provinces tables ---------- */
+.dt-page .dt-tables .table { font-size: 13px; }
+.dt-page .dt-tables .table thead th {
+  background: var(--uep-page); font-size: 12px; font-weight: var(--uep-weight-medium); color: var(--uep-text-2);
+  position: sticky; top: 0; z-index: 1;
+}
+.dt-page .dt-tables .table tbody tr { border-bottom: 1px solid var(--uep-divider); }
+.dt-page .dt-tables .table tbody tr:hover { background: var(--uep-page); }
+.dt-page .dt-tables .table td.tnum { text-align: right; font-variant-numeric: tabular-nums; }
+.dt-page .dt-gap-cell { font-weight: var(--uep-weight-semibold); }
+.dt-page .dt-rate-bar { height: 6px; border-radius: 3px; background: var(--uep-track); }
+.dt-page .dt-rate-fill { background: var(--uep-accent); }
+/* The tab fills exactly the page body: the two cards share its height and
+   each table scrolls inside its own card under a sticky header. The
+   scorecard takes what it needs, the province table the rest. */
+.dt-page .dt-bench:has(.dt-tables) { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+.dt-page .dt-bench:has(.dt-tables) > .dt-view { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; }
+.dt-page .dt-tables { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; gap: 16px; }
+.dt-page .dt-tables > .dt-section { flex: 0 1 auto; min-height: 120px; }
+.dt-page .dt-tables > .dt-tables-cell { flex: 1 1 0; min-height: 160px; display: flex; flex-direction: column; }
+.dt-page .dt-tables-cell > .dt-section { flex: 1 1 0; min-height: 0; }
+.dt-page .dt-tables .dt-section { display: flex; flex-direction: column; }
+.dt-page .dt-tables .dt-section-body { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+.dt-page .dt-tables .dt-section-body > * { flex: none; }
+.dt-page .dt-tables .table-wrap { flex: 1 1 auto; min-height: 0; overflow: auto; }
+.dt-empty-row td { padding: 16px; text-align: center; color: var(--uep-text-3); }
+
+/* ---------- empty province ---------- */
+.dt-empty-province {
+  display: grid; justify-items: center; gap: 8px; text-align: center;
+  padding: 48px 24px; margin-block-start: 8px;
+  background: var(--uep-surface); border: 1px solid var(--uep-border); border-radius: var(--uep-radius-card);
+}
+.dt-empty-province h2 { font-size: 16px; line-height: 22px; font-weight: var(--uep-weight-semibold); margin: 4px 0 0; }
+.dt-empty-province p { margin: 0 0 8px; font-size: 13px; color: var(--uep-text-3); }
+
+/* ---------- page error ---------- */
+.dt-page .dt-page-error { background: var(--uep-danger-tint); }
+
+/* ---------- drill-through panel ---------- */
+.dt-drill {
+  background: var(--uep-surface);
+  border-inline-start: 1px solid var(--uep-border);
+  box-shadow: var(--uep-shadow-popover);
+  animation: dt-pop var(--uep-dur-pop) var(--uep-ease-productive) both;
+}
+.dt-drill-title { font-size: 16px; font-weight: var(--uep-weight-semibold); }
+.dt-drill-table thead th { background: var(--uep-page); font-size: 12px; font-weight: var(--uep-weight-medium); color: var(--uep-text-2); }
+.dt-drill-table tbody tr { border-bottom: 1px solid var(--uep-divider); }
+.dt-drill-table tbody tr:hover { background: var(--uep-page); }
+@keyframes dt-pop { from { opacity: 0; transform: translateX(12px); } to { opacity: 1; transform: none; } }
+
+/* Button press. */
+.dt-page .btn:active { transform: scale(0.98); }
+
+/* ---------- 1366x768: tighter, nothing hidden ---------- */
+@media (max-height: 820px) {
+  .dt-page { --dt-gap: 12px; }
+  .dt-page .page-body { padding-block: 10px 8px; gap: 12px; }
+  .dt-page .dt-section-head { padding-block: 6px; }
+  .dt-page .dt-section-body,
+  .dt-page .dt-pip-section .dt-section-body { padding-block: 6px 8px; }
+  .dt-page .hk-strip .dt-kpi-card { padding: 6px 12px 4px; }
+  .dt-page .hk-strip .dt-kpi-figure { font-size: 26px; }
+  .dt-page .hk-strip .hk-spark { height: 22px; margin-top: 2px; }
+  .dt-page .dt-pip-section .dt-plan-progress { margin-block: 8px 15px; }
+  .dt-wf-row { padding-block: 2px; }
+  .dt-page .dt-tables { gap: 12px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dt-page .dt-bench, .dt-skel, .dt-drill, .dt-page .dt-section,
+  .dt-page .dt-pip-section .dt-plan-progress-fill { animation: none; transition: none; }
+}
+html[data-uep-motion='reduce'] :is(.dt-page .dt-bench, .dt-skel, .dt-drill, .dt-page .dt-plan-progress-fill) { animation: none; }

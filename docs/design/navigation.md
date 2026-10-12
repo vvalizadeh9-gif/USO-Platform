@@ -23,12 +23,19 @@
 | `color`, `tint` | CSS custom properties for the tile and card-header tint |
 | `group` | `rollout`, `planning`, `insights` or `platform` |
 | `roles` | Who sees the app (absent: everyone) |
-| `pages[]` | `id`, `label`, `route`, `roles`, `queues` |
+| `pages[]` | `id`, `label`, `route`, `roles`, `queues`, `divider` |
 
 `pages[].queues` is the page's count query: the Home queue keys whose counts
 it sums (`'*'` for all of them). Counts are read from the one `GET /me/home`
 response (`shell/HomeData.jsx`), so a rail count, an Apps-panel pill, a card
 total, a KPI and the notification badge can never disagree.
+
+`pages[].divider` draws a 1px rule under the page in the rail, setting it apart
+from the queue pages below. Drive test uses it for **Dashboard**
+(`/reports/drive-test`, UEP-04): it is the app's first page, carries no count,
+and is the same page that Insights → Dashboards opens, not a copy. The Drive
+test rail reads: Dashboard · HC check · HC review · Assignment · DT review ·
+In progress · All sites (pages filtered by role as usual).
 
 The launcher, the Apps panel and every rail are generated from this list with
 `appsFor(role)`. The rail's active page is the page whose route best matches

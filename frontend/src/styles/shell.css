@@ -333,3 +333,10 @@
   .uep-shell :is(button, a):active { transform: none; }
 }
 html[data-uep-motion='reduce'] .uep-pop { animation: none; }
+
+/* A page set apart from the queues below it (Drive test → Dashboard). */
+.uep-rail-item.has-divider { position: relative; margin-bottom: 9px; }
+.uep-rail-item.has-divider::after {
+  content: ''; position: absolute; left: 0; right: 0; bottom: -5px;
+  height: 1px; background: var(--uep-divider);
+}

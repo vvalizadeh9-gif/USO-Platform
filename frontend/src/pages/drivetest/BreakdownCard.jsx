@@ -76,12 +76,21 @@ export default function BreakdownCard({ idBase, tab, views, total }) {
             {asTable ? (
               <BreakdownTable points={view.points} total={total} unit={view.unit} />
             ) : (
-              <RankedBars
-                points={view.points}
-                total={total}
-                color={view.color}
-                hrefFor={view.hrefFor}
-              />
+              <>
+                {/* Column captions over the bars: what each row is, then its
+                    sites and share. */}
+                <div className="dt-bars-caption" aria-hidden="true">
+                  <span>{view.unit}</span>
+                  <span>Sites</span>
+                  <span>Share</span>
+                </div>
+                <RankedBars
+                  points={view.points}
+                  total={total}
+                  color={view.color}
+                  hrefFor={view.hrefFor}
+                />
+              </>
             )}
           </motion.div>
         </AnimatePresence>
