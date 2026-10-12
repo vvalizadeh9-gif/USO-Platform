@@ -11,14 +11,14 @@ import { DrillProvider } from './DrillPanel'
 import ContractorScorecard from './ContractorScorecard'
 import InfoTip from './InfoTip'
 import KpiBand from './KpiBand'
+import MonthLabel from './MonthLabel'
 import PipThisMonth from './PipThisMonth'
 import ProvinceList, { ProvinceSearch, matchProvinces } from './ProvinceList'
 import Section from './Section'
 import DashboardActions, { ProvinceScope } from './Toolbar'
-import FlowChart, { FlowLegend } from './charts/FlowChart'
+import FlowChart, { FlowKey } from './charts/FlowChart'
 import FlowTable from './charts/FlowTable'
-import FlowViewControl from './charts/FlowViewControl'
-import { LAST_12, flowHasActivity, flowNotes, flowYears, kpiSeries } from './charts/flowView'
+import { flowHasActivity, flowNotes, flowView, kpiSeries } from './charts/flowView'
 import FlowLedger, { flowNet } from './charts/FlowLedger'
 import { flowScale } from './charts/flowScale'
 import { PROVINCE_LIMIT } from './constants'
@@ -80,11 +80,6 @@ export default function DriveTestProject() {
   } = useDashboard()
   const [ongoingTab, setOngoingTab] = useState('contractor')
   const [problematicTab, setProblematicTab] = useState('category')
-  // Which months the trend shows: the last twelve (the default), every month
-  // (cumulative) or one Shamsi year. Held here, not in the chart, because the
-  // card header shows both the control that switches it and the note that
-  // describes the view.
-  const [flowScope, setFlowScope] = useState(LAST_12)
   const [flowAsTable, setFlowAsTable] = useState(false)
   const [provinceSearch, setProvinceSearch] = useState('')
   const [exporting, setExporting] = useState(false)
@@ -295,13 +290,12 @@ export default function DriveTestProject() {
                   width, not the window's) everything stacks in one column: the
                   chart, PIP, then What moved. */}
               <div className="dt-grid2">
-                {/* One-line header from the first frame: the control and the info
-                    icon arrive with the data, and a header that changed shape as
-                    they did would jump under the reader. The sentence that used to
-                    be its subtitle opens the info note. */}
+                {/* One-line header from the first frame: the table toggle and the
+                    info icon arrive with the data, and a header that changed shape
+                    as they did would jump under the reader. No subtitle: the chart
+                    is always every month, cumulatively, and the info note says so. */}
                 <Section
                   title="On air vs DT done"
-                  subtitle="Sites, cumulative · last 12 months"
                   inline
                   state={flow}
                   onRetry={refresh}
@@ -310,7 +304,7 @@ export default function DriveTestProject() {
                   info={
                     flowHasActivity(flow.data) && (
                       <InfoTip label="How this chart is drawn">
-                        {flowNotes(flow.data, flowScope).map((line) => (
+                        {flowNotes(flow.data).map((line) => (
                           <span key={line} className="dt-info-line">
                             {line}
                           </span>
@@ -320,37 +314,29 @@ export default function DriveTestProject() {
                   }
                   controls={
                     flowHasActivity(flow.data) && (
-                      <>
-                        <button
-                          type="button"
-                          className="btn btn-ghost dt-flow-table-toggle"
-                          aria-pressed={flowAsTable}
-                          onClick={() => setFlowAsTable((v) => !v)}
-                        >
-                          {flowAsTable ? 'View as chart' : 'View as table'}
-                        </button>
-                        <FlowViewControl
-                          years={flowYears(flow.data)}
-                          scope={flowScope}
-                          onScope={setFlowScope}
-                        />
-                      </>
+                      <button
+                        type="button"
+                        className="btn btn-ghost dt-flow-table-toggle"
+                        aria-pressed={flowAsTable}
+                        onClick={() => setFlowAsTable((v) => !v)}
+                      >
+                        {flowAsTable ? 'View as chart' : 'View as table'}
+                      </button>
                     )
                   }
                 >
                   {(f) =>
                     flowHasActivity(f) ? (
-                      <>
-                        {/* The key, on its own row directly under the title row. */}
-                        <FlowLegend />
-                        {/* Keyed on the view shown, so switching redraws the chart
-                            rather than morphing one view's columns into the next. */}
-                        {flowAsTable ? (
-                          <FlowTable data={f} scope={flowScope} />
-                        ) : (
-                          <FlowChart key={String(flowScope)} data={f} scope={flowScope} />
-                        )}
-                      </>
+                      flowAsTable ? (
+                        <>
+                          {/* The chart draws its own key row (key and readout);
+                              the table keeps it, reading the latest month. */}
+                          <FlowKey view={flowView(f)} />
+                          <FlowTable data={f} />
+                        </>
+                      ) : (
+                        <FlowChart data={f} />
+                      )
                     ) : (
                       <div className="dt-empty">
                         No on-air or drive-test activity has been recorded yet. The chart fills in
@@ -374,9 +360,12 @@ export default function DriveTestProject() {
                     <Section
                       title="What moved"
                       tile="chart--column"
-                      subtitle={`${trend.data.latest_flows.label} ${trend.data.latest_flows.shamsi_year}${
-                        trend.data.latest_flows.is_open ? ' · in progress' : ''
-                      }`}
+                      subtitle={
+                        <MonthLabel
+                          label={`${trend.data.latest_flows.label} ${trend.data.latest_flows.shamsi_year}`}
+                          suffix={trend.data.latest_flows.is_open && ' · in progress'}
+                        />
+                      }
                       inline
                       state={trend}
                       onRetry={refresh}

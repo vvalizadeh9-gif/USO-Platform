@@ -1,15 +1,15 @@
 import { shamsiMonthName } from '../../../lib/shamsi'
 import { count } from '../format'
-import { LAST_12, flowView } from './flowView'
+import { flowView } from './flowView'
 
 /**
  * "View as table" for On air vs DT done: the same points the chart draws
- * (flowView), newest first, so the table and the plot can never disagree.
- * The standard alternative to every UEP chart -- colour is never the only
- * way to read the figures.
+ * (flowView), every month since the opening balance, newest first, so the
+ * table and the plot can never disagree. The standard alternative to every
+ * UEP chart -- colour is never the only way to read the figures.
  */
-export default function FlowTable({ data, scope = LAST_12 }) {
-  const { points, months } = flowView(data, scope)
+export default function FlowTable({ data }) {
+  const { points, months } = flowView(data)
   const rows = months.map((m, j) => ({ ...m, ...points[j + 1] })).reverse()
   return (
     <div className="dt-flow-table-wrap">

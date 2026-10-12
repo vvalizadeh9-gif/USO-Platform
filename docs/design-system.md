@@ -200,10 +200,19 @@ Implementation: `Section` in `pages/drivetest` draws the tile from a Carbon icon
 
 Home and the Drive Test dashboard share one strip (`styles/kpi-strip.css`, `components/KpiSpark.jsx`): a white container holding four transparent tiles. Each tile has a label, a 32px figure, a 12px change line and a 28px sparkline that draws in over 900ms, after which its 8% area fades in. The change line uses `--uep-danger` only when the change is bad, and a flat month reads "No change". Home lifts its first tile as the hero; the dashboard has no hero.
 
+**Home keeps this standard size.** The Drive Test dashboard uses the **dense dashboard variant** (UEP-04a), scoped under `.dt-page` in `styles/dt-dashboard.css` so Home is never affected:
+
+- Four equal columns (`repeat(4, minmax(0, 1fr))`, 6px gap). Tile padding `10px 16px 8px`.
+- A 28px figure (600, −0.02em, line-height 1.15) and a 24px sparkline.
+- Exactly one line under the figure (12px, 500, `--uep-text-3`, a fixed 18px line box): On air shows "+N this month" (or "No change this month"), from the same series as its sparkline; DT done and Pending show their change and "% of on air".
+- The visual is pinned to the bottom of the tile (`margin-top: auto`), so every sparkline, and the Pending by status stack, ends on the same line. Pending by status lists three 20px rows (swatch, name, count, a fixed 34px share) over a 6px stack and is no taller than the other tiles.
+
 ## Chart interaction (standard for every UEP chart)
 
-- **Hover:** a 1px `--uep-border-strong` rule at the month, 8px white dots with a 2px stroke on each line, and a tooltip card (white, 1px border, radius 8, `--uep-shadow-popover`). With nothing hovered, the tooltip reads the latest month, and an open month is labelled "· so far".
-- **Keyboard:** the plot is one tab stop (`tabindex="0"`, `role="group"`) whose label explains the arrow keys. ← and → move a month; Home and End jump to the first and last. The tooltip is a polite live region, and focus shows the accent ring 4px out.
+- **The readout replaces the floating tooltip (UEP-04a).** No tooltip ever covers the data. The key row under the card header is one flex row (wrapping when narrow, `8px 16px` padding, a 1px `--uep-divider` bottom border): the key on the left, the readout on the right. The readout is a pill (1px `--uep-border`, radius 8, `--uep-page`, `4px 10px`, 12px, no wrap) showing the month and year in Persian script (600, "· so far" for an open month), then each series as an 8px dot, its running total (600, `--uep-text`) and that month's change (`--uep-text-3`; `--uep-danger` only when the change is bad, with a visually hidden word). Its values are the same points the chart and its table draw.
+- **Hover:** a 1px `--uep-border-strong` rule at the month and 8px white dots with a 2px stroke on each line. The readout follows the hovered month; with nothing hovered or focused it shows the latest month.
+- **Keyboard:** the plot is one tab stop (`tabindex="0"`, `role="group"`) whose label explains the arrow keys. ← and → move a month; Home and End jump to the first and last. The readout is a polite live region, so the month moved to is announced, and focus shows the accent ring 4px out.
+- **Axis labels:** the current month is always labelled, in `--uep-text` 600. Other month labels are thinned, counting back from the current month, so none overlap at the narrowest card width.
 - **View as table:** a toggle (`aria-pressed`) swaps the plot for a table of the same derived points, newest first. The table has a sticky header on `--uep-page`, scrolls inside its card and has a visually hidden caption.
 
 ## Neutral data colour

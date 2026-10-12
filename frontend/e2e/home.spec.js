@@ -61,3 +61,19 @@ test('the KPI figures are static, not links', async ({ page }) => {
   await page.goto('/home')
   await expect(page.getByRole('region', { name: 'Your numbers' }).getByRole('link')).toHaveCount(0)
 })
+
+test('the KPI strip keeps its standard size: a 32px figure and a 28px sparkline', async ({ page }) => {
+  // The Drive Test dashboard's dense variant (UEP-04a) is scoped to that
+  // page; Home's strip must not change with it.
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await signIn(page)
+  await page.goto('/home')
+  const strip = page.getByRole('region', { name: 'Your numbers' })
+  await expect(strip).toBeVisible()
+  const figure = await strip.locator('.hk-value').first().evaluate((el) => getComputedStyle(el).fontSize)
+  expect(figure).toBe('32px')
+  const spark = strip.locator('.hk-spark').first()
+  if (await spark.count()) {
+    expect(await spark.evaluate((el) => el.getBoundingClientRect().height)).toBeCloseTo(28, 0)
+  }
+})

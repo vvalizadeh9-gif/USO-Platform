@@ -1013,7 +1013,8 @@ describe('delta direction', () => {
     draw()
 
     await screen.findByLabelText('Programme totals')
-    const chip = within(band()).getByText(/\+4/)
+    // Scoped to Pending: On air's line also reads +4 (this month's change).
+    const chip = within(band().querySelector('[data-kpi="pending"]')).getByText(/\+4/)
     expect(chip).toHaveAttribute('data-tone', 'bad')
     expect(chip.nextElementSibling).toHaveClass('dt-sr-only')
     expect(chip.nextElementSibling).toHaveTextContent('worse')
@@ -1039,7 +1040,12 @@ describe('delta direction', () => {
 
     const band = await screen.findByLabelText('Programme totals')
     expect(screen.queryByText(/no baseline/i)).not.toBeInTheDocument()
-    expect(band.querySelectorAll('.dt-delta')).toHaveLength(0)
+    // No snapshot change on DT done or Pending. On air's line is this
+    // month's change from the flow series, which needs no snapshot.
+    for (const kpi of ['done', 'pending']) {
+      expect(band.querySelector(`[data-kpi="${kpi}"] .dt-delta`)).toBeNull()
+    }
+    expect(within(band).queryByText(/vs last month/)).not.toBeInTheDocument()
   })
 })
 
@@ -1249,6 +1255,58 @@ describe('the KPI band', () => {
     expect(card(band, 'Pending')).toContainElement(sparks[2])
     expect(sparks[0]).toHaveAttribute('aria-label', 'On air over the last 8 months')
     expect(card(band, 'Pending by status').querySelector('[data-testid="dt-spark"]')).toBeNull()
+  })
+
+  it("gives On air one line: this month's change, from the flow series", async () => {
+    // UEP-04a: every tile has exactly one line under its figure. On air's is
+    // the current month's on-air change, from the same running totals as its
+    // sparkline (4 sites in the fixture's open month). A rise is not bad
+    // news, so it is the neutral tone.
+    serve()
+    draw()
+
+    const band = await screen.findByLabelText('Programme totals')
+    const line = card(band, 'On air').querySelector('.dt-kpi-change')
+    await waitFor(() => expect(line).toHaveTextContent('+4betterthis month'))
+    expect(line).toHaveAttribute('data-tone', 'good')
+    expect(card(band, 'On air').querySelectorAll('.dt-kpi-change')).toHaveLength(1)
+  })
+
+  it('writes a month with no new sites on air as "No change this month"', async () => {
+    serve(planDelivery(), overview, trend(), flow({
+      months: [...flow().months.slice(0, -1), flowMonth(1405, 2, { on_aired: 0, dt_done: 2, is_open: true })],
+    }))
+    draw()
+
+    const band = await screen.findByLabelText('Programme totals')
+    const line = card(band, 'On air').querySelector('.dt-kpi-change')
+    await waitFor(() => expect(line).toHaveTextContent('No changeno changethis month'))
+    expect(line).toHaveAttribute('data-tone', 'flat')
+  })
+
+  it('gives every figure tile one line and Pending by status none', async () => {
+    serve()
+    draw()
+
+    const band = await screen.findByLabelText('Programme totals')
+    for (const title of ['On air', 'DT done', 'Pending']) {
+      expect(card(band, title).querySelectorAll('.dt-kpi-change')).toHaveLength(1)
+    }
+    expect(card(band, 'Pending by status').querySelector('.dt-kpi-change')).toBeNull()
+  })
+
+  it('lays each status row out as swatch, name, count and share, so the columns line up', async () => {
+    serve()
+    draw()
+
+    const band = await screen.findByLabelText('Programme totals')
+    for (const name of ['Ongoing', 'Problematic', 'Not started']) {
+      const cells = [...part(band, name).children].map((c) => c.className.split(' ')[0])
+      expect(cells).toEqual(['dt-kpi-part-dot', 'dt-status-name', 'dt-status-num', 'dt-status-pct'])
+    }
+    // The stack is the tile's last element, so it pins to the bottom.
+    const tile = card(band, 'Pending by status')
+    expect(tile.lastElementChild).toHaveClass('dt-kpi-split')
   })
 
   it('no longer repeats the monthly figure the plan section already carries', async () => {
@@ -1679,9 +1737,7 @@ describe('failure and freshness', () => {
 
     const card = await section('PIP this month')
     await userEvent.click(await within(card).findByRole('button', { name: /Retry/ }))
-    expect(
-      await within(card).findByText(/3 of 4 contractors approved/),
-    ).toBeInTheDocument()
+    expect(await within(card).findByText('Plan', { selector: 'dt' })).toBeInTheDocument()
   })
 
   it('says how old the figures are instead of calling them live', async () => {
@@ -1702,7 +1758,8 @@ describe('failure and freshness', () => {
 
     expect(await screen.findByText(/Could not load the Drive Test figures/)).toBeInTheDocument()
     // PIP this month comes from a different request and is unaffected.
-    expect(await screen.findByText(/3 of 4 contractors approved/)).toBeInTheDocument()
+    const pip = await section('PIP this month')
+    expect(await within(pip).findByText('Plan', { selector: 'dt' })).toBeInTheDocument()
   })
 
   it('leaves the rest of the dashboard standing when a breakdown is absent', async () => {
@@ -1910,20 +1967,13 @@ describe('the province filter', () => {
 })
 
 /** The running totals the chart ends on, as its accessible label states
- * them. The card no longer carries a figures row: the chart's label is the
- * one place it states them. */
+ * them. The card carries no figures row: the chart's label is the one place
+ * it states them outside the readout. */
 function chartTotals(card) {
   const label = card.querySelector('.dt-flowchart').getAttribute('aria-label')
   const [, onAir, dtDone, gap] = label.match(/On air (\d+), DT done (\d+), gap (\d+)/)
   return { onAir: Number(onAir), dtDone: Number(dtDone), gap: Number(gap) }
 }
-
-/** The month table's Gap change cells, as they read (the sign and the
- * figure, without the words for a screen reader). */
-const gapChanges = (card) =>
-  within(card)
-    .getAllByTestId('dt-flow-net')
-    .map((td) => td.firstChild.textContent)
 
 /** A figure as a number: a real minus sign or a hyphen, commas dropped. */
 const num = (t) => Number(String(t).replace('−', '-').replace(/,/g, ''))
@@ -1931,29 +1981,45 @@ const num = (t) => Number(String(t).replace('−', '-').replace(/,/g, ''))
 /** The month names under the plot, as they read. */
 const monthLabels = (card) => within(card).getAllByTestId('dt-flow-month').map((m) => m.textContent)
 
-/** Hover month `j` of the chart and read its hover card: each row's
- * [this month, cumulative], as the figures read. */
+/** The readout beside the key: its month, and each row's [this month's
+ * change, running total], as the figures read (without the words for a
+ * screen reader). */
+function readReadout(card) {
+  const readout = within(card).getByTestId('dt-flow-readout')
+  const fig = (row) => {
+    const el = readout.querySelector(`[data-row="${row}"]`)
+    return [
+      el.querySelector('[data-testid="dt-flow-readout-change"]').firstChild.textContent,
+      el.querySelector('[data-testid="dt-flow-readout-value"]').textContent,
+    ]
+  }
+  return {
+    readout,
+    month: within(readout).getByTestId('dt-flow-readout-month').textContent,
+    onAir: fig('onair'),
+    dtDone: fig('done'),
+    gap: fig('gap'),
+  }
+}
+
+/** Hover month `j` of the chart and read the readout. */
 async function hoverMonth(card, j) {
   await userEvent.hover(card.querySelectorAll('.dt-flow-hit')[j])
-  return readTip(card)
+  return readReadout(card)
 }
 
-function readTip(card) {
-  const tip = within(card).getByTestId('dt-flow-tip')
-  const row = (name) =>
-    [...within(tip).getByRole('rowheader', { name }).closest('tr').querySelectorAll('td')].map(
-      (td) => td.firstChild.textContent,
-    )
-  return { tip, onAir: row('On air'), dtDone: row('DT done'), gap: row('Gap') }
-}
+/** The gap change's tone in the readout. */
+const gapTone = (card) =>
+  within(card)
+    .getByTestId('dt-flow-readout')
+    .querySelector('[data-row="gap"] [data-testid="dt-flow-readout-change"]')
+    .getAttribute('data-tone')
 
 describe('the flow chart', () => {
-  // Replaces the old trailing-month trend chart in "On air vs DT done",
-  // which used to read `/trend` and carried a 6m/12m window picker. Neither
-  // applies any more: this card now reads its own endpoint, `/drive-test/flow`,
-  // and reads two ways -- cumulative or one year -- rather than over a
-  // sliding window.
-  it('draws the chart from the cumulative totals by default', async () => {
+  // UEP-04a: the chart is always cumulative over every month the endpoint
+  // returns. There is no period switch, no row of net-change badges and no
+  // floating hover card: a month's figures are in the readout beside the key.
+  it('draws the chart from the cumulative totals', async () => {
     serve()
     draw()
 
@@ -1963,118 +2029,58 @@ describe('the flow chart', () => {
     // 53 + 27 on-aired, 20 + 15 done. The chart has to end where the KPI
     // cards above it read, and the cards count not-placed sites too.
     expect(chartTotals(card)).toEqual({ onAir: 80, dtDone: 35, gap: 45 })
-
-    // No window picker -- gone with the chart it belonged to.
-    expect(screen.queryByRole('button', { name: '6m' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: '12m' })).not.toBeInTheDocument()
     expect(within(card).queryAllByRole('link')).toHaveLength(0)
   })
 
-  it('the latest year draws the real running totals, not a restarted count', async () => {
-    // The view this replaces once restarted both counts at zero for a year,
-    // which drew a year that tested more than it put on air as coverage over
-    // 100%. The lines carry the running total from 1404 instead.
+  it('has no scope control: the chart and the table show every month, first to current', async () => {
     serve()
     draw()
 
     const card = await section('On air vs DT done')
-    await userEvent.click(within(card).getByRole('button', { name: '1405' }))
+    expect(within(card).queryByRole('group', { name: 'Chart period' })).toBeNull()
+    for (const name of ['Last 12 months', 'Cumulative', '1404', '1405']) {
+      expect(within(card).queryByRole('button', { name })).toBeNull()
+    }
+    // The chart: every month the endpoint returned, Farvardin 1404 to now.
+    const hits = [...card.querySelectorAll('.dt-flow-hit')].map((h) => h.getAttribute('aria-label'))
+    expect(hits).toEqual(['فروردین 1404', 'اردیبهشت 1404', 'فروردین 1405', 'اردیبهشت 1405'])
 
-    // Real totals at the end of 1405: 80 on air, 35 done, a gap of 45.
-    expect(chartTotals(card)).toEqual({ onAir: 80, dtDone: 35, gap: 45 })
-    // One column per month of 1405, not 1404's too.
-    expect(gapChanges(card)).toEqual(['+2', '+2'])
-    expect(
-      within(card).getByText(/Showing 1405, month by month\. The lines are the programme’s running totals/),
-    ).toBeInTheDocument()
+    // The table: the same months, newest first.
+    await userEvent.click(within(card).getByRole('button', { name: 'View as table' }))
+    const rowMonths = within(within(card).getByRole('table'))
+      .getAllByRole('rowheader')
+      .map((th) => th.textContent.replace(' · so far', ''))
+    expect(rowMonths).toEqual([...hits].reverse())
   })
 
-  it('shows a past year on its own months, ending on that year, not today', async () => {
-    serve()
-    draw()
-
-    const card = await section('On air vs DT done')
-    await userEvent.click(within(card).getByRole('button', { name: '1404' }))
-
-    // End of 1404: 53 + 10 + 8 on air, 20 + 4 + 6 done. 1404 is the payload's
-    // first year, so this is also everything from the opening balance --
-    // there is nothing before it to keep.
-    expect(chartTotals(card)).toEqual({ onAir: 71, dtDone: 30, gap: 41 })
-    // 1404's own months: two columns, not four.
-    expect(gapChanges(card)).toEqual(['+6', '+2'])
-  })
-
-  it('puts one period switch in the card header: Last 12 months, Cumulative, then each year', async () => {
+  it('puts the key on the left and the readout on the right of one row, with no subtitle', async () => {
     serve()
     draw()
 
     const card = await section('On air vs DT done')
     const header = card.querySelector('.dt-section-head')
-    const period = within(header).getByRole('group', { name: 'Chart period' })
-    const options = within(period).getAllByRole('button')
-    // The years come from the payload, oldest first, after the two fixed
-    // views. The last twelve months is the default.
-    expect(options.map((b) => b.textContent)).toEqual(['Last 12 months', 'Cumulative', '1404', '1405'])
-    const pressed = () => options.filter((b) => b.getAttribute('aria-pressed') === 'true')
-    expect(pressed().map((b) => b.textContent)).toEqual(['Last 12 months'])
+    // No subtitle: the title, then the info button beside it.
+    expect(header.querySelector('.dt-section-note')).toBeNull()
+    expect(header).not.toHaveTextContent(/last 12 months/i)
+    const title = within(header).getByRole('heading', { name: 'On air vs DT done' })
+    const info = within(header).getByRole('button', { name: 'How this chart is drawn' })
+    expect(title.nextElementSibling).toContainElement(info)
 
-    // One click per view, one option pressed at a time, and each year
-    // redraws on that year's months only.
-    await userEvent.click(options[2])
-    expect(pressed().map((b) => b.textContent)).toEqual(['1404'])
-    expect(gapChanges(card)).toHaveLength(2)
-    await userEvent.click(within(card).getByRole('button', { name: '1405' }))
-    expect(
-      within(card)
-        .getAllByRole('button')
-        .filter((b) => b.getAttribute('aria-pressed') === 'true')
-        .map((b) => b.textContent),
-    ).toEqual(['1405'])
-    expect(gapChanges(card)).toEqual(['+2', '+2'])
-    await userEvent.click(within(card).getByRole('button', { name: 'Cumulative' }))
-    expect(gapChanges(card)).toHaveLength(4)
-  })
-
-  it('offers a year that arrives in the data without a code change', async () => {
-    serve(planDelivery(), overview, trend(), flow({
-      months: [...flow().months, flowMonth(1406, 1, { on_aired: 1, dt_done: 1, is_open: true })],
-    }))
-    draw()
-
-    const card = await section('On air vs DT done')
-    const period = within(card).getByRole('group', { name: 'Chart period' })
-    expect(within(period).getAllByRole('button').map((b) => b.textContent)).toEqual([
-      'Last 12 months',
-      'Cumulative',
-      '1404',
-      '1405',
-      '1406',
-    ])
-  })
-
-  it('carries no figures row and no readout, and its key sits on a row of its own', async () => {
-    serve()
-    draw()
-
-    const card = await section('On air vs DT done')
-    expect(card.querySelector('.dt-flowtiles')).toBeNull()
-    expect(within(card).queryByTestId('dt-flow-readout')).toBeNull()
-    expect(within(card).queryByText(/Running:/)).toBeNull()
-    // The key is directly under the title row, not in it.
-    const header = card.querySelector('.dt-section-head')
-    const key = within(card).getByRole('list', { name: 'Chart key' })
-    expect(header.contains(key)).toBe(false)
-    expect(header.compareDocumentPosition(key) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-    expect(key.compareDocumentPosition(card.querySelector('.dt-flowchart')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    const row = card.querySelector('.dt-flow-keyrow')
+    expect(header.contains(row)).toBe(false)
+    const key = within(row).getByRole('list', { name: 'Chart key' })
+    const readout = within(row).getByTestId('dt-flow-readout')
+    expect(key.compareDocumentPosition(readout) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     expect(within(key).getAllByRole('listitem').map((li) => li.textContent)).toEqual([
       'On air',
       'DT done',
       'Gap',
     ])
-    // The title row: the info button, then the period switch on the right.
-    const info = within(header).getByRole('button', { name: 'How this chart is drawn' })
-    const period = within(header).getByRole('group', { name: 'Chart period' })
-    expect(info.compareDocumentPosition(period) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    // The readout sits outside the plot, so it can never cover the lines.
+    expect(card.querySelector('.dt-flowchart').contains(readout)).toBe(false)
+    expect(within(card).queryByTestId('dt-flow-tip')).toBeNull()
+    expect(within(card).queryAllByTestId('dt-flow-net')).toHaveLength(0)
+    expect(card.querySelector('.dt-flow-nets')).toBeNull()
   })
 
   it('keeps every DT done point inside the plot when DT done is above On air', async () => {
@@ -2092,18 +2098,15 @@ describe('the flow chart', () => {
     draw()
 
     const card = await section('On air vs DT done')
-    for (const view of ['1404', '1405', 'Cumulative']) {
-      await userEvent.click(within(card).getByRole('button', { name: view }))
-      const dots = [
-        ...within(card).queryAllByTestId('dt-flow-dot'),
-        ...within(card).queryAllByTestId('dt-flow-open-dot'),
-      ]
-      expect(dots.length).toBeGreaterThan(0)
-      for (const dot of dots) {
-        const top = parseFloat(dot.style.top)
-        expect(top, view).toBeGreaterThanOrEqual(0)
-        expect(top, view).toBeLessThanOrEqual(100)
-      }
+    const dots = [
+      ...within(card).queryAllByTestId('dt-flow-dot'),
+      ...within(card).queryAllByTestId('dt-flow-open-dot'),
+    ]
+    expect(dots.length).toBe(6)
+    for (const dot of dots) {
+      const top = parseFloat(dot.style.top)
+      expect(top).toBeGreaterThanOrEqual(0)
+      expect(top).toBeLessThanOrEqual(100)
     }
   })
 
@@ -2112,45 +2115,38 @@ describe('the flow chart', () => {
     draw()
 
     const card = await section('On air vs DT done')
-    // Cumulative draws all four months, the last still open: three filled
-    // dots per series, one hollow.
+    // All four months, the last still open: three filled dots per series,
+    // one hollow.
     expect(within(card).getAllByTestId('dt-flow-dot')).toHaveLength(6)
     expect(within(card).getAllByTestId('dt-flow-open-dot')).toHaveLength(2)
   })
 
-  it('names every month under the plot, with the year and the month in progress', async () => {
+  it('names every month under the plot, marks the current one, and marks each year', async () => {
     serve()
     draw()
 
     const card = await section('On air vs DT done')
-    // Cumulative: every month, the open one marked.
     expect(monthLabels(card)).toEqual(['فروردین', 'اردیبهشت', 'فروردین', 'اردیبهشت'])
-    expect(within(card).getAllByTestId('dt-flow-month')[3]).toHaveClass('is-open')
-    expect(gapChanges(card)).toEqual(['+6', '+2', '+2', '+2'])
-    // One pill per month; the open month's is drawn open.
-    expect(within(card).getAllByTestId('dt-flow-net')[3]).toHaveClass('is-open')
-    expect(within(card).getAllByTestId('dt-flow-net')[2]).not.toHaveClass('is-open')
-    // The years sit at the top of the plot, beside each first month, not
-    // under the month names; a dashed line marks where 1405 starts.
+    const labels = within(card).getAllByTestId('dt-flow-month')
+    expect(labels[3]).toHaveClass('is-open')
+    // The current month is always labelled, never thinned out.
+    expect(labels[3]).toHaveClass('is-current')
+    expect(labels[3]).not.toHaveClass('is-skipped')
+    expect(card.querySelectorAll('.dt-flow-month.is-current')).toHaveLength(1)
+    // The years sit at the top of the plot, beside each first month; a
+    // dashed line marks where 1405 starts.
     expect(within(card).getAllByTestId('dt-flow-year').map((y) => y.textContent)).toEqual([
       '1404',
       '1405',
     ])
     expect(card.querySelector('.dt-flow-plot').contains(within(card).getAllByTestId('dt-flow-year')[0])).toBe(true)
     expect(card.querySelectorAll('.dt-flow-yearline')).toHaveLength(1)
-    // A single year's view needs no year labels: the switch names it.
-    await userEvent.click(within(card).getByRole('button', { name: '1405' }))
-    expect(within(card).queryAllByTestId('dt-flow-year')).toHaveLength(0)
-    expect(monthLabels(card)).toEqual(['فروردین', 'اردیبهشت'])
-    // No per-month figures under the plot: they are in the hover card.
-    expect(within(card).queryByTestId('dt-flow-table')).toBeNull()
-    expect(within(card).queryByText('New on air')).toBeNull()
   })
 
-  it("matches the KPI cards and What moved in the last column, for both years", async () => {
+  it('matches the KPI cards and What moved in the readout', async () => {
     // One programme, told three ways. The fixture is consistent across the
     // three endpoints -- as the backend's own parity tests require -- so a
-    // column that drifted from the cards would be a bug on this side.
+    // readout that drifted from the cards would be a bug on this side.
     //
     // 60 on air and 10 done before 1404; 1404 adds 36 and 16; 1405 is quiet
     // until Shahrivar, which is still open with 4 on air and 14 done. Totals:
@@ -2185,90 +2181,70 @@ describe('the flow chart', () => {
     const cardFigure = (kpi) => band.querySelector(`[data-kpi="${kpi}"] .dt-kpi-figure`).textContent
     const cardDelta = (kpi) => band.querySelector(`[data-kpi="${kpi}"] .dt-delta-pill b`).textContent
 
-    // 1405: the lines end on the cards' totals, and the last column is the
-    // month the cards' deltas and What moved describe.
+    // The lines end on the cards' totals, and the latest month -- what the
+    // readout shows by default -- is the month What moved describes.
     expect(chartTotals(card)).toEqual({
       onAir: Number(cardFigure('onair')),
       dtDone: Number(cardFigure('done')),
       gap: Number(cardFigure('pending')),
     })
     expect(monthLabels(card).at(-1)).toBe(trend().latest_flows.label)
-    const n = monthLabels(card).length
-    let tip = await hoverMonth(card, n - 1)
-    // This month's figures are the cards' deltas; the running ones, the
-    // cards' totals.
-    expect(num(tip.onAir[0])).toBe(num(cardDelta('onair')))
-    expect(num(tip.dtDone[0])).toBe(num(cardDelta('done')))
-    expect(num(tip.gap[0])).toBe(num(cardDelta('pending')))
-    expect(num(tip.onAir[1])).toBe(num(cardFigure('onair')))
-    expect(num(tip.dtDone[1])).toBe(num(cardFigure('done')))
-    expect(num(tip.gap[1])).toBe(num(cardFigure('pending')))
-    expect(within(moved).getByText(`+${tip.onAir[0]}`)).toBeInTheDocument()
-    expect(within(moved).getByText(`−${tip.dtDone[0]}`)).toBeInTheDocument()
-    // The last closed month's running gap is the gap the band showed before
-    // this month's change: pending minus its month delta -- the 70 What
-    // moved opens on.
-    tip = await hoverMonth(card, n - 2)
-    expect(num(tip.gap[1])).toBe(num(cardFigure('pending')) - num(cardDelta('pending')))
-    expect(num(tip.gap[1])).toBe(70)
+    let r = readReadout(card)
+    // This month's changes are the cards' deltas (On air's line is this
+    // month's change); the running figures, the cards' totals.
+    expect(num(r.onAir[0])).toBe(num(cardDelta('onair')))
+    expect(num(r.dtDone[0])).toBe(num(cardDelta('done')))
+    expect(num(r.gap[0])).toBe(num(cardDelta('pending')))
+    expect(num(r.onAir[1])).toBe(num(cardFigure('onair')))
+    expect(num(r.dtDone[1])).toBe(num(cardFigure('done')))
+    expect(num(r.gap[1])).toBe(num(cardFigure('pending')))
+    expect(within(moved).getByText(`${r.onAir[0]}`)).toBeInTheDocument()
+    expect(within(moved).getByText(`−${num(r.dtDone[0])}`)).toBeInTheDocument()
+    // The last closed month's running gap is the 70 What moved opens on.
+    r = await hoverMonth(card, monthLabels(card).length - 2)
+    expect(num(r.gap[1])).toBe(70)
 
-    // 1404: its last column is Esfand's own movement, and where the year
-    // closed is where 1405 picked up -- the lines carry, they do not reset.
-    // Its closing totals plus every 1405 column are the cards' totals.
-    await userEvent.click(within(card).getByRole('button', { name: '1404' }))
-    const closed1404 = chartTotals(card)
-    tip = await hoverMonth(card, 1)
-    expect(tip.onAir[0]).toBe('16')
-    expect(tip.dtDone[0]).toBe('6')
-    expect(tip.gap[0]).toBe('+10')
-    await userEvent.click(within(card).getByRole('button', { name: '1405' }))
+    // Every month's change, read off the readout, adds up from the opening
+    // balance to the cards' totals: the readout reconciles to the lines.
     const sums = { onAir: 0, dtDone: 0, gap: 0 }
     for (let j = 0; j < monthLabels(card).length; j += 1) {
-      tip = await hoverMonth(card, j)
-      for (const k of Object.keys(sums)) sums[k] += num(tip[k][0])
+      r = await hoverMonth(card, j)
+      for (const k of Object.keys(sums)) sums[k] += num(r[k][0])
     }
-    expect(closed1404.onAir + sums.onAir).toBe(Number(cardFigure('onair')))
-    expect(closed1404.dtDone + sums.dtDone).toBe(Number(cardFigure('done')))
-    expect(closed1404.gap + sums.gap).toBe(Number(cardFigure('pending')))
+    expect(60 + sums.onAir).toBe(Number(cardFigure('onair')))
+    expect(10 + sums.dtDone).toBe(Number(cardFigure('done')))
+    expect(50 + sums.gap).toBe(Number(cardFigure('pending')))
   })
 
-  it('shows a month\'s figures in a card pinned to the plot when the month is hovered', async () => {
+  it('shows the latest month by default and follows the hovered month', async () => {
     serve()
     draw()
 
     const card = await section('On air vs DT done')
-    // Nothing hovered: the card reads the latest month, unmarked (UEP-04).
-    const tipEl = within(card).getByTestId('dt-flow-tip')
-    expect(tipEl).not.toHaveClass('is-on')
-    expect(tipEl.querySelector('.dt-flow-tip-open')).toHaveTextContent('· so far')
+    // Nothing hovered: the latest month, "so far" because it is still open,
+    // and nothing marked on the chart.
+    let r = readReadout(card)
+    expect(r.month).toBe('اردیبهشت ۱۴۰۵')
+    expect(r.readout).toHaveTextContent('· so far')
+    expect(r).toMatchObject({ onAir: ['+4', '80'], dtDone: ['+2', '35'], gap: ['+2', '45'] })
     expect(within(card).queryByTestId('dt-flow-hovercol')).toBeNull()
 
-    // Cumulative, Ordibehesht 1404: 8 on air and 6 done that month; running
-    // 53 + 10 + 8 = 71 on air, 20 + 4 + 6 = 30 done, a gap of 41, +2.
-    const tip = await hoverMonth(card, 1)
-    expect(tip.tip).toHaveClass('is-on')
-    expect(tip.tip.querySelector('.dt-flow-tip-month')).toHaveTextContent('اردیبهشت')
-    expect(tip.tip.querySelector('.dt-flow-tip-year')).toHaveTextContent('1404')
-    expect(tip.tip.querySelector('.dt-flow-tip-open')).toBeNull()
-    expect(
-      within(tip.tip).getAllByRole('columnheader').map((th) => th.textContent),
-    ).toEqual(['This month', 'Cumulative'])
-    expect(tip).toMatchObject({ onAir: ['8', '71'], dtDone: ['6', '30'], gap: ['+2', '41'] })
+    // Ordibehesht 1404: 8 on air and 6 done that month; running 53 + 10 + 8
+    // = 71 on air, 20 + 4 + 6 = 30 done, a gap of 41, +2.
+    r = await hoverMonth(card, 1)
+    expect(r.month).toBe('اردیبهشت ۱۴۰۴')
+    expect(r.readout).not.toHaveTextContent('so far')
+    expect(r).toMatchObject({ onAir: ['+8', '71'], dtDone: ['+6', '30'], gap: ['+2', '41'] })
 
     // The hovered month is marked: its column, its two dots, its label.
     expect(within(card).getByTestId('dt-flow-hovercol')).toBeInTheDocument()
     expect(card.querySelectorAll('.dt-flow-dot.is-active')).toHaveLength(2)
     expect(within(card).getAllByTestId('dt-flow-month')[1]).toHaveClass('is-active')
 
-    // The open month says so.
-    const open = await hoverMonth(card, 3)
-    expect(within(open.tip).getByText('· so far')).toBeInTheDocument()
-    expect(open).toMatchObject({ onAir: ['4', '80'], dtDone: ['2', '35'], gap: ['+2', '45'] })
-
-    // Leaving the chart puts everything back.
-    await userEvent.unhover(card.querySelectorAll('.dt-flow-hit')[3])
+    // Leaving the chart puts the readout back on the latest month.
+    await userEvent.unhover(card.querySelectorAll('.dt-flow-hit')[1])
     await userEvent.unhover(card.querySelector('.dt-flow-frame'))
-    expect(within(card).getByTestId('dt-flow-tip')).not.toHaveClass('is-on')
+    expect(readReadout(card).month).toBe('اردیبهشت ۱۴۰۵')
     expect(within(card).queryByTestId('dt-flow-hovercol')).toBeNull()
     expect(card.querySelectorAll('.dt-flow-dot.is-active')).toHaveLength(0)
   })
@@ -2289,20 +2265,24 @@ describe('the flow chart', () => {
     const months = () => within(card).getAllByTestId('dt-flow-month')
     const activeIndex = () => months().findIndex((m) => m.classList.contains('is-active'))
 
-    // Focusing the chart starts on the latest month.
+    // Focusing the chart starts on the latest month. The readout announces
+    // the month the keys move to.
     act(() => plot.focus())
     expect(activeIndex()).toBe(3)
-    const tip = within(card).getByTestId('dt-flow-tip')
-    expect(tip).toHaveAttribute('aria-live', 'polite')
-    expect(readTip(card)).toMatchObject({ onAir: ['4', '80'], dtDone: ['2', '35'] })
+    const readout = within(card).getByTestId('dt-flow-readout')
+    expect(readout).toHaveAttribute('aria-live', 'polite')
+    expect(readReadout(card)).toMatchObject({ onAir: ['+4', '80'], dtDone: ['+2', '35'] })
 
     fireEvent.keyDown(plot, { key: 'ArrowLeft' })
     expect(activeIndex()).toBe(2)
-    expect(readTip(card)).toMatchObject({ onAir: ['5', '76'], dtDone: ['3', '33'] })
+    expect(readReadout(card)).toMatchObject({ month: 'فروردین ۱۴۰۵', onAir: ['+5', '76'], dtDone: ['+3', '33'] })
+    expect(within(card).getByTestId('dt-flow-readout')).toHaveTextContent('فروردین ۱۴۰۵')
     fireEvent.keyDown(plot, { key: 'ArrowRight' })
     expect(activeIndex()).toBe(3)
+    expect(readReadout(card).month).toBe('اردیبهشت ۱۴۰۵')
     fireEvent.keyDown(plot, { key: 'Home' })
     expect(activeIndex()).toBe(0)
+    expect(readReadout(card).month).toBe('فروردین ۱۴۰۴')
     fireEvent.keyDown(plot, { key: 'ArrowLeft' })
     expect(activeIndex()).toBe(0)
     fireEvent.keyDown(plot, { key: 'End' })
@@ -2332,12 +2312,34 @@ describe('the flow chart', () => {
     expect(rows[0]).toEqual(['80', '35', '45'])
     expect(rows[rows.length - 1]).toEqual(['63', '24', '39'])
     expect(within(table).getAllByRole('rowheader')[0]).toHaveTextContent('· so far')
+    // The key row stays above the table, its readout on the latest month.
+    expect(readReadout(card)).toMatchObject({ onAir: ['+4', '80'], gap: ['+2', '45'] })
 
     await userEvent.click(within(card).getByRole('button', { name: 'View as chart' }))
     expect(card.querySelector('.dt-flowchart')).not.toBeNull()
   })
 
-  it('shows the same card when a month takes the keyboard focus', async () => {
+  it("gives the readout the table row's figures for every month", async () => {
+    serve()
+    draw()
+
+    const card = await section('On air vs DT done')
+    const n = monthLabels(card).length
+    const shown = []
+    for (let j = 0; j < n; j += 1) {
+      const r = await hoverMonth(card, j)
+      shown.push([r.onAir[1], r.dtDone[1], r.gap[1]])
+    }
+    await userEvent.click(within(card).getByRole('button', { name: 'View as table' }))
+    const rows = within(within(card).getByRole('table'))
+      .getAllByRole('row')
+      .slice(1)
+      .map((r) => [...r.querySelectorAll('td')].map((td) => td.textContent))
+      .reverse()
+    expect(shown).toEqual(rows)
+  })
+
+  it('shows the same readout when a month takes the keyboard focus', async () => {
     serve()
     draw()
 
@@ -2345,19 +2347,10 @@ describe('the flow chart', () => {
     const hits = card.querySelectorAll('.dt-flow-hit')
     expect(hits[0]).toHaveAccessibleName('فروردین 1404')
     act(() => hits[2].focus())
-    const tip = readTip(card)
-    expect(tip.tip).toHaveClass('is-on')
-    expect(tip).toMatchObject({ onAir: ['5', '76'], dtDone: ['3', '33'], gap: ['+2', '43'] })
-    // Still "Cumulative" in a year view: the lines carry the running total.
-    await userEvent.click(within(card).getByRole('button', { name: '1405' }))
-    act(() => card.querySelectorAll('.dt-flow-hit')[0].focus())
-    expect(
-      within(readTip(card).tip).getAllByRole('columnheader').map((th) => th.textContent),
-    ).toEqual(['This month', 'Cumulative'])
-    expect(readTip(card)).toMatchObject({ onAir: ['5', '76'], gap: ['+2', '43'] })
+    expect(readReadout(card)).toMatchObject({ onAir: ['+5', '76'], dtDone: ['+3', '33'], gap: ['+2', '43'] })
   })
 
-  it('colours the hover card\'s gap change by its direction, with a real minus sign', async () => {
+  it('draws the gap change in danger only when the gap grew, with a real minus sign', async () => {
     serve(planDelivery(), overview, trend(), flow({
       months: [
         flowMonth(1404, 1, { on_aired: 10, dt_done: 4 }),   // +6, grew
@@ -2369,16 +2362,20 @@ describe('the flow chart', () => {
     draw()
 
     const card = await section('On air vs DT done')
-    const gapCell = (tip) => within(tip.tip).getByRole('rowheader', { name: 'Gap' }).nextElementSibling
-    let tip = await hoverMonth(card, 0)
-    expect(tip.gap[0]).toBe('+6')
-    expect(gapCell(tip)).toHaveAttribute('data-tone', 'bad')
-    tip = await hoverMonth(card, 1)
-    expect(tip.gap[0]).toBe('−17')
-    expect(gapCell(tip)).toHaveAttribute('data-tone', 'good')
-    tip = await hoverMonth(card, 2)
-    expect(tip.gap[0]).toBe('0')
-    expect(gapCell(tip)).toHaveAttribute('data-tone', 'flat')
+    const word = () =>
+      within(card).getByTestId('dt-flow-readout').querySelector('[data-row="gap"] .dt-sr-only:last-child')
+    let r = await hoverMonth(card, 0)
+    expect(r.gap[0]).toBe('+6')
+    expect(gapTone(card)).toBe('bad')
+    expect(word()).toHaveTextContent('grew')
+    r = await hoverMonth(card, 1)
+    expect(r.gap[0]).toBe('−17')
+    expect(gapTone(card)).toBe('good')
+    expect(word()).toHaveTextContent('shrank')
+    r = await hoverMonth(card, 2)
+    expect(r.gap[0]).toBe('0')
+    expect(gapTone(card)).toBe('flat')
+    expect(word()).toHaveTextContent('no change')
   })
 
   it('writes a negative running gap with a real minus sign', async () => {
@@ -2390,84 +2387,23 @@ describe('the flow chart', () => {
     draw()
 
     const card = await section('On air vs DT done')
-    const tip = await hoverMonth(card, 0)
-    expect(tip.gap[1]).toBe('−20')
+    expect(readReadout(card).gap[1]).toBe('−20')
   })
 
   it("keeps the chart's notes behind the header's info icon, not under the chart", async () => {
-    serve()
+    serve(planDelivery(), overview, trend(), flow({ opening: { on_air: 1000, dt_done: 900 } }))
     draw()
 
     const card = await section('On air vs DT done')
     expect(card.querySelector('.dt-flowcard .dt-note')).toBeNull()
-    expect(within(card).getByText(/^Showing the last 12 months, month by month\./)).not.toBeVisible()
-    await userEvent.click(within(card).getByRole('button', { name: '1405' }))
-    const note = within(card).getByText(
-      /Showing 1405, month by month/,
-    )
-    // 1405's lines run 30..80, fitted on steps of 20 from 20: the axis does
-    // not start at zero, and the note says so.
-    expect(note).toHaveTextContent('The scale starts at 20, not zero.')
+    const note = within(card).getByText(/^The lines are the programme’s running totals/)
+    // Lines in the 900s are fitted well above zero, and the note says where.
+    expect(note).toHaveTextContent(/The scale starts at [\d,]+, not zero\./)
     expect(note).not.toBeVisible()
+    expect(within(card).getByText(/every month since Farvardin 1404\.$/)).not.toBeVisible()
 
     await userEvent.click(within(card).getByRole('button', { name: 'How this chart is drawn' }))
     expect(note).toBeVisible()
-  })
-
-  it('foots each month with what it did to the backlog', async () => {
-    serve()
-    draw()
-
-    const card = await section('On air vs DT done')
-    // One per month drawn: all four in the cumulative view. 10 on air
-    // against 4 done is +6 pending; 8 against 6, 5 against 3 and 4 against
-    // 2 are +2 each.
-    expect(gapChanges(card)).toEqual(['+6', '+2', '+2', '+2'])
-    // All grew the backlog, so all are the bad tone.
-    expect(
-      within(card)
-        .getAllByTestId('dt-flow-net')
-        .map((p) => p.getAttribute('data-tone')),
-    ).toEqual(['bad', 'bad', 'bad', 'bad'])
-  })
-
-  it('colours a month green when the backlog shrank and brick when it grew', async () => {
-    serve(planDelivery(), overview, trend(), flow({
-      months: [
-        flowMonth(1404, 1, { on_aired: 10, dt_done: 4 }),   // +6, grew
-        flowMonth(1404, 2, { on_aired: 3, dt_done: 20 }),   // -17, shrank
-        flowMonth(1404, 3, { on_aired: 5, dt_done: 5 }),    // 0, flat
-      ],
-    }))
-    draw()
-
-    const card = await section('On air vs DT done')
-    const cells = within(card).getAllByTestId('dt-flow-net')
-    expect(cells.map((p) => p.getAttribute('data-tone'))).toEqual(['bad', 'good', 'flat'])
-    expect(gapChanges(card)).toEqual(['+6', '−17', '0'])
-  })
-
-  it('adds the month table up to the movement in the gap across the year', async () => {
-    // The parity that makes the table trustworthy: read the rendered Gap
-    // change cells, sum them, and check the total against the gap the chart
-    // itself ends on. A table that stops summing to its own chart is worse
-    // than no table.
-    serve()
-    draw()
-
-    const card = await section('On air vs DT done')
-    const sum = gapChanges(card).reduce((total, v) => total + num(v), 0)
-
-    // Cumulative opens on the opening balance plus the undated sites: 53 on
-    // air, 20 done, a gap of 33. The chart ends on 45, so the columns must
-    // add up to 12.
-    expect(sum).toBe(chartTotals(card).gap - 33)
-    expect(sum).toBe(12)
-
-    // And a year on its own: 1405 opened on the gap 1404 closed on (71 on
-    // air, 30 done, 41), so its columns add up to 4.
-    await userEvent.click(within(card).getByRole('button', { name: '1405' }))
-    expect(gapChanges(card).reduce((total, v) => total + num(v), 0)).toBe(4)
   })
 
   it('marks the open month as still in progress', async () => {
@@ -2735,7 +2671,6 @@ describe('PIP this month', () => {
     const card = await section('PIP this month')
     expect(card.querySelector('.dt-pip-tiles')).not.toHaveClass('is-uncommitted')
     expect(within(card).getByTestId('dt-pip-progress-fill')).toHaveStyle({ width: '37.5%' })
-    expect(card).toHaveTextContent('3 of 4 contractors approved.')
   })
 
   describe('the pace marker', () => {
@@ -2755,21 +2690,6 @@ describe('PIP this month', () => {
       const tick = within(card).getByTestId('dt-pip-pace')
       expect(parseFloat(tick.style.left)).toBeCloseTo((16 / 31) * 100, 5)
       expect(tick).toHaveTextContent('Today')
-    })
-
-    it('says how far behind pace, in danger ink, only when behind', async () => {
-      // 16 planned by 51.6% of the month is 8 expected; 6 delivered.
-      serve()
-      const { unmount } = draw()
-      let card = await section('PIP this month')
-      expect(card.querySelector('.dt-pip-behind')).toHaveTextContent('2 behind pace')
-      unmount()
-
-      serve(planDelivery({ actual: 9, achievement_percent: 56.25 }))
-      draw()
-      card = await section('PIP this month')
-      expect(card.querySelector('.dt-pip-behind')).toBeNull()
-      expect(card).not.toHaveTextContent(/ahead|behind/i)
     })
   })
 
@@ -2804,30 +2724,48 @@ describe('PIP this month', () => {
     )
   })
 
-  it("gives a contractor the programme average, their only benchmark past their own row", async () => {
-    serve(planDelivery({ programme_achievement_percent: 62.5 }))
+  it('carries no pace or approval note under the bar (UEP-04a)', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2026-09-07T09:00:00Z'))
+    try {
+      serve(planDelivery({ programme_achievement_percent: 62.5 }))
+      draw()
+
+      const card = await section('PIP this month')
+      // The bar and its "Today" tick stay.
+      expect(within(card).getByTestId('dt-pip-progress-fill')).toBeInTheDocument()
+      expect(within(card).getByTestId('dt-pip-pace')).toHaveTextContent('Today')
+      // The note does not: no pace, no approvals, no programme average, no link.
+      expect(card).not.toHaveTextContent(/behind pace/)
+      expect(card).not.toHaveTextContent(/contractors approved/)
+      expect(card).not.toHaveTextContent(/Programme average/)
+      expect(within(card).queryByRole('link', { name: 'Monthly plan' })).toBeNull()
+      expect(card.querySelector('.dt-pip-note, .dt-pip-behind')).toBeNull()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+})
+
+describe('the month in the card headers', () => {
+  // UEP-04a: PIP this month and What moved name their month with one shared
+  // element, set in 600 ink; whatever follows keeps the note's own style.
+  it('names the month with the shared month element in both headers', async () => {
+    serve()
     draw()
 
-    const card = await section('PIP this month')
-    expect(card).toHaveTextContent('Programme average 62.5% across all contractors.')
-  })
-
-  it('offers the monthly plan only to a role that can open it', async () => {
-    // The same list the sidebar gates its Monthly Plan entry on. Admin is a
-    // systems role and is not offered the page anywhere in the interface.
-    serve()
-    const { unmount } = draw()
-    let card = await section('PIP this month')
-    expect(within(card).getByRole('link', { name: 'Monthly plan' })).toHaveAttribute(
-      'href',
-      '/monthly-plan',
-    )
-    unmount()
-
-    serve()
-    draw('/reports/drive-test', { id: 9, username: 'admin', role: { name: 'Admin' } })
-    card = await section('PIP this month')
-    expect(within(card).queryByRole('link', { name: 'Monthly plan' })).toBeNull()
+    const pip = await section('PIP this month')
+    const moved = await section('What moved')
+    const pipMonth = pip.querySelector('.dt-section-head [data-testid="dt-month-label"]')
+    const movedMonth = moved.querySelector('.dt-section-head [data-testid="dt-month-label"]')
+    expect(pipMonth).toHaveTextContent(planDelivery().month_label)
+    expect(pipMonth).toHaveClass('dt-month-label')
+    const { label, shamsi_year: year, is_open: open } = trend().latest_flows
+    expect(movedMonth).toHaveTextContent(`${label} ${year}`)
+    expect(movedMonth).toHaveClass('dt-month-label')
+    // The suffix sits outside the bold element, in the note's own style.
+    expect(movedMonth).not.toHaveTextContent('in progress')
+    if (open) expect(movedMonth.parentElement).toHaveTextContent('· in progress')
   })
 })
 
