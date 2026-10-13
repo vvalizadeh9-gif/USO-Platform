@@ -115,6 +115,9 @@ export const APPS = Object.freeze([
     group: 'rollout',
     roles: ACCEPTANCE_ROLES,
     pages: [
+      // As in Drive test: the dashboard leads the rail behind a divider and
+      // carries no count. Insights → Acceptance dashboard opens the same page.
+      { id: 'dashboard', label: 'Dashboard', route: '/reports/acceptance', divider: true },
       { id: 'filing', label: 'ICT and CRA filing', route: '/my-work', queues: ['ict_pending', 'cra_pending'] },
       { id: 'validation', label: 'Validation', route: '/my-work?tab=filled', roles: ['PM', 'Coordinator'], queues: ['ict_to_validate', 'cra_to_validate'] },
       { id: 'letters', label: 'Letters', route: '/my-work?tab=all' },
@@ -233,8 +236,12 @@ function aliasScore(route, pathname, search) {
   return new URLSearchParams(search).get('tab') === params.get('tab') ? 1 : -1
 }
 
-/** The app and page a location belongs to, among this role's apps. */
-export function locate(apps, pathname, search = '') {
+/** The app and page a location belongs to, among this role's apps.
+ *
+ * Some pages live in more than one app (the dashboards are in their own app
+ * and in Insights), so a URL alone cannot say which app is open. `preferAppId`
+ * names the app the user opened; it wins a tie, so its rail stays. */
+export function locate(apps, pathname, search = '', preferAppId = null) {
   let best = { app: null, page: null, score: -1 }
   for (const app of apps) {
     for (const page of app.pages) {
@@ -242,11 +249,16 @@ export function locate(apps, pathname, search = '') {
         matchScore(page.route, pathname, search),
         ...(page.also || []).map((r) => aliasScore(r, pathname, search)),
       )
-      if (score > best.score) best = { app, page, score }
+      const preferred = score >= 0 && score === best.score && app.id === preferAppId && best.app?.id !== preferAppId
+      if (score > best.score || preferred) best = { app, page, score }
     }
   }
   return { app: best.app, page: best.page }
 }
+
+/** Router `state` for a link that opens an app's page, so the shell keeps
+ * that app when the page is shared with another. */
+export const appState = (app) => ({ app: app.id })
 
 /** Pending counts per Home queue key, from a GET /me/home response. */
 export function queueCounts(home) {

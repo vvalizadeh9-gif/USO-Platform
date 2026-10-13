@@ -79,4 +79,20 @@ describe('counts come from the one /me/home response', () => {
     expect(dt.pages.map((p) => p.id)).toEqual(['fixes'])
     expect(appsFor('PM').find((a) => a.id === 'drive-test').pages.map((p) => p.id)).not.toContain('fixes')
   })
+
+  it.each([
+    ['/reports/drive-test', 'drive-test', 'dashboard'],
+    ['/reports/acceptance', 'acceptance', 'dashboard'],
+  ])('keeps a shared dashboard (%s) in the app the user opened', (path, own, ownPage) => {
+    const apps = appsFor('PM')
+    expect(locate(apps, path, '').app.id).toBe(own)
+    expect(locate(apps, path, '', own).page.id).toBe(ownPage)
+    const insights = locate(apps, path, '', 'insights')
+    expect(insights.app.id).toBe('insights')
+    expect(insights.app.pages.map((p) => p.id)).toEqual(expect.arrayContaining(['roles', 'gaps']))
+  })
+
+  it('ignores a preferred app that does not hold the page', () => {
+    expect(locate(appsFor('PM'), '/my-work', '', 'insights').app.id).toBe('acceptance')
+  })
 })
