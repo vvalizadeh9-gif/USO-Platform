@@ -379,6 +379,7 @@ def acceptance_progress_view(
     months: int = Query(
         acceptance_progress.DEFAULT_MONTHS, ge=1, le=acceptance_progress.MAX_MONTHS
     ),
+    year: int | None = Query(default=None, ge=1300, le=1500),
     province_id: int | None = Query(default=None),
     contractor_id: int | None = Query(default=None),
     db: Session = Depends(get_db),
@@ -390,11 +391,18 @@ def acceptance_progress_view(
     Open to every signed-in role, like ``/overview``: the villages are the
     caller's own scope, a contractor's ``contractor_id`` is always its own
     company, and the Internal PIP is withheld (``null``) wherever the caller
-    may not see it. See ``services/acceptance_progress.py``.
+    may not see it. With ``year``, that Shamsi year's twelve months, months
+    after the running one carrying plans only (``is_future``). See
+    ``services/acceptance_progress.py``.
     """
     return AcceptanceProgress(
         **acceptance_progress.progress(
-            db, user, months=months, province_id=province_id, contractor_id=contractor_id
+            db,
+            user,
+            months=months,
+            year=year,
+            province_id=province_id,
+            contractor_id=contractor_id,
         )
     )
 

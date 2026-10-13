@@ -25,6 +25,13 @@ in every month's ``approved_cumulative`` from the first month of the window,
 and in no month's ``approved``. That is what makes the last month's running
 total equal the overview's approved figure for the same scope.
 
+**One Shamsi year** (``year=``): the year's twelve months, Farvardin to
+Esfand. A month after the running one has not happened yet: it carries its
+plans, ``approved`` and ``approved_cumulative`` are None, and ``is_future``
+is True. ``years`` lists every year the dropdown offers -- each year with a
+dated approval or a plan the caller may see, and the current year -- newest
+first. Without ``year`` the window is the last *months* months, as before.
+
 **Plans are None, never 0**, when there is no plan for that month and stream,
 when the view is narrowed to a province (plans are programme-wide), and --
 for the Internal PIP -- when the caller may not see it (a contractor, or staff
@@ -95,6 +102,11 @@ def _window(today: date, months: int) -> list[Period]:
         periods.append(period)
         period = jalali.previous_period(*period)
     return list(reversed(periods))
+
+
+def _year(year: int) -> list[Period]:
+    """One Shamsi year's twelve periods, Farvardin to Esfand."""
+    return [(year, month) for month in range(1, 13)]
 
 
 # ---------------------------------------------------------------------------
@@ -176,12 +188,15 @@ def _contractor_plan(db: Session, scope: _Scope, stream: str, actuals: _Actuals)
 # ---------------------------------------------------------------------------
 # Assembly
 # ---------------------------------------------------------------------------
-def _stream_month(period: Period, actuals: _Actuals, internal: _Plan, contractor: _Plan) -> dict:
+def _stream_month(
+    period: Period, actuals: _Actuals, internal: _Plan, contractor: _Plan, *, future: bool
+) -> dict:
     internal_plan, internal_cumulative = internal.at(period)
     contractor_plan, contractor_cumulative = contractor.at(period)
     return {
-        "approved": actuals.monthly.get(period, 0),
-        "approved_cumulative": actuals.through(period),
+        # A month that has not started has no approvals yet -- not zero of them.
+        "approved": None if future else actuals.monthly.get(period, 0),
+        "approved_cumulative": None if future else actuals.through(period),
         "internal_plan": internal_plan,
         "internal_plan_cumulative": internal_cumulative,
         "contractor_plan": contractor_plan,
@@ -194,14 +209,17 @@ def progress(
     user: User,
     *,
     months: int = DEFAULT_MONTHS,
+    year: int | None = None,
     province_id: int | None = None,
     contractor_id: int | None = None,
     today: date | None = None,
 ) -> dict:
     """Approvals against plan, month by month, for all three streams.
 
-    Shaped as ``schemas.AcceptanceProgress``. *today* is the Tehran day by
-    default; tests pin it.
+    Shaped as ``schemas.AcceptanceProgress``. With *year*, that Shamsi year's
+    twelve months (and *months* is ignored); without it, the last *months*
+    months ending with today's. *today* is the Tehran day by default; tests
+    pin it.
     """
     today = today or jalali.tehran_today()
     scope = _resolve_scope(user, province_id, contractor_id)
@@ -220,30 +238,47 @@ def progress(
         for key, stream in STREAM_KEYS.items()
     }
 
-    year, month, day = jalali.to_shamsi_date(today)
-    current: Period = (year, month)
+    this_year, this_month, day = jalali.to_shamsi_date(today)
+    current: Period = (this_year, this_month)
+    periods = _year(year) if year is not None else _window(today, months)
     out_months = [
         {
             "shamsi_year": p[0],
             "shamsi_month": p[1],
             "label": jalali.month_name(p[1]),
             "is_current": p == current,
+            "is_future": p > current,
             "days_in_month": jalali.days_in_month(*p),
             **{
-                key: _stream_month(p, actuals[key], *plans[key])
+                key: _stream_month(p, actuals[key], *plans[key], future=p > current)
                 for key in STREAM_KEYS
             },
         }
-        for p in _window(today, months)
+        for p in periods
     ]
     return {
         "today": {
-            "shamsi_year": year,
-            "shamsi_month": month,
+            "shamsi_year": this_year,
+            "shamsi_month": this_month,
             "day": day,
-            "days_in_month": jalali.days_in_month(year, month),
+            "days_in_month": jalali.days_in_month(this_year, this_month),
         },
         "plans_available": scope.plans_available,
         "internal_visible": scope.internal_visible,
+        "years": _years(this_year, actuals, plans),
         "months": out_months,
     }
+
+
+def _years(
+    this_year: int, actuals: dict[str, _Actuals], plans: dict[str, tuple[_Plan, _Plan]]
+) -> list[int]:
+    """The years the dashboard can show, newest first: every year with a dated
+    approval or a plan this caller may see (a withheld plan is ``_NO_PLAN``,
+    so it adds nothing), and always the current year."""
+    years = {this_year}
+    for key in STREAM_KEYS:
+        years.update(p[0] for p in actuals[key].monthly)
+        for plan in plans[key]:
+            years.update(p[0] for p in plan.monthly)
+    return sorted(years, reverse=True)
