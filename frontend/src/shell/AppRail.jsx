@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import Icon from '../components/Icon'
 import AppTile from './AppTile'
-import { pageCount } from './appRegistry'
+import { appState, pageCount } from './appRegistry'
 
 /** An app's own pages, with each page's pending count. No rail for an app
  * with a single page. Collapsible on narrow screens; stacks on mobile. */
@@ -32,6 +32,7 @@ export default function AppRail({ app, activePage, counts }) {
             <Link
               key={page.id}
               to={page.route}
+              state={appState(app)}
               className={`uep-rail-item ${active ? 'is-active' : ''} ${page.divider ? 'has-divider' : ''}`.trim()}
               aria-current={active ? 'page' : undefined}
             >

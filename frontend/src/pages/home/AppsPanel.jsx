@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom'
 import AppTile from '../../shell/AppTile'
-import { appCount, appGroupsFor, appRoute } from '../../shell/appRegistry'
+import { appCount, appGroupsFor, appRoute, appState } from '../../shell/appRegistry'
 
 /** Every app this role may open, by group, with its pending count. Apps only:
  * dashboards and trackers are pages inside apps. */
@@ -14,7 +14,7 @@ export default function AppsPanel({ roleName, counts }) {
           {group.apps.map((app) => {
             const count = appCount(app, counts)
             return (
-              <Link key={app.id} to={appRoute(app)} className="ha-app" data-app={app.id}>
+              <Link key={app.id} to={appRoute(app)} state={appState(app)} className="ha-app" data-app={app.id}>
                 <AppTile app={app} size={36} />
                 <span className="ha-app-text">
                   <span className="ha-app-name">{app.name}</span>

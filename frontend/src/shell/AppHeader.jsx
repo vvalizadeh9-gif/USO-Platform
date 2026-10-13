@@ -4,7 +4,7 @@ import Icon from '../components/Icon'
 import { initialsOf } from '../lib/initials'
 import AccountPopover from './AccountPopover'
 import AppLauncher from './AppLauncher'
-import { appRoute } from './appRegistry'
+import { appRoute, appState } from './appRegistry'
 
 /** The single tenant/project today; a list once UEP is multi-tenant. */
 export const TENANT = 'Rollout 1405'
@@ -33,7 +33,8 @@ function GlobalSearch({ apps }) {
     const term = q.trim()
     if (!term) return
     const app = apps.find((a) => a.name.toLowerCase().includes(term.toLowerCase()))
-    navigate(app ? appRoute(app) : `/work-items?search=${encodeURIComponent(term)}`)
+    if (app) navigate(appRoute(app), { state: appState(app) })
+    else navigate(`/work-items?search=${encodeURIComponent(term)}`)
     setQ('')
     inputRef.current?.blur()
   }
@@ -85,7 +86,7 @@ export default function AppHeader({ user, apps, crumbs, pending, onSignOut }) {
           {crumbs.map((c) => (
             <span key={c.label}>
               <span aria-hidden="true">/</span>
-              {c.to ? <Link to={c.to}>{c.label}</Link> : <span aria-current="page">{c.label}</span>}
+              {c.to ? <Link to={c.to} state={c.state}>{c.label}</Link> : <span aria-current="page">{c.label}</span>}
             </span>
           ))}
         </nav>
