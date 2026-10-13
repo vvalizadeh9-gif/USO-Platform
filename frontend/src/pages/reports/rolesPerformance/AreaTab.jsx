@@ -1,205 +1,208 @@
-// Area (PM, Viewer) and My area (everyone else): where things stand today.
-// Six headline cards, a breakdown, and the open work -- each linking to
-// Lifecycle Gaps, never to a village list on this page.
-import { useState } from 'react'
-import { ArrowUpRight } from 'lucide-react'
-import { Link } from 'react-router-dom'
+// Area (PM, Viewer) and My area (everyone else): where things stand today,
+// against national.
+//
+// Left, the scope's pipeline (Total villages, then five measures of equal
+// weight); right, every member of one breakdown ranked on the selected
+// measure by its gap to national, furthest behind first. A row opens
+// Lifecycle Gaps with its lens and key.
+import { useCallback, useEffect, useState } from 'react'
+import { Link, useSearchParams } from 'react-router-dom'
 import { SegmentedControl } from '../../../components/ui'
-import { useAuth } from '../../../context/AuthContext'
-import { hasWorkQueues } from '../../../lib/roles'
-import { importStamp } from '../kpiTheme'
+import { useToast } from '../../../context/ToastContext'
+import { shamsiDayLabel } from '../../../lib/shamsi'
+import MeasureList from './MeasureList'
 import PerfHeader from './PerfHeader'
+import RankBar from './RankBar'
 import ScopePicker from './ScopePicker'
 import { useExport, useRpData } from './hooks'
-import { CountUp, NotCompared, Num, RateBar, RpCard } from './parts'
-import { fmtCount, fmtPct, scopeParams } from './model'
-
-const BREAKDOWN_LABELS = { province: 'Provinces', region: 'CRA regions', contractor: 'Contractors' }
+import { Fa, IconTile, Num, RpCard } from './parts'
+import {
+  AREA_DEFAULT_MEASURE,
+  AREA_MEASURES,
+  BREAKDOWNS,
+  SCOPE_GROUPS,
+  fmtCount,
+  fmtGap,
+  fmtRate,
+  gapPoints,
+  gapsLink,
+  rankLabel,
+  rankRows,
+  scopeParams,
+  scopeValue,
+} from './model'
 
 export default function AreaTab({ scope, onScope, search }) {
-  const { user } = useAuth()
+  const toast = useToast()
+  const [params, setParams] = useSearchParams()
   const [breakdown, setBreakdown] = useState(null)
-  const params = { ...scopeParams(scope), ...(breakdown ? { breakdown } : {}) }
-  const { data, error, loading } = useRpData('/kpi/area', params)
-  const exporter = useExport('/kpi/area.xlsx', params, 'UEP-roles-area.xlsx')
-  const shown = data?.breakdown ?? breakdown
+  // A new scope starts on its own default breakdown (its kind is not offered).
+  const scopeKey = scopeValue(scope)
+  useEffect(() => setBreakdown(null), [scopeKey])
+  const query = { ...scopeParams(scope), ...(breakdown ? { breakdown } : {}) }
+  const { data, error, loading, retry } = useRpData('/kpi/area', query)
+  const onExportError = useCallback((message) => toast.error('Export failed', message), [toast])
+  const exporter = useExport('/kpi/area.xlsx', query, 'UEP-roles-area.xlsx', onExportError)
+
+  const asked = params.get('measure')
+  const measure = AREA_MEASURES.some((m) => m.key === asked) ? asked : AREA_DEFAULT_MEASURE
+  const setMeasure = (key) => {
+    const next = new URLSearchParams(params)
+    next.set('measure', key)
+    setParams(next, { replace: true })
+  }
+  const scoped = Boolean(data && data.scope.lens !== 'country')
+  const stamp = shamsiDayLabel(data?.as_of)
 
   return (
     <>
       <PerfHeader
         tab="area"
-        scopeLabel={data?.scope?.label ?? 'Whole country'}
+        scopeLabel={scopeKind(data?.scope ?? scope)}
         title={<ScopePicker scope={scope} onChange={onScope} />}
         chip={data?.scope?.chip}
+        subtitle={<>Today · as of the last CPM import {stamp ? <Fa>{stamp}</Fa> : 'not yet run'}</>}
         search={search}
-        dateControl={
-          <span className="rp-stamp">As of today · CPM import {importStamp(data?.as_of)}</span>
-        }
         onExport={exporter.run}
         exporting={exporter.busy}
-        exportError={exporter.error}
       />
-      <div className="rp-body rp-area">
-        {data?.scope?.past && (
-          <p className="rp-state">
-            {data.scope.key} owns no province today. Their past months are in Performance.
-          </p>
+      <div className="rp-body rp-split">
+        {data ? (
+          <MeasureList
+            label="Pipeline"
+            value={measure}
+            onChange={setMeasure}
+            groups={[{
+              key: 'pipeline',
+              title: 'Pipeline',
+              icon: 'chart--column',
+              unit: 'villages',
+              rows: [
+                {
+                  key: 'villages',
+                  label: 'Total villages',
+                  kind: 'info',
+                  value: <Num>{fmtCount(data.totals.villages)}</Num>,
+                },
+                ...AREA_MEASURES.map((m) => ({
+                  key: m.key,
+                  label: m.label,
+                  kind: 'even',
+                  value: <Num>{fmtCount(data.totals[m.key].count)}</Num>,
+                  sub: (
+                    <RateLine rate={data.totals[m.key].rate} national={data.national[m.key]}
+                      scoped={scoped} />
+                  ),
+                })),
+              ],
+            }]}
+          />
+        ) : (
+          <RpCard className="rp-measures" label="Pipeline" loading={loading} error={error}
+            onRetry={retry} />
         )}
-        <div className="rp-cards6">
-          {(data?.cards ?? Array.from({ length: 6 }, (_, i) => ({ key: i }))).map((card, i) => (
-            <HeadlineCard key={card.key} card={card} loading={loading && !data} error={error}
-              index={i} />
-          ))}
-        </div>
-        <div className="rp-area-lower">
-          <RpCard
-            className="rp-card-fill rp-rise"
-            title="Breakdown"
-            aside={data && (
-              <SegmentedControl
-                options={data.breakdowns.map((key) => ({ key, label: BREAKDOWN_LABELS[key] }))}
-                value={shown}
-                onChange={setBreakdown}
-                label="Breakdown by"
-              />
-            )}
-            loading={loading && !data}
-            error={error}
-            empty={data && !data.rows.length}
-          >
-            {data && <BreakdownTable data={data} />}
-          </RpCard>
-          <RpCard className="rp-rise" title="Open work" loading={loading && !data} error={error}>
-            {data && (
-              <OpenWork
-                items={data.open_work}
-                hasWork={hasWorkQueues(user?.role?.name)}
-              />
-            )}
-          </RpCard>
-        </div>
+        <RpCard className="rp-panel" label="Ranking against national" loading={loading && !data}
+          error={error} onRetry={retry}>
+          {data && (
+            <Ranking
+              data={data}
+              measure={measure}
+              breakdown={data.breakdown}
+              onBreakdown={setBreakdown}
+            />
+          )}
+        </RpCard>
       </div>
     </>
   )
 }
 
-function HeadlineCard({ card, loading, error, index }) {
-  return (
-    <RpCard className="rp-headline rp-rise" style={{ '--rp-delay': `${index * 90}ms` }}
-      loading={loading} error={error}>
-      {card.label && (
-        <>
-          <p className="rp-headline-label">{card.label}</p>
-          <p className="rp-headline-figure">
-            <CountUp value={card.count} className="rp-figure" />
-            {card.rate != null && <Num className="rp-headline-rate">{fmtPct(card.rate)}</Num>}
-          </p>
-          {card.rate != null && (
-            <RateBar value={card.rate} tick={card.national_rate}
-              label={`${fmtPct(card.rate)}; national ${fmtPct(card.national_rate)}`} />
-          )}
-          <p className="rp-headline-base">
-            of <Num>{fmtCount(card.base)}</Num> {card.base_label}
-            {card.national_rate != null && <> · national <Num>{fmtPct(card.national_rate)}</Num></>}
-            {card.remaining != null && <> · <Num>{fmtCount(card.remaining)}</Num> remaining</>}
-          </p>
-        </>
-      )}
-    </RpCard>
-  )
+/** The eyebrow's scope: "Whole country", or the kind of thing chosen. */
+function scopeKind(scope) {
+  if (!scope || scope.lens === 'country') return 'Whole country'
+  return SCOPE_GROUPS.find((g) => g.lens === scope.lens)?.one ?? 'Whole country'
 }
 
-function gapsLink(breakdown, row) {
-  if (!row.gaps_key) return '/reports/gaps'
-  return `/reports/gaps?${new URLSearchParams({ lens: breakdown, key: row.gaps_key })}`
-}
-
-function BreakdownTable({ data }) {
-  return (
-    <div className="rp-table-scroll">
-      <table className="rp-table">
-        <thead>
-          <tr>
-            <th scope="col">Name</th>
-            <th scope="col">Villages: DT done · on air · not on air</th>
-            <th scope="col">ICT</th>
-            <th scope="col">CRA</th>
-            <th scope="col" className="rp-right">Remaining</th>
-          </tr>
-        </thead>
-        <tbody>
-          {data.rows.map((row) => (
-            <tr key={row.name} className={row.low_sample ? 'rp-low' : undefined}>
-              <th scope="row">
-                <Link to={gapsLink(data.breakdown, row)} className="rp-row-link">
-                  <span dir="auto">{row.name}</span>
-                </Link>
-                <span className="rp-row-sub"><Num>{fmtCount(row.villages)}</Num> villages</span>
-              </th>
-              <td><StackBar row={row} /></td>
-              <td><AuthorityRate cell={row.ict} low={row.low_sample} colour="var(--rp-ict)" /></td>
-              <td><AuthorityRate cell={row.cra} low={row.low_sample} colour="var(--rp-cra)" /></td>
-              <td className="rp-right"><Num>{fmtCount(row.remaining)}</Num></td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  )
-}
-
-function StackBar({ row }) {
-  const total = row.villages || 1
-  const parts = [
-    ['dt', row.dt_done, 'DT done'],
-    ['air', row.on_air_only, 'on air'],
-    ['off', row.not_on_air, 'not on air'],
-  ]
-  return (
-    <span className="rp-stack" role="img"
-      aria-label={parts.map(([, n, label]) => `${n} ${label}`).join(', ')}>
-      <span className="rp-stack-bar">
-        {parts.map(([key, n]) => (
-          <span key={key} className={`rp-stack-${key}`} style={{ width: `${(n / total) * 100}%` }} />
-        ))}
-      </span>
-      <Num className="rp-stack-counts">
-        {fmtCount(row.dt_done)} · {fmtCount(row.on_air_only)} · {fmtCount(row.not_on_air)}
-      </Num>
-    </span>
-  )
-}
-
-function AuthorityRate({ cell, low, colour }) {
-  if (low) return <NotCompared />
-  return (
-    <span className="rp-authority">
-      <Num>{fmtPct(cell.rate)}</Num>
-      <RateBar value={cell.rate} tick={cell.national} colour={colour}
-        label={`${fmtPct(cell.rate)}; national ${fmtPct(cell.national)}`} />
-    </span>
-  )
-}
-
-function OpenWork({ items, hasWork }) {
+/** "94%", and when scoped " · +3 pts" against national. */
+function RateLine({ rate, national, scoped }) {
+  const gap = fmtGap(gapPoints(rate, national))
   return (
     <>
-      <ul className="rp-open">
-        {items.map((item) => (
-          <li key={item.key}>
-            <Link to="/reports/gaps" className="rp-open-link">
-              <span>{item.label}</span>
-              <Num className="rp-open-count">{fmtCount(item.count)}</Num>
-              <ArrowUpRight size={14} aria-hidden="true" />
+      <Num>{fmtRate(rate)}</Num>
+      {scoped && (
+        <> · <Num className={`rp-gap rp-gap-${gap.tone}`}>{gap.text}</Num></>
+      )}
+    </>
+  )
+}
+
+function Ranking({ data, measure, breakdown, onBreakdown }) {
+  const info = AREA_MEASURES.find((m) => m.key === measure)
+  const noun = BREAKDOWNS[breakdown]
+  const national = data.national[measure]
+  const { compared, low, behind } = rankRows(data.rows, measure, national)
+
+  return (
+    <>
+      <header className="rp-panel-head">
+        <IconTile name={info.icon} large />
+        <div className="rp-panel-titles">
+          <h2 className="rp-panel-title">{info.label} by {noun.one}</h2>
+          <p className="rp-panel-sub">Behind national first</p>
+        </div>
+        <p className="rp-behind">
+          <Num><b>{behind}</b></Num> of <Num>{compared.length}</Num>{' '}
+          {compared.length === 1 ? noun.one : noun.many}
+          <br />below national
+        </p>
+      </header>
+      <div className="rp-rank-controls">
+        <SegmentedControl
+          options={data.breakdowns.map((key) => ({ key, label: BREAKDOWNS[key].label }))}
+          value={breakdown}
+          onChange={onBreakdown}
+          label="Breakdown"
+        />
+        <span className="rp-rank-key">
+          <span className="rp-rank-key-tick" aria-hidden="true" />
+          National <Num>{fmtRate(national)}</Num>
+        </span>
+      </div>
+      <ol className="rp-rank-list" aria-label={`${info.label} by ${noun.one}`}>
+        <li className="rp-rank-row rp-rank-national">
+          <span className="rp-rank-name">National average</span>
+          <RankBar rate={national} reference={national} national
+            label={`National average ${fmtRate(national)}`} />
+          <Num className="rp-rank-rate">{fmtRate(national)}</Num>
+          <span className="rp-gap" />
+        </li>
+        {compared.map((row) => {
+          const gap = fmtGap(row.gap)
+          return (
+            <li key={row.name}>
+              <Link to={gapsLink(breakdown, row)} className="rp-rank-row"
+                title={`Open ${row.name} in Lifecycle Gaps`}>
+                <span className="rp-rank-name" dir="auto">{row.name}</span>
+                <RankBar rate={row.rate} reference={national}
+                  label={rankLabel(row.name, row.rate, national)} />
+                <Num className="rp-rank-rate">{fmtRate(row.rate)}</Num>
+                <Num className={`rp-gap rp-gap-${gap.tone}`}>{gap.text}</Num>
+              </Link>
+            </li>
+          )
+        })}
+        {low.map((row) => (
+          <li key={row.name}>
+            <Link to={gapsLink(breakdown, row)} className="rp-rank-row rp-rank-low"
+              title={`Open ${row.name} in Lifecycle Gaps`}>
+              <span className="rp-rank-name" dir="auto">{row.name}</span>
+              <span className="rp-rank-nc">
+                Not compared · fewer than {data.low_sample_threshold} DT-done villages
+              </span>
             </Link>
           </li>
         ))}
-      </ul>
-      {hasWork && (
-        <Link to="/home" className="rp-button rp-button-block">
-          Open my work
-        </Link>
-      )}
+      </ol>
     </>
   )
 }

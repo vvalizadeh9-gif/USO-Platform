@@ -926,6 +926,9 @@ tbody tr:last-child td { border-bottom: none; }
   font-size: var(--fs-display); line-height: var(--lh-display); font-weight: 600;
   letter-spacing: -0.01em; white-space: nowrap;
 }
+.page-bar-subtitle {
+  margin: 2px 0 0; font-size: var(--fs-meta); line-height: var(--lh-meta); color: var(--text-secondary);
+}
 .page-bar-context {
   display: flex; align-items: center; min-width: 0;
   padding-inline-start: 20px; border-inline-start: 1px solid var(--border);

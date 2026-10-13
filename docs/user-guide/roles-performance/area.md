@@ -3,40 +3,56 @@
 *Area for the PM and the general manager. My area for regional managers,
 coordinators and contractors, and the page they land on.*
 
-Area shows **where things stand today**, as of the last CPM import (the date
-is in the header). It has no month picker.
+Area shows **where things stand today**, against national, as of the last
+CPM import (the date is in the subtitle). It has no month picker.
 
 The PM and the general manager choose **whose** area in the title: the whole
 country (the default), any person, a CRA region or a province. Everyone else
 sees their own: a regional manager or coordinator sees their provinces and
 CRA regions, and a contractor sees their own sites.
 
-## The six cards
+## The pipeline
 
-Each card shows a count, its rate, a bar and what the rate is out of. Where
-it applies, a tick on the bar and the line under it show the **national**
-rate.
+The list on the left is the area's pipeline, in villages:
 
-* On air and DT done are out of the villages in the area.
-* ICT and CRA approved are out of the **DT-done** villages: a village is not
-  eligible for approval until its drive test is done.
-* Fully accepted is out of all villages. "Remaining" is the villages not yet
-  approved by both ICT and CRA.
+1. **Total villages** (for reference; it is not a choice);
+2. **On air**, **DT done** and **Fully approved**, as a share of all villages;
+3. **ICT approved** and **CRA approved**, as a share of **DT-done** villages:
+   a village is not eligible for approval until its drive test is done.
 
-## Breakdown
+Each measure shows its village count and its rate. When you look at anything
+other than the whole country, the rate line also shows the gap to national,
+for example "94% · +3 pts": red when behind, cobalt when ahead, "±0" when
+level.
 
-Switch between **Provinces**, **CRA regions** and **Contractors**. Contractors
-are not offered to contractors. Each row shows:
+Click a measure to rank by it. **Fully approved** is selected when the page
+opens, and the choice is kept in the address (`?measure=`).
 
-* a stacked bar of DT done, on air without DT, and not on air;
-* ICT % and CRA %, each with a tick at the national rate;
-* the villages remaining.
+## Ranked against national
 
-A province row counts only **your** villages in that province.
+The panel on the right ranks the area's provinces, CRA regions or people on
+the selected measure. The header says how many are below national, for
+example "17 of 30 provinces below national".
 
-**Not compared.** A row with fewer than **10 DT-done villages** shows "Not
-compared" instead of ICT and CRA rates, in grey. Three approvals out of three
-is not a 100% result. It is three villages.
+Choose the breakdown above the list:
 
-Clicking a row opens Lifecycle Gaps. **Open work** lists what is unfinished,
-and each line also opens Lifecycle Gaps.
+| You are | Breakdowns |
+|---|---|
+| PM, general manager | Provinces, CRA regions, Contractors, Coordinators, Regional managers (minus the kind you are looking at) |
+| Regional manager, coordinator | Provinces, CRA regions, Contractors |
+| Contractor | Provinces, CRA regions |
+
+The **National average** row stays pinned at the top. Every other row shows
+the name, a bar, the rate and the gap in points. The bar is grey up to the
+lower of the rate and national. The difference is solid cobalt when ahead
+and red stripes when behind. The black tick is national. Rows are sorted by
+the gap, furthest behind first.
+
+A row counts only **your** villages in that province, region or person's
+patch.
+
+**Not compared.** A row with fewer than **10 DT-done villages** is listed last,
+in grey, with no bar and no gap. Three approvals out of three is not a 100%
+result. It is three villages.
+
+Click a row to open it in Lifecycle Gaps.

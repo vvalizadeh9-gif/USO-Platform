@@ -9,9 +9,14 @@ function readError(err, fallback) {
   return typeof detail === 'string' ? detail : fallback
 }
 
-/** GET `path` with `params`; refetched whenever the params change. */
+/**
+ * GET `path` with `params`; refetched whenever the params change, and by
+ * `retry`. The last data stays on screen while the next loads, so a control
+ * that triggered the fetch keeps its place (and its focus).
+ */
 export function useRpData(path, params) {
   const key = JSON.stringify(params ?? {})
+  const [attempt, setAttempt] = useState(0)
   const [state, setState] = useState({ data: null, error: '', loading: true })
 
   useEffect(() => {
@@ -26,31 +31,30 @@ export function useRpData(path, params) {
     return () => {
       live = false
     }
-  }, [path, key])
+  }, [path, key, attempt])
 
-  return state
+  const retry = useCallback(() => setAttempt((n) => n + 1), [])
+  return { ...state, retry }
 }
 
 /** The Excel button: the same params as the screen, so the same numbers. */
-export function useExport(path, params, fallbackName) {
+export function useExport(path, params, fallbackName, onError) {
   const [busy, setBusy] = useState(false)
-  const [error, setError] = useState('')
   const key = JSON.stringify(params ?? {})
 
   const run = useCallback(async () => {
     setBusy(true)
-    setError('')
     try {
       const response = await api.get(path, { params: JSON.parse(key), responseType: 'blob' })
       saveBlob(response.data, filenameFrom(response.headers, fallbackName))
     } catch (err) {
-      setError(await describeBlobError(err))
+      onError?.(await describeBlobError(err))
     } finally {
       setBusy(false)
     }
-  }, [path, key, fallbackName])
+  }, [path, key, fallbackName, onError])
 
-  return { run, busy, error }
+  return { run, busy }
 }
 
 const easeOutCubic = (t) => 1 - (1 - t) ** 3
@@ -59,7 +63,7 @@ const easeOutCubic = (t) => 1 - (1 - t) ** 3
  * A number that counts up to `value` over `duration` ms, ease-out-cubic.
  * With reduced motion (and in tests) it is the end value from the start.
  */
-export function useCountUp(value, duration = 1100) {
+export function useCountUp(value, duration = 900) {
   const reduced = prefersReducedMotion()
   const [shown, setShown] = useState(reduced || value == null ? value : 0)
   const frame = useRef(null)

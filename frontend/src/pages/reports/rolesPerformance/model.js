@@ -3,22 +3,18 @@
 // server (app/services/performance); nothing here computes a measure.
 
 import { canCompare } from '../../../lib/roles'
+import { toPersianDigits } from '../../../lib/persianDigits'
+import { shamsiMonthName } from '../../../lib/shamsi'
 
-export const TAB_LABELS = {
-  month: 'Month',
-  area: 'Area',
-  performance: 'Performance',
-  compare: 'Compare',
-  map: 'Map',
-}
+export const TAB_LABELS = { month: 'Month', area: 'Area', map: 'Map' }
 
-const OWN_LABELS = { area: 'My area', performance: 'My performance' }
+const OWN_LABELS = { area: 'My area' }
 
 /** The tabs a role gets, in order. Admin gets none (the route refuses it). */
 export function tabsFor(user) {
-  if (canCompare(user)) return ['month', 'area', 'performance', 'compare', 'map']
+  if (canCompare(user)) return ['month', 'area', 'map']
   if (['RegionalManager', 'Coordinator', 'Contractor'].includes(user?.role?.name)) {
-    return ['area', 'performance', 'map']
+    return ['area', 'map']
   }
   return []
 }
@@ -32,6 +28,16 @@ export function landingTab(user) {
   return tabsFor(user)[0] ?? null
 }
 
+/** The query a tab link carries: Area keeps the chosen scope, nothing else does. */
+export function tabSearch(tab, search) {
+  if (tab !== 'area') return ''
+  const params = new URLSearchParams(search)
+  const kept = new URLSearchParams()
+  for (const name of ['lens', 'key']) if (params.get(name)) kept.set(name, params.get(name))
+  const text = kept.toString()
+  return text ? `?${text}` : ''
+}
+
 export const ROLE_LABELS = {
   PM: 'PM',
   Viewer: 'General manager',
@@ -40,93 +46,192 @@ export const ROLE_LABELS = {
   Contractor: 'Contractor',
 }
 
-// ----- Colours ----------------------------------------------------------
-//
-// Data colours, one per Month row, always shown beside their label. Green
-// and red are reserved for good and bad change (the +/- chips).
-
-export const ROW_COLOURS = {
-  on_air: { ink: '#5F6B7E', soft: '#B8C1CF' },
-  dt_done: { ink: '#2F5FD0', soft: '#9DB4EE' },
-  ict_approved: { ink: '#8E2F74', soft: '#D29BC2' },
-  cra_approved: { ink: '#17877B', soft: '#8ED3C9' },
-  fully_approved: { ink: '#1D3F99', soft: '#9DB4EE' },
-  full_config: { ink: '#1D7A4B', soft: '#93CDA9' },
-  fell_back: { ink: '#5F6B7E', soft: '#B8C1CF' },
-  problem_resolved: { ink: '#1D7A4B', soft: '#93CDA9' },
-  problem_new: { ink: '#B42F2A', soft: '#E59D97' },
-}
-
 // ----- Numbers ----------------------------------------------------------
 
 export function fmtCount(value) {
   return value == null ? '—' : Math.round(value).toLocaleString('en-US')
 }
 
-export function fmtPct(value) {
-  return value == null ? '—' : `${value.toFixed(1)}%`
+/** A rate as a whole percent: "51%". */
+export function fmtRate(value) {
+  return value == null ? '—' : `${Math.round(value)}%`
 }
 
-/** A signed change. Zero reads "±0", so "no change" is never mistaken for a gain. */
-export function fmtDelta(value, suffix = '') {
-  if (value == null) return '—'
-  if (value === 0) return `±0${suffix}`
-  const shown = Number.isInteger(value) ? Math.abs(value).toLocaleString('en-US') : Math.abs(value).toFixed(1)
-  return `${value > 0 ? '+' : '−'}${shown}${suffix}`
+/** A share of a total, as a whole percent. */
+export function sharePct(count, total) {
+  return total ? Math.round((100 * count) / total) : 0
 }
 
-/** 'good' | 'bad' | 'flat' for a change; inverted where lower is better. */
-export function deltaTone(delta, lowerIsBetter = false) {
-  if (delta == null || delta === 0) return 'flat'
-  const better = lowerIsBetter ? delta < 0 : delta > 0
-  return better ? 'good' : 'bad'
+/** Persian digits for a number shown in Persian text ("day ۲۱ of ۳۰"). */
+export function fa(value) {
+  return toPersianDigits(String(value))
 }
 
-export function fmtDays(value) {
-  return value == null ? '—' : `${value.toFixed(1)} d`
+export function monthLabel(year, month) {
+  return `${shamsiMonthName(month)} ${fa(year)}`
 }
 
-// ----- The Month block row ----------------------------------------------
+// ----- Month ------------------------------------------------------------
+
+/** One headline measure per group: bold, larger figure. */
+export const HEADLINE_MEASURES = new Set(['on_air', 'fully_approved', 'full_config', 'problem_resolved'])
+
+export const MONTH_DEFAULT_MEASURE = 'fully_approved'
+
+/** A Carbon icon per Month section. */
+export const SECTION_ICONS = {
+  delivery: 'cell-tower',
+  acceptance: 'certificate--check',
+  full_config: 'tools',
+  problematic: 'warning--alt',
+}
+
+/** Who a Month row belongs to, left to right. */
+export const OWNER_COLUMNS = [
+  { key: 'contractor', label: 'Contractors', noun: 'contractor' },
+  { key: 'rm', label: 'Regional managers', noun: 'regional manager' },
+  { key: 'coordinator', label: 'Coordinators', noun: 'coordinator' },
+]
+
+export const UNATTRIBUTED = 'Unattributed'
 
 /**
- * The blocks one Month row draws. ceil(max(now, ref) / per) blocks:
+ * One owner column: who is listed, who had none, and how the strip is drawn.
  *
- *   done     filled, this month (the last one may be partial: `fill` < 1)
- *   beyond   filled and ringed: done this month, past last month's figure
- *   short    outlined and empty: last month got here, this month has not yet
- *
- * A row with nothing in either month draws no blocks.
+ * `listed` holds everyone with something (named owners high to low, then
+ * Unattributed); each carries `rank` -- 1 (leader), 2, 'rest' or 'none'
+ * (Unattributed) -- which picks its colour. Only the top two named owners
+ * carry colour; colour marks the exception, not every owner.
  */
-export function blocks(now, ref, per) {
-  const current = Math.max(now ?? 0, 0)
-  const previous = Math.max(ref ?? 0, 0)
-  const count = Math.ceil(Math.max(current, previous) / per)
-  const out = []
-  for (let i = 0; i < count; i += 1) {
-    const start = i * per
-    const fill = Math.min(Math.max((current - start) / per, 0), 1)
-    let kind
-    if (fill > 0) kind = ref != null && start >= previous ? 'beyond' : 'done'
-    else kind = 'short'
-    out.push({ kind, fill })
+export function ownerColumn(entries, total) {
+  const named = entries.filter((e) => e.name !== UNATTRIBUTED)
+  const some = named.filter((e) => e.now > 0)
+  const none = named.filter((e) => !e.now)
+  const unattributed = entries.find((e) => e.name === UNATTRIBUTED && e.now > 0)
+  const listed = some.map((e, i) => ({
+    name: e.name,
+    count: e.now,
+    share: sharePct(e.now, total),
+    rank: i < 2 ? i + 1 : 'rest',
+  }))
+  if (unattributed) {
+    listed.push({
+      name: UNATTRIBUTED,
+      count: unattributed.now,
+      share: sharePct(unattributed.now, total),
+      rank: 'none',
+    })
   }
-  return out
+  const topTwo = some.slice(0, 2).reduce((sum, e) => sum + e.now, 0)
+  return { listed, none: none.map((e) => e.name), topTwo: sharePct(topTwo, total) }
 }
 
-/** Share of the leader, for an owner's 4px bar (max 64px). */
-export function barWidth(value, leader, max = 64) {
-  if (!leader || !value || value < 0) return 0
-  return Math.round((value / leader) * max)
+// ----- Month picker -----------------------------------------------------
+
+const index = ({ year, month }) => year * 12 + month - 1
+
+export function isFutureMonth(period, current) {
+  return index(period) > index(current)
+}
+
+export function sameMonth(a, b) {
+  return Boolean(a && b) && a.year === b.year && a.month === b.month
+}
+
+export function monthParam({ year, month }) {
+  return `${year}-${String(month).padStart(2, '0')}`
+}
+
+/** "1405-07" -> { year, month }, or null. */
+export function parseMonthParam(value) {
+  const m = /^(\d{4})-(\d{2})$/.exec(value || '')
+  if (!m) return null
+  const month = Number(m[2])
+  return month >= 1 && month <= 12 ? { year: Number(m[1]), month } : null
+}
+
+// ----- Area -------------------------------------------------------------
+
+/** The pipeline, in order. On air, DT done and Fully approved are % of
+ * villages; ICT and CRA are % of DT-done villages (the server divides). */
+export const AREA_MEASURES = [
+  { key: 'onair', label: 'On air', icon: 'cell-tower' },
+  { key: 'dt', label: 'DT done', icon: 'cell-tower' },
+  { key: 'full', label: 'Fully approved', icon: 'certificate--check' },
+  { key: 'ict', label: 'ICT approved', icon: 'certificate--check' },
+  { key: 'cra', label: 'CRA approved', icon: 'certificate--check' },
+]
+
+export const AREA_DEFAULT_MEASURE = 'full'
+
+export const BREAKDOWNS = {
+  province: { label: 'Provinces', one: 'province', many: 'provinces' },
+  region: { label: 'CRA regions', one: 'CRA region', many: 'CRA regions' },
+  contractor: { label: 'Contractors', one: 'contractor', many: 'contractors' },
+  coordinator: { label: 'Coordinators', one: 'coordinator', many: 'coordinators' },
+  rm: { label: 'Regional managers', one: 'regional manager', many: 'regional managers' },
+}
+
+/** The gap to national in whole points; null when either side is missing. */
+export function gapPoints(rate, national) {
+  if (rate == null || national == null) return null
+  return Math.round(rate - national)
+}
+
+/** "−11 pts" / "+4 pts" / "±0", and its tone: worse is red, better is accent. */
+export function fmtGap(points) {
+  if (points == null) return { text: '—', tone: 'flat' }
+  if (points === 0) return { text: '±0', tone: 'flat' }
+  return {
+    text: `${points > 0 ? '+' : '−'}${Math.abs(points)} pts`,
+    tone: points > 0 ? 'better' : 'worse',
+  }
+}
+
+/**
+ * The ranking for one measure: compared rows by gap to national, furthest
+ * behind first (ties by name), then the rows with too few DT-done villages
+ * to compare. `behind` counts the compared rows below national.
+ */
+export function rankRows(rows, measure, national) {
+  const byName = (a, b) => a.name.localeCompare(b.name)
+  const compared = rows
+    .filter((r) => !r.low_sample)
+    .map((r) => {
+      const rate = r.measures[measure].rate
+      return { ...r, rate, gap: gapPoints(rate, national) }
+    })
+    .sort((a, b) => (a.rate ?? 0) - national - ((b.rate ?? 0) - national) || byName(a, b))
+  const low = rows.filter((r) => r.low_sample).sort(byName)
+  return {
+    compared,
+    low,
+    behind: compared.filter((r) => r.gap != null && r.gap < 0).length,
+  }
+}
+
+/** "Qazvin 40%, national 51%, 11 points behind". */
+export function rankLabel(name, rate, national) {
+  const points = gapPoints(rate, national)
+  let gap = 'level with national'
+  if (points > 0) gap = `${points} points ahead`
+  if (points < 0) gap = `${-points} points behind`
+  return `${name} ${fmtRate(rate)}, national ${fmtRate(national)}, ${gap}`
+}
+
+export function gapsLink(breakdown, row) {
+  if (!row.gaps_key) return '/reports/gaps'
+  return `/reports/gaps?${new URLSearchParams({ lens: breakdown, key: row.gaps_key })}`
 }
 
 // ----- Scope picker -----------------------------------------------------
 
 export const SCOPE_GROUPS = [
-  { lens: 'rm', label: 'Regional managers' },
-  { lens: 'coordinator', label: 'Coordinators' },
-  { lens: 'contractor', label: 'Contractors' },
-  { lens: 'region', label: 'CRA regions' },
-  { lens: 'province', label: 'Provinces' },
+  { lens: 'rm', label: 'Regional managers', one: 'Regional manager' },
+  { lens: 'coordinator', label: 'Coordinators', one: 'Coordinator' },
+  { lens: 'contractor', label: 'Contractors', one: 'Contractor' },
+  { lens: 'region', label: 'CRA regions', one: 'CRA region' },
+  { lens: 'province', label: 'Provinces', one: 'Province' },
 ]
 
 export const COUNTRY = { lens: 'country', key: 'Whole country', label: 'Whole country' }
@@ -148,12 +253,10 @@ export function scopeParams(scope) {
   return { lens: scope.lens, key: scope.key }
 }
 
-/** "1405-07" from a { year, month } entry. */
-export function monthKey(entry) {
-  return `${entry.year}-${String(entry.month).padStart(2, '0')}`
-}
-
 export function prefersReducedMotion() {
+  if (typeof document !== 'undefined' && document.documentElement.dataset.uepMotion === 'reduce') {
+    return true
+  }
   return typeof window !== 'undefined' &&
     window.matchMedia?.('(prefers-reduced-motion: reduce)').matches === true
 }

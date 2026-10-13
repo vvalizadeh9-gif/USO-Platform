@@ -84,6 +84,10 @@ class Ownership:
             )
         return cls(rows)
 
+    def spans(self) -> list[Owners]:
+        """Every mapping row, current and past."""
+        return [o for spans in self._rows.values() for o in spans]
+
     def at(self, province_fa: str | None, day: date | None) -> Owners | None:
         """The row in force on ``day``; the current row when ``day`` is None."""
         spans = self._rows.get(province_fa) if province_fa else None

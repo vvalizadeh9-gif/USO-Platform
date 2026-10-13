@@ -230,18 +230,20 @@ function TabButton({ tab, selected, onSelect, panelId }) {
 /**
  * The header of a one-screen page, the same on every page that has one.
  *
- * Row 1: the eyebrow over the title, then `context` after a divider (a
- * process stepper, a scope button), then `actions` pushed to the far end.
+ * Row 1: the eyebrow over the title (and an optional `subtitle` under it),
+ * then `context` after a divider (a process stepper, a scope button), then
+ * `actions` pushed to the far end.
  * Row 2, when there are `tabs`: the page's tabs (normally a `<Tabs>`), then
  * `tabsRight` -- the controls that act on the tab's view -- at the far end.
  */
-export function PageBar({ eyebrow, title, context, actions, tabs, tabsRight }) {
+export function PageBar({ eyebrow, title, subtitle, context, actions, tabs, tabsRight }) {
   return (
     <header className="page-bar">
       <div className="page-bar-row">
         <div className="page-bar-titles">
           {eyebrow && <div className="page-bar-eyebrow">{eyebrow}</div>}
           <h1 className="page-bar-title">{title}</h1>
+          {subtitle && <p className="page-bar-subtitle">{subtitle}</p>}
         </div>
         {context && <div className="page-bar-context">{context}</div>}
         {actions && <div className="page-bar-actions">{actions}</div>}

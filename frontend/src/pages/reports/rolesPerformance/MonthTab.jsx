@@ -1,199 +1,222 @@
-// Month (PM, Viewer): what happened this month, against last month up to the
-// same day. Four section cards; in Overall each row is a block row, in an
-// owner view each row is a ranked line of owners, highest first.
-import { useState } from 'react'
-import { SegmentedControl } from '../../../components/ui'
-import { toPersianDigits } from '../../../lib/persianDigits'
-import { currentShamsiPeriod, previousPeriod, shamsiMonthName } from '../../../lib/shamsi'
+// Month (PM, Viewer): what happened in a month, and who it belongs to. No
+// comparison with the previous month anywhere on this tab.
+//
+// Left, the measures (four groups); right, the selected measure split three
+// ways side by side -- contractors, regional managers, coordinators -- each
+// column adding up to the total. An owner opens Area scoped to them.
+import { useCallback } from 'react'
+import { useSearchParams } from 'react-router-dom'
+import { useToast } from '../../../context/ToastContext'
+import MeasureList from './MeasureList'
+import MonthPicker from './MonthPicker'
 import PerfHeader from './PerfHeader'
 import { useExport, useRpData } from './hooks'
-import { CountUp, DeltaChip, Fa, Num, RpCard } from './parts'
-import { ROW_COLOURS, barWidth, blocks, fmtCount } from './model'
+import { CountUp, Fa, IconTile, Num, RpCard } from './parts'
+import {
+  HEADLINE_MEASURES,
+  MONTH_DEFAULT_MEASURE,
+  OWNER_COLUMNS,
+  SECTION_ICONS,
+  UNATTRIBUTED,
+  fa,
+  fmtCount,
+  monthLabel,
+  monthParam,
+  ownerColumn,
+  parseMonthParam,
+} from './model'
 
-const VIEWS = [
-  { key: 'all', label: 'Overall' },
-  { key: 'coordinator', label: 'Coordinators' },
-  { key: 'contractor', label: 'Contractors' },
-  { key: 'rm', label: 'Regional managers' },
-]
+export default function MonthTab({ search, onOpenOwner }) {
+  const toast = useToast()
+  const [params, setParams] = useSearchParams()
+  const asked = parseMonthParam(params.get('month'))
+  const query = { ...(asked ? { month: monthParam(asked) } : {}), by: 'owners' }
+  const { data, error, loading, retry } = useRpData('/kpi/month', query)
+  const onExportError = useCallback((message) => toast.error('Export failed', message), [toast])
+  const exporter = useExport(
+    '/kpi/month.xlsx',
+    data ? { month: monthParam(data.month) } : {},
+    'UEP-roles-month.xlsx',
+    onExportError,
+  )
 
-function monthOptions(count = 12) {
-  const now = currentShamsiPeriod()
-  if (!now) return []
-  const out = []
-  let { year, month } = now
-  for (let i = 0; i < count; i += 1) {
-    out.push({
-      value: `${year}-${String(month).padStart(2, '0')}`,
-      label: `${shamsiMonthName(month)} ${toPersianDigits(String(year))}`,
-    })
-    ;({ year, month } = previousPeriod(year, month))
+  const rows = (data?.sections ?? []).flatMap((s) => s.rows.map((r) => ({ ...r, section: s })))
+  const askedMeasure = params.get('measure')
+  const measure = rows.some((r) => r.key === askedMeasure) ? askedMeasure : MONTH_DEFAULT_MEASURE
+  const selected = rows.find((r) => r.key === measure)
+
+  const update = (changes) => {
+    const next = new URLSearchParams(params)
+    for (const [name, value] of Object.entries(changes)) next.set(name, value)
+    setParams(next, { replace: true })
   }
-  return out
-}
 
-export default function MonthTab({ search }) {
-  const [month, setMonth] = useState(null)
-  const [view, setView] = useState('all')
-  const params = { ...(month ? { month } : {}), by: view }
-  const { data, error, loading } = useRpData('/kpi/month', params)
-  const exporter = useExport('/kpi/month.xlsx', params, 'UEP-roles-month.xlsx')
-  const options = monthOptions()
-
-  const title = data ? <Fa>{data.month.label_fa}</Fa> : 'Month'
   return (
     <>
       <PerfHeader
         tab="month"
         scopeLabel="Whole country"
-        title={title}
+        title={data ? (
+          <MonthPicker
+            month={data.month}
+            current={data.current_month}
+            firstYear={data.first_year}
+            onChange={(next) => update({ month: monthParam(next) })}
+          />
+        ) : 'Month'}
         subtitle={data && <Subtitle data={data} />}
         search={search}
-        dateControl={
-          <select
-            className="rp-select rp-fa"
-            aria-label="Month"
-            value={month ?? options[0]?.value ?? ''}
-            onChange={(e) => setMonth(e.target.value === options[0]?.value ? null : e.target.value)}
-          >
-            {options.map((o) => (
-              <option key={o.value} value={o.value}>{o.label}</option>
-            ))}
-          </select>
-        }
-        onExport={exporter.run}
+        onExport={data ? exporter.run : undefined}
         exporting={exporter.busy}
-        exportError={exporter.error}
       />
-      <div className="rp-controls">
-        <SegmentedControl options={VIEWS} value={view} onChange={setView} label="Month view" />
-        <Legend view={view} data={data} />
-      </div>
-      <div className="rp-body rp-month" key={view}>
-        {(data?.sections ?? Array.from({ length: 4 }, (_, i) => ({ key: i }))).map((section, i) => (
-          <RpCard
-            key={section.key}
-            className="rp-rise"
-            style={{ '--rp-delay': `${i * 90}ms` }}
-            title={section.title}
-            aside={view === 'all' && section.block && (
-              <span className="rp-chip">■ = {section.block.value} {section.block.unit}</span>
-            )}
-            loading={loading && !data}
-            error={error}
-          >
-            {section.rows?.map((row, r) => (
-              <MonthRow key={row.key} row={row} block={section.block} view={view} rowIndex={r} />
-            ))}
-          </RpCard>
-        ))}
+      <div className="rp-body rp-split">
+        {data ? (
+          <MeasureList
+            label="Measures"
+            value={measure}
+            onChange={(key) => update({ measure: key })}
+            groups={data.sections.map((section) => ({
+              key: section.key,
+              title: section.title,
+              icon: SECTION_ICONS[section.key],
+              unit: section.rows[0]?.unit,
+              rows: section.rows.map((row) => ({
+                key: row.key,
+                label: row.label,
+                kind: HEADLINE_MEASURES.has(row.key) ? 'headline' : 'minor',
+                notRecorded: !row.recorded,
+                value: <Num>{fmtCount(row.now)}</Num>,
+              })),
+            }))}
+          />
+        ) : (
+          <RpCard className="rp-measures" label="Measures" loading={loading} error={error}
+            onRetry={retry} />
+        )}
+        <RpCard className="rp-panel" label="Who it belongs to" loading={loading && !data}
+          error={error} onRetry={retry}>
+          {selected && (
+            <OwnerPanel row={selected} data={data} onOpenOwner={onOpenOwner} />
+          )}
+        </RpCard>
       </div>
     </>
   )
 }
 
 function Subtitle({ data }) {
-  const ref = <Fa>{shamsiMonthName(data.ref_month.month)}</Fa>
   if (data.running) {
-    return (
-      <>
-        Day {data.day} of {data.days_in_month} · compared with {ref} up to the same day
-      </>
-    )
+    return <>So far · day <Fa>{fa(data.day)}</Fa> of <Fa>{fa(data.days_in_month)}</Fa></>
   }
-  return <>Whole month · compared with the whole of {ref}</>
+  return <>Whole month</>
 }
 
-function Legend({ view, data }) {
-  if (view === 'all') {
-    return (
-      <p className="rp-legend" aria-label="Legend">
-        <span className="rp-key rp-key-done" aria-hidden="true" /> the month
-        <span className="rp-key rp-key-beyond" aria-hidden="true" /> more than last month
-        <span className="rp-key rp-key-short" aria-hidden="true" /> short of last month
+function OwnerPanel({ row, data, onOpenOwner }) {
+  const recordedFrom = data.recorded_from
+  let body
+  if (!row.recorded) {
+    body = (
+      <p className="rp-empty">
+        Not recorded. UEP has recorded this since{' '}
+        <Fa>{monthLabel(recordedFrom.year, recordedFrom.month)}</Fa>.
       </p>
     )
-  }
-  const ref = data ? <Fa>{shamsiMonthName(data.ref_month.month)}</Fa> : 'last month'
-  return <p className="rp-legend">Highest first · +/− against each owner&apos;s own {ref}</p>
-}
-
-function MonthRow({ row, block, view, rowIndex }) {
-  const colour = ROW_COLOURS[row.key] ?? ROW_COLOURS.on_air
-  return (
-    <div className="rp-month-row" data-row={row.key}>
-      <div className="rp-month-label">
-        <span className="rp-dot" style={{ background: colour.ink }} aria-hidden="true" />
-        {row.label}
-      </div>
-      <div className="rp-month-total">
-        {row.recorded ? (
-          <>
-            <CountUp value={row.now} className="rp-total" />
-            <span className="rp-unit">
-              {row.villages
-                ? <> {row.unit} · <Num>{fmtCount(row.villages.now)}</Num> villages</>
-                : <> {row.unit}</>}
-            </span>
-            {row.ref_recorded && <DeltaChip delta={row.delta} lowerIsBetter={row.lower_is_better} />}
-          </>
-        ) : (
-          <span className="rp-not-recorded">Not recorded</span>
-        )}
-      </div>
-      <div className="rp-month-visual">
-        {row.recorded && (view === 'all'
-          ? <BlockRow row={row} per={block.value} colour={colour} rowIndex={rowIndex} />
-          : <OwnerLine owners={row.owners ?? []} colour={colour} lowerIsBetter={row.lower_is_better} />)}
-      </div>
-    </div>
-  )
-}
-
-export function BlockRow({ row, per, colour, rowIndex = 0 }) {
-  const items = blocks(row.now, row.ref_recorded ? row.ref : null, per)
-  return (
-    <div
-      className="rp-blocks"
-      role="img"
-      aria-label={`${fmtCount(row.now)} this month${row.ref != null ? `, ${fmtCount(row.ref)} last month` : ''}`}
-    >
-      {items.map((b, i) => (
-        <span
-          key={i}
-          className={`rp-block rp-block-${b.kind}`}
-          style={{
-            '--rp-ink': colour.ink,
-            '--rp-soft': colour.soft,
-            '--rp-fill': `${Math.round(b.fill * 100)}%`,
-            '--rp-delay': `${rowIndex * 50 + i * 30}ms`,
-          }}
-        />
-      ))}
-    </div>
-  )
-}
-
-export function OwnerLine({ owners, colour, lowerIsBetter }) {
-  const leader = Math.max(0, ...owners.map((o) => o.now ?? 0))
-  return (
-    <ol className="rp-owners">
-      {owners.map((owner, i) => (
-        <li key={owner.name} className="rp-owner rp-rise" style={{ '--rp-delay': `${i * 40}ms` }}>
-          <span className="rp-owner-name" dir="auto">{owner.name}</span>
-          <span className="rp-owner-figures">
-            <Num className="rp-owner-value">{fmtCount(owner.now)}</Num>
-            {owner.ref_recorded && (
-              <DeltaChip delta={owner.delta} lowerIsBetter={lowerIsBetter} small />
-            )}
-          </span>
-          <span
-            className="rp-owner-bar"
-            style={{ width: `${barWidth(owner.now, leader)}px`, background: colour.ink }}
-            aria-hidden="true"
+  } else if (!row.now) {
+    body = <p className="rp-empty">Nothing this month.</p>
+  } else {
+    body = (
+      <div className="rp-owner-grid" key={row.key}>
+        {OWNER_COLUMNS.map((column) => (
+          <OwnerColumn
+            key={column.key}
+            column={column}
+            entries={row.owners_by?.[column.key] ?? []}
+            total={row.now}
+            fewer={row.lower_is_better}
+            onOpen={(name) => onOpenOwner({ lens: column.key, key: name })}
           />
-        </li>
-      ))}
-    </ol>
+        ))}
+      </div>
+    )
+  }
+  return (
+    <>
+      <header className="rp-panel-head">
+        <IconTile name={SECTION_ICONS[row.section.key]} large />
+        <div className="rp-panel-titles">
+          <h2 className="rp-panel-title">{row.label}</h2>
+          <p className="rp-panel-sub">Who it belongs to</p>
+        </div>
+        {row.recorded && (
+          <div className="rp-panel-total">
+            <CountUp value={row.now} className="rp-total" />
+            <span className="rp-total-unit">
+              {row.unit}
+              {row.villages && <><br /><Num>{fmtCount(row.villages.now)}</Num> villages</>}
+            </span>
+          </div>
+        )}
+      </header>
+      {body}
+    </>
+  )
+}
+
+function OwnerColumn({ column, entries, total, fewer, onOpen }) {
+  const { listed, none, topTwo } = ownerColumn(entries, total)
+  return (
+    <section className={`rp-owner-col${fewer ? ' rp-fewer' : ''}`} aria-label={column.label}>
+      <div className="rp-owner-head">
+        <h3 className="rp-owner-title">{column.label}</h3>
+        <span className="rp-owner-top">Top 2 hold <Num><b>{topTwo}%</b></Num></span>
+      </div>
+      <div className="rp-strip" role="img" aria-label={`${column.label} share of the total`}>
+        {listed.map((o, i) => (
+          <span
+            key={o.name}
+            className="rp-strip-seg"
+            data-rank={o.rank}
+            title={`${o.name} · ${fmtCount(o.count)}`}
+            style={{ flexGrow: o.count, '--rp-delay': `${i * 40}ms` }}
+          />
+        ))}
+      </div>
+      <ol className="rp-owner-list">
+        {listed.map((o) => {
+          const inner = (
+            <>
+              <span className="rp-swatch" data-rank={o.rank} aria-hidden="true" />
+              <span className="rp-owner-name" dir="auto" title={o.name}>{o.name}</span>
+              <Num className="rp-owner-count">{fmtCount(o.count)}</Num>
+              <Num className="rp-owner-share">{o.share}%</Num>
+            </>
+          )
+          return (
+            <li key={o.name}>
+              {o.name === UNATTRIBUTED ? (
+                <div className="rp-owner-row rp-owner-un"
+                  title={`Not linked to any ${column.noun} on the day it happened`}>
+                  {inner}
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  className={`rp-owner-row${o.rank === 1 || o.rank === 2 ? ' rp-owner-lead' : ''}`}
+                  title={`Open ${o.name} in Area`}
+                  onClick={() => onOpen(o.name)}
+                >
+                  {inner}
+                </button>
+              )}
+            </li>
+          )
+        })}
+      </ol>
+      {none.length > 0 && (
+        <p className="rp-owner-none" title={none.join(', ')}>
+          {none.length} with none this month
+        </p>
+      )}
+    </section>
   )
 }
