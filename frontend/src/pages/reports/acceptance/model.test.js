@@ -1,9 +1,7 @@
 // The Acceptance Dashboard's view model, rule by rule. Every number the page
 // shows is the server's or one of these: a share, a pace, what is left.
 import { describe, expect, it } from 'vitest'
-import { MIN_LABEL_GAP, monotonePath, nudge, runs } from './chartGeometry'
 import {
-  arcFraction,
   axisTicks,
   buildKpis,
   chartSeries,
@@ -17,176 +15,103 @@ import {
   pct1,
   pctOf,
   perDay,
-  tickAngle,
+  readout,
+  selectableKeys,
+  selectedMonth,
+  yearTrack,
 } from './model'
 
 // ------------------------------------------------------------------ fixtures
+const NAMES = ['فروردین', 'اردیبهشت', 'خرداد', 'تیر', 'مرداد', 'شهریور', 'مهر', 'آبان', 'آذر', 'دی', 'بهمن', 'اسفند']
 const stream = (over = {}) => ({
   approved: 0, approved_cumulative: 0,
   internal_plan: null, internal_plan_cumulative: null,
   contractor_plan: null, contractor_plan_cumulative: null,
   ...over,
 })
-const month = (y, m, over = {}) => ({
-  shamsi_year: y, shamsi_month: m, label: ['مرداد', 'شهریور', 'مهر'][m - 5], is_current: false,
-  days_in_month: m <= 6 ? 31 : 30,
-  village: stream(), ict: stream(), cra: stream(),
-  ...over,
-})
-const progress = (over = {}) => ({
-  today: { shamsi_year: 1405, shamsi_month: 7, day: 7, days_in_month: 30 },
-  plans_available: true,
-  internal_visible: true,
-  months: [
-    month(1405, 5, { village: stream({ approved: 300, approved_cumulative: 2500, internal_plan: 290, internal_plan_cumulative: 2490, contractor_plan: 320, contractor_plan_cumulative: 2520 }) }),
-    month(1405, 6, { village: stream({ approved: 288, approved_cumulative: 2788, internal_plan: 320, internal_plan_cumulative: 2810, contractor_plan: 280, contractor_plan_cumulative: 2800 }) }),
-    month(1405, 7, {
-      is_current: true,
-      village: stream({ approved: 92, approved_cumulative: 2880, internal_plan: 320, internal_plan_cumulative: 3130, contractor_plan: 300, contractor_plan_cumulative: 3100 }),
+const future = (over = {}) => stream({ approved: null, approved_cumulative: null, ...over })
+
+/** 1405, today 7 Mehr: Farvardin-Shahrivar closed, Mehr running, the rest
+ * to come. `rows` overrides the village stream per month number. */
+function progress({ rows = {}, internalVisible = true, plansAvailable = true, year = 1405, current = 7 } = {}) {
+  return {
+    today: { shamsi_year: 1405, shamsi_month: 7, day: 7, days_in_month: 30 },
+    plans_available: plansAvailable,
+    internal_visible: internalVisible,
+    years: [1405, 1403],
+    months: NAMES.map((label, i) => {
+      const m = i + 1
+      const isFuture = year > 1405 || (year === 1405 && m > current)
+      const base = isFuture ? future() : stream()
+      return {
+        shamsi_year: year,
+        shamsi_month: m,
+        label,
+        is_current: year === 1405 && m === current,
+        is_future: isFuture,
+        days_in_month: m <= 6 ? 31 : 30,
+        village: { ...base, ...(rows[m] ?? {}) },
+        ict: base,
+        cra: base,
+      }
     }),
-  ],
-  ...over,
+  }
+}
+
+const plans = (internal, internalCum, contractor, contractorCum) => ({
+  internal_plan: internal, internal_plan_cumulative: internalCum,
+  contractor_plan: contractor, contractor_plan_cumulative: contractorCum,
 })
 
-// --------------------------------------------------------------------- maths
+// --------------------------------------------------------------- the maths
 describe('the month maths', () => {
   it('spreads the plan evenly over the days: due today, pace, what is left', () => {
-    expect(dueToday(320, 7, 30)).toBe(75)
-    expect(pace(92, 320, { isCurrent: true, d: 7, D: 30 })).toBe(17)
-    expect(pace(60, 320, { isCurrent: true, d: 7, D: 30 })).toBe(-15)
-    // A closed month is measured against the whole plan.
-    expect(pace(328, 320, { isCurrent: false, d: 30, D: 30 })).toBe(8)
-    expect(left(320, 92)).toBe(228)
-    expect(left(320, 400)).toBe(0)
+    expect(dueToday(300, 7, 30)).toBe(70)
+    expect(pace(50, 300, { isCurrent: true, d: 7, D: 30 })).toBe(-20)
+    expect(pace(310, 300, { isCurrent: false, d: 31, D: 31 })).toBe(10)
+    expect(left(300, 92)).toBe(208)
+    expect(left(300, 320)).toBe(0)
+    expect(daysLeft(7, 30)).toBe(23)
   })
 
   it('works out a daily rate, and treats the last day as one day', () => {
-    expect(daysLeft(7, 30)).toBe(23)
-    expect(perDay(228, 23)).toBe(10)
-    expect(perDay(50, 0)).toBe(50)
-    expect(perDay(0, 5)).toBe(0)
+    expect(perDay(208, 23)).toBe(10)
+    expect(perDay(5, 0)).toBe(5)
   })
 
-  it('reports the true share past 100 while the arc stops at a full circle', () => {
-    expect(pctOf(400, 320)).toBe(125)
-    expect(arcFraction(400, 320)).toBe(1)
-    expect(arcFraction(160, 320)).toBe(0.5)
-    expect(tickAngle(15, 30)).toBe(180)
+  it('reports the true share, past 100 too', () => {
+    expect(pctOf(330, 300)).toBe(110)
   })
 
   it('writes shares with one decimal under 100', () => {
-    expect(pct1(2880, 4090)).toBe('70.4%')
-    expect(pct1(50, 50)).toBe('100%')
+    expect(pct1(2884, 4437)).toBe('65.0%')
+    expect(pct1(5, 5)).toBe('100%')
     expect(pct1(1, 0)).toBeNull()
   })
 
   it('picks four round gridlines that clear the data', () => {
-    expect(axisTicks(4500)).toEqual([1200, 2400, 3600, 4800])
-    expect(axisTicks(360)).toEqual([100, 200, 300, 400])
-    expect(axisTicks(0).length).toBe(4)
+    expect(axisTicks(330)).toEqual([100, 200, 300, 400])
+    expect(axisTicks(0)).toEqual([0.25, 0.5, 0.75, 1])
   })
 })
 
-// ------------------------------------------------------------------- panel
-describe('monthView', () => {
-  it('reads the running month against due-by-today', () => {
-    const view = monthView(progress(), 'village', '1405-07')
-    expect(view.status).toEqual({ text: 'Day 7 of 30', tone: 'accent' })
-    expect(view.approved).toBe(92)
-    expect(view.approvedToDate).toBe(2880)
-    const [internal, contractor] = view.rings
-    expect(internal).toMatchObject({ label: 'Internal PIP', plan: 320, pct: 29, tick: 84 })
-    expect(internal.pace).toEqual({ text: '+17 vs due today', tone: 'success' })
-    expect(contractor.pace).toEqual({ text: '+22 vs due today', tone: 'success' })
-    expect(view.finish.title).toBe('To finish on plan (23 days left)')
-    expect(view.finish.columns[0]).toMatchObject({ figure: '228 more', line: 'about 10 a day' })
+// --------------------------------------------------------------- months
+describe('which month opens', () => {
+  it('offers every month that has started, never one to come', () => {
+    expect(selectableKeys(progress())).toEqual(
+      ['01', '02', '03', '04', '05', '06', '07'].map((m) => `1405-${m}`),
+    )
   })
 
-  it('says a met plan is met, not a negative number to go', () => {
-    const p = progress()
-    p.months[2].village.approved = 330
-    const view = monthView(p, 'village', '1405-07')
-    expect(view.finish.columns[0]).toMatchObject({ figure: 'Plan met', line: 'nothing left to do' })
-    expect(view.rings[0].pct).toBe(103)
-    expect(view.rings[0].arc).toBe(1)
+  it('opens ?month= when it can, else the running month', () => {
+    expect(selectedMonth(progress(), '1405-05')).toBe('1405-05')
+    expect(selectedMonth(progress(), '1405-09')).toBe('1405-07')
+    expect(selectedMonth(progress(), 'nonsense')).toBe('1405-07')
   })
 
-  it('gives a closed month its result, above, short of or exactly on plan', () => {
-    const view = monthView(progress(), 'village', '1405-06')
-    expect(view.status).toEqual({ text: 'Closed', tone: 'neutral' })
-    expect(view.finish.title).toBe('Month result')
-    expect(view.rings[0].tick).toBeNull()
-    expect(view.rings[0].pace).toEqual({ text: '−32 vs plan', tone: 'danger' })
-    expect(view.finish.columns).toEqual([
-      { kind: 'internal', figure: '−32', line: 'short of plan' },
-      { kind: 'contractor', figure: '+8', line: 'above plan' },
-    ])
-
-    const exact = progress()
-    exact.months[1].village.approved = 320
-    expect(monthView(exact, 'village', '1405-06').finish.columns[0]).toMatchObject({ figure: 'Met', line: 'exactly on plan' })
-    expect(monthView(exact, 'village', '1405-06').rings[0].pace.text).toBe('On plan')
-  })
-
-  it('draws a month with no plan as "no plan set", with no pill and no number', () => {
-    const view = monthView(progress(), 'ict', '1405-07')
-    for (const ring of view.rings) {
-      expect(ring.noPlan).toBe(true)
-      expect(ring.pace).toBeUndefined()
-    }
-    expect(view.finish.columns.every((c) => c.figure === '—')).toBe(true)
-  })
-
-  it('shows one ring, the contractor’s own, when the Internal PIP is withheld', () => {
-    const p = progress({ internal_visible: false })
-    expect(monthView(p, 'village', '1405-07').rings.map((r) => r.label)).toEqual(['Contractor PIP'])
-    expect(monthView(p, 'village', '1405-07', p.today, { isContractor: true }).rings.map((r) => r.label)).toEqual(['Your PIP'])
-  })
-
-  it('is null for a month outside the window', () => {
-    expect(monthView(progress(), 'village', '1399-01')).toBeNull()
-  })
-})
-
-// ------------------------------------------------------------------- chart
-describe('chartSeries', () => {
-  it('gives monthly bars an attainment pill against the Internal PIP', () => {
-    const s = chartSeries(progress(), 'village', 'monthly')
-    expect(s.points.map((p) => p.attainment)).toEqual([
-      { text: '103%', tone: 'success' },
-      { text: '90%', tone: 'danger' },
-      { text: 'so far', tone: 'neutral' },
-    ])
-    expect(s.legend.map((l) => l.label)).toEqual(['Approved', 'Internal PIP', 'Contractor PIP', 'Month in progress'])
-    expect(s.caption).toBeNull()
-  })
-
-  it('switches to running totals and its own legend in Cumulative', () => {
-    const s = chartSeries(progress(), 'village', 'cumulative')
-    expect(s.points.map((p) => p.value)).toEqual([2500, 2788, 2880])
-    expect(s.legend.map((l) => l.label)).toEqual(['Approved to date', 'Internal PIP', 'Contractor PIP'])
-    // The last closed month: 2,788 against 2,810.
-    expect(s.callout).toMatchObject({ index: 1, text: '22 behind internal PIP' })
-  })
-
-  it('drops the plan legend and says why when a stream has no plan', () => {
-    const s = chartSeries(progress(), 'ict', 'monthly')
-    expect(s.legend.map((l) => l.key)).toEqual(['approved', 'current'])
-    expect(s.caption).toBe('No ICT plan set yet. A PM sets it on Monthly Plan.')
-    expect(s.points.every((p) => p.attainment == null)).toBe(true)
-
-    const province = chartSeries(progress({ plans_available: false }), 'cra', 'monthly')
-    expect(province.caption).toBe('Plans are set for the whole programme, not per province.')
-  })
-
-  it('calls the contractor’s plan "Your PIP" for a contractor', () => {
-    const s = chartSeries(progress({ internal_visible: false }), 'village', 'monthly', { isContractor: true })
-    expect(s.legend.map((l) => l.label)).not.toContain('Internal PIP')
-  })
-
-  it('summarises itself in words for assistive technology', () => {
-    const s = chartSeries(progress(), 'ict', 'monthly')
-    expect(chartSummary(s, 'ict', 'monthly')).toMatch(/^ICT approvals, last 3 months: 0 in مرداد/)
+  it('opens Esfand of a past year, and nothing of a year still to come', () => {
+    expect(selectedMonth(progress({ year: 1403 }), null)).toBe('1403-12')
+    expect(selectedMonth(progress({ year: 1406 }), null)).toBeNull()
   })
 
   it('keys a month the way the address does', () => {
@@ -194,56 +119,215 @@ describe('chartSeries', () => {
   })
 })
 
-// --------------------------------------------------------------------- KPIs
-const overview = {
-  kpis: {
-    total_onair_villages: 5000, total_dt_done_villages: 4000,
-    total_ict_approval: 3000, total_ict_remained: 1000, total_ict_rejected: 400, total_ict_pending: 600,
-    total_cra_approval: 2500, total_cra_remained: 1500, total_cra_rejected: 500, total_cra_pending: 1000,
-  },
-  analysis: { villages_both_approved: 2200 },
-}
-
-describe('buildKpis', () => {
-  it('builds the Village band: on air, DT done, fully accepted, remaining', () => {
-    const cards = buildKpis(overview, 'village')
-    expect(cards.map((c) => [c.title, c.figure, c.context])).toEqual([
-      ['Villages on air', 5000, null],
-      ['Drive test done', 4000, '80.0% of on air'],
-      ['Fully accepted', 2200, '55.0% of DT done'],
-      ['Remaining', 1800, '45.0% of DT done'],
+// ------------------------------------------------------------- PIP card
+describe('monthView (the PIP card)', () => {
+  it('says how far behind pace the running month is, and what is left per day', () => {
+    const p = progress({ rows: { 7: stream({ approved: 50, approved_cumulative: 2880, ...plans(300, 3130, 200, 3100) }) } })
+    const view = monthView(p, 'village', '1405-07')
+    expect(view.status).toBe('Day 7 of 30')
+    expect(view.isCurrent).toBe(true)
+    const [internal, contractor] = view.plans
+    expect(internal).toMatchObject({ label: 'Internal PIP', act: 50, plan: 300, pct: 17 })
+    expect(internal.today).toBeCloseTo((100 * 7) / 30)
+    // due today 70, approved 50: 20 behind; 250 to go over 23 days.
+    expect(internal.line).toEqual([
+      { text: '20 behind pace', tone: 'danger', strong: true },
+      { text: '250 to go, about 11 a day' },
     ])
-    expect(cards.some((c) => c.tiles)).toBe(false)
-    expect(cards.map((c) => c.drill.metric)).toEqual(['onair', 'dt_done', 'approved', 'remaining'])
+    // due today 47, approved 50: ahead, so no "behind" clause.
+    expect(contractor.line).toEqual([{ text: '150 to go, about 7 a day' }])
   })
 
-  it.each(['ict', 'cra'])('splits the %s Remaining into rejected and waiting, which add up to it', (key) => {
-    const cards = buildKpis(overview, key)
-    const remaining = cards[3]
-    const [rejected, waiting] = remaining.tiles
-    expect(rejected.figure + waiting.figure).toBe(remaining.figure)
-    expect(remaining.drill.authority).toBe(key.toUpperCase())
-    expect(cards[2].bar.color).toBe(`var(--${key})`)
+  it('says a met plan is met', () => {
+    const p = progress({ rows: { 7: stream({ approved: 320, ...plans(300, null, null, null) }) } })
+    expect(monthView(p, 'village', '1405-07').plans[0].line).toEqual([{ text: 'Plan met' }])
+  })
+
+  it('gives a closed month its result: short of, above, or exactly on plan', () => {
+    const p = progress({
+      rows: {
+        4: stream({ approved: 280, ...plans(300, null, 260, null) }),
+        5: stream({ approved: 300, ...plans(300, null, null, null) }),
+      },
+    })
+    const july = monthView(p, 'village', '1405-04')
+    expect(july.status).toBe('Closed')
+    expect(july.plans[0].line).toEqual([{ text: '−20 short of plan', tone: 'danger' }])
+    expect(july.plans[1].line).toEqual([{ text: '+20 above plan' }])
+    expect(july.plans[0].today).toBeNull()
+    expect(monthView(p, 'village', '1405-05').plans[0].line).toEqual([{ text: 'Exactly on plan' }])
+  })
+
+  it('draws a plan that does not exist as "No plan set", with no bar', () => {
+    const row = monthView(progress(), 'village', '1405-05').plans[0]
+    expect(row).toMatchObject({ noPlan: true, plan: null, line: [{ text: 'No plan set' }] })
+    expect(row.bar).toBeUndefined()
+  })
+
+  it('reads the total to date against the Internal PIP to date', () => {
+    const p = progress({ rows: { 6: stream({ approved: 10, approved_cumulative: 2788, ...plans(320, 2810, 280, 2800) }) } })
+    expect(monthView(p, 'village', '1405-06').toDate).toEqual({
+      approved: 2788,
+      plan: 2810,
+      planLabel: 'Internal PIP to date',
+      gap: { text: '22 behind', tone: 'danger' },
+    })
+  })
+
+  it('shows a contractor only "Your PIP", and measures to date against it', () => {
+    const p = progress({
+      internalVisible: false,
+      rows: { 6: stream({ approved: 10, approved_cumulative: 2830, ...plans(null, null, 280, 2800) }) },
+    })
+    const view = monthView(p, 'village', '1405-06', { isContractor: true })
+    expect(view.plans.map((r) => r.label)).toEqual(['Your PIP'])
+    expect(view.toDate).toMatchObject({ planLabel: 'Your PIP to date', gap: { text: '30 ahead' } })
+  })
+
+  it('is null for a month to come or one not in the year', () => {
+    expect(monthView(progress(), 'village', '1405-09')).toBeNull()
+    expect(monthView(progress(), 'village', '1399-01')).toBeNull()
   })
 })
 
-// ----------------------------------------------------------------- geometry
-describe('chart geometry', () => {
-  it('pushes end labels at least 15px apart and keeps them in the plot', () => {
-    const out = nudge([{ key: 'a', y: 100 }, { key: 'b', y: 104 }, { key: 'c', y: 108 }], 10, 300)
-    expect(out[1].y - out[0].y).toBeGreaterThanOrEqual(MIN_LABEL_GAP)
-    expect(out[2].y - out[1].y).toBeGreaterThanOrEqual(MIN_LABEL_GAP)
-    const low = nudge([{ key: 'a', y: 295 }, { key: 'b', y: 298 }], 10, 300)
-    expect(low[1].y).toBeLessThanOrEqual(300)
+// ---------------------------------------------------------------- chart
+describe('chartSeries (the year chart)', () => {
+  const p = progress({
+    rows: {
+      5: stream({ approved: 300, ...plans(290, null, 320, null) }),
+      6: stream({ approved: 288, ...plans(320, null, 280, null) }),
+      7: stream({ approved: 92, ...plans(320, null, 300, null) }),
+      9: future(plans(330, null, null, null)),
+    },
+  })
+  const series = chartSeries(p, 'village')
+
+  it('always draws twelve months, Farvardin to Esfand', () => {
+    expect(series.points.map((x) => x.label)).toEqual(NAMES)
   })
 
-  it('splits a series where a value is missing', () => {
-    expect(runs([{ x: 1 }, null, { x: 2 }, { x: 3 }]).map((r) => r.length)).toEqual([1, 2])
+  it('writes "{p}%" of plan under a closed month, danger under 100', () => {
+    expect(series.points[4].under).toEqual({ text: '103%', tone: undefined })
+    expect(series.points[5].under).toEqual({ text: '90%', tone: 'danger' })
+    expect(series.points[0].under).toBeNull()
   })
 
-  it('never overshoots between two equal values (monotone)', () => {
-    const d = monotonePath([{ x: 0, y: 100 }, { x: 10, y: 50 }, { x: 20, y: 50 }, { x: 30, y: 0 }])
-    // The flat stretch between the 2nd and 3rd points stays flat.
-    expect(d).toContain('C13.3,50.0 16.7,50.0 20.0,50.0')
+  it('writes "so far" under the running month and "plan" under one to come', () => {
+    expect(series.points[6].under).toEqual({ text: 'so far' })
+    expect(series.points[8]).toMatchObject({ isFuture: true, approved: null, internal: 330, under: { text: 'plan' } })
+  })
+
+  it('puts Today inside the running month', () => {
+    expect(series.today).toEqual({ index: 6, at: 7 / 30 })
+  })
+
+  it('keys only what it draws', () => {
+    expect(series.legend.map((l) => l.label)).toEqual([
+      'Approved', 'Internal PIP', 'Contractor PIP', 'In progress', 'Planned',
+    ])
+    const past = chartSeries(progress({ year: 1403 }), 'village')
+    expect(past.legend.map((l) => l.key)).toEqual(['approved'])
+    expect(past.caption).toBe('No village plan set for this year.')
+  })
+
+  it('says why there is no plan when the page is narrowed to a province', () => {
+    expect(chartSeries(progress({ plansAvailable: false }), 'ict').caption).toBe(
+      'Plans are set for the whole programme, not per province.',
+    )
+  })
+
+  it('reads one month in the readout: figures for a month, plans only for one to come', () => {
+    expect(readout(series, 5)).toEqual({
+      name: 'شهریور ۱۴۰۵',
+      note: null,
+      figures: [
+        { key: 'approved', label: 'Approved', value: 288 },
+        { key: 'internal', label: 'Internal PIP', value: 320 },
+        { key: 'contractor', label: 'Contractor PIP', value: 280 },
+      ],
+      pct: { text: '90% of Internal PIP', tone: 'danger' },
+    })
+    expect(readout(series, 8)).toMatchObject({ note: 'Upcoming', figures: [{ key: 'internal', value: 330 }], pct: null })
+  })
+
+  it('summarises itself in words for assistive technology', () => {
+    expect(chartSummary(series, 'village', '۱۴۰۵')).toMatch(/^Fully accepted against plan, ۱۴۰۵\. /)
+    expect(chartSummary(series, 'village', '۱۴۰۵')).toContain('آذر: planned 330')
+  })
+})
+
+describe('yearTrack (the year plan row)', () => {
+  it('reads the year so far against what was due by today', () => {
+    const p = progress({
+      rows: {
+        6: stream({ approved: 288, ...plans(320, null, null, null) }),
+        7: stream({ approved: 92, ...plans(300, null, null, null) }),
+        9: future(plans(330, null, null, null)),
+      },
+    })
+    // due: 320 (Shahrivar) + 70 (Mehr pro rata); plan: 320 + 300 + 330.
+    expect(yearTrack(p, 'village')).toEqual({
+      approved: 380,
+      plan: 950,
+      fill: 40,
+      due: { value: 390, at: (100 * 390) / 950 },
+      pct: { text: '97% of due', tone: 'danger' },
+    })
+  })
+
+  it('reads a past year against its whole plan', () => {
+    const p = progress({ year: 1403 })
+    p.months[0].village = stream({ approved: 12, ...plans(10, null, null, null) })
+    expect(yearTrack(p, 'village')).toMatchObject({ due: null, pct: { text: '120% of plan', tone: undefined } })
+  })
+
+  it('is hidden when the year has no plan', () => {
+    expect(yearTrack(progress(), 'village')).toBeNull()
+  })
+})
+
+// ------------------------------------------------------------------ KPIs
+describe('buildKpis (the strip)', () => {
+  const overview = {
+    kpis: {
+      total_onair_villages: 5210, total_dt_done_villages: 4437,
+      total_ict_approval: 3840, total_ict_remained: 597, total_ict_rejected: 404, total_ict_pending: 193,
+    },
+    analysis: { villages_both_approved: 2884, villages_rejected: 1100, villages_remained: 453 },
+  }
+
+  it('builds four tiles, each with one line', () => {
+    const tiles = buildKpis(overview, 'village', { thisMonth: 92 })
+    expect(tiles.map((t) => t.title)).toEqual(['Villages on air', 'Drive test done', 'Fully accepted', 'Remaining'])
+    expect(tiles[0].line).toEqual([{ text: '773 awaiting drive test' }])
+    expect(tiles[0].visual).toBeNull()
+    expect(tiles[1].line).toEqual([{ text: '85.2% of on air' }])
+    expect(tiles[2].line).toEqual([{ text: '+92 this month · 65.0% of DT done' }])
+  })
+
+  it('leaves out "+n this month" while it is not known', () => {
+    expect(buildKpis(overview, 'village').at(2).line).toEqual([{ text: '65.0% of DT done' }])
+  })
+
+  it('splits Village Remaining into rejected and waiting, each opening its own list', () => {
+    const remaining = buildKpis(overview, 'village').at(3)
+    expect(remaining.figure).toBe(1553)
+    expect(remaining.line.map((p) => [p.figure, p.drill.metric, p.drill.authority])).toEqual([
+      [1100, 'rejected', undefined],
+      [453, 'remained', undefined],
+    ])
+  })
+
+  it('reads ICT Remaining from the ICT figures, with the authority on every drill', () => {
+    const tiles = buildKpis(overview, 'ict')
+    expect(tiles[2]).toMatchObject({ title: 'ICT approved', figure: 3840 })
+    expect(tiles[3].line.map((p) => [p.figure, p.tone, p.drill.authority])).toEqual([
+      [404, 'danger', 'ICT'],
+      [193, 'pending', 'ICT'],
+    ])
+    expect(tiles[3].visual.stack.map((s) => s.color)).toEqual([
+      'var(--uep-status-danger-dot)',
+      'var(--uep-status-pending-dot)',
+    ])
   })
 })

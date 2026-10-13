@@ -1857,10 +1857,12 @@ class AcceptanceProgressStream(BaseModel):
     Every plan field is None -- never 0 -- when there is no plan for that
     month and stream, when plans are not available for the scope, and (the
     ``internal_*`` pair) when the caller may not see the Internal PIP.
+    ``approved`` and ``approved_cumulative`` are None for a month that has
+    not started (``is_future``).
     """
 
-    approved: int
-    approved_cumulative: int
+    approved: int | None
+    approved_cumulative: int | None
     internal_plan: int | None = None
     internal_plan_cumulative: int | None = None
     contractor_plan: int | None = None
@@ -1873,6 +1875,8 @@ class AcceptanceProgressMonth(BaseModel):
     #: The Shamsi month's name, e.g. مهر.
     label: str
     is_current: bool
+    #: After the running month: plans only, nothing approved yet.
+    is_future: bool = False
     days_in_month: int
     village: AcceptanceProgressStream
     ict: AcceptanceProgressStream
@@ -1886,7 +1890,11 @@ class AcceptanceProgress(BaseModel):
     plans_available: bool
     #: False for a contractor, and for staff narrowed to one contractor.
     internal_visible: bool
-    #: Oldest first; the last is the running month.
+    #: Every Shamsi year with a dated approval or a plan the caller may see,
+    #: plus the current year, newest first (the dashboard's year dropdown).
+    years: list[int] = []
+    #: Oldest first. Without ``year`` the last is the running month; with it,
+    #: Farvardin to Esfand of that year.
     months: list[AcceptanceProgressMonth]
 
 

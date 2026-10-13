@@ -1,0 +1,187 @@
+/* Acceptance → Dashboard (UEP-07): pages/reports/AcceptanceDashboard.jsx and
+   pages/reports/acceptance/. The Drive test dashboard's look -- the page is
+   `.dt-page acc-page`, so dt-dashboard.css and kpi-strip.css style the title
+   row, tabs, cards and KPI strip; this file adds only what the Acceptance
+   parts have of their own.
+
+   One screen at 1440×900: the strip, then the year chart beside the 380px
+   PIP card, filling the height. Every data mark is the accent on every tab;
+   red only for short of plan, behind pace, or rejected. No green.
+   Every value comes from uep-tokens.css. */
+
+/* ---------- page: the bench fills the body, the cards fill the bench ---------- */
+.acc-page .page-body { overflow: hidden; }
+.acc-page .acc-bench { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+.acc-page .acc-grid { flex: 1 1 auto; min-height: 0; grid-template-rows: minmax(0, 1fr); }
+.acc-page .acc-grid > .dt-stack { min-height: 0; }
+.acc-page .acc-chart-section,
+.acc-page .acc-pip-section { display: flex; flex-direction: column; min-height: 0; }
+.acc-page .acc-chart-section > .dt-section-body,
+.acc-page .acc-pip-section > .dt-section-body { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+.acc-page .acc-chart-section .dt-section-controls { margin-inline-start: auto; }
+.acc-page .acc-pip-section .dt-section-actions { margin-inline-start: auto; }
+
+/* The 28px app tile: Acceptance violet; the PIP card keeps Monthly plan amber. */
+.acc-page .dt-card-tile { background: var(--uep-app-acceptance); }
+.acc-page .acc-pip-section .dt-card-tile { background: var(--uep-app-monthly-plan); }
+
+/* Scope: two buttons side by side. */
+.acc-scope { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.acc-scope .dt-scope-menu { max-height: min(60vh, 480px); overflow-y: auto; }
+
+/* Tabs: ICT and CRA carry an 8px authority dot before the label. */
+.acc-tab-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; flex: none; }
+
+/* ---------- KPI strip ---------- */
+.acc-kpis-failed .dt-failed { margin: 0; }
+.acc-page .acc-kpis .dt-kpi-figure.drill { align-self: flex-start; text-align: left; border-bottom-width: 1px; }
+.acc-page .acc-kpis .dt-kpi-card { min-height: 104px; }
+.acc-page .dt-kpi-change .drill { font-size: inherit; line-height: inherit; }
+.acc-line-fig { display: inline-flex; align-items: baseline; gap: 0; }
+.acc-line-fig b { font-weight: var(--uep-weight-semibold); }
+.acc-tone-danger, .acc-tone-danger b { color: var(--uep-danger); }
+.acc-tone-pending, .acc-tone-pending b { color: var(--uep-status-pending-ink); }
+.acc-kpi-visual { margin-top: auto; }
+.acc-meter { display: block; height: 6px; border-radius: 3px; background: var(--uep-track); overflow: hidden; }
+.acc-meter > i { display: block; height: 100%; border-radius: 3px; background: var(--uep-accent); }
+.acc-page .hk-strip .acc-kpi-visual.dt-kpi-split { display: flex; overflow: hidden; background: var(--uep-track); }
+
+/* ---------- chart card ---------- */
+.acc-year {
+  height: 28px; padding: 0 28px 0 10px; border: 1px solid var(--uep-border); border-radius: var(--uep-radius-control);
+  background-color: var(--uep-surface); color: var(--uep-text);
+  font-family: var(--font-farsi); font-weight: var(--uep-weight-semibold); font-size: 13px;
+}
+.acc-year:focus-visible { outline: 2px solid var(--uep-accent); outline-offset: 2px; }
+
+/* The year plan track: label, an 8px track with the Today tick, figures. */
+.acc-yeartrack {
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 12px;
+  padding-block: 2px 16px; font-size: 12px; line-height: 16px; color: var(--uep-text-3); flex: none;
+}
+.acc-yeartrack-label { font-weight: var(--uep-weight-medium); color: var(--uep-text-2); }
+.acc-yeartrack-bar { position: relative; height: 8px; border-radius: 4px; background: var(--uep-track); }
+.acc-yeartrack-fill { position: absolute; inset-block: 0; inset-inline-start: 0; border-radius: 4px; background: var(--uep-accent); }
+.acc-yeartrack-due {
+  position: absolute; top: -3px; width: 2px; height: 14px; background: var(--uep-text); border-radius: 1px; transform: translateX(-1px);
+}
+.acc-yeartrack-due-label {
+  position: absolute; top: 14px; left: 50%; transform: translateX(-50%);
+  font-size: 11px; line-height: 14px; font-weight: var(--uep-weight-medium); color: var(--uep-text); white-space: nowrap;
+}
+.acc-yeartrack-figures { white-space: nowrap; }
+.acc-yeartrack-figures b { color: var(--uep-text); font-weight: var(--uep-weight-semibold); }
+
+/* Key row: the key left, readout and the Table toggle right. */
+.acc-page .acc-keyrow { padding: 6px 0 8px; margin-block-end: 6px; flex: none; }
+.acc-keyrow-end { display: inline-flex; align-items: center; gap: 8px; margin-inline-start: auto; }
+.acc-table-toggle { height: 28px; padding: 0 8px; font-size: 13px; }
+.acc-readout-label { color: var(--uep-text-3); }
+.acc-caption { margin: 0 0 6px; font-size: 12px; color: var(--uep-text-3); flex: none; }
+
+/* Legend and readout swatches: each mark as the chart draws it. */
+.acc-key { display: inline-block; flex: none; width: 10px; height: 10px; border-radius: 2px; }
+.acc-key-approved { background: var(--uep-accent); }
+.acc-key-internal { background: var(--uep-accent-tint); box-shadow: inset 0 0 0 1px var(--uep-accent-on-tint); }
+.acc-key-contractor { width: 14px; height: 2px; border-radius: 1px; background: var(--uep-text); }
+.acc-key-current {
+  background: repeating-linear-gradient(45deg, var(--uep-accent) 0 2px, var(--uep-accent-tint) 2px 4px);
+}
+.acc-key-planned { background: none; box-shadow: inset 0 0 0 1px var(--uep-accent); border: 0; outline: 1px dashed var(--uep-surface); outline-offset: -1px; }
+
+/* The plot: drawn in the card's own pixels (useElementSize). */
+.acc-plot { position: relative; flex: 1 1 auto; min-height: 160px; outline: none; }
+.acc-plot:focus-visible { outline: 2px solid var(--uep-accent); outline-offset: 4px; border-radius: 4px; }
+.acc-svg { display: block; overflow: visible; }
+.acc-grid line { stroke: var(--uep-divider); stroke-width: 1; }
+.acc-grid .acc-baseline { stroke: var(--uep-border-strong); }
+.acc-axis { font-size: 11px; fill: var(--uep-text-3); }
+.acc-col-band { fill: var(--uep-page); }
+.acc-plan-bar { fill: var(--uep-accent-tint); stroke: var(--uep-accent-on-tint); stroke-width: 1; }
+.acc-plan-bar.is-future { fill: none; stroke: var(--uep-accent); stroke-dasharray: 3 3; opacity: 0.7; }
+.acc-approved-bar { fill: var(--uep-accent); }
+.acc-stripe-base { fill: var(--uep-accent-tint); }
+.acc-stripe-line { fill: var(--uep-accent); }
+.acc-pip-tick { stroke: var(--uep-text); stroke-width: 2; }
+.acc-pip-tick.is-future { stroke-dasharray: 3 2; }
+.acc-today { stroke: var(--uep-text); stroke-width: 1; stroke-dasharray: 3 3; }
+.acc-bar-value { font-size: 11px; font-weight: var(--uep-weight-semibold); fill: var(--uep-text); }
+.acc-bar-value.is-inside { fill: var(--uep-on-accent); }
+
+/* The month row under the plot, and the hover/click columns above it. */
+.acc-months { position: absolute; left: 0; right: 0; bottom: 0; margin: 0; padding: 0; list-style: none; }
+.acc-months > li { position: absolute; top: 0; height: 100%; }
+.acc-month {
+  width: 100%; height: 100%; padding: 4px 0 0; border: 0; background: none; cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; gap: 0;
+  font-size: 12px; line-height: 16px; color: var(--uep-text-2);
+}
+.acc-month:disabled { cursor: default; }
+.acc-month-name { font-size: 12px; line-height: 16px; }
+.acc-month.is-active .acc-month-name { color: var(--uep-text); }
+.acc-month.is-selected .acc-month-name { font-weight: var(--uep-weight-semibold); color: var(--uep-text); }
+.acc-month-under { font-size: 11px; line-height: 14px; color: var(--uep-text-3); }
+.acc-month-under.acc-tone-danger { color: var(--uep-danger); }
+.acc-col { position: absolute; top: 0; cursor: pointer; }
+.acc-col.is-future { cursor: default; }
+
+/* Table view: scrolls inside the card. */
+.acc-page .acc-table-wrap { flex: 1 1 auto; min-height: 0; max-height: none; }
+
+/* ---------- PIP card ---------- */
+.acc-steps { display: inline-flex; gap: 2px; }
+.acc-step { width: 28px; height: 28px; padding: 0; display: inline-grid; place-items: center; color: var(--uep-text-2); }
+.acc-step:disabled { opacity: 0.4; }
+.acc-pip { flex: 1 1 auto; display: flex; flex-direction: column; gap: 12px; min-height: 0; }
+.acc-pip-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; }
+.acc-pip-approved { display: flex; flex-direction: column; }
+.acc-pip-label { font-size: 12px; line-height: 16px; color: var(--uep-text-3); }
+.acc-pip-approved b { font-size: 28px; line-height: 32px; font-weight: var(--uep-weight-semibold); color: var(--uep-text); letter-spacing: -0.02em; }
+.acc-pill {
+  display: inline-flex; align-items: center; height: 22px; padding: 0 8px; border-radius: var(--uep-radius-pill);
+  background: var(--uep-page); border: 1px solid var(--uep-border);
+  font-size: 12px; font-weight: var(--uep-weight-medium); color: var(--uep-text-2); white-space: nowrap;
+}
+.acc-plan { padding-block-start: 10px; border-block-start: 1px solid var(--uep-divider); }
+.acc-plan-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 13px; line-height: 18px; }
+.acc-plan-name { display: inline-flex; align-items: center; gap: 6px; font-weight: var(--uep-weight-medium); color: var(--uep-text); }
+.acc-plan-figures { color: var(--uep-text-3); white-space: nowrap; }
+.acc-plan-figures b { color: var(--uep-text); font-weight: var(--uep-weight-semibold); }
+.acc-plan-pct { margin-inline-start: 8px; color: var(--uep-text-2); font-weight: var(--uep-weight-medium); }
+/* The bar: the DT PIP bar (amber fill, Today tick), without its top rule. */
+.acc-page .acc-pip-section .acc-plan-bar.dt-plan-progress { margin-block: 8px 0; }
+.acc-page .acc-pip-section .acc-plan-bar.dt-plan-progress::before { content: none; }
+.acc-page .acc-pip-section .acc-plan-bar:has(.dt-plan-pace) { margin-block-end: 14px; }
+.acc-plan-line { margin: 6px 0 0; font-size: 12px; line-height: 16px; color: var(--uep-text-3); }
+.acc-plan-line b { font-weight: var(--uep-weight-semibold); }
+
+.acc-pip-todate {
+  margin: auto 0 0; padding-block-start: 10px; border-block-start: 1px solid var(--uep-divider);
+  display: grid; grid-template-columns: 1fr 1fr auto; align-items: end; gap: 12px;
+}
+.acc-pip-todate dt { font-size: 12px; line-height: 16px; color: var(--uep-text-3); }
+.acc-pip-todate dd { margin: 0; font-size: 16px; line-height: 22px; font-weight: var(--uep-weight-semibold); color: var(--uep-text); }
+.acc-pip-gap { font-size: 12px; line-height: 22px; font-weight: var(--uep-weight-semibold); color: var(--uep-text-2); white-space: nowrap; }
+
+/* ---------- below 980px of page: one column, the body may scroll ---------- */
+@container dt-bench (max-width: 979px) {
+  .acc-page .acc-grid { grid-template-rows: none; }
+  .acc-page .acc-plot { min-height: 260px; }
+}
+@media (max-width: 1099px) {
+  .acc-page .page-body { overflow-y: auto; }
+  .acc-page .acc-bench { flex: none; }
+}
+
+/* ---------- 1366x768: tighter, nothing hidden ---------- */
+@media (max-height: 820px) {
+  .acc-page .acc-kpis .dt-kpi-card { min-height: 88px; }
+  .acc-yeartrack { padding-block-end: 12px; }
+  .acc-page .acc-keyrow { padding-block: 2px 4px; margin-block-end: 2px; }
+  .acc-pip { gap: 8px; }
+  .acc-plan { padding-block-start: 6px; }
+  .acc-pip-approved b { font-size: 24px; line-height: 28px; }
+}
+
+/* Green means approved, and nothing else: the freshness dot is neutral here. */
+.acc-page .dt-freshness-dot { background: var(--uep-neutral-data); }

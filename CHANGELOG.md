@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- **Acceptance dashboard: moved into the Acceptance app, DT dashboard look, one Shamsi year per chart with planned months, PIP card replaces the rings (UEP-07).**
+  - Fixes the blank screen on `/reports/acceptance`: the view model had moved to the new shapes while the page still read the old ones, so the first render threw.
+  - API: `GET /acceptance/progress` gains `year` (that year's twelve months; future months carry plans, `approved: null` and `is_future: true`) and `years` for the dropdown. Without `year` the response is unchanged.
+  - Page: tabs Fully accepted · ICT · CRA; province and contractor scope buttons (the Drive test `ScopeMenu`); the dense four-tile KPI strip with Remaining split into rejected and waiting, each a drill-through; the year chart with a year plan track, readout, keyboard model and Table view; the PIP card with per-plan pace lines and the totals to date.
+  - Removed: the rings (`PlanRing`), the Monthly/Cumulative switch and `chartGeometry`, the month `<select>`, the `.acc-stream-*` colours and the old `.accd-*` CSS. `Section` and `MonthLabel` move to `components/`; the DT `KpiSkeleton` is shared.
+
 - **Roles Performance · Map: fits the window without scrolling; the detail panel shows sites and villages for delivery, ICT and CRA; the owner list and its switch are removed; CRA borders are white (UEP-10).**
   - API: `GET /gaps/map` rows' `detail` is now `{delivery: {assigned, on_air, dt}, ict: {approved, pending}, cra: {approved, pending}}`, every leaf `{sites, villages}`; `ict`/`cra` gain `sites: {approved, reached}` for the tooltip. `detail.owners` and the `base`/`remained` counters are removed. New `_site_grid` (one site = one work item, approved when every village is).
   - Removed: the List by switch, `DETAIL_LENSES`, `detailRows`, `REMAINED_NOTES`, the Pending / Remained tiles, the caption under the map and their CSS. New token `--uep-ease-standard`.

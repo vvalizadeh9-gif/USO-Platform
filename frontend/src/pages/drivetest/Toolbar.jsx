@@ -7,17 +7,42 @@ import { freshness } from './format'
  * context slot: "All provinces", or the province's name with a clear button
  * beside it. Opening it lists every province to pick from, so the scope can
  * be set here as well as from the province table.
- *
- * A menu of radio items: one is checked, arrows move between them, Escape
- * closes it and gives focus back to the button.
  */
 export function ProvinceScope({ provinces, provinceId, provinceName, onChange }) {
+  return (
+    <ScopeMenu
+      icon={<MapPin size={16} strokeWidth={1.9} aria-hidden="true" />}
+      what="Province"
+      all="All provinces"
+      options={provinces}
+      value={provinceId}
+      valueName={provinceName}
+      onChange={onChange}
+      clearLabel={
+        provinceName
+          ? `Show every province again, not just ${provinceName}`
+          : 'Show every province again'
+      }
+    />
+  )
+}
+
+/**
+ * One scope as a button: `all` when nothing is picked, or the picked
+ * option's name with a clear button beside it. Shared by the Drive test and
+ * Acceptance dashboards, so a scope reads and works the same on both.
+ *
+ * A menu of radio items: one is checked, arrows move between them, Escape
+ * closes it and gives focus back to the button. `what` names it ("Province"
+ * gives "Province scope: …"); option names are Farsi.
+ */
+export function ScopeMenu({ icon, what, all, options: items, value, valueName, onChange, clearLabel }) {
   const [open, setOpen] = useState(false)
   const wrapRef = useRef(null)
   const buttonRef = useRef(null)
   const menuRef = useRef(null)
-  const scoped = provinceId != null
-  const options = [{ id: null, name: 'All provinces' }, ...(provinces ?? [])]
+  const scoped = value != null
+  const options = [{ id: null, name: all }, ...(items ?? [])]
 
   useEffect(() => {
     if (!open) return undefined
@@ -36,7 +61,7 @@ export function ProvinceScope({ provinces, provinceId, provinceName, onChange })
   }
   const pick = (id) => {
     close()
-    if (id !== provinceId) onChange(id)
+    if (id !== value) onChange(id)
   }
   const onMenuKey = (e) => {
     const items = [...menuRef.current.querySelectorAll('[role="menuitemradio"]')]
@@ -53,7 +78,7 @@ export function ProvinceScope({ provinces, provinceId, provinceName, onChange })
     }
   }
 
-  const label = scoped ? provinceName ?? `Province ${provinceId}` : 'All provinces'
+  const label = scoped ? valueName ?? `${what} ${value}` : all
 
   return (
     <div className="dt-scope" ref={wrapRef}>
@@ -63,11 +88,11 @@ export function ProvinceScope({ provinces, provinceId, provinceName, onChange })
         className={`dt-scope-btn${scoped ? ' is-scoped' : ''}`}
         aria-haspopup="menu"
         aria-expanded={open}
-        aria-label={`Province scope: ${label}`}
+        aria-label={`${what} scope: ${label}`}
         onClick={() => setOpen((o) => !o)}
       >
-        <MapPin size={16} strokeWidth={1.9} aria-hidden="true" />
-        <span className={scoped && provinceName ? 'dt-farsi' : undefined}>{label}</span>
+        {icon}
+        <span className={scoped && valueName ? 'dt-farsi' : undefined}>{label}</span>
         <ChevronDown size={16} aria-hidden="true" />
       </button>
       {scoped && (
@@ -75,19 +100,15 @@ export function ProvinceScope({ provinces, provinceId, provinceName, onChange })
           type="button"
           className="dt-clear"
           onClick={() => onChange(null)}
-          aria-label={
-            provinceName
-              ? `Show every province again, not just ${provinceName}`
-              : 'Show every province again'
-          }
+          aria-label={clearLabel}
         >
           <X size={14} aria-hidden="true" />
         </button>
       )}
       {open && (
-        <div className="dt-scope-menu" role="menu" aria-label="Province" ref={menuRef} onKeyDown={onMenuKey}>
+        <div className="dt-scope-menu" role="menu" aria-label={what} ref={menuRef} onKeyDown={onMenuKey}>
           {options.map((p) => {
-            const checked = p.id === (provinceId ?? null)
+            const checked = p.id === (value ?? null)
             return (
               <button
                 key={p.id ?? 'all'}

@@ -78,6 +78,12 @@ import checkmarkOutline16 from '@carbon/icons/es/checkmark--outline/16.js'
 import checkmarkOutline20 from '@carbon/icons/es/checkmark--outline/20.js'
 import settingsAdjust16 from '@carbon/icons/es/settings--adjust/16.js'
 import settingsAdjust20 from '@carbon/icons/es/settings--adjust/20.js'
+import location16 from '@carbon/icons/es/location/16.js'
+import location20 from '@carbon/icons/es/location/20.js'
+import userMultiple16 from '@carbon/icons/es/user--multiple/16.js'
+import userMultiple20 from '@carbon/icons/es/user--multiple/20.js'
+import chevronLeft16 from '@carbon/icons/es/chevron--left/16.js'
+import chevronLeft20 from '@carbon/icons/es/chevron--left/20.js'
 
 /**
  * @typedef {{ elem: string, attrs: Record<string, string | number>, content?: CarbonNode[] }} CarbonNode
@@ -124,6 +130,9 @@ export const ICONS = Object.freeze({
   'flag': { 16: flag16, 20: flag20 },
   'checkmark--outline': { 16: checkmarkOutline16, 20: checkmarkOutline20 },
   'settings--adjust': { 16: settingsAdjust16, 20: settingsAdjust20 },
+  location: { 16: location16, 20: location20 },
+  'user--multiple': { 16: userMultiple16, 20: userMultiple20 },
+  'chevron--left': { 16: chevronLeft16, 20: chevronLeft20 },
 })
 
 /** @typedef {keyof typeof ICONS} IconName */

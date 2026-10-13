@@ -14,6 +14,9 @@ Covers the rules in ``services/acceptance_progress.py``:
 6. ``today``, ``is_current`` and ``days_in_month`` across 31/30/29-day months.
 7. The ICT and CRA plan streams round-trip through the Monthly Plan API and
    reach the chart.
+8. ``year=``: that Shamsi year's twelve months, future months plans only
+   (``is_future``, approved None); ``years`` for the dropdown; no ``year``
+   leaves the window as it was.
 
 The service tests pin ``today`` to 7 مهر 1405 and seed their own months, so
 they do not depend on when the suite runs.
@@ -441,4 +444,82 @@ def test_authority_site_lists_add_up_to_their_cards(client, world, authority):
 
 def test_an_unknown_authority_is_refused(client, world):
     r = client.get(f"{ACC}/sites", headers=world["pm"], params={"metric": "approved", "authority": "HQ"})
+    assert r.status_code == 422
+
+
+# ---------------------------------------------------------------------------
+# 8. One Shamsi year (?year=)
+# ---------------------------------------------------------------------------
+def test_a_year_is_farvardin_to_esfand_with_future_months_plan_only(world):
+    from app.models.reference import User
+    from app.services import acceptance_plan
+
+    db = SessionLocal()
+    pm = db.query(User).filter_by(username="test_pm").one()
+    acceptance_plan.set_target(db, year=1405, month=9, target_count=6, user=pm)
+    db.commit()
+    db.close()
+
+    data = _progress("test_pm", year=1405)
+    months = data["months"]
+    assert [(m["shamsi_year"], m["shamsi_month"]) for m in months] == [(1405, n) for n in range(1, 13)]
+    assert [m["is_current"] for m in months] == [n == 7 for n in range(1, 13)]
+    assert [m["is_future"] for m in months] == [n > 7 for n in range(1, 13)]
+    for m in months:
+        for key in STREAMS:
+            if m["is_future"]:
+                assert m[key]["approved"] is None
+                assert m[key]["approved_cumulative"] is None
+            else:
+                assert isinstance(m[key]["approved"], int)
+                assert isinstance(m[key]["approved_cumulative"], int)
+    # A future month still carries its plan; the running month its actuals.
+    assert data["by"][(1405, 9)]["village"]["internal_plan"] == 6
+    assert data["by"][(1405, 7)]["ict"]["approved"] == 1  # V2
+    # The same running total as the default window for the same month.
+    window = _progress("test_pm")["by"][(1405, 7)]
+    for key in STREAMS:
+        assert data["by"][(1405, 7)][key] == window[key]
+
+
+def test_years_lists_dated_approvals_plans_and_the_current_year(world):
+    # 1405: approvals and plans; 1403: V6's dated approvals. Newest first.
+    assert _progress("test_pm")["years"] == [1405, 1403]
+    # The current year is always offered, even with nothing in it.
+    later = _progress("test_pm", today=jalali.from_shamsi_date(1407, 2, 1))
+    assert later["years"] == [1407, 1405, 1403]
+
+
+def test_a_past_year_is_all_closed_months(world):
+    data = _progress("test_pm", year=1403)
+    assert len(data["months"]) == 12
+    assert not any(m["is_current"] or m["is_future"] for m in data["months"])
+    assert data["by"][(1403, 1)]["village"]["approved"] == 1  # V6
+
+
+def test_without_year_the_window_is_unchanged(world):
+    data = _progress("test_pm")
+    assert len(data["months"]) == 12
+    assert data["months"][-1]["is_current"] is True
+    assert not any(m["is_future"] for m in data["months"])
+    assert all(isinstance(m["village"]["approved"], int) for m in data["months"])
+
+
+def test_a_year_keeps_the_plan_rules(client, world):
+    mine = client.get(f"{ACC}/progress", headers=world["contractor"], params={"year": 1405})
+    assert mine.status_code == 200, mine.text
+    body = mine.json()
+    assert body["internal_visible"] is False
+    assert all(m[k]["internal_plan"] is None for m in body["months"] for k in STREAMS)
+    assert body["months"][6]["village"]["contractor_plan"] == 3  # C1's own, مهر
+
+    data = _progress("test_pm", year=1405, province_id=world["p1"])
+    for m in data["months"]:
+        for key in STREAMS:
+            assert m[key]["internal_plan"] is None
+            assert m[key]["contractor_plan"] is None
+
+
+def test_an_out_of_range_year_is_refused(client, world):
+    r = client.get(f"{ACC}/progress", headers=world["pm"], params={"year": 99})
     assert r.status_code == 422

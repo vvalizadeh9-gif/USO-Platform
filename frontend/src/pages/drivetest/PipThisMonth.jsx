@@ -1,8 +1,8 @@
 import { monthProgress } from '../../lib/shamsi'
 import { DrillLink } from './DrillPanel'
 import InfoTip from './InfoTip'
-import MonthLabel from './MonthLabel'
-import Section from './Section'
+import MonthLabel from '../../components/MonthLabel'
+import Section from '../../components/Section'
 import { achievement, count } from './format'
 import { deliveredLink } from './links'
 
