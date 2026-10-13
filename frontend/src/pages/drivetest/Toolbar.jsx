@@ -100,11 +100,7 @@ export function ScopeMenu({ icon, what, all, options: items, value, valueName, o
           type="button"
           className="dt-clear"
           onClick={() => onChange(null)}
-          aria-label={
-            provinceName
-              ? `Show every province again, not just ${provinceName}`
-              : 'Show every province again'
-          }
+          aria-label={clearLabel}
         >
           <X size={14} aria-hidden="true" />
         </button>
