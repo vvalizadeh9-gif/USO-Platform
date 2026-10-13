@@ -1,44 +1,60 @@
-import { useEffect, useMemo, useState } from 'react'
-import { X } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import api from '../../api/client'
 import ExportNumber from '../../components/ExportNumber'
+import Icon from '../../components/Icon'
 import { AuthorityChip, Banner, Card, EmptyState, SegmentedControl } from '../../components/ui'
 import { fmtCount } from './kpiTheme'
-import { ATTRIBUTION_NOTES } from './lifecycleGaps'
 import {
   BANDS,
-  DETAIL_LENSES,
   MAPS,
-  REMAINED_NOTES,
+  PANEL_GAPS,
   approvalRate,
   bandOf,
   detailBand,
   detailRate,
-  detailRows,
   onePct,
   regionDrift,
   wholePct,
 } from './coverageMap'
 import iranMap from './iranMap.json'
-import { Skeleton } from './LifecycleGaps'
+
+/** The loading state: the KPI skeleton (kept here, so this module does not
+ * import LifecycleGaps, which imports it). */
+function Skeleton() {
+  return (
+    <div className="kpi-skeleton" aria-hidden="true">
+      {Array.from({ length: 5 }, (_, index) => (
+        <span key={index} />
+      ))}
+    </div>
+  )
+}
+
+/** How long the old map takes to fade out when the switch changes. */
+const LEAVE_MS = 160
+
+const reducedMotion = () =>
+  typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
 
 /**
- * Lifecycle Gaps → Coverage map.
+ * Roles Performance → Map (and Lifecycle Gaps → Coverage map).
  *
  * One map at a time -- ICT approval by province, or CRA approval by CRA
  * region, each authority drawn at the level it works at -- and beside it a
- * detail panel that is empty until a shape is clicked.
+ * detail panel that is empty until a shape is clicked. Both fill the height
+ * they are given and the map scales to fit it, so the page never scrolls.
  *
  * Where a village is drawn is decided by its CPM province, the same province
- * every figure is grouped by. The borders are OpenStreetMap's, committed as
- * `iranMap.json` by `scripts/build-iran-map.py` and keyed by the Persian
- * province name, so the join with the API is the same string on both sides.
+ * every figure is grouped by. The borders are OpenStreetMap's (ODbL, via
+ * geoBoundaries), committed as `iranMap.json` by `scripts/build-iran-map.py`
+ * and keyed by the Persian province name, so the join with the API is the
+ * same string on both sides.
  *
- * The map keeps its own counting, unchanged: ICT is drive-test-done villages
+ * The map keeps its own counting: ICT is drive-test-done villages
  * ICT-approved, CRA is ICT-approved villages CRA-approved, over every هدف
- * village. The detail panel counts like the Gaps tab -- on-air, drive-tested
- * villages -- because every count in it is an export, and an export lists
- * exactly the villages the Gaps tab counts.
+ * village. The panel shows delivery (assigned, on air, drive test) and then
+ * ICT and CRA counted like the Gaps tab, every figure in sites and villages;
+ * its ICT and CRA village counts are exports.
  *
  * Rules: a number on every shape; one fixed six-band scale; low sample is
  * hatched, not coloured. Scope is the server's: a PM sees the country;
@@ -48,7 +64,10 @@ export default function CoverageMap() {
   const [data, setData] = useState(null)
   const [error, setError] = useState('')
   const [map, setMap] = useState('ict')
+  const [leaving, setLeaving] = useState(false)
   const [selected, setSelected] = useState(null)
+  const [band, setBand] = useState(null)
+  const leaveTimer = useRef(null)
 
   useEffect(() => {
     let live = true
@@ -62,6 +81,7 @@ export default function CoverageMap() {
       })
     return () => {
       live = false
+      clearTimeout(leaveTimer.current)
     }
   }, [])
 
@@ -92,25 +112,43 @@ export default function CoverageMap() {
 
   const current = MAPS.find((item) => item.key === map)
   const row = selected ? (map === 'ict' ? byKey.get(selected) : byRegion.get(selected)) : null
+  // The old map fades out, then the new one fades in; the panel clears.
   const switchMap = (next) => {
-    setMap(next)
+    if (next === map) return
     setSelected(null)
+    clearTimeout(leaveTimer.current)
+    if (reducedMotion()) {
+      setMap(next)
+      return
+    }
+    setLeaving(true)
+    leaveTimer.current = setTimeout(() => {
+      setMap(next)
+      setLeaving(false)
+    }, LEAVE_MS)
   }
+  const pick = (id) => setSelected(selected === id ? null : id)
 
   return (
     <div className="cov">
       <Card className="cov-map-card">
         <div className="cov-map-head">
           <SegmentedControl label="Map" options={MAPS} value={map} onChange={switchMap} />
-          <div className="cov-scale" role="list" aria-label="Approval rate bands">
-            {BANDS.map((band) => (
+          <div
+            className="cov-scale"
+            role="list"
+            aria-label="Approval rate bands"
+            onMouseLeave={() => setBand(null)}
+          >
+            {BANDS.map((item, index) => (
               <span
-                key={band.label}
+                key={item.label}
                 role="listitem"
                 className="cov-scale-band"
-                style={{ background: band.fill, color: band.ink }}
+                style={{ background: item.fill, color: item.ink }}
+                onMouseEnter={() => setBand(index)}
               >
-                {band.label}
+                {item.label}
               </span>
             ))}
           </div>
@@ -118,9 +156,10 @@ export default function CoverageMap() {
 
         <Notes data={data} />
 
-        <figure className="cov-map" data-testid={`cov-map-${map}`}>
+        <figure className={`cov-map ${leaving ? 'is-leaving' : ''}`} data-testid={`cov-map-${map}`}>
           {map === 'ict' ? (
             <MapLayer
+              key="ict"
               label="ICT approval by province"
               stretch="ICT"
               shapes={Object.entries(iranMap.provinces).map(([key, shape]) => ({
@@ -130,11 +169,13 @@ export default function CoverageMap() {
                 figures: byKey.get(key)?.ict,
               }))}
               picked={selected}
-              onPick={(key) => setSelected(selected === key ? null : key)}
+              onPick={pick}
+              band={band}
               small
             />
           ) : (
             <MapLayer
+              key="cra"
               label="CRA approval by region"
               stretch="CRA"
               shapes={Object.entries(iranMap.regions).map(([name, shape]) => ({
@@ -144,19 +185,12 @@ export default function CoverageMap() {
                 figures: byRegion.get(name)?.cra,
               }))}
               picked={selected}
-              onPick={(name) => setSelected(selected === name ? null : name)}
+              onPick={pick}
+              band={band}
               region
             />
           )}
         </figure>
-
-        <p className="cov-caption">
-          {map === 'ict'
-            ? 'Share of drive-test-done villages ICT-approved.'
-            : 'Share of ICT-approved villages CRA-approved.'}{' '}
-          Hatched = fewer than {data.low_sample_threshold} reached, not compared. Boundaries ©
-          OpenStreetMap contributors (ODbL), via geoBoundaries.
-        </p>
       </Card>
 
       <Card className="cov-panel" aria-label="Detail">
@@ -172,7 +206,7 @@ export default function CoverageMap() {
           <div className="cov-panel-empty">
             <EmptyState
               title={map === 'ict' ? 'Select a province on the map' : 'Select a CRA region on the map'}
-              hint="Its approval, pending and remained villages appear here, and who holds them."
+              hint="Its sites and villages (assigned, on air, drive test, ICT and CRA) appear here."
             />
           </div>
         )}
@@ -204,7 +238,7 @@ function Notes({ data }) {
 }
 
 /* ---------------------------------------------------------------------------
-   The map itself: unchanged apart from a single selection.
+   The map itself.
    --------------------------------------------------------------------------- */
 
 /** The diagonal hatch for a shape that is shown but not compared. */
@@ -238,65 +272,108 @@ function labelX(x, name, small) {
   return Math.min(Math.max(x, half), MAP_WIDTH - half)
 }
 
-/** Name, approval and the counts behind it, for the tooltip and screen readers. */
-function describe(name, figures, stretch) {
-  if (!figures) return `${name} — outside your scope`
-  const rate = approvalRate(figures)
-  return (
-    `${name} — ${stretch} approval ${onePct(rate)}: ` +
-    `${fmtCount(figures.reached - figures.stopped)} of ${fmtCount(figures.reached)} approved, ` +
-    `${fmtCount(figures.stopped)} stopped` +
-    (figures.low_sample ? ' (too few to compare)' : '')
-  )
+/** The tooltip's lines: name and rate, then villages and sites. */
+export function tipLines(name, figures, stretch) {
+  if (!figures) return [`${name} — outside your scope`]
+  const approved = figures.reached - figures.stopped
+  const sites = figures.sites ?? { approved: 0, reached: 0 }
+  return [
+    `${name} · ${wholePct(approvalRate(figures))} ${stretch} approved`,
+    `${fmtCount(approved)} of ${fmtCount(figures.reached)} villages`,
+    `${fmtCount(sites.approved)} of ${fmtCount(sites.reached)} sites` +
+      (figures.low_sample ? ' · too few to compare' : ''),
+  ]
 }
 
 /**
  * One map: every shape, then the outline of the selected one, then every
  * label -- in that order, so no neighbouring shape is painted over the
- * outline or a label.
+ * outline or a label. The tooltip is positioned in the figure.
  */
-function MapLayer({ label, stretch, shapes, picked, onPick, small, region }) {
+function MapLayer({ label, stretch, shapes, picked, onPick, band, small, region }) {
   const chosen = shapes.find((shape) => shape.id === picked)
+  const [tip, setTip] = useState(null)
+  const bandIndex = (shape) => {
+    const b = bandOf(shape.figures)
+    return b ? BANDS.indexOf(b) : null
+  }
+  const lit = (shape) => band != null && bandIndex(shape) === band
+
+  const showTip = (shape, event) => {
+    const box = event.currentTarget.ownerSVGElement?.parentElement?.getBoundingClientRect()
+    if (!box) return
+    setTip({ id: shape.id, x: event.clientX - box.left + 16, y: event.clientY - box.top + 16 })
+  }
+  const tipShape = tip && shapes.find((shape) => shape.id === tip.id)
+
+  const classes = ['cov-svg', chosen && 'has-pick', band != null && 'is-dim'].filter(Boolean).join(' ')
   return (
-    <svg viewBox={iranMap.viewBox} role="group" aria-label={label}>
-      <Hatch />
-      {shapes.map((shape) => (
-        <Shape
-          key={shape.id}
-          shape={shape}
-          stretch={stretch}
-          selected={shape.id === picked}
-          onPick={() => onPick(shape.id)}
-          region={region}
-        />
-      ))}
-      {chosen && <path d={chosen.path} className="cov-outline" data-testid="cov-outline" />}
-      {shapes.map((shape) => (
-        <Label key={shape.id} shape={shape} small={small} />
-      ))}
-    </svg>
+    <>
+      <svg viewBox={iranMap.viewBox} className={classes} role="group" aria-label={label}>
+        <Hatch />
+        <g className="cov-layer">
+          {shapes.map((shape) => (
+            <Shape
+              key={shape.id}
+              shape={shape}
+              stretch={stretch}
+              selected={shape.id === picked}
+              lit={lit(shape)}
+              onPick={() => onPick(shape.id)}
+              onHover={(event) => showTip(shape, event)}
+              onLeave={() => setTip(null)}
+              region={region}
+            />
+          ))}
+          {chosen && <path d={chosen.path} className="cov-outline" data-testid="cov-outline" />}
+          {shapes.map((shape) => (
+            <Label
+              key={shape.id}
+              shape={shape}
+              small={small}
+              selected={shape.id === picked}
+              lit={lit(shape)}
+            />
+          ))}
+        </g>
+      </svg>
+      {tipShape && (
+        <div className="cov-tip" style={{ left: tip.x, top: tip.y }} aria-hidden="true" data-testid="cov-tip">
+          {tipLines(tipShape.name, tipShape.figures, stretch).map((line, index) => (
+            <span key={line} className={index === 0 ? 'cov-tip-title' : 'cov-tip-line'}>
+              {line}
+            </span>
+          ))}
+        </div>
+      )}
+    </>
   )
 }
 
-function Shape({ shape, stretch, selected, onPick, region }) {
+function Shape({ shape, stretch, selected, lit, onPick, onHover, onLeave, region }) {
   const { id, name, path, figures } = shape
   const band = bandOf(figures)
   // Three states: coloured by band; hatched (in scope, not comparable); grey
   // (outside this account's scope -- no figures were sent for it at all).
   const fill = band ? band.fill : figures ? 'url(#cov-hatch)' : 'var(--track)'
-  const text = describe(name, figures, stretch)
   const state = band ? 'coloured' : figures ? 'hatched' : 'outside'
+  const classes = ['cov-shape', region && 'is-region', selected && 'is-sel', lit && 'is-hl']
+    .filter(Boolean)
+    .join(' ')
 
   return (
     <g
-      className={`cov-shape ${region ? 'is-region' : ''}`}
+      className={classes}
       data-shape={id}
       data-state={state}
       role="button"
       tabIndex={figures ? 0 : -1}
-      aria-label={text}
+      aria-label={tipLines(name, figures, stretch).join(', ')}
       aria-pressed={selected}
       onClick={figures ? onPick : undefined}
+      onMouseEnter={onHover}
+      onMouseMove={onHover}
+      onMouseLeave={onLeave}
       onKeyDown={(event) => {
         if (figures && (event.key === 'Enter' || event.key === ' ')) {
           event.preventDefault()
@@ -304,23 +381,31 @@ function Shape({ shape, stretch, selected, onPick, region }) {
         }
       }}
     >
-      <title>{text}</title>
       <path d={path} fill={fill} fillRule="evenodd" />
     </g>
   )
 }
 
-function Label({ shape, small }) {
+function Label({ shape, small, selected, lit }) {
   const { name, label, figures } = shape
   const band = bandOf(figures)
   const x = labelX(label[0], name, small)
+  const classes = [
+    'cov-label',
+    small && 'small',
+    band?.ink === '#FFFFFF' && 'on-dark',
+    selected && 'is-sel',
+    lit && 'is-hl',
+  ]
+    .filter(Boolean)
+    .join(' ')
   return (
     <text
       x={x}
       y={label[1]}
       // A halo in the opposite tone keeps a label readable where it spills
       // past its own shape -- onto a neighbour, or onto the page.
-      className={`cov-label ${small ? 'small' : ''} ${band?.ink === '#FFFFFF' ? 'on-dark' : ''}`}
+      className={classes}
       style={{ fill: band ? band.ink : 'var(--text)' }}
       aria-hidden="true"
     >
@@ -338,125 +423,119 @@ function Label({ shape, small }) {
 
 /* ---------------------------------------------------------------------------
    The detail panel: one province (ICT map) or one CRA region (CRA map).
+   Delivery, then ICT, then CRA; every figure in sites and villages.
    --------------------------------------------------------------------------- */
 
 function Detail({ row, map, threshold, onClose }) {
-  const stretch = map.key
-  const lenses = DETAIL_LENSES[stretch]
-  const [lens, setLens] = useState(lenses[0].key)
-  const figures = row.detail[stretch]
+  const { detail } = row
   const scope = map.shape === 'province' ? `province:${row.key}` : `region:${row.name}`
-  const gapOf = { approved: `${stretch}_approved`, pending: `pending_${stretch}`, remained: `${stretch}_remained` }
   const exportProps = { scope, scopeLabel: row.name }
-  const rows = detailRows(row.detail, stretch, lens)
   const where =
     map.shape === 'province'
       ? row.region && `${row.region} region`
       : `${row.provinces.length} ${row.provinces.length === 1 ? 'province' : 'provinces'}`
-  const managers = row.managers?.length ? `RM ${row.managers.join(', ')}` : null
-  const attributionNote = ATTRIBUTION_NOTES[row.attribution]
 
   return (
     <div className="cov-detail" role="region" aria-label={`${row.name} detail`}>
       <header className="cov-detail-head">
         <div className="cov-detail-titles">
           <h3 className="cov-detail-name">{row.name}</h3>
-          <p className="cov-detail-sub">
-            {[where, managers, attributionNote].filter(Boolean).join(' · ')}
-          </p>
+          {where && <p className="cov-detail-sub">{where}</p>}
         </div>
         <button type="button" className="btn cov-close" onClick={onClose} aria-label="Clear selection">
-          <X size={16} aria-hidden="true" />
+          <Icon name="close" size={16} />
         </button>
       </header>
 
-      <dl className="cov-figures">
-        <div className="cov-figure cov-figure-wide">
-          <dt>
-            <AuthorityChip authority={map.authority} /> approved
-          </dt>
-          <dd>
-            <span className="cov-figure-main">{onePct(detailRate(figures))}</span>
-            <BandPill figures={figures} threshold={threshold} band />
-          </dd>
-          <dd className="cov-figure-note">
-            <ExportNumber value={figures.approved} gap={gapOf.approved} {...exportProps} /> of{' '}
-            {fmtCount(figures.base)} drive-tested
-          </dd>
-        </div>
-        <div className="cov-figure">
-          <dt>Pending</dt>
-          <dd className="cov-figure-main">
-            <ExportNumber value={figures.pending} gap={gapOf.pending} {...exportProps} />
-          </dd>
-        </div>
-        <div className="cov-figure">
-          <dt>Remained</dt>
-          <dd className="cov-figure-main">
-            <ExportNumber value={figures.remained} gap={gapOf.remained} {...exportProps} />
-          </dd>
-          <dd className="cov-figure-note">{REMAINED_NOTES[stretch]}</dd>
-        </div>
-      </dl>
-      {figures.base > 0 && figures.base < threshold && (
-        <p className="cov-low">
-          Fewer than {threshold} drive-tested villages, so this is not compared.
-        </p>
-      )}
+      <section className="cov-group" aria-label="Delivery">
+        <GroupHead>
+          <h4>Delivery</h4>
+        </GroupHead>
+        <Figure label="Total assigned" figure={detail.delivery.assigned} />
+        <Figure label="Total on air" figure={detail.delivery.on_air} />
+        <Figure label="Total drive test" figure={detail.delivery.dt} />
+      </section>
 
-      <SegmentedControl
-        label="List by"
-        options={lenses}
-        value={lens}
-        onChange={setLens}
-        className="cov-detail-lenses"
-      />
-      <ul className="cov-rows" aria-label={`Pending by ${lenses.find((l) => l.key === lens).label}`}>
-        {rows.map((item) => (
-          <li key={`${item.attribution}:${item.name}`} className="cov-row">
-            <span
-              className={`cov-row-name ${item.attribution === 'owned' ? 'text-farsi' : 'is-unowned'}`}
-              dir={item.attribution === 'owned' ? 'auto' : undefined}
-              title={ATTRIBUTION_NOTES[item.attribution]}
-            >
-              {item.name}
-            </span>
-            {stretch === 'cra' && lens === 'province' && (
-              <BandPill figures={item.figures} threshold={threshold} />
-            )}
-            <span className="cov-row-count">
-              <ExportNumber
-                value={item.pending}
-                gap={gapOf.pending}
-                lens={lens}
-                keyValue={item.name}
-                {...exportProps}
-              />
-            </span>
-            <span className="cov-row-of">
-              of {fmtCount(item.base)} · {item.pendingShare == null ? '—' : `${Math.round(item.pendingShare)}%`}
-            </span>
-          </li>
-        ))}
-      </ul>
+      {['ict', 'cra'].map((stretch) => (
+        <Stage
+          key={stretch}
+          stretch={stretch}
+          figures={detail[stretch]}
+          threshold={threshold}
+          exportProps={exportProps}
+        />
+      ))}
     </div>
   )
 }
 
-/**
- * An approval rate on its band's colour, or plain when not compared. With
- * `band`, the pill names the band ("85%+") -- for when the rate itself is
- * already printed beside it.
- */
-function BandPill({ figures, threshold, band: showBand = false }) {
+function GroupHead({ children }) {
+  return (
+    <div className="cov-group-head">
+      <div className="cov-group-title">{children}</div>
+      <span className="cov-col">Sites</span>
+      <span className="cov-col">Villages</span>
+    </div>
+  )
+}
+
+/** One row: a label, then sites and villages, right-aligned. */
+function Figure({ label, figure, dot, gap, exportProps }) {
+  return (
+    <div className="cov-fig">
+      <span className="cov-fig-label">
+        {dot && <span className={`cov-dot is-${dot}`} aria-hidden="true" />}
+        {label}
+      </span>
+      <span className="cov-fig-num">{fmtCount(figure.sites)}</span>
+      <span className="cov-fig-num">
+        {gap ? <ExportNumber value={figure.villages} gap={gap} {...exportProps} /> : fmtCount(figure.villages)}
+      </span>
+    </div>
+  )
+}
+
+/** ICT or CRA: the rate pill, approved and pending, and the split bar. */
+function Stage({ stretch, figures, threshold, exportProps }) {
+  const authority = stretch.toUpperCase()
+  const { approved, pending } = figures
+  const base = approved.villages + pending.villages
+  const share = (n) => (base ? `${(n * 100) / base}%` : '0%')
+  return (
+    <section className="cov-group" aria-label={authority}>
+      <GroupHead>
+        <AuthorityChip authority={authority} />
+        <RatePill figures={figures} threshold={threshold} />
+      </GroupHead>
+      <Figure
+        label="Approved"
+        dot="approved"
+        figure={approved}
+        gap={PANEL_GAPS[stretch].approved}
+        exportProps={exportProps}
+      />
+      <Figure
+        label="Pending"
+        dot="pending"
+        figure={pending}
+        gap={PANEL_GAPS[stretch].pending}
+        exportProps={exportProps}
+      />
+      <div className="cov-split" aria-hidden="true">
+        <span className="cov-split-approved" style={{ width: share(approved.villages) }} />
+        <span className="cov-split-pending" style={{ width: share(pending.villages) }} />
+      </div>
+    </section>
+  )
+}
+
+/** The approval rate on its band's colour, or "Not compared" (low sample). */
+function RatePill({ figures, threshold }) {
   const band = detailBand(figures, threshold)
-  const rate = detailRate(figures)
-  if (!band) {
-    return <span className="cov-pill plain">{showBand ? 'Not compared' : onePct(rate)}</span>
-  }
+  if (!band) return <span className="cov-pill plain">Not compared</span>
   return (
     <span className="cov-pill" style={{ background: band.fill, color: band.ink }}>
-      {showBand ? band.label : onePct(rate)}
+      {onePct(detailRate(figures))}
     </span>
   )
 }

@@ -139,11 +139,11 @@ test.describe('export behind every number', () => {
     expect(rows).toBe(clicked)
   })
 
-  test('a map panel row downloads its villages in that province', async ({ page }) => {
+  test('a map panel figure downloads its villages in that province', async ({ page }) => {
     await open(page, 'map')
     await page.locator('[data-shape="تهران"]').click({ force: true })
     const panel = page.getByRole('region', { name: 'Tehran detail' })
-    const button = panel.getByRole('button', { name: /^Export .* \(ICT pending · Tehran · Coordinator/ }).first()
+    const button = panel.getByRole('button', { name: /^Export .* \(ICT pending · Tehran\)/ }).first()
     const { clicked, rows } = await download(page, button)
     expect(rows).toBe(clicked)
   })

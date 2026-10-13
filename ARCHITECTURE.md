@@ -1175,15 +1175,24 @@ six fixed bands, the labels and the low-sample hatch are unchanged.
 
 Beside the map, a detail panel that is empty until a shape is clicked (a
 second click, ✕ or Esc clears it). Its figures are a `detail` block on every
-province and region: approved, pending and remained over the drive-tested
-base, and the owners behind them by coordinator, contractor, RM (and, for a
-region, province — weakest CRA approval first). **The detail counts like the
-Gaps tab, not like the map colours**: it is a fold of the overview's grid
-(same scope, same cells), because every count in it is an export and an
-export lists the overview's villages. So a province's panel can read a little
-differently from its colour (the colour's CRA base is ICT-approved villages); the tests hold the panel
-to the overview and to its exports, and the map to its own counting.
-`tests/test_gaps_map.py`, `tests/test_gaps_export.py`.
+province, region and the total:
+
+    detail: { delivery: { assigned, on_air, dt },
+              ict: { approved, pending }, cra: { approved, pending } }
+
+and every leaf is `{sites, villages}`. Villages for ICT and CRA are the Gaps
+tab's counters (`ict_approved`/`pending_ict`, `cra_approved`/`pending_cra`, a
+fold of `_gap_grid`), so each exports exactly. Sites come from `_site_grid`:
+one row per work item (its live هدف villages and how many each authority
+approved), then one GROUP BY (province, DT SC contractor). A work item has one
+Site (one province) and one contractor, so site counts add across cells like
+villages. A site is approved when every one of its villages is; pending is the
+rest of the base. The panel's base is the DT-done sites for both authorities
+(ICT and CRA are parallel there, as on the Gaps tab); the map's own stretches,
+in `ict.sites`/`cra.sites` for the tooltip, are ICT over DT-done sites and CRA
+over ICT-approved sites. Delivery counts the whole هدف universe: assigned is a
+DT SC contractor set, on air is a temporary or permanent launch, DT is
+`dt_status == Done`. `tests/test_gaps_map.py`, `tests/test_gaps_export.py`.
 
 ### Deliberately not built
 

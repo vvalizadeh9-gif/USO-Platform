@@ -60,12 +60,12 @@ ON_AIR = "راه_اندازی_دائم"
 
 # ----- The country figures the seed produces, worked out by hand -----------
 #
-#   villages       10 + 8 + 6 + 5 + 3 + 4 + 2 = 38
-#   ICT reached    10 + 8 + 6 + 0 + 3 + 4 + 2 = 33   (drive test done)
-#   ICT stopped     4 + 0 + 4 + 0 + 3 + 0 + 2 = 13   (done, not ICT approved)
-#   CRA reached     6 + 8 + 2 + 0 + 0 + 4 + 0 = 20   (ICT approved)
-#   CRA stopped     2 + 5 + 0 + 0 + 0 + 4 + 0 = 11   (ICT approved, not CRA)
-COUNTRY_VILLAGES = 38
+#   villages       10 + 8 + 6 + 5 + 3 + 4 + 2 + 2 = 40
+#   ICT reached    10 + 8 + 6 + 0 + 3 + 4 + 2 + 0 = 33   (drive test done)
+#   ICT stopped     4 + 0 + 4 + 0 + 3 + 0 + 2 + 0 = 13   (done, not ICT approved)
+#   CRA reached     6 + 8 + 2 + 0 + 0 + 4 + 0 + 0 = 20   (ICT approved)
+#   CRA stopped     2 + 5 + 0 + 0 + 0 + 4 + 0 + 0 = 11   (ICT approved, not CRA)
+COUNTRY_VILLAGES = 40
 COUNTRY_ICT_REACHED = 33
 COUNTRY_ICT_STOPPED = 13
 COUNTRY_CRA_REACHED = 20
@@ -180,6 +180,13 @@ def _seed() -> None:
         #    count as ICT stopped and have not reached the CRA stretch.
         wi = work_item(mazandaran_site, beta, dt_done=True, site_type="B")
         _villages(db, wi.id, 2, ict_approved=0, cra_approved=2)
+
+        # 8. Zanjan, second site: not on air, no drive test, no contractor.
+        #    Delivery's only off-air, unassigned site.
+        wi = work_item(site("S-ZAN2", ZANJAN), None, dt_done=False)
+        wi.last_stage = "Site Survey"
+        wi.dt_status = None
+        _villages(db, wi.id, 2)
 
         db.commit()
     finally:
@@ -344,7 +351,13 @@ def test_pm_gets_every_province_and_every_region(client, actors):
     assert sum(len(row["provinces"]) for row in regions) == 31
 
     qom = _named(payload["provinces"], "Qom")
-    assert qom["ict"] == {"stopped": 0, "reached": 0, "rate": None, "low_sample": True}
+    assert qom["ict"] == {
+        "stopped": 0,
+        "reached": 0,
+        "rate": None,
+        "low_sample": True,
+        "sites": {"approved": 0, "reached": 0},
+    }
 
 
 def test_each_province_carries_its_mapping_region(client, actors):
@@ -359,7 +372,7 @@ def test_each_province_carries_its_mapping_region(client, actors):
 #   Tehran      WI1 10 DT done, 6 ICT, 4 CRA + WI6 4 DT done, 4 ICT, 0 CRA
 #   Mazandaran  WI2 8 DT done, 8 ICT, 3 CRA  + WI7 2 DT done, 0 ICT, 2 CRA
 #   Ardabil     WI3 6 DT done, 2 ICT, 2 CRA
-#   Zanjan      WI4 drive test not done
+#   Zanjan      WI4 drive test not done + WI8 not on air, no drive test
 #   Unknown     WI5 3 DT done, nothing approved
 MAP_BY_PROVINCE = {
     "Tehran": (4, 14, 6, 10),
@@ -482,43 +495,129 @@ def test_the_map_asset_has_every_province_and_region_and_nothing_else():
 
 # ----- The detail panel ---------------------------------------------------
 #
-# Each province and region carries the Gaps tab's figures (approved, pending,
-# remained over the drive-tested base) and, under each lens, the owners
-# behind them. All are folds of the overview's grid, so they must add up.
+# Each province and region carries delivery (assigned, on air, drive test),
+# then ICT and CRA (approved, pending), every figure in sites and villages. A
+# site is a work item; it is approved when every one of its villages is.
+#
+# Worked out by hand from _seed (sites / villages):
+#
+#   WI  province    DT SC  on air  DT  villages  ICT ok  CRA ok
+#   1   Tehran      Alpha  yes     yes 10        6       4
+#   2   Mazandaran  Beta   yes     yes  8        8       3
+#   3   Ardabil     Alpha  yes     yes  6        2       2
+#   4   Zanjan      Beta   yes     no   5        0       0
+#   5   (none)      Alpha  yes     yes  3        0       0
+#   6   Tehran      --     yes     yes  4        4       0
+#   7   Mazandaran  Beta   yes     yes  2        0       2
+#   8   Zanjan      --     no      no   2        0       0
+#
+#   assigned      1 2 3 4 5 7      6 / 34
+#   on air        1 2 3 4 5 6 7    7 / 38
+#   drive test    1 2 3 5 6 7      6 / 33
+#   ICT approved  2 6              2 / 20 (villages: 6+8+2+0+4+0)
+#   ICT pending   1 3 5 7          4 / 13
+#   CRA approved  7                1 / 11 (villages: 4+3+2+0+0+2)
+#   CRA pending   1 2 3 5 6        5 / 22
+#
+# The map's own stretches, in sites: ICT 2 of 6 DT-done sites; CRA 0 of the 2
+# sites every village of which is ICT-approved (WI2, WI6).
 
-_COUNTERS = ("approved", "base", "pending", "remained")
+_DETAIL_SHAPE = {
+    "delivery": {"assigned", "on_air", "dt"},
+    "ict": {"approved", "pending"},
+    "cra": {"approved", "pending"},
+}
 
 
-def _sum_rows(rows, stretch, counter):
-    return sum(row[stretch][counter] for row in rows)
+def _fig(sites, villages):
+    return {"sites": sites, "villages": villages}
 
 
-def test_every_owner_list_adds_up_to_its_province(client, actors):
-    payload = _map(client, actors["pm"])
+def _leaves(detail):
+    for group, figures in detail.items():
+        for name, leaf in figures.items():
+            yield f"{group}.{name}", leaf
+
+
+def _shapes(payload):
+    return [*payload["provinces"], *payload["regions"], payload["total"]]
+
+
+def test_the_detail_has_sites_and_villages_for_every_figure(client, actors):
+    for row in _shapes(_map(client, actors["pm"])):
+        detail = row["detail"]
+        assert {k: set(v) for k, v in detail.items()} == _DETAIL_SHAPE, row.get("name")
+        for path, leaf in _leaves(detail):
+            assert set(leaf) == {"sites", "villages"}, path
+            assert all(isinstance(v, int) for v in leaf.values()), path
+
+
+def test_the_removed_fields_are_gone(client, actors):
+    for row in _shapes(_map(client, actors["pm"])):
+        assert "owners" not in row["detail"]
+        for stretch in ("ict", "cra"):
+            assert not {"base", "remained"} & set(row["detail"][stretch])
+
+
+def test_the_country_detail_is_the_hand_worked_one(client, actors):
+    assert _map(client, actors["pm"])["total"]["detail"] == {
+        "delivery": {
+            "assigned": _fig(6, 34),
+            "on_air": _fig(7, 38),
+            "dt": _fig(6, 33),
+        },
+        "ict": {"approved": _fig(2, 20), "pending": _fig(4, 13)},
+        "cra": {"approved": _fig(1, 11), "pending": _fig(5, 22)},
+    }
+
+
+def test_a_province_detail_is_the_hand_worked_one(client, actors):
+    """Tehran: WI1 (Alpha, 10 villages, 6 ICT, 4 CRA) and WI6 (no contractor,
+    4 villages, all ICT) on the same site."""
+    rows = _map(client, actors["pm"])["provinces"]
+    assert _named(rows, "Tehran")["detail"] == {
+        "delivery": {
+            "assigned": _fig(1, 10),
+            "on_air": _fig(2, 14),
+            "dt": _fig(2, 14),
+        },
+        "ict": {"approved": _fig(1, 10), "pending": _fig(1, 4)},
+        "cra": {"approved": _fig(0, 4), "pending": _fig(2, 10)},
+    }
+    assert _named(rows, "Zanjan")["detail"]["delivery"] == {
+        "assigned": _fig(1, 5),
+        "on_air": _fig(1, 5),
+        "dt": _fig(0, 0),
+    }
+
+
+def test_the_tooltip_counts_sites_on_the_maps_stretches(client, actors):
+    total = _map(client, actors["pm"])["total"]
+    assert total["ict"]["sites"] == {"approved": 2, "reached": 6}
+    assert total["cra"]["sites"] == {"approved": 0, "reached": 2}
+
+
+def test_approved_and_pending_make_the_drive_tested_base(client, actors):
+    """For ICT and for CRA, in sites and in villages, on every shape."""
     problems = []
-    for province in payload["provinces"]:
-        detail = province["detail"]
-        assert set(detail["owners"]) == set(gaps.PROVINCE_DETAIL_LENSES)
-        for lens, rows in detail["owners"].items():
-            for stretch in ("ict", "cra"):
-                for counter in _COUNTERS:
-                    if _sum_rows(rows, stretch, counter) != detail[stretch][counter]:
-                        problems.append(f"{province['name']}/{lens}/{stretch}/{counter}")
+    for row in _shapes(_map(client, actors["pm"])):
+        detail = row["detail"]
+        base = detail["delivery"]["dt"]
+        for stretch in ("ict", "cra"):
+            for unit in ("sites", "villages"):
+                got = detail[stretch]["approved"][unit] + detail[stretch]["pending"][unit]
+                if got != base[unit]:
+                    problems.append(f"{row.get('name')}/{stretch}/{unit}: {got} != {base[unit]}")
     assert not problems, "\n".join(problems)
 
 
-def test_every_owner_list_adds_up_to_its_region(client, actors):
-    payload = _map(client, actors["pm"])
-    problems = []
-    for region in payload["regions"]:
-        detail = region["detail"]
-        assert set(detail["owners"]) == set(gaps.REGION_DETAIL_LENSES)
-        for lens, rows in detail["owners"].items():
-            for stretch in ("ict", "cra"):
-                for counter in _COUNTERS:
-                    if _sum_rows(rows, stretch, counter) != detail[stretch][counter]:
-                        problems.append(f"{region['name']}/{lens}/{stretch}/{counter}")
-    assert not problems, "\n".join(problems)
+def test_sites_never_exceed_villages(client, actors):
+    for row in _shapes(_map(client, actors["pm"])):
+        for path, leaf in _leaves(row["detail"]):
+            assert leaf["sites"] <= leaf["villages"], (row.get("name"), path)
+        for stretch in ("ict", "cra"):
+            sites = row[stretch]["sites"]
+            assert sites["approved"] <= sites["reached"], (row.get("name"), stretch)
 
 
 def test_a_region_detail_is_the_sum_of_its_provinces(client, actors):
@@ -527,20 +626,81 @@ def test_a_region_detail_is_the_sum_of_its_provinces(client, actors):
     for region in payload["regions"]:
         if region["attribution"] != gaps.OWNED:
             continue
-        for stretch in ("ict", "cra"):
-            for counter in _COUNTERS:
-                members = sum(by_key[k]["detail"][stretch][counter] for k in region["provinces"])
-                assert members == region["detail"][stretch][counter], (region["name"], stretch, counter)
+        for path, leaf in _leaves(region["detail"]):
+            group, name = path.split(".")
+            for unit in ("sites", "villages"):
+                members = sum(by_key[k]["detail"][group][name][unit] for k in region["provinces"])
+                assert members == leaf[unit], (region["name"], path, unit)
 
 
-def test_the_details_add_up_to_the_overview(client, actors):
-    """The map's panels and the Gaps tab count the same villages."""
+def test_the_total_detail_is_the_sum_of_the_regions_and_of_the_provinces(client, actors):
+    payload = _map(client, actors["pm"])
+    for rows in (payload["regions"], payload["provinces"]):
+        for path, leaf in _leaves(payload["total"]["detail"]):
+            group, name = path.split(".")
+            for unit in ("sites", "villages"):
+                assert sum(r["detail"][group][name][unit] for r in rows) == leaf[unit], (path, unit)
+    for stretch in ("ict", "cra"):
+        for counter in ("approved", "reached"):
+            got = sum(r[stretch]["sites"][counter] for r in payload["regions"])
+            assert got == payload["total"][stretch]["sites"][counter], (stretch, counter)
+
+
+def test_a_site_is_in_exactly_one_cell(client):
+    """Site counts add across (province, contractor) cells only if no site
+    spans two. Each work item has one Site (one province) and one DT SC
+    contractor, so the fold must count every site exactly once: the cells add
+    up to a direct count of distinct work items -- including WI1 and WI6, two
+    work items on one site under two contractors."""
+    from sqlalchemy import func, select
+
+    from app.models.workitem import Village, WorkItem
+    from app.services import mojri_tracker
+
+    db = SessionLocal()
+    try:
+        grid = gaps._site_grid(db)
+        on_air = db.execute(
+            select(func.count(func.distinct(WorkItem.id)))
+            .select_from(Village)
+            .join(WorkItem, Village.work_item_id == WorkItem.id)
+            .where(
+                *mojri_tracker.live_target_village(db),
+                WorkItem.last_stage.in_(gaps.kpi.onair_values(db)),
+            )
+        ).scalar_one()
+    finally:
+        db.close()
+    assert sum(cell.on_air_sites for cell in grid.values()) == on_air == 7
+    assert sum(cell.dt_sites for cell in grid.values()) == 6
+    # Tehran's one site carries two work items, in two cells.
+    assert grid[(TEHRAN, ALPHA)].dt_sites == 1
+    assert grid[(TEHRAN, None)].dt_sites == 1
+
+
+def test_the_drive_tested_villages_are_the_gaps_tabs_eligible(client, actors):
+    """The panel's drive-test villages are the Gaps tab's base, so the ICT and
+    CRA rows under them count the same villages the overview does."""
     payload = _map(client, actors["pm"])
     overview = client.get("/api/v1/gaps/overview", headers=actors["pm"]).json()
-    pending_ict = sum(r["detail"]["ict"]["pending"] for r in payload["regions"])
-    assert pending_ict == overview["gaps"]["pending_ict"]["count"]
-    cra_remained = sum(r["detail"]["cra"]["remained"] for r in payload["regions"])
-    assert cra_remained == overview["gaps"]["cra_remained"]["count"]
+    detail = payload["total"]["detail"]
+    assert detail["delivery"]["dt"]["villages"] == overview["totals"]["eligible"]
+    assert detail["ict"]["pending"]["villages"] == overview["gaps"]["pending_ict"]["count"]
+    assert detail["cra"]["pending"]["villages"] == overview["gaps"]["pending_cra"]["count"]
+
+
+def test_a_scoped_detail_is_their_own_cells_only(client, actors):
+    """DT-Alpha sees Tehran's WI1 alone, not WI6 (no contractor)."""
+    tehran = _named(_map(client, actors["contractor"])["provinces"], "Tehran")
+    assert tehran["detail"] == {
+        "delivery": {
+            "assigned": _fig(1, 10),
+            "on_air": _fig(1, 10),
+            "dt": _fig(1, 10),
+        },
+        "ict": {"approved": _fig(0, 6), "pending": _fig(1, 4)},
+        "cra": {"approved": _fig(0, 4), "pending": _fig(1, 6)},
+    }
 
 
 def test_a_shape_names_its_regional_managers(client, actors):
@@ -549,10 +709,3 @@ def test_a_shape_names_its_regional_managers(client, actors):
     assert tehran["managers"] == ["Allahyar"]
     north = next(r for r in payload["regions"] if r["name"] == "North")
     assert "Allahyar" in north["managers"] and "Nobakht" in north["managers"]
-
-
-def test_a_region_lists_its_provinces_by_their_persian_key(client, actors):
-    payload = _map(client, actors["pm"])
-    north = next(r for r in payload["regions"] if r["name"] == "North")
-    keys = {row["key"] for row in north["detail"]["owners"]["province"]}
-    assert TEHRAN in keys and MAZANDARAN in keys

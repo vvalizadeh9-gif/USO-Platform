@@ -143,7 +143,9 @@
   grid-template-rows: minmax(0, 1fr);
   gap: var(--uep-space-20);
 }
-.rp-map { overflow: auto; }
+/* A bounded flex column, so the coverage map (.cov, flex: 1) gets a definite
+   height to fit into instead of growing to its width-derived height. */
+.rp-map { display: flex; flex-direction: column; overflow: hidden; }
 
 .rp-card {
   min-width: 0; min-height: 0;
@@ -436,6 +438,7 @@ a.rp-rank-row:hover { background: var(--uep-row-hover); }
 
 @media (max-width: 760px) {
   .rp-body { padding: var(--uep-space-12) var(--uep-space-16); overflow-y: auto; }
+  .rp-map { display: block; }
   .rp-split { grid-template-columns: 1fr; grid-template-rows: auto auto; }
   .rp-owner-grid { grid-template-columns: 1fr; }
   .rp-owner-col { border-inline-start: 0; border-top: var(--uep-border-width) solid var(--uep-divider); }

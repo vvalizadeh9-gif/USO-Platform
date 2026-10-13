@@ -74,7 +74,7 @@ import re
 from dataclasses import dataclass, fields
 
 from fastapi import HTTPException
-from sqlalchemy import ColumnElement, Select, and_, func, or_, select
+from sqlalchemy import ColumnElement, Select, and_, case, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.core.province_directory import UNKNOWN_PROVINCE_LABEL
@@ -933,61 +933,172 @@ def _attribution(province_fa: str | None, contractor: str | None, mapping) -> st
 # that roll up to their own key under their own lens.
 
 
-#: The owner lists the map's detail panel offers. A province is one CRA
-#: region, so only a region's panel lists by province.
-PROVINCE_DETAIL_LENSES = (kpi.LENS_COORDINATOR, kpi.LENS_CONTRACTOR, kpi.LENS_RM)
-REGION_DETAIL_LENSES = (LENS_PROVINCE, *PROVINCE_DETAIL_LENSES)
+# ----- The map's sites ----------------------------------------------------
+#
+# Every figure in the detail panel, and the map's tooltip, is two numbers:
+# sites and villages. A "site" is a work item (Site + Site Type), as on every
+# Roles Performance tab, and its villages are its live هدف villages.
+#
+# A site belongs to exactly one (province, DT SC contractor) cell: its province
+# is its Site's and its contractor is its own column. So site counts add across
+# cells exactly like village counts, and a region of sites is still the sum of
+# its provinces. ``test_a_site_is_in_exactly_one_cell`` holds that.
+#
+# A site is approved by an authority when **every** one of its villages is
+# (the Acceptance dashboard's site roll-up). Pending is the rest of that
+# authority's base, so approved + pending sites is the base exactly:
+#
+# * panel ICT and CRA: the base is the DT-done sites, for both authorities --
+#   the panel's village counters (``ict_approved``/``pending_ict``,
+#   ``cra_approved``/``pending_cra``) are the Gaps tab's, where ICT and CRA are
+#   parallel jobs over the drive-tested villages;
+# * the map's own stretches (the tooltip): ICT is approved over DT-done sites,
+#   CRA is approved over ICT-approved sites, the same sequence the map colours
+#   its villages by.
 
 
-def _stretch_figures(cell: GapCell) -> dict:
-    """One shape's detail figures, both authorities, in the Gaps tab's
-    counting: approved, pending and remained, each over the drive-tested
-    base. Every one of them is a count the export can list."""
+@dataclass
+class SiteCell:
+    """Site counts, and the villages of those sites, for one (province,
+    contractor) cell."""
+
+    #: Delivery, over every live هدف village: a DT SC contractor assigned, on
+    #: air (temporary or permanent launch), drive test done.
+    assigned_sites: int = 0
+    assigned_villages: int = 0
+    on_air_sites: int = 0
+    on_air_villages: int = 0
+    dt_sites: int = 0
+    dt_villages: int = 0
+    #: The panel: DT-done sites every village of which is approved, and the rest.
+    ict_approved_sites: int = 0
+    ict_pending_sites: int = 0
+    cra_approved_sites: int = 0
+    cra_pending_sites: int = 0
+    #: The map's stretches: reached and got past, in sites.
+    ict_reached_sites: int = 0
+    ict_passed_sites: int = 0
+    cra_reached_sites: int = 0
+    cra_passed_sites: int = 0
+
+    def add(self, other: SiteCell) -> None:
+        for f in fields(self):
+            setattr(self, f.name, getattr(self, f.name) + getattr(other, f.name))
+
+
+def _site_grid(db: Session) -> dict[tuple[str | None, str | None], SiteCell]:
+    """Every site counter, grouped by (province, DT SC contractor).
+
+    One row per site first (its villages and how many of them each authority
+    approved), then one GROUP BY over those rows -- so each site is counted
+    once, in its one cell, and "every village approved" is a comparison of two
+    counts rather than a second query. Unscoped, like :func:`_grid`.
+    """
+    approved = kpi.APPROVED
+    ict_ok = Village.ict_status == approved
+    cra_ok = Village.cra_status == approved
+    site = (
+        select(
+            Province.name.label("province"),
+            Contractor.name.label("contractor"),
+            WorkItem.dt_sc_contractor_id.label("dt_sc"),
+            WorkItem.last_stage.label("stage"),
+            WorkItem.dt_status.label("dt_status"),
+            func.count(Village.id).label("villages"),
+            kpi.count_if(ict_ok).label("ict_ok"),
+            kpi.count_if(cra_ok).label("cra_ok"),
+            kpi.count_if(and_(ict_ok, cra_ok)).label("both_ok"),
+        )
+        .select_from(Village)
+        .join(WorkItem, Village.work_item_id == WorkItem.id)
+        .join(Site, WorkItem.site_id == Site.id)
+        .outerjoin(Province, Site.province_id == Province.id)
+        .outerjoin(Contractor, WorkItem.dt_sc_contractor_id == Contractor.id)
+        .where(*mojri_tracker.live_target_village(db))
+        .group_by(
+            WorkItem.id,
+            Province.name,
+            Contractor.name,
+            WorkItem.dt_sc_contractor_id,
+            WorkItem.last_stage,
+            WorkItem.dt_status,
+        )
+        .subquery()
+    )
+    s = site.c
+    # The Gaps tab's drive-test rule (the panel), and the map's (the tooltip):
+    # the same two predicates the village counters use.
+    dt = s.dt_status == acceptance_universe.DT_DONE
+    map_dt = s.dt_status.in_(kpi.dt_done_values(db) or [""])
+    every_ict = s.ict_ok == s.villages
+    every_cra = s.cra_ok == s.villages
+    delivery = {
+        "assigned": s.dt_sc.is_not(None),
+        "on_air": s.stage.in_(kpi.onair_values(db) or [""]),
+        "dt": dt,
+    }
+    counted = {
+        "ict_approved_sites": and_(dt, every_ict),
+        "ict_pending_sites": and_(dt, s.ict_ok < s.villages),
+        "cra_approved_sites": and_(dt, every_cra),
+        "cra_pending_sites": and_(dt, s.cra_ok < s.villages),
+        "ict_reached_sites": map_dt,
+        "ict_passed_sites": and_(map_dt, every_ict),
+        "cra_reached_sites": every_ict,
+        "cra_passed_sites": s.both_ok == s.villages,
+    }
+    names = [
+        *(f"{key}_{unit}" for key in delivery for unit in ("sites", "villages")),
+        *counted,
+    ]
+    stmt = select(
+        s.province,
+        s.contractor,
+        *(
+            column
+            for condition in delivery.values()
+            for column in (
+                kpi.count_if(condition),
+                func.sum(case((condition, s.villages), else_=0)),
+            )
+        ),
+        *(kpi.count_if(condition) for condition in counted.values()),
+    ).group_by(s.province, s.contractor)
+
+    grid: dict[tuple[str | None, str | None], SiteCell] = {}
+    for province, contractor, *counts in db.execute(stmt):
+        grid[(province, contractor)] = SiteCell(
+            **{name: value or 0 for name, value in zip(names, counts, strict=True)}
+        )
+    return grid
+
+
+def _figure(sites: int, villages: int) -> dict:
+    return {"sites": sites, "villages": villages}
+
+
+def _detail(gap: GapCell, site: SiteCell) -> dict:
+    """The detail panel for one shape: delivery, then ICT and CRA, each figure
+    in sites and in villages.
+
+    The village counts of ICT and CRA are the Gaps tab's (and the export's)
+    counters, so each one downloads exactly the villages it counts.
+    """
     return {
+        "delivery": {
+            "assigned": _figure(site.assigned_sites, site.assigned_villages),
+            "on_air": _figure(site.on_air_sites, site.on_air_villages),
+            "dt": _figure(site.dt_sites, site.dt_villages),
+        },
         "ict": {
-            "approved": cell.ict_approved,
-            "base": cell.eligible,
-            "pending": cell.pending_ict,
-            "remained": cell.ict_remained,
+            "approved": _figure(site.ict_approved_sites, gap.ict_approved),
+            "pending": _figure(site.ict_pending_sites, gap.pending_ict),
         },
         "cra": {
-            "approved": cell.cra_approved,
-            "base": cell.eligible,
-            "pending": cell.pending_cra,
-            "remained": cell.cra_remained,
+            "approved": _figure(site.cra_approved_sites, gap.cra_approved),
+            "pending": _figure(site.cra_pending_sites, gap.pending_cra),
         },
     }
-
-
-def _detail(cells: dict, lenses: tuple[str, ...], mapping) -> dict:
-    """The detail panel for one shape: its figures and, under each lens, its
-    owners -- all folds of the same cells, so the owner rows sum to the
-    shape's own figures."""
-    total = _fold(cells, lambda _p, _c: (_COUNTRY, OWNED), GapCell).get(
-        (_COUNTRY, OWNED), GapCell()
-    )
-    owners = {}
-    for lens in lenses:
-        def owner_of(province_fa, contractor, lens=lens):
-            # A province row also carries its Persian name, which is the key
-            # the map and the export's province scope use.
-            name, attribution = _owner(lens, province_fa, contractor, mapping)
-            return name, attribution, province_fa if lens == LENS_PROVINCE else None
-
-        folded = _fold(cells, owner_of, GapCell)
-        owners[lens] = sorted(
-            (
-                {
-                    "name": name,
-                    "attribution": attribution,
-                    **({"key": province_fa} if lens == LENS_PROVINCE else {}),
-                    **_stretch_figures(cell),
-                }
-                for (name, attribution, province_fa), cell in folded.items()
-            ),
-            key=lambda row: row["name"],
-        )
-    return {**_stretch_figures(total), "owners": owners}
 
 
 def coverage_map(db: Session, user) -> dict:
@@ -997,29 +1108,46 @@ def coverage_map(db: Session, user) -> dict:
     is_pm = kpi.may_compare(user)
     scope = None if is_pm else kpi.resolve_scope(db, user, None, None)
 
-    grid = _grid(db)
     mapping = _mapping(db)
-
     in_scope = (
         (lambda _p, _c: True)
         if scope is None
         else _owned_by(scope.lens, scope.key, mapping)
     )
 
-    mine = {key: cell for key, cell in grid.items() if in_scope(*key)}
-    # The detail panel counts like the Gaps tab (and its export), so it folds
-    # the overview's grid -- the same scope, the same cells.
-    gap_mine = {key: cell for key, cell in _gap_grid(db).items() if in_scope(*key)}
+    def mine(grid: dict) -> dict:
+        return {key: cell for key, cell in grid.items() if in_scope(*key)}
+
+    # Three grids over the same (province, contractor) cells and the same
+    # scope: the map's own counting, the Gaps tab's (the panel's villages, so
+    # they export exactly) and the sites.
+    grids = (mine(_grid(db)), mine(_gap_grid(db)), mine(_site_grid(db)))
+    empties = (Cell, GapCell, SiteCell)
     ict, cra = _BY_KEY[STRETCH_ICT], _BY_KEY[STRETCH_CRA]
 
-    def both(cell: Cell) -> dict:
-        return {"ict": _scored(cell, ict), "cra": _scored(cell, cra)}
+    def folded(key_of) -> tuple[dict, dict, dict]:
+        return tuple(_fold(g, key_of, e) for g, e in zip(grids, empties, strict=True))
 
-    by_province = _fold(mine, lambda province_fa, _c: province_fa)
+    def figures(folds, key) -> dict:
+        cell, gap, site = (f.get(key) or e() for f, e in zip(folds, empties, strict=True))
+        return {
+            "villages": cell.villages,
+            "ict": {
+                **_scored(cell, ict),
+                "sites": {"approved": site.ict_passed_sites, "reached": site.ict_reached_sites},
+            },
+            "cra": {
+                **_scored(cell, cra),
+                "sites": {"approved": site.cra_passed_sites, "reached": site.cra_reached_sites},
+            },
+            "detail": _detail(gap, site),
+        }
+
+    by_province = folded(lambda province_fa, _c: province_fa)
     # PM's map is the whole programme: every province in the mapping has a row,
     # reading zero if nothing there has reached a stretch yet, so the map has no
     # blank province that might be read as "no gap".
-    wanted = set(by_province) | (set(mapping) if is_pm else set())
+    wanted = set().union(*by_province) | (set(mapping) if is_pm else set())
 
     provinces = []
     for province_fa in sorted(wanted, key=lambda fa: (fa is None, fa or "")):
@@ -1032,34 +1160,24 @@ def coverage_map(db: Session, user) -> dict:
                 "attribution": attribution,
                 "region": owners[kpi.LENS_REGION] if owners else None,
                 "managers": [owners[kpi.LENS_RM]] if owners else [],
-                "villages": by_province.get(province_fa, Cell()).villages,
-                **both(by_province.get(province_fa, Cell())),
-                "detail": _detail(
-                    {k: c for k, c in gap_mine.items() if k[0] == province_fa},
-                    PROVINCE_DETAIL_LENSES,
-                    mapping,
-                ),
+                **figures(by_province, province_fa),
             }
         )
 
-    by_region = _fold(
-        mine, lambda province_fa, contractor: _owner(
-            kpi.LENS_REGION, province_fa, contractor, mapping
-        )
+    by_region = folded(
+        lambda province_fa, contractor: _owner(kpi.LENS_REGION, province_fa, contractor, mapping)
     )
-    region_keys = set(by_region)
+    region_keys = set().union(*by_region)
     if is_pm:
         region_keys |= {(owners[kpi.LENS_REGION], OWNED) for owners in mapping.values()}
 
     regions = []
     for name, attribution in sorted(region_keys, key=lambda key: (key[1] != OWNED, key[0])):
-        cell = by_region.get((name, attribution), Cell())
         members = [
             row["key"]
             for row in provinces
             if row["key"] is not None and row["region"] == name
         ]
-        in_region = _owned_by(kpi.LENS_REGION, name, mapping)
         regions.append(
             {
                 "name": name,
@@ -1072,17 +1190,9 @@ def coverage_map(db: Session, user) -> dict:
                         if fa in mapping
                     }
                 ),
-                "villages": cell.villages,
-                **both(cell),
-                "detail": _detail(
-                    {k: c for k, c in gap_mine.items() if in_region(*k)},
-                    REGION_DETAIL_LENSES,
-                    mapping,
-                ),
+                **figures(by_region, (name, attribution)),
             }
         )
-
-    total = _fold(mine, lambda _p, _c: (_COUNTRY, OWNED)).get((_COUNTRY, OWNED), Cell())
 
     return {
         "scoped": not is_pm,
@@ -1092,5 +1202,5 @@ def coverage_map(db: Session, user) -> dict:
         "low_sample_threshold": kpi.LOW_SAMPLE_DT_DONE,
         "provinces": provinces,
         "regions": regions,
-        "total": {"villages": total.villages, **both(total)},
+        "total": figures(folded(lambda _p, _c: _COUNTRY), _COUNTRY),
     }

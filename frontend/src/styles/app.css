@@ -3609,45 +3609,67 @@ a.lifecycle-step:focus-visible { outline: 2px solid var(--accent); outline-offse
 }
 
 /* ----- Coverage map: one map at a time, and a detail panel beside it -----
-   The map card takes what the 360px panel leaves; both fill the height under
-   the PageBar, and the map scales down to fit it (the SVG keeps its aspect),
-   so the page never scrolls. Only the panel's owner list scrolls. */
+   The map card takes what the panel leaves; both fill the height of their
+   bounded flex parent, and the map scales down to fit (the SVG keeps its
+   aspect), so the page never scrolls and nothing inside it does either.
+   Motion: one ease-out curve, 120-240ms, nothing decorative; all of it off
+   under prefers-reduced-motion. */
 .cov {
   flex: 1 1 auto; min-height: 0;
-  display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 12px;
+  display: grid; grid-template-columns: minmax(0, 1fr) clamp(360px, 24vw, 448px);
+  grid-template-rows: minmax(0, 1fr); gap: 16px;
 }
-@media (max-width: 900px) { .cov { grid-template-columns: minmax(0, 1fr); } }
 .cov-map-card.ui-card, .cov-panel.ui-card { padding: 16px 20px; gap: 12px; min-height: 0; min-width: 0; overflow: hidden; }
-.cov-map-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; }
+/* The switch on the left, the legend on the right, on one row. */
+.cov-map-head { display: flex; align-items: center; justify-content: space-between; gap: 8px 16px; flex: none; }
 
 .cov-scale {
   display: grid; grid-template-columns: repeat(6, minmax(0, 1fr));
-  border-radius: var(--radius-sm); overflow: hidden; flex: 0 1 420px; min-width: 0;
+  border-radius: var(--radius-sm); overflow: hidden; flex: 0 1 500px; min-width: 0;
 }
 .cov-scale-band {
   text-align: center; font-size: var(--fs-caption); line-height: var(--lh-caption); font-weight: 600;
-  padding: 4px 2px; font-variant-numeric: tabular-nums; white-space: nowrap;
+  padding: 4px 2px; font-variant-numeric: tabular-nums; white-space: nowrap; cursor: default;
 }
-.cov-caption { font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--text-tertiary); flex: none; }
 
-.cov-map { margin: 0; min-width: 0; flex: 1 1 auto; min-height: 0; display: flex; justify-content: center; }
-.cov-map svg { width: 100%; height: 100%; display: block; }
+/* The SVG is taken out of flow so it never sizes the card: the figure takes
+   whatever height is left, and the map scales to fit it (aspect kept). */
+.cov-map { margin: 0; min-width: 0; flex: 1 1 auto; min-height: 0; position: relative; }
+.cov-map svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; overflow: visible; }
+.cov-layer { animation: cov-fade-in 240ms var(--uep-ease-standard); transition: opacity 160ms var(--uep-ease-standard); }
+.cov-map.is-leaving .cov-layer { opacity: 0; }
+@keyframes cov-fade-in { from { opacity: 0; } to { opacity: 1; } }
+@media (max-width: 900px) {
+  .cov { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto; }
+  .cov-map-head { flex-wrap: wrap; }
+  .cov-map { flex: none; aspect-ratio: 1000 / 904; }
+}
 
-.cov-shape path { stroke: #FFFFFF; stroke-width: 1.2; stroke-linejoin: round; }
-.cov-shape.is-region path { stroke: #4E5A55; stroke-width: 1; }
+.cov-shape { transition: opacity 200ms var(--uep-ease-standard); }
+.cov-shape path { stroke: #FFFFFF; stroke-width: 1.2; stroke-linejoin: round; transition: filter 120ms var(--uep-ease-standard); }
 .cov-shape[role='button'][tabindex='0'] { cursor: pointer; }
 .cov-shape:focus { outline: none; }
-.cov-shape[tabindex='0']:hover path,
-.cov-shape:focus-visible path { filter: brightness(0.92); }
+.cov-shape[tabindex='0']:hover path { filter: brightness(0.92); }
+.cov-shape:focus-visible path { stroke: var(--text); stroke-width: 2.4; }
+/* A shape picked: the rest step back. A legend band hovered: only that band
+   stays. Labels follow their shapes. */
+.cov-svg.has-pick .cov-shape:not(.is-sel) { opacity: 0.55; }
+.cov-svg.has-pick .cov-label:not(.is-sel) { opacity: 0.6; }
+.cov-svg.is-dim .cov-shape:not(.is-hl) { opacity: 0.22; }
+.cov-svg.is-dim .cov-label:not(.is-hl) { opacity: 0.22; }
 /* The selected shape: a 3px ink outline, drawn after every shape so a
-   neighbour never paints over it. The other shapes stay as they are. */
-.cov-outline { fill: none; stroke: var(--text); stroke-width: 3; stroke-linejoin: round; pointer-events: none; }
+   neighbour never paints over it. */
+.cov-outline {
+  fill: none; stroke: var(--text); stroke-width: 3; stroke-linejoin: round; pointer-events: none;
+  animation: cov-fade-in 150ms var(--uep-ease-standard);
+}
 .cov-hatch-bg { fill: var(--surface-subtle); }
 .cov-hatch-line { stroke: var(--text-tertiary); stroke-width: 2; }
 
 .cov-label {
   text-anchor: middle; pointer-events: none; font-family: var(--font-body);
   paint-order: stroke; stroke: rgba(255, 255, 255, 0.6); stroke-width: 1.8px; stroke-linejoin: round;
+  transition: opacity 200ms var(--uep-ease-standard);
 }
 .cov-label.on-dark { stroke: rgba(0, 0, 0, 0.35); }
 .cov-label-name { font-size: 17px; font-weight: 500; }
@@ -3655,9 +3677,24 @@ a.lifecycle-step:focus-visible { outline: 2px solid var(--accent); outline-offse
 .cov-label.small .cov-label-name { font-size: 12.5px; }
 .cov-label.small .cov-label-pct { font-size: 15px; }
 
-/* The panel: empty until a click, then the shape's detail. */
+/* The tooltip: replaces the native <title>; the shape keeps its aria-label. */
+.cov-tip {
+  position: absolute; z-index: 5; pointer-events: none; white-space: nowrap;
+  background: var(--text); color: var(--surface); border-radius: var(--radius-sm);
+  padding: 8px 12px; font-size: var(--fs-meta); line-height: var(--lh-meta);
+  font-variant-numeric: tabular-nums; box-shadow: var(--shadow-2);
+  animation: cov-fade-in 120ms var(--uep-ease-standard);
+}
+.cov-tip-title { display: block; font-weight: 600; }
+.cov-tip-line { display: block; opacity: 0.82; }
+
+/* The panel: empty until a click, then the shape's detail. Nothing in it
+   scrolls. */
 .cov-panel-empty { flex: 1 1 auto; display: grid; place-items: center; }
-.cov-detail { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: 12px; }
+.cov-detail {
+  flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: 12px;
+  animation: cov-fade-in 160ms var(--uep-ease-standard);
+}
 .cov-detail-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; flex: none; }
 .cov-detail-titles { min-width: 0; }
 .cov-detail-name { font-size: var(--fs-heading); line-height: var(--lh-heading); font-weight: 600; }
@@ -3666,48 +3703,40 @@ a.lifecycle-step:focus-visible { outline: 2px solid var(--accent); outline-offse
   width: 32px; height: 32px; padding: 0; flex: none;
   display: inline-grid; place-items: center; border-radius: var(--radius-sm);
 }
-.cov-figures {
-  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 0; flex: none;
-}
-.cov-figure {
-  padding: 10px 12px; background: var(--surface-subtle);
-  border: 1px solid var(--track); border-radius: var(--radius-md); min-width: 0;
-}
-.cov-figure-wide { grid-column: 1 / -1; }
-.cov-figure dt {
-  display: flex; align-items: center; gap: 6px;
-  font-size: var(--fs-meta); line-height: var(--lh-meta); color: var(--text-secondary);
-}
-.cov-figure dd { margin: 2px 0 0; display: flex; align-items: center; gap: 8px; font-variant-numeric: tabular-nums; }
-.cov-figure-main { font-size: 22px; line-height: 30px; font-weight: 600; color: var(--text); }
-.cov-figure-note { font-size: var(--fs-caption) !important; line-height: var(--lh-caption); color: var(--text-tertiary); }
-.cov-figure-note .export-number { font-weight: 600; color: var(--text); }
-.cov-low { font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--text-tertiary); flex: none; }
-/* Up to four options in 320px: equal columns, and a long label ("Regional
-   manager") wraps inside its own button rather than onto a second row. */
-.cov-detail-lenses { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); flex: none; }
-.cov-detail-lenses .ui-seg-option {
-  height: auto; min-height: 30px; padding: 4px 6px; white-space: normal;
-  font-size: var(--fs-meta); line-height: var(--lh-meta);
-}
 
-.cov-rows { list-style: none; flex: 1 1 auto; min-height: 0; overflow-y: auto; margin: 0; padding: 0; }
-.cov-row {
-  display: grid; grid-template-columns: minmax(0, 1fr) auto auto auto; align-items: center; gap: 8px;
-  min-height: 40px; padding: 4px 0; border-bottom: 1px solid var(--divider);
-  font-size: var(--fs-control); line-height: var(--lh-control); font-variant-numeric: tabular-nums;
+/* One group per stage: a title row with the two column heads, then rows of
+   two right-aligned numbers. Hairlines only -- not a spreadsheet. */
+.cov-group { border: 1px solid var(--border); border-radius: var(--radius-md); padding: 4px 16px 8px; flex: none; }
+.cov-group-head, .cov-fig {
+  display: grid; grid-template-columns: minmax(0, 1fr) 88px 88px; align-items: center; gap: 8px;
 }
-.cov-row-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.cov-row-name.is-unowned { font-style: italic; color: var(--text-secondary); }
-.cov-row-name:not(:has(+ .cov-pill)) { grid-column: 1 / 3; }
-.cov-row-count { font-weight: 600; text-align: end; }
-.cov-row-of { font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--text-tertiary); white-space: nowrap; min-width: 84px; text-align: end; }
+.cov-group-head { min-height: 40px; border-bottom: 1px solid var(--divider); }
+.cov-group-title { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.cov-group-title h4, .cov-col {
+  margin: 0; font-size: var(--fs-caption); line-height: var(--lh-caption); font-weight: 600;
+  letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-secondary);
+}
+.cov-col { text-align: end; }
+.cov-fig { height: 50px; font-variant-numeric: tabular-nums; }
+.cov-fig + .cov-fig { border-top: 1px solid var(--divider); }
+.cov-fig-label { display: flex; align-items: center; gap: 8px; font-size: var(--fs-control); line-height: var(--lh-control); color: var(--text-secondary); }
+.cov-dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+.cov-dot.is-approved, .cov-split-approved { background: var(--uep-status-success-dot); }
+.cov-dot.is-pending, .cov-split-pending { background: var(--uep-status-pending-dot); }
+.cov-fig-num { text-align: end; font-size: 22px; line-height: 30px; font-weight: 600; color: var(--text); }
+.cov-fig-num .export-number { font: inherit; }
+.cov-split { display: flex; gap: 2px; height: 6px; margin: 2px 0 6px; border-radius: 3px; overflow: hidden; background: var(--track); }
+.cov-split > span { display: block; height: 100%; }
 .cov-pill {
   display: inline-block; min-width: 56px; text-align: center; white-space: nowrap;
   padding: 2px 8px; border-radius: var(--radius-sm);
   font-size: var(--fs-caption); line-height: var(--lh-caption); font-weight: 600;
 }
 .cov-pill.plain { color: var(--text-secondary); font-weight: 500; background: var(--neutral-soft); }
+
+@media (prefers-reduced-motion: reduce) {
+  .cov *, .cov *::before, .cov *::after { animation: none !important; transition: none !important; }
+}
 
 
 /* ---------- Monthly Plan: the decision and history drawers ----------

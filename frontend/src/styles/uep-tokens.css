@@ -144,6 +144,7 @@
   --uep-dur-slow: 900ms;    /* sparkline draw, progress fill, brand reveal */
   --uep-ease-productive: cubic-bezier(0.2, 0, 0.38, 0.9);
   --uep-ease-entrance: cubic-bezier(0, 0, 0.3, 1);
+  --uep-ease-standard: cubic-bezier(0.2, 0, 0, 1); /* standard ease-out: the coverage map */
   --uep-ease-expressive: cubic-bezier(0.16, 1, 0.3, 1);
   --uep-enter-distance: 8px;
   --uep-press-scale: 0.98;
