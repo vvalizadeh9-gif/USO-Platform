@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import AppTile from './AppTile'
-import { HOME_APP, appRoute } from './appRegistry'
+import { HOME_APP, appRoute, appState } from './appRegistry'
 import { usePopover } from './usePopover'
 
 const COLUMNS = 4
@@ -54,7 +54,7 @@ export default function AppLauncher({ apps, onClose, openerRef }) {
         <div className="uep-launcher-label" id="launcher-your-apps">Your apps</div>
         <div className="uep-launcher-grid" aria-labelledby="launcher-your-apps" onKeyDown={onGridKey}>
           {tiles.map((app) => (
-            <Link key={app.id} to={appRoute(app)} className="uep-launcher-tile" onClick={onClose}>
+            <Link key={app.id} to={appRoute(app)} state={appState(app)} className="uep-launcher-tile" onClick={onClose}>
               <AppTile app={app} size={40} />
               <span>{app.name}</span>
             </Link>

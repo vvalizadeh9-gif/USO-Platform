@@ -1,11 +1,11 @@
 import { motion } from 'framer-motion'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Outlet, useLocation } from 'react-router-dom'
 import { PAGE_MODE, PageModeContext } from '../components/pageMode'
 import { useAuth } from '../context/AuthContext'
 import AppHeader from './AppHeader'
 import AppRail from './AppRail'
-import { appRoute, appsFor, locate } from './appRegistry'
+import { appRoute, appState, appsFor, locate } from './appRegistry'
 import { useHomeData } from './HomeData'
 import '../styles/shell.css'
 
@@ -19,13 +19,23 @@ function pageKey(pathname) {
   return section === 'reports' ? `reports/${sub}` : section
 }
 
-// eslint-disable-next-line react-refresh/only-export-components -- tested on its own
 /** "/ {App}" inside an app, "/ Sites / {ID}" on a site, nothing on Home. */
+// eslint-disable-next-line react-refresh/only-export-components -- tested on its own
 export function crumbsFor(pathname, app) {
   const site = pathname.match(/^\/work-items\/([^/]+)/)
   if (site) return [{ label: 'Sites', to: '/work-items' }, { label: decodeURIComponent(site[1]) }]
   if (pathname === '/home' || !app) return []
-  return [{ label: app.name, to: appRoute(app) }]
+  return [{ label: app.name, to: appRoute(app), state: appState(app) }]
+}
+
+const LAST_APP_KEY = 'uep.lastApp'
+
+function readLastApp() {
+  try {
+    return sessionStorage.getItem(LAST_APP_KEY)
+  } catch {
+    return null
+  }
 }
 
 /**
@@ -47,7 +57,21 @@ export default function AppShell() {
     [mustChangePassword, user?.role?.name],
   )
   const isHome = location.pathname === '/home'
-  const { app, page } = locate(apps, location.pathname, location.search)
+  // A page shared by two apps (a dashboard in its own app and in Insights)
+  // stays in the app the user opened: the link's state says which, else the
+  // app last shown (kept for the tab, so a reload keeps it too).
+  const lastApp = useRef(readLastApp())
+  const preferAppId = location.state?.app ?? lastApp.current
+  const { app, page } = locate(apps, location.pathname, location.search, preferAppId)
+  useEffect(() => {
+    if (!app) return
+    lastApp.current = app.id
+    try {
+      sessionStorage.setItem(LAST_APP_KEY, app.id)
+    } catch {
+      // Storage blocked: the app is still kept for this page's lifetime.
+    }
+  }, [app])
 
   return (
     <div className="uep-shell">
