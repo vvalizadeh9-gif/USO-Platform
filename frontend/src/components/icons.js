@@ -72,6 +72,12 @@ import viewOff16 from '@carbon/icons/es/view--off/16.js'
 import viewOff20 from '@carbon/icons/es/view--off/20.js'
 import warningAlt16 from '@carbon/icons/es/warning--alt/16.js'
 import warningAlt20 from '@carbon/icons/es/warning--alt/20.js'
+import flag16 from '@carbon/icons/es/flag/16.js'
+import flag20 from '@carbon/icons/es/flag/20.js'
+import checkmarkOutline16 from '@carbon/icons/es/checkmark--outline/16.js'
+import checkmarkOutline20 from '@carbon/icons/es/checkmark--outline/20.js'
+import settingsAdjust16 from '@carbon/icons/es/settings--adjust/16.js'
+import settingsAdjust20 from '@carbon/icons/es/settings--adjust/20.js'
 
 /**
  * @typedef {{ elem: string, attrs: Record<string, string | number>, content?: CarbonNode[] }} CarbonNode
@@ -115,6 +121,9 @@ export const ICONS = Object.freeze({
   'recently-viewed': { 16: recentlyViewed16, 20: recentlyViewed20 },
   'attachment': { 16: attachment16, 20: attachment20 },
   'checkmark--filled': { 16: checkmarkFilled16, 20: checkmarkFilled20 },
+  'flag': { 16: flag16, 20: flag20 },
+  'checkmark--outline': { 16: checkmarkOutline16, 20: checkmarkOutline20 },
+  'settings--adjust': { 16: settingsAdjust16, 20: settingsAdjust20 },
 })
 
 /** @typedef {keyof typeof ICONS} IconName */

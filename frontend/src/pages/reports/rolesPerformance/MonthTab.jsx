@@ -69,7 +69,7 @@ export default function MonthTab({ search, onOpenOwner }) {
         onExport={data ? exporter.run : undefined}
         exporting={exporter.busy}
       />
-      <div className="rp-body rp-split">
+      <div className="rp-body rp-split rp-month">
         {data ? (
           <MeasureList
             label="Measures"

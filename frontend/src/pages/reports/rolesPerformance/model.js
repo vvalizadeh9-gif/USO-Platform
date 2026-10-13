@@ -80,9 +80,9 @@ export const MONTH_DEFAULT_MEASURE = 'fully_approved'
 
 /** A Carbon icon per Month section. */
 export const SECTION_ICONS = {
-  delivery: 'cell-tower',
-  acceptance: 'certificate--check',
-  full_config: 'tools',
+  delivery: 'flag',
+  acceptance: 'checkmark--outline',
+  full_config: 'settings--adjust',
   problematic: 'warning--alt',
 }
 
@@ -155,11 +155,11 @@ export function parseMonthParam(value) {
 /** The pipeline, in order. On air, DT done and Fully approved are % of
  * villages; ICT and CRA are % of DT-done villages (the server divides). */
 export const AREA_MEASURES = [
-  { key: 'onair', label: 'On air', icon: 'cell-tower' },
-  { key: 'dt', label: 'DT done', icon: 'cell-tower' },
-  { key: 'full', label: 'Fully approved', icon: 'certificate--check' },
-  { key: 'ict', label: 'ICT approved', icon: 'certificate--check' },
-  { key: 'cra', label: 'CRA approved', icon: 'certificate--check' },
+  { key: 'onair', label: 'On air', icon: 'flag' },
+  { key: 'dt', label: 'DT done', icon: 'flag' },
+  { key: 'full', label: 'Fully approved', icon: 'checkmark--outline' },
+  { key: 'ict', label: 'ICT approved', icon: 'checkmark--outline' },
+  { key: 'cra', label: 'CRA approved', icon: 'checkmark--outline' },
 ]
 
 export const AREA_DEFAULT_MEASURE = 'full'
