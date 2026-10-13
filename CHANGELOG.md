@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- **Roles Performance · Map: fits the window without scrolling; the detail panel shows sites and villages for delivery, ICT and CRA; the owner list and its switch are removed; CRA borders are white (UEP-10).**
+  - API: `GET /gaps/map` rows' `detail` is now `{delivery: {assigned, on_air, dt}, ict: {approved, pending}, cra: {approved, pending}}`, every leaf `{sites, villages}`; `ict`/`cra` gain `sites: {approved, reached}` for the tooltip. `detail.owners` and the `base`/`remained` counters are removed. New `_site_grid` (one site = one work item, approved when every village is).
+  - Removed: the List by switch, `DETAIL_LENSES`, `detailRows`, `REMAINED_NOTES`, the Pending / Remained tiles, the caption under the map and their CSS. New token `--uep-ease-standard`.
+
 - **Roles Performance: Month shows who each month's results belong to (contractors, regional managers, coordinators side by side); Area ranks provinces, CRA regions and owners against national; Performance and Compare tabs removed (UEP-09).**
   - Tabs: PM and Viewer get Month · Area · Map; everyone else My area · Map. Old `/reports/kpi/performance` and `/compare` links land on the role's first tab with `?lens=&key=` kept. Map is unchanged.
   - Month and Area share one layout: a measure list on the left (selection in `?measure=`) and a breakdown on the right. Month's title is a Shamsi month picker, it opens on the last closed month, and it shows no comparison with the previous month. Clicking an owner opens their Area.

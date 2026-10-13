@@ -1,5 +1,5 @@
-// Map: the Lifecycle Gaps coverage map, embedded exactly as it is (same
-// component, same /gaps/map endpoint, same styling). Nothing here changes it.
+// Map: the Lifecycle Gaps coverage map (same component, same /gaps/map
+// endpoint), fitted to the window by the bounded .rp-map column. See UEP-10.
 import CoverageMap from '../CoverageMap'
 import PerfHeader from './PerfHeader'
 

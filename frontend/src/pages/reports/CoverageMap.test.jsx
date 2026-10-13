@@ -12,7 +12,7 @@
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { BANDS, approvalRate, bandOf, detailBand, detailRows, regionDrift } from './coverageMap'
+import { BANDS, approvalRate, bandOf, detailBand, regionDrift } from './coverageMap'
 import iranMap from './iranMap.json'
 
 vi.mock('../../api/client', () => ({ default: { get: vi.fn() } }))
@@ -29,24 +29,18 @@ const fig = (stopped, reached) => ({
   reached,
   rate: reached ? Math.round((stopped * 1000) / reached) / 10 : null,
   low_sample: reached < 10,
+  sites: { approved: Math.round((reached - stopped) / 3), reached: Math.round(reached / 3) },
 })
 
-const stretch = (approved, base, pending, remained) => ({ approved, base, pending, remained })
+const f = (sites, villages) => ({ sites, villages })
 
-/** A detail block: ICT 285 of 403 approved, CRA 201 of 403, with owners. */
-function detail(over = {}) {
-  const owners = {
-    coordinator: [
-      { name: 'V. Hashemi', attribution: 'owned', ict: stretch(200, 280, 80, 20), cra: stretch(150, 280, 130, 30) },
-      { name: 'R. Karimi', attribution: 'owned', ict: stretch(85, 123, 38, 10), cra: stretch(51, 123, 72, 12) },
-    ],
-    contractor: [
-      { name: 'پیشرو فن', attribution: 'owned', ict: stretch(285, 400, 115, 30), cra: stretch(200, 400, 200, 42) },
-      { name: 'Unassigned', attribution: 'unassigned', ict: stretch(0, 3, 3, 0), cra: stretch(1, 3, 2, 0) },
-    ],
-    rm: [{ name: 'Allahyar', attribution: 'owned', ict: stretch(285, 403, 118, 30), cra: stretch(201, 403, 202, 42) }],
+/** A detail block: ICT 285 of 403 villages approved, CRA 201 of 403. */
+function detail() {
+  return {
+    delivery: { assigned: f(150, 480), on_air: f(140, 450), dt: f(130, 403) },
+    ict: { approved: f(90, 285), pending: f(40, 118) },
+    cra: { approved: f(60, 201), pending: f(70, 202) },
   }
-  return { ict: stretch(285, 403, 118, 30), cra: stretch(201, 403, 202, 42), owners, ...over }
 }
 
 // One row per province in the map asset, which carries the directory's
@@ -66,13 +60,6 @@ function payload(over = {}) {
   const regions = Object.keys(iranMap.regions).map((name) => {
     const members = provinces.filter((p) => p.region === name)
     const sum = (s, counter) => members.reduce((acc, m) => acc + m[s][counter], 0)
-    const provinceRows = members.map((m, i) => ({
-      name: m.name,
-      key: m.key,
-      attribution: 'owned',
-      ict: stretch(100, 150, 50, 5),
-      cra: stretch(30 + i * 20, 150, 120 - i * 20, 10),
-    }))
     return {
       name,
       attribution: 'owned',
@@ -81,7 +68,7 @@ function payload(over = {}) {
       villages: members.length * 120,
       ict: fig(sum('ict', 'stopped'), sum('ict', 'reached')),
       cra: fig(sum('cra', 'stopped'), sum('cra', 'reached')),
-      detail: detail({ owners: { ...detail().owners, province: provinceRows } }),
+      detail: detail(),
     }
   })
   return {
@@ -111,7 +98,11 @@ function serve(body) {
 const shapes = (map) => screen.getByTestId(`cov-map-${map}`).querySelectorAll('[data-shape]')
 const shape = (map, id) =>
   screen.getByTestId(`cov-map-${map}`).querySelector(`[data-shape="${id}"]`)
-const toCra = () => userEvent.click(screen.getByRole('button', { name: 'CRA approval · by region' }))
+// The old map fades out before the new one is drawn.
+const toCra = async () => {
+  await userEvent.click(screen.getByRole('button', { name: 'CRA approval · by region' }))
+  await screen.findByTestId('cov-map-cra')
+}
 const panel = () => screen.getByRole('region', { name: /detail$/ })
 
 async function draw(body = payload()) {
@@ -149,7 +140,7 @@ describe('the shapes', () => {
     body.provinces.find((p) => p.key === ISFAHAN).ict = fig(90, 100) // 10% approved
     await draw(body)
     expect(shape('ict', ISFAHAN).getAttribute('aria-label')).toBe(
-      'Isfahan — ICT approval 10.0%: 10 of 100 approved, 90 stopped'
+      'Isfahan · 10% ICT approved, 10 of 100 villages, 3 of 33 sites'
     )
     expect(shape('ict', ISFAHAN).querySelector('path').getAttribute('fill')).toBe(BANDS[0].fill)
     expect(shape('ict', QOM).querySelector('path').getAttribute('fill')).toBe(BANDS[4].fill)
@@ -166,14 +157,13 @@ describe('the shapes', () => {
 })
 
 describe('colour', () => {
-  it('hatches a low-sample province and says what the hatch means', async () => {
+  it('hatches a low-sample province', async () => {
     const body = payload()
     body.provinces.find((p) => p.key === QOM).ict = fig(0, 3)
     await draw(body)
     expect(shape('ict', QOM).dataset.state).toBe('hatched')
     expect(shape('ict', QOM).querySelector('path').getAttribute('fill')).toBe('url(#cov-hatch)')
     expect(shape('ict', ISFAHAN).dataset.state).toBe('coloured')
-    expect(screen.getByText(/Hatched = fewer than 10 reached, not compared/)).toBeInTheDocument()
   })
 
   it('uses six fixed bands', () => {
@@ -193,9 +183,13 @@ describe('colour', () => {
     expect(approvalRate(fig(0, 0))).toBeNull()
   })
 
-  it('carries the OpenStreetMap attribution', async () => {
+  it('has no caption under the map; the legend shares the switch row', async () => {
     await draw()
-    expect(screen.getByText(/© OpenStreetMap contributors/)).toHaveTextContent('ODbL')
+    expect(document.querySelector('.cov-caption')).toBeNull()
+    expect(screen.queryByText(/OpenStreetMap/)).not.toBeInTheDocument()
+    const head = document.querySelector('.cov-map-head')
+    expect(within(head).getByRole('group', { name: 'Map' })).toBeInTheDocument()
+    expect(within(head).getByRole('list', { name: 'Approval rate bands' })).toBeInTheDocument()
   })
 })
 
@@ -208,73 +202,69 @@ describe('the detail panel', () => {
     expect(screen.getByText('Select a CRA region on the map')).toBeInTheDocument()
   })
 
-  it('shows a province: its region, RM and three figures', async () => {
+  it('shows a province: delivery, ICT and CRA, each in sites and villages', async () => {
     await draw()
     await userEvent.click(shape('ict', ISFAHAN))
     const detailPanel = panel()
     expect(detailPanel).toHaveAccessibleName('Isfahan detail')
-    expect(detailPanel).toHaveTextContent('Central region · RM Allahyar')
-    expect(detailPanel).toHaveTextContent('70.7%') // 285 of 403
-    expect(within(detailPanel).getByText('70–85%')).toBeInTheDocument()
-    expect(detailPanel).toHaveTextContent('285 of 403 drive-tested')
+    expect(within(detailPanel).getByText('Central region')).toBeInTheDocument()
+    for (const name of ['Delivery', 'ICT', 'CRA']) {
+      const group = within(detailPanel).getByRole('region', { name })
+      expect(within(group).getByText('Sites')).toBeInTheDocument()
+      expect(within(group).getByText('Villages')).toBeInTheDocument()
+    }
+    const row = (group, label) =>
+      within(within(detailPanel).getByRole('region', { name: group })).getByText(label).closest('.cov-fig')
+    expect(row('Delivery', 'Total assigned')).toHaveTextContent('Total assigned150480')
+    expect(row('Delivery', 'Total drive test')).toHaveTextContent('130403')
+    expect(row('ICT', 'Approved')).toHaveTextContent('Approved90285')
+    expect(row('CRA', 'Pending')).toHaveTextContent('Pending70202')
+    expect(within(detailPanel).getByText('70.7%')).toBeInTheDocument() // 285 of 403
     expect(shape('ict', ISFAHAN)).toHaveAttribute('aria-pressed', 'true')
     expect(screen.getByTestId('cov-outline')).toBeInTheDocument()
   })
 
-  it('makes every village count in it an export of exactly those villages', async () => {
+  it('no longer lists owners', async () => {
     await draw()
     await userEvent.click(shape('ict', ISFAHAN))
-    const detailPanel = panel()
-    const labels = within(detailPanel)
+    expect(within(panel()).queryByRole('group', { name: 'List by' })).not.toBeInTheDocument()
+    expect(within(panel()).queryAllByRole('listitem')).toHaveLength(0)
+  })
+
+  it('makes the ICT and CRA village counts exports; sites are plain', async () => {
+    await draw()
+    await userEvent.click(shape('ict', ISFAHAN))
+    const labels = within(panel())
       .getAllByRole('button', { name: /^Export/ })
       .map((b) => b.getAttribute('aria-label'))
     expect(labels).toEqual([
       'Export 285 villages (ICT approved · Isfahan) to Excel',
       'Export 118 villages (ICT pending · Isfahan) to Excel',
-      'Export 30 villages (ICT remained · Isfahan) to Excel',
-      'Export 80 villages (ICT pending · Isfahan · Coordinator V. Hashemi) to Excel',
-      'Export 38 villages (ICT pending · Isfahan · Coordinator R. Karimi) to Excel',
+      'Export 201 villages (CRA approved · Isfahan) to Excel',
+      'Export 202 villages (CRA pending · Isfahan) to Excel',
     ])
-    await userEvent.click(within(detailPanel).getByRole('button', { name: /Coordinator V. Hashemi/ }))
+    await userEvent.click(within(panel()).getByRole('button', { name: /ICT pending/ }))
     expect(api.get).toHaveBeenCalledWith('/gaps/villages.xlsx', {
-      params: { gap: 'pending_ict', lens: 'coordinator', key: 'V. Hashemi', scope: `province:${ISFAHAN}` },
+      params: { gap: 'pending_ict', scope: `province:${ISFAHAN}` },
       responseType: 'blob',
     })
   })
 
-  it('lists by the ICT lenses, with each row over its own base', async () => {
-    await draw()
-    await userEvent.click(shape('ict', ISFAHAN))
-    const lenses = within(panel()).getByRole('group', { name: 'List by' })
-    expect(within(lenses).getAllByRole('button').map((b) => b.textContent)).toEqual([
-      'Coordinator', 'Contractor', 'Regional manager',
-    ])
-    expect(panel()).toHaveTextContent('V. Hashemi80of 280 · 29%')
-    await userEvent.click(within(lenses).getByRole('button', { name: 'Contractor' }))
-    expect(within(panel()).getByText('Unassigned')).toHaveClass('is-unowned')
-  })
-
-  it('lists a CRA region by province, weakest CRA approval first, with its band', async () => {
+  it('shows a CRA region with its province count', async () => {
     await draw()
     await toCra()
     await userEvent.click(shape('cra', 'North'))
-    const detailPanel = panel()
-    expect(detailPanel).toHaveTextContent('4 provinces · RM Allahyar, Nobakht')
-    const lenses = within(detailPanel).getByRole('group', { name: 'List by' })
-    expect(within(lenses).getAllByRole('button').map((b) => b.textContent)).toEqual([
-      'Province', 'Coordinator', 'Contractor', 'Regional manager',
-    ])
-    const rows = within(detailPanel).getAllByRole('listitem')
-    // 30/150 = 20%, 50/150, 70/150, 90/150: weakest first.
-    expect(rows[0]).toHaveTextContent('20.0%')
-    expect(rows.at(-1)).toHaveTextContent('60.0%')
-    expect(rows[0].querySelector('.cov-pill').style.background).not.toBe('')
-    await userEvent.click(within(rows[0]).getByRole('button', { name: /^Export/ }))
-    expect(api.get.mock.calls.at(-1)[1].params).toMatchObject({
-      gap: 'pending_cra',
-      lens: 'province',
-      scope: 'region:North',
-    })
+    expect(within(panel()).getByText('4 provinces')).toBeInTheDocument()
+  })
+
+  it('carries sites and villages in the tooltip', async () => {
+    await draw()
+    await userEvent.hover(shape('ict', ISFAHAN))
+    const tip = screen.getByTestId('cov-tip')
+    expect(tip).toHaveTextContent('Isfahan · 80% ICT approved')
+    expect(tip).toHaveTextContent('80 of 100 villages')
+    expect(tip).toHaveTextContent('27 of 33 sites')
+    expect(shape('ict', ISFAHAN).querySelector('title')).toBeNull()
   })
 
   it('clears on a second click on the same shape', async () => {
@@ -303,7 +293,7 @@ describe('the detail panel', () => {
     await toCra()
     expect(screen.getByText('Select a CRA region on the map')).toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: 'ICT approval · by province' }))
-    expect(screen.getByText('Select a province on the map')).toBeInTheDocument()
+    expect(await screen.findByText('Select a province on the map')).toBeInTheDocument()
   })
 
   it('selects with the keyboard too', async () => {
@@ -315,18 +305,11 @@ describe('the detail panel', () => {
 })
 
 describe('detail arithmetic', () => {
-  it('sorts most pending first, and the CRA province list weakest first', () => {
-    const d = payload().regions[0].detail
-    expect(detailRows(d, 'ict', 'coordinator').map((r) => r.name)).toEqual(['V. Hashemi', 'R. Karimi'])
-    const provinces = detailRows(d, 'cra', 'province')
-    const rates = provinces.map((r) => r.rate)
-    expect(rates).toEqual([...rates].sort((a, b) => a - b))
-  })
-
   it('does not band a detail figure under the low-sample threshold', () => {
-    expect(detailBand(stretch(5, 9, 4, 0), 10)).toBeNull()
-    expect(detailBand(stretch(90, 100, 10, 0), 10).label).toBe('85%+')
-    expect(detailBand(stretch(0, 0, 0, 0), 10)).toBeNull()
+    const stage = (approved, pending) => ({ approved: f(1, approved), pending: f(1, pending) })
+    expect(detailBand(stage(5, 4), 10)).toBeNull()
+    expect(detailBand(stage(90, 10), 10).label).toBe('85%+')
+    expect(detailBand(stage(0, 0), 10)).toBeNull()
   })
 })
 

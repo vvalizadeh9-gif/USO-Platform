@@ -327,38 +327,24 @@ const stretchFig = (stopped, reached) => ({
   low_sample: reached < 10,
 })
 
-const PANEL_OWNERS = {
-  coordinator: GAP_OWNERS.coordinator.slice(0, 3),
-  contractor: CONTRACTORS.slice(0, 4),
-  rm: GAP_OWNERS.rm.slice(0, 2),
-}
+const fig = (sites, villages) => ({ sites, villages })
 
 function panelFigures(base, ictRate, craRate) {
   const ictApproved = Math.round(base * ictRate)
   const craApproved = Math.round(base * craRate)
+  const sites = (n) => Math.round(n / 1.6)
   return {
-    ict: { approved: ictApproved, base, pending: base - ictApproved, remained: Math.round((base - ictApproved) * 0.4) },
-    cra: { approved: craApproved, base, pending: base - craApproved, remained: Math.round((base - craApproved) * 0.3) },
+    delivery: {
+      assigned: fig(sites(base * 1.2), Math.round(base * 1.2)),
+      on_air: fig(sites(base * 1.1), Math.round(base * 1.1)),
+      dt: fig(sites(ictApproved) + sites(base - ictApproved), base),
+    },
+    ict: { approved: fig(sites(ictApproved), ictApproved), pending: fig(sites(base - ictApproved), base - ictApproved) },
+    cra: { approved: fig(sites(craApproved), craApproved), pending: fig(sites(ictApproved) + sites(base - ictApproved) - sites(craApproved), base - craApproved) },
   }
 }
 
-/** Split each counter of `figures` over `names`, summing exactly. */
-function ownerRows(figures, names, extra = () => ({})) {
-  const pieces = {}
-  for (const stretch of ['ict', 'cra']) {
-    for (const counter of ['approved', 'base', 'pending', 'remained']) {
-      pieces[`${stretch}.${counter}`] = split(figures[stretch][counter], names.length)
-    }
-  }
-  return names.map((name, i) => {
-    const row = { name, attribution: 'owned', ...extra(name, i), ict: {}, cra: {} }
-    for (const [path, parts] of Object.entries(pieces)) {
-      const [stretch, counter] = path.split('.')
-      row[stretch][counter] = parts[i]
-    }
-    return row
-  })
-}
+const withSites = (f) => ({ ...f, sites: { approved: Math.round((f.reached - f.stopped) / 1.6), reached: Math.round(f.reached / 1.6) } })
 
 const mapProvinces = Object.entries(IRAN.provinces).map(([key, shape], i) => {
   const base = 60 + ((i * 37) % 340)
@@ -375,52 +361,39 @@ const mapProvinces = Object.entries(IRAN.provinces).map(([key, shape], i) => {
     region: shape.region,
     managers: [GAP_OWNERS.rm[i % GAP_OWNERS.rm.length]],
     villages: reached + 20,
-    ict: stretchFig(ictStopped, reached),
-    cra: stretchFig(Math.round(craReached * (1 - craRate / Math.max(ictRate, 0.01))), craReached),
-    detail: {
-      ...figures,
-      owners: Object.fromEntries(
-        Object.entries(PANEL_OWNERS).map(([lens, names]) => [lens, ownerRows(figures, names)])
-      ),
-    },
+    ict: withSites(stretchFig(ictStopped, reached)),
+    cra: withSites(stretchFig(Math.round(craReached * (1 - craRate / Math.max(ictRate, 0.01))), craReached)),
+    detail: figures,
   }
 })
 
 const sumFig = (rows, stretch, counter) => rows.reduce((s, r) => s + r[stretch][counter], 0)
 
-const mapRegions = Object.keys(IRAN.regions).map((name) => {
-  const members = mapProvinces.filter((p) => p.region === name)
-  const figures = {}
-  for (const stretch of ['ict', 'cra']) {
-    figures[stretch] = {}
-    for (const counter of ['approved', 'base', 'pending', 'remained']) {
-      figures[stretch][counter] = members.reduce((s, m) => s + m.detail[stretch][counter], 0)
+function sumDetail(members) {
+  const out = {}
+  for (const [group, figures] of Object.entries(members[0].detail)) {
+    out[group] = {}
+    for (const name of Object.keys(figures)) {
+      out[group][name] = fig(
+        members.reduce((s, m) => s + m.detail[group][name].sites, 0),
+        members.reduce((s, m) => s + m.detail[group][name].villages, 0)
+      )
     }
   }
-  const provinceRows = members.map((m) => ({
-    name: m.name,
-    key: m.key,
-    attribution: 'owned',
-    ict: m.detail.ict,
-    cra: m.detail.cra,
-  }))
+  return out
+}
+
+const mapRegions = Object.keys(IRAN.regions).map((name) => {
+  const members = mapProvinces.filter((p) => p.region === name)
   return {
     name,
     attribution: 'owned',
     provinces: members.map((m) => m.key),
     managers: [...new Set(members.flatMap((m) => m.managers))].sort(),
     villages: members.reduce((s, m) => s + m.villages, 0),
-    ict: stretchFig(members.reduce((s, m) => s + m.ict.stopped, 0), members.reduce((s, m) => s + m.ict.reached, 0)),
-    cra: stretchFig(members.reduce((s, m) => s + m.cra.stopped, 0), members.reduce((s, m) => s + m.cra.reached, 0)),
-    detail: {
-      ...figures,
-      owners: {
-        province: provinceRows,
-        ...Object.fromEntries(
-          Object.entries(PANEL_OWNERS).map(([lens, names]) => [lens, ownerRows(figures, names)])
-        ),
-      },
-    },
+    ict: withSites(stretchFig(sumFig(members, 'ict', 'stopped'), sumFig(members, 'ict', 'reached'))),
+    cra: withSites(stretchFig(sumFig(members, 'cra', 'stopped'), sumFig(members, 'cra', 'reached'))),
+    detail: sumDetail(members),
   }
 })
 
@@ -434,8 +407,9 @@ export const gapsMap = {
   regions: mapRegions,
   total: {
     villages: mapProvinces.reduce((s, p) => s + p.villages, 0),
-    ict: stretchFig(sumFig(mapProvinces, 'ict', 'stopped'), sumFig(mapProvinces, 'ict', 'reached')),
-    cra: stretchFig(sumFig(mapProvinces, 'cra', 'stopped'), sumFig(mapProvinces, 'cra', 'reached')),
+    ict: withSites(stretchFig(sumFig(mapProvinces, 'ict', 'stopped'), sumFig(mapProvinces, 'ict', 'reached'))),
+    cra: withSites(stretchFig(sumFig(mapProvinces, 'cra', 'stopped'), sumFig(mapProvinces, 'cra', 'reached'))),
+    detail: sumDetail(mapProvinces),
   },
 }
 
@@ -447,7 +421,6 @@ export const gapsMap = {
 
 const STRETCH_OF = {
   pending_ict: ['ict', 'pending'], pending_cra: ['cra', 'pending'],
-  ict_remained: ['ict', 'remained'], cra_remained: ['cra', 'remained'],
   ict_approved: ['ict', 'approved'], cra_approved: ['cra', 'approved'],
 }
 
@@ -462,8 +435,7 @@ export function exportCount(url) {
     const shape =
       kind === 'province' ? mapProvinces.find((p) => p.key === value) : mapRegions.find((r) => r.name === value)
     const [stretch, counter] = STRETCH_OF[gap]
-    if (!lens) return shape.detail[stretch][counter]
-    return shape.detail.owners[lens].find((row) => row.name === key)[stretch][counter]
+    return shape.detail[stretch][counter].villages
   }
   if (lens) return gapRows(lens)[gap].find((row) => row.name === key).count
   return GAP_FIGURES[gap]?.count ?? GAP_TOTALS[gap]
