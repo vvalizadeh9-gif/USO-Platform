@@ -272,3 +272,20 @@ export default function KpiBand({ kpis, provinceId, series }) {
     </section>
   )
 }
+
+/** The strip at its final size while it loads: four tiles of label, figure
+ * and sparkline, staggered 80ms (pulse and stagger in dt-dashboard.css).
+ * Shared with the Acceptance dashboard. */
+export function KpiSkeleton() {
+  return (
+    <div className="hk-strip dt-kpi-band dt-kpi-skeleton" aria-hidden="true">
+      {[0, 1, 2, 3].map((i) => (
+        <div key={i} className="hk-tile dt-kpi-skel" style={{ '--i': i }}>
+          <span className="dt-skel" data-part="label" />
+          <span className="dt-skel" data-part="figure" />
+          <span className="dt-skel" data-part="spark" />
+        </div>
+      ))}
+    </div>
+  )
+}

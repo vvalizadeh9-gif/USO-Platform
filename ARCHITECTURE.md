@@ -427,23 +427,33 @@ computes from current state on every request and writes nothing. See
 The page answers two questions for a PM: *am I on plan month by month, and
 what happened in a given month?* It has one tab per **stream**:
 
-| Tab | Counts | Plan stream | Colour |
-|---|---|---|---|
-| Village | villages **fully accepted** (ICT and CRA both approved) | `ACCEPTANCE` | `--accent` |
-| ICT | villages approved by ICT, whatever CRA has said | `ICT` | `--ict` |
-| CRA | villages approved by CRA, whatever ICT has said | `CRA` | `--cra` / `--cra-ink` |
+| Tab (`?tab=`) | Counts | Plan stream |
+|---|---|---|
+| Fully accepted (`village`) | villages **fully accepted** (ICT and CRA both approved) | `ACCEPTANCE` |
+| ICT (`ict`) | villages approved by ICT, whatever CRA has said | `ICT` |
+| CRA (`cra`) | villages approved by CRA, whatever ICT has said | `CRA` |
 
-Each tab is a KPI band, a progress chart (Monthly bars or Cumulative lines)
-and a month panel. Two reads feed the whole page, and each card loads, fails
-and retries on its own:
+Since UEP-07 the page is the **Acceptance app's first rail page** (Dashboard,
+with a divider, like Drive test's) as well as Insights → Acceptance dashboard,
+and wears the Drive test dashboard's look (`.dt-page acc-page`). All data is
+the accent on every tab; ICT and CRA show only an 8px authority dot on their
+tab. Each tab is a KPI strip (four equal tiles), one Shamsi year's chart
+(`?year=`, Farvardin to Esfand, with the year plan track) and the PIP card for
+one month (`?month=`). Two reads feed the whole page, and each card loads,
+fails and retries on its own:
 
 - `GET /acceptance/overview` -- the KPI band. Unchanged apart from an
   optional `province_id`, so the page-wide scope picker narrows the band and
   the chart alike.
-- `GET /acceptance/progress?months=12&province_id&contractor_id` -- the chart
-  and the panel, **all three streams at once**, so a tab switch never
+- `GET /acceptance/progress?year=1405&province_id&contractor_id` -- the chart
+  and the PIP card, **all three streams at once**, so a tab switch never
   refetches (`services/acceptance_progress.py`, response
-  `schemas.AcceptanceProgress`). `GET /acceptance/progress/export` is the
+  `schemas.AcceptanceProgress`). With `year`, that Shamsi year's twelve
+  months; a month after the running one carries its plans, `approved` and
+  `approved_cumulative` `null`, and `is_future: true`. `years` lists every
+  year with a dated approval or a plan the caller may see, plus the current
+  year, newest first (the year dropdown). Without `year` the window is the
+  last `months` months, as before (the export and older callers). `GET /acceptance/progress/export` is the
   same payload as a workbook, one sheet per stream.
 
 **Two plans, and what they are called.** The **Internal PIP** is the PM's own
@@ -478,7 +488,8 @@ own as "Your PIP" and never sees the Internal PIP.
   DT done and pure هدف, loaded once and bucketed for all three streams in one
   pass -- no per-month queries.
 
-The panel's arithmetic (due by today, pace, what is left, per day) is in
+The PIP card's and the year track's arithmetic (due by today, pace, what is
+left, per day) is in
 `pages/reports/acceptance/model.js`, from the server's `today` (day of month
 and its length -- the browser does no calendar arithmetic).
 

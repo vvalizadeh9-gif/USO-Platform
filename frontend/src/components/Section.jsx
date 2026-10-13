@@ -1,6 +1,6 @@
 import { motion } from 'framer-motion'
 import { AlertCircle, RefreshCw } from 'lucide-react'
-import Icon from '../../components/Icon'
+import Icon from './Icon'
 
 /**
  * Card chrome with its three states in one place: loading, failed, loaded.

@@ -10,11 +10,11 @@ import BreakdownCard, { BreakdownTabs } from './BreakdownCard'
 import { DrillProvider } from './DrillPanel'
 import ContractorScorecard from './ContractorScorecard'
 import InfoTip from './InfoTip'
-import KpiBand from './KpiBand'
-import MonthLabel from './MonthLabel'
+import KpiBand, { KpiSkeleton } from './KpiBand'
+import MonthLabel from '../../components/MonthLabel'
 import PipThisMonth from './PipThisMonth'
 import ProvinceList, { ProvinceSearch, matchProvinces } from './ProvinceList'
-import Section from './Section'
+import Section from '../../components/Section'
 import DashboardActions, { ProvinceScope } from './Toolbar'
 import FlowChart, { FlowKey } from './charts/FlowChart'
 import FlowTable from './charts/FlowTable'
@@ -573,22 +573,6 @@ function SectionTotal({ value, label }) {
       <b className="tnum">{count(value)}</b>
       <span>{label}</span>
     </span>
-  )
-}
-
-function KpiSkeleton() {
-  // The strip at its final size: four tiles of label, figure and sparkline,
-  // staggered 80ms (pulse and stagger in dt-dashboard.css).
-  return (
-    <div className="hk-strip dt-kpi-band dt-kpi-skeleton" aria-hidden="true">
-      {[0, 1, 2, 3].map((i) => (
-        <div key={i} className="hk-tile dt-kpi-skel" style={{ '--i': i }}>
-          <span className="dt-skel" data-part="label" />
-          <span className="dt-skel" data-part="figure" />
-          <span className="dt-skel" data-part="spark" />
-        </div>
-      ))}
-    </div>
   )
 }
 

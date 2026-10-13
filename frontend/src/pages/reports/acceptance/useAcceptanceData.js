@@ -35,13 +35,14 @@ export function useResource(url, params) {
 }
 
 /**
- * The page's two sources, for one scope: the overview (KPI band) and the
- * progress payload (chart and month panel, all three streams at once -- so a
- * tab switch never refetches). `refresh` reloads both.
+ * The page's two sources, for one scope: the overview (KPI strip) and the
+ * progress payload for one Shamsi year (chart and PIP card, all three
+ * streams at once -- so a tab switch never refetches; a year change does).
+ * `year` null asks for the default window. `refresh` reloads both.
  */
-export default function useAcceptanceData(scope) {
+export default function useAcceptanceData(scope, year) {
   const overview = useResource('/acceptance/overview', scope)
-  const progress = useResource('/acceptance/progress', scope)
+  const progress = useResource('/acceptance/progress', year == null ? scope : { ...scope, year })
   const { retry: retryOverview } = overview
   const { retry: retryProgress } = progress
   const refresh = useCallback(() => {

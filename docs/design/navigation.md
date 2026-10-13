@@ -37,6 +37,11 @@ and is the same page that Insights → Dashboards opens, not a copy. The Drive
 test rail reads: Dashboard · HC check · HC review · Assignment · DT review ·
 In progress · All sites (pages filtered by role as usual).
 
+Acceptance does the same since UEP-07: its first page is **Dashboard**
+(`/reports/acceptance`, divider, no count), the page Insights → Acceptance
+dashboard also opens. Its address carries `?tab=village|ict|cra`,
+`?year=1405` (default the current Shamsi year) and `?month=1405-07`.
+
 The launcher, the Apps panel and every rail are generated from this list with
 `appsFor(role)`. The rail's active page is the page whose route best matches
 the URL (`locate`): same path, and the most query params in common. A page's
