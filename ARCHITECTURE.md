@@ -505,8 +505,8 @@ Existing rows are untouched and there is no backfill: months before the new
 streams simply have no ICT or CRA plan. Versioning (`version`, `is_current`,
 append on every change) is identical for every stream.
 
-On Monthly Plan the PM sets an Internal PIP per stream (the Internal PIP card
-on PIP vs Achieved), and a contractor files all four PIPs on one form, each
+On Monthly Plan the PM sets an Internal PIP per stream (the Internal PIP
+tab, see §5h), and a contractor files all four PIPs on one form, each
 decided, returned and revised on its own. The deadline and "not submitted"
 chips, the Action Center items and the export (one sheet per stream) cover
 all four. Only the PM sets an Internal PIP; a contractor never reads one.
@@ -1437,7 +1437,7 @@ queue held together by a parity test.
 | ICT/CRA | Validate contractor filings | Coord | submission `submitted_at` | My Work → To check |
 | ICT/CRA | Re-file rejected villages | Contractor | rejection `reviewed_at` | My Work → New letter needed |
 | ICT/CRA | Correct returned villages | Contractor | return `reviewed_at` | My Work → Returned |
-| Plans | Approve plans | PM | `submitted_at` (revisions too) | Monthly Plan → Plans |
+| Plans | Approve plans | PM | `submitted_at` (revisions too) | Monthly Plan → Approvals |
 | Plans | Validate CPM changes | PM | `cpm_change_requests.created_at` | Admin → Validate CPM |
 | Plans | Submit monthly plan | Contractor | **due** on the day-3 deadline | Monthly Plan |
 
@@ -1724,6 +1724,52 @@ whether the SLA clock restarts. That last point is a product decision.
 There are no database changes. Every role guard, list scope, validation
 message and confirmation dialog is as it was. "Ready" is cobalt, never green.
 
+## 5h. Monthly Plan, staff side (UEP-08)
+
+`/monthly-plan` is the contractor's own filing page (`ContractorPlan`) for a
+contractor and, for staff, `PmPlan`: four tabs under one `PageBar`, the tab in
+`?tab=`.
+
+| Tab | `?tab=` | Month in the header | Reads |
+|---|---|---|---|
+| Approvals (default) | `approvals` or none | planning (next) | `GET /pip/queue` per stream, planning and running months (`usePlanBoard`); running `GET /pip/overview` for "behind" |
+| Plans | `plans` | planning | the same queue; running `GET /pip/overview` for delivered against plan |
+| History | `history` | running | `GET /pip/overview?period=year&year=` (each stream's `months[]`) |
+| Internal PIP | `internal` (staff who read it) | running | `GET /pip/overview` for the running and the planning month; the queue for planning coverage |
+
+Everything the tabs derive from the queue is in `planBoard.js`
+(`buildBoard`, `buildApprovals`, `countWaiting`), so the Approvals badge and
+the cards cannot disagree. The History arithmetic is in `history.js`.
+
+- **Approvals.** One card per contractor with a plan `Submitted` for the
+  planning month, then one per contractor with a `RevisionRequested` on the
+  running month. A card's Approve sends `POST /pip/{id}/approve` for every
+  waiting plan in parallel. If any fails, the toast names the stream and the
+  card stays. Return sends `POST /pip/{id}/return` with one required comment
+  (the shared `Modal`, with the page made `inert` behind it). The red lines
+  are only "N above sites held" (DT, plan above the running month's
+  assignment) and "N behind" (the running overview's `pace_diff` below zero).
+  There is no Undo: no endpoint reverses an approval. Roles that cannot decide
+  see the same cards with no buttons.
+- **Plans.** Read-only. Shared = Submitted, Returned or Approved (a pending or
+  returned revision keeps the approved number). Running-month progress per
+  stream comes from the overview, not from the queue row's `delivered`,
+  because that field is always the DT figure.
+- **History.** Closed months get a verdict: Met plan (100% or more), Near plan
+  (80–99%) or Below 80%, judged on the exact share. The running month is shown
+  but never judged and never totalled. Future months are a dash. One
+  contractor's view drops the Internal PIP columns.
+- **Internal PIP.** `PUT /pip/internal-target` (PM only on the server, so
+  `canSetTarget` decides only whether the stepper is offered).
+
+`GET /pip/overview?period=year` adds `months[]` to each stream
+(`OverviewYearMonth`): `plan` (in-force contractor plans summed, `null` when
+none), `delivered` (`null` for a future month), `internal` (the stream's
+Internal PIP; `null` for a contractor, although the endpoint is closed to
+contractors anyway), `is_running`, `is_future`, and `contractors[]` of
+`{id, name, plan, delivered}`. The `month` and `since_start` views carry
+`months: null`.
+
 ## 6. Roles and permissions
 
 Ten roles. Six are staff and workflow roles; four exist solely to own health-check
@@ -1982,9 +2028,9 @@ A fill page's parts:
 Two rules keep it honest:
 
 - **Nothing is clipped.** `.page-body` has `overflow-y: auto` as a fallback:
-  a long tab that is not a one-screen design (HC Review, History, the Plans
-  board) scrolls inside the frame; the document still never does. The
-  one-screen designs (DT dashboard Overview, PIP vs Achieved, HC Pool, HC In
+  a long tab that is not a one-screen design (HC Review, History) scrolls
+  inside the frame; the document still never does. The
+  one-screen designs (DT dashboard Overview, the Monthly Plan tabs, HC Pool, HC In
   Progress, DT Assignment) are laid out to fit at 1440x900 and 1280x800
   without using it -- `e2e/noPageScroll.spec.js` asserts both.
 - **Tab panels do not animate their height.** A tab change is a 120ms opacity

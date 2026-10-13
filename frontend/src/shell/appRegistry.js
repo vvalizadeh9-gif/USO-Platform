@@ -11,6 +11,7 @@
  */
 import {
   CATEGORY_OWNER_ROLES,
+  INTERNAL_PIP_ROLES,
   KPI_ROLES,
   MONTHLY_PLAN_ROLES,
   REVIEW_AUTHORITY_ROLES,
@@ -129,8 +130,12 @@ export const APPS = Object.freeze([
     group: 'planning',
     roles: MONTHLY_PLAN_ROLES,
     pages: [
-      { id: 'internal', label: 'Internal PIP', route: '/monthly-plan?tab=internal', roles: ['PM', 'Coordinator', 'RegionalManager', 'Viewer'] },
-      { id: 'contractor', label: 'Contractor PIP', route: '/monthly-plan?tab=plans', queues: ['plans_approve', 'plan_submit'] },
+      // Approvals is the page's default (no ?tab=); a contractor lands on
+      // their own filing page at the same address.
+      { id: 'approvals', label: 'Approvals', route: '/monthly-plan', queues: ['plans_approve', 'plan_submit'], also: ['/monthly-plan?tab=approvals'] },
+      { id: 'plans', label: 'Plans', route: '/monthly-plan?tab=plans', roles: INTERNAL_PIP_ROLES },
+      { id: 'history', label: 'History', route: '/monthly-plan?tab=history', roles: INTERNAL_PIP_ROLES },
+      { id: 'internal', label: 'Internal PIP', route: '/monthly-plan?tab=internal', roles: INTERNAL_PIP_ROLES },
     ],
   },
   {

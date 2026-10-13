@@ -2337,12 +2337,39 @@ class OverviewTrendPoint(BaseModel):
     in_progress: bool
 
 
+class OverviewYearContractor(BaseModel):
+    id: int
+    name: str | None = None
+    #: None when the contractor had no approved plan that month, never 0.
+    plan: int | None = None
+    delivered: int
+
+
+class OverviewYearMonth(BaseModel):
+    """One row of the History table (``period=year`` only)."""
+
+    shamsi_year: int
+    shamsi_month: int
+    shamsi_month_name: str
+    #: The contractors' in-force plans summed; None when nobody had one.
+    plan: int | None = None
+    #: None for a month still ahead.
+    delivered: int | None = None
+    #: The stream's Internal PIP. Staff only: None for a contractor.
+    internal: int | None = None
+    is_running: bool
+    is_future: bool
+    contractors: list[OverviewYearContractor]
+
+
 class OverviewStream(BaseModel):
     stream: PlanStream
     kpis: OverviewKpis
     all_contractors: OverviewAllContractors
     rows: list[OverviewRow]
     trend: list[OverviewTrendPoint]
+    #: ``period=year`` only: Farvardin to Esfand of the year asked for.
+    months: list[OverviewYearMonth] | None = None
 
 
 class OverviewAttention(BaseModel):

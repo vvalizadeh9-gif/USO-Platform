@@ -97,7 +97,7 @@ QUEUES: tuple[QueueDefinition, ...] = (
     *(q for authority in AUTHORITIES for q in _acceptance_queues(authority)),
     # --- Plans & Data ----------------------------------------------------
     _q("plans_approve", Stage.PLANS, "Approve plans", "Plan approvals",
-       "/monthly-plan?tab=plans", {PM}, plans.plans_to_approve, unit="plans"),
+       "/monthly-plan?tab=approvals", {PM}, plans.plans_to_approve, unit="plans"),
     _q("cpm_changes", Stage.PLANS, "Validate CPM changes", "CPM changes",
        "/admin?tab=validate", {PM}, plans.cpm_changes, unit="changes"),
     _q("plan_submit", Stage.PLANS, "Submit monthly plan", "Monthly plan",

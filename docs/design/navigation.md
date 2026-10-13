@@ -68,6 +68,23 @@ page's steps and keep the rest of the query. Rail counts still come from
 which counts through the same queue service.
 
 
+### Monthly plan rail (UEP-08)
+
+The rail's pages are the staff page's four tabs, in tab order:
+
+| Rail item | Route | Roles | Count |
+|---|---|---|---|
+| Approvals | `/monthly-plan` (also `?tab=approvals`) | everyone with the app | `plans_approve`, `plan_submit` |
+| Plans | `/monthly-plan?tab=plans` | PM, Coordinator, RegionalManager, Viewer | — |
+| History | `/monthly-plan?tab=history` | PM, Coordinator, RegionalManager, Viewer | — |
+| Internal PIP | `/monthly-plan?tab=internal` | PM, Coordinator, RegionalManager, Viewer | — |
+
+A contractor's Approvals item opens their own filing page, as the old
+*Contractor PIP* item did. Home's *Approve plans* links to
+`/monthly-plan?tab=approvals`. History reads `GET /pip/overview?period=year`,
+whose streams carry `months[]` (`plan`, `delivered`, `internal`, `is_running`,
+`is_future`, `contractors[]`); see ARCHITECTURE §5h.
+
 ### Adding an app or a page
 
 1. Add the app (or the page) to `APPS`. Give it roles and, if it has pending

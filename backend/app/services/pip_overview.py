@@ -34,6 +34,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core import jalali
+from app.core.deps import CONTRACTOR
 from app.models.acceptance_plan import AcceptanceMonthlyTarget
 from app.models.monthly_plan import (
     STATUS_APPROVED,
@@ -272,6 +273,59 @@ def _internal_target(db: Session, stream: str, months: list[tuple[int, int]]) ->
     return _sum_pip(values)
 
 
+def _year_months(
+    db: Session,
+    user: User,
+    stream: str,
+    figures: dict,
+    year: int,
+    running: tuple[int, int],
+) -> list[dict]:
+    """The History table's twelve months of one stream, Farvardin to Esfand.
+
+    Per month: the contractors' plans summed (``None`` when nobody had one,
+    never 0), what was delivered, the stream's Internal PIP (staff only;
+    ``None`` for a contractor), whether the month is the running one or still
+    ahead, and the same two figures per contractor. A future month has no
+    figures yet: its plan and delivered are ``None`` and it lists nobody.
+    """
+    staff = user.role is None or user.role.name != CONTRACTOR
+    out = []
+    for m in range(1, 13):
+        period = (year, m)
+        is_future = period > running
+        target = acceptance_plan.get_current_target(db, year, m, stream) if staff else None
+        entry = {
+            "shamsi_year": year,
+            "shamsi_month": m,
+            "shamsi_month_name": jalali.month_name(m),
+            "plan": None,
+            "delivered": None,
+            "internal": target.target_count if target is not None else None,
+            "is_running": period == running,
+            "is_future": is_future,
+            "contractors": [],
+        }
+        month = figures.get(period)
+        if not is_future and month is not None:
+            rows = sorted(month["rows"].values(), key=lambda r: (r.get("name") or "").lower())
+            entry["contractors"] = [
+                {
+                    "id": r["contractor_id"],
+                    "name": r.get("name"),
+                    "plan": r.get("pip"),
+                    "delivered": r["delivered"],
+                }
+                for r in rows
+            ]
+            entry["plan"] = _sum_pip([r.get("pip") for r in rows])
+            entry["delivered"] = month["total"]["delivered"]
+        elif not is_future:
+            entry["delivered"] = 0
+        out.append(entry)
+    return out
+
+
 def _stream(
     db: Session,
     user: User,
@@ -389,13 +443,16 @@ def _stream(
             }
         )
 
-    return {
+    out = {
         "stream": stream,
         "kpis": kpis,
         "all_contractors": all_contractors,
         "rows": rows,
         "trend": trend_points,
     }
+    if view == "year":
+        out["months"] = _year_months(db, user, stream, figures, months[0][0], running)
+    return out
 
 
 def _needs_attention(db: Session, user: User, running: tuple[int, int], today: date, dt_rows_running: dict) -> list[dict]:

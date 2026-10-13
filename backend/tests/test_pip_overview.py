@@ -466,3 +466,79 @@ def test_export_never_gives_a_contractor_the_internal_pip(client, world, monkeyp
 def test_export_without_a_period_is_the_old_workbook(client, world, monkeypatch):
     _on_day(monkeypatch, 10)
     assert _book(client, world, {"months": 3}).sheetnames == ["Summary", "Contractors"]
+
+
+# ---------------------------------------------------------------------------
+# period=year: the History table's twelve months (UEP-08)
+# ---------------------------------------------------------------------------
+def test_year_months_are_twelve_in_order_with_running_and_future(client, world, monkeypatch):
+    _on_day(monkeypatch, 10)
+    data = _get(client, world, "?period=year&year=1406&month=1")
+    for key in ("dt", "acceptance", "ict", "cra"):
+        months = data[key]["months"]
+        assert [m["shamsi_month"] for m in months] == list(range(1, 13))
+        assert [m["shamsi_month_name"] for m in months] == [jalali.month_name(i) for i in range(1, 13)]
+        assert [m["is_running"] for m in months] == [i == RUNNING[1] for i in range(1, 13)]
+        assert [m["is_future"] for m in months] == [i > RUNNING[1] for i in range(1, 13)]
+    # A month still ahead has no figures and lists nobody.
+    future = data["dt"]["months"][5]
+    assert future["plan"] is None and future["delivered"] is None
+    assert future["contractors"] == []
+
+
+def test_year_months_carry_plan_delivered_internal_and_contractors(client, world, monkeypatch):
+    _on_day(monkeypatch, 10)
+    months = _get(client, world, "?period=year&year=1406&month=1")["dt"]["months"]
+    a, b, c = (world["ids"][k] for k in "abc")
+    farvardin, ordibehesht, khordad = months[0], months[1], months[2]
+    # 1406/1: only Alpha approved (4); nothing delivered.
+    assert (farvardin["plan"], farvardin["delivered"]) == (4, 0)
+    # 1406/2: Alpha approved 1 and delivered it.
+    assert (ordibehesht["plan"], ordibehesht["delivered"]) == (1, 1)
+    # The running month: Alpha 5 + Beta 3 in force (the revision is pending).
+    assert khordad["plan"] == 8 and khordad["delivered"] == 1
+    assert khordad["internal"] == 10
+    assert farvardin["internal"] is None
+    by_id = {r["id"]: r for r in khordad["contractors"]}
+    assert by_id[a] == {"id": a, "name": "Alpha Ov", "plan": 5, "delivered": 1}
+    assert by_id[b]["plan"] == 3
+    # Gamma had no DT plan: null, never 0.
+    if c in by_id:
+        assert by_id[c]["plan"] is None
+
+
+def test_year_month_with_no_plans_is_null_not_zero(client, world, monkeypatch):
+    _on_day(monkeypatch, 10)
+    months = _get(client, world, "?period=year&year=1405&month=1")["dt"]["months"]
+    assert all(not m["is_future"] and not m["is_running"] for m in months)
+    assert all(m["plan"] is None for m in months)
+    assert all(m["delivered"] == 0 for m in months)
+
+
+def test_year_months_never_carry_the_internal_pip_for_a_contractor(client, world, monkeypatch):
+    from app.models.reference import User
+    from app.services import pip_overview
+
+    _on_day(monkeypatch, 10)
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter_by(username="ov_alpha").one()
+        data = pip_overview.overview(db, user, period="year", year=1406, month=1)
+    finally:
+        db.close()
+    months = data["dt"]["months"]
+    assert len(months) == 12
+    assert all(m["internal"] is None for m in months)
+    # Their own figures only.
+    names = {r["name"] for m in months for r in m["contractors"]}
+    assert names <= {"Alpha Ov"}
+
+
+@pytest.mark.parametrize("params", ["", "?period=since_start"])
+def test_month_and_since_start_have_no_year_months(client, world, monkeypatch, params):
+    _on_day(monkeypatch, 10)
+    data = _get(client, world, params)
+    for key in ("dt", "acceptance", "ict", "cra"):
+        assert data[key]["months"] is None
+    # The rest of the response is what it was.
+    assert set(data["dt"]) == {"stream", "kpis", "all_contractors", "rows", "trend", "months"}
