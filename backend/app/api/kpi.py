@@ -32,18 +32,11 @@ from app.schemas import (
     ProvinceMappingReassign,
     ProvinceMappingWrite,
 )
-from app.schemas.roles_performance import (
-    AreaPayload,
-    ComparePayload,
-    MonthPayload,
-    PerformancePayload,
-)
+from app.schemas.roles_performance import AreaPayload, MonthPayload
 from app.services import gap_export, kpi, kpi_export, kpi_mapping
 from app.services.performance import area as perf_area
-from app.services.performance import compare as perf_compare
 from app.services.performance import export as perf_export
 from app.services.performance import month as perf_month
-from app.services.performance import person as perf_person
 from app.services.audit import record_audit
 
 router = APIRouter(prefix="/kpi", tags=["kpi"])
@@ -62,57 +55,38 @@ def _lens_key(
     return lens, key
 
 
-# ----- Roles Performance: the four tabs -----------------------------------
+# ----- Roles Performance: Month and Area -----------------------------------
 
 
 @router.get("/month", response_model=MonthPayload)
 def roles_month(
-    month: str | None = Query(None, description="YYYY-MM, Shamsi. Default: this month"),
-    by: str = Query("all", description="all | coordinator | contractor | rm"),
+    month: str | None = Query(
+        None, description="YYYY-MM, Shamsi. Default: the last closed month (see default_month)"
+    ),
+    by: str = Query("all", description="all | owners | coordinator | contractor | rm"),
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> dict:
-    """This month against last month up to the same day, section by section.
-    PM and Viewer only. With ``by``, one entry per owner, highest first."""
+    """One month, section by section. PM and Viewer only. ``by=owners``:
+    every row also lists its contractors, regional managers and coordinators,
+    highest first; ``by=coordinator|contractor|rm``: one of those lists."""
     return perf_month.payload(db, user, month, by)
 
 
 @router.get("/area", response_model=AreaPayload)
 def roles_area(
     lens_key: tuple[str | None, str | None] = Depends(_lens_key),
-    breakdown: str | None = Query(None, description="province | region | contractor"),
+    breakdown: str | None = Query(
+        None, description="province | region | contractor | coordinator | rm"
+    ),
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> dict:
-    """Where things stand today in one scope. ``breakdown=contractor`` is a
-    403 for a contractor."""
+    """Where things stand today in one scope, and every member of one
+    breakdown with the same measures. ``coordinator`` and ``rm`` are PM and
+    Viewer only; ``contractor`` is a 403 for a contractor."""
     lens, key = lens_key
     return perf_area.payload(db, user, lens, key, breakdown)
-
-
-@router.get("/performance", response_model=PerformancePayload)
-def roles_performance(
-    lens_key: tuple[str | None, str | None] = Depends(_lens_key),
-    start: str | None = Query(None, alias="from", description="YYYY-MM, Shamsi"),
-    end: str | None = Query(None, alias="to", description="YYYY-MM, Shamsi"),
-    db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
-) -> dict:
-    """What one owner delivered month by month, and how fast."""
-    lens, key = lens_key
-    return perf_person.payload(db, user, lens, key, start, end)
-
-
-@router.get("/compare", response_model=ComparePayload)
-def roles_compare(
-    kind: str = Query("contractor", description="contractor | coordinator | rm | province | region"),
-    measure: str = Query("ict", description="dt | onair | ict | cra | speed"),
-    period: str = Query("all", description="all | month:YYYY-MM"),
-    db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
-) -> dict:
-    """Owners of one kind, ranked. PM and Viewer only."""
-    return perf_compare.payload(db, user, kind, measure, period)
 
 
 def _xlsx(built, filename: str) -> Response:
@@ -152,35 +126,6 @@ def roles_area_xlsx(
     lens, key = lens_key
     payload = perf_area.payload(db, user, lens, key, breakdown)
     return _xlsx(perf_export.area(payload), perf_export.filename("area", payload["scope"]["label"]))
-
-
-@router.get("/performance.xlsx")
-def roles_performance_xlsx(
-    lens_key: tuple[str | None, str | None] = Depends(_lens_key),
-    start: str | None = Query(None, alias="from"),
-    end: str | None = Query(None, alias="to"),
-    db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
-) -> Response:
-    lens, key = lens_key
-    payload = perf_person.payload(db, user, lens, key, start, end)
-    return _xlsx(
-        perf_export.performance(payload),
-        perf_export.filename("performance", payload["scope"]["label"]),
-    )
-
-
-@router.get("/compare.xlsx")
-def roles_compare_xlsx(
-    kind: str = Query("contractor"),
-    measure: str = Query("ict"),
-    period: str = Query("all"),
-    db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
-) -> Response:
-    payload = perf_compare.payload(db, user, kind, measure, period)
-    label = f"{payload['kind']}-{payload['measure']}-{payload['period']}"
-    return _xlsx(perf_export.compare(payload), perf_export.filename("compare", label))
 
 
 @router.get("/lenses")
@@ -225,7 +170,7 @@ def kpi_summary(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ) -> dict:
-    """Deprecated: use ``/kpi/area`` and ``/kpi/performance``.
+    """Deprecated: use ``/kpi/area``.
 
     The whole old page for one scope: both funnels, the heatmap, the country
     benchmark, and when CPM was last imported."""

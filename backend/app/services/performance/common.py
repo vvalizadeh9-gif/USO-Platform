@@ -6,13 +6,9 @@ value that was not recorded is ``None`` with ``recorded: false``, never 0:
 """
 from __future__ import annotations
 
-from collections.abc import Iterable
-
 from app.services import kpi
 from app.services.performance import definitions as D
-from app.services.performance.facts import Cell, CellKey
-from app.services.performance.ownership import UNATTRIBUTED, Ownership
-from app.services.performance.periods import ShamsiMonth
+from app.services.performance.facts import Cell
 
 
 def scope_for(db, user, lens: str | None, key: str | None) -> kpi.Scope:
@@ -66,51 +62,5 @@ def rate_of(cell: Cell, rate: D.Rate) -> float | None:
     return D.pct(getattr(cell, rate.count), getattr(cell, rate.base))
 
 
-def peer_cells(
-    cells: dict[CellKey, Cell], kind: str, ownership: Ownership
-) -> dict[str, Cell]:
-    """Today's cells folded by owner of one kind, unattributed left out: the
-    owners a role average is taken over, and the owners Compare lists."""
-    out: dict[str, Cell] = {}
-    for (province_fa, contractor), cell in cells.items():
-        name = ownership.owner(kind, province_fa, contractor, None)
-        if name != UNATTRIBUTED:
-            out.setdefault(name, Cell()).add(cell)
-    return out
-
-
 def low_sample(cell: Cell) -> bool:
     return cell.villages_dt_done < D.LOW_SAMPLE_DT_DONE
-
-
-def role_average(cells: Iterable[Cell], rate: D.Rate, *, weighted: bool) -> float | None:
-    """The average owner of one kind, over the **compared** owners only.
-
-    Contractors are weighted (numerators over denominators): they do not
-    partition the country, so a weighted average says something the national
-    rate does not. Regional managers, coordinators, regions and provinces do
-    partition it, so their weighted average would be the national rate again;
-    for them it is the plain mean, each owner counting once.
-    """
-    compared = [c for c in cells if not low_sample(c)]
-    if weighted:
-        return D.pct(
-            sum(getattr(c, rate.count) for c in compared),
-            sum(getattr(c, rate.base) for c in compared),
-        )
-    values = [v for c in compared if (v := rate_of(c, rate)) is not None]
-    return round(sum(values) / len(values), 1) if values else None
-
-
-def is_weighted(kind: str) -> bool:
-    return kind == kpi.LENS_CONTRACTOR
-
-
-def gap(value: float | None, benchmark: float | None) -> float | None:
-    if value is None or benchmark is None:
-        return None
-    return round(value - benchmark, 1)
-
-
-def month_entry(month: ShamsiMonth, **values) -> dict:
-    return {**month.as_dict(), "key": month.key, **values}

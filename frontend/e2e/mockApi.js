@@ -6,6 +6,7 @@ import * as F from './fixtures.js'
 import * as W from './workFixtures.js'
 import { villagesXlsx } from './xlsx.js'
 import { myWorkList, myWorkSuggestions, myWorkVillage } from './myWorkFixtures.js'
+import { rpArea, rpMonth } from './rolesFixtures.js'
 
 const ROUTES = {
   '/auth/me': F.PM,
@@ -23,6 +24,8 @@ const ROUTES = {
   '/hc/queues/dt-in-progress': W.dtInProgress,
   '/reference/contractors': F.contractors,
   '/kpi/lenses': F.kpiLenses,
+  '/kpi/month': rpMonth,
+  '/kpi/area': rpArea,
   '/gaps/overview': F.gapsOverview,
   '/gaps/map': F.gapsMap,
   '/acceptance/overview': F.accOverview,

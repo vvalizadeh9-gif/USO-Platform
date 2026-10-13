@@ -12,6 +12,7 @@
 @import '@fontsource/ibm-plex-sans/400.css';
 @import '@fontsource/ibm-plex-sans/500.css';
 @import '@fontsource/ibm-plex-sans/600.css';
+@import '@fontsource/ibm-plex-sans/700.css';
 
 :root {
   /* ---- Colour. Bright cobalt means "click me"; deep cobalt means "this is
@@ -83,6 +84,7 @@
   --uep-weight-regular: 400;
   --uep-weight-medium: 500;
   --uep-weight-semibold: 600;
+  --uep-weight-bold: 700;          /* headline figures on Roles Performance only */
   --uep-fs-caption: 12px;
   --uep-fs-small: 13px;
   --uep-fs-body: 14px;
@@ -211,6 +213,20 @@
   --uep-assign-card-min-tight: 64px;
   --uep-notice-max: 640px;
   --uep-kbd-radius: 4px;
+
+  /* ---- Component: Roles Performance (UEP-09) ----
+     Colour marks the exception only: the second owner on Month, and the
+     shortfall to national on Area (light red stripes, never green). */
+  --uep-rank-second: #7C9BEE;        /* the second owner's strip segment */
+  --uep-danger-stripe: #F2B8B8;      /* "worse" stripes, with --uep-danger-tint */
+  --uep-danger-edge: #E39A9A;        /* their 1px inset line */
+  --uep-measure-list: 288px;
+  --uep-measure-list-tight: 224px;   /* below 1320px */
+  --uep-rank-bar: 10px;
+  --uep-share-strip: 14px;
+  --uep-dur-grow: 500ms;             /* a bar or strip growing in */
+  --uep-ease-grow: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --uep-grow-follow: 150ms;          /* the difference segment follows the fill */
 
   /* ---- Component: sign-in ---- */
   --uep-signin-half-basis: 520px;

@@ -271,3 +271,11 @@ The 360px right panel of DT review: the Site ID (18px/600) with type, province a
 - **Loading:** strip and row skeletons at their final size, never a spinner.
 - **Error:** "Couldn't load {step}." with Retry inside the card; the rest of the page still renders.
 - **Saving:** the pressed control is disabled with `aria-busy`.
+
+## Roles Performance: measure list and deviation bar (UEP-09)
+
+Month and Area share one layout: a **measure list** on the left (288px, 224px below 1320px; `--uep-measure-list`, `--uep-measure-list-tight`) and the selected measure's breakdown on the right. The page never scrolls; only the owner columns, the ranking and, on short screens, the pipeline scroll inside their cards.
+
+- **Measure list** (`MeasureList.jsx`): groups under a 24px icon tile (`--uep-accent-tint`), an uppercase 12px title and the unit. A row is a button; the selected one is solid `--uep-accent` with `--uep-on-accent` text (muted parts on `--uep-accent-on-tint`), one at a time, `aria-pressed`. Headline rows: name 600, figure 20px `--uep-weight-bold`. Others: 34px, secondary ink. Area's five measures are equal 60px rows; Total villages is an information row on `--uep-page`, not a button.
+- **One accent.** Colour marks the exception only. Month's share strip (14px, `--uep-share-strip`): leader `--uep-accent`, second `--uep-rank-second`, the rest `--uep-border-strong`, Unattributed hatched grey and last. Where fewer is better, the top two are `--uep-text` / `--uep-text-3`, never red. No green on this page.
+- **Deviation bar** (`RankBar.jsx`, 10px, `--uep-rank-bar`): `--uep-track` with a 1px `--uep-border` inset; `--uep-neutral-data` up to the lower of rate and national; the difference solid `--uep-accent` when better, or `--uep-danger-stripe`/`--uep-danger-tint` stripes with a `--uep-danger-edge` inset when worse; a 2px `--uep-text` tick at national. The fill grows over `--uep-dur-grow` with `--uep-ease-grow`, the difference `--uep-grow-follow` later; off under reduced motion. Every bar has a spoken label ("Qazvin 40%, national 51%, 11 points behind"), and every gap is also signed text.

@@ -1,4 +1,4 @@
-// "Whose?" -- the title of Area and Performance for PM and Viewer. Defaults
+// "Whose?" -- the title of Area for PM and Viewer. Defaults
 // to the whole country; offers any person, province or CRA region, and the
 // people who owned provinces once (their past months are still theirs).
 import { useRpData } from './hooks'
@@ -38,10 +38,16 @@ export default function ScopePicker({ scope, onChange }) {
           </optgroup>
         )
       })}
-      {/* A scope chosen from elsewhere (a Compare row) before the list loads. */}
-      {scope && scope.lens !== 'country' && !data && (
+      {/* A scope chosen from elsewhere (a Month owner, a shared link) that the
+          list does not offer, or not yet: shown as itself, never as the country. */}
+      {scope && scope.lens !== 'country' && !listed(data, scope) && (
         <option value={scopeValue(scope)}>{scope.key}</option>
       )}
     </select>
   )
+}
+
+function listed(data, scope) {
+  return [...(data?.options?.[scope.lens] ?? []), ...(data?.past?.[scope.lens] ?? [])]
+    .includes(scope.key)
 }

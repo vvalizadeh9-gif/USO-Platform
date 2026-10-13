@@ -1,13 +1,17 @@
 import { describe, expect, it } from 'vitest'
 import {
-  barWidth,
-  blocks,
-  deltaTone,
-  fmtDelta,
+  fmtGap,
+  gapPoints,
+  isFutureMonth,
   landingTab,
+  ownerColumn,
+  parseMonthParam,
   parseScopeValue,
+  rankLabel,
+  rankRows,
   scopeValue,
   tabLabel,
+  tabSearch,
   tabsFor,
 } from './model'
 
@@ -15,72 +19,93 @@ const as = (name) => ({ role: { name } })
 
 describe('tabs per role', () => {
   it.each([
-    ['PM', ['month', 'area', 'performance', 'compare', 'map'], 'month'],
-    ['Viewer', ['month', 'area', 'performance', 'compare', 'map'], 'month'],
-    ['RegionalManager', ['area', 'performance', 'map'], 'area'],
-    ['Coordinator', ['area', 'performance', 'map'], 'area'],
-    ['Contractor', ['area', 'performance', 'map'], 'area'],
+    ['PM', ['month', 'area', 'map'], 'month'],
+    ['Viewer', ['month', 'area', 'map'], 'month'],
+    ['RegionalManager', ['area', 'map'], 'area'],
+    ['Coordinator', ['area', 'map'], 'area'],
+    ['Contractor', ['area', 'map'], 'area'],
     ['Admin', [], null],
   ])('%s', (role, tabs, landing) => {
     expect(tabsFor(as(role))).toEqual(tabs)
     expect(landingTab(as(role))).toBe(landing)
   })
 
-  it('calls the area and performance tabs "My ..." for people confined to their own', () => {
+  it('calls Area "My area" for people confined to their own', () => {
     expect(tabLabel(as('Coordinator'), 'area')).toBe('My area')
-    expect(tabLabel(as('Contractor'), 'performance')).toBe('My performance')
     expect(tabLabel(as('PM'), 'area')).toBe('Area')
-    expect(tabLabel(as('Viewer'), 'performance')).toBe('Performance')
+  })
+
+  it('carries the scope to Area only, and nothing else', () => {
+    expect(tabSearch('area', '?lens=rm&key=X&measure=dt')).toBe('?lens=rm&key=X')
+    expect(tabSearch('month', '?lens=rm&key=X')).toBe('')
+    expect(tabSearch('area', '')).toBe('')
   })
 })
 
-describe('deltas', () => {
-  it('reads zero as ±0 and signs everything else', () => {
-    expect(fmtDelta(0)).toBe('±0')
-    expect(fmtDelta(3)).toBe('+3')
-    expect(fmtDelta(-2)).toBe('−2')
-    expect(fmtDelta(-1.25, ' pts')).toBe('−1.3 pts')
-    expect(fmtDelta(null)).toBe('—')
+describe('owner columns', () => {
+  const entries = [
+    { name: 'A', now: 6 }, { name: 'B', now: 3 }, { name: 'C', now: 1 },
+    { name: 'D', now: 0 }, { name: 'E', now: 0 }, { name: 'Unattributed', now: 2 },
+  ]
+
+  it('colours the top two only, and puts Unattributed last', () => {
+    const { listed } = ownerColumn(entries, 12)
+    expect(listed.map((o) => [o.name, o.rank])).toEqual([
+      ['A', 1], ['B', 2], ['C', 'rest'], ['Unattributed', 'none'],
+    ])
   })
 
-  it('inverts the colour where lower is better', () => {
-    expect(deltaTone(2)).toBe('good')
-    expect(deltaTone(-2)).toBe('bad')
-    expect(deltaTone(2, true)).toBe('bad')
-    expect(deltaTone(-2, true)).toBe('good')
-    expect(deltaTone(0, true)).toBe('flat')
-  })
-})
-
-describe('block row', () => {
-  it('is ceil(max(now, ref) / per) blocks', () => {
-    expect(blocks(23, 12, 5)).toHaveLength(5)
-    expect(blocks(0, 0, 5)).toHaveLength(0)
+  it('collapses owners with none, and the top two share', () => {
+    const { none, topTwo } = ownerColumn(entries, 12)
+    expect(none).toEqual(['D', 'E'])
+    expect(topTwo).toBe(75)
   })
 
-  it('fills this month, rings what is beyond last month, outlines the shortfall', () => {
-    // 12 this month against 23 last month, 5 per block.
-    expect(blocks(12, 23, 5).map((b) => b.kind)).toEqual(['done', 'done', 'done', 'short', 'short'])
-    // 23 against 12: the blocks past 12 are ringed.
-    expect(blocks(23, 12, 5).map((b) => b.kind)).toEqual(['done', 'done', 'done', 'beyond', 'beyond'])
-  })
-
-  it('fills a partial last block to its share', () => {
-    const row = blocks(12, 0, 5)
-    expect(row[2].fill).toBeCloseTo(0.4)
-    expect(row[0].fill).toBe(1)
-  })
-
-  it('never rings anything when last month was not recorded', () => {
-    expect(blocks(12, null, 5).every((b) => b.kind === 'done')).toBe(true)
+  it('adds up to the total', () => {
+    const { listed } = ownerColumn(entries, 12)
+    expect(listed.reduce((sum, o) => sum + o.count, 0)).toBe(12)
   })
 })
 
-describe('owner bars and scopes', () => {
-  it('scales a bar against the leader, at most 64px', () => {
-    expect(barWidth(10, 10)).toBe(64)
-    expect(barWidth(5, 10)).toBe(32)
-    expect(barWidth(0, 0)).toBe(0)
+describe('the ranking against national', () => {
+  const row = (name, rate, low = false) => ({
+    name, low_sample: low, measures: { full: { count: 1, rate } },
+  })
+
+  it('puts the furthest behind first, ties by name, not-compared last', () => {
+    const { compared, low, behind } = rankRows(
+      [row('Yazd', 60), row('Qom', 40), row('Ilam', 40), row('Zanjan', 10, true), row('Fars', 51)],
+      'full', 51,
+    )
+    expect(compared.map((r) => r.name)).toEqual(['Ilam', 'Qom', 'Fars', 'Yazd'])
+    expect(compared.map((r) => r.gap)).toEqual([-11, -11, 0, 9])
+    expect(low.map((r) => r.name)).toEqual(['Zanjan'])
+    expect(behind).toBe(2)
+  })
+
+  it('writes the gap signed, red only when worse', () => {
+    expect(fmtGap(gapPoints(40, 51))).toEqual({ text: '−11 pts', tone: 'worse' })
+    expect(fmtGap(4)).toEqual({ text: '+4 pts', tone: 'better' })
+    expect(fmtGap(0)).toEqual({ text: '±0', tone: 'flat' })
+  })
+
+  it('labels a bar in words', () => {
+    expect(rankLabel('Qazvin', 40, 51)).toBe('Qazvin 40%, national 51%, 11 points behind')
+  })
+})
+
+describe('months and scopes', () => {
+  it('disables only months after the running one', () => {
+    const current = { year: 1405, month: 7 }
+    expect(isFutureMonth({ year: 1405, month: 8 }, current)).toBe(true)
+    expect(isFutureMonth({ year: 1405, month: 7 }, current)).toBe(false)
+    expect(isFutureMonth({ year: 1404, month: 12 }, current)).toBe(false)
+  })
+
+  it('reads ?month=', () => {
+    expect(parseMonthParam('1405-06')).toEqual({ year: 1405, month: 6 })
+    expect(parseMonthParam('1405-13')).toBeNull()
+    expect(parseMonthParam(null)).toBeNull()
   })
 
   it('round-trips a scope through one select value', () => {

@@ -66,10 +66,16 @@ def filename(tab: str, label: str, *, on: date | None = None) -> str:
 # ----- One builder per tab --------------------------------------------------
 
 
+_OWNER_KINDS = {"contractor": "Contractor", "rm": "Regional manager",
+                "coordinator": "Coordinator"}
+
+
 def month(payload: dict) -> BuiltWorkbook:
-    by_owner = payload["by"] != "all"
+    by_owner = payload["by"] not in ("all", "owners")
     figures = ["This month", "Last month (same day)", "Change"]
-    if by_owner:
+    if payload["by"] == "owners":
+        header = ["Section", "Measure", "Owner kind", "Owner", *figures]
+    elif by_owner:
         header = ["Section", "Measure", "Owner", *figures]
     else:
         header = ["Section", "Measure", "Unit", *figures,
@@ -78,6 +84,12 @@ def month(payload: dict) -> BuiltWorkbook:
     def rows():
         for section in payload["sections"]:
             for row in section["rows"]:
+                if row.get("owners_by"):
+                    for kind, owners in row["owners_by"].items():
+                        for owner in owners:
+                            yield [section["title"], row["label"], _OWNER_KINDS[kind],
+                                   owner["name"], owner["now"], owner["ref"], owner["delta"]]
+                    continue
                 if by_owner:
                     for owner in row["owners"] or []:
                         yield [section["title"], row["label"], owner["name"],
@@ -101,89 +113,34 @@ def month(payload: dict) -> BuiltWorkbook:
     ])
 
 
+_AREA_MEASURES = (("onair", "On air"), ("dt", "DT done"), ("full", "Fully approved"),
+                  ("ict", "ICT approved"), ("cra", "CRA approved"))
+
+
 def area(payload: dict) -> BuiltWorkbook:
-    header = ["Name", "Villages", "DT done", "On air, no DT", "Not on air",
-              "ICT %", "ICT approved", "CRA %", "CRA approved", "Remaining", "Compared"]
+    """One row per breakdown member, then the scope and national on their
+    own sheet. On air, DT done and Fully approved are % of villages; ICT and
+    CRA are % of DT-done villages."""
+    measure_header = [h for _k, label in _AREA_MEASURES for h in (label, f"{label} %")]
+    header = ["Name", "Villages", *measure_header, "Compared"]
+
+    def figures(measures: dict) -> list:
+        return [v for k, _l in _AREA_MEASURES for v in (measures[k]["count"], measures[k]["rate"])]
+
     rows = (
-        [r["name"], r["villages"], r["dt_done"], r["on_air_only"], r["not_on_air"],
-         r["ict"]["rate"], r["ict"]["count"], r["cra"]["rate"], r["cra"]["count"],
-         r["remaining"], "Not compared" if r["low_sample"] else "Yes"]
+        [r["name"], r["villages"], *figures(r["measures"]),
+         "Not compared" if r["low_sample"] else "Yes"]
         for r in payload["rows"]
     )
-    cards = (
-        [c["label"], c["count"], c["rate"], c["base"], c["base_label"], c["national_rate"]]
-        for c in payload["cards"]
+    totals, national = payload["totals"], payload["national"]
+    headline = (
+        [label, totals[k]["count"], totals[k]["rate"], national[k]]
+        for k, label in _AREA_MEASURES
     )
     return _write([
         ("Breakdown", header, rows),
-        ("Headline", ["Figure", "Count", "Rate %", "Base", "Base is", "National %"], cards),
+        ("Scope", ["Measure", "Count", "Rate %", "National %"],
+         [["Villages", totals["villages"], None, None], *headline]),
         _about([("Scope", payload["scope"]["label"]), ("Breakdown", payload["breakdown"]),
                 ("As of", "today")]),
-    ])
-
-
-def performance(payload: dict) -> BuiltWorkbook:
-    def count(entry, key):
-        return entry[key]["count"]
-
-    series = (
-        [f"{m['year']}-{m['month']:02d}", count(m, "dt_done"), count(m, "ict_approved"),
-         count(m, "cra_approved"), m["ict_role_average"]]
-        for m in (payload["results"] or {}).get("series", [])
-    )
-    sheets: list[Sheet] = [
-        ("Delivered", ["Month", "DT done", "ICT approved", "CRA approved", "ICT role average"],
-         series),
-    ]
-    if payload["results"]:
-        sheets.append((
-            "Results",
-            ["Measure", "Rate %", "Count", "Base", "This month", "National %", "Gap",
-             "Role average %", "Gap to role"],
-            ([t["label"], t["rate"], t["count"], t["base"], t["movement"], t["national_rate"],
-              t["national_gap"], t["role_average"], t["role_gap"]]
-             for t in payload["results"]["tiles"]),
-        ))
-    if payload["activity"]:
-        sheets.append((
-            "Response times",
-            ["Measure", "Median days", "Pairs", "Role median days"],
-            ([t["label"], t["median_days"], t["pairs"], t["role_median_days"]]
-             for t in payload["activity"]["response_times"]),
-        ))
-        sheets.append((
-            "Activity",
-            ["Month", "Filed", "Validated"],
-            ([f"{m['year']}-{m['month']:02d}", m["filed"], m["validated"]]
-             for m in payload["activity"]["trend"]),
-        ))
-    sheets.append(_about([("Scope", payload["scope"]["label"])]))
-    return _write(sheets)
-
-
-def compare(payload: dict) -> BuiltWorkbook:
-    unit = payload["unit"]
-    value = "Median days" if unit == "days" else "Rate %"
-    months = [f"{m['year']}-{m['month']:02d}" for m in payload["series_months"]]
-    header = ["Rank", "Name", value, "Count", "Delta vs national", "Compared", *months]
-
-    def series_value(entry):
-        return entry.get("median_days") if unit == "days" else entry.get("count")
-
-    rows = (
-        [r["rank"], r["label"], r["rate"], r["count"], r["delta"],
-         "Not compared" if r["low_sample"] else "Yes",
-         *(series_value(e) for e in r["series"])]
-        for r in payload["rows"]
-    )
-    head = payload["headline"]
-    return _write([
-        ("Ranking", header, rows),
-        _about([
-            ("Kind", payload["kind"]),
-            ("Measure", payload["measure"]),
-            ("Period", payload["period"]),
-            ("National", head["national"]),
-            ("Average", head["average"]),
-        ]),
     ])

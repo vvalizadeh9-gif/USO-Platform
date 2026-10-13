@@ -20,11 +20,7 @@ RECORDED_FROM: tuple[int, int] = (1405, 7)
 SITES = "sites"
 VILLAGES = "villages"
 
-#: Fewer timed pairs than this and a speed figure is "Not compared", the same
-#: rule as :data:`LOW_SAMPLE_DT_DONE` applied to response times.
-LOW_SAMPLE_PAIRS = 10
-
-__all__ = ["LOW_SAMPLE_DT_DONE", "LOW_SAMPLE_PAIRS", "pct"]
+__all__ = ["LOW_SAMPLE_DT_DONE", "pct"]
 
 
 @dataclass(frozen=True)
@@ -114,43 +110,15 @@ class Rate:
     label: str
     count: str
     base: str
-    #: The event that moves this rate, for "this month: +23".
-    measure: Measure
 
 
 RATES: dict[str, Rate] = {
     r.key: r
     for r in (
-        Rate("on_air", "On air", "villages_on_air", "villages", ON_AIR),
-        Rate("dt_done", "DT done", "villages_dt_done", "villages", DT_DONE),
-        Rate("ict", "ICT approved", "ict_approved", "villages_dt_done", ICT_APPROVED),
-        Rate("cra", "CRA approved", "cra_approved", "villages_dt_done", CRA_APPROVED),
-        Rate("fully", "Fully accepted", "fully_approved", "villages", FULLY_APPROVED),
+        Rate("on_air", "On air", "villages_on_air", "villages"),
+        Rate("dt_done", "DT done", "villages_dt_done", "villages"),
+        Rate("ict", "ICT approved", "ict_approved", "villages_dt_done"),
+        Rate("cra", "CRA approved", "cra_approved", "villages_dt_done"),
+        Rate("fully", "Fully accepted", "fully_approved", "villages"),
     )
-}
-
-#: Compare's ``measure`` parameter, to the rate it ranks.
-COMPARE_MEASURES: dict[str, str] = {
-    "dt": "dt_done",
-    "onair": "on_air",
-    "ict": "ict",
-    "cra": "cra",
-}
-SPEED = "speed"
-
-
-# ----- Response times -------------------------------------------------------
-#
-# Always medians. Only people who act in UEP have them: contractors,
-# coordinators and PM. Regional managers, provinces and CRA regions show
-# results only.
-
-VALIDATION = "validation"  # contractor filing -> coordinator validation
-FIRST_FILING = "first_filing"  # DT done -> first ICT/CRA filing
-REFILING = "refiling"  # rejection -> re-filing with a new letter
-
-RESPONSE_TIMES: dict[str, str] = {
-    VALIDATION: "Filing to validation",
-    FIRST_FILING: "DT done to first filing",
-    REFILING: "Rejection to re-filing",
 }

@@ -4,6 +4,7 @@
     periods       Shamsi months and the same-day comparison
     ownership     who owned a province on a given day
     facts         the dated events every tab counts
-    month, area, person, compare   one payload builder per tab
+    month, area   one payload builder per tab
+    onair_history the on-air dates the CPM import records
     export        workbooks built from those payloads
 """

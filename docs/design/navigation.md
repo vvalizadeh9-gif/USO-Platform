@@ -85,6 +85,25 @@ A contractor's Approvals item opens their own filing page, as the old
 whose streams carry `months[]` (`plan`, `delivered`, `internal`, `is_running`,
 `is_future`, `contractors[]`); see ARCHITECTURE §5h.
 
+### Roles performance tabs (UEP-09)
+
+Insights' *Roles performance* item opens `/reports/kpi`, which lands on the
+role's first tab:
+
+| Tab | Route | Roles |
+|---|---|---|
+| Month | `/reports/kpi/month` (`?month=YYYY-MM&measure=`) | PM, Viewer |
+| Area / My area | `/reports/kpi/area` (`?lens=&key=&measure=`) | PM, Viewer / RegionalManager, Coordinator, Contractor |
+| Map | `/reports/kpi/map` | everyone with the page |
+
+Any other tab, including the removed `/reports/kpi/performance` and
+`/reports/kpi/compare`, redirects to the role's first tab and keeps `?lens=&key=`.
+A Month owner opens `/reports/kpi/area?lens=&key=`; an Area row opens
+Lifecycle Gaps with `?lens=&key=`. Month reads `GET /kpi/month?by=owners`
+(three owner lists per row in one call); Area reads `GET /kpi/area`, whose rows
+carry `measures: {onair, dt, full, ict, cra}` with `totals` and `national`
+(see docs/design/roles-performance-api.md).
+
 ### Adding an app or a page
 
 1. Add the app (or the page) to `APPS`. Give it roles and, if it has pending

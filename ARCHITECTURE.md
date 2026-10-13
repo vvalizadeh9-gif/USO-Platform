@@ -699,26 +699,37 @@ in the app and the importer will not overwrite them.
 
 The reporting page about **people**, at `/reports/kpi` (sidebar: "Roles
 Performance", one item). It replaced the single-scope KPI & Performance page
-in 1405 and answers three questions, one tab each:
+in 1405. Since UEP-09 it answers two questions, one tab each:
 
 | Question | Tab |
 |---|---|
-| What happened this month compared with last month? | **Month** |
-| Where do things stand today? | **Area** (PM, Viewer) / **My area** (everyone else) |
-| What did a person deliver, month by month, and how fast? | **Performance** / **My performance** |
+| What happened in a month, and who does it belong to? | **Month** (PM, Viewer) |
+| Where do things stand today, against national? | **Area** (PM, Viewer) / **My area** (everyone else) |
 
-PM and Viewer also get **Compare**, which ranks like with like. **Map** is the
-Lifecycle Gaps coverage map (`/gaps/map`, `CoverageMap.jsx`) embedded
-unchanged.
+**Map** is the Lifecycle Gaps coverage map (`/gaps/map`, `CoverageMap.jsx`)
+embedded unchanged. The Performance and Compare tabs were removed in UEP-09,
+with the per-person monthly trend and the UEP activity measures (filings,
+validations, response times); old `/reports/kpi/performance` and `/compare`
+links land on the role's first tab with `?lens=&key=` kept.
 
 | Role | Tabs, in order | Lands on |
 |---|---|---|
-| PM | Month · Area · Performance · Compare · Map | PM's existing landing |
-| Viewer | Month · Area · Performance · Compare · Map (read-only) | Month |
-| Regional Manager | My area · My performance · Map | My area |
-| Coordinator | My area · My performance · Map | My area |
-| Contractor | My area · My performance · Map | My area |
+| PM | Month · Area · Map | Month |
+| Viewer | Month · Area · Map (read-only) | Month |
+| Regional Manager | My area · Map | My area |
+| Coordinator | My area · Map | My area |
+| Contractor | My area · Map | My area |
 | Admin | none: 403 on every route | n/a |
+
+Both tabs share one layout: a **measure list** on the left (`MeasureList.jsx`,
+the selection in `?measure=`) and a breakdown of the selected measure on the
+right. Month splits it three ways side by side (contractors, regional
+managers, coordinators), each column adding up to the total, from one
+`GET /kpi/month?by=owners`. Area ranks every member of a breakdown by its gap
+to national with `RankBar.jsx` (grey to the lower of rate and national, the
+difference cobalt when ahead and red stripes when behind), from
+`GET /kpi/area`, whose rows carry all five measures. Month shows no
+comparison with the previous month; the payload still has it, for the export.
 
 ### The mapping is master data
 
@@ -781,15 +792,14 @@ test is unfinished was never eligible for acceptance. Fully accepted % divides
 by villages in scope.
 
 **Low sample.** Fewer than `LOW_SAMPLE_DT_DONE` (10) DT-done villages means the
-owner is "Not compared": shown in grey, unranked, sorted last. For speed, the
-same rule applies to fewer than 10 timed pairs.
+row is "Not compared": shown in grey, with no bar and no gap, sorted last.
 
-**Benchmarks.** *National* is always the whole country, weighted: the sum of
-numerators over the sum of denominators. *Role average* is the plain mean of
-the **compared** owners' rates, each person counting once. A weighted average
-over regional managers, coordinators or regions would just be the national
-rate again, because they partition the country. Contractors do not partition
-the country, so their role average is weighted.
+**National** is always the whole country, weighted: the sum of numerators over
+the sum of denominators. Area's gap is the row's rate minus national, in whole
+points.
+
+**Default month.** `month.default_month` is the last closed month, or the
+running month while the last closed month is before `RECORDED_FROM`.
 
 ### Months, and the same-day comparison
 
@@ -803,6 +813,7 @@ a window pair:
 * **A closed month** is compared whole against whole.
 
 Every comparison is returned as `{now, ref, delta, lower_is_better, recorded}`.
+Only the Month export shows `ref` and `delta`; the screen reads `now`.
 
 ### Ownership at the time
 
@@ -826,47 +837,11 @@ range join.
   no DT SC) goes to an **"Unattributed"** bucket. It is never dropped, so the
   owner splits always add up to the row total.
 * **Area is "today"** and uses the current mapping rows only.
-* PM and Viewer may open **past owners** in Performance and Compare.
-  `/kpi/lenses` lists them under `past`, and the picker marks them "(past)".
-  Their Area is empty, and the page says so.
-* On Month, an owner is listed when they have something in either window,
-  highest first. A roll-call of zeros is not a ranking.
-
-### Activity and response times come from `acceptance_submissions`
-
-**This deviates from the original brief, which asked for a new
-`performance_event` table.** The submission tables are already the event log.
-A round is never changed after review, and a re-filing is a new row
-(`round_no` + 1). The columns give every event:
-
-| Event | Read as |
-|---|---|
-| filed | a submission row: `submitted_at`, `submitted_by`, `letter_number` |
-| validated | `reviewed_at` / `reviewed_by` with `Validated` or `Returned`, where the reviewer is not the filer |
-| rejected | a validated round that claims `Rejected` for any technology: a refusal by the **authority**. A coordinator's `Returned` is not a rejection. |
-| refiled | the next round for the same village and authority, after a rejection, under a **different** letter number |
-
-A second table would have to be written in the same transaction as each of
-these and backfilled once. It could still drift from the rows it copies.
-`services/performance/activity.py` reads the facts in place instead, behind
-one `load()`, so a database view can replace it later without touching the
-API. The CPM-side facts (on air, DT done, approvals, health checks,
-problematic) come from `services/performance/facts.py` in the same way.
-
-The three response times are always **medians**:
-
-1. **Filing → validation.** From `submitted_at` to `reviewed_at`, credited to
-   the reviewer. Rounds a coordinator filed and decided themselves are
-   excluded, because they take zero time.
-2. **DT done → first filing.** From `dt_date_gregorian` to the first round per
-   village and authority, credited to the filer.
-3. **Rejection → re-filing with a new letter.** From the rejecting round's
-   `reviewed_at` to the next round's `submitted_at`, credited to the filer.
-
-Only contractors, coordinators and PM act in UEP, so only they get activity
-and speed. Regional managers, provinces and regions show results only. In
-Compare, **Speed** ranks contractors on measure 2 and coordinators on
-measure 1.
+* `/kpi/lenses` lists **past owners** under `past`, and the picker marks them
+  "(past)". Their Area is empty.
+* On Month (`by=owners`), every owner who could have been credited is
+  returned, at 0 if they had nothing; the screen lists those with something,
+  highest first, and folds the rest into "N with none this month".
 
 ### `lifecycle_status_history`
 
@@ -886,7 +861,7 @@ Every figure is a live read. `facts.load()` reads the live work items through
 target villages and the approval dates: a handful of queries, a few
 milliseconds at about 4.4k villages. Every tab then folds those rows:
 
-* Month and Performance count dated events;
+* Month counts dated events;
 * Area folds today's counters, grouped by (province, contractor), so a region
   agrees with its provinces and the rows agree with the headline.
 
@@ -903,10 +878,8 @@ services/performance/
   periods.py                    Shamsi months and the same-day cut
   ownership.py                  who owned a province on a day
   facts.py                      dated CPM-side facts and today's cells (the read model)
-  activity.py                   filings, validations, the three response times
-  common.py                     shared shapes: comparison, scope, role average
+  common.py                     shared shapes: comparison, scope, rates, low sample
   month.py  area.py             one payload builder per tab
-  person.py  compare.py         (person.py is the Performance tab)
   export.py                     workbooks built from the same payloads
   onair_history.py              writes lifecycle_status_history after a CPM import
 schemas/roles_performance.py    the response models
@@ -916,13 +889,15 @@ api/kpi.py                      read routes; mapping and linking routes unchange
 ```
 frontend/src/pages/reports/rolesPerformance/
   RolesPerformance.jsx          tab router, role landing, scope in the URL
-  PerfHeader.jsx                eyebrow · title · tabs · date control · Export
+  PerfHeader.jsx                the shared PageBar: eyebrow · title · subtitle · Export · Tabs
   ScopePicker.jsx               "whose?" (PM, Viewer)
-  MonthTab.jsx  AreaTab.jsx  PerformanceTab.jsx  CompareTab.jsx  MapTab.jsx
-  parts.jsx                     Num (LTR span), CountUp, DeltaChip, RpCard, RateBar
-  hooks.js                      useRpData, useExport, useCountUp
-  model.js                      tabs per role, row colours, block maths, formats
-  rolesPerformance.css          page-local Cobalt tokens, dark mode, motion
+  MonthPicker.jsx               the Month title: a Shamsi month dialog
+  MeasureList.jsx  RankBar.jsx  the two pieces both tabs share
+  MonthTab.jsx  AreaTab.jsx  MapTab.jsx
+  parts.jsx                     Num (LTR span), CountUp, Fa, IconTile, RpCard
+  hooks.js                      useRpData (with retry), useExport, useCountUp
+  model.js                      tabs per role, owner columns, ranking, formats
+  rolesPerformance.css          on the UEP tokens (uep-tokens.css), motion
 ```
 
 The logic module is `model.js`, not `rolesPerformance.js`. A file whose name
@@ -949,24 +924,23 @@ modified.
   same `require_kpi_access`, so Viewer reads it too, choosing the lens as PM
   does. Viewer may download Excel. It never sees the Mojri tracker or the
   mapping screens, and both are refused on the server, not just hidden.
-* **"Open my Action Center"** on Area appears only for roles that have an
-  Action Center (`hasActionCenter`, the same list as the server's
-  `board_role()`): not for Viewer or Regional Manager.
-* **Month and Compare are PM's and Viewer's** (`kpi.require_compare`).
+* **Month is PM's and Viewer's** (`kpi.require_compare`).
   Anyone else gets a 403 on them, exports included.
 * **Asking for another scope is a 403**, never an empty result and never a
   silent substitution. A substituted page would be headed with someone
   else's name.
-* **Contractor breakdown in Area.** PM, Viewer, coordinators and regional
-  managers get it, limited to contractors working in their own provinces and
-  not ranked. A contractor asking for it gets a 403.
-* **Ranking.** *The old "never rank people" rule is retired.* PM and Viewer
-  may rank owners in Month (owner views) and Compare. Every other role sees
-  only their own scope, so nothing on their page ranks anyone.
+* **Area breakdowns.** PM and Viewer: provinces, CRA regions, contractors,
+  coordinators and regional managers (minus the scope's own kind).
+  Coordinators and regional managers: provinces, CRA regions and contractors
+  in their own provinces. Contractors: provinces and CRA regions. Anything
+  else is a 403.
+* **Ranking.** *The old "never rank people" rule is retired.* Area ranks every
+  breakdown against national, and Month orders owners by count. Outside PM
+  and Viewer, the ranking only covers the caller's own scope.
 
 ### Exports
 
-`/kpi/{month,area,performance,compare}.xlsx` are built from the payload the
+`/kpi/{month,area}.xlsx` are built from the payload the
 screen receives, never from a second query. A number in the file cannot
 differ from the one on screen, and the row counts match: each response says
 how many rows its main sheet has in `X-Row-Count`, and the tests compare that
@@ -974,7 +948,7 @@ with the screen. They stream above the Lifecycle Gaps threshold. The access
 rules are the screen's.
 
 An Area breakdown row links to Lifecycle Gaps with `?lens=` set to the
-breakdown (province, region or contractor), so PM and Viewer land on the
+breakdown (province, region, contractor, coordinator or regional manager), so PM and Viewer land on the
 lens they were reading. Everyone else is confined there anyway.
 
 `GET /kpi/summary`, `/kpi/contractors` and `/kpi/export.{xlsx,pdf}` serve the
@@ -2069,12 +2043,8 @@ above:
 - **bcrypt still being verifiable** after the move to Argon2id — deliberate;
   removing it locks out every user at once.
 - **No route that deletes a user** — deliberate; see "Nothing is deleted" above.
-- **No `performance_event` table** — deliberate; `acceptance_submissions` is
-  already the append-only event log. See section 5b.
 - **Approvals dated by `reviewed_at`, not the letter date** — deliberate; a
   typed letter date would let a late filing rewrite a closed month.
-- **Role average as a plain mean for geographic roles** — deliberate; a
-  weighted average over a partition of the country is the national rate.
 - **Action Center tickets calling the screens' own list functions** instead
   of fast counts — deliberate; a ticket must open exactly what it counted
   (§ 5e).

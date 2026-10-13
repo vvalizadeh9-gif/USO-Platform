@@ -1,5 +1,5 @@
-"""Roles Performance: the definitions, the same-day comparison, ownership at
-the time, access, and exports.
+"""Roles Performance (Month and Area): the definitions, the same-day
+comparison, ownership at the time, access, and exports.
 
 "Today" is pinned to 10 Mehr 1405, so every window below is fixed. The
 dataset is small and every expected figure names its arithmetic:
@@ -129,8 +129,6 @@ def actors(client):
         coordinator_user=_user_id(client, admin_h, "test_coordinator"),
     )
     contractor = _contractor_account(client, admin_h, ids["alpha"])
-    _seed_activity(_user_id(client, admin_h, "rp_contractor"),
-                   _user_id(client, admin_h, "test_coordinator"))
     return {
         "admin": admin_h, "pm": pm, "viewer": viewer, "rm": rm,
         "coordinator": coordinator, "contractor": contractor,
@@ -278,44 +276,6 @@ def _approve(db, village, authority, *, filed, reviewed, by, reviewer):
     db.flush()
 
 
-def _seed_activity(contractor_user: int, coordinator_user: int) -> None:
-    """Attribute the T1 rounds to the contractor account, and add one
-    rejection followed by a re-filing under a new letter."""
-    from app.models.acceptance_workflow import (
-        AcceptanceSubmission,
-        AcceptanceSubmissionTech,
-    )
-    from app.models.workitem import Site, Village, WorkItem
-
-    db = SessionLocal()
-    try:
-        t1 = db.query(WorkItem).join(Site).filter(Site.site_code == "T1").one()
-        tv = db.query(Village).filter(Village.work_item_id == t1.id).order_by(Village.id).all()
-        db.query(AcceptanceSubmission).filter(
-            AcceptanceSubmission.village_id.in_([v.id for v in tv])
-        ).update({"submitted_by": contractor_user}, synchronize_session=False)
-
-        rejected = AcceptanceSubmission(
-            village_id=tv[3].id, authority="ICT", round_no=1, letter_number="L-REJ-1",
-            source="Contractor", review_status="Validated", submitted_by=contractor_user,
-            submitted_at=at(1405, 7, 5), reviewed_by=coordinator_user,
-            reviewed_at=at(1405, 7, 6),
-        )
-        rejected.technologies = [AcceptanceSubmissionTech(
-            technology="2G", claimed_status="Rejected", comment="Signal")]
-        refiled = AcceptanceSubmission(
-            village_id=tv[3].id, authority="ICT", round_no=2, letter_number="L-REJ-2",
-            source="Contractor", review_status="Pending", submitted_by=contractor_user,
-            submitted_at=at(1405, 7, 9),
-        )
-        refiled.technologies = [AcceptanceSubmissionTech(technology="2G", claimed_status="Approved")]
-        db.add_all([rejected, refiled])
-        tv[3].ict_status = "Pending"
-        db.commit()
-    finally:
-        db.close()
-
-
 # ----- Helpers ---------------------------------------------------------------
 
 
@@ -373,14 +333,6 @@ def test_a_closed_month_is_compared_whole_against_whole():
 
 def test_a_future_month_is_refused(client, actors):
     _get(client, actors["pm"], "month", status=422, month="1405-08")
-
-
-def test_medians_with_odd_and_even_counts():
-    from app.services.performance.activity import median_days
-
-    assert median_days([3.0, 1.0, 2.0]) == 2.0
-    assert median_days([1.0, 2.0, 3.0, 4.0]) == 2.5
-    assert median_days([]) is None
 
 
 # ----- Definitions --------------------------------------------------------------
@@ -476,44 +428,127 @@ def test_owners_are_sorted_high_to_low(client, actors):
             assert named == sorted(named, reverse=True)
 
 
+def test_owners_gives_three_lists_that_each_add_up(client, actors):
+    p = _get(client, actors["pm"], "month", month="1405-07", by="owners")
+    for section in p["sections"]:
+        for row in section["rows"]:
+            assert row["owners"] is None
+            if not row["recorded"]:
+                assert row["owners_by"] is None
+                continue
+            assert list(row["owners_by"]) == ["contractor", "rm", "coordinator"]
+            for kind, entries in row["owners_by"].items():
+                assert sum(o["now"] for o in entries) == row["now"], (kind, row["key"])
+                named = [o["now"] for o in entries if o["name"] != "Unattributed"]
+                assert named == sorted(named, reverse=True)
+    dt = _row(p, "dt_done")["owners_by"]
+    # U1 has no province and no contractor: Unattributed, last, in every list.
+    for entries in dt.values():
+        assert (entries[-1]["name"], entries[-1]["now"]) == ("Unattributed", 1)
+    # The same crediting as by=rm: T1's DT done went to Karimi.
+    assert _owner_now({"owners": dt["rm"]}, NEW_RM) == 1
+    # Zero entries are listed, so the screen can say who had none: Allahyar
+    # held Tehran until 07/03 and still holds other provinces.
+    assert next(o for o in dt["rm"] if o["name"] == "Allahyar")["now"] == 0
+    assert {o["name"] for o in dt["contractor"]} == {ALPHA, BETA, "Unattributed"}
+
+
+def test_default_month_is_the_last_closed_one():
+    from app.services.performance.month import default_month
+    from app.services.performance.periods import ShamsiMonth
+
+    # Shahrivar 1405 closed before UEP recorded approvals: the running month.
+    assert default_month(sh(1405, 7, 10)) == ShamsiMonth(1405, 7)
+    # From Aban on, the last closed month.
+    assert default_month(sh(1405, 8, 1)) == ShamsiMonth(1405, 7)
+    assert default_month(sh(1406, 1, 15)) == ShamsiMonth(1405, 12)
+
+
+def test_month_defaults_and_picker_range(client, actors):
+    p = _get(client, actors["pm"], "month")
+    assert p["month"]["month"] == 7 and p["running"] is True
+    assert p["current_month"] == {"year": 1405, "month": 7, "label_fa": p["month"]["label_fa"]}
+    # Z1 went on air in Esfand 1404: the first year with data.
+    assert p["first_year"] == 1404
+
+
 # ----- Area -------------------------------------------------------------------
 
 
-def test_area_country_cards(client, actors):
+def test_area_country_totals_and_national(client, actors):
     p = _get(client, actors["pm"], "area")
     assert p["scope"]["lens"] == "country"
-    cards = {c["key"]: c for c in p["cards"]}
-    # Villages 12+10+10+4+2 = 38; DT done 12+10+10+2 = 34.
-    assert cards["dt_done"]["count"] == 34 and cards["dt_done"]["base"] == 38
-    # ICT approved 3 + 5 = 8 of 34 DT-done villages.
-    assert cards["ict"]["count"] == 8 and cards["ict"]["rate"] == round(800 / 34, 1)
-    assert cards["fully"]["remaining"] == 37
-    assert list(cards) == ["on_air", "dt_done", "ict", "cra", "fully", "problematic"]
+    t = p["totals"]
+    # Villages 12+10+10+4+2 = 38, all on air; DT done 12+10+10+2 = 34.
+    assert t["villages"] == 38
+    assert t["onair"] == {"count": 38, "rate": 100.0}
+    assert t["dt"] == {"count": 34, "rate": round(3400 / 38, 1)}
+    # ICT and CRA divide by DT-done villages; Fully approved by villages.
+    assert t["ict"] == {"count": 8, "rate": round(800 / 34, 1)}
+    assert t["cra"] == {"count": 1, "rate": round(100 / 34, 1)}
+    assert t["full"] == {"count": 1, "rate": round(100 / 38, 1)}
+    assert p["national"] == {k: t[k]["rate"] for k in ("onair", "dt", "full", "ict", "cra")}
+    for gone in ("cards", "open_work"):
+        assert gone not in p
 
 
-def test_province_rows_add_up_to_the_country(client, actors):
-    p = _get(client, actors["pm"], "area", breakdown="province")
-    names = [r["name"] for r in p["rows"]]
-    assert "Unknown province" in names and names[-1] == "Unknown province"
-    assert sum(r["villages"] for r in p["rows"]) == 38
-    assert sum(r["dt_done"] for r in p["rows"]) == 34
-
-
-def test_area_low_sample(client, actors):
+def test_area_rows_carry_the_five_measures(client, actors):
     p = _get(client, actors["pm"], "area", breakdown="province")
     rows = {r["name"]: r for r in p["rows"]}
+    tehran = rows["Tehran"]["measures"]
+    assert tehran["ict"] == {"count": 3, "rate": 25.0}
+    assert tehran["full"] == {"count": 1, "rate": round(100 / 12, 1)}
+    assert rows["Tehran"]["gaps_key"] == TEHRAN
+    for gone in ("remaining", "on_air_only", "not_on_air", "dt_done"):
+        assert gone not in rows["Tehran"]
     assert rows["Zanjan"]["low_sample"] is True
     assert rows["Tehran"]["low_sample"] is False
+    names = [r["name"] for r in p["rows"]]
+    assert names[-1] == "Unknown province"
+    assert sum(r["villages"] for r in p["rows"]) == 38
+    assert sum(r["measures"]["dt"]["count"] for r in p["rows"]) == 34
+
+
+@pytest.mark.parametrize("lens,key", [("rm", "Nobakht"), ("rm", NEW_RM), ("contractor", ALPHA),
+                                      ("province", TEHRAN)])
+def test_a_scoped_area_is_the_sum_of_its_provinces(client, actors, lens, key):
+    p = _get(client, actors["pm"], "area", lens=lens, key=key, breakdown="province")
+    for k in ("onair", "dt", "full", "ict", "cra"):
+        assert sum(r["measures"][k]["count"] for r in p["rows"]) == p["totals"][k]["count"]
+    assert sum(r["villages"] for r in p["rows"]) == p["totals"]["villages"]
+
+
+def test_breakdowns_offered_per_role(client, actors):
+    pm = _get(client, actors["pm"], "area")
+    assert pm["breakdowns"] == ["province", "region", "contractor", "coordinator", "rm"]
+    assert pm["breakdown"] == "province"
+    # The scope's own kind is not offered.
+    scoped = _get(client, actors["viewer"], "area", lens="rm", key="Nobakht")
+    assert scoped["breakdowns"] == ["province", "region", "contractor", "coordinator"]
+    assert _get(client, actors["rm"], "area")["breakdowns"] == ["province", "region", "contractor"]
+    assert _get(client, actors["coordinator"], "area")["breakdowns"] == [
+        "province", "region", "contractor"]
+    assert _get(client, actors["contractor"], "area")["breakdowns"] == ["province", "region"]
+
+
+def test_people_breakdowns_are_pm_and_viewer_only(client, actors):
+    for who in ("pm", "viewer"):
+        rm = _get(client, actors[who], "area", breakdown="rm")
+        assert NEW_RM in {r["name"] for r in rm["rows"]}
+        assert next(r for r in rm["rows"] if r["name"] == NEW_RM)["gaps_key"] == NEW_RM
+        coordinator = _get(client, actors[who], "area", breakdown="coordinator")
+        assert sum(r["villages"] for r in coordinator["rows"]) == 38
+    for who in ("rm", "coordinator", "contractor"):
+        for breakdown in ("rm", "coordinator"):
+            _get(client, actors[who], "area", status=403, breakdown=breakdown)
 
 
 def test_my_area_is_the_regional_managers_own(client, actors):
     p = _get(client, actors["rm"], "area")
     assert p["scope"]["key"] == "Nobakht" and p["scope"]["selectable"] is False
-    assert p["breakdown"] == "contractor"
-    cards = {c["key"]: c for c in p["cards"]}
-    assert list(cards)[0] == "villages"
     # Nobakht holds Mazandaran (10 villages) and Golestan (none here).
-    assert cards["villages"]["count"] == 10
+    assert p["totals"]["villages"] == 10
+    assert p["breakdown"] == "province"
 
 
 def test_contractor_area_is_their_own_sites(client, actors):
@@ -521,7 +556,7 @@ def test_contractor_area_is_their_own_sites(client, actors):
     assert p["breakdown"] == "province"
     assert "contractor" not in p["breakdowns"]
     # Alpha: T1 (12) and A1 (10).
-    assert {c["key"]: c for c in p["cards"]}["villages"]["count"] == 22
+    assert p["totals"]["villages"] == 22
     assert {r["name"] for r in p["rows"]} == {"Tehran", "Ardabil"}
 
 
@@ -529,86 +564,9 @@ def test_contractor_breakdown_is_refused_to_a_contractor(client, actors):
     _get(client, actors["contractor"], "area", status=403, breakdown="contractor")
 
 
-# ----- Performance ------------------------------------------------------------
-
-
-def test_performance_tiles_and_series(client, actors):
-    p = _get(client, actors["pm"], "performance", lens="province", key=TEHRAN)
-    tiles = {t["key"]: t for t in p["results"]["tiles"]}
-    assert tiles["ict"]["count"] == 3 and tiles["ict"]["base"] == 12
-    assert tiles["ict"]["movement"] == 3
-    assert tiles["ict"]["national_gap"] == round(25.0 - round(800 / 34, 1), 1)
-    series = {m["key"]: m for m in p["results"]["series"]}
-    assert series["1405-07"]["running"] is True
-    assert series["1405-07"]["dt_done"]["count"] == 12
-    assert series["1405-06"]["ict_approved"] == {"count": None, "recorded": False}
-    assert p["activity"] is None  # a province does not act in UEP
-
-
-def test_country_performance_shows_activity_only(client, actors):
-    p = _get(client, actors["viewer"], "performance")
-    assert p["scope"]["lens"] == "country"
-    assert p["results"] is None
-    assert p["activity"] is not None
-
-
-def test_contractor_activity_and_response_times(client, actors):
-    p = _get(client, actors["contractor"], "performance")
-    activity = p["activity"]
-    times = {t["key"]: t for t in activity["response_times"]}
-    # Validations of Alpha's rounds: 2, 2, 2, 3 (CRA) and 1 (the rejection).
-    # These are credited to the reviewer, so Alpha has none of its own.
-    assert times["validation"]["pairs"] == 0
-    # First filings, all two days after DT done on 07/03.
-    assert times["first_filing"]["median_days"] == 2.0
-    assert times["first_filing"]["pairs"] == 5
-    # Rejected 07/06 noon, re-filed under a new letter 07/09 noon.
-    assert times["refiling"]["median_days"] == 3.0
-    mehr = next(m for m in activity["trend"] if m["key"] == "1405-07")
-    assert mehr["filed"] == 6
-
-
-def test_coordinator_validation_time(client, actors):
-    p = _get(client, actors["coordinator"], "performance")
-    times = {t["key"]: t for t in p["activity"]["response_times"]}
-    # 2, 2, 2, 3, 1 -> median 2; the five Shahrivar approvals had no filer
-    # account, so they still count as validations by another: 2 days each.
-    assert times["validation"]["pairs"] == 10
-    assert times["validation"]["median_days"] == 2.0
-
-
-# ----- Compare ----------------------------------------------------------------
-
-
-def test_compare_low_sample_and_ranking(client, actors):
-    p = _get(client, actors["viewer"], "compare", kind="province", measure="ict")
-    rows = {r["name"]: r for r in p["rows"]}
-    assert rows[ZANJAN]["low_sample"] is True and rows[ZANJAN]["rank"] is None
-    assert p["rows"][-1]["low_sample"] is True
-    ranked = [r["rate"] for r in p["rows"] if r["rank"] is not None]
-    assert ranked == sorted(ranked, reverse=True)
-
-
-def test_contractor_average_is_weighted(client, actors):
-    p = _get(client, actors["pm"], "compare", kind="contractor", measure="ict")
-    # Alpha: 3 ICT of 22 DT-done villages; Beta: 5 of 10 (Z1 not done).
-    # Weighted: 8 / 32 = 25.0; a mean of rates would be (13.6 + 50.0) / 2.
-    assert p["headline"]["average"] == 25.0
-
-
-def test_speed_falls_back_to_ict_for_kinds_that_do_not_act(client, actors):
-    p = _get(client, actors["pm"], "compare", kind="rm", measure="speed")
-    assert p["measure"] == "ict"
-    speed = _get(client, actors["pm"], "compare", kind="contractor", measure="speed")
-    assert speed["unit"] == "days" and speed["lower_is_better"] is True
-    alpha = next(r for r in speed["rows"] if r["name"] == ALPHA)
-    assert alpha["rate"] == 2.0 and alpha["low_sample"] is True
-
-
 # ----- Access -----------------------------------------------------------------
 
-ROUTES = ["month", "area", "performance", "compare", "lenses",
-          "month.xlsx", "area.xlsx", "performance.xlsx", "compare.xlsx"]
+ROUTES = ["month", "area", "lenses", "month.xlsx", "area.xlsx"]
 
 
 @pytest.mark.parametrize("path", ROUTES)
@@ -628,15 +586,15 @@ def test_viewer_reads_any_scope_but_writes_nothing(client, actors):
     assert client.get("/api/v1/gaps/overview", headers=viewer).json()["scoped"] is False
 
 
-def test_only_pm_and_viewer_see_month_and_compare(client, actors):
+def test_only_pm_and_viewer_see_month(client, actors):
     for role in ("rm", "coordinator", "contractor"):
         _get(client, actors[role], "month", status=403)
-        _get(client, actors[role], "compare", status=403)
+        _get(client, actors[role], "month", status=403, by="owners")
 
 
 def test_another_scope_is_a_403_never_empty(client, actors):
     _get(client, actors["rm"], "area", status=403, lens="rm", key="Allahyar")
-    _get(client, actors["coordinator"], "performance", status=403, lens="rm", key="Nobakht")
+    _get(client, actors["coordinator"], "area", status=403, lens="rm", key="Nobakht")
     _get(client, actors["contractor"], "area", status=403, lens="contractor", key=BETA)
 
 
@@ -670,15 +628,17 @@ def test_exports_have_the_screens_row_counts(client, actors):
     assert response.status_code == 200
     assert _rows_in(response) == len(area["rows"])
 
-    compare = _get(client, pm, "compare", kind="province", measure="dt")
-    response = client.get("/api/v1/kpi/compare.xlsx", headers=pm,
-                          params={"kind": "province", "measure": "dt"})
-    assert _rows_in(response) == len(compare["rows"])
+    owners = _get(client, pm, "month", month="1405-07", by="owners")
+    response = client.get("/api/v1/kpi/month.xlsx", headers=pm,
+                          params={"month": "1405-07", "by": "owners"})
+    assert _rows_in(response) == sum(
+        len(entries) for s in owners["sections"] for r in s["rows"]
+        for entries in (r["owners_by"] or {}).values())
 
-    perf = _get(client, pm, "performance", lens="province", key=TEHRAN)
-    response = client.get("/api/v1/kpi/performance.xlsx", headers=pm,
-                          params={"lens": "province", "key": TEHRAN})
-    assert _rows_in(response) == len(perf["results"]["series"])
+
+def test_removed_tabs_are_gone(client, actors):
+    for path in ("performance", "performance.xlsx", "compare", "compare.xlsx"):
+        _get(client, actors["pm"], path, status=404)
 
 
 def test_viewer_may_download_and_others_only_their_own(client, actors):
