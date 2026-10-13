@@ -163,7 +163,7 @@ const streamOut = (stream) => ({
   trend: trendPoints,
 })
 
-export const pipOverview = {
+const pipOverviewMonth = {
   period: 'month', shamsi_year: RUNNING.year, shamsi_month: RUNNING.month,
   shamsi_month_name: MONTHS[RUNNING.month - 1],
   months: [{ shamsi_year: RUNNING.year, shamsi_month: RUNNING.month, shamsi_month_name: MONTHS[RUNNING.month - 1] }],
@@ -176,7 +176,65 @@ export const pipOverview = {
   needs_attention: [],
 }
 
-export const pipQueue = { label: '', stream: 'DT', rows: [], current_month: {} }
+// UEP-08: the year view's months[] per stream, for the History tab.
+const yearMonths = (year) =>
+  MONTHS.map((name, i) => {
+    const m = i + 1
+    const future = year > RUNNING.year || (year === RUNNING.year && m > RUNNING.month)
+    const base = { shamsi_year: year, shamsi_month: m, shamsi_month_name: name }
+    if (future) return { ...base, plan: null, delivered: null, internal: null, is_running: false, is_future: true, contractors: [] }
+    const people = CONTRACTORS.map((c, k) => ({ id: k + 1, name: c, plan: 50 + k * 5, delivered: 40 + ((m * 7 + k * 11) % 30) }))
+    return {
+      ...base,
+      plan: people.reduce((a, p) => a + p.plan, 0),
+      delivered: people.reduce((a, p) => a + p.delivered, 0),
+      internal: 360,
+      is_running: year === RUNNING.year && m === RUNNING.month,
+      is_future: false,
+      contractors: people,
+    }
+  })
+
+/** GET /pip/overview: the month view, or the year view with months[]. */
+export const pipOverview = (url) => {
+  const params = new URL(url).searchParams
+  if (params.get('period') !== 'year') return pipOverviewMonth
+  const year = Number(params.get('year'))
+  const withMonths = (stream) => ({ ...stream, months: yearMonths(year) })
+  return {
+    ...pipOverviewMonth,
+    period: 'year',
+    dt: withMonths(pipOverviewMonth.dt),
+    acceptance: withMonths(pipOverviewMonth.acceptance),
+    ict: withMonths(pipOverviewMonth.ict),
+    cra: withMonths(pipOverviewMonth.cra),
+  }
+}
+
+// GET /pip/queue, UEP-08: every contractor (plus one more, so the Approvals
+// grid holds seven cards and scrolls inside itself) has DT and Acceptance
+// waiting for the planning month; one has a revision on the running month.
+const QUEUE_PEOPLE = [...CONTRACTORS, 'مخابرات نوین']
+export const pipQueue = (url) => {
+  const params = new URL(url).searchParams
+  const stream = params.get('stream')
+  const running = Number(params.get('month')) === RUNNING.month && Number(params.get('year')) === RUNNING.year
+  const row = (k, over) => ({
+    contractor_id: k + 1, contractor_name: QUEUE_PEOPLE[k], plan_id: 100 + k + (stream === 'DT' ? 0 : 50),
+    status: 'Submitted', committed_count: 40 + k * 3, previous_month_committed: 38 + k * 2, version: 1,
+    submitted_at: '2026-10-05T08:00:00Z', is_late: false, return_comment: null, in_force_count: null,
+    revision_reason: null, revision_comment: null, assignment: 60 - k * 6, pip: 50, delivered: 20, ...over,
+  })
+  let rows = []
+  if (running) {
+    rows = stream === 'DT'
+      ? [row(0, { plan_id: 900, status: 'RevisionRequested', committed_count: 44, in_force_count: 52, revision_reason: 'SITES_BLOCKED' })]
+      : []
+  } else if (stream === 'DT' || stream === 'ACCEPTANCE') {
+    rows = QUEUE_PEOPLE.map((_, k) => row(k))
+  }
+  return { label: '', stream, rows, current_month: {} }
+}
 
 // ----- Lifecycle Gaps ------------------------------------------------------
 //
@@ -502,7 +560,7 @@ const homeGroups = [
   },
   {
     key: 'plans', label: 'Plans', scope_label: null,
-    tickets: [homeTicket('plans_approve', 'Plan approvals', 'Approve plans', '/monthly-plan?tab=plans', { due_soon: 2, age: 12 })],
+    tickets: [homeTicket('plans_approve', 'Plan approvals', 'Approve plans', '/monthly-plan?tab=approvals', { due_soon: 2, age: 12 })],
   },
 ]
 

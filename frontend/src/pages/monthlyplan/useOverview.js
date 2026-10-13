@@ -1,34 +1,39 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import api from '../../api/client'
 
 /**
- * GET /pip/overview for one period, the read behind the PIP vs Achieved tab.
+ * GET /pip/overview with `params` -- `{ period: 'month' }` for the running
+ * month, `{ period: 'month', year, month }` for another, or
+ * `{ period: 'year', year, month }` for the History table (which reads each
+ * stream's `months[]`).
  *
- * Reads only while `enabled` (the tab is on screen), and again each time it
- * becomes enabled, so a decision taken on the Plans tab is reflected when
- * the PM comes back. `reload` re-reads on demand (after a decision or a new
- * internal target).
+ * Reads only while `enabled`, and again each time it becomes enabled, so a
+ * decision taken on another tab is reflected when the user comes back. A
+ * response for params the page has already left is dropped.
+ *
+ * Returns `{ state, data, reload }`: `state` is `loading`, `ready`, `failed`,
+ * or `denied` (a 403: the role does not read the overview).
  */
-export default function useOverview({ view, period, enabled }) {
-  const [data, setData] = useState(null)
-  const [failed, setFailed] = useState(false)
-
-  const reload = useCallback(() => {
-    setFailed(false)
-    const params = { period: view }
-    if (view !== 'since_start' && period.year && period.month) {
-      params.year = period.year
-      params.month = period.month
-    }
-    api
-      .get('/pip/overview', { params })
-      .then((r) => setData(r.data))
-      .catch(() => setFailed(true))
-  }, [view, period])
+export default function useOverview({ params, enabled }) {
+  const key = JSON.stringify(params)
+  const [result, setResult] = useState({ key: '', state: 'loading', data: null })
+  const [tick, setTick] = useState(0)
 
   useEffect(() => {
-    if (enabled) reload()
-  }, [enabled, reload])
+    if (!enabled) return undefined
+    let live = true
+    api
+      .get('/pip/overview', { params: JSON.parse(key) })
+      .then((r) => live && setResult({ key, state: 'ready', data: r.data }))
+      .catch((err) => {
+        if (live) setResult({ key, state: err.response?.status === 403 ? 'denied' : 'failed', data: null })
+      })
+    return () => {
+      live = false
+    }
+  }, [enabled, key, tick])
 
-  return { data, failed, reload }
+  // A reload keeps the figures on screen until the new ones arrive.
+  const current = result.key === key ? result : { key, state: 'loading', data: null }
+  return { ...current, reload: () => setTick((t) => t + 1) }
 }

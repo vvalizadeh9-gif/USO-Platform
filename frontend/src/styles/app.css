@@ -280,11 +280,6 @@ input, select, textarea { font-family: inherit; font-size: 14px; }
   font-size: 14.5px;
   font-family: var(--font-farsi);
 }
-.text-data-lg {
-  font-size: 15.5px;
-  font-family: var(--font-farsi);
-  font-weight: 500;
-}
 
 
 /* Scrollbar */
@@ -1046,9 +1041,6 @@ a.stepper-step:focus-visible { outline: 2px solid var(--accent); outline-offset:
   font-size: var(--fs-meta); line-height: var(--lh-meta); color: var(--text-secondary);
 }
 .kpi-card-aside b { color: var(--text); font-weight: 700; }
-.kpi-card-meter { display: flex; align-items: center; gap: 10px; margin-top: auto; }
-.kpi-card-meter .meter { flex: 1 1 auto; }
-.kpi-card-pct { font-size: var(--fs-control); line-height: var(--lh-control); font-weight: 600; color: var(--text-secondary); }
 
 /* Meter (ui.jsx): an accent share on the plain track, 8px, with an optional
    2px ink tick for "expected by today". */
@@ -1834,41 +1826,11 @@ a.stepper-step:focus-visible { outline: 2px solid var(--accent); outline-offset:
   --kpi-ic: var(--dt-ongoing-wash);
 }
 
-/* The acceptance target card (monthlyplan/AcceptanceTarget.jsx). It keeps
-   the card shell and its violet: neither an authority nor a verdict, because
-   a promise is not a state anything is in. */
-.dt-kpi-card[data-kpi="acc-plan"] {
-  --kpi-accent: var(--violet);
-  --kpi-tint: rgba(109, 91, 208, 0.07);
-  --kpi-ic: var(--violet-dim);
-}
-.acc-plan-row {
-  display: grid; grid-template-columns: minmax(0, 320px);
-  margin-block-end: 24px;
-}
-
-/* Header row: the icon sits inline with the label, not above it, so the label
-   is what the eye lands on and the icon is a tint beside it. */
-.dt-kpi-hd {
-  display: flex; align-items: center; gap: 8px;
-  margin-block-end: 7px;
-}
-.dt-kpi-ic {
-  inline-size: 24px; block-size: 24px; border-radius: 7px; flex: none;
-  display: grid; place-items: center;
-  font-size: 10.5px;
-  color: var(--kpi-accent); background: var(--kpi-ic);
-}
 .dt-kpi-title {
   font-size: 12.5px; font-weight: 600; color: var(--text-secondary);
   min-width: 0;
 }
 
-/* The figure, at the card's full width, with its share beside it. */
-.dt-kpi-v {
-  display: flex; align-items: baseline; gap: 7px;
-  min-width: 0;
-}
 .dt-kpi-figure {
   font-family: var(--font-display); font-size: 25px; font-weight: 700;
   letter-spacing: -0.025em; line-height: 1.2; color: var(--text);
@@ -1907,13 +1869,6 @@ a.dt-status-row:focus-visible {
 }
 .dt-kpi-split > i { display: block; block-size: 100%; }
 
-/* The line under a figure saying what it is a share of. The drive test band
-   puts its share in the `.dt-kpi-pct` chip on the figure's own line; the
-   Acceptance band names the denominator too ("35% of 4,437"), which does not
-   fit there. */
-.dt-kpi-sub {
-  font-size: 11.5px; color: var(--text-tertiary); margin-block-start: 2px;
-}
 
 /* The strip of outstanding tiles that used to sit under this band —
    `.acc-remaining-strip` and its `.acc-tile-*` parts — is gone. It split
@@ -2785,8 +2740,8 @@ a.dt-contractor-name:hover { text-decoration: underline; text-decoration-color: 
 .dt-view { display: grid; gap: var(--dt-gap); min-width: 0; }
 
 /* ---------- Cobalt, scoped to this page ----------
-   The KPI card classes below are shared with the Acceptance Dashboard and
-   the Monthly Plan's target card, which move to Cobalt in their own steps.
+   The KPI card classes below are shared with the Acceptance Dashboard,
+   which moves to Cobalt in its own step.
    Until then this page's look is scoped under `.dt-page` so those pages do
    not change with it. */
 /* --dt-muted and --dt-pending-bar are global data tokens now (:root). */
@@ -3059,25 +3014,6 @@ a.dt-contractor-name:hover { text-decoration: underline; text-decoration-color: 
 
 @media (prefers-reduced-motion: reduce) {
   .pip-bar { animation: none !important; }
-}
-
-/* The PM's queue: the marks a decision row needs that a card does not. */
-.pip-th-sub { font-size: 11px; font-weight: 500; letter-spacing: 0; }
-.pip-mid { font-family: var(--font-display); font-size: 16px; font-weight: 600; }
-.pip-proposed { font-family: var(--font-display); font-size: 21px; font-weight: 700; }
-.pip-mini {
-  width: 88px; height: 8px; border-radius: 999px; position: relative;
-  display: inline-block; vertical-align: middle; flex: 0 0 auto;
-  background: var(--surface-3);
-}
-.pip-mini > i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 999px; }
-.pip-pcs {
-  font-size: 12.5px; font-weight: 600; display: inline-block;
-  width: 40px; text-align: right; font-family: var(--font-display);
-}
-
-@media (max-width: 720px) {
-  .pip-mini { display: none; }
 }
 
 /* ---------- Acceptance dashboard ----------
@@ -3771,212 +3707,10 @@ a.lifecycle-step:focus-visible { outline: 2px solid var(--accent); outline-offse
 .cov-pill.plain { color: var(--text-secondary); font-weight: 500; background: var(--neutral-soft); }
 
 
-/* ---------- Monthly Plan: the PM's two tabs (PmPlan / PipTab / StreamPanel) ----------
-   Built to fit 1440x900 with the sidebar: tight rows, small type for the
-   secondary lines, and a single plan's history in a drawer. */
-/* ---------- Monthly Plan (PM): the header's controls ----------
-   The plan clock (two 13/18 lines), the month picker as one control, and
-   Export. The Plans tab is a long board: its body scrolls inside the frame;
-   PIP vs Achieved is laid out to fit. */
-.mp-clock {
-  display: flex; flex-direction: column; align-items: flex-end; margin-inline-end: 8px;
-  font-size: var(--fs-meta); line-height: var(--lh-meta); color: var(--text-secondary); white-space: nowrap;
-}
-.mp-clock span:first-child { color: var(--text); font-weight: 600; }
-.mp-picker {
-  display: inline-flex; align-items: center; height: 36px;
-  border: 1px solid var(--control-border); border-radius: var(--radius-sm); background: var(--surface);
-}
-.mp-picker-step {
-  display: grid; place-items: center; width: 32px; height: 100%;
-  border: 0; background: none; color: var(--text-secondary);
-}
-.mp-picker-step:hover:not(:disabled) { background: var(--surface-subtle); color: var(--text); }
-.mp-picker-step:disabled { color: var(--text-tertiary); opacity: 0.5; cursor: default; }
-.mp-picker-step:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
-.mp-picker-label {
-  min-width: 104px; padding: 0 4px; text-align: center; white-space: nowrap;
-  font-family: var(--font-farsi); font-size: var(--fs-body); line-height: var(--lh-body); font-weight: 600;
-}
-/* The Plans tab's count of decisions waiting on the PM. */
-.mp-badge {
-  display: inline-grid; place-items: center;
-  min-width: 20px; height: 20px; padding: 0 6px; margin-inline-start: 6px;
-  border-radius: 999px; background: var(--accent-soft); color: var(--accent-ink);
-  font-size: 12px; font-weight: 600; line-height: 1;
-}
-
-
-/* ---------- Monthly Plan: the Plans tab (PlansTab) ----------
-   Two cards, then the two lists, then one slim card per pending revision.
-   Every status colour comes with its word. */
-.pl-tab { display: flex; flex-direction: column; gap: 14px; }
-.pl-top { display: grid; grid-template-columns: 1.35fr 1fr; gap: 16px; }
-.pl-lists { display: grid; grid-template-columns: 260px minmax(0, 1fr); gap: 16px; align-items: start; }
-@media (max-width: 1100px) {
-  .pl-top, .pl-lists { grid-template-columns: 1fr; }
-}
-.pl-card.ui-card { padding: 16px 20px; gap: 12px; }
-.pl-card-head { display: flex; align-items: center; gap: 8px; }
-.pl-card-label { font-size: 13px; font-weight: 600; color: var(--text-secondary); }
-.pl-card-note { font-size: 12px; color: var(--text-tertiary); margin-inline-start: auto; }
-.pl-vs .pl-card-note { margin-inline-start: 0; }
-.pl-card-sub { font-size: 13px; color: var(--text-secondary); }
-.pl-count {
-  display: inline-grid; place-items: center; min-width: 22px; height: 20px; padding: 0 6px;
-  border-radius: 999px; background: var(--neutral-soft); color: var(--text-secondary);
-  font-size: 12px; font-weight: 600;
-}
-
-.pl-shared { display: flex; align-items: center; gap: 24px; }
-.pl-shared-figure { flex: 0 0 auto; }
-.pl-fig { font-size: 36px; line-height: 44px; font-weight: 600; color: var(--text); }
-.pl-fig-of { font-size: 20px; color: var(--text-tertiary); }
-.pl-people { list-style: none; margin: 0; padding: 0; flex: 1; display: flex; justify-content: space-around; gap: 12px; flex-wrap: wrap; }
-.pl-person { display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 64px; max-width: 110px; text-align: center; }
-.pl-person-name { font-size: 13px; font-weight: 600; color: var(--text); font-family: var(--font-farsi); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.pl-person-word { font-size: 12px; color: var(--text-secondary); }
-
-.pl-avatar {
-  position: relative; flex: 0 0 auto;
-  width: 56px; height: 56px; border-radius: 50%;
-  display: grid; place-items: center;
-  background: var(--accent-soft); color: var(--accent-ink);
-  font-family: var(--font-farsi); font-weight: 600; font-size: 16px;
-}
-.pl-avatar-sm { width: 40px; height: 40px; font-size: 14px; }
-.pl-avatar-empty { background: var(--surface); border: 2px dashed #8391A7; color: var(--text-tertiary); }
-.pl-avatar-mark {
-  position: absolute; inset-inline-end: -2px; bottom: -2px;
-  width: 20px; height: 20px; border-radius: 50%;
-  display: grid; place-items: center; color: #fff; box-shadow: 0 0 0 2px var(--surface);
-}
-.pl-mark-done { background: var(--success-ink); }
-.pl-mark-pending { background: var(--pending-ink); }
-
-.pl-vs-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 20px; }
-.pl-vs { display: flex; flex-direction: column; gap: 6px; }
-.pl-vs-head { display: flex; justify-content: space-between; gap: 8px; font-size: 14px; color: var(--text-secondary); }
-.pl-vs-head b { color: var(--text); font-weight: 600; }
-.pl-meter { display: block; height: 10px; border-radius: 5px; background: var(--track); overflow: hidden; }
-.pl-meter i { display: block; height: 100%; background: var(--accent); border-radius: 5px; }
-
-.pl-notshared.ui-card { border: 1px dashed #8391A7; box-shadow: none; }
-.pl-plain { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
-.pl-ns-row { display: flex; align-items: center; gap: 10px; }
-.pl-name { display: block; font-size: 15px; font-weight: 600; color: var(--text); font-family: var(--font-farsi); }
-.pl-name-link { border: 0; background: none; padding: 0; text-align: start; cursor: pointer; }
-.pl-name-link:hover { color: var(--accent-ink); text-decoration: underline; }
-.pl-name-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 2px; }
-.pl-row-sub { display: block; font-size: 12px; color: var(--text-tertiary); }
-.pl-ns-row .pl-row-sub { font-size: 13px; }
-
-.pl-grid { display: flex; flex-direction: column; }
-.pl-grid-row {
-  /* The contractor, then one column per plan stream (DT, Acceptance, ICT,
-     CRA). A cell's number and its decision wrap onto two lines when the
-     column is narrow, rather than squeezing the buttons. */
-  display: grid; grid-template-columns: minmax(170px, 0.8fr) repeat(4, minmax(0, 1fr));
-  min-height: 76px; border-top: 1px solid var(--divider);
-}
-.pl-grid-head { min-height: 0; border-top: 0; padding-bottom: 6px; font-size: 12px; font-weight: 600; color: var(--text-tertiary); }
-.pl-grid-head > span + span { padding-inline-start: 16px; }
-.pl-who { display: flex; align-items: center; gap: 10px; padding: 8px 12px 8px 0; min-width: 0; }
-.pl-cell { display: flex; flex-direction: column; justify-content: center; gap: 8px; padding: 6px 0 6px 16px; border-inline-start: 1px solid var(--divider); min-width: 0; }
-.pl-cell-none { color: var(--text-tertiary); }
-.pl-cell-main { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px 10px; }
-.pl-num { display: block; font-size: 24px; line-height: 30px; font-weight: 600; color: var(--text); }
-.pl-over { display: block; font-size: 12px; color: var(--pending-ink); font-weight: 600; white-space: nowrap; }
-.pl-actions { display: inline-flex; align-items: center; gap: 6px; justify-content: flex-end; flex-shrink: 0; }
-
-.pl-pill {
-  display: inline-flex; align-items: center; gap: 4px; white-space: nowrap;
-  height: 24px; padding: 0 10px; border-radius: 999px; font-size: 12px; font-weight: 600;
-}
-.pl-pill-done { background: var(--success-soft); color: var(--success-ink); }
-.pl-pill-pending { background: var(--pending-soft); color: var(--pending-ink); }
-
-.pl-return { display: flex; flex-direction: column; gap: 6px; }
-.pl-return-label { font-size: 12px; font-weight: 600; color: var(--text-secondary); }
-.pl-return .input { min-height: 0; font-family: var(--font-farsi); }
-.pl-return .pl-actions { justify-content: flex-end; }
-
-.pl-revision {
-  display: flex; align-items: flex-start; gap: 14px;
-  padding: 12px 20px; background: var(--surface);
-  border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow-1);
-}
-.pl-revision-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
-.pl-revision-title { font-size: 15px; font-weight: 600; color: var(--text); }
-.pl-revision-note { font-size: 14px; color: var(--text-secondary); font-family: var(--font-farsi); }
-/* The drawer's figures (DecisionDrawer). */
+/* ---------- Monthly Plan: the decision and history drawers ----------
+   (DecisionDrawer, HistoryDrawer). The tabs are in monthly-plan.css. */
 .mp-kpi-label { font-size: var(--fs-caption); line-height: var(--lh-caption); color: var(--text-tertiary); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mp-kpi-value { font-family: var(--font-display); font-size: 20px; font-weight: 700; line-height: 1.2; }
-
-/* ---------- Monthly Plan: the PIP vs Achieved tab (PipTab) ----------
-   One stream at a time: four KPI cards, then the contractors beside the last
-   seven months, filling the rest of the screen. The table scrolls inside its
-   card; the totals row is sticky at its foot. */
-.pv-tab { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: 16px; }
-.pv-kpis { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 12px; flex: none; }
-@media (max-width: 900px) { .pv-kpis { grid-auto-flow: row; } }
-.pv-internal { position: relative; }
-.pv-unset { font-size: var(--fs-heading); line-height: var(--lh-heading); color: var(--text-tertiary); font-weight: 500; }
-.pv-body {
-  flex: 1 1 auto; min-height: 0;
-  display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 16px;
-}
-@media (max-width: 1100px) { .pv-body { grid-template-columns: minmax(0, 1fr); } }
-.pv-card.ui-card, .pv-trend-card.ui-card { padding: 16px 20px; gap: 12px; min-height: 0; }
-.pv-trend-card { overflow-y: auto; }
-.pv-table tbody th, .pv-table tfoot th { font-weight: 600; }
-.pv-name {
-  display: block; border: 0; background: none; padding: 0; text-align: start; cursor: pointer;
-  font-family: var(--font-farsi); font-size: var(--fs-body); line-height: var(--lh-body); font-weight: 600; color: var(--text);
-}
-.pv-name:hover { color: var(--accent-ink); text-decoration: underline; }
-.pv-name:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 2px; }
-.pv-sub {
-  display: block; font-size: var(--fs-meta); line-height: var(--lh-meta); font-weight: 400; color: var(--text-tertiary);
-}
-.pv-none { color: var(--text-tertiary); }
-.pv-total th, .pv-total td {
-  position: sticky; bottom: 0; background: var(--surface-subtle);
-  font-weight: 600; border-top: 1px solid var(--border);
-}
-.pv-progress { display: inline-flex; align-items: center; gap: 10px; }
-.pv-meter { width: 110px; }
-.pv-pct { min-width: 4ch; font-size: var(--fs-meta); line-height: var(--lh-meta); color: var(--text-secondary); }
-
-/* The last seven months, one row each: Farsi name, the bar, the figures. */
-.pv-trend { list-style: none; display: flex; flex-direction: column; gap: 6px; }
-.pv-trend-row {
-  display: grid; grid-template-columns: 72px minmax(0, 1fr) auto; align-items: center; gap: 12px;
-  min-height: 32px;
-}
-.pv-trend-name { font-family: var(--font-farsi); font-size: var(--fs-body); line-height: var(--lh-body); font-weight: 500; color: var(--text); white-space: nowrap; }
-.pv-trend-row[data-kind='running'] .pv-trend-name { color: var(--accent-ink); font-weight: 600; }
-.pv-trend-track { position: relative; height: 12px; border-radius: 3px; background: var(--track); }
-.pv-trend-bar { position: absolute; inset-block: 0; inset-inline-start: 0; border-radius: 3px; }
-.pv-trend-met { background: var(--accent); }
-.pv-trend-below { background: var(--dt-pending-bar); }
-.pv-trend-noplan { background: var(--dt-muted); }
-.pv-trend-running { background: var(--accent-soft); box-shadow: inset 0 0 0 1px var(--accent); }
-.pv-trend-pip {
-  position: absolute; top: -4px; bottom: -4px; width: 2px; margin-inline-start: -1px;
-  border-radius: 1px; background: var(--text);
-}
-.pv-trend-num { font-size: var(--fs-meta); line-height: var(--lh-meta); color: var(--text-secondary); white-space: nowrap; }
-.pv-legend {
-  display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: auto;
-  font-size: var(--fs-meta); line-height: var(--lh-meta); color: var(--text-secondary);
-}
-.pv-legend span { display: inline-flex; align-items: center; gap: 6px; }
-.pv-legend i { display: inline-block; width: 12px; height: 10px; border-radius: 2px; }
-.pv-key-met { background: var(--accent); }
-.pv-key-below { background: var(--dt-pending-bar); }
-.pv-key-running { background: var(--accent-soft); box-shadow: inset 0 0 0 1px var(--accent); }
-.pv-legend .pv-key-pip { width: 2px; height: 14px; background: var(--text); border-radius: 1px; }
 
 .mp-drawer-scrim { position: fixed; inset: 0; background: rgba(20, 26, 24, 0.18); z-index: 60; }
 .mp-drawer {

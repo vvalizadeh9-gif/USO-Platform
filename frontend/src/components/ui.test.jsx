@@ -106,6 +106,18 @@ describe('Tabs', () => {
     await userEvent.keyboard('{End}')
     expect(screen.getByTestId('value')).toHaveTextContent('history')
   })
+
+  it('controls its panel when given one: ids and aria-controls', () => {
+    render(<Tabs tabs={TABS} value="road" onChange={() => {}} label="Gap views" panelId="gap-panel" />)
+    const road = screen.getByRole('tab', { name: 'The road' })
+    expect(road).toHaveAttribute('id', 'gap-panel-tab-road')
+    for (const tab of screen.getAllByRole('tab')) expect(tab).toHaveAttribute('aria-controls', 'gap-panel')
+  })
+
+  it('names its count for assistive technology', () => {
+    render(<Tabs tabs={[{ key: 'a', label: 'Approvals', count: 3, countLabel: 'waiting' }]} value="a" onChange={() => {}} label="x" />)
+    expect(screen.getByRole('tab', { name: 'Approvals 3 waiting' })).toBeInTheDocument()
+  })
 })
 
 describe('SegmentedControl', () => {

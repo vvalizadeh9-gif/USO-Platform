@@ -1,10 +1,13 @@
 /**
- * What the Plans tab makes of the PM queue (usePlanBoard). Pure functions of
- * the GET /pip/queue responses, so the counts on the tab badge and on the tab
- * itself come from one place and cannot disagree.
+ * What the Monthly Plan tabs make of the PM queue (usePlanBoard) and of the
+ * running month's GET /pip/overview. Pure functions of those responses, so
+ * the count on the Approvals badge and the cards under it come from one place
+ * and cannot disagree.
  */
 
-import { STREAMS } from './streams'
+import { toPersianDigits } from '../../lib/persianDigits'
+import { periodLabel } from '../../lib/shamsi'
+import { STREAMS, streamMeta } from './streams'
 
 export { STREAMS }
 
@@ -154,4 +157,113 @@ export function buildBoard(board) {
 /** The first two letters of a name, for its circle. */
 export function initials(name) {
   return Array.from((name || '').replace(/\s+/g, '')).slice(0, 2).join('')
+}
+
+/** "مهر ۱۴۰۵": a Shamsi month as the page shows it, Persian digits. */
+export function monthLabel(period) {
+  return period ? toPersianDigits(periodLabel(period.year, period.month)) : ''
+}
+
+/**
+ * One contractor's running month for one stream, from the running month's
+ * GET /pip/overview: `{ pip, delivered, behind }`, where `behind` is how far
+ * delivered is under an even pace through the month (null when on or ahead
+ * of it, or with no plan). Null when the overview has no row for them.
+ */
+export function runningFigures(running, stream, contractorId) {
+  const row = running?.[streamMeta(stream).key]?.rows?.find((r) => r.contractor_id === contractorId)
+  if (!row) return null
+  return {
+    pip: row.pip ?? null,
+    delivered: row.delivered ?? 0,
+    behind: row.pace_diff != null && row.pace_diff < 0 ? -row.pace_diff : null,
+  }
+}
+
+/** The latest of some ISO timestamps, or null. */
+function latest(values) {
+  return values.filter(Boolean).sort().at(-1) ?? null
+}
+
+/**
+ * The Approvals tab, from usePlanBoard's `ready` state and the running
+ * month's overview (which may still be loading: then nothing is "behind").
+ *
+ * * `cards` -- one per contractor with a plan waiting on the PM for the
+ *   planning month (`kind: 'plan'`), then one per contractor with a revision
+ *   request pending on the running month (`kind: 'revision'`). Each carries
+ *   one block per waiting stream, in stream order, with the plan id it is
+ *   decided through. A red line is only ever a number: `above` (DT: the
+ *   number exceeds the sites held) and `behind` (the running month is under
+ *   pace), each null when not true.
+ * * `decided` -- contractors who shared and have nothing left waiting:
+ *   `Sent back` when any stream was returned, otherwise `Approved`.
+ */
+export function buildApprovals(board, running) {
+  const view = buildBoard(board)
+  const above = (stream, number, held) =>
+    stream === 'DT' && number != null && held != null && number > held ? number - held : null
+  const behind = (stream, id) => runningFigures(running, stream, id)?.behind ?? null
+
+  const planCards = view.contractors
+    .filter((c) => STREAMS.some((s) => c.cells[s].state === 'waiting'))
+    .map((c) => {
+      const streams = STREAMS.filter((s) => c.cells[s].state === 'waiting')
+      return {
+        key: `plan-${c.id}`,
+        kind: 'plan',
+        id: c.id,
+        name: c.name,
+        submittedAt: latest(streams.map((s) => rowsOf(board.planning, s).find((r) => r.contractor_id === c.id)?.submitted_at)),
+        blocks: streams.map((stream) => {
+          const cell = c.cells[stream]
+          return {
+            stream,
+            planId: cell.planId,
+            number: cell.number,
+            compare: cell.lastMonth,
+            above: above(stream, cell.number, cell.held),
+            behind: behind(stream, c.id),
+          }
+        }),
+      }
+    })
+
+  const revisionsById = new Map()
+  for (const stream of STREAMS) {
+    for (const r of rowsOf(board.running, stream)) {
+      if (r.status !== 'RevisionRequested') continue
+      const card = revisionsById.get(r.contractor_id) ?? {
+        key: `revision-${r.contractor_id}`,
+        kind: 'revision',
+        id: r.contractor_id,
+        name: r.contractor_name,
+        submittedAt: null,
+        blocks: [],
+      }
+      card.submittedAt = latest([card.submittedAt, r.submitted_at])
+      card.blocks.push({
+        stream,
+        planId: r.plan_id,
+        number: r.committed_count,
+        compare: r.in_force_count ?? null,
+        reason: r.revision_reason,
+        above: above(stream, r.committed_count, r.assignment ?? null),
+        behind: behind(stream, r.contractor_id),
+      })
+      revisionsById.set(r.contractor_id, card)
+    }
+  }
+  const revisionCards = [...revisionsById.values()].sort(byName)
+  const pending = new Set([...planCards, ...revisionCards].map((c) => c.id))
+
+  const decided = view.shared
+    .filter((c) => !pending.has(c.id))
+    .map((c) => ({
+      id: c.id,
+      name: c.name,
+      state: STREAMS.some((s) => c.cells[s].state === 'returned') ? 'returned' : 'approved',
+    }))
+
+  return { cards: [...planCards, ...revisionCards], decided, waiting: view.waiting }
 }

@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- **Monthly plan: Approvals first (all waiting plans on one page), Plans, new History table, refined Internal PIP (UEP-08).**
+  - The staff page has four tabs: **Approvals** (default, `?tab=approvals`), **Plans** (`?tab=plans`), **History** (`?tab=history`) and **Internal PIP** (`?tab=internal`). Unknown keys, including the old `?tab=pip`, open Approvals. The rail pages match the tabs; Home's *Approve plans* links to Approvals.
+  - Approvals shows one card per contractor with a plan waiting, plus one per pending revision request. **Approve** decides every waiting plan on the card (one `POST /pip/{id}/approve` each, in parallel; a partial failure names the stream and keeps the card). **Return** asks for a required comment in a dialog. There is no Undo, because the API cannot reverse an approval.
+  - Plans lists who shared for the planning month (a segmented bar and a *Not shared yet* strip). Each stream column shows the plan's status and the running month's delivered against plan. It has one column per stream in `STREAM_LIST`.
+  - History is a new table of plan against delivered, month by month, for any year. It can be filtered by contractor and stream. The running month is shown but excluded from the totals. *Below 80%* is the only coloured result.
+  - Internal PIP sets each stream's target for the running or planning month with a stepper (Enter saves), against a coverage bar per contractor.
+  - API (additive): `GET /pip/overview?period=year` gains a per-stream `months[]` (12 entries: `plan`, `delivered`, `internal`, `is_running`, `is_future`, per-contractor figures). The `month` and `since_start` views return `months: null` and are otherwise unchanged.
+  - Removed: the PIP vs Achieved tab (`PipTab`), the old Plans board, `PlanQueue`, `Scorecard`, `AcceptanceTarget`/`AcceptanceTargetCard`, `SetTargetForm` and their CSS and tests. `Tabs` gains `panelId` (ids and `aria-controls`) and a `countLabel`.
+
 - **Drive test app: Health check and Drive test share one pipeline strip with volume bars; full-width site lists with Village and Province; contractor workload cards with a suggested contractor; persistent confirmations with Undo and a History view; DT review side panel; All sites restyled. WCAG 2.2 AA (UEP-06).**
   - Both pages show the same strip: steps 1–6, DT done, and the Remediation, Re-routes and Sent back loops. The step is the URL's `?tab=`, so Back and Forward work. Legacy `basket`, `results`, `dt-assign` and `dt-review` links still work. The old tab rows, the HC Pool state filter, `AssignDock` and its CSS are removed. `ProcessStepper` stays for Monthly plan only, and `LifecycleStrip` for the contractor pages.
   - Step 4 is the drive-test assignment queue. The pool's "Health check passed" state is no longer a tile: its rows are in steps 3, 5 and 6.

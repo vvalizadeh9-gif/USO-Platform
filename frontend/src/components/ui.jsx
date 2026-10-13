@@ -109,8 +109,12 @@ export const fadeUp = {
  *
  * With `steps`, a chevron sits between the parts of the row (not inside a
  * group, and not before an end tab): the tabs are a process, in order.
+ *
+ * With `panelId`, every tab is `aria-controls` that panel and gets the id
+ * `${panelId}-tab-${key}`, so the panel can be `aria-labelledby` the selected
+ * tab (the WAI-ARIA tabs pattern).
  */
-export function Tabs({ tabs, value, onChange, label, className = '', steps = false, groups = {} }) {
+export function Tabs({ tabs, value, onChange, label, className = '', steps = false, groups = {}, panelId }) {
   const listRef = useRef(null)
 
   const onKeyDown = (event) => {
@@ -127,7 +131,7 @@ export function Tabs({ tabs, value, onChange, label, className = '', steps = fal
   }
 
   const renderTab = (tab) => (
-    <TabButton key={tab.key} tab={tab} selected={tab.key === value} onSelect={onChange} />
+    <TabButton key={tab.key} tab={tab} selected={tab.key === value} onSelect={onChange} panelId={panelId} />
   )
 
   return (
@@ -194,20 +198,30 @@ function tabSegments(tabs) {
   return segments
 }
 
-function TabButton({ tab, selected, onSelect }) {
+/** The id `Tabs` gives the tab `key` of the tablist controlling `panelId`. */
+const tabId = (panelId, key) => `${panelId}-tab-${key}`
+
+function TabButton({ tab, selected, onSelect, panelId }) {
   const Icon = tab.icon
   return (
     <button
       type="button"
       role="tab"
       className="ui-tab"
+      id={panelId ? tabId(panelId, tab.key) : undefined}
+      aria-controls={panelId}
       aria-selected={selected}
       tabIndex={selected ? 0 : -1}
       onClick={() => onSelect(tab.key)}
     >
       {Icon && <Icon size={16} strokeWidth={1.9} aria-hidden="true" />}
       {tab.label}
-      {tab.count > 0 && <span className="ui-tab-count tnum">{tab.count}</span>}
+      {tab.count > 0 && (
+        <span className="ui-tab-count tnum">
+          {tab.count}
+          {tab.countLabel && <span className="sr-only"> {tab.countLabel}</span>}
+        </span>
+      )}
       {tab.alert && <span className="ui-tab-alert tnum">{tab.alert}</span>}
     </button>
   )

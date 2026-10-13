@@ -12,6 +12,17 @@ describe('app registry role filtering', () => {
     expect(dt.pages.map((p) => p.id)).toEqual(['dashboard', 'hc-check', 'in-progress', 'all-sites'])
   })
 
+  it('lists the Monthly plan pages in tab order, Approvals first, staff-only past it', () => {
+    const pm = appsFor('PM').find((a) => a.id === 'monthly-plan')
+    expect(pm.pages.map((p) => p.label)).toEqual(['Approvals', 'Plans', 'History', 'Internal PIP'])
+    expect(pm.pages[0].queues).toContain('plans_approve')
+    const contractor = appsFor('Contractor').find((a) => a.id === 'monthly-plan')
+    expect(contractor.pages.map((p) => p.id)).toEqual(['approvals'])
+    expect(locate(appsFor('PM'), '/monthly-plan', '').page.id).toBe('approvals')
+    expect(locate(appsFor('PM'), '/monthly-plan', '?tab=approvals').page.id).toBe('approvals')
+    expect(locate(appsFor('PM'), '/monthly-plan', '?tab=history').page.id).toBe('history')
+  })
+
   it('gives Admin only the platform apps', () => {
     expect(ids(appsFor('Admin'))).toEqual(['data', 'admin'])
   })
