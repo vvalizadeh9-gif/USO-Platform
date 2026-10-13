@@ -461,38 +461,36 @@ export const accOverview = {
   provinces: [],
 }
 
+/** The running Shamsi year, Farvardin to Esfand (`GET /acceptance/progress
+ * ?year=`): closed months, the running one, then months to come with their
+ * plans only and `approved: null`. Plans start in Tir. */
 function progressMonths() {
-  const out = []
-  let { year, month } = RUNNING
-  for (let i = 0; i < 12; i += 1) {
-    out.unshift({ year, month })
-    month -= 1
-    if (month === 0) { month = 12; year -= 1 }
-  }
+  const { year, month: running } = RUNNING
   const stream = (approvedPer, internal, contractor, opening) => {
     let run = opening
     let internalRun = opening
     let contractorRun = opening
-    return out.map((p, i) => {
-      const approved = approvedPer[i]
-      const row = {
-        approved,
-        approved_cumulative: (run += approved),
-        internal_plan: i >= 3 ? internal : null,
-        internal_plan_cumulative: i >= 3 ? (internalRun += internal) : null,
-        contractor_plan: i >= 3 ? contractor : null,
-        contractor_plan_cumulative: i >= 3 ? (contractorRun += contractor) : null,
+    return approvedPer.map((approved, i) => {
+      const future = i + 1 > running
+      const planned = i >= 3
+      if (!future) run += approved
+      if (!planned) { internalRun = run; contractorRun = run }
+      return {
+        approved: future ? null : approved,
+        approved_cumulative: future ? null : run,
+        internal_plan: planned ? internal : null,
+        internal_plan_cumulative: planned ? (internalRun += internal) : null,
+        contractor_plan: planned ? contractor : null,
+        contractor_plan_cumulative: planned ? (contractorRun += contractor) : null,
       }
-      if (i < 3) { internalRun = run; contractorRun = run }
-      return row
     })
   }
-  const village = stream([180, 210, 250, 290, 305, 330, 280, 340, 310, 360, 318, 92], 320, 300, 0)
-  const ict = stream([260, 300, 340, 400, 420, 380, 360, 410, 390, 420, 372, 118], 400, 380, 0)
-  const cra = stream([200, 230, 260, 300, 320, 280, 250, 300, 290, 310, 260, 44], 300, 280, 0)
-  return out.map((p, i) => ({
-    shamsi_year: p.year, shamsi_month: p.month, label: MONTHS[p.month - 1],
-    is_current: i === 11, days_in_month: p.month <= 6 ? 31 : 30,
+  const village = stream([180, 210, 250, 290, 305, 330, 92, 340, 310, 360, 318, 300], 320, 300, 0)
+  const ict = stream([260, 300, 340, 400, 420, 380, 118, 410, 390, 420, 372, 400], 400, 380, 0)
+  const cra = stream([200, 230, 260, 300, 320, 280, 44, 300, 290, 310, 260, 300], 300, 280, 0)
+  return MONTHS.map((label, i) => ({
+    shamsi_year: year, shamsi_month: i + 1, label,
+    is_current: i + 1 === running, is_future: i + 1 > running, days_in_month: i < 6 ? 31 : 30,
     village: village[i], ict: ict[i], cra: cra[i],
   }))
 }
@@ -501,6 +499,7 @@ export const accProgress = {
   today: { shamsi_year: RUNNING.year, shamsi_month: RUNNING.month, day: 7, days_in_month: RUNNING.month <= 6 ? 31 : 30 },
   plans_available: true,
   internal_visible: true,
+  years: [RUNNING.year, RUNNING.year - 1],
   months: progressMonths(),
 }
 
