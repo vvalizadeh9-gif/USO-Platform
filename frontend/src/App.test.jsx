@@ -37,8 +37,18 @@ vi.mock('./pages/HealthCheck', () => page('health-check'))
 vi.mock('./pages/MyHealthCheck', () => page('my-health-check'))
 vi.mock('./pages/MyDriveTests', () => page('my-drive-tests'))
 vi.mock('./pages/MyFixQueue', () => page('my-fix-queue'))
-vi.mock('./pages/WorkItems', () => page('work-items'))
-vi.mock('./pages/WorkItemDetail', () => page('work-item-detail'))
+// The Explorer markers also show the address they were reached at, so a
+// redirect from the old All sites URLs can be checked end to end.
+const located = async (name) => {
+  const { useLocation } = await import('react-router-dom')
+  function Marker() {
+    const { pathname, search } = useLocation()
+    return <p data-testid="page" data-at={pathname + search}>{name}</p>
+  }
+  return { default: Marker }
+}
+vi.mock('./pages/explorer/ExplorerList', () => located('explorer'))
+vi.mock('./pages/explorer/SiteRecord', () => located('site-record'))
 vi.mock('./pages/Home', () => page('home'))
 vi.mock('./pages/mywork/MyWork', () => page('my-work'))
 vi.mock('./pages/monthlyplan/MonthlyPlan', () => page('monthly-plan'))
@@ -83,7 +93,7 @@ beforeEach(() => {
 
 describe('signed out', () => {
   it('sends anything to the login screen', async () => {
-    expect(await landOn('/work-items')).toBe('login')
+    expect(await landOn('/explorer')).toBe('login')
   })
 
   it('carries the page along, so signing in comes back to it', async () => {
@@ -292,7 +302,7 @@ describe('when a password reset is outstanding', () => {
   it('sends every other screen there too, whatever the role', async () => {
     for (const [role, path] of [
       ['Admin', '/admin'],
-      ['Coordinator', '/work-items'],
+      ['Coordinator', '/explorer'],
       ['NwgPlanning', '/my-fix-queue'],
     ]) {
       signedInAs(role, { mustChangePassword: true })
@@ -320,6 +330,31 @@ describe('changing your password when nothing is forcing it', () => {
 
   it('does not divert anyone who does not owe a change', async () => {
     signedInAs('Coordinator')
-    expect(await landOn('/work-items')).toBe('work-items')
+    expect(await landOn('/explorer')).toBe('explorer')
+  })
+})
+
+// UEP-11: All sites became Explorer. The old addresses still land.
+describe('Explorer', () => {
+  beforeEach(() => signedInAs('Coordinator'))
+
+  it('opens the list and a site record', async () => {
+    expect(await landOn('/explorer')).toBe('explorer')
+    cleanup()
+    expect(await landOn('/explorer/sites/42?village=V10232')).toBe('site-record')
+  })
+
+  it('sends /work-items to the list, keeping the query string', async () => {
+    expect(await landOn('/work-items?q=W4318&stage=Assigned')).toBe('explorer')
+    expect(screen.getByTestId('page')).toHaveAttribute('data-at', '/explorer?q=W4318&stage=Assigned')
+  })
+
+  it('sends /work-items/:id to the site record', async () => {
+    expect(await landOn('/work-items/42')).toBe('site-record')
+    expect(screen.getByTestId('page')).toHaveAttribute('data-at', '/explorer/sites/42')
+  })
+
+  it('still opens the Drive Test dashboard at its own address', async () => {
+    expect(await landOn('/reports/drive-test')).toBe('dt-dashboard')
   })
 })

@@ -20,11 +20,10 @@ function pageKey(pathname) {
   return section === 'reports' ? `reports/${sub}` : section
 }
 
-/** "/ {App}" inside an app, "/ Sites / {ID}" on a site, nothing on Home. */
+/** "/ {App}" inside an app, nothing on Home. A site's record page draws its
+ * own "Explorer / {site ID}" trail under the header. */
 // eslint-disable-next-line react-refresh/only-export-components -- tested on its own
 export function crumbsFor(pathname, app) {
-  const site = pathname.match(/^\/work-items\/([^/]+)/)
-  if (site) return [{ label: 'Sites', to: '/work-items' }, { label: decodeURIComponent(site[1]) }]
   if (pathname === '/home' || !app) return []
   return [{ label: app.name, to: appRoute(app), state: appState(app) }]
 }

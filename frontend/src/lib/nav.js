@@ -77,7 +77,7 @@ export const NAV_SECTIONS = [
       // One place for a contractor to work instead of knowing which sites to
       // open on Work Items -- the same reason My Health Check exists.
       { to: '/my-drive-tests', label: 'My Drive Tests', step: true, roles: ['Contractor'], key: 'mydt' },
-      { to: '/work-items', label: 'Work Items', icon: ListChecks, end: true, hideRoles: ['Admin'] },
+      { to: '/explorer', label: 'Explorer', icon: ListChecks, end: true, hideRoles: ['Admin'] },
     ],
   },
   {

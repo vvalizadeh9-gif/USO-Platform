@@ -37,14 +37,14 @@ vi.mock('../healthcheck/HcHistoryTab', () => ({ default: () => <p>archive</p> })
 
 const HealthCheck = (await import('../HealthCheck')).default
 const DriveTest = (await import('../DriveTest')).default
-const WorkItems = (await import('../WorkItems')).default
+const ExplorerList = (await import('../explorer/ExplorerList')).default
 const { ToastProvider } = await import('../../context/ToastContext')
 
 const VIEWS = [
   '/health-check?tab=pool', '/health-check?tab=running', '/health-check?tab=review',
   '/drive-test?tab=assignment', '/drive-test?tab=in-progress', '/drive-test?tab=review',
   '/drive-test?tab=done', '/health-check?tab=remediation', '/health-check?tab=reroutes',
-  '/drive-test?tab=sent-back', '/health-check?tab=history', '/work-items', '/work-items?stage=Ready%20for%20Assignment',
+  '/drive-test?tab=sent-back', '/health-check?tab=history', '/explorer', '/explorer?stage=Ready%20for%20Assignment',
 ]
 
 describe('the work pages have no axe violations', () => {
@@ -55,7 +55,7 @@ describe('the work pages have no axe violations', () => {
           <Routes>
             <Route path="/health-check" element={<HealthCheck />} />
             <Route path="/drive-test" element={<DriveTest />} />
-            <Route path="/work-items" element={<WorkItems />} />
+            <Route path="/explorer" element={<ExplorerList />} />
           </Routes>
         </ToastProvider>
       </MemoryRouter>,

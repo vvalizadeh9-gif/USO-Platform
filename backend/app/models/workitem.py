@@ -98,10 +98,17 @@ class WorkItem(Base):
     dt_problem_category: Mapped[str | None] = mapped_column(String(120))
     dt_date_gregorian: Mapped[date | None] = mapped_column(Date)
 
+    # The site's execution contractor, CPM column 31 (پیمانکار اجرایی سایت).
+    # A master field: refreshed on every import, unlike the DT block above.
+    site_contractor_id: Mapped[int | None] = mapped_column(
+        ForeignKey("contractors.id"), index=True
+    )
+
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     site: Mapped[Site] = relationship(back_populates="work_items")
     dt_sc_contractor = relationship("Contractor", foreign_keys=[dt_sc_contractor_id])
+    site_contractor = relationship("Contractor", foreign_keys=[site_contractor_id])
     # NOTE: no default eager loading here (deliberately). Loading the full
     # villages+acceptances graph is expensive and most endpoints (work item
     # list, work item detail, CPM admin, etc.) never touch it. The acceptance

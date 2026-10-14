@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import api from '../../api/client'
 import { describeBlobError, filenameFrom, saveBlob } from '../../lib/download'
+import { siteRecordPath } from '../../lib/explorerLinks'
 import SiteHistoryDrawer, { SiteCodeButton } from '../../components/SiteHistoryDrawer'
 import { EmptyState, Loading, PageHead } from '../../components/ui'
 import { useAuth } from '../../context/AuthContext'
@@ -504,8 +505,8 @@ export default function SiteList() {
                     ))}
                     <td className="dt-col-action">
                       <Link
-                        to={`/work-items/${row.work_item_id}`}
-                        aria-label={`Open work item ${row.site_code || row.work_item_id}`}
+                        to={siteRecordPath(row.work_item_id)}
+                        aria-label={`Open site ${row.site_code || row.work_item_id} in Explorer`}
                       >
                         <ExternalLink size={14} aria-hidden="true" />
                       </Link>

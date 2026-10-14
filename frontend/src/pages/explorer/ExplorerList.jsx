@@ -1,22 +1,23 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
-import api from '../api/client'
-import { useFillPage } from '../components/pageMode'
-import AssignPanel from '../components/work/AssignPanel'
-import PageHeading from '../components/work/PageHeading'
-import RecentActions from '../components/work/RecentActions'
-import SiteTable from '../components/work/SiteTable'
-import { WorkProvider, useWork } from '../components/work/WorkContext'
-import { EmptyStep, Fa, SearchBox, StepError, TechChips, WorkListCard } from '../components/work/parts'
-import { useAuth } from '../context/AuthContext'
-import { useToast } from '../context/ToastContext'
-import { describeBlobError, saveBlob } from '../lib/download'
-import { toPersianDigits } from '../lib/persianDigits'
-import { canReview } from '../lib/roles'
-import AppFooter from '../shell/AppFooter'
-import { useHomeData } from '../shell/HomeData'
-import '../styles/home.css'
-import '../styles/work.css'
+import api from '../../api/client'
+import { useFillPage } from '../../components/pageMode'
+import AssignPanel from '../../components/work/AssignPanel'
+import PageHeading from '../../components/work/PageHeading'
+import RecentActions from '../../components/work/RecentActions'
+import SiteTable from '../../components/work/SiteTable'
+import { WorkProvider, useWork } from '../../components/work/WorkContext'
+import { EmptyStep, Fa, SearchBox, StepError, TechChips, WorkListCard } from '../../components/work/parts'
+import { useAuth } from '../../context/AuthContext'
+import { useToast } from '../../context/ToastContext'
+import { describeBlobError, saveBlob } from '../../lib/download'
+import { toPersianDigits } from '../../lib/persianDigits'
+import { EXPLORER_PATH, explorerListPath, siteRecordPath } from '../../lib/explorerLinks'
+import { canReview } from '../../lib/roles'
+import AppFooter from '../../shell/AppFooter'
+import { useHomeData } from '../../shell/HomeData'
+import '../../styles/home.css'
+import '../../styles/work.css'
 
 // The stages, in lifecycle order: chip label and the `current_stage` value.
 // Approval IS completion, so an approved drive test terminates at DT Done.
@@ -84,12 +85,14 @@ const STAGE_EXTRA = {
 }
 
 const BASE_COLUMNS = [
-  { key: 'site', label: 'Site ID', width: '13%', render: (r) => <Link className="uw-site-id" to={`/work-items/${r.id}`}>{r.site_code || `#${r.id}`}</Link> },
-  { key: 'province', label: 'Province', width: '15%', render: (r) => <Fa>{r.province}</Fa> },
-  { key: 'type', label: 'Type', width: '10%', render: (r) => r.site_type || '—' },
-  { key: 'tech', label: 'Requested tech', width: '17%', render: (r) => <TechChips techs={techsOf(r.requested_technology)} /> },
+  { key: 'site', label: 'Site ID', width: '12%', render: (r) => <Link className="uw-site-id" to={siteRecordPath(r.id)}>{r.site_code || `#${r.id}`}</Link> },
+  { key: 'province', label: 'Province', width: '14%', render: (r) => <Fa>{r.province}</Fa> },
+  { key: 'type', label: 'Type', width: '9%', render: (r) => r.site_type || '—' },
+  { key: 'tech', label: 'Requested tech', width: '14%', render: (r) => <TechChips techs={techsOf(r.requested_technology)} /> },
+  // The site's هدف villages: the record page lists the same ones.
+  { key: 'villages', label: 'Villages', width: '8%', render: (r) => <span className="uw-num">{(r.village_count ?? 0).toLocaleString('en-US')}</span> },
   {
-    key: 'stage', label: 'Stage', width: '19%',
+    key: 'stage', label: 'Stage', width: '17%',
     render: (r) => (
       <span className={`uw-stage ${STAGE_TONE[r.current_stage] || ''}`.trim()}>
         <i aria-hidden="true" />
@@ -102,17 +105,18 @@ const BASE_COLUMNS = [
 ]
 
 /**
- * All sites (UEP-06 §9): every site in scope, by stage. The stage chips are
- * a tab list over the one list card; a stage adds its own date columns. Sites
- * awaiting an assignment can be bulk-assigned with the same selection and
- * contractor cards as the Drive test page. Kept generic: this page becomes
- * Explorer.
+ * Explorer's list (UEP-11 §B2, the All sites list of UEP-06 §9): every site
+ * in scope, by stage. The stage chips are a tab list over the one list card; a
+ * stage adds its own date columns. Search matches site ID, province, and
+ * village ID or name. A row opens the site's record page. Sites awaiting an
+ * assignment can be bulk-assigned with the same selection and contractor
+ * cards as the Drive test page.
  */
-export default function WorkItems() {
+export default function ExplorerList() {
   useFillPage()
   return (
     <WorkProvider>
-      <AllSites />
+      <SitesList />
     </WorkProvider>
   )
 }
@@ -136,7 +140,7 @@ function useJson(url, params, version) {
   return { ...state, retry: () => setAttempt((n) => n + 1) }
 }
 
-function AllSites() {
+function SitesList() {
   const { user } = useAuth()
   const toast = useToast()
   const navigate = useNavigate()
@@ -252,11 +256,11 @@ function AllSites() {
   return (
     <div className="uep-home uw-page">
       <PageHeading
-        title="All sites"
+        title="Explorer"
         count={counts.data?.All}
         headingRef={headingRef}
         historyOpen={historyOpen}
-        onHistory={() => navigate(historyOpen ? '/work-items' : '/work-items?view=history')}
+        onHistory={() => navigate(historyOpen ? EXPLORER_PATH : explorerListPath({ view: 'history' }))}
         onExport={historyOpen ? undefined : exportExcel}
         exporting={exporting}
       />
@@ -275,7 +279,7 @@ function AllSites() {
               busy={!rows && !list.error}
               tools={
                 <>
-                  <SearchBox value={query} onChange={setQuery} label="Search site ID, village or province" placeholder="Search site, village, province…" />
+                  <SearchBox value={query} onChange={setQuery} label="Search site ID, village ID or name, or province" placeholder="Search site, village, province…" />
                   <select className="uw-select" aria-label="Province" value={provinceId} onChange={(e) => setProvinceId(e.target.value)}>
                     <option value="">All provinces</option>
                     {provinces.map((p) => (
@@ -310,7 +314,7 @@ function AllSites() {
               }
             >
               {list.error && !rows ? (
-                <StepError stepName="All sites" onRetry={list.retry} />
+                <StepError stepName="Explorer" onRetry={list.retry} />
               ) : rows && rows.length === 0 ? (
                 <EmptyStep stepName={stage === 'All' ? 'this list' : stage} />
               ) : (
@@ -322,6 +326,7 @@ function AllSites() {
                   selected={selected}
                   onSelect={selectable ? onSelect : undefined}
                   siteLabel={(r) => r.site_code}
+                  onOpen={(r) => navigate(siteRecordPath(r.id))}
                   loading={!rows}
                 />
               )}

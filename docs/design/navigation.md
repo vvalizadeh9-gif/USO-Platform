@@ -33,13 +33,18 @@ response (`shell/HomeData.jsx`), so a rail count, an Apps-panel pill, a card
 total and a KPI can never disagree.
 
 `pages[].divider` draws a 1px rule under the page in the rail, setting it apart
-from the queue pages below. Drive test uses it for **Dashboard**
-(`/reports/drive-test`, UEP-04): it is the app's first page, carries no count,
-and is the same page that Insights → Dashboards opens, not a copy. The Drive
-test rail reads: Dashboard · HC check · HC review · Assignment · DT review ·
-In progress · All sites (pages filtered by role as usual).
+from the queue pages below. The Acceptance app uses it for its **Dashboard**.
 
-Acceptance does the same since UEP-07: its first page is **Dashboard**
+The Drive test app has no Dashboard in its rail since UEP-11: the Drive Test
+dashboard (`/reports/drive-test`) is Insights → Dashboards, and the app opens
+on its first page for the role through `appRoute` (staff and contractors: HC
+check; category owners: Fix queue). The Drive test rail reads: HC check ·
+HC review · Assignment · DT review · In progress · Explorer (pages filtered by
+role as usual). **Explorer** (`/explorer`) is the site list, and every site's
+record page (`/explorer/sites/:id`) lights it too; `/work-items` and
+`/work-items/:id` redirect there.
+
+Acceptance's first page has been its **Dashboard** since UEP-07
 (`/reports/acceptance`, divider, no count), the page Insights → Acceptance
 dashboard also opens. Its address carries `?tab=village|ict|cra`,
 `?year=1405` (default the current Shamsi year) and `?month=1405-07`.

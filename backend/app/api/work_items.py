@@ -106,9 +106,9 @@ def _for_contractor(stmt, contractor_id: int | None):
 
 
 def _matching(stmt, q: str | None):
-    """Narrow to sites whose ID, province or village contains ``q``.
+    """Narrow to sites whose ID, province, village name or village ID contains ``q``.
 
-    The All sites search box. Applied after the scope, like every filter here,
+    The Explorer list's search box. Applied after the scope, like every filter here,
     so it can only narrow what the caller may already see.
     """
     q = (q or "").strip()
@@ -118,7 +118,10 @@ def _matching(stmt, q: str | None):
     by_site = select(Site.id).outerjoin(Province, Site.province_id == Province.id).where(
         or_(Site.site_code.ilike(like), Province.name.ilike(like))
     )
-    by_village = select(Village.work_item_id).where(Village.village_name.ilike(like))
+    by_village = select(Village.work_item_id).where(
+        Village.deleted_at.is_(None),
+        or_(Village.village_name.ilike(like), Village.village_code.ilike(like)),
+    )
     return stmt.where(or_(WorkItem.site_id.in_(by_site), WorkItem.id.in_(by_village)))
 
 

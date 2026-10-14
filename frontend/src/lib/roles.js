@@ -54,6 +54,14 @@ export function canReview(user) {
   return REVIEW_AUTHORITY_ROLES.includes(user?.role?.name)
 }
 
+// Who files ICT and CRA letters: the same three roles as
+// app/services/my_work_status.FILING_ROLES. Everyone else reads My Work only.
+export const ACCEPTANCE_FILING_ROLES = ['PM', 'Coordinator', 'Contractor']
+
+export function canFileAcceptance(roleName) {
+  return ACCEPTANCE_FILING_ROLES.includes(roleName)
+}
+
 // The monthly plan (PIP) screen. Contractors fill one in; PM decides them;
 // Coordinator, Regional Manager and Viewer read the queue. Admin is absent on
 // purpose -- setting a contractor's monthly target is an operational act, and

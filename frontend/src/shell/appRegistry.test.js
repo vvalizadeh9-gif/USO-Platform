@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { appCount, appsFor, locate, pageCount, queueCounts } from './appRegistry'
+import { appCount, appRoute, appsFor, locate, pageCount, queueCounts } from './appRegistry'
 
 const ids = (apps) => apps.map((a) => a.id)
 
@@ -9,7 +9,7 @@ describe('app registry role filtering', () => {
     expect(ids(apps)).not.toContain('data')
     expect(ids(apps)).not.toContain('admin')
     const dt = apps.find((a) => a.id === 'drive-test')
-    expect(dt.pages.map((p) => p.id)).toEqual(['dashboard', 'hc-check', 'in-progress', 'all-sites'])
+    expect(dt.pages.map((p) => p.id)).toEqual(['hc-check', 'in-progress', 'explorer'])
   })
 
   it('lists the Monthly plan pages in tab order, Approvals first, staff-only past it', () => {
@@ -80,19 +80,55 @@ describe('counts come from the one /me/home response', () => {
     expect(appsFor('PM').find((a) => a.id === 'drive-test').pages.map((p) => p.id)).not.toContain('fixes')
   })
 
-  it.each([
-    ['/reports/drive-test', 'drive-test', 'dashboard'],
-    ['/reports/acceptance', 'acceptance', 'dashboard'],
-  ])('keeps a shared dashboard (%s) in the app the user opened', (path, own, ownPage) => {
+  it('keeps the shared Acceptance dashboard in the app the user opened', () => {
     const apps = appsFor('PM')
-    expect(locate(apps, path, '').app.id).toBe(own)
-    expect(locate(apps, path, '', own).page.id).toBe(ownPage)
-    const insights = locate(apps, path, '', 'insights')
+    expect(locate(apps, '/reports/acceptance', '').app.id).toBe('acceptance')
+    expect(locate(apps, '/reports/acceptance', '', 'acceptance').page.id).toBe('dashboard')
+    const insights = locate(apps, '/reports/acceptance', '', 'insights')
     expect(insights.app.id).toBe('insights')
     expect(insights.app.pages.map((p) => p.id)).toEqual(expect.arrayContaining(['roles', 'gaps']))
   })
 
   it('ignores a preferred app that does not hold the page', () => {
     expect(locate(appsFor('PM'), '/my-work', '', 'insights').app.id).toBe('acceptance')
+  })
+})
+
+// UEP-11 Part A: the Drive Test dashboard left the Drive test rail. It is
+// still Insights › Dashboards, and the app opens on its first queue.
+describe('Drive test rail without Dashboard', () => {
+  it.each(['PM', 'Coordinator', 'Contractor', 'RegionalManager', 'Viewer', 'CpgPower'])(
+    'has no Dashboard for %s',
+    (role) => {
+      const dt = appsFor(role).find((a) => a.id === 'drive-test')
+      expect(dt.pages.map((p) => p.route)).not.toContain('/reports/drive-test')
+    },
+  )
+
+  it.each([
+    ['PM', '/health-check?tab=pool'],
+    ['Coordinator', '/health-check?tab=pool'],
+    ['Contractor', '/my-health-check'],
+    ['CpgPower', '/my-fix-queue'],
+  ])('opens the app for %s on its first remaining page', (role, route) => {
+    const dt = appsFor(role).find((a) => a.id === 'drive-test')
+    expect(appRoute(dt)).toBe(route)
+    expect(appRoute(dt)).toBe(dt.pages[0].route)
+  })
+
+  it('still offers the dashboard under Insights › Dashboards, and the URL lands there', () => {
+    const apps = appsFor('PM')
+    const insights = apps.find((a) => a.id === 'insights')
+    expect(insights.pages.find((p) => p.id === 'dashboards').route).toBe('/reports/drive-test')
+    expect(locate(apps, '/reports/drive-test', '').app.id).toBe('insights')
+    expect(locate(apps, '/reports/drive-test', '', 'drive-test').app.id).toBe('insights')
+  })
+
+  it('names the site list Explorer, for the Drive test roles', () => {
+    for (const role of ['PM', 'Coordinator', 'Contractor', 'RegionalManager', 'Viewer']) {
+      const page = appsFor(role).find((a) => a.id === 'drive-test').pages.find((p) => p.id === 'explorer')
+      expect(page).toMatchObject({ label: 'Explorer', route: '/explorer' })
+    }
+    expect(locate(appsFor('PM'), '/explorer/sites/7', '').page.id).toBe('explorer')
   })
 })

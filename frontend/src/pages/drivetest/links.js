@@ -23,20 +23,6 @@
 // instead, and this file is what keeps that from ever being what a reader
 // sees.
 
-/** A link into the work queue, filtered by any combination we support.
- *
- * Still used where the destination really is the queue — the stage pipeline
- * links to the sites *and* to the tab a person acts on them in.
- */
-export function queueLink({ stage, provinceId, contractorId } = {}) {
-  const params = new URLSearchParams()
-  if (stage) params.set('stage', stage)
-  if (provinceId != null) params.set('province_id', String(provinceId))
-  if (contractorId != null) params.set('contractor_id', String(contractorId))
-  const query = params.toString()
-  return `/work-items${query ? `?${query}` : ''}`
-}
-
 /** The sites behind one figure on the Drive Test dashboard.
  *
  * The parameter names live here and nowhere else, spelled as

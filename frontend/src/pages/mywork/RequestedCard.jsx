@@ -1,5 +1,6 @@
 import { X } from 'lucide-react'
 import { Link } from 'react-router-dom'
+import { siteRecordPath } from '../../lib/explorerLinks'
 import { shown } from './roundText'
 import { formatNumber } from '../../lib/numbers'
 
@@ -41,7 +42,7 @@ export function RequestedOne({ facts, suggestion, onTakeSuggestion }) {
         )}
       </div>
       <dl className="mw-facts">
-        <div><dt>Site</dt><dd>{f.workItemId ? <Link className="mw-link" to={`/work-items/${f.workItemId}`}>{f.site}</Link> : f.site}</dd></div>
+        <div><dt>Site</dt><dd>{f.workItemId ? <Link className="mw-link" to={siteRecordPath(f.workItemId, f.code)}>{f.site}</Link> : f.site}</dd></div>
         <div><dt>Province</dt><dd className="text-farsi">{f.province}</dd></div>
         <div><dt>Village ID</dt><dd>{f.code}</dd></div>
         <div><dt>Requested</dt><dd>{f.techs.map((t) => <span key={t} className="mw-tech-chip">{t}</span>)}</dd></div>

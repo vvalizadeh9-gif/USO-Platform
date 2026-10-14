@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { daysBetween, formatLong, fromIso, toIso, todayIso } from './dates'
+import { daysBetween, formatGregorian, formatLong, fromIso, toIso, todayIso } from './dates'
 
 describe('fromIso', () => {
   it('parses a real date', () => {
@@ -85,5 +85,17 @@ describe('daysBetween', () => {
   it('is null when either side is unparseable', () => {
     expect(daysBetween('2026-09-08', 'x')).toBeNull()
     expect(daysBetween(null, '2026-09-08')).toBeNull()
+  })
+})
+
+describe('formatGregorian', () => {
+  it('reads an ISO date as day, short month and year in English digits', () => {
+    expect(formatGregorian('2026-10-06')).toBe('6 Oct 2026')
+    expect(formatGregorian('2026-01-31')).toBe('31 Jan 2026')
+  })
+
+  it('is null for nothing and for a date that does not exist', () => {
+    expect(formatGregorian(null)).toBeNull()
+    expect(formatGregorian('2026-02-31')).toBeNull()
   })
 })

@@ -324,15 +324,15 @@ describe('the table', () => {
     )
   })
 
-  it('opens the site history from a site code, and the work item from the row', async () => {
+  it('opens the site history from a site code, and the site record from the row', async () => {
     serve()
     draw()
 
     const cell = await screen.findByText('K-0001')
     expect(cell.tagName).toBe('BUTTON')
 
-    const link = screen.getByRole('link', { name: 'Open work item K-0001' })
-    expect(link).toHaveAttribute('href', '/work-items/11')
+    const link = screen.getByRole('link', { name: 'Open site K-0001 in Explorer' })
+    expect(link).toHaveAttribute('href', '/explorer/sites/11')
   })
 })
 

@@ -155,6 +155,16 @@ from the file on the **first** import only. After that the application owns them
 because they change through the app's own workflow. A later CPM file cannot
 overwrite a drive-test result recorded in UEP.
 
+### The site contractor is a master field
+
+Column 31 (پیمانکار اجرایی سایت) is stored as `work_items.site_contractor_id`
+(UEP-11), resolved with the same contractor-name matching as the DT
+contractor (`CpmImportService._contractor`). Unlike column AV it is a master
+field: every import sets it again. A blank cell leaves it alone, because a
+site's rows repeat once per village and one blank row must not clear what
+another set. Raw rows of earlier imports are not kept, so existing work items
+pick it up on the next import.
+
 ### Erasing CPM data
 
 Admin Console → CPM Import → *Erase all CPM data* (`POST
@@ -1699,7 +1709,8 @@ already decided (409), and is all or nothing.
   which is what step 2 lists.
 - `GET /hc/results`: `completed_at` and `days_waiting`.
 - `GET /work-items`: `launch_date_shamsi`, and a `q` search over site ID,
-  province and village (also on its export and counts).
+  province and village name (also on its export and counts). Since UEP-11 it
+  also matches the village code, and ignores removed villages.
 - `GET /work-items/counts` (new): visible sites per `current_stage` plus
   `All`, with the list's `q` and `province_id`. This was chosen over adding a
   counts field because the list answers a bare array.
@@ -1763,6 +1774,106 @@ Internal PIP; `null` for a contractor, although the endpoint is closed to
 contractors anyway), `is_running`, `is_future`, and `contractors[]` of
 `{id, name, plan, delivered}`. The `month` and `since_start` views carry
 `months: null`.
+
+## 5i. Explorer: a site's record (UEP-11)
+
+All sites became **Explorer**: the list at `/explorer` and one record page per
+site at `/explorer/sites/{work_item_id}` (`?village=V10232` highlights a
+village). `/work-items` and `/work-items/{id}` redirect there. The Drive Test
+dashboard left the Drive test rail at the same time; it is Insights ›
+Dashboards (docs/design/navigation.md).
+
+### `GET /explorer/sites/{work_item_id}`
+
+Read-only, in `api/explorer.py` → `services/explorer.py` (loading) and
+`services/explorer_journey.py` (pure rules, testable without a session).
+`GET /work-items/{id}` is deliberately not grown: it keeps villages out, and
+the assignment screens rely on that.
+
+```json
+{
+  "id": 123, "site_code": "W4318",
+  "status": {"step": "acceptance", "state": "in_progress"},
+  "general": {"on_air_date": "2026-10-06", "dt_date": "2026-09-30",
+              "site_contractor": "…", "dt_contractor": "…",
+              "requested_technology": ["3G", "4G"], "province": "…", "hadaf_villages": 3},
+  "journey": {
+    "steps": [{"key": "on_air", "state": "done", "date": "2026-09-02", "gap_days": null}, "…"],
+    "aging": {"total_days": 42, "current_step_days": 14,
+              "longest_step": {"from": "assigned", "to": "dt_done", "days": 14},
+              "oldest_pending": {"authority": "CRA", "days": 14, "villages": 2}}
+  },
+  "acceptance_started": true,
+  "villages": [{"id": 9, "code": "V10232", "name": "…",
+                "ict": {"status": "approved|pending|rejected", "phase": "…",
+                        "filed_date": "…", "decided_date": "…", "days": 4,
+                        "round": 1, "filed": true, "refiled": false},
+                "cra": {"…": "same shape"}}],
+  "counts": {"ict": {"approved": 1, "pending": 1, "rejected": 1}, "cra": {"…": "…"}},
+  "workflow": {"current_stage": "DT Done", "active_drive_test_id": 3, "dt_submission_date": "2026-09-30"}
+}
+```
+
+- **Scope** is `apply_work_item_scope`; a site the caller may not see is 404.
+- **Queries:** a fixed number however many villages: the work item with its
+  graph (`selectinload`), the villages with their acceptance rows, and the
+  site's rounds and request letters as plain columns. A test holds 1 and 20
+  villages to the same statement count.
+- **Days** are whole Tehran days (`jalali.tehran_today`, `tehran_day`), never
+  negative; a missing date makes every count that needs it `null`.
+
+### Where each field comes from
+
+| Field | Source |
+|---|---|
+| On air date | `launch_date_gregorian`, else `launch_date_shamsi` parsed |
+| DT date | `dt_date_gregorian`, the date the DT dashboard counts by |
+| Site contractor | `site_contractor_id` (CPM column 31) |
+| DT contractor | `dt_sc_contractor_id` (CPM column AV) |
+| Requested technology | `requested_technology` through `tech_parser` |
+| Hadaf villages | live villages passing `cpm_columns.is_pure_target`. For a DT-done site this is exactly the acceptance universe (`in_dt_done_universe`); before the drive test it still counts the site's villages rather than reading 0 |
+
+**The step path follows the process.** A site goes on air first: the health
+check pool is every on-air site whose drive test is not Done. So the steps are
+On air → Health check → Assigned → DT done → Acceptance. A step is done when
+it, or any later step, is done (a drive test seeded Done from CPM proves the
+site was assigned). Dates: on air as above; health check is the latest
+`hc_tasks` row with a Ready result (`completed_at`), falling back to the legacy
+`health_checks` table; assigned is `relevant_assignment().assigned_at`; DT
+done is `dt_date_gregorian`; acceptance is the date the last village became
+fully approved (the latest ICT and CRA verdict date), when every village has
+one. Acceptance starts when the drive test is Done.
+
+**A village side** is My Work's state (`villages.ict_status` / `cra_status`
+read through `my_work_status.display_status`), in three words with a phase:
+
+| Code state | Shown | Phase | Dates |
+|---|---|---|---|
+| approved | Approved | `decided` | decided = `authority_verdict_date` (the answer letter's date in `acceptances`); filed = the newest request letter sent on or before it; days = filed → decided |
+| filled | Pending | `with_coordinator` | filed = the pending submission's `submitted_at`; days since |
+| returned | Pending + Returned chip | `returned` | the returned round's `reviewed_at`; days since |
+| waiting or rejected, with an unanswered request letter | Pending (+ Re-filed when round ≥ 2) | `with_authority` | filed = the request's letter date, else `sent_at`; days since `sent_at` |
+| rejected | Rejected | `rejected` | decided = the latest rejected technology's date |
+| waiting | Pending | `not_filed` | days on My Work's clock (latest submission or review, else the DT date) |
+
+A request is unanswered while no non-withdrawn submission for the side was
+recorded on or after it, the rule in `acceptance_requests`. Fully approved
+means both sides approved, which is the existing `village_verdict`.
+
+### The page
+
+`pages/explorer/`: `ExplorerList` (the All sites list, renamed),
+`SiteRecord` (one request, `useSiteRecord`), `GeneralInfoCard`, `JourneyCard`
+(`AgingTiles`, `StepPath`, `VillageAcceptance`) and `TakeActionDrawer`.
+Labels, the row order and which workflow forms apply are in `explorerModel.js`.
+The old detail page's forms (assign, submit DT, return to coordinator, DT
+review) live in the drawer unchanged; assignment is offered only on sites
+awaiting one. Every link to a site goes through `lib/explorerLinks.js`.
+
+### Database
+
+One column: `work_items.site_contractor_id`, nullable, FK `contractors.id`,
+indexed (migration `a7c3e9d2f514`). See §3.
 
 ## 6. Roles and permissions
 
@@ -1921,7 +2032,8 @@ Iran uses the Jalali (Shamsi) calendar. The CPM workbook carries both, and users
 expect to see Jalali.
 
 The rule: **store Gregorian, display Jalali.** Conversion lives in
-`app/core/jalali.py`. Reporting periods are Shamsi months, so monthly snapshots
+`app/core/jalali.py`. One exception, on Explorer only (UEP-11): every date there
+is Gregorian in English digits, "6 Oct 2026" (`lib/dates.formatGregorian`). Reporting periods are Shamsi months, so monthly snapshots
 are keyed by Shamsi year and month.
 
 Timestamps are stored as `timestamptz` and written in UTC. Two columns were

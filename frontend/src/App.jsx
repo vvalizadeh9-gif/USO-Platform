@@ -1,5 +1,5 @@
 import { lazy, Suspense } from 'react'
-import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
+import { Navigate, Route, Routes, useLocation, useParams } from 'react-router-dom'
 import AppShell from './shell/AppShell'
 import { HomeDataProvider } from './shell/HomeData'
 import { useAuth } from './context/AuthContext'
@@ -19,8 +19,8 @@ const HealthCheck = lazy(() => import('./pages/HealthCheck'))
 const MyHealthCheck = lazy(() => import('./pages/MyHealthCheck'))
 const MyDriveTests = lazy(() => import('./pages/MyDriveTests'))
 const MyFixQueue = lazy(() => import('./pages/MyFixQueue'))
-const WorkItems = lazy(() => import('./pages/WorkItems'))
-const WorkItemDetail = lazy(() => import('./pages/WorkItemDetail'))
+const ExplorerList = lazy(() => import('./pages/explorer/ExplorerList'))
+const SiteRecord = lazy(() => import('./pages/explorer/SiteRecord'))
 const Home = lazy(() => import('./pages/Home'))
 const MyWork = lazy(() => import('./pages/mywork/MyWork'))
 const MonthlyPlan = lazy(() => import('./pages/monthlyplan/MonthlyPlan'))
@@ -65,6 +65,18 @@ function Protected({ children, adminOnly, allowedRoles }) {
 // Signing in sets the user, which re-renders this route before the form's own
 // redirect runs -- so the signed-in branch must honour ?next= itself, or
 // everyone sent here from a page would land on Home instead of back on it.
+// All sites became Explorer (UEP-11). Old links and bookmarks still land:
+// the list keeps its query string, a site opens its record page.
+function WorkItemsRedirect() {
+  const { search } = useLocation()
+  return <Navigate to={`/explorer${search}`} replace />
+}
+
+function WorkItemRedirect() {
+  const { id } = useParams()
+  return <Navigate to={`/explorer/sites/${encodeURIComponent(id)}`} replace />
+}
+
 function LoginRoute() {
   const { user } = useAuth()
   const location = useLocation()
@@ -174,8 +186,10 @@ export default function App() {
               </Protected>
             }
           />
-          <Route path="/work-items" element={<WorkItems />} />
-          <Route path="/work-items/:id" element={<WorkItemDetail />} />
+          <Route path="/explorer" element={<ExplorerList />} />
+          <Route path="/explorer/sites/:workItemId" element={<SiteRecord />} />
+          <Route path="/work-items" element={<WorkItemsRedirect />} />
+          <Route path="/work-items/:id" element={<WorkItemRedirect />} />
           {/* The Action Center was removed (UEP-05): Home shows each user's
               pending work. Old bookmarks, with or without ?view=, land there. */}
           <Route path="/action-center" element={<Navigate to="/home" replace />} />
