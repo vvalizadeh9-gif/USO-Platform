@@ -1,5 +1,5 @@
-// UEP-06: the Health check → Drive test work pages and Explorer's list
-// (UEP-11; the record page is explorer.spec.js).
+// UEP-06: the Health check → Drive test work pages. Explorer's list and
+// record page are explorer.spec.js (UEP-11, UEP-11a).
 //
 // * no page scroll at 1440×900 on any step, and everything still reachable at
 //   1366×768 (Home's max-height: 820px tightening);
@@ -22,7 +22,6 @@ const STEPS = [
   { name: 'Re-routes', path: '/health-check?tab=reroutes', title: 'Re-routes' },
   { name: 'Sent back', path: '/drive-test?tab=sent-back', title: 'Sent back' },
   { name: 'History', path: '/drive-test?tab=history', title: 'History' },
-  { name: 'Explorer', path: '/explorer', title: 'Explorer', list: true },
 ]
 
 async function open(page, step) {

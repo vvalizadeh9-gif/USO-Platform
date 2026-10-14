@@ -72,7 +72,7 @@ export function resultGroups(pages, data) {
           key: `province:${p.id}`,
           label: p.name,
           meta: 'All sites in this province',
-          to: explorerListPath({ province_id: p.id }),
+          to: explorerListPath({ province: p.id }),
         })),
       },
       {
@@ -82,7 +82,7 @@ export function resultGroups(pages, data) {
           key: `contractor:${c.id}`,
           label: c.name,
           meta: 'All sites for this contractor',
-          to: explorerListPath({ contractor_id: c.id }),
+          to: explorerListPath({ dt_contractor: c.id }),
         })),
       },
       {

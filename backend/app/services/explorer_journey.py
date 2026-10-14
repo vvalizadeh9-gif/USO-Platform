@@ -5,7 +5,8 @@ loads the facts and hands them over, so every rule on the page -- which step is
 current, how many days sit between two steps, what a village's ICT or CRA side
 reads as -- is testable without a session.
 
-The step order is the process's, not a guess at it: a site goes on air, the
+The step order is the process's, not a guess at it: a site goes on air (the
+first step: the journey and its total aging start there), the
 health check pool takes every on-air site whose drive test is not Done
 (``health_check.get_basket``), the drive test is assigned and done, and only
 then can its villages be accepted (``acceptance_universe.in_dt_done_universe``).
@@ -128,12 +129,16 @@ def site_status(steps: list[dict]) -> dict:
 # Aging
 # --------------------------------------------------------------------------
 def total_days(steps: list[dict], today: date) -> int | None:
-    """From the first dated step to today, or to acceptance when it is done."""
-    first = next((s["date"] for s in steps if s["date"] is not None), None)
+    """From the on-air date to today, or to acceptance when it is done.
+
+    On air is where the journey starts; a site without an on-air date has no
+    total, rather than one measured from some later step.
+    """
+    on_air = next((s["date"] for s in steps if s["key"] == STEP_ON_AIR), None)
     last = steps[-1]
     if last["state"] == STATE_DONE:
-        return days_between(first, last["date"])
-    return days_between(first, today)
+        return days_between(on_air, last["date"])
+    return days_between(on_air, today)
 
 
 def current_step_days(steps: list[dict]) -> int | None:

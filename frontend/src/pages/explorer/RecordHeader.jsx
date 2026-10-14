@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom'
 import Icon from '../../components/Icon'
 import { EXPLORER_PATH, myWorkPath } from '../../lib/explorerLinks'
 import { openVillages, siteBadge } from './explorerModel'
+import { lastListSearch } from './listModel'
 
 /**
  * The breadcrumb and the header row (UEP-11 §B3): the site ID with its one
@@ -17,7 +18,7 @@ export default function RecordHeader({ record, siteLabel, headingRef, canFile, i
     <>
       <nav className="ex-crumbs" aria-label="Breadcrumb">
         <ol>
-          <li><Link to={EXPLORER_PATH}>Explorer</Link></li>
+          <li><Link to={EXPLORER_PATH + lastListSearch()}>Explorer</Link></li>
           <li aria-current="page">{siteLabel}</li>
         </ol>
       </nav>

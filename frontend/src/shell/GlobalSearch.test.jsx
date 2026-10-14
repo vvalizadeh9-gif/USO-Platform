@@ -52,8 +52,8 @@ describe('resultGroups', () => {
     expect(groups.map((g) => g.items[0].to)).toEqual([
       '/explorer/sites/7',
       '/explorer/sites/7?village=V1',
-      '/explorer?province_id=3',
-      '/explorer?contractor_id=4',
+      '/explorer?province=3',
+      '/explorer?dt_contractor=4',
       '/admin?tab=users&search=s.finder',
     ])
   })

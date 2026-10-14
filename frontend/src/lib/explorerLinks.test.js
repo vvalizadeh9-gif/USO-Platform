@@ -4,7 +4,7 @@ import { explorerListPath, myWorkPath, siteRecordPath } from './explorerLinks'
 describe('explorer links', () => {
   it('builds the list path with only the filters given', () => {
     expect(explorerListPath()).toBe('/explorer')
-    expect(explorerListPath({ q: 'W43 18', province_id: '', contractor_id: null })).toBe('/explorer?q=W43+18')
+    expect(explorerListPath({ q: 'W43 18', province: '', dt_contractor: null })).toBe('/explorer?q=W43+18')
   })
 
   it('builds the record path, with the village highlighted when named', () => {

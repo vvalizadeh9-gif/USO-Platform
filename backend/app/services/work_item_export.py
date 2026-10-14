@@ -50,30 +50,38 @@ def _cell(value) -> object:
     return value if value is not None else ""
 
 
-def build_assigned_sites_export(rows: list[dict]) -> bytes:
-    """Build the .xlsx for a list of work-item rows. Returns the file bytes."""
+def build_sheet(
+    title: str, columns: list[tuple[str, str]], widths: list[int], rows: list[dict]
+) -> bytes:
+    """One .xlsx sheet: a header row from ``columns`` (header, row key), then
+    a line per row. Dates stay dates; the header is frozen and filterable."""
     wb = Workbook()
     ws = wb.active
-    ws.title = "Assigned Sites"
+    ws.title = title
 
-    ws.append([header for header, _ in _COLUMNS])
-    for col_idx in range(1, len(_COLUMNS) + 1):
+    ws.append([header for header, _ in columns])
+    for col_idx in range(1, len(columns) + 1):
         cell = ws.cell(row=1, column=col_idx)
         cell.fill = _HEADER_FILL
         cell.font = _HEADER_FONT
-        ws.column_dimensions[get_column_letter(col_idx)].width = _WIDTHS[col_idx - 1]
+        ws.column_dimensions[get_column_letter(col_idx)].width = widths[col_idx - 1]
 
     for row in rows:
-        ws.append([_cell(row.get(key)) for _, key in _COLUMNS])
-
-    for row_idx in range(2, len(rows) + 2):
-        ws.cell(row=row_idx, column=4).number_format = "yyyy-mm-dd"
+        ws.append([_cell(row.get(key)) for _, key in columns])
+        for col_idx, (_, key) in enumerate(columns, start=1):
+            if isinstance(row.get(key), (date, datetime)):
+                ws.cell(row=ws.max_row, column=col_idx).number_format = "yyyy-mm-dd"
 
     # The header stays put while scrolling, and every column gets a filter —
     # a contractor with four hundred sites reads this file by filtering it.
     ws.freeze_panes = "A2"
-    ws.auto_filter.ref = f"A1:{get_column_letter(len(_COLUMNS))}{len(rows) + 1}"
+    ws.auto_filter.ref = f"A1:{get_column_letter(len(columns))}{len(rows) + 1}"
 
     buf = io.BytesIO()
     wb.save(buf)
     return buf.getvalue()
+
+
+def build_assigned_sites_export(rows: list[dict]) -> bytes:
+    """Build the .xlsx for a list of work-item rows. Returns the file bytes."""
+    return build_sheet("Assigned Sites", _COLUMNS, _WIDTHS, rows)

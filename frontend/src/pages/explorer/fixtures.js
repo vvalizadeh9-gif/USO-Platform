@@ -76,3 +76,42 @@ export const manyVillages = (n) =>
   Array.from({ length: n }, (_, i) =>
     village(`V2${String(i).padStart(4, '0')}`, side('pending', { filed_date: '2026-10-01', days: i }), side('approved', { decided_date: '2026-10-02' })),
   )
+
+// --------------------------------------------------------------------------
+// The list: GET /explorer/sites, /explorer/sites/filters and /{id}/villages
+// --------------------------------------------------------------------------
+const PROVINCES = ['کرمان', 'تهران', 'فارس']
+const CONTRACTORS = [{ id: 5, name: 'آریا موج' }, { id: 6, name: 'رعد' }]
+
+/** Row `i` of a mock list: varied type, technology, villages and contractor. */
+export const siteRow = (i, over = {}) => ({
+  id: i,
+  site_code: `W${String(4000 + i)}`,
+  province: PROVINCES[i % PROVINCES.length],
+  type: i % 4 === 0 ? 'Add Tech' : 'New Site',
+  requested_technology: i % 3 === 0 ? ['3G', '4G'] : ['4G'],
+  hadaf_villages: i % 5,
+  dt_contractor: i % 7 === 0 ? null : CONTRACTORS[i % 2],
+  village_match: null,
+  ...over,
+})
+
+/** One page of `total` rows, `limit` at a time; the cursor is the next offset. */
+export function sitesPage({ total = 120, limit = 50, cursor = null, q = '' } = {}) {
+  const from = cursor ? Number(cursor) : 0
+  const all = Array.from({ length: total }, (_, i) => siteRow(i + 1))
+  const matching = q ? all.filter((r) => r.site_code.toLowerCase().includes(q.toLowerCase())) : all
+  const items = matching.slice(from, from + limit)
+  const next = from + limit < matching.length ? String(from + limit) : null
+  return { items, total: matching.length, next_cursor: next }
+}
+
+export const FILTER_OPTIONS = {
+  provinces: PROVINCES.map((name, i) => ({ id: i + 1, name })),
+  types: ['Add Tech', 'New Site'],
+  technologies: ['3G', '4G'],
+  dt_contractors: CONTRACTORS,
+}
+
+export const siteVillages = (n = 3) =>
+  Array.from({ length: n }, (_, i) => ({ code: `V1000${i + 1}`, name: `روستای ${i + 1}` }))

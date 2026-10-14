@@ -100,6 +100,14 @@ import userMultiple16 from '@carbon/icons/es/user--multiple/16.js'
 import userMultiple20 from '@carbon/icons/es/user--multiple/20.js'
 import chevronLeft16 from '@carbon/icons/es/chevron--left/16.js'
 import chevronLeft20 from '@carbon/icons/es/chevron--left/20.js'
+import filter16 from '@carbon/icons/es/filter/16.js'
+import filter20 from '@carbon/icons/es/filter/20.js'
+import copy16 from '@carbon/icons/es/copy/16.js'
+import copy20 from '@carbon/icons/es/copy/20.js'
+import arrowUp16 from '@carbon/icons/es/arrow--up/16.js'
+import arrowUp20 from '@carbon/icons/es/arrow--up/20.js'
+import arrowDown16 from '@carbon/icons/es/arrow--down/16.js'
+import arrowDown20 from '@carbon/icons/es/arrow--down/20.js'
 
 /**
  * @typedef {{ elem: string, attrs: Record<string, string | number>, content?: CarbonNode[] }} CarbonNode
@@ -158,6 +166,11 @@ export const ICONS = Object.freeze({
   'hourglass': { 16: hourglass16, 20: hourglass20 },
   'meter': { 16: meter16, 20: meter20 },
   'pending': { 16: pending16, 20: pending20 },
+  // Explorer's list (UEP-11a).
+  'filter': { 16: filter16, 20: filter20 },
+  'copy': { 16: copy16, 20: copy20 },
+  'arrow--up': { 16: arrowUp16, 20: arrowUp20 },
+  'arrow--down': { 16: arrowDown16, 20: arrowDown20 },
 })
 
 /** @typedef {keyof typeof ICONS} IconName */

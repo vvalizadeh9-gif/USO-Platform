@@ -160,6 +160,12 @@ def world():
 
     one, twenty = busy_site("WQ001", 1), busy_site("WQ020", 20)
 
+    # --- W5000: an Add Tech site; its village name is typed with Arabic letters
+    add_tech = work_item("W5000", home, requested_technology="2G")
+    add_tech.site_type = "Add Tech"
+    v = village(add_tech, "V50001")
+    v.village_name = "علي آباد"   # "Ali Abad", Arabic ي
+
     def user(username, role, **kw):
         u = User(username=username, password_hash="x", first_name=username, family_name="T",
                  role_id=roles[role].id, status=user_status.ACTIVE, **kw)
@@ -170,6 +176,7 @@ def world():
     coord = user("x_coord", COORDINATOR, sees_all_provinces=False)
     coord.provinces = [home]
     sc = user("x_sc", CONTRACTOR, sees_all_provinces=False, contractor_id=dt_co.id)
+    everyone = user("x_all", COORDINATOR, sees_all_provinces=True)
     db.commit()
 
     def headers(u):
@@ -177,8 +184,10 @@ def world():
 
     out = {
         "client": TestClient(app),
-        "coord": headers(coord), "sc": headers(sc),
-        "coord_id": coord.id, "sc_id": sc.id,
+        "coord": headers(coord), "sc": headers(sc), "all": headers(everyone),
+        "coord_id": coord.id, "sc_id": sc.id, "all_id": everyone.id,
+        "home": home.id, "away": away.id, "home_name": home.name,
+        "dt_co": dt_co.id, "add_tech": add_tech.id,
         "main": main.id, "undated": undated.id, "done": done.id, "hidden": hidden.id,
         "one": one.id, "twenty": twenty.id,
     }
@@ -535,3 +544,202 @@ def test_list_search_matches_village_id_and_name(world):
     # A removed village no longer finds its site.
     body = client.get("/api/v1/work-items", params={"q": "V10005"}, headers=world["coord"]).json()
     assert body == []
+
+
+# --------------------------------------------------------------------------
+# The list (GET /explorer/sites), its villages, filters and export
+# --------------------------------------------------------------------------
+LIST = "/api/v1/explorer/sites"
+ALI_ABAD_ARABIC = "علي آباد"
+ALI_ABAD_PERSIAN = "علی آباد"
+
+
+def _list(world, who="coord", **params):
+    response = world["client"].get(LIST, params=params, headers=world[who])
+    assert response.status_code == 200, response.text
+    return response.json()
+
+
+def _codes(body):
+    return [r["site_code"] for r in body["items"]]
+
+
+def _all_pages(world, who="coord", **params):
+    """Every row, walking the cursor two rows at a time."""
+    rows, cursor = [], None
+    for _ in range(50):
+        extra = {"cursor": cursor} if cursor else {}
+        body = _list(world, who, limit=2, **params, **extra)
+        rows += body["items"]
+        cursor = body["next_cursor"]
+        if cursor is None:
+            return rows, body["total"]
+    raise AssertionError("cursor never ended")
+
+
+def test_list_shape_and_default_order(world):
+    body = _list(world)
+    assert set(body) == {"items", "total", "next_cursor"}
+    assert _codes(body) == ["W0001", "W0002", "W4318", "W5000", "WQ001", "WQ020"]
+    assert body["total"] == 6 and body["next_cursor"] is None
+    row = next(r for r in body["items"] if r["site_code"] == "W4318")
+    assert row == {
+        "id": world["main"], "site_code": "W4318", "province": world["home_name"],
+        "type": "Greenfield", "requested_technology": ["3G", "4G"], "hadaf_villages": 3,
+        "dt_contractor": {"id": world["dt_co"], "name": "Drive Co"}, "village_match": None,
+    }
+
+
+def test_list_scope(world):
+    assert "W9999" not in _codes(_list(world))
+    assert _codes(_list(world, "sc")) == ["W4318"]
+    assert "W9999" in _codes(_list(world, "all"))
+
+
+def test_list_filters(world):
+    assert _codes(_list(world, "all", province=world["away"])) == ["W9999"]
+    assert _codes(_list(world, type="Add Tech")) == ["W5000"]
+    assert _codes(_list(world, tech="2G")) == ["W5000"]
+    assert _codes(_list(world, tech="4G")) == ["W0002", "W4318", "WQ001", "WQ020"]
+    assert _codes(_list(world, dt_contractor=world["dt_co"])) == ["W4318"]
+    # A filter never widens the scope.
+    assert _codes(_list(world, province=world["away"])) == []
+
+
+@pytest.mark.parametrize("term, match", [
+    ("W43", None),
+    ("v10002", {"code": "V10002", "name": "Village V10002"}),
+    ("Village V10003", {"code": "V10003", "name": "Village V10003"}),
+    (ALI_ABAD_PERSIAN, {"code": "V50001", "name": ALI_ABAD_ARABIC}),
+])
+def test_list_search(world, term, match):
+    body = _list(world, q=term)
+    assert len(body["items"]) == 1 and body["total"] == 1
+    assert body["items"][0]["village_match"] == match
+
+
+def test_list_search_by_province_and_skips_non_hadaf_villages(world):
+    assert len(_list(world, q=world["home_name"])["items"]) == 6
+    assert _list(world, q="V10004")["items"] == []   # not هدف
+    assert _list(world, q="V10005")["items"] == []   # removed
+
+
+@pytest.mark.parametrize("sort", ["site", "province", "type", "tech", "villages", "dt_contractor"])
+@pytest.mark.parametrize("direction", ["asc", "desc"])
+def test_every_sort_pages_without_gaps_or_duplicates(world, sort, direction):
+    whole = _list(world, "all", sort=sort, dir=direction, limit=100)["items"]
+    paged, total = _all_pages(world, "all", sort=sort, dir=direction)
+    assert [r["id"] for r in paged] == [r["id"] for r in whole]
+    # The seeded sample sites are in view too: more pages, mixed empty values.
+    assert len({r["id"] for r in paged}) == len(paged) == total == len(whole) > 7
+
+
+def test_sort_by_villages_breaks_ties_by_site_code(world):
+    codes = _codes(_list(world, sort="villages", dir="desc"))
+    assert codes == ["WQ020", "W4318", "W0002", "W5000", "WQ001", "W0001"]
+    codes = _codes(_list(world, sort="villages"))
+    assert codes == ["W0001", "W0002", "W5000", "WQ001", "W4318", "WQ020"]
+
+
+def test_empty_values_sort_last_either_way(world):
+    for direction in ("asc", "desc"):
+        codes = _codes(_list(world, sort="dt_contractor", dir=direction))
+        assert codes == ["W4318", "W0001", "W0002", "W5000", "WQ001", "WQ020"]
+
+
+def test_a_foreign_cursor_is_refused(world):
+    client = world["client"]
+    cursor = _list(world, limit=1)["next_cursor"]
+    assert client.get(LIST, params={"cursor": cursor, "sort": "type"},
+                      headers=world["coord"]).status_code == 400
+    assert client.get(LIST, params={"cursor": "nonsense"},
+                      headers=world["coord"]).status_code == 400
+
+
+def test_list_count_matches_the_record_page(world):
+    rows = {r["id"]: r for r in _list(world)["items"]}
+    for key in ("main", "undated", "done", "one", "twenty", "add_tech"):
+        record = _record(world, key)
+        assert rows[world[key]]["hadaf_villages"] == record["general"]["hadaf_villages"]
+
+
+def test_list_query_count_is_constant(world):
+    from app.core.database import engine
+
+    def statements(**params):
+        seen = []
+
+        def count(*_args, **_kw):
+            seen.append(1)
+
+        event.listen(engine, "before_cursor_execute", count)
+        try:
+            _list(world, "all", **params)
+        finally:
+            event.remove(engine, "before_cursor_execute", count)
+        return len(seen)
+
+    assert statements(limit=1) == statements(limit=100)
+    assert statements(limit=1, q="V") == statements(limit=100, q="V")
+
+
+def test_site_villages(world):
+    client = world["client"]
+    url = LIST + "/{}/villages"
+    body = client.get(url.format(world["main"]), headers=world["coord"]).json()
+    assert [v["code"] for v in body] == ["V10001", "V10002", "V10003"]
+    assert client.get(url.format(world["hidden"]), headers=world["coord"]).status_code == 404
+    assert client.get(url.format(999999), headers=world["coord"]).status_code == 404
+
+
+def test_filter_options_are_only_what_the_caller_sees(world):
+    body = world["client"].get(LIST + "/filters", headers=world["coord"]).json()
+    assert body["provinces"] == [{"id": world["home"], "name": world["home_name"]}]
+    assert body["types"] == ["Add Tech", "Greenfield"]
+    assert body["technologies"] == ["2G", "3G", "4G"]
+    assert body["dt_contractors"] == [{"id": world["dt_co"], "name": "Drive Co"}]
+    sc = world["client"].get(LIST + "/filters", headers=world["sc"]).json()
+    assert sc["types"] == ["Greenfield"]
+
+
+def test_export_holds_the_listed_rows(world):
+    from io import BytesIO
+
+    from openpyxl import load_workbook
+
+    def sheet(**params):
+        response = world["client"].get(LIST + "/export", params=params, headers=world["coord"])
+        assert response.status_code == 200
+        rows = list(load_workbook(BytesIO(response.content)).active.values)
+        return rows[0], [r[0] for r in rows[1:]]
+
+    header, codes = sheet(sort="site", dir="desc")
+    assert header[0] == "Site ID" and codes == list(reversed(_codes(_list(world))))
+    # A selection narrows the file; a hidden id in it changes nothing.
+    assert sheet(ids=[world["main"], world["hidden"]])[1] == ["W4318"]
+
+
+# --------------------------------------------------------------------------
+# Journey order (UEP-11a Part C)
+# --------------------------------------------------------------------------
+def test_total_aging_starts_at_on_air_only():
+    steps = J.build_steps([
+        J.StepFact(J.STEP_ON_AIR, True, None),
+        J.StepFact(J.STEP_HEALTH_CHECK, True, date(2026, 9, 1)),
+        J.StepFact(J.STEP_ASSIGNED, False, None),
+        J.StepFact(J.STEP_DT_DONE, False, None),
+        J.StepFact(J.STEP_ACCEPTANCE, False, None),
+    ], TODAY)
+    assert J.total_days(steps, TODAY) is None
+
+
+def test_a_drive_test_dated_before_on_air_has_no_negative_gap():
+    steps = J.build_steps([
+        J.StepFact(J.STEP_ON_AIR, True, date(2026, 9, 10)),
+        J.StepFact(J.STEP_HEALTH_CHECK, True, date(2026, 9, 12)),
+        J.StepFact(J.STEP_ASSIGNED, True, date(2026, 9, 13)),
+        J.StepFact(J.STEP_DT_DONE, True, date(2026, 9, 1)),
+        J.StepFact(J.STEP_ACCEPTANCE, False, None),
+    ], TODAY)
+    assert [s["key"] for s in steps] == list(J.STEP_ORDER)
+    assert [s["gap_days"] for s in steps] == [None, 2, 1, None, 43]

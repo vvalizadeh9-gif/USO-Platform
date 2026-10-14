@@ -101,9 +101,10 @@ describe('General information', () => {
 })
 
 describe('Journey', () => {
-  it('renders the five steps in order with their aging pills', async () => {
+  it('renders the five steps in order, On air first, with their aging pills', async () => {
     await draw()
     const steps = within(screen.getByRole('list', { name: 'Journey' })).getAllByRole('listitem')
+    expect(steps[0].querySelector('[data-icon]')).toHaveAttribute('data-icon', 'cell-tower')
     expect(steps.map((s) => s.getAttribute('aria-label'))).toEqual([
       'On air: done, 2 Sept 2026',
       'Health check: done, 9 Sept 2026, 7 days after the previous step',
@@ -135,6 +136,8 @@ describe('Journey', () => {
     const aging = screen.getByRole('list', { name: 'Aging' })
     expect(within(aging).getAllByRole('listitem')).toHaveLength(4)
     expect(within(aging).getByText('42 d')).toBeInTheDocument()
+    // The journey starts on air (UEP-11a Part C): total aging counts from there.
+    expect(document.querySelector('[data-tile="total"] .ex-aging-context')).toHaveTextContent('since on air')
     expect(within(aging).getByText('Assigned to DT done')).toBeInTheDocument()
     expect(within(aging).getByText('CRA, 2 villages')).toBeInTheDocument()
   })

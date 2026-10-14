@@ -1,251 +1,146 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import api from '../../api/client'
+import Icon from '../../components/Icon'
 import { useFillPage } from '../../components/pageMode'
-import AssignPanel from '../../components/work/AssignPanel'
 import PageHeading from '../../components/work/PageHeading'
 import RecentActions from '../../components/work/RecentActions'
-import SiteTable from '../../components/work/SiteTable'
 import { WorkProvider, useWork } from '../../components/work/WorkContext'
-import { EmptyStep, Fa, SearchBox, StepError, TechChips, WorkListCard } from '../../components/work/parts'
-import { useAuth } from '../../context/AuthContext'
+import { Fa, StepError } from '../../components/work/parts'
 import { useToast } from '../../context/ToastContext'
 import { describeBlobError, saveBlob } from '../../lib/download'
-import { toPersianDigits } from '../../lib/persianDigits'
-import { EXPLORER_PATH, explorerListPath, siteRecordPath } from '../../lib/explorerLinks'
-import { canReview } from '../../lib/roles'
+import { EXPLORER_PATH, explorerListPath } from '../../lib/explorerLinks'
 import AppFooter from '../../shell/AppFooter'
 import { useHomeData } from '../../shell/HomeData'
+import BulkBar from './BulkBar'
+import FilterPopover from './FilterPopover'
+import SiteRows from './SiteRows'
+import {
+  FILTER_FIELDS, apiParams, fieldOptions, footerText, isFiltered, listParams, nextSort,
+  readListState, recallList, rememberList,
+} from './listModel'
+import useSiteList from './useSiteList'
 import '../../styles/home.css'
 import '../../styles/work.css'
+import '../../styles/explorer.css'
 
-// The stages, in lifecycle order: chip label and the `current_stage` value.
-// Approval IS completion, so an approved drive test terminates at DT Done.
-const STAGES = [
-  { label: 'All', value: 'All' },
-  { label: 'HC in progress', value: 'HC In Progress' },
-  { label: 'HC review', value: 'HC Review' },
-  { label: 'Ready for assignment', value: 'Ready for Assignment' },
-  { label: 'Assigned', value: 'Assigned' },
-  { label: 'Returned', value: 'Returned by Contractor' },
-  { label: 'DT submitted', value: 'DT Submitted' },
-  { label: 'DT done', value: 'DT Done' },
-  { label: 'Problematic', value: 'Problematic' },
-]
-
-// Contractors never act on the assignment queue itself.
-const HIDDEN_FOR_CONTRACTOR = new Set(['Ready for Assignment'])
-
-/** The stages bulk assignment applies to: the sites awaiting one. */
-const ASSIGNABLE = new Set(['Ready for Assignment', 'Returned by Contractor'])
-
-const PAGE = 100
-
-/** "2G/4G" as chips. The server's parser (tech_parser) is what decides a
- * site's technologies; this only splits the stored text for display. */
-const techsOf = (text) => (text || '').split(/[\s,/+&]+/).filter(Boolean)
-
-const STAGE_TONE = {
-  Problematic: 'is-problem',
-  'DT Done': 'is-done',
-  Assigned: 'is-ongoing',
-  'DT Submitted': 'is-ongoing',
-  'Ready for Assignment': 'is-pending',
-  'Returned by Contractor': 'is-pending',
-}
-
-const fmtDate = (value) => {
-  if (!value) return '—'
-  const d = new Date(value)
-  return Number.isNaN(d.getTime()) ? '—' : <span className="uw-num">{d.toISOString().slice(0, 10)}</span>
-}
-
-// The columns each stage adds after the common ones: only the dates that
-// carry information at that point in the lifecycle.
-const STAGE_EXTRA = {
-  Assigned: [
-    { key: 'assignment_date', label: 'Assigned', render: (r) => fmtDate(r.assignment_date) },
-    { key: 'assigned_aging_days', label: 'Aging (days)', render: (r) => <span className="uw-num">{r.assigned_aging_days ?? '—'}</span> },
-    { key: 'assignment_user', label: 'Assigned by', render: (r) => r.assignment_user || '—' },
-  ],
-  'Returned by Contractor': [
-    { key: 'assignment_date', label: 'Assigned', render: (r) => fmtDate(r.assignment_date) },
-    { key: 'returned_date', label: 'Returned', render: (r) => fmtDate(r.returned_date) },
-  ],
-  'DT Submitted': [
-    { key: 'assignment_date', label: 'Assigned', render: (r) => fmtDate(r.assignment_date) },
-    { key: 'dt_submission_date', label: 'DT submitted', render: (r) => fmtDate(r.dt_submission_date) },
-  ],
-  'DT Done': [
-    { key: 'dt_submission_date', label: 'DT submitted', render: (r) => fmtDate(r.dt_submission_date) },
-    { key: 'aging_days', label: 'Aging (days)', render: (r) => <span className="uw-num">{r.aging_days ?? '—'}</span> },
-    { key: 'dt_approval_date', label: 'Approved', render: (r) => fmtDate(r.dt_approval_date) },
-    { key: 'dt_approval_user', label: 'Approved by', render: (r) => r.dt_approval_user || '—' },
-  ],
-}
-
-const BASE_COLUMNS = [
-  { key: 'site', label: 'Site ID', width: '12%', render: (r) => <Link className="uw-site-id" to={siteRecordPath(r.id)}>{r.site_code || `#${r.id}`}</Link> },
-  { key: 'province', label: 'Province', width: '14%', render: (r) => <Fa>{r.province}</Fa> },
-  { key: 'type', label: 'Type', width: '9%', render: (r) => r.site_type || '—' },
-  { key: 'tech', label: 'Requested tech', width: '14%', render: (r) => <TechChips techs={techsOf(r.requested_technology)} /> },
-  // The site's هدف villages: the record page lists the same ones.
-  { key: 'villages', label: 'Villages', width: '8%', render: (r) => <span className="uw-num">{(r.village_count ?? 0).toLocaleString('en-US')}</span> },
-  {
-    key: 'stage', label: 'Stage', width: '17%',
-    render: (r) => (
-      <span className={`uw-stage ${STAGE_TONE[r.current_stage] || ''}`.trim()}>
-        <i aria-hidden="true" />
-        {r.current_stage}
-      </span>
-    ),
-  },
-  { key: 'contractor', label: 'Contractor', width: '14%', render: (r) => <Fa>{r.contractor_name}</Fa> },
-  { key: 'onair', label: 'On air', render: (r) => <Fa>{r.launch_date_shamsi ? toPersianDigits(r.launch_date_shamsi) : null}</Fa> },
-]
+const SEARCH_DELAY = 250
 
 /**
- * Explorer's list (UEP-11 §B2, the All sites list of UEP-06 §9): every site
- * in scope, by stage. The stage chips are a tab list over the one list card; a
- * stage adds its own date columns. Search matches site ID, province, and
- * village ID or name. A row opens the site's record page. Sites awaiting an
- * assignment can be bulk-assigned with the same selection and contractor
- * cards as the Drive test page.
+ * Explorer (UEP-11a §B): the list of all sites, for finding one fast and
+ * opening its record. One card: search, filter chips and Filter on top, the
+ * sortable table in the middle (the only thing that scrolls), the count and
+ * keyboard hints at the foot. Search, filters and sort live in the URL.
  */
 export default function ExplorerList() {
   useFillPage()
   return (
     <WorkProvider>
-      <SitesList />
+      <SitesPage />
     </WorkProvider>
   )
 }
 
-function useJson(url, params, version) {
-  const [state, setState] = useState({ data: null, error: false })
-  const [attempt, setAttempt] = useState(0)
-  const key = JSON.stringify(params)
+/** The header search's old links (?province_id=, ?contractor_id=) as filters. */
+function useLegacyLinks(params, setParams) {
   useEffect(() => {
-    let live = true
-    setState((s) => ({ data: s.data, error: false, loading: true }))
-    api
-      .get(url, { params })
-      .then((r) => live && setState({ data: r.data, error: false }))
-      .catch(() => live && setState({ data: null, error: true }))
-    return () => {
-      live = false
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [url, key, version, attempt])
-  return { ...state, retry: () => setAttempt((n) => n + 1) }
+    const province = params.get('province_id')
+    const contractor = params.get('contractor_id')
+    if (!province && !contractor && !params.has('stage')) return
+    const next = new URLSearchParams(params)
+    for (const old of ['province_id', 'contractor_id', 'stage']) next.delete(old)
+    if (province) next.set('province', province)
+    if (contractor) next.set('dt_contractor', contractor)
+    setParams(next, { replace: true })
+  }, [params, setParams])
 }
 
-function SitesList() {
-  const { user } = useAuth()
+/** The count of every site the person can see, whatever the view. */
+function useAllTotal(list, filtered) {
+  const [all, setAll] = useState(null)
+  useEffect(() => {
+    if (!filtered && list.status === 'ready') setAll(list.total)
+  }, [filtered, list.status, list.total])
+  useEffect(() => {
+    if (!filtered || all != null) return
+    api.get('/explorer/sites', { params: { limit: 1 } }).then(({ data }) => setAll(data.total)).catch(() => {})
+  }, [filtered, all])
+  return all
+}
+
+function SitesPage() {
   const toast = useToast()
   const navigate = useNavigate()
-  const { headingRef, version, confirmAction, notice, clearNotice } = useWork()
+  const { search } = useLocation()
+  const { headingRef } = useWork()
   const { data: home, error: homeError } = useHomeData()
-  const [searchParams, setSearchParams] = useSearchParams()
-  const isContractor = user?.role?.name === 'Contractor'
-  const stages = STAGES.filter((s) => !isContractor || !HIDDEN_FOR_CONTRACTOR.has(s.value))
-  const requested = searchParams.get('stage')
-  const stage = stages.some((s) => s.value === requested) ? requested : 'All'
-  const historyOpen = searchParams.get('view') === 'history'
+  const [params, setParams] = useSearchParams()
+  useLegacyLinks(params, setParams)
 
-  // The header search links here with ?q=, ?province_id= or ?contractor_id=.
-  const linkedQ = searchParams.get('q')
-  const linkedProvince = searchParams.get('province_id')
-  const linkedContractor = searchParams.get('contractor_id')
-  const [query, setQuery] = useState(() => linkedQ || '')
-  const [q, setQ] = useState(() => (linkedQ || '').trim())
-  const [provinceId, setProvinceId] = useState(() => linkedProvince || '')
-  const [contractorId, setContractorId] = useState(() => linkedContractor || '')
-  const [offset, setOffset] = useState(0)
-  const [provinces, setProvinces] = useState([])
-  const [contractors, setContractors] = useState([])
+  const historyOpen = params.get('view') === 'history'
+  const state = useMemo(() => readListState(params), [params])
+  const filtered = isFiltered(state)
+  const viewKey = JSON.stringify(apiParams(state))
+  const list = useSiteList(state, search)
+  const allTotal = useAllTotal(list, filtered)
+  const [options, setOptions] = useState(null)
   const [selected, setSelected] = useState(() => new Set())
-  const [busyId, setBusyId] = useState(null)
+  const [expanded, setExpanded] = useState(null)
+  const [villages, setVillages] = useState({})
   const [exporting, setExporting] = useState(false)
+  const scrollRef = useRef(null)
 
-  // The search reaches the server a moment after typing stops.
-  useEffect(() => {
-    const t = setTimeout(() => setQ(query.trim()), 300)
-    return () => clearTimeout(t)
-  }, [query])
-  // A second search from the header while already here.
-  useEffect(() => {
-    if (linkedQ != null) setQuery(linkedQ)
-    if (linkedProvince != null) setProvinceId(linkedProvince)
-    if (linkedContractor != null) setContractorId(linkedContractor)
-  }, [linkedQ, linkedProvince, linkedContractor])
-  useEffect(() => {
-    setOffset(0)
-    setSelected(new Set())
-  }, [stage, q, provinceId, contractorId])
-  useEffect(() => {
-    api.get('/reference/provinces').then((r) => Array.isArray(r.data) && setProvinces(r.data)).catch(() => {})
-    // A contractor's list is already only its own sites.
-    if (!isContractor) {
-      api.get('/reference/contractors').then((r) => Array.isArray(r.data) && setContractors(r.data)).catch(() => {})
-    }
-  }, [isContractor])
-
-  const filters = { q: q || undefined, province_id: provinceId || undefined, contractor_id: contractorId || undefined }
-  const counts = useJson('/work-items/counts', filters, version)
-  const list = useJson('/work-items', { ...filters, stage: stage === 'All' ? undefined : stage, limit: PAGE, offset }, version)
-  const rows = list.data
-  const total = counts.data ? counts.data[stage] ?? (stage === 'All' ? counts.data.All : 0) : null
-
-  const selectable = canReview(user) && ASSIGNABLE.has(stage)
-  const columns = useMemo(() => [...BASE_COLUMNS, ...(STAGE_EXTRA[stage] || [])], [stage])
-  const byId = useMemo(() => new Map((rows || []).map((r) => [r.id, r])), [rows])
-
-  const setStage = (next) => {
-    clearNotice()
-    setSearchParams(next === 'All' ? {} : { stage: next }, { replace: true })
-  }
-
-  const onSelect = useCallback(
-    (ids, on) => {
-      if (notice) clearNotice()
-      setSelected((prev) => {
-        const next = new Set(prev)
-        for (const id of ids) on ? next.add(id) : next.delete(id)
-        return next
-      })
-    },
-    [notice, clearNotice],
+  const setState = useCallback(
+    (patch) => setParams(listParams({ ...state, ...patch }), { replace: true }),
+    [state, setParams],
   )
 
-  async function assign(contractor) {
-    const ids = [...selected]
-    setBusyId(contractor.contractor_id)
-    try {
-      const { data } = await api.post('/work-items/assign', {
-        work_item_ids: ids, contractor_id: contractor.contractor_id, assignment_type: 'official',
-      })
-      setSelected(new Set())
-      confirmAction({
-        text: `✓ ${ids.length} ${ids.length === 1 ? 'site' : 'sites'} assigned to ${contractor.name}.`,
-        undoUrl: `/work-items/assign/${data.batch_id}/undo`,
-      })
-    } catch (err) {
-      toast.error('Assign failed', err.response?.data?.detail || 'Please try again.')
-    } finally {
-      setBusyId(null)
-    }
-  }
+  useEffect(() => {
+    api.get('/explorer/sites/filters').then(({ data }) => setOptions(data)).catch(() => {})
+  }, [])
+  // A new view: a new selection and nothing expanded.
+  useEffect(() => {
+    setSelected(new Set())
+    setExpanded(null)
+  }, [viewKey])
 
-  // The list as a spreadsheet: the same rows, the same scope and filters.
-  async function exportExcel() {
+  const onScroll = useScrollMemory(scrollRef, list, search)
+
+  const toggleFilter = (key, value) => setState({ filters: { ...state.filters, [key]: value || undefined } })
+  const clearAll = () => setParams({}, { replace: true })
+
+  const onSelect = useCallback((id, on) => {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (on) next.add(id)
+      else next.delete(id)
+      return next
+    })
+  }, [])
+  const onSelectAll = (on) => setSelected(on ? new Set(list.items.map((r) => r.id)) : new Set())
+
+  const villagesRef = useRef(villages)
+  villagesRef.current = villages
+  const onToggle = useCallback((id) => {
+    setExpanded((open) => (open === id ? null : id))
+    const known = villagesRef.current[id]?.status
+    if (known === 'ready' || known === 'loading') return
+    setVillages((v) => ({ ...v, [id]: { status: 'loading' } }))
+    api
+      .get(`/explorer/sites/${id}/villages`)
+      .then(({ data }) => setVillages((v) => ({ ...v, [id]: { status: 'ready', list: data } })))
+      .catch(() => setVillages((v) => ({ ...v, [id]: { status: 'error' } })))
+  }, [])
+
+  async function exportSites(ids) {
     setExporting(true)
     try {
-      const res = await api.get('/work-items/export', {
-        params: { ...filters, stage: stage === 'All' ? undefined : stage },
+      const res = await api.get('/explorer/sites/export', {
+        params: { ...apiParams(state), ...(ids ? { ids } : {}) },
+        paramsSerializer: { indexes: null },
         responseType: 'blob',
       })
-      saveBlob(res.data, `${stage.toLowerCase().replace(/ /g, '_')}_sites.xlsx`)
+      saveBlob(res.data, ids ? 'selected_sites.xlsx' : 'explorer_sites.xlsx')
     } catch (err) {
       toast.error('Export failed', await describeBlobError(err))
     } finally {
@@ -253,15 +148,28 @@ function SitesList() {
     }
   }
 
+  async function copyIds() {
+    const codes = list.items.filter((r) => selected.has(r.id)).map((r) => r.site_code)
+    try {
+      await navigator.clipboard.writeText(codes.join('\n'))
+      toast.success(`${codes.length} ${codes.length === 1 ? 'ID' : 'IDs'} copied`)
+    } catch {
+      toast.error('Copy failed', 'Your browser did not allow copying.')
+    }
+  }
+
+  const foot = list.total != null ? footerText(list.items.length, list.total, filtered) : null
+
   return (
-    <div className="uep-home uw-page">
+    <div className="uep-home uw-page exl-page">
       <PageHeading
         title="Explorer"
-        count={counts.data?.All}
+        count={allTotal}
+        pill
         headingRef={headingRef}
         historyOpen={historyOpen}
         onHistory={() => navigate(historyOpen ? EXPLORER_PATH : explorerListPath({ view: 'history' }))}
-        onExport={historyOpen ? undefined : exportExcel}
+        onExport={historyOpen ? undefined : () => exportSites(null)}
         exporting={exporting}
       />
       {historyOpen ? (
@@ -269,129 +177,168 @@ function SitesList() {
           <RecentActions panelProps={{ id: 'sites-panel', 'aria-label': 'History' }} />
         </div>
       ) : (
-        <>
-          <StageChips stages={stages} value={stage} counts={counts.data} onChange={setStage} />
-          <div className="uw-content">
-            <WorkListCard
-              id="sites-panel"
-              role="tabpanel"
-              aria-labelledby={`stage-chip-${stage.replace(/\W+/g, '-')}`}
-              busy={!rows && !list.error}
-              tools={
-                <>
-                  <SearchBox value={query} onChange={setQuery} label="Search site ID, village ID or name, or province" placeholder="Search site, village, province…" />
-                  <select className="uw-select" aria-label="Province" value={provinceId} onChange={(e) => setProvinceId(e.target.value)}>
-                    <option value="">All provinces</option>
-                    {provinces.map((p) => (
-                      <option key={p.id} value={p.id}>{p.name}</option>
-                    ))}
-                  </select>
-                  {!isContractor && (
-                    <select className="uw-select" aria-label="Contractor" value={contractorId} onChange={(e) => setContractorId(e.target.value)}>
-                      <option value="">All contractors</option>
-                      {contractors.map((c) => (
-                        <option key={c.id} value={c.id}>{c.name}</option>
-                      ))}
-                    </select>
-                  )}
-                </>
-              }
-              description={total != null ? `${total.toLocaleString('en-US')} ${total === 1 ? 'site' : 'sites'}` : null}
-              foot={
-                <>
-                  <Pager offset={offset} shown={rows?.length ?? 0} total={total} onMove={setOffset} />
-                  {selectable && (
-                    <AssignPanel
-                      process="dt"
-                      selectedCount={selected.size}
-                      selectedProvinces={[...selected].map((id) => byId.get(id)?.province)}
-                      onClear={() => setSelected(new Set())}
-                      onAssign={assign}
-                      busyId={busyId}
-                    />
-                  )}
-                </>
-              }
-            >
-              {list.error && !rows ? (
-                <StepError stepName="Explorer" onRetry={list.retry} />
-              ) : rows && rows.length === 0 ? (
-                <EmptyStep stepName={stage === 'All' ? 'this list' : stage} />
-              ) : (
-                <SiteTable
-                  label={`Sites: ${stage}`}
-                  rows={rows || []}
-                  rowId={(r) => r.id}
-                  columns={columns}
-                  selected={selected}
-                  onSelect={selectable ? onSelect : undefined}
-                  siteLabel={(r) => r.site_code}
-                  onOpen={(r) => navigate(siteRecordPath(r.id))}
-                  loading={!rows}
-                />
-              )}
-            </WorkListCard>
+        <section className="uw-card exl-card" aria-label="All sites">
+          <header className="exl-toolbar">
+            <SearchField value={state.q} onChange={(q) => setState({ q })} />
+            <FilterChips state={state} options={options} onRemove={(key) => toggleFilter(key, null)} />
+            <span className="exl-toolbar-spacer" />
+            <FilterPopover options={options} filters={state.filters} onToggle={toggleFilter} />
+          </header>
+          <div className="uw-card-body exl-body" ref={scrollRef} onScroll={onScroll}>
+            {list.status === 'error' ? (
+              <StepError stepName="sites" onRetry={list.retry} />
+            ) : list.status === 'ready' && list.items.length === 0 ? (
+              <NoMatch filtered={filtered} onClear={clearAll} />
+            ) : (
+              <SiteRows
+                list={list}
+                state={state}
+                onSort={(key) => setState(nextSort(state, key))}
+                selected={selected}
+                onSelect={onSelect}
+                onSelectAll={onSelectAll}
+                expanded={expanded}
+                villages={villages}
+                onToggle={onToggle}
+                scrollRef={scrollRef}
+              />
+            )}
           </div>
-        </>
+          <footer className="exl-footer">
+            <span role="status">
+              {foot && <>Showing <b className="uw-num">{foot.shown}</b> {foot.rest}</>}
+            </span>
+            <span className="exl-keys" aria-hidden="true">
+              <kbd>↑</kbd> <kbd>↓</kbd> move · <kbd>Enter</kbd> open
+            </span>
+          </footer>
+          <BulkBar
+            count={selected.size}
+            exporting={exporting}
+            onExport={() => exportSites([...selected])}
+            onCopy={copyIds}
+            onClear={() => setSelected(new Set())}
+          />
+        </section>
       )}
       <AppFooter data={home} failed={Boolean(homeError) && !home} />
     </div>
   )
 }
 
-/** The stage chips: a tab list with arrow, Home and End keys and a roving
- * tab stop. Scrolls sideways inside itself when it does not fit. */
-function StageChips({ stages, value, counts, onChange }) {
-  const ref = useRef(null)
-  const index = stages.findIndex((s) => s.value === value)
-  const onKeyDown = (e) => {
-    const last = stages.length - 1
-    const next = { ArrowRight: Math.min(last, index + 1), ArrowLeft: Math.max(0, index - 1), Home: 0, End: last }[e.key]
-    if (next === undefined) return
-    e.preventDefault()
-    onChange(stages[next].value)
-    ref.current?.querySelectorAll('[role="tab"]')[next]?.focus()
+/**
+ * Remember the loaded pages and scroll offset on the way out, and put the
+ * offset back when this same view is restored (UEP-11a §B6). Returns the
+ * body's onScroll handler.
+ */
+function useScrollMemory(scrollRef, list, search) {
+  const latest = useRef({ list, search })
+  latest.current = { list, search }
+  const top = useRef(0)
+  const kept = useRef(recallList(search))
+
+  useLayoutEffect(() => {
+    const restore = kept.current
+    kept.current = null
+    if (restore && scrollRef.current) scrollRef.current.scrollTop = restore.scrollTop
+  }, [scrollRef])
+
+  useEffect(() => () => {
+    const { list: l, search: s } = latest.current
+    if (l.status === 'ready') {
+      rememberList(s, { items: l.items, total: l.total, nextCursor: l.nextCursor, scrollTop: top.current })
+    }
+  }, [])
+
+  return useCallback((e) => {
+    top.current = e.currentTarget.scrollTop
+  }, [])
+}
+
+/** The search field: 380px, clear button, Esc clears. The URL updates a
+ * moment after typing stops. */
+function SearchField({ value, onChange }) {
+  const [text, setText] = useState(value)
+  const sent = useRef(value)
+  useEffect(() => {
+    if (value !== sent.current) {
+      sent.current = value
+      setText(value)
+    }
+  }, [value])
+  useEffect(() => {
+    const term = text.trim()
+    if (term === sent.current) return undefined
+    const t = setTimeout(() => {
+      sent.current = term
+      onChange(term)
+    }, SEARCH_DELAY)
+    return () => clearTimeout(t)
+  }, [text, onChange])
+
+  const clear = () => {
+    setText('')
+    sent.current = ''
+    onChange('')
   }
   return (
-    <div className="uw-chip-row" role="tablist" aria-label="Stage" ref={ref} onKeyDown={onKeyDown}>
-      {stages.map((s) => {
-        const on = s.value === value
-        const n = counts ? counts[s.value] ?? 0 : null
-        return (
-          <button
-            key={s.value}
-            id={`stage-chip-${s.value.replace(/\W+/g, '-')}`}
-            type="button"
-            role="tab"
-            aria-selected={on}
-            aria-controls="sites-panel"
-            tabIndex={on ? 0 : -1}
-            className={`uw-stage-chip ${on ? 'is-selected' : ''}`.trim()}
-            onClick={() => !on && onChange(s.value)}
-          >
-            {s.label}
-            {n != null && <span className="uw-stage-count">{n.toLocaleString('en-US')}</span>}
-          </button>
-        )
-      })}
-    </div>
+    <label className="exl-search">
+      <Icon name="search" size={16} />
+      <input
+        type="search"
+        value={text}
+        placeholder="Find a site by ID, village ID or village name"
+        aria-label="Find a site by ID, village ID, village name or province"
+        onChange={(e) => setText(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Escape' && text) {
+            e.preventDefault()
+            clear()
+          }
+        }}
+      />
+      {text && (
+        <button type="button" className="exl-search-clear" aria-label="Clear search" onClick={clear}>
+          <Icon name="close" size={16} />
+        </button>
+      )}
+    </label>
   )
 }
 
-function Pager({ offset, shown, total, onMove }) {
-  if (!total || total <= PAGE) return null
-  const last = Math.min(offset + shown, total)
+/** "Province کرمان ×" for each active filter. */
+function FilterChips({ state, options, onRemove }) {
+  const chips = FILTER_FIELDS.filter((f) => state.filters[f.key])
+  if (chips.length === 0) return null
   return (
-    <nav className="uw-pager" aria-label="Pages">
-      <span className="uw-muted uw-num">
-        {(offset + 1).toLocaleString('en-US')}–{last.toLocaleString('en-US')} of {total.toLocaleString('en-US')}
-      </span>
-      <button type="button" className="uw-btn uw-btn-sm" disabled={offset === 0} onClick={() => onMove(Math.max(0, offset - PAGE))}>
-        Previous
-      </button>
-      <button type="button" className="uw-btn uw-btn-sm" disabled={last >= total} onClick={() => onMove(offset + PAGE)}>
-        Next
-      </button>
-    </nav>
+    <ul className="exl-chips" aria-label="Active filters">
+      {chips.map((f) => {
+        const value = state.filters[f.key]
+        const label = fieldOptions(f, options).find((o) => o.value === value)?.label ?? value
+        return (
+          <li key={f.key} className="exl-chip">
+            {f.label} <b>{f.persian ? <Fa>{label}</Fa> : label}</b>
+            <button type="button" className="exl-chip-remove" aria-label={`Remove ${f.label} filter`} onClick={() => onRemove(f.key)}>
+              <Icon name="close" size={16} />
+            </button>
+          </li>
+        )
+      })}
+    </ul>
+  )
+}
+
+function NoMatch({ filtered, onClear }) {
+  return (
+    <div className="uw-state">
+      <span className="uw-state-icon"><Icon name="search" size={20} /></span>
+      <b>{filtered ? 'No sites match' : 'No sites yet'}</b>
+      {filtered && (
+        <>
+          <span>Change the search or remove a filter.</span>
+          <button type="button" className="uw-btn" onClick={onClear}>Clear search and filters</button>
+        </>
+      )}
+    </div>
   )
 }

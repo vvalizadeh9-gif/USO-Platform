@@ -6,14 +6,14 @@ const stepName = (key) => STEP_META[key]?.phrase ?? key
 
 /** The four compact tiles above the step path (UEP-11 §B5.1). Oldest
  * pending is left out when nothing is pending. Total aging runs from the
- * first dated step, which is on air when CPM carried its date. */
+ * on-air date, the journey's first step (UEP-11a Part C); without that date
+ * there is no total. */
 export default function AgingTiles({ aging, steps }) {
-  const first = steps.find((s) => s.date)
   const currentStep = steps.find((s) => s.state === 'in_progress')?.key
   const longest = aging.longest_step
   const oldest = aging.oldest_pending
   const tiles = [
-    { key: 'total', icon: 'time', label: 'Total aging', value: days(aging.total_days), context: first ? `since ${stepName(first.key)}` : null },
+    { key: 'total', icon: 'time', label: 'Total aging', value: days(aging.total_days), context: aging.total_days != null ? 'since on air' : null },
     {
       key: 'current', icon: 'hourglass', label: 'In current step', value: days(aging.current_step_days),
       context: currentStep ? `in ${stepName(currentStep)}` : 'all steps done',

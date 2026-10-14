@@ -111,3 +111,40 @@ class SiteRecordOut(BaseModel):
     villages: list[VillageOut]
     counts: CountsOut
     workflow: WorkflowOut
+
+
+# --------------------------------------------------------------------------
+# The list (GET /explorer/sites) and what hangs off it
+# --------------------------------------------------------------------------
+class NamedOut(BaseModel):
+    id: int
+    name: str
+
+
+class VillageRefOut(BaseModel):
+    code: str | None
+    name: str | None
+
+
+class SiteRowOut(BaseModel):
+    id: int
+    site_code: str | None
+    province: str | None
+    type: str | None
+    requested_technology: list[str]
+    hadaf_villages: int
+    dt_contractor: NamedOut | None
+    village_match: VillageRefOut | None
+
+
+class SiteListOut(BaseModel):
+    items: list[SiteRowOut]
+    total: int
+    next_cursor: str | None
+
+
+class FilterOptionsOut(BaseModel):
+    provinces: list[NamedOut]
+    types: list[str]
+    technologies: list[str]
+    dt_contractors: list[NamedOut]
