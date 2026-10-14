@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import api from '../../api/client'
 import { EmptyState, Loading } from '../../components/ui'
 import { actionLabel, describeAuditEntry, formatDateTime } from '../../lib/auditLog'
+import { formatNumber } from '../../lib/numbers'
 
 const PAGE_SIZE = 25
 
@@ -107,7 +108,7 @@ export default function UserAuditDrawer({ user, onClose }) {
 
             <div className="row between mt-16">
               <span className="dim" style={{ fontSize: 12.5 }}>
-                Showing {offset + 1}–{Math.min(offset + PAGE_SIZE, total)} of {total}
+                Showing {formatNumber(offset + 1)}–{formatNumber(Math.min(offset + PAGE_SIZE, total))} of {formatNumber(total)}
               </span>
               <div className="row" style={{ gap: 8 }}>
                 <button

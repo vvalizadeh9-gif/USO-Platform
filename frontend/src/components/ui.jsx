@@ -4,6 +4,7 @@ import { motion } from 'framer-motion'
 import { AlertTriangle, CheckCircle2, ChevronRight, Inbox, Info, XCircle } from 'lucide-react'
 import { Fragment, useId, useRef } from 'react'
 import { useDialogFocus } from './useDialogFocus'
+import { formatNumber } from '../lib/numbers'
 
 const STATUS_CLASS = {
   Approved: 'pill-green',
@@ -218,7 +219,7 @@ function TabButton({ tab, selected, onSelect, panelId }) {
       {tab.label}
       {tab.count > 0 && (
         <span className="ui-tab-count tnum">
-          {tab.count}
+          {formatNumber(tab.count)}
           {tab.countLabel && <span className="sr-only"> {tab.countLabel}</span>}
         </span>
       )}

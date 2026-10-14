@@ -210,7 +210,8 @@ openssl rand -hex 32
 
 | Setting | Default | What it does |
 |---|---|---|
-| `ACCESS_TOKEN_EXPIRE_MINUTES` | `480` (8 hours) | How long a sign-in lasts. The session cookie expires with it; after that the person is sent to sign in with "Your session expired. Sign in again." and returned to the page they were on. |
+| `ACCESS_TOKEN_EXPIRE_MINUTES` | `30` | The **idle timeout**: how long a session lasts with nobody using it. The page renews it (`POST /auth/session/refresh`, at most every 5 minutes) only while the person clicks, types or scrolls, never from its background polling. After it runs out the person is sent to sign in with "Your session expired. Sign in again." and returned to the page they were on. 30 minutes is OWASP's figure for a low-risk application and NIST SP 800-63B's limit for AAL2. |
+| `SESSION_MAX_MINUTES` | `480` (8 hours) | The **absolute timeout**: the longest a session lasts however busy it is, counted from the password being typed. A renewal keeps the original sign-in time, so it cannot extend this. NIST SP 800-63B allows up to 12 hours at AAL2. |
 | `LOGIN_MAX_ATTEMPTS_PER_USERNAME` | `5` | Failed attempts for one username, inside the window, that lock it. |
 | `LOGIN_ATTEMPT_WINDOW_SECONDS` | `900` (15 min) | The window those failures are counted in. |
 | `LOGIN_LOCKOUT_SECONDS` | `900` (15 min) | How long the lock lasts. The page says "Too many attempts. Try again in N minutes." |

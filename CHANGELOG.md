@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- **Header clean-up, thousands separators everywhere, a 30-minute idle timeout, and a search that searches.**
+  - Removed the notification bell (and its pending badge) and the "Rollout 1405" project button from the header; the account menu no longer repeats the project name. `/notifications` still redirects to Home.
+  - Every count, total and figure is written with thousands separators (`1,000`, `2,500,000`) through one helper, `lib/numbers.js` (`formatNumber`, `formatCount`). The six per-page formatters that each did this on their own now call it. Identifiers (Shamsi years, site codes, letter numbers) are not quantities and are untouched.
+  - Sessions: `ACCESS_TOKEN_EXPIRE_MINUTES` is now the **idle** timeout and defaults to **30** (was 480). New `SESSION_MAX_MINUTES=480` is the **absolute** timeout from sign-in. New `POST /auth/session/refresh` renews the session; the page calls it at most every 5 minutes, and only after a click, key, scroll or touch, so background polling can never keep a session alive. Tokens gain an `auth_time` claim that renewals carry unchanged, which is what stops renewing from pushing the absolute limit out; tokens without it fall back to `iat`, so a deploy signs no one out. Existing deployments with `ACCESS_TOKEN_EXPIRE_MINUTES=480` in `.env` keep that idle timeout until they change it.
+  - Search: the header box did nothing useful (it sent people to `/work-items?search=`, which the page never read). It now finds pages and apps (instantly), and, through the new `GET /search`, sites, villages, contractors and, for administrators, people, each through the same role and province scope as the lists. See `docs/design/uep-home.md`.
+  - API: `GET /work-items/counts` gains `contractor_id` (the stage chips follow the list); the list, export and counts share one `_held_by` definition. All sites reads `?q=` and `?contractor_id=`; Users and roles reads `?q=`. `apiClient` writes can pass `skipDataChanged` to avoid reloading every list.
+
 - **Acceptance dashboard: moved into the Acceptance app, DT dashboard look, one Shamsi year per chart with planned months, PIP card replaces the rings (UEP-07).**
   - Fixes the blank screen on `/reports/acceptance`: the view model had moved to the new shapes while the page still read the old ones, so the first render threw.
   - API: `GET /acceptance/progress` gains `year` (that year's twelve months; future months carry plans, `approved: null` and `is_future: true`) and `years` for the dropdown. Without `year` the response is unchanged.

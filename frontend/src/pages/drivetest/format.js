@@ -3,6 +3,8 @@
 // point of most of them is that two figures on the same screen cannot
 // disagree about how a number is written or what a colour means.
 
+import { formatNumber } from '../../lib/numbers'
+
 /** A count, with thousands separators.
  *
  * Latin digits with grouping, even though half the labels on this page are
@@ -11,8 +13,7 @@
  * both the alignment and the comparison.
  */
 export function count(value) {
-  if (value == null) return '—'
-  return Number(value).toLocaleString('en-US')
+  return formatNumber(value)
 }
 
 /** A share of a whole, as a percentage string.

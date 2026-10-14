@@ -1,5 +1,6 @@
 import KpiSpark from '../../components/KpiSpark'
 import { deltaText, deltaTone, weekDelta } from './homeLogic'
+import { formatNumber } from '../../lib/numbers'
 
 // Static figures: the queue rows on Home's work cards are the way into the work.
 function Tile({ kpi, label, value, series, delta, hero, index }) {
@@ -11,7 +12,7 @@ function Tile({ kpi, label, value, series, delta, hero, index }) {
       data-kpi={kpi}
     >
       <span className="hk-label">{label}</span>
-      <span className="hk-value">{value}</span>
+      <span className="hk-value">{formatNumber(value)}</span>
       <span className="hk-delta" data-tone={deltaTone(kpi, delta)}>{text ?? ' '}</span>
       <KpiSpark values={series} title={label} />
     </div>

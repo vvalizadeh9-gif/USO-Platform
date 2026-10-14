@@ -1,6 +1,7 @@
 import { X } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { shown } from './roundText'
+import { formatNumber } from '../../lib/numbers'
 
 const COLUMNS = ['Site', 'Province', 'Village ID', 'Village', 'Requested', 'DT date']
 
@@ -55,7 +56,7 @@ export function RequestedMany({ rows, onUntick, onClear }) {
   return (
     <section className="ui-card mw-requested mw-requested-many" aria-label="Requested">
       <div className="mw-requested-head">
-        <h2 className="mw-record-many-title">One letter for {rows.length} villages</h2>
+        <h2 className="mw-record-many-title">One letter for {formatNumber(rows.length)} villages</h2>
         <button type="button" className="btn btn-sm" onClick={onClear}>Clear</button>
       </div>
       <div className="mw-req-table" role="table" aria-label="Ticked villages">

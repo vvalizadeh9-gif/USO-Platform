@@ -3,6 +3,7 @@ import Icon from '../../components/Icon'
 import AppTile from '../../shell/AppTile'
 import { APPS } from '../../shell/appRegistry'
 import { metaText } from './homeLogic'
+import { formatNumber } from '../../lib/numbers'
 
 // Each card is its app's: tile colour, icon and header tint from the registry.
 const CARD_APP = { drive_test: 'drive-test', acceptance: 'acceptance', plans: 'monthly-plan' }
@@ -17,11 +18,11 @@ function QueueRow({ ticket }) {
       <span className="hw-row-text">
         <span className="hw-row-label">{ticket.short_label}</span>
         <span className="hw-row-meta">
-          {ticket.late > 0 && <span className="hw-late">{ticket.late} late · </span>}
+          {ticket.late > 0 && <span className="hw-late">{formatNumber(ticket.late)} late · </span>}
           {meta}
         </span>
       </span>
-      <span className="hw-row-count">{ticket.count}</span>
+      <span className="hw-row-count">{formatNumber(ticket.count)}</span>
       <Icon name="chevron--right" size={16} />
     </button>
   )
@@ -41,7 +42,7 @@ function PlanProgress({ plan }) {
         <i style={{ '--pct': `${pct}%` }} />
       </div>
       <div className="hw-plan-line">
-        {plan.delivered} of {target || '—'} sites delivered · {plan.days_left} {plan.days_left === 1 ? 'day' : 'days'} left
+        {formatNumber(plan.delivered)} of {target ? formatNumber(target) : '—'} sites delivered · {formatNumber(plan.days_left)} {plan.days_left === 1 ? 'day' : 'days'} left
       </div>
     </div>
   )
@@ -57,7 +58,7 @@ export default function WorkCard({ group, plan }) {
       <header className="hw-head" style={{ background: `var(${app.tint})` }}>
         <AppTile app={app} size={36} />
         <h3 id={headingId}>{group.label}</h3>
-        <span className="hw-total" data-testid={`card-total-${group.key}`}>{total}</span>
+        <span className="hw-total" data-testid={`card-total-${group.key}`}>{formatNumber(total)}</span>
       </header>
       <div className="hw-rows">
         {group.tickets.map((t) => (

@@ -9,12 +9,13 @@ import {
 import { useWork } from '../../components/work/WorkContext'
 import { useToast } from '../../context/ToastContext'
 import useStepData, { useExportRows } from './useStepData'
+import { formatCount, formatNumber } from '../../lib/numbers'
 
 // Fallback only: categories are admin-extendable, so the live list comes from
 // /reference/problem-categories; this keeps the screen usable if that fails.
 const FALLBACK_CATEGORIES = ['Managed Service', 'CPG Project', 'NWG RND', 'Huawei Cleanup', 'Temp Power']
 
-const plural = (n, one) => `${n} ${n === 1 ? one : `${one}s`}`
+const plural = (n, one) => formatCount(n, one)
 
 const EXPORT_COLUMNS = [
   { label: 'Site ID', value: (r) => r.site_code },
@@ -126,7 +127,7 @@ export default function HcReviewStep({ step, figures, panelProps, onExport, high
             aria-busy={busy === 'all' || undefined}
             onClick={() => confirm(ready, 'all')}
           >
-            Confirm all {ready.length} Ready
+            Confirm all {formatNumber(ready.length)} Ready
           </button>
         </>
       }

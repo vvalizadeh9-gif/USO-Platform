@@ -7,8 +7,9 @@ import { Avatar, PlanBar, PlanStatus, TabState } from './parts'
 import { buildApprovals } from './planBoard'
 import ReturnDialog from './ReturnDialog'
 import { REASON_LABEL, streamMeta } from './streams'
+import { formatNumber } from '../../lib/numbers'
 
-const fmt = (v) => (v == null ? '—' : Number(v).toLocaleString('en-US'))
+const fmt = (v) => formatNumber(v)
 
 /**
  * Approvals: every plan waiting on the PM, on one page.

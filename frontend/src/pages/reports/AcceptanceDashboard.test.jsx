@@ -217,7 +217,7 @@ describe('the KPI strip', () => {
     serve()
     show()
     await loaded()
-    await userEvent.click(await screen.findByRole('button', { name: /^Rejected villages: 1100/ }))
+    await userEvent.click(await screen.findByRole('button', { name: /^Rejected villages: 1,100/ }))
     await waitFor(() =>
       expect(api.get).toHaveBeenCalledWith('/acceptance/sites', { params: { metric: 'rejected', limit: 50 } }),
     )

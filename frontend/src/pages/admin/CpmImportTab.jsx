@@ -3,6 +3,7 @@ import { UploadCloud, FileSpreadsheet, Trash2, AlertTriangle, X } from 'lucide-r
 import { useRef, useState } from 'react'
 import api from '../../api/client'
 import { useToast } from '../../context/ToastContext'
+import { formatNumber } from '../../lib/numbers'
 
 const CONFIRM_PHRASE = 'ERASE ALL CPM DATA'
 
@@ -31,7 +32,7 @@ export default function CpmImportTab() {
         headers: { 'Content-Type': 'multipart/form-data' },
       })
       setResult(data)
-      toast.success('Import complete', `${data.new_count} new work items created.`)
+      toast.success('Import complete', `${formatNumber(data.new_count)} new work items created.`)
     } catch (err) {
       toast.error('Import failed', err.response?.data?.detail || 'Please check the file and try again.')
     } finally {
@@ -187,7 +188,7 @@ function SummaryRow({ label, value, accent }) {
   return (
     <div className="row between" style={{ padding: '9px 0', borderBottom: '1px solid var(--border-soft)' }}>
       <span className="muted" style={{ fontSize: 13 }}>{label}</span>
-      <span className="tnum" style={{ fontWeight: 600, fontSize: 16, color: accent || 'var(--text)' }}>{value}</span>
+      <span className="tnum" style={{ fontWeight: 600, fontSize: 16, color: accent || 'var(--text)' }}>{formatNumber(value)}</span>
     </div>
   )
 }
@@ -202,7 +203,7 @@ function WipeConfirmModal({ onClose, onWiped }) {
     setBusy(true)
     try {
       const { data } = await api.post('/admin/cpm/wipe-data', { confirm: typed.trim() })
-      toast.success('Data erased', `${data.total_deleted} records removed.`)
+      toast.success('Data erased', `${formatNumber(data.total_deleted)} records removed.`)
       onWiped()
     } catch (err) {
       toast.error('Erase failed', err.response?.data?.detail || 'Please try again.')

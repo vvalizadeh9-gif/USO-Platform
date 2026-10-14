@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import api from '../../api/client'
 import { useToast } from '../../context/ToastContext'
 import { EmptyState, Loading } from '../../components/ui'
+import { formatNumber } from '../../lib/numbers'
 
 // Friendly label + icon per tracked change type.
 const CHANGE_META = {
@@ -58,7 +59,7 @@ export default function ValidateCpmTab({ onDecided, highlightId }) {
   return (
     <div>
       <p className="muted mb-16" style={{ fontSize: 13, lineHeight: 1.6 }}>
-        {items.length} change{items.length === 1 ? '' : 's'} on existing sites need your validation.
+        {formatNumber(items.length)} change{items.length === 1 ? '' : 's'} on existing sites need your validation.
         These are <b>blocked</b> until you decide. Accept applies the change; Ignore keeps the current
         data; Archive sets it aside. All other CPM fields update automatically and don't appear here.
       </p>

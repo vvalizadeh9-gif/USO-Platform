@@ -3,6 +3,7 @@ import {
   History, KeyRound, LifeBuoy, MapPin, Pencil, Plus, Search, ShieldOff, UserPlus, X,
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import api from '../../api/client'
 import { useToast } from '../../context/ToastContext'
 import { useAuth } from '../../context/AuthContext'
@@ -15,6 +16,7 @@ import ResetRequestsPanel from './ResetRequestsPanel'
 import UserAuditDrawer from './UserAuditDrawer'
 import UserStatusDialog from './UserStatusDialog'
 import PasswordResetDialog from './PasswordResetDialog'
+import { formatNumber } from '../../lib/numbers'
 
 const CONTRACTOR_ROLE_NAME = 'Contractor'
 const EMPTY_FILTERS = { search: '', status: '', role_id: '' }
@@ -27,7 +29,9 @@ export default function UsersTab() {
   const [provinces, setProvinces] = useState([])
   const [contractors, setContractors] = useState([])
   const [categories, setCategories] = useState([])
-  const [filters, setFilters] = useState(EMPTY_FILTERS)
+  // A link from the header search arrives with `?q=` to land on the person found.
+  const [searchParams] = useSearchParams()
+  const [filters, setFilters] = useState(() => ({ ...EMPTY_FILTERS, search: searchParams.get('q') ?? '' }))
   const [showCreate, setShowCreate] = useState(false)
   const [editingUser, setEditingUser] = useState(null)
   const [provincePopup, setProvincePopup] = useState(null)
@@ -197,7 +201,7 @@ export default function UsersTab() {
         <>
           <div className="row between mb-16">
             <span className="muted">
-              {users.length} user{users.length === 1 ? '' : 's'}
+              {formatNumber(users.length)} user{users.length === 1 ? '' : 's'}
               {hasFilters ? ' matching' : ''}
             </span>
           </div>

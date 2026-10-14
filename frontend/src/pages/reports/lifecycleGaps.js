@@ -9,6 +9,8 @@
 // owner list adding to 445, and it reached a person because nothing on the
 // screen ever added the rows up.
 
+import { formatNumber } from '../../lib/numbers'
+
 /**
  * The three cards of the Gaps tab, in order. ICT is always the left tile and
  * CRA the right one, in every card.
@@ -238,7 +240,7 @@ export const ATTRIBUTION_NOTES = {
 }
 
 export function fmt(value) {
-  return value == null ? '—' : value.toLocaleString('en-US')
+  return formatNumber(value)
 }
 
 /** "42%": the tiles' rounding; "—" for a base of 0. */

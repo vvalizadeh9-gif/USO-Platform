@@ -3,6 +3,7 @@ import { ChevronDown, ChevronRight, Filter, ShieldAlert, X } from 'lucide-react'
 import { Fragment, useEffect, useState } from 'react'
 import api from '../../api/client'
 import { EmptyState, Loading } from '../../components/ui'
+import { formatNumber } from '../../lib/numbers'
 import {
   ACCOUNT_ACTIONS,
   AUDIT_ENTITY_TYPES,
@@ -316,7 +317,7 @@ export default function AuditLogTab() {
 
           <div className="row between mt-16">
             <span className="dim" style={{ fontSize: 12.5 }}>
-              Showing {from}–{to} of {total}
+              Showing {formatNumber(from)}–{formatNumber(to)} of {formatNumber(total)}
             </span>
             <div className="row" style={{ gap: 8 }}>
               <button className="btn btn-sm" disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - PAGE_SIZE))}>

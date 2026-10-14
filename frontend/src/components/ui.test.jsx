@@ -326,7 +326,7 @@ function ProcessTabs() {
 describe('Tabs: counts, groups and steps', () => {
   it('shows a count above zero, and the alert chip beside it', () => {
     render(<ProcessTabs />)
-    expect(screen.getByRole('tab', { name: /HC Pool/ })).toHaveTextContent('1012')
+    expect(screen.getByRole('tab', { name: /HC Pool/ })).toHaveTextContent('1,012')
     const running = screen.getByRole('tab', { name: /In Progress/ })
     expect(running.querySelector('.ui-tab-count')).toHaveTextContent('320')
     expect(running.querySelector('.ui-tab-alert')).toHaveTextContent('4 late')

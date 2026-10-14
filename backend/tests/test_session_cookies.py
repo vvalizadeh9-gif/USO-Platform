@@ -97,7 +97,7 @@ def test_sign_in_sets_an_httponly_session_and_a_readable_csrf_cookie(browser):
     assert response.status_code == 200, response.text
     cookies = _set_cookie_headers(response)
     session, csrf = cookies["uep_session"], cookies["uep_csrf"]
-    for attribute in ("secure", "samesite=strict", "max-age=28800"):
+    for attribute in ("secure", "samesite=strict", "max-age=1800"):
         assert attribute in session
         assert attribute in csrf
     assert "httponly" in session and "path=/api" in session

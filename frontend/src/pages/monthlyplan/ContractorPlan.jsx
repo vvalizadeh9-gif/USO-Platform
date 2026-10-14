@@ -9,6 +9,7 @@ import Revisions from './Revisions'
 import SixMonthChart, { ChartLegend } from './SixMonthChart'
 import { FigureCards, Standing } from './Standing'
 import { STREAM_LIST } from './streams'
+import { formatNumber } from '../../lib/numbers'
 
 // What the server accepts (services/monthly_plan.MAX_COMMITTED_COUNT). Checked
 // here so a typo is refused where it was typed, not after a round trip; the
@@ -421,7 +422,7 @@ function RevisionRow({ stream, planning, onChanged, onHistory }) {
         reason,
         comment: comment.trim() || undefined,
       })
-      toast.success('Revision requested', `${planning.in_force_count} stays in force until the PM decides.`)
+      toast.success('Revision requested', `${formatNumber(planning.in_force_count)} stays in force until the PM decides.`)
       setOpen(false)
       onChanged?.()
     } catch (err) {
@@ -441,7 +442,7 @@ function RevisionRow({ stream, planning, onChanged, onHistory }) {
         {planning.in_force_version && <span className="pill pill-dim">v{planning.in_force_version}</span>}
         {pending && (
           <span className="pill pill-violet">
-            Revision to {planning.committed_count} requested · {planning.in_force_count} stays in force
+            Revision to {formatNumber(planning.committed_count)} requested · {formatNumber(planning.in_force_count)} stays in force
           </span>
         )}
         <div className="spacer" />
@@ -459,7 +460,7 @@ function RevisionRow({ stream, planning, onChanged, onHistory }) {
         <div className="pip-note" role="status">
           <div className="pip-note-who">
             <AlertCircle size={14} />
-            {planning.returned_by ? `${planning.returned_by}, PM` : 'The PM'} kept {planning.in_force_count}
+            {planning.returned_by ? `${planning.returned_by}, PM` : 'The PM'} kept {formatNumber(planning.in_force_count)}
           </div>
           <div className="pip-note-msg">{planning.return_comment}</div>
         </div>

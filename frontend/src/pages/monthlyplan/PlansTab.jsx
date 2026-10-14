@@ -3,8 +3,9 @@ import HistoryDrawer from './HistoryDrawer'
 import { Avatar, PlanBar, PlanStatus, TabState } from './parts'
 import { STREAMS, buildBoard, monthLabel, runningFigures } from './planBoard'
 import { streamMeta } from './streams'
+import { formatNumber } from '../../lib/numbers'
 
-const fmt = (v) => (v == null ? '—' : Number(v).toLocaleString('en-US'))
+const fmt = (v) => formatNumber(v)
 
 /**
  * Plans: who shared a plan for the planning month and who did not, and how
@@ -38,7 +39,7 @@ export default function PlansTab({ board, running, planning, runningPeriod }) {
           <span
             className="mp-segments"
             role="img"
-            aria-label={`${view.shared.length} of ${total} contractors shared`}
+            aria-label={`${formatNumber(view.shared.length)} of ${formatNumber(total)} contractors shared`}
           >
             {view.contractors.map((c) => (
               <i key={c.id} data-shared={c.shared} />
@@ -46,7 +47,7 @@ export default function PlansTab({ board, running, planning, runningPeriod }) {
           </span>
         </div>
         <p className="mp-plans-count tnum">
-          <b>{view.shared.length}</b> of {total} contractors shared
+          <b>{formatNumber(view.shared.length)}</b> of {formatNumber(total)} contractors shared
         </p>
       </div>
 
@@ -135,7 +136,7 @@ function StreamCell({ stream, cell, run, runningName }) {
             <span>
               <bdi className="mp-fa">{runningName}</bdi> {fmt(run.delivered)} of {fmt(run.pip)}
             </span>
-            {run.behind != null ? <span className="mp-alert">{run.behind} behind</span> : <span>On track</span>}
+            {run.behind != null ? <span className="mp-alert">{formatNumber(run.behind)} behind</span> : <span>On track</span>}
           </span>
         </>
       )}

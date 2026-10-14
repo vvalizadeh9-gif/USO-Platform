@@ -1,4 +1,5 @@
 import { figure, sharePercent } from './figures'
+import { formatNumber } from '../../lib/numbers'
 
 /**
  * Where a month stands: Assignment, PIP, Delivered, and the calendar.
@@ -32,7 +33,7 @@ export function FigureCards({ month }) {
       <FigureCard
         label="Assignment"
         value={month.assignment}
-        sub={`${month.carried_in} carried in + ${month.newly_assigned} new`}
+        sub={`${formatNumber(month.carried_in)} carried in + ${formatNumber(month.newly_assigned)} new`}
       />
       <FigureCard label="PIP" value={month.pip} sub="Approved for this month" />
       <FigureCard label="Delivered" value={month.delivered} sub="Drive tests done" highlight />

@@ -23,7 +23,9 @@ const READ_METHODS = new Set(['get', 'head', 'options'])
 api.interceptors.response.use(
   (res) => {
     const method = (res.config?.method || 'get').toLowerCase()
-    if (!READ_METHODS.has(method)) {
+    // `skipDataChanged` is for a write that changes no data a page shows (the
+    // session renewal), so it does not make every list on screen reload.
+    if (!READ_METHODS.has(method) && !res.config?.skipDataChanged) {
       window.dispatchEvent(new Event(DATA_CHANGED_EVENT))
     }
     return res

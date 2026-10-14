@@ -13,6 +13,7 @@ import api from '../../api/client'
 import { useToast } from '../../context/ToastContext'
 import { describeBlobError, filenameFrom, saveBlob } from '../../lib/download'
 import { fmtCount } from './kpiTheme'
+import { formatNumber } from '../../lib/numbers'
 
 /**
  * The sites behind the Acceptance figure that was just clicked.
@@ -92,7 +93,7 @@ export function DrillFigure({ metric, authority, label, value, className, childr
       type="button"
       className={`drill ${className || ''}`.trim()}
       onClick={() => ctx.open(metric, label, authority)}
-      aria-label={`${label}: ${value} villages — open the sites behind this figure`}
+      aria-label={`${label}: ${formatNumber(value)} villages — open the sites behind this figure`}
     >
       {shown}
     </button>
@@ -261,9 +262,9 @@ function AcceptanceDrillPanel({ focus, scope, onClose }) {
                     <tr key={`${row.site_id}-${row.site_code}`}>
                       <td className="tnum">{row.site_code || '—'}</td>
                       <td className="dt-farsi">{row.province || '—'}</td>
-                      <td className="tnum">{row.villages}</td>
-                      <td className="tnum">{row.approved}</td>
-                      <td className="tnum">{row.rejected}</td>
+                      <td className="tnum">{formatNumber(row.villages)}</td>
+                      <td className="tnum">{formatNumber(row.approved)}</td>
+                      <td className="tnum">{formatNumber(row.rejected)}</td>
                     </tr>
                   ))}
                 </tbody>

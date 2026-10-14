@@ -248,15 +248,39 @@ def generate_temporary_password(length: int = 16) -> str:
     return "".join(secrets.choice(_TEMPORARY_ALPHABET) for _ in range(length))
 
 
-def create_access_token(subject: str | int, extra_claims: dict[str, Any] | None = None) -> str:
+def session_deadline(auth_time: datetime) -> datetime:
+    """The latest moment a session that began at ``auth_time`` may still be live.
+
+    The absolute timeout: however often the session is renewed, it ends this
+    long after the password was typed.
+    """
+    return auth_time + timedelta(minutes=settings.session_max_minutes)
+
+
+def create_access_token(
+    subject: str | int,
+    extra_claims: dict[str, Any] | None = None,
+    *,
+    auth_time: datetime | None = None,
+) -> str:
     """Create a signed JWT access token.
+
+    A token lives for the idle timeout (``access_token_expire_minutes``) and
+    never past the absolute one: its ``exp`` is the earlier of the two. Signing
+    in mints it with ``auth_time`` left out, meaning "now"; a renewal passes the
+    original ``auth_time`` back in, which is how the absolute limit survives
+    from one token to the next.
 
     Args:
         subject: The user id placed in the ``sub`` claim.
         extra_claims: Optional additional claims (e.g. role).
+        auth_time: When the person actually signed in. Defaults to now.
     """
-    expire = datetime.now(timezone.utc) + timedelta(
-        minutes=settings.access_token_expire_minutes
+    now = datetime.now(timezone.utc)
+    began = auth_time or now
+    expire = min(
+        now + timedelta(minutes=settings.access_token_expire_minutes),
+        session_deadline(began),
     )
     payload: dict[str, Any] = {
         "sub": str(subject),
@@ -264,11 +288,29 @@ def create_access_token(subject: str | int, extra_claims: dict[str, Any] | None 
         # When this token was minted. Not used for expiry -- ``exp`` does that
         # -- but it is what makes a token auditable after the fact, and it is
         # one line now against a schema change later.
-        "iat": datetime.now(timezone.utc),
+        "iat": now,
+        # When the password was typed, carried unchanged through every
+        # renewal. This, not ``iat``, is what the absolute timeout counts from.
+        "auth_time": int(began.timestamp()),
     }
     if extra_claims:
         payload.update(extra_claims)
     return jwt.encode(payload, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
+
+
+def claimed_auth_time(claims: dict[str, Any]) -> datetime:
+    """When the session in ``claims`` began.
+
+    Tokens minted before ``auth_time`` existed carry only ``iat``, which for
+    them is the sign-in (they were never renewed); failing both, the session
+    is treated as beginning now rather than being refused, so a deploy does not
+    sign everyone out.
+    """
+    stamp = claims.get("auth_time", claims.get("iat"))
+    try:
+        return datetime.fromtimestamp(int(stamp), tz=timezone.utc)
+    except (TypeError, ValueError, OverflowError, OSError):
+        return datetime.now(timezone.utc)
 
 
 def decode_access_token(token: str) -> dict[str, Any] | None:

@@ -11,13 +11,14 @@ import { useWork } from '../../components/work/WorkContext'
 import { useToast } from '../../context/ToastContext'
 import { orderSites } from '../../lib/siteOrder'
 import useStepData, { useExportRows } from './useStepData'
+import { formatCount } from '../../lib/numbers'
 
 /** The server takes at most this many sites in one assignment. */
 const MAX_ASSIGN = 500
 /** Rows drawn at a time: the pool can hold the whole country. */
 const PAGE = 200
 
-const plural = (n, one) => `${n} ${n === 1 ? one : `${one}s`}`
+const plural = (n, one) => formatCount(n, one)
 
 /** The pool's "Ready to assign" states: Home's hc_assign queue counts these. */
 const HC_READY = new Set(['New', 'Ready for re-check'])

@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react'
 import api from '../../api/client'
 import { Loading, fadeUp, stagger } from '../../components/ui'
 import { actorLabel, describeAuditEntry, formatDateTime } from '../../lib/auditLog'
+import { formatNumber } from '../../lib/numbers'
 
 export default function OverviewTab({ onNavigateTab }) {
   const [stats, setStats] = useState(null)
@@ -43,7 +44,7 @@ function KpiCard({ icon: Icon, label, value, color }) {
   return (
     <motion.div className="stat" variants={fadeUp} style={{ '--accent-glow': color }} whileHover={{ y: -3 }} transition={{ type: 'spring', stiffness: 300, damping: 20 }}>
       <div className="label"><Icon size={15} strokeWidth={2} /> {label}</div>
-      <div className="value tnum">{value}</div>
+      <div className="value tnum">{typeof value === 'number' ? formatNumber(value) : value}</div>
     </motion.div>
   )
 }
@@ -85,10 +86,10 @@ function SystemHealthWidget({ health, onNavigateTab }) {
                   {health.last_cpm_import.imported_by || 'Unknown'} · {formatDateTime(health.last_cpm_import.created_at)}
                 </div>
                 <div className="row wrap" style={{ gap: 6, marginTop: 6 }}>
-                  <span className="pill pill-dim">{health.last_cpm_import.total_rows} rows</span>
-                  <span className="pill pill-green">{health.last_cpm_import.new_count} new</span>
+                  <span className="pill pill-dim">{formatNumber(health.last_cpm_import.total_rows)} rows</span>
+                  <span className="pill pill-green">{formatNumber(health.last_cpm_import.new_count)} new</span>
                   {health.last_cpm_import.changed_count > 0 && (
-                    <span className="pill pill-amber">{health.last_cpm_import.changed_count} changed</span>
+                    <span className="pill pill-amber">{formatNumber(health.last_cpm_import.changed_count)} changed</span>
                   )}
                 </div>
               </div>
@@ -101,7 +102,7 @@ function SystemHealthWidget({ health, onNavigateTab }) {
             <div className="row" style={{ gap: 7 }}>
               <GitCompare size={14} style={{ color: 'var(--text-dim)' }} />
               <span style={{ fontSize: 13 }}>
-                <b className="tnum">{health.pending_change_requests_count}</b> pending change request{health.pending_change_requests_count === 1 ? '' : 's'}
+                <b className="tnum">{formatNumber(health.pending_change_requests_count)}</b> pending change request{health.pending_change_requests_count === 1 ? '' : 's'}
               </span>
             </div>
             {health.pending_change_requests_count > 0 && (

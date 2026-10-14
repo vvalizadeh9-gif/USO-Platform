@@ -6,11 +6,12 @@ import { contractorsOf, historyTable } from './history'
 import { TabState } from './parts'
 import { PIP_STREAMS, STREAM_LIST } from './streams'
 import useOverview from './useOverview'
+import { formatNumber } from '../../lib/numbers'
 
 const STREAM_OPTIONS = STREAM_LIST.map((s) => ({ key: s.key, label: s.title }))
 const RESULT = { met: 'Met plan', near: 'Near plan', below: 'Below 80%', running: 'Running' }
 
-const fmt = (v) => (v == null ? '—' : Number(v).toLocaleString('en-US'))
+const fmt = (v) => formatNumber(v)
 const pct = (v) => (v == null ? '—' : `${v}%`)
 
 /**

@@ -125,3 +125,39 @@ describe('All sites', () => {
     expect(api.get).toHaveBeenCalledWith('/work-items/export', expect.objectContaining({ params: expect.objectContaining({ stage: 'Assigned' }) }))
   })
 })
+
+describe('All sites, opened from the header search', () => {
+  const lastCall = (url) => api.get.mock.calls.filter(([u]) => u === url).at(-1)[1].params
+
+  it('starts with the search in the address already typed into the box and applied', async () => {
+    await draw('/work-items?q=KRM-12')
+    expect(screen.getByRole('searchbox', { name: /Search site ID/ })).toHaveValue('KRM-12')
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 350))
+    })
+    expect(lastCall('/work-items').q).toBe('KRM-12')
+    expect(lastCall('/work-items/counts').q).toBe('KRM-12')
+  })
+
+  it('narrows to one contractor, for the list and the stage counts alike, and says so', async () => {
+    await draw('/work-items?contractor_id=5&contractor=Acme%20Telecom')
+    expect(lastCall('/work-items').contractor_id).toBe('5')
+    expect(lastCall('/work-items/counts').contractor_id).toBe('5')
+    expect(screen.getByRole('button', { name: /Contractor: Acme Telecom/ })).toBeInTheDocument()
+  })
+
+  it('drops the contractor when its chip is cleared', async () => {
+    await draw('/work-items?contractor_id=5&contractor=Acme%20Telecom')
+    await userEvent.click(screen.getByRole('button', { name: /Contractor: Acme Telecom/ }))
+    await act(async () => {})
+    expect(screen.queryByRole('button', { name: /Contractor: Acme Telecom/ })).not.toBeInTheDocument()
+    expect(lastCall('/work-items').contractor_id).toBeUndefined()
+  })
+
+  it('keeps the contractor when the stage changes', async () => {
+    await draw('/work-items?contractor_id=5&contractor=Acme%20Telecom')
+    await userEvent.click(screen.getByRole('tab', { name: /^Assigned/ }))
+    await act(async () => {})
+    expect(lastCall('/work-items')).toMatchObject({ stage: 'Assigned', contractor_id: '5' })
+  })
+})

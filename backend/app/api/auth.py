@@ -19,15 +19,21 @@ from app.core.rate_limit import client_ip, login_rate_limiter
 from app.core.deps import get_current_user_allowing_password_change
 from app.core.passwords import PasswordError, validate_password
 from app.core.security import (
+    claimed_auth_time,
     create_access_token,
     create_captcha_challenge,
+    decode_access_token,
     hash_password,
     needs_rehash,
     verify_captcha,
     verify_password,
     verify_password_or_dummy,
 )
-from app.core.session_cookies import clear_session_cookies, set_session_cookies
+from app.core.session_cookies import (
+    clear_session_cookies,
+    request_token,
+    set_session_cookies,
+)
 from app.models.auth import PasswordResetRequest
 from app.models.reference import User
 from app.schemas import (
@@ -293,6 +299,49 @@ def read_me(
     frontend learns that the flag is set at all.
     """
     return UserOut.model_validate(user)
+
+
+@router.post("/session/refresh")
+def refresh_session(
+    request: Request,
+    response: Response,
+    user: User = Depends(get_current_user_allowing_password_change),
+) -> dict:
+    """Start the idle clock again, for a person who is still working.
+
+    Sessions end after ``access_token_expire_minutes`` of nobody using them
+    (the idle timeout), and after ``session_max_minutes`` whatever happens (the
+    absolute one). The page calls this while there is real activity -- a click,
+    a key -- and never from its background polling, which is what makes the idle
+    timeout mean idle: a screen left open refreshes nothing and times out.
+
+    Authenticating the call is the whole check: a session already past either
+    limit has no valid token and never gets here (401). The new token keeps the
+    original ``auth_time``, so renewing cannot push the absolute limit out, and
+    its ``exp`` is capped to it; the answer says how long the session has left.
+
+    Not audited. A renewal every few minutes for every signed-in person would
+    drown the entries the log exists for, and it says nothing sign-in did not.
+    """
+    claims = decode_access_token(request_token(request) or "") or {}
+    began = claimed_auth_time(claims)
+    token = create_access_token(
+        user.id,
+        {"role": user.role.name, "ver": user.token_version},
+        auth_time=began,
+    )
+    expires_in = max(
+        0,
+        int(decode_access_token(token)["exp"] - datetime.now(timezone.utc).timestamp()),
+    )
+    set_session_cookies(
+        response,
+        request,
+        token,
+        max_age=expires_in,
+        csrf_token=request.cookies.get(settings.csrf_cookie_name),
+    )
+    return {"status": "ok", "expires_in": expires_in}
 
 
 @router.post("/me/password")
