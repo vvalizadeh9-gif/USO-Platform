@@ -9,6 +9,7 @@ import {
 import { useWork } from '../../components/work/WorkContext'
 import { useToast } from '../../context/ToastContext'
 import useStepData, { useExportRows } from './useStepData'
+import { formatNumber } from '../../lib/numbers'
 
 // Fallback only: categories are admin-extendable, so the live list comes from
 // /reference/problem-categories; this keeps the screen usable if that fails.
@@ -126,7 +127,7 @@ export default function HcReviewStep({ step, figures, panelProps, onExport, high
             aria-busy={busy === 'all' || undefined}
             onClick={() => confirm(ready, 'all')}
           >
-            Confirm all {ready.length} Ready
+            Confirm all {formatNumber(ready.length)} Ready
           </button>
         </>
       }

@@ -7,6 +7,7 @@ import AppHeader from './AppHeader'
 import AppRail from './AppRail'
 import { appRoute, appState, appsFor, locate } from './appRegistry'
 import { useHomeData } from './HomeData'
+import { useSessionKeepAlive } from './useSessionKeepAlive'
 import '../styles/shell.css'
 
 /**
@@ -46,9 +47,10 @@ function readLastApp() {
 export default function AppShell() {
   const { user, logout, mustChangePassword } = useAuth()
   const location = useLocation()
-  const { data, counts } = useHomeData()
+  const { counts } = useHomeData()
   const [pageMode, setPageMode] = useState(PAGE_MODE.scroll)
   const pageModeValue = useMemo(() => ({ setMode: setPageMode }), [])
+  useSessionKeepAlive(Boolean(user))
 
   // While an administrator-issued password is outstanding every app answers
   // 403, so none is offered.
@@ -79,7 +81,6 @@ export default function AppShell() {
         user={user}
         apps={apps}
         crumbs={crumbsFor(location.pathname, app)}
-        pending={data?.totals?.pending ?? 0}
         onSignOut={logout}
       />
       <div className="uep-shell-body">

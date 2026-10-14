@@ -71,25 +71,7 @@ def _scoped_work_items(
                 select(Site.id).where(Site.province_id == province_id)
             )
         )
-    if contractor_id is not None:
-        active_for = (
-            select(Assignment.work_item_id)
-            .where(Assignment.contractor_id == contractor_id)
-            .where(Assignment.is_active.is_(True))
-        )
-        has_active = (
-            select(Assignment.work_item_id)
-            .where(Assignment.is_active.is_(True))
-        )
-        stmt = stmt.where(
-            or_(
-                WorkItem.id.in_(active_for),
-                and_(
-                    WorkItem.dt_sc_contractor_id == contractor_id,
-                    WorkItem.id.not_in(has_active),
-                ),
-            )
-        )
+    stmt = _for_contractor(stmt, contractor_id)
     stmt = stmt.order_by(WorkItem.id.desc()).limit(limit).offset(offset)
     stmt = stmt.options(
         selectinload(WorkItem.site).selectinload(Site.province),
@@ -97,6 +79,30 @@ def _scoped_work_items(
         selectinload(WorkItem.drive_tests),
     )
     return list(db.execute(stmt).scalars().all())
+
+
+def _for_contractor(stmt, contractor_id: int | None):
+    """Narrow to the sites attributed to ``contractor_id`` (see above)."""
+    if contractor_id is None:
+        return stmt
+    active_for = (
+        select(Assignment.work_item_id)
+        .where(Assignment.contractor_id == contractor_id)
+        .where(Assignment.is_active.is_(True))
+    )
+    has_active = (
+        select(Assignment.work_item_id)
+        .where(Assignment.is_active.is_(True))
+    )
+    return stmt.where(
+        or_(
+            WorkItem.id.in_(active_for),
+            and_(
+                WorkItem.dt_sc_contractor_id == contractor_id,
+                WorkItem.id.not_in(has_active),
+            ),
+        )
+    )
 
 
 def _matching(stmt, q: str | None):
@@ -205,6 +211,7 @@ def export_work_items(
 @router.get("/counts")
 def count_work_items(
     province_id: int | None = Query(default=None),
+    contractor_id: int | None = Query(default=None),
     q: str | None = Query(default=None, max_length=100),
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
@@ -213,7 +220,7 @@ def count_work_items(
 
     The All sites page's stage chips. The same scope as the list, counted by
     the same ``current_stage`` column the list's ``stage`` filter reads, and
-    the same ``q`` and ``province_id``, so a chip's number is the length of
+    the same ``q``, ``province_id`` and ``contractor_id``, so a chip's number is the length of
     the list it opens. Declared before
     ``/{work_item_id}`` for the reason given on the export.
     """
@@ -225,6 +232,7 @@ def count_work_items(
         stmt = stmt.where(
             WorkItem.site_id.in_(select(Site.id).where(Site.province_id == province_id))
         )
+    stmt = _for_contractor(stmt, contractor_id)
     stmt = stmt.group_by(WorkItem.current_stage)
     stages = {stage: n for stage, n in db.execute(stmt).all() if stage}
     return {"All": sum(stages.values()), **stages}

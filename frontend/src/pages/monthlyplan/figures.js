@@ -5,6 +5,8 @@
 // wire is two answers to one question, free to disagree the moment one of them
 // is rounded differently.
 
+import { formatNumber } from '../../lib/numbers'
+
 // The y-axis ends on a multiple of four so that five gridlines land on whole
 // numbers of drive tests. A tick at 7.5 sites is not a thing anybody counts.
 const STEPS = [1, 2, 5, 10, 20, 25, 50, 100, 200, 500, 1000, 2500]
@@ -28,5 +30,5 @@ export function sharePercent(delivered, pip) {
 
 /** A dash, not a zero: nothing approved is not the same as approved nothing. */
 export function figure(value) {
-  return value == null ? '—' : value
+  return formatNumber(value)
 }

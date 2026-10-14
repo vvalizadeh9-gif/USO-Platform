@@ -12,6 +12,7 @@ import { useWork } from '../../components/work/WorkContext'
 import { useToast } from '../../context/ToastContext'
 import { roleLabel } from '../../lib/roles'
 import useStepData, { useExportRows } from './useStepData'
+import { formatNumber } from '../../lib/numbers'
 
 const DAY = 24 * 60 * 60 * 1000
 const daysSince = (iso) => (iso ? Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / DAY)) : null)
@@ -115,7 +116,7 @@ export function RemediationStep({ step, panelProps, onExport }) {
                   </td>
                   <td>
                     <WaitingCell days={r.days_open} late={r.days_late > 0} />
-                    {r.days_late > 0 && <span className="uw-late uw-late-note">{r.days_late} d late</span>}
+                    {r.days_late > 0 && <span className="uw-late uw-late-note">{formatNumber(r.days_late)} d late</span>}
                   </td>
                 </tr>
               ))}

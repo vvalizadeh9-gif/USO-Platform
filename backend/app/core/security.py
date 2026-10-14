@@ -248,23 +248,34 @@ def generate_temporary_password(length: int = 16) -> str:
     return "".join(secrets.choice(_TEMPORARY_ALPHABET) for _ in range(length))
 
 
-def create_access_token(subject: str | int, extra_claims: dict[str, Any] | None = None) -> str:
+def create_access_token(
+    subject: str | int,
+    extra_claims: dict[str, Any] | None = None,
+    *,
+    expires_at: datetime | None = None,
+) -> str:
     """Create a signed JWT access token.
 
     Args:
         subject: The user id placed in the ``sub`` claim.
         extra_claims: Optional additional claims (e.g. role).
+        expires_at: When it stops working. Defaults to the idle timeout from
+            now; a renewed session passes an earlier time when the absolute
+            timeout is nearer than that.
     """
-    expire = datetime.now(timezone.utc) + timedelta(
-        minutes=settings.access_token_expire_minutes
-    )
+    now = datetime.now(timezone.utc)
+    expire = expires_at or now + timedelta(minutes=settings.access_token_expire_minutes)
     payload: dict[str, Any] = {
         "sub": str(subject),
         "exp": expire,
         # When this token was minted. Not used for expiry -- ``exp`` does that
         # -- but it is what makes a token auditable after the fact, and it is
         # one line now against a schema change later.
-        "iat": datetime.now(timezone.utc),
+        "iat": now,
+        # When the person signed in. Carried unchanged through every renewal,
+        # so the absolute timeout counts from the sign-in rather than from the
+        # latest token.
+        "auth_time": int(now.timestamp()),
     }
     if extra_claims:
         payload.update(extra_claims)

@@ -39,9 +39,14 @@ class Settings(BaseSettings):
     # Security / JWT
     jwt_secret_key: str = INSECURE_JWT_SECRET
     jwt_algorithm: str = "HS256"
-    # How long a sign-in lasts: the token's expiry and the session cookie's
-    # lifetime are both this.
-    access_token_expire_minutes: int = 480  # 8 hours
+    # The idle timeout: a session nobody has used for this long ends. Every
+    # request the person makes (not the page's own background refresh) slides
+    # it forward -- see app/core/session_renewal.py. 30 minutes is the upper
+    # end of OWASP's recommendation for an internal application of this kind.
+    access_token_expire_minutes: int = 30
+    # The absolute timeout: however busy, a sign-in ends this long after it
+    # began, and the person signs in again.
+    session_absolute_timeout_minutes: int = 480  # 8 hours
 
     # The browser session (see app/core/session_cookies.py). The access token
     # travels in an HttpOnly cookie that page scripts cannot read, with a

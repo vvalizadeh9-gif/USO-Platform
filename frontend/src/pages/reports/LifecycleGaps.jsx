@@ -28,6 +28,7 @@ import {
   waffleFilled,
   wholePct,
 } from './lifecycleGaps'
+import { formatNumber } from '../../lib/numbers'
 
 /**
  * Performance → Lifecycle Gaps.
@@ -330,8 +331,8 @@ function HoldersDrawer({ gapKey, data, lens, isPm, onLens, onClose }) {
       loading={loading}
       summary={
         <>
-          <strong>{holders.holders}</strong> {holders.noun} {holders.verb} these{' '}
-          <strong>{holders.total}</strong> {holders.villages} · most pending first
+          <strong>{formatNumber(holders.holders)}</strong> {holders.noun} {holders.verb} these{' '}
+          <strong>{formatNumber(holders.total)}</strong> {holders.villages} · most pending first
         </>
       }
       shareNote={`Share of gap = their pending ÷ ${fmt(gap.count)}`}

@@ -9,6 +9,7 @@ import { useToast } from '../context/ToastContext'
 import { ConfirmDialog, Loading, PageHead, StatusPill } from '../components/ui'
 import DriveTestSubmitForm from '../components/DriveTestSubmitForm'
 import ReturnToCoordinatorForm from '../components/ReturnToCoordinatorForm'
+import { formatNumber } from '../lib/numbers'
 
 export default function WorkItemDetail() {
   const { id } = useParams()
@@ -173,7 +174,7 @@ function Aging({ days }) {
   const color = days >= 30 ? 'var(--red)' : days >= 14 ? 'var(--amber)' : undefined
   return (
     <span className="tnum" style={{ color }}>
-      {days} {days === 1 ? 'day' : 'days'}
+      {formatNumber(days)} {days === 1 ? 'day' : 'days'}
     </span>
   )
 }

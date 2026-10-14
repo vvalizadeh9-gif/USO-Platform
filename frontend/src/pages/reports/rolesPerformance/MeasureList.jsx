@@ -8,6 +8,7 @@
 //        'even'      a 60px row, figure over a muted sub line (Area)
 //        'info'      not a choice: a grey line with no button (Total villages)
 import { IconTile } from './parts'
+import { formatNumber } from '../../../lib/numbers'
 
 export default function MeasureList({ label, groups, value, onChange }) {
   return (
@@ -41,7 +42,7 @@ function MeasureRow({ row, selected, onSelect }) {
     <span className="rp-mrow-nrec">Not recorded</span>
   ) : (
     <span className="rp-mrow-figure">
-      <span className="rp-mrow-value">{row.value}</span>
+      <span className="rp-mrow-value">{formatNumber(row.value)}</span>
       {row.sub && <span className="rp-mrow-sub">{row.sub}</span>}
     </span>
   )

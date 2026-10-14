@@ -64,7 +64,7 @@ function collapse(points, limit = PROVINCE_LIMIT) {
   const head = points.slice(0, limit)
   const tail = points.slice(limit)
   const rest = tail.reduce((sum, p) => sum + p.value, 0)
-  return [...head, { name: `${tail.length} more provinces`, value: rest, muted: true }]
+  return [...head, { name: `${count(tail.length)} more provinces`, value: rest, muted: true }]
 }
 
 export default function DriveTestProject() {

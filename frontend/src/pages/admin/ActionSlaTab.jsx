@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import api from '../../api/client'
 import { EmptyState, Loading } from '../../components/ui'
 import { useToast } from '../../context/ToastContext'
+import { formatNumber } from '../../lib/numbers'
 
 const MIN_DAYS = 1
 const MAX_DAYS = 365
@@ -43,7 +44,7 @@ export default function ActionSlaTab() {
       )
       setRows(r.data)
       setDraft({})
-      toast.success('SLA saved', `${changed.length} queue${changed.length === 1 ? '' : 's'} updated.`)
+      toast.success('SLA saved', `${formatNumber(changed.length)} queue${changed.length === 1 ? '' : 's'} updated.`)
     } catch (err) {
       toast.error('Could not save', err.response?.data?.detail || 'Please try again.')
     } finally {

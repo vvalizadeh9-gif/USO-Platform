@@ -3,6 +3,7 @@ import Icon from '../Icon'
 import { isLate } from '../../lib/siteOrder'
 import { useActionLog } from '../../lib/actionLog'
 import { useWork } from './WorkContext'
+import { formatNumber } from '../../lib/numbers'
 
 /** Persian data -- a province, contractor or village name, a field note --
  * isolated and set in Vazirmatn. Renders "—" for nothing. */
@@ -31,7 +32,7 @@ export function WaitingCell({ days, slaDays, late: lateOverride }) {
   return (
     <span className={`uw-wait ${late ? 'is-late' : ''}`.trim()}>
       <span className="uw-wait-days">
-        {days} d{late && <span className="uw-sr-only"> late</span>}
+        {formatNumber(days)} d{late && <span className="uw-sr-only"> late</span>}
       </span>
       <span className="uw-wait-bar" aria-hidden="true">
         <i style={{ width: `${fill}%` }} />

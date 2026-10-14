@@ -231,7 +231,7 @@ export default function KpiBand({ kpis, provinceId, series }) {
         title="Pending"
         value={pending}
         href={remainingLink(scope)}
-        ariaLabel={`Total pending: ${pending} sites`}
+        ariaLabel={`Total pending: ${count(pending)} sites`}
         metric={kpis.total_remaining}
         ofOnAir={pendingPct}
         series={series?.pending}

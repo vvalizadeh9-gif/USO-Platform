@@ -5,6 +5,7 @@ import { AlertTriangle, X } from 'lucide-react'
 import { AuthorityChip, EmptyState, SegmentedControl } from './ui'
 import { useDialogFocus } from './useDialogFocus'
 import Waffle from './Waffle'
+import { formatNumber } from '../lib/numbers'
 
 /**
  * "Who is holding it": a right-side drawer that breaks one figure down by
@@ -43,7 +44,7 @@ export default function GapDrawer({
   lensOptions,
   onLens,
   rows = [],
-  renderCount = (row) => row.count,
+  renderCount = (row) => formatNumber(row.count),
   summary,
   shareNote,
   check,

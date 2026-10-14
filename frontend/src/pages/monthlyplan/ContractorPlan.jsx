@@ -9,6 +9,7 @@ import Revisions from './Revisions'
 import SixMonthChart, { ChartLegend } from './SixMonthChart'
 import { FigureCards, Standing } from './Standing'
 import { STREAM_LIST } from './streams'
+import { formatNumber } from '../../lib/numbers'
 
 // What the server accepts (services/monthly_plan.MAX_COMMITTED_COUNT). Checked
 // here so a typo is refused where it was typed, not after a round trip; the
@@ -421,7 +422,7 @@ function RevisionRow({ stream, planning, onChanged, onHistory }) {
         reason,
         comment: comment.trim() || undefined,
       })
-      toast.success('Revision requested', `${planning.in_force_count} stays in force until the PM decides.`)
+      toast.success('Revision requested', `${formatNumber(planning.in_force_count)} stays in force until the PM decides.`)
       setOpen(false)
       onChanged?.()
     } catch (err) {

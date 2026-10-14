@@ -11,6 +11,7 @@ import { useWork } from '../../components/work/WorkContext'
 import { useToast } from '../../context/ToastContext'
 import { orderSites } from '../../lib/siteOrder'
 import useStepData, { useExportRows } from './useStepData'
+import { formatNumber } from '../../lib/numbers'
 
 /** The server takes at most this many sites in one assignment. */
 const MAX_ASSIGN = 500
@@ -151,7 +152,7 @@ export default function AssignStep({ process, step, figures, panelProps, onExpor
       render: (r) => (
         <>
           <Fa>{r.village}</Fa>
-          {r.village_count > 1 && <span className="uw-muted"> +{r.village_count - 1}</span>}
+          {r.village_count > 1 && <span className="uw-muted"> +{formatNumber(r.village_count - 1)}</span>}
         </>
       ),
     },

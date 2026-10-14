@@ -116,7 +116,7 @@ function PipTiles({ data, scoped, provinceName }) {
           className="dt-plan-progress"
           role="img"
           aria-label={`Achievement ${achievement(pct)}${
-            pace ? `, ${pace.elapsed} of ${pace.total} days into the month` : ''
+            pace ? `, ${count(pace.elapsed)} of ${count(pace.total)} days into the month` : ''
           }`}
         >
           <span

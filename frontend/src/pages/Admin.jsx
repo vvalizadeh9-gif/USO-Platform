@@ -44,6 +44,11 @@ export default function Admin() {
   const [searchParams] = useSearchParams()
   const [tab, setTab] = useState(searchParams.get('tab') || (isAdmin ? 'overview' : 'validate'))
   const highlightId = searchParams.get('highlight')
+  // A link to another tab while already here (the rail, the header search).
+  const linkedTab = searchParams.get('tab')
+  useEffect(() => {
+    if (linkedTab) setTab(linkedTab)
+  }, [linkedTab])
   const [pendingCount, setPendingCount] = useState(0)
 
   function refreshPending() {

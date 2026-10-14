@@ -3,6 +3,7 @@ import {
   History, KeyRound, LifeBuoy, MapPin, Pencil, Plus, Search, ShieldOff, UserPlus, X,
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import api from '../../api/client'
 import { useToast } from '../../context/ToastContext'
 import { useAuth } from '../../context/AuthContext'
@@ -27,7 +28,13 @@ export default function UsersTab() {
   const [provinces, setProvinces] = useState([])
   const [contractors, setContractors] = useState([])
   const [categories, setCategories] = useState([])
-  const [filters, setFilters] = useState(EMPTY_FILTERS)
+  // The header search opens a person here with ?search=<username>.
+  const [searchParams] = useSearchParams()
+  const linkedSearch = searchParams.get('search')
+  const [filters, setFilters] = useState(() => ({ ...EMPTY_FILTERS, search: linkedSearch || '' }))
+  useEffect(() => {
+    if (linkedSearch != null) setFilters((f) => ({ ...f, search: linkedSearch }))
+  }, [linkedSearch])
   const [showCreate, setShowCreate] = useState(false)
   const [editingUser, setEditingUser] = useState(null)
   const [provincePopup, setProvincePopup] = useState(null)
