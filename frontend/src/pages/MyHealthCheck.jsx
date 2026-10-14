@@ -6,6 +6,7 @@ import api from '../api/client'
 import { useToast } from '../context/ToastContext'
 import LifecycleStrip from '../components/LifecycleStrip'
 import { EmptyState, Loading, PageHead } from '../components/ui'
+import { formatNumber } from '../lib/numbers'
 
 export default function MyHealthCheck() {
   const [assignments, setAssignments] = useState(null)
@@ -83,7 +84,7 @@ function AssignmentCard({ assignment, active, onOpen }) {
         <span className={`pill ${assignment.status === 'Completed' ? 'pill-green' : 'pill-amber'}`}>{assignment.status}</span>
       </div>
       <div className="row between" style={{ marginTop: 10 }}>
-        <span className="dim" style={{ fontSize: 12.5 }}>{done}/{total} sites done</span>
+        <span className="dim" style={{ fontSize: 12.5 }}>{formatNumber(done)}/{formatNumber(total)} sites done</span>
         <ChevronRight size={16} style={{ color: 'var(--text-dim)' }} />
       </div>
       <div style={{ height: 5, background: 'var(--surface-3)', borderRadius: 3, marginTop: 8, overflow: 'hidden' }}>
@@ -130,7 +131,7 @@ function AssignmentDetail({ assignment, onRefresh, autoOpenTaskId, onAutoOpened 
       const { data } = await api.post(`/hc/assignments/${assignment.id}/upload`, form, {
         headers: { 'Content-Type': 'multipart/form-data' },
       })
-      toast.success('Bulk upload applied', `${data.sites_applied} sites updated.`)
+      toast.success('Bulk upload applied', `${formatNumber(data.sites_applied)} sites updated.`)
       onRefresh?.()
     } catch (err) {
       toast.error('Upload failed', err.response?.data?.detail || 'Check the file and try again.')
@@ -143,7 +144,7 @@ function AssignmentDetail({ assignment, onRefresh, autoOpenTaskId, onAutoOpened 
         <div className="row between wrap" style={{ gap: 10 }}>
           <div>
             <h3 style={{ fontSize: 15 }}>{assignment.title || assignment.code}</h3>
-            <span className="dim" style={{ fontSize: 12.5 }}>{tasks.length} sites</span>
+            <span className="dim" style={{ fontSize: 12.5 }}>{formatNumber(tasks.length)} sites</span>
           </div>
           <div className="row" style={{ gap: 8 }}>
             <button className="btn btn-sm" onClick={downloadTemplate}><Download size={14} /> Template</button>

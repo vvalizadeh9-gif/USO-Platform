@@ -39,9 +39,18 @@ class Settings(BaseSettings):
     # Security / JWT
     jwt_secret_key: str = INSECURE_JWT_SECRET
     jwt_algorithm: str = "HS256"
-    # How long a sign-in lasts: the token's expiry and the session cookie's
-    # lifetime are both this.
-    access_token_expire_minutes: int = 480  # 8 hours
+    # The idle timeout: how long a session survives with nobody using it. The
+    # token's expiry and the session cookie's lifetime are both this, and each
+    # call to POST /auth/session/refresh (which the page makes while the person
+    # is working) starts the clock again. 30 minutes is the figure OWASP's
+    # session-management guidance gives for a low-risk application, and NIST
+    # SP 800-63B's own limit for a session at its second assurance level.
+    access_token_expire_minutes: int = 30
+    # The absolute timeout: the longest a session can last however busy it is,
+    # counted from the password being typed. Refreshing never extends past it,
+    # so a session left open on a shared machine cannot be kept alive forever.
+    # 8 hours is one working day; NIST SP 800-63B allows up to 12 for AAL2.
+    session_max_minutes: int = 480
 
     # The browser session (see app/core/session_cookies.py). The access token
     # travels in an HttpOnly cookie that page scripts cannot read, with a

@@ -7,6 +7,8 @@
 // deciding a colour and the two would still have to agree about what to do
 // with it.
 
+import { formatNumber } from '../../lib/numbers'
+
 /** Difference from the country average, in points, at which a shade deepens. */
 export const STRONG_AT = 5
 
@@ -63,7 +65,7 @@ export function deltaTone(cell) {
 
 /** A whole number with thousands separators, for counts. */
 export function fmtCount(value) {
-  return value == null ? '—' : value.toLocaleString('en-US')
+  return formatNumber(value)
 }
 
 export const LENSES = [

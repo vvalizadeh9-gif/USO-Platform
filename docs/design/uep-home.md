@@ -152,7 +152,7 @@ The product owner delegated these. Each one is reversible unless marked.
 | 8 | Cards | Three fixed groups. **Drive test** = HC + DT stages. **Acceptance** = ICT + CRA. **Plans** = Plans & Data. A group is shown when the role has any queue in it, so the layout stays stable even when a card is empty. Rows use a new `short_label` on `QueueDefinition` ("HC review", "ICT filings", "CRA filings"); the registry `label` stays the board's and the button's verb. |
 | 9 | SLA heading | "SLA 14 days" when every configured-SLA queue on this user's board has the same days. Otherwise "SLA per queue", with a tooltip listing each queue's days. |
 | 10 | Due soon | Late items are never also due soon. For configured-SLA queues, due = `effective_start + sla_days`. For category and deadline queues, due = `due_at`. An item is due soon when `0 ≤ due − now ≤ window`. The window is `HOME_DUE_SOON_DAYS=3` in `Settings`. |
-| 11 | Header | The **search pill** is honest: "Search sites" opens Work Items with its search focused, and ⌘K / Ctrl+K does the same. A real cross-entity search is its own project. The **bell is omitted** until notifications exist. **Help** links to `VITE_HELP_URL` and is hidden when that is unset. |
+| 11 | Header | The **search** is a real cross-entity search (below). The **bell and the project name are removed**: there are no notifications to show and only one project. **Help** links to `VITE_HELP_URL` and is hidden when that is unset. |
 | 12 | Who holds it | No invented Latin initials. Under each row, up to two **owner names** (Farsi, Vazirmatn, `dir="auto"`) and "+N". They are left out when the only owner is the viewer or the "PM" role. Scope is inherited from each queue's own fetch, so a contractor only ever sees themself (and therefore no line). |
 | 13 | Plan progress | The **DT stream**, for the running **Shamsi** month ("Mehr plan"). It reuses `monthly_plan.running_month()`, which is already role-scoped: a contractor sees only their own figures, and staff see their visible scope. It shows "41 of 64 sites delivered · 22 days left", where days left runs to the Shamsi month end. With no approved plan it says so; the PIP is never 0. |
 | 14 | Apps | An optional `app: {group, icon, tint}` on existing `NAV_SECTIONS` items, so `navItemVisible` stays the single visibility rule. The groups are Rollout, Insights and Programme office. Coverage map and Contractor tracker are **dropped** because they don't exist. "Browse all apps" opens a drawer of every visible nav item. |
@@ -400,3 +400,27 @@ empty rows are no longer kept: an empty row, and a card with none, is hidden.
 The trends come from the existing nightly `action_daily_snapshot` job
 (`jobs/daily_digest.py` → `action_digest.run`); until 14 days of rows exist a
 sparkline draws only the days it has.
+
+## Header search
+
+One box, `shell/GlobalSearch.jsx`, with the rules in `shell/globalSearch.js`. It
+is a combobox: the input keeps focus and names the highlighted row.
+
+| What | Source | Who |
+|---|---|---|
+| Pages and apps | the role's own `appRegistry`, in the browser, instantly | everyone, only what their role can open |
+| Sites | `GET /search`: site ID, temporary ID, province, county, district | everyone, through the same row-level scope as the lists |
+| Villages | `GET /search`: name or code; opens the village's site | the same |
+| Contractors | `GET /search`: name; opens All sites narrowed to that contractor | staff roles; not contractors or problem owners |
+| People | `GET /search`: name, username, email; opens Users and roles on them | administrators only |
+
+- Two or more characters; the server is asked 250 ms after typing pauses and an
+  older answer is never shown against newer text.
+- Each group shows its best five and the true total. "See all N" opens the full
+  list (`/work-items?q=`, `/admin?tab=users&q=`) where one exists.
+- ↑ ↓ walk the rows, Enter opens the highlighted one, or the first, or searches
+  All sites when nothing matched. Esc closes and clears. Ctrl/⌘+K focuses it.
+- Persian and Arabic-Indic digits find the same rows as Latin ones; `%` and `_`
+  are searched literally.
+- Not searched yet: letters and acceptance submissions (their pages have no
+  address-level filter to land on), audit log entries, health-check tasks.

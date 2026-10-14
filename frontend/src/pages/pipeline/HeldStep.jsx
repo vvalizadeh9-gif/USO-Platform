@@ -6,6 +6,7 @@ import {
 } from '../../components/work/parts'
 import { isLate } from '../../lib/siteOrder'
 import useStepData, { useExportRows } from './useStepData'
+import { formatCount, formatNumber } from '../../lib/numbers'
 
 const PROCESS = {
   hc: {
@@ -39,7 +40,7 @@ const EXPORT_COLUMNS = [
   { label: 'Waiting (days)', value: (r) => r.days },
 ]
 
-const plural = (n, one) => `${n} ${n === 1 ? one : `${one}s`}`
+const plural = (n, one) => formatCount(n, one)
 
 /**
  * Steps 2 and 5 (UEP-06 §4.3): sites held by a contractor, grouped by
@@ -122,7 +123,7 @@ export default function HeldStep({ process, step, figures, panelProps, onExport 
                       <Fa>{g.name || 'No contractor'}</Fa>
                       <span className="uw-group-meta">
                         {plural(g.sites.length, 'site')}
-                        {g.late > 0 && <> · <b className="uw-late">{g.late} late</b></>}
+                        {g.late > 0 && <> · <b className="uw-late">{formatNumber(g.late)} late</b></>}
                       </span>
                     </th>
                   </tr>

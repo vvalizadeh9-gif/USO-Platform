@@ -7,6 +7,7 @@ import SendToAuthority from './SendToAuthority'
 import { StatusBar } from './StatusBar'
 import { lastReasonText, shown } from './roundText'
 import { sideErrors } from './useLetterActions'
+import { formatNumber } from '../../lib/numbers'
 
 const EDITABLE = new Set(['waiting', 'returned', 'rejected'])
 // A side whose request letter can go to the authority: nothing filed yet, or
@@ -117,7 +118,7 @@ export function ManyAuthorityCard({
     <article className="ui-card mw-auth-card" aria-label={authority}>
       <div className="mw-auth-head">
         <AuthorityChip authority={authority} />
-        <h3 className="mw-auth-title">{fileable.length} of {rows.length} villages</h3>
+        <h3 className="mw-auth-title">{formatNumber(fileable.length)} of {formatNumber(rows.length)} villages</h3>
       </div>
       {errors.message && <Banner tone="error">{errors.message}</Banner>}
       {fileable.length === 0 || readOnly ? (

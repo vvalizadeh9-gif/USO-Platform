@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import Icon from '../Icon'
 import { STEPS, stepSpokenName, tabId, volumeWidths } from '../../lib/pipelineSteps'
+import { formatNumber } from '../../lib/numbers'
 
 const GROUPS = [
   { id: 'hc', caption: 'Health check' },
@@ -129,7 +130,7 @@ function LoopRow({ step, figures, selected, ...props }) {
   return (
     <button className={`uw-loop ${selected ? 'is-selected' : ''}`.trim()} {...props}>
       <span className="uw-loop-label" aria-hidden="true">{step.short}</span>
-      {figures?.late > 0 && <span className="uw-loop-late" aria-hidden="true">{figures.late} late</span>}
+      {figures?.late > 0 && <span className="uw-loop-late" aria-hidden="true">{formatNumber(figures.late)} late</span>}
       <span className="uw-loop-count" aria-hidden="true">{figures ? figures.count.toLocaleString('en-US') : '–'}</span>
     </button>
   )

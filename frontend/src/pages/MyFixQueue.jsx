@@ -7,6 +7,7 @@ import { useAuth } from '../context/AuthContext'
 import { useToast } from '../context/ToastContext'
 import { roleLabel } from '../lib/roles'
 import '../styles/fix-queue.css'
+import { formatNumber } from '../lib/numbers'
 
 /**
  * The Fix queue, in the Drive test app: the one page a category owner works.
@@ -144,13 +145,13 @@ export default function MyFixQueue() {
             ) : fixes && fixes.length > 0 ? (
               <>
                 <b>
-                  {fixes.length} site{fixes.length === 1 ? '' : 's'}
+                  {formatNumber(fixes.length)} site{fixes.length === 1 ? '' : 's'}
                 </b>{' '}
                 waiting on you
                 {late > 0 && (
                   <>
                     {' · '}
-                    <b className="fq-late">{late} late</b>
+                    <b className="fq-late">{formatNumber(late)} late</b>
                   </>
                 )}
               </>

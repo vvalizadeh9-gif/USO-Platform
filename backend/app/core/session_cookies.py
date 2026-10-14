@@ -49,14 +49,25 @@ def _is_secure(request: Request) -> bool:
     return scheme.lower() == "https"
 
 
-def set_session_cookies(response: Response, request: Request, token: str) -> None:
+def set_session_cookies(
+    response: Response,
+    request: Request,
+    token: str,
+    *,
+    max_age: int | None = None,
+    csrf_token: str | None = None,
+) -> None:
     """Start (or renew) a browser session holding ``token``.
 
     Both cookies live exactly as long as the token does, so the browser drops
-    them at the moment the server would refuse them anyway. A fresh CSRF token
-    is issued with every new session.
+    them at the moment the server would refuse them anyway. ``max_age`` is that
+    lifetime in seconds: the idle timeout by default, less when a renewal is
+    close to the absolute one. A new session gets a fresh CSRF token; a renewal
+    passes the current one back in as ``csrf_token``, so a request the page has
+    already started is not refused because the value changed underneath it.
     """
-    max_age = settings.access_token_expire_minutes * 60
+    if max_age is None:
+        max_age = settings.access_token_expire_minutes * 60
     secure = _is_secure(request)
     response.set_cookie(
         settings.session_cookie_name,
@@ -69,7 +80,7 @@ def set_session_cookies(response: Response, request: Request, token: str) -> Non
     )
     response.set_cookie(
         settings.csrf_cookie_name,
-        secrets.token_urlsafe(32),
+        csrf_token or secrets.token_urlsafe(32),
         max_age=max_age,
         path=_CSRF_PATH,
         secure=secure,

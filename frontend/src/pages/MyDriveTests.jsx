@@ -11,6 +11,7 @@ import SiteHistoryDrawer, { SiteCodeButton } from '../components/SiteHistoryDraw
 import WaitingPill from '../components/WaitingPill'
 import { useToast } from '../context/ToastContext'
 import { EmptyState, Loading, PageHead } from '../components/ui'
+import { formatNumber } from '../lib/numbers'
 
 const TABS = [
   { key: 'todo', label: 'To do', count: 'todo' },
@@ -145,7 +146,7 @@ export default function MyDriveTests() {
                 <span className="row" style={{ gap: 8 }}>
                   {t.label}
                   {counts[t.count] > 0 && (
-                    <span className={`badge tnum ${isActive ? 'badge-active' : ''}`}>{counts[t.count]}</span>
+                    <span className={`badge tnum ${isActive ? 'badge-active' : ''}`}>{formatNumber(counts[t.count])}</span>
                   )}
                 </span>
               </button>
@@ -191,7 +192,7 @@ export default function MyDriveTests() {
               {(query.trim() || provinceSel.size > 0) && (
                 <div className="row" style={{ marginTop: 8, justifyContent: 'flex-end' }}>
                   <span className="dim" style={{ fontSize: 11.5 }}>
-                    {filtered.length} of {rows.length}
+                    {formatNumber(filtered.length)} of {formatNumber(rows.length)}
                   </span>
                 </div>
               )}

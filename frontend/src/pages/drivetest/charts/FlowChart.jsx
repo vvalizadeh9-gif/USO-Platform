@@ -4,6 +4,7 @@ import { shamsiMonthName } from '../../../lib/shamsi'
 import { count } from '../format'
 import { flowView } from './flowView'
 import { FadeArea } from './primitives'
+import { formatNumber } from '../../../lib/numbers'
 
 /**
  * Sites on air against drive tests done, every month since the opening
@@ -225,7 +226,7 @@ export default function FlowChart({ data }) {
               role="img"
               aria-label={
                 'On air vs drive tests done, running totals, every month since Farvardin 1404. ' +
-                `On air ${last.onAir}, DT done ${last.dtDone}, gap ${last.gap}.` +
+                `On air ${formatNumber(last.onAir)}, DT done ${formatNumber(last.dtDone)}, gap ${formatNumber(last.gap)}.` +
                 (last.isOpen ? ' The latest month is still in progress.' : '')
               }
             >

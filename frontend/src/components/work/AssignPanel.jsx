@@ -3,6 +3,7 @@ import api from '../../api/client'
 import { coveredProvinces, orderContractors, suggestContractor } from '../../lib/suggestContractor'
 import { ActionNotice, Fa } from './parts'
 import { useWork } from './WorkContext'
+import { formatCount, formatNumber } from '../../lib/numbers'
 
 const PROCESS = {
   hc: { url: '/hc/contractors/load', holding: 'in check now', noun: 'in check' },
@@ -26,7 +27,7 @@ function useContractorLoad(process, version) {
   return rows
 }
 
-const plural = (n, one) => `${n} ${n === 1 ? one : `${one}s`}`
+const plural = (n, one) => formatCount(n, one)
 
 /**
  * The band at the foot of a site list (UEP-06 §4.2): one card per
@@ -85,8 +86,8 @@ export default function AssignPanel({ process, selectedCount, selectedProvinces,
               const isSuggested = suggested?.contractor_id === c.contractor_id
               const busy = busyId === c.contractor_id
               const facts = [
-                `${c.open} ${words.noun}`,
-                c.late > 0 ? `${c.late} late` : null,
+                `${formatNumber(c.open)} ${words.noun}`,
+                c.late > 0 ? `${formatNumber(c.late)} late` : null,
                 c.avg_submit_days != null ? `about ${Math.round(c.avg_submit_days)} days to submit` : null,
               ].filter(Boolean).join(', ')
               const name = active
@@ -104,14 +105,14 @@ export default function AssignPanel({ process, selectedCount, selectedProvinces,
                 >
                   <span className="uw-assign-line">
                     <Fa className="uw-assign-name">{c.name}</Fa>
-                    <span className="uw-assign-open">{c.open}</span>
+                    <span className="uw-assign-open">{formatNumber(c.open)}</span>
                   </span>
                   <span className="uw-assign-bar" aria-hidden="true">
                     <i style={{ width: `${(100 * c.open) / maxOpen}%` }} />
                   </span>
                   <span className="uw-assign-meta" aria-hidden="true">
                     {isSuggested && <b className="uw-suggested">Suggested · </b>}
-                    {c.late > 0 && <b className="uw-late">{c.late} late · </b>}
+                    {c.late > 0 && <b className="uw-late">{formatNumber(c.late)} late · </b>}
                     {c.avg_submit_days != null && <span>avg {Math.round(c.avg_submit_days)} d</span>}
                   </span>
                 </button>

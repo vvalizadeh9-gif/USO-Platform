@@ -5,10 +5,11 @@ import { useToast } from '../../context/ToastContext'
 import { buildBoard, initials, monthLabel } from './planBoard'
 import { TabState } from './parts'
 import { STREAM_LIST } from './streams'
+import { formatNumber } from '../../lib/numbers'
 
 const STEP = 5
 const MAX_TARGET = 1_000_000
-const fmt = (v) => (v == null ? '—' : Number(v).toLocaleString('en-US'))
+const fmt = (v) => formatNumber(v)
 const percentOf = (part, whole) => (whole ? Math.round((100 * part) / whole) : null)
 
 /**

@@ -2,6 +2,7 @@
 // itself is an HttpOnly cookie that this code never sees.
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import api from '../api/client'
+import { startKeepAlive } from '../lib/sessionKeepAlive'
 
 const AuthContext = createContext(null)
 
@@ -34,6 +35,19 @@ export function AuthProvider({ children }) {
       setLoading(false)
     }
   }, [])
+
+  // While someone is signed in and working, tell the server so: it ends a
+  // session after 30 idle minutes, and only a person's own click or key press
+  // (not this page's background polling) restarts that clock.
+  const signedIn = Boolean(user)
+  useEffect(() => {
+    if (!signedIn) return undefined
+    return startKeepAlive({
+      // A failed renewal needs no handling here: if the session is really gone,
+      // the next request answers 401 and the client sends the person to sign in.
+      refresh: () => api.post('/auth/session/refresh', null, { skipDataChanged: true }).catch(() => {}),
+    })
+  }, [signedIn])
 
   function store(nextUser) {
     setUser(nextUser)

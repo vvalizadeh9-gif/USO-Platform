@@ -14,6 +14,7 @@ from app.api import (
     mojri,
     monthly_plan,
     my_work,
+    search,
     work_items,
     work_queues,
     workflow,
@@ -35,3 +36,4 @@ api_router.include_router(admin.router)
 api_router.include_router(misc.router)
 api_router.include_router(work_queues.router)
 api_router.include_router(home.router)
+api_router.include_router(search.router)

@@ -15,6 +15,8 @@
  * who is not shown the Internal PIP is never measured against it.
  */
 
+import { formatNumber } from '../../../lib/numbers'
+
 // ------------------------------------------------------------------ streams
 /** The page's three tabs, in order. `key` is the tab and the payload key. */
 export const STREAMS = [
@@ -32,7 +34,7 @@ export function streamOf(key) {
 // --------------------------------------------------------------- formatting
 /** 2,880 -- or a dash for a figure that does not exist. */
 export function fmt(value) {
-  return value == null ? '—' : Number(value).toLocaleString('en-US')
+  return formatNumber(value)
 }
 
 /** A share with one decimal under 100 ("70.4%"), whole at and above it. */

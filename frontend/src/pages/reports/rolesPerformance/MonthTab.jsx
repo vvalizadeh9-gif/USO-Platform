@@ -12,6 +12,7 @@ import MonthPicker from './MonthPicker'
 import PerfHeader from './PerfHeader'
 import { useExport, useRpData } from './hooks'
 import { CountUp, Fa, IconTile, Num, RpCard } from './parts'
+import { formatNumber } from '../../../lib/numbers'
 import {
   HEADLINE_MEASURES,
   MONTH_DEFAULT_MEASURE,
@@ -214,7 +215,7 @@ function OwnerColumn({ column, entries, total, fewer, onOpen }) {
       </ol>
       {none.length > 0 && (
         <p className="rp-owner-none" title={none.join(', ')}>
-          {none.length} with none this month
+          {formatNumber(none.length)} with none this month
         </p>
       )}
     </section>

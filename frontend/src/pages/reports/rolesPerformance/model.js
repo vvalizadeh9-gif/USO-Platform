@@ -5,6 +5,7 @@
 import { canCompare } from '../../../lib/roles'
 import { toPersianDigits } from '../../../lib/persianDigits'
 import { shamsiMonthName } from '../../../lib/shamsi'
+import { formatNumber } from '../../../lib/numbers'
 
 export const TAB_LABELS = { month: 'Month', area: 'Area', map: 'Map' }
 
@@ -49,7 +50,7 @@ export const ROLE_LABELS = {
 // ----- Numbers ----------------------------------------------------------
 
 export function fmtCount(value) {
-  return value == null ? '—' : Math.round(value).toLocaleString('en-US')
+  return value == null ? '—' : formatNumber(Math.round(value))
 }
 
 /** A rate as a whole percent: "51%". */

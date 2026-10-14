@@ -5,6 +5,7 @@ import api from '../../api/client'
 import { useToast } from '../../context/ToastContext'
 import { detailMessage } from '../../lib/apiError'
 import { formatDateTime } from '../../lib/auditLog'
+import { formatNumber } from '../../lib/numbers'
 
 // People who said, from the sign-in page, that they cannot get in.
 //
@@ -51,7 +52,7 @@ export default function ResetRequestsPanel({ version, onResetUser, onChanged }) 
       <div className="row" style={{ gap: 8, marginBottom: 4 }}>
         <LifeBuoy size={16} />
         <h3 style={{ fontSize: 15 }}>
-          {requests.length} password reset request{requests.length === 1 ? '' : 's'}
+          {formatNumber(requests.length)} password reset request{requests.length === 1 ? '' : 's'}
         </h3>
       </div>
       <p className="dim" style={{ fontSize: 12.5, marginBottom: 14 }}>

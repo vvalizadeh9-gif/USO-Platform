@@ -91,26 +91,17 @@
 .uep-crumbs a:hover { color: var(--uep-accent); }
 .uep-crumbs [aria-current] { color: var(--uep-text); font-weight: var(--uep-weight-medium); }
 
-.uep-tenant {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--uep-space-4);
-  height: var(--uep-search-height);
-  padding: 0 var(--uep-space-8);
-  border: var(--uep-border-width) solid var(--uep-border);
-  border-radius: var(--uep-radius-control);
-  background: var(--uep-surface);
-  color: var(--uep-text-2);
-  font: inherit;
-  font-size: var(--uep-fs-small);
-  white-space: nowrap;
-  cursor: pointer;
-}
-
-.uep-search {
+/* The search box and the results under it. The wrapper is what sits in the
+   header's row; the pill and the list are positioned against it. */
+.uep-search-wrap {
+  position: relative;
   flex: 1 1 auto;
+  min-width: 0;
   max-width: var(--uep-search-max);
   margin: 0 auto;
+}
+.uep-search {
+  width: 100%;
   height: var(--uep-search-height);
   display: flex;
   align-items: center;
@@ -143,21 +134,51 @@
   white-space: nowrap;
 }
 
-.uep-notify-badge {
+.uep-search-pop {
   position: absolute;
-  top: var(--uep-space-4);
-  right: var(--uep-space-4);
-  min-width: var(--uep-badge-size);
-  height: var(--uep-badge-size);
-  padding: 0 var(--uep-space-4);
-  border-radius: var(--uep-radius-pill);
-  background: var(--uep-accent);
-  color: var(--uep-on-accent);
-  font-size: var(--uep-fs-caption);
-  font-weight: var(--uep-weight-semibold);
-  line-height: var(--uep-badge-size);
-  text-align: center;
+  top: calc(100% + var(--uep-space-4));
+  left: 0;
+  right: 0;
+  z-index: 50;
+  max-height: min(70vh, 480px);
+  overflow-y: auto;
+  padding: var(--uep-space-4);
+  background: var(--uep-surface);
+  border: var(--uep-border-width) solid var(--uep-border);
+  border-radius: var(--uep-radius-card);
+  box-shadow: var(--uep-shadow-popover);
 }
+.uep-search-group + .uep-search-group { margin-top: var(--uep-space-4); }
+.uep-search-label {
+  display: flex;
+  justify-content: space-between;
+  padding: var(--uep-space-8) var(--uep-space-8) var(--uep-space-4);
+  font-size: var(--uep-fs-caption);
+  font-weight: var(--uep-weight-medium);
+  color: var(--uep-text-3);
+}
+.uep-search-row {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  width: 100%;
+  padding: var(--uep-space-8);
+  border: 0;
+  border-radius: var(--uep-radius-control);
+  background: transparent;
+  font: inherit;
+  font-size: var(--uep-fs-small);
+  text-align: left;
+  color: var(--uep-text);
+  cursor: pointer;
+}
+.uep-search-row b { font-weight: var(--uep-weight-medium); overflow-wrap: anywhere; }
+.uep-search-row span { font-size: var(--uep-fs-caption); color: var(--uep-text-3); overflow-wrap: anywhere; }
+.uep-search-row[aria-selected='true'] { background: var(--uep-accent-tint); }
+.uep-search-all { flex-direction: row; color: var(--uep-accent); font-weight: var(--uep-weight-medium); }
+.uep-search-note { padding: var(--uep-space-12) var(--uep-space-8); font-size: var(--uep-fs-small); color: var(--uep-text-3); }
+
 .uep-avatar {
   flex: 0 0 auto;
   width: var(--uep-avatar-size);
@@ -324,7 +345,7 @@
 @media (max-width: 720px) {
   .uep-shell-body { flex-direction: column; }
   .uep-rail { width: auto; flex: 0 0 auto; border-right: 0; border-bottom: var(--uep-border-width) solid var(--uep-border); }
-  .uep-tenant, .uep-search kbd, .uep-crumbs { display: none; }
+  .uep-search kbd, .uep-crumbs { display: none; }
   .uep-launcher { width: calc(100vw - 2 * var(--uep-space-12)); }
 }
 

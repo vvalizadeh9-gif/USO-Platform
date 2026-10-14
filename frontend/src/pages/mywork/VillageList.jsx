@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { Search, X } from 'lucide-react'
 import { BarLegend, MiniBar } from './StatusBar'
+import { formatNumber } from '../../lib/numbers'
 
 /** Loads the next page when the end of the list scrolls into view. */
 function useEndOfList(onEnd, enabled) {
@@ -76,7 +77,7 @@ export default function VillageList({
         {paste && (
           <div className="mw-paste" role="status">
             <span>
-              {paste.matched.length} of {paste.total} codes found
+              {formatNumber(paste.matched.length)} of {formatNumber(paste.total)} codes found
               {paste.unmatched.length > 0 && ` · ${paste.unmatched.length} not in your list`}
             </span>
             <button type="button" className="btn btn-sm" onClick={onTickPasted} disabled={!paste.ids.length}>Tick</button>
@@ -91,7 +92,7 @@ export default function VillageList({
           onChange={() => onTickAll(allTicked)}
           aria-label="Tick every village in this list"
         />
-        <span className="mw-grow">{ticked.length ? `${ticked.length} ticked` : `${total} villages`}</span>
+        <span className="mw-grow">{ticked.length ? `${formatNumber(ticked.length)} ticked` : `${formatNumber(total)} villages`}</span>
         <span className="mw-col-auth">ICT</span>
         <span className="mw-col-auth">CRA</span>
       </div>

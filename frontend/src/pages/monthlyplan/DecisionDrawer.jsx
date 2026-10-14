@@ -5,6 +5,7 @@ import { Loading, StatusPill } from '../../components/ui'
 import { useToast } from '../../context/ToastContext'
 import Revisions from './Revisions'
 import { REASON_LABEL, streamMeta } from './streams'
+import { formatNumber } from '../../lib/numbers'
 
 /** The statuses a PM decides: a first submission, or a revision request. */
 const DECIDABLE = ['Submitted', 'RevisionRequested']
@@ -60,7 +61,7 @@ export default function DecisionDrawer({ target, canDecide, onClose, onDecided }
     try {
       if (action === 'approve') {
         await api.post(`/pip/${row.plan_id}/approve`)
-        toast.success(`${row.contractor_name} approved`, `${row.committed_count} is their ${streamName} PIP for ${label}.`)
+        toast.success(`${row.contractor_name} approved`, `${formatNumber(row.committed_count)} is their ${streamName} PIP for ${label}.`)
       } else {
         await api.post(`/pip/${row.plan_id}/return`, { comment })
         toast.success(`Sent back to ${row.contractor_name}`, 'They see your comment on their own plan.')
@@ -148,7 +149,7 @@ export default function DecisionDrawer({ target, canDecide, onClose, onDecided }
                       Return
                     </button>
                     <button type="button" className="btn btn-primary btn-sm" disabled={busy} onClick={() => decide('approve')}>
-                      Approve {row.committed_count}
+                      Approve {formatNumber(row.committed_count)}
                     </button>
                   </div>
                 </div>

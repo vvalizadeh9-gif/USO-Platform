@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Check } from 'lucide-react'
 import { viewScan } from './api'
 import { shown } from './roundText'
+import { formatNumber } from '../../lib/numbers'
 
 /**
  * A filed side, as a coordinator or PM checks it: the letter, who filed it,
@@ -72,7 +73,7 @@ export default function ReviewBlock({ round, contractor, sameLetter, onConfirm, 
         <div className="mw-actions">
           {sameLetter && sameLetter.count > 1 && (
             <button type="button" className="btn mw-confirm-all" onClick={onConfirmAll} disabled={busy}>
-              Confirm all {sameLetter.count} on this letter
+              Confirm all {formatNumber(sameLetter.count)} on this letter
             </button>
           )}
           <button type="button" className="btn mw-btn-danger-text" onClick={() => setReturning(true)} disabled={busy}>
