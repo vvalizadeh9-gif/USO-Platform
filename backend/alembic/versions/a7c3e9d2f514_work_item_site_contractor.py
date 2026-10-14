@@ -24,7 +24,9 @@ depends_on = None
 TABLE = "work_items"
 COLUMN = "site_contractor_id"
 INDEX = "ix_work_items_site_contractor_id"
-FK = "fk_work_items_site_contractor_id_contractors"
+# The name PostgreSQL gives the model's unnamed ForeignKey (``<table>_<column>_fkey``),
+# so a database built by ``create_all`` and one built by migrating agree.
+FK = "work_items_site_contractor_id_fkey"
 
 
 def _has_column() -> bool:
