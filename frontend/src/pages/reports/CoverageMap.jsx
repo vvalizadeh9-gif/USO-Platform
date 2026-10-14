@@ -433,7 +433,7 @@ function Detail({ row, map, threshold, onClose }) {
   const where =
     map.shape === 'province'
       ? row.region && `${row.region} region`
-      : `${row.provinces.length} ${row.provinces.length === 1 ? 'province' : 'provinces'}`
+      : `${fmtCount(row.provinces.length)} ${row.provinces.length === 1 ? 'province' : 'provinces'}`
 
   return (
     <div className="cov-detail" role="region" aria-label={`${row.name} detail`}>

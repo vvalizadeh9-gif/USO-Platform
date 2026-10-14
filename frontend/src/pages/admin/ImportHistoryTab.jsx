@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import api from '../../api/client'
 import { EmptyState } from '../../components/ui'
 import { formatDateTime } from '../../lib/auditLog'
+import { formatNumber } from '../../lib/numbers'
 
 export default function ImportHistoryTab() {
   const [history, setHistory] = useState(null)
@@ -55,13 +56,13 @@ function HistoryList({ history }) {
             {formatDateTime(h.created_at)}
           </div>
           <div className="row wrap" style={{ gap: 6, marginTop: 8 }}>
-            <span className="pill pill-green">{h.new_count} new</span>
-            {h.new_villages_count > 0 && <span className="pill pill-green">{h.new_villages_count} villages</span>}
-            {h.changed_count > 0 && <span className="pill pill-amber">{h.changed_count} changed</span>}
-            {h.changed_village_qty > 0 && <span className="pill pill-amber">{h.changed_village_qty} village qty</span>}
+            <span className="pill pill-green">{formatNumber(h.new_count)} new</span>
+            {h.new_villages_count > 0 && <span className="pill pill-green">{formatNumber(h.new_villages_count)} villages</span>}
+            {h.changed_count > 0 && <span className="pill pill-amber">{formatNumber(h.changed_count)} changed</span>}
+            {h.changed_village_qty > 0 && <span className="pill pill-amber">{formatNumber(h.changed_village_qty)} village qty</span>}
             {h.changed_site_type > 0 && <span className="pill pill-amber">{h.changed_site_type} site type</span>}
             {h.changed_requested_tech > 0 && <span className="pill pill-amber">{h.changed_requested_tech} tech</span>}
-            <span className="pill pill-dim">{h.unchanged_count} unchanged</span>
+            <span className="pill pill-dim">{formatNumber(h.unchanged_count)} unchanged</span>
             {h.skipped_satellite > 0 && <span className="pill pill-dim">{h.skipped_satellite} skipped</span>}
           </div>
         </motion.div>

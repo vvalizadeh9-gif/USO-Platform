@@ -6,6 +6,7 @@ import {
 } from '../../components/work/parts'
 import { isLate } from '../../lib/siteOrder'
 import useStepData, { useExportRows } from './useStepData'
+import { formatNumber } from '../../lib/numbers'
 
 const PROCESS = {
   hc: {
@@ -122,7 +123,7 @@ export default function HeldStep({ process, step, figures, panelProps, onExport 
                       <Fa>{g.name || 'No contractor'}</Fa>
                       <span className="uw-group-meta">
                         {plural(g.sites.length, 'site')}
-                        {g.late > 0 && <> · <b className="uw-late">{g.late} late</b></>}
+                        {g.late > 0 && <> · <b className="uw-late">{formatNumber(g.late)} late</b></>}
                       </span>
                     </th>
                   </tr>

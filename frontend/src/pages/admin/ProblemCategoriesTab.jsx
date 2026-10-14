@@ -4,6 +4,7 @@ import api from '../../api/client'
 import { EmptyState, Loading } from '../../components/ui'
 import { useToast } from '../../context/ToastContext'
 import { isCategoryOwner, roleLabel } from '../../lib/roles'
+import { formatNumber } from '../../lib/numbers'
 
 /**
  * The remediation routing table, as a screen.
@@ -143,9 +144,9 @@ export default function ProblemCategoriesTab() {
                   </td>
                   <td className="tnum">{c.sla_days} days</td>
                   <td className="tnum" style={{ color: c.open_fixes ? 'var(--amber)' : undefined }}>
-                    {c.open_fixes}
+                    {formatNumber(c.open_fixes)}
                   </td>
-                  <td className="tnum dim">{c.total_fixes}</td>
+                  <td className="tnum dim">{formatNumber(c.total_fixes)}</td>
                   <td>
                     <button
                       className="btn btn-sm btn-ghost"

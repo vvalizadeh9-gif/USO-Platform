@@ -1,0 +1,132 @@
+import { act, fireEvent, render, screen } from '@testing-library/react'
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import api from '../api/client'
+import { appsFor } from './appRegistry'
+import GlobalSearch, { matchPages, resultGroups } from './GlobalSearch'
+
+vi.mock('../api/client', () => ({ default: { get: vi.fn() } }))
+
+const EMPTY = { sites: [], villages: [], provinces: [], contractors: [], people: [] }
+
+function Where() {
+  const loc = useLocation()
+  return <div data-testid="where">{loc.pathname + loc.search}</div>
+}
+
+function renderSearch(role = 'PM') {
+  return render(
+    <MemoryRouter initialEntries={['/home']}>
+      <GlobalSearch apps={appsFor(role)} />
+      <Routes>
+        <Route path="*" element={<Where />} />
+      </Routes>
+    </MemoryRouter>,
+  )
+}
+
+describe('matchPages', () => {
+  it('finds a page by its label and every page of an app by the app name', () => {
+    const apps = appsFor('PM')
+    expect(matchPages(apps, 'review').map((p) => p.label)).toEqual(['HC review', 'DT review'])
+    expect(matchPages(apps, 'monthly').map((p) => p.label)).toEqual(['Approvals', 'Plans', 'History', 'Internal PIP'])
+    expect(matchPages(apps, '  ')).toEqual([])
+  })
+
+  it('offers only the pages this role may open', () => {
+    expect(matchPages(appsFor('Contractor'), 'audit')).toEqual([])
+    expect(matchPages(appsFor('Admin'), 'audit').map((p) => p.to)).toEqual(['/admin?tab=audit'])
+  })
+})
+
+describe('resultGroups', () => {
+  it('turns each kind of result into a link to its own screen', () => {
+    const groups = resultGroups([], {
+      sites: [{ id: 7, site_code: 'TEH-001', province: 'تهران', stage: 'Perm On Air' }],
+      villages: [{ work_item_id: 7, village_name: 'Alpha', village_code: 'V1', site_code: 'TEH-001' }],
+      provinces: [{ id: 3, name: 'تهران' }],
+      contractors: [{ id: 4, name: 'Towers Co' }],
+      people: [{ id: 9, full_name: 'Sara Finder', username: 's.finder', role: 'PM' }],
+    })
+    expect(groups.map((g) => g.id)).toEqual(['sites', 'villages', 'provinces', 'contractors', 'people'])
+    expect(groups.map((g) => g.items[0].to)).toEqual([
+      '/work-items/7',
+      '/work-items/7',
+      '/work-items?province_id=3',
+      '/work-items?contractor_id=4',
+      '/admin?tab=users&search=s.finder',
+    ])
+  })
+
+  it('leaves out empty groups', () => {
+    expect(resultGroups([], EMPTY)).toEqual([])
+  })
+})
+
+describe('GlobalSearch', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+    api.get.mockReset()
+  })
+  afterEach(() => vi.useRealTimers())
+
+  it('lists apps and pages from the first character, before asking the server', () => {
+    renderSearch()
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'h' } })
+
+    expect(screen.getByRole('option', { name: /HC check/ })).toBeInTheDocument()
+    expect(api.get).not.toHaveBeenCalled()
+  })
+
+  it('asks GET /search from two characters and opens the chosen site', async () => {
+    api.get.mockResolvedValue({ data: { ...EMPTY, sites: [{ id: 7, site_code: 'TEH-001', province: null, stage: null }] } })
+    renderSearch()
+    const input = screen.getByRole('combobox')
+    fireEvent.change(input, { target: { value: 'teh' } })
+    await act(async () => {
+      vi.advanceTimersByTime(250)
+    })
+
+    expect(api.get).toHaveBeenCalledWith('/search', { params: { q: 'teh' } })
+    fireEvent.click(screen.getByRole('option', { name: /TEH-001/ }))
+    expect(screen.getByTestId('where')).toHaveTextContent('/work-items/7')
+  })
+
+  it('moves through results with the arrow keys and opens one with Enter', async () => {
+    api.get.mockResolvedValue({ data: EMPTY })
+    renderSearch()
+    const input = screen.getByRole('combobox')
+    fireEvent.change(input, { target: { value: 'review' } })
+    await act(async () => {
+      vi.advanceTimersByTime(250)
+    })
+
+    fireEvent.keyDown(input, { key: 'ArrowDown' })
+    expect(screen.getByRole('option', { name: /DT review/ })).toHaveAttribute('aria-selected', 'true')
+    fireEvent.submit(input.closest('form'))
+    expect(screen.getByTestId('where')).toHaveTextContent('/drive-test?tab=review')
+  })
+
+  it('always offers the full site list for the term', async () => {
+    api.get.mockResolvedValue({ data: EMPTY })
+    renderSearch()
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'zz9' } })
+    await act(async () => {
+      vi.advanceTimersByTime(250)
+    })
+
+    fireEvent.click(screen.getByRole('option', { name: /Search all sites for “zz9”/ }))
+    expect(screen.getByTestId('where')).toHaveTextContent('/work-items?q=zz9')
+  })
+
+  it('says so when nothing matches', async () => {
+    api.get.mockResolvedValue({ data: EMPTY })
+    renderSearch('Admin')
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'zz9' } })
+    await act(async () => {
+      vi.advanceTimersByTime(250)
+    })
+
+    expect(screen.getByRole('status')).toHaveTextContent('Nothing matches “zz9”.')
+  })
+})

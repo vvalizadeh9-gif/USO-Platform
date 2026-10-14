@@ -210,7 +210,8 @@ openssl rand -hex 32
 
 | Setting | Default | What it does |
 |---|---|---|
-| `ACCESS_TOKEN_EXPIRE_MINUTES` | `480` (8 hours) | How long a sign-in lasts. The session cookie expires with it; after that the person is sent to sign in with "Your session expired. Sign in again." and returned to the page they were on. |
+| `ACCESS_TOKEN_EXPIRE_MINUTES` | `30` | The idle timeout. Every request the person makes slides it forward (the page's own background refresh does not), so a session ends 30 minutes after they stop working. They are then sent to sign in with "Your session expired. Sign in again." and returned to the page they were on. |
+| `SESSION_ABSOLUTE_TIMEOUT_MINUTES` | `480` (8 hours) | The absolute timeout: a sign-in ends this long after it began, however busy. |
 | `LOGIN_MAX_ATTEMPTS_PER_USERNAME` | `5` | Failed attempts for one username, inside the window, that lock it. |
 | `LOGIN_ATTEMPT_WINDOW_SECONDS` | `900` (15 min) | The window those failures are counted in. |
 | `LOGIN_LOCKOUT_SECONDS` | `900` (15 min) | How long the lock lasts. The page says "Too many attempts. Try again in N minutes." |

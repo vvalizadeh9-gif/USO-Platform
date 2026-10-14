@@ -151,7 +151,7 @@ function Ranking({ data, measure, breakdown, onBreakdown }) {
           <p className="rp-panel-sub">Behind national first</p>
         </div>
         <p className="rp-behind">
-          <Num><b>{behind}</b></Num> of <Num>{compared.length}</Num>{' '}
+          <Num><b>{fmtCount(behind)}</b></Num> of <Num>{fmtCount(compared.length)}</Num>{' '}
           {compared.length === 1 ? noun.one : noun.many}
           <br />below national
         </p>

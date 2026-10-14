@@ -5,6 +5,7 @@ import { Loading, StatusPill } from '../../components/ui'
 import { useToast } from '../../context/ToastContext'
 import Revisions from './Revisions'
 import { REASON_LABEL, streamMeta } from './streams'
+import { formatNumber } from '../../lib/numbers'
 
 /** The statuses a PM decides: a first submission, or a revision request. */
 const DECIDABLE = ['Submitted', 'RevisionRequested']
@@ -60,7 +61,7 @@ export default function DecisionDrawer({ target, canDecide, onClose, onDecided }
     try {
       if (action === 'approve') {
         await api.post(`/pip/${row.plan_id}/approve`)
-        toast.success(`${row.contractor_name} approved`, `${row.committed_count} is their ${streamName} PIP for ${label}.`)
+        toast.success(`${row.contractor_name} approved`, `${formatNumber(row.committed_count)} is their ${streamName} PIP for ${label}.`)
       } else {
         await api.post(`/pip/${row.plan_id}/return`, { comment })
         toast.success(`Sent back to ${row.contractor_name}`, 'They see your comment on their own plan.')
@@ -104,12 +105,12 @@ export default function DecisionDrawer({ target, canDecide, onClose, onDecided }
               <div className="mp-drawer-figs">
                 <div>
                   <div className="mp-kpi-label">In force</div>
-                  <div className="mp-kpi-value tnum">{row.in_force_count ?? '—'}</div>
+                  <div className="mp-kpi-value tnum">{formatNumber(row.in_force_count)}</div>
                 </div>
                 {row.status && row.status !== 'Approved' && (
                   <div>
                     <div className="mp-kpi-label">{revision ? 'Revision requested' : 'Handed in'}</div>
-                    <div className="mp-kpi-value tnum">{row.committed_count ?? '—'}</div>
+                    <div className="mp-kpi-value tnum">{formatNumber(row.committed_count)}</div>
                   </div>
                 )}
                 <div style={{ alignSelf: 'center' }}>

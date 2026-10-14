@@ -46,7 +46,7 @@ export default function PlansTab({ board, running, planning, runningPeriod }) {
           </span>
         </div>
         <p className="mp-plans-count tnum">
-          <b>{view.shared.length}</b> of {total} contractors shared
+          <b>{fmt(view.shared.length)}</b> of {fmt(total)} contractors shared
         </p>
       </div>
 

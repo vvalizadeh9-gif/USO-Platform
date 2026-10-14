@@ -3,6 +3,7 @@ import api from '../../api/client'
 import { coveredProvinces, orderContractors, suggestContractor } from '../../lib/suggestContractor'
 import { ActionNotice, Fa } from './parts'
 import { useWork } from './WorkContext'
+import { formatNumber } from '../../lib/numbers'
 
 const PROCESS = {
   hc: { url: '/hc/contractors/load', holding: 'in check now', noun: 'in check' },
@@ -86,7 +87,7 @@ export default function AssignPanel({ process, selectedCount, selectedProvinces,
               const busy = busyId === c.contractor_id
               const facts = [
                 `${c.open} ${words.noun}`,
-                c.late > 0 ? `${c.late} late` : null,
+                c.late > 0 ? `${formatNumber(c.late)} late` : null,
                 c.avg_submit_days != null ? `about ${Math.round(c.avg_submit_days)} days to submit` : null,
               ].filter(Boolean).join(', ')
               const name = active
@@ -111,7 +112,7 @@ export default function AssignPanel({ process, selectedCount, selectedProvinces,
                   </span>
                   <span className="uw-assign-meta" aria-hidden="true">
                     {isSuggested && <b className="uw-suggested">Suggested · </b>}
-                    {c.late > 0 && <b className="uw-late">{c.late} late · </b>}
+                    {c.late > 0 && <b className="uw-late">{formatNumber(c.late)} late · </b>}
                     {c.avg_submit_days != null && <span>avg {Math.round(c.avg_submit_days)} d</span>}
                   </span>
                 </button>

@@ -12,6 +12,8 @@
 // still renders as a readable sentence naming the actor and the record, so the
 // backend can add one without the audit screen going quiet about it.
 
+import { formatNumber } from './numbers'
+
 const ENTITY_LABELS = {
   User: 'user',
   PasswordResetRequest: 'a password reset request',
@@ -135,13 +137,13 @@ function detail(entry) {
   switch (entry.entity_type) {
     case 'CpmDataWipe': {
       const total = Object.values(nv).reduce((sum, v) => sum + (Number(v) || 0), 0)
-      return `${total} records removed`
+      return `${formatNumber(total)} records removed`
     }
     case 'CpmImportBatch':
-      return [nv.filename, nv.rows != null ? `${nv.rows} rows` : null]
+      return [nv.filename, nv.rows != null ? `${formatNumber(nv.rows)} rows` : null]
         .filter(Boolean).join(', ')
     case 'WorkItemBulk':
-      return nv.count != null ? `${nv.count} work items` : ''
+      return nv.count != null ? `${formatNumber(nv.count)} work items` : ''
     case 'Acceptance':
       return `ICT: ${nv.ict || '—'}, CRA: ${nv.cra || '—'}`
     case 'HcTask':

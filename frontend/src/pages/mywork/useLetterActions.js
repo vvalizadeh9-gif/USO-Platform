@@ -8,6 +8,7 @@ import { detailMessage } from '../../lib/apiError'
 import { LETTERS_PATH, REVIEW_PATH, fileLetter, reviewLetter, uploadScan } from './api'
 import { claimsFor, claimsFromRejections } from './useFilingForms'
 import { hasErrors, letterErrors, reasonErrors, rejectionErrors, serverErrors } from './validation'
+import { formatNumber } from '../../lib/numbers'
 
 /** The errors one side shows: its own checks once tried, plus the server's. */
 export function sideErrors(form, { villageId, toFile } = {}) {
@@ -113,7 +114,7 @@ export function useLetterActions({ decides, forms, actions, deferred, refresh, t
       village_id: row.village_id,
       claims: claimsFromRejections(row, authority, form.rejections),
     }))
-    holdLetter(authority, items, `${fileable.length} villages`,
+    holdLetter(authority, items, `${formatNumber(fileable.length)} villages`,
       Object.fromEntries(fileable.map((row) => [row.village_id, row.sides[authority].next_round_no])))
   }, [forms, actions, holdLetter])
 
@@ -138,7 +139,7 @@ export function useLetterActions({ decides, forms, actions, deferred, refresh, t
 
   const confirmAll = useCallback((authority, row, round, count) => {
     holdReview(authority, { letter_number: round.letter_number, decision: 'confirm' }, {
-      text: `Confirmed ${authority} for ${count} villages`,
+      text: `Confirmed ${authority} for ${formatNumber(count)} villages`,
       villages: { [row.village_id]: { status: decidedStatus(round.claims) } },
     })
   }, [holdReview])

@@ -1,6 +1,8 @@
 // UEP Home's wording rules, kept apart from the components so they are tested
 // on their own.
 
+import { formatNumber } from '../../lib/numbers'
+
 /** For which KPIs a rise is bad. Done today is the one where a fall is. */
 const UP_IS_BAD = { pending: true, overdue: true, dueSoon: true, done: false }
 
@@ -8,7 +10,7 @@ const UP_IS_BAD = { pending: true, overdue: true, dueSoon: true, done: false }
 export function deltaText(delta) {
   if (delta === null || delta === undefined) return null
   if (delta === 0) return 'No change'
-  return `${delta > 0 ? '↑' : '↓'} ${Math.abs(delta)} vs last week`
+  return `${delta > 0 ? '↑' : '↓'} ${formatNumber(Math.abs(delta))} vs last week`
 }
 
 /** 'bad' only when the change goes the wrong way for this KPI; never 'good'. */

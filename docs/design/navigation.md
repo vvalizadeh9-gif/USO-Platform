@@ -5,8 +5,10 @@
 - **No global sidebar.** Every signed-in page sits in `shell/AppShell.jsx`: a
   56px header and, inside an app, that app's rail.
 - **Global level:** the header. It holds the app launcher, the logo (links to
-  Home), the breadcrumb, the tenant switcher, global search (Ctrl/⌘+K),
-  notifications and the account menu.
+  Home), the breadcrumb, global search (Ctrl/⌘+K) and the account menu.
+  Search matches apps and pages as you type, and sites, villages, provinces,
+  contractors and (for Admin) people through `GET /search`, each scoped to
+  what the person may open (`shell/GlobalSearch.jsx`, `backend/app/api/search.py`).
 - **App level:** a left rail lists only the current app's pages (3–7). An app
   with one page has no rail. The rail collapses below 1100px and stacks above
   the content below 720px.
@@ -28,7 +30,7 @@
 `pages[].queues` is the page's count query: the Home queue keys whose counts
 it sums (`'*'` for all of them). Counts are read from the one `GET /me/home`
 response (`shell/HomeData.jsx`), so a rail count, an Apps-panel pill, a card
-total, a KPI and the notification badge can never disagree.
+total and a KPI can never disagree.
 
 `pages[].divider` draws a 1px rule under the page in the rail, setting it apart
 from the queue pages below. Drive test uses it for **Dashboard**

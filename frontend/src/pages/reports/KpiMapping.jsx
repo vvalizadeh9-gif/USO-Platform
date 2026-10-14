@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom'
 import api from '../../api/client'
 import { EmptyState, Loading, PageHead } from '../../components/ui'
 import { importStamp } from './kpiTheme'
+import { formatNumber } from '../../lib/numbers'
 
 /**
  * Performance → Roles Performance → Mapping. PM only, on the server as well.
@@ -152,7 +153,7 @@ function PeoplePanel({ title, people }) {
         {people.map((person) => (
           <li key={person.name}>
             <span className="kpi-person-name">{person.name}</span>
-            <span className="kpi-person-count">{person.count}</span>
+            <span className="kpi-person-count">{formatNumber(person.count)}</span>
             <span className="kpi-person-list">{person.provinces.join(', ')}</span>
           </li>
         ))}

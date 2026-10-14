@@ -3,6 +3,7 @@ import api from '../api/client'
 import { useAuth } from '../context/AuthContext'
 import { DATA_CHANGED_EVENT } from '../lib/dataChanged'
 import { hasHome } from '../lib/roles'
+import { BACKGROUND_HEADERS } from '../lib/session'
 import { queueCounts } from './appRegistry'
 
 /**
@@ -21,10 +22,12 @@ export function HomeDataProvider({ children }) {
   const [data, setData] = useState(null)
   const [error, setError] = useState(null)
 
-  const reload = useCallback(() => {
+  // `background` for the timer: a refresh nobody asked for must not keep an
+  // unattended session alive (lib/session.js).
+  const reload = useCallback((background = false) => {
     if (!enabled) return Promise.resolve()
     return api
-      .get('/me/home')
+      .get('/me/home', background === true ? { headers: BACKGROUND_HEADERS } : undefined)
       .then((r) => {
         setData(r.data)
         setError(null)
@@ -40,7 +43,7 @@ export function HomeDataProvider({ children }) {
       pending = setTimeout(reload, 300)
     }
     reload()
-    const id = setInterval(reload, REFRESH_MS)
+    const id = setInterval(() => reload(true), REFRESH_MS)
     window.addEventListener(DATA_CHANGED_EVENT, onChange)
     return () => {
       clearInterval(id)

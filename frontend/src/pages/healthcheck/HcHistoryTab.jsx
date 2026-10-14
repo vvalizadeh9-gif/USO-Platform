@@ -5,6 +5,7 @@ import SiteHistoryDrawer, { SiteCodeButton } from '../../components/SiteHistoryD
 import api from '../../api/client'
 import { useToast } from '../../context/ToastContext'
 import { EmptyState, Loading } from '../../components/ui'
+import { formatNumber } from '../../lib/numbers'
 
 /**
  * The archive, in two shapes.
@@ -134,7 +135,7 @@ export default function HcHistoryTab() {
                     <td style={{ fontWeight: 500 }}>{a.code}</td>
                     <td className="text-data">{contractors[a.contractor_id] || '—'}</td>
                     <td className="dim" style={{ fontSize: 'var(--fs-meta)' }}>{formatDate(a.created_at)}</td>
-                    <td className="tnum">{a.task_count ?? a.tasks?.length ?? '—'}</td>
+                    <td className="tnum">{formatNumber(a.task_count ?? a.tasks?.length)}</td>
                     <td className="tnum" style={{ color: 'var(--green)', fontWeight: 500 }}>{a.sites_ready ?? '—'}</td>
                     <td className="tnum" style={{ color: 'var(--red)', fontWeight: 500 }}>{a.sites_not_ready ?? '—'}</td>
                     <td className="dim" style={{ fontSize: 'var(--fs-meta)' }}>{formatAging(a)}</td>
@@ -309,7 +310,7 @@ function AssignmentSummary({ assignment: a, exporting, onExport }) {
         {stats.map((s) => (
           <div key={s.label} style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
             <span className="dim" style={{ fontSize: 'var(--fs-caption)', textTransform: 'uppercase', letterSpacing: 0.3 }}>{s.label}</span>
-            <span style={{ fontSize: 14, fontWeight: 600, color: s.color || 'var(--text)' }}>{s.value}</span>
+            <span style={{ fontSize: 14, fontWeight: 600, color: s.color || 'var(--text)' }}>{formatNumber(s.value)}</span>
           </div>
         ))}
       </div>

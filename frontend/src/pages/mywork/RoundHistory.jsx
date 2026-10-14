@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Check, CornerUpLeft, Dot, X } from 'lucide-react'
 import { roundSummary, shown } from './roundText'
+import { formatNumber } from '../../lib/numbers'
 
 const MARK = {
   approved: { tone: 'success', Icon: Check },
@@ -22,7 +23,7 @@ export default function RoundHistory({ rounds }) {
         <span className="mw-history-title">History</span>
         {rounds.length > VISIBLE && (
           <button type="button" className="mw-link-btn" onClick={() => setAll(!all)}>
-            {all ? 'Show less' : `Show all ${rounds.length}`}
+            {all ? 'Show less' : `Show all ${formatNumber(rounds.length)}`}
           </button>
         )}
       </div>

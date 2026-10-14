@@ -10,6 +10,7 @@ from app.core.bootstrap import init_db
 from app.core.config import get_settings
 from app.core.csrf import CsrfMiddleware
 from app.core.logging_config import RequestLoggingMiddleware, configure_logging
+from app.core.session_renewal import SessionRenewalMiddleware
 
 settings = get_settings()
 
@@ -42,6 +43,8 @@ app = FastAPI(
 # Innermost of the three, so a refused write is still logged and still carries
 # CORS headers. See app/core/csrf.py.
 app.add_middleware(CsrfMiddleware)
+# Slides the session's idle deadline. See app/core/session_renewal.py.
+app.add_middleware(SessionRenewalMiddleware)
 app.add_middleware(RequestLoggingMiddleware)
 
 # The origin list is validated at startup (app/core/config.py): in production it

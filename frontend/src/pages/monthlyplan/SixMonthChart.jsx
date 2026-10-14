@@ -1,6 +1,7 @@
 import { useReducedMotion } from 'framer-motion'
 import { bandColor } from '../drivetest/format'
 import { axisScale, sharePercent } from './figures'
+import { formatNumber } from '../../lib/numbers'
 
 /**
  * Six months of Delivered against PIP, with Assignment behind them.
@@ -73,7 +74,7 @@ export default function SixMonthChart({ months = [] }) {
         <g key={i}>
           <line className="pip-grid" x1={LEFT} y1={y(step * i)} x2={RIGHT} y2={y(step * i)} />
           <text className="pip-axis" x={LEFT - 10} y={y(step * i) + 4} textAnchor="end">
-            {step * i}
+            {formatNumber(step * i)}
           </text>
         </g>
       ))}

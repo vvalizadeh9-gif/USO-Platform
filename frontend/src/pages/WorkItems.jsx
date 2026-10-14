@@ -149,11 +149,17 @@ function AllSites() {
   const stage = stages.some((s) => s.value === requested) ? requested : 'All'
   const historyOpen = searchParams.get('view') === 'history'
 
-  const [query, setQuery] = useState('')
-  const [q, setQ] = useState('')
-  const [provinceId, setProvinceId] = useState('')
+  // The header search links here with ?q=, ?province_id= or ?contractor_id=.
+  const linkedQ = searchParams.get('q')
+  const linkedProvince = searchParams.get('province_id')
+  const linkedContractor = searchParams.get('contractor_id')
+  const [query, setQuery] = useState(() => linkedQ || '')
+  const [q, setQ] = useState(() => (linkedQ || '').trim())
+  const [provinceId, setProvinceId] = useState(() => linkedProvince || '')
+  const [contractorId, setContractorId] = useState(() => linkedContractor || '')
   const [offset, setOffset] = useState(0)
   const [provinces, setProvinces] = useState([])
+  const [contractors, setContractors] = useState([])
   const [selected, setSelected] = useState(() => new Set())
   const [busyId, setBusyId] = useState(null)
   const [exporting, setExporting] = useState(false)
@@ -163,15 +169,25 @@ function AllSites() {
     const t = setTimeout(() => setQ(query.trim()), 300)
     return () => clearTimeout(t)
   }, [query])
+  // A second search from the header while already here.
+  useEffect(() => {
+    if (linkedQ != null) setQuery(linkedQ)
+    if (linkedProvince != null) setProvinceId(linkedProvince)
+    if (linkedContractor != null) setContractorId(linkedContractor)
+  }, [linkedQ, linkedProvince, linkedContractor])
   useEffect(() => {
     setOffset(0)
     setSelected(new Set())
-  }, [stage, q, provinceId])
+  }, [stage, q, provinceId, contractorId])
   useEffect(() => {
     api.get('/reference/provinces').then((r) => Array.isArray(r.data) && setProvinces(r.data)).catch(() => {})
-  }, [])
+    // A contractor's list is already only its own sites.
+    if (!isContractor) {
+      api.get('/reference/contractors').then((r) => Array.isArray(r.data) && setContractors(r.data)).catch(() => {})
+    }
+  }, [isContractor])
 
-  const filters = { q: q || undefined, province_id: provinceId || undefined }
+  const filters = { q: q || undefined, province_id: provinceId || undefined, contractor_id: contractorId || undefined }
   const counts = useJson('/work-items/counts', filters, version)
   const list = useJson('/work-items', { ...filters, stage: stage === 'All' ? undefined : stage, limit: PAGE, offset }, version)
   const rows = list.data
@@ -266,6 +282,14 @@ function AllSites() {
                       <option key={p.id} value={p.id}>{p.name}</option>
                     ))}
                   </select>
+                  {!isContractor && (
+                    <select className="uw-select" aria-label="Contractor" value={contractorId} onChange={(e) => setContractorId(e.target.value)}>
+                      <option value="">All contractors</option>
+                      {contractors.map((c) => (
+                        <option key={c.id} value={c.id}>{c.name}</option>
+                      ))}
+                    </select>
+                  )}
                 </>
               }
               description={total != null ? `${total.toLocaleString('en-US')} ${total === 1 ? 'site' : 'sites'}` : null}
