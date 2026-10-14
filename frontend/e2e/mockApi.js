@@ -7,6 +7,7 @@ import * as W from './workFixtures.js'
 import { villagesXlsx } from './xlsx.js'
 import { myWorkList, myWorkSuggestions, myWorkVillage } from './myWorkFixtures.js'
 import { rpArea, rpMonth } from './rolesFixtures.js'
+import { explorerSite } from './explorerFixtures.js'
 
 const ROUTES = {
   '/auth/me': F.PM,
@@ -53,6 +54,7 @@ const PATTERNS = [
   [/^\/acceptance\/villages\/\d+\/suggestions$/, myWorkSuggestions],
   [/^\/acceptance\/villages\/\d+$/, myWorkVillage],
   [/^\/acceptance\/my-work$/, myWorkList],
+  [/^\/explorer\/sites\/\d+$/, explorerSite],
 ]
 
 const viewOf = (user) => (user.role.name === 'Contractor' ? 'contractor' : 'staff')

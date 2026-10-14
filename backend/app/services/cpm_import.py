@@ -257,6 +257,8 @@ class CpmImportService:
             # (site, type) until an admin accepts. Skip village handling.
             return
 
+        self._apply_site_contractor(work_item, raw)
+
         if wi_created:
             self._created_wi_keys.add(wi_key)
         elif wi_key not in self._created_wi_keys:
@@ -537,6 +539,19 @@ class CpmImportService:
         dt_sc = C.clean(self._get(raw, C.COL_HISTORY["dt_sc"]))
         if dt_sc is not None:
             wi.dt_sc_contractor = self._contractor(dt_sc, kind="drive_test")
+
+    def _apply_site_contractor(self, wi: WorkItem, raw: list) -> None:
+        """Set the site (execution) contractor from CPM column 31.
+
+        A master field, so it is applied on every import -- unlike the DT
+        contractor in column AV, which is seeded once and then app-owned. Name
+        matching is the same as the DT contractor's (:meth:`_contractor`). A
+        blank cell leaves the stored value alone: a site's rows repeat once per
+        village, and one blank row must not clear what another row set.
+        """
+        name = C.clean(self._get(raw, C.COL["site_contractor"]))
+        if name is not None:
+            wi.site_contractor = self._contractor(name, kind="site")
 
     def _village_data(self, raw: list, code: str | None) -> dict:
         return {

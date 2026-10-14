@@ -10,15 +10,18 @@ import { SkeletonRows } from './parts'
  * Shift-click selects the range from the last row clicked. The header
  * checkbox selects every site in the current filter.
  *
+ * A list nobody selects from can pass `onOpen` instead: a click on the row
+ * then opens it. The row's own link stays the keyboard way in.
+ *
  * @param {{
  *   rows: object[], rowId: (row: object) => number,
  *   columns: { key: string, label: React.ReactNode, width?: string, className?: string, render: (row: object) => React.ReactNode }[],
  *   selected?: Set<number>, onSelect?: (ids: number[], on: boolean) => void,
  *   label: string, siteLabel?: (row: object) => string, loading?: boolean, after?: React.ReactNode,
- *   filterIds?: number[],
+ *   filterIds?: number[], onOpen?: (row: object) => void,
  * }} props
  */
-export default function SiteTable({ rows, rowId, columns, selected, onSelect, label, siteLabel, loading, after, filterIds }) {
+export default function SiteTable({ rows, rowId, columns, selected, onSelect, label, siteLabel, loading, after, filterIds, onOpen }) {
   const lastIndex = useRef(null)
   // A change event does not carry the Shift key; the click before it does.
   const shift = useRef(false)
@@ -41,10 +44,12 @@ export default function SiteTable({ rows, rowId, columns, selected, onSelect, la
     lastIndex.current = index
   }
 
+  const openable = !selectable && Boolean(onOpen)
   const onRowClick = (event, index) => {
     // A button or link inside the row does its own thing.
     if (event.target.closest('button, a, input, select, textarea, label')) return
-    toggle(index, event.shiftKey)
+    if (selectable) toggle(index, event.shiftKey)
+    else onOpen(rows[index])
   }
 
   return (
@@ -86,8 +91,8 @@ export default function SiteTable({ rows, rowId, columns, selected, onSelect, la
             return (
               <tr
                 key={id}
-                className={`${selectable ? 'is-selectable' : ''} ${on ? 'is-selected' : ''}`.trim() || undefined}
-                onClick={selectable ? (e) => onRowClick(e, index) : undefined}
+                className={`${selectable || openable ? 'is-selectable' : ''} ${on ? 'is-selected' : ''}`.trim() || undefined}
+                onClick={selectable || openable ? (e) => onRowClick(e, index) : undefined}
               >
                 {selectable && (
                   <td className="uw-col-check">

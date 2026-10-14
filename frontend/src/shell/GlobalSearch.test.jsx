@@ -50,12 +50,23 @@ describe('resultGroups', () => {
     })
     expect(groups.map((g) => g.id)).toEqual(['sites', 'villages', 'provinces', 'contractors', 'people'])
     expect(groups.map((g) => g.items[0].to)).toEqual([
-      '/work-items/7',
-      '/work-items/7',
-      '/work-items?province_id=3',
-      '/work-items?contractor_id=4',
+      '/explorer/sites/7',
+      '/explorer/sites/7?village=V1',
+      '/explorer?province_id=3',
+      '/explorer?contractor_id=4',
       '/admin?tab=users&search=s.finder',
     ])
+  })
+
+  it('opens a village result on its site with the village highlighted, by ID or name', () => {
+    const [villages] = resultGroups([], {
+      ...EMPTY,
+      villages: [
+        { work_item_id: 7, village_name: 'Alpha', village_code: 'V10232', site_code: 'TEH-001' },
+        { work_item_id: 8, village_name: 'Beta', village_code: null, site_code: 'TEH-002' },
+      ],
+    })
+    expect(villages.items.map((i) => i.to)).toEqual(['/explorer/sites/7?village=V10232', '/explorer/sites/8'])
   })
 
   it('leaves out empty groups', () => {
@@ -89,7 +100,7 @@ describe('GlobalSearch', () => {
 
     expect(api.get).toHaveBeenCalledWith('/search', { params: { q: 'teh' } })
     fireEvent.click(screen.getByRole('option', { name: /TEH-001/ }))
-    expect(screen.getByTestId('where')).toHaveTextContent('/work-items/7')
+    expect(screen.getByTestId('where')).toHaveTextContent('/explorer/sites/7')
   })
 
   it('moves through results with the arrow keys and opens one with Enter', async () => {
@@ -116,7 +127,7 @@ describe('GlobalSearch', () => {
     })
 
     fireEvent.click(screen.getByRole('option', { name: /Search all sites for “zz9”/ }))
-    expect(screen.getByTestId('where')).toHaveTextContent('/work-items?q=zz9')
+    expect(screen.getByTestId('where')).toHaveTextContent('/explorer?q=zz9')
   })
 
   it('says so when nothing matches', async () => {

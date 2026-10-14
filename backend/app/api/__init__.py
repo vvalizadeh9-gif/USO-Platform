@@ -6,6 +6,7 @@ from app.api import (
     admin,
     auth,
     drive_test,
+    explorer,
     gaps,
     health_check,
     home,
@@ -23,6 +24,7 @@ from app.api import (
 api_router = APIRouter(prefix="/api/v1")
 api_router.include_router(auth.router)
 api_router.include_router(work_items.router)
+api_router.include_router(explorer.router)
 api_router.include_router(workflow.router)
 api_router.include_router(health_check.router)
 api_router.include_router(drive_test.router)

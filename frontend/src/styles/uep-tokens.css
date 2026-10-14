@@ -229,6 +229,36 @@
   --uep-ease-grow: cubic-bezier(0.2, 0.7, 0.2, 1);
   --uep-grow-follow: 150ms;          /* the difference segment follows the fill */
 
+  /* ---- Component: Explorer record page (UEP-11) ----
+     General information tiles: one colour per field, a white icon on each
+     (every one at least 4.5:1 against white). Status keeps green / yellow /
+     red; the journey is cobalt; ICT and CRA labels are deep cobalt. */
+  --uep-field-on-air: #1D4ED8;            /* blue */
+  --uep-field-dt-date: #4338CA;           /* indigo */
+  --uep-field-site-contractor: #C2410C;   /* orange */
+  --uep-field-dt-contractor: #0E7490;     /* cyan */
+  --uep-field-technology: #7E22CE;        /* purple */
+  --uep-field-province: #BE185D;          /* pink */
+  --uep-field-villages: #475569;          /* slate */
+  --uep-explorer-info-width: 360px;
+  --uep-explorer-field-row: 62px;
+  --uep-explorer-field-tile: 36px;
+  --uep-explorer-aging-icon: 26px;
+  --uep-explorer-step-circle: 48px;
+  --uep-explorer-step-line: 2px;
+  --uep-explorer-step-dash: #93B2FF;      /* the line into the open step */
+  --uep-explorer-mark: 28px;
+  --uep-explorer-status-cell: 250px;
+  --uep-explorer-authority-height: 32px;
+  --uep-explorer-row-roomy: 62px;         /* up to 3 villages */
+  --uep-explorer-row-compact: 50px;       /* 4 to 6, so six fit at 1440x900 */
+  --uep-explorer-table-row: 52px;         /* above 6 villages */
+  --uep-explorer-scrollbar: 8px;
+  --uep-fs-explorer-count: 24px;
+  --uep-dur-explorer-enter: 240ms;        /* the page fades in once */
+  --uep-dur-explorer-hover: 120ms;
+  --uep-dur-explorer-filter: 160ms;       /* All / Open cross-fade */
+
   /* ---- Component: sign-in ---- */
   --uep-signin-half-basis: 520px;
   --uep-signin-breakpoint: 960px;  /* documentation only: media queries cannot read it */

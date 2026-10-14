@@ -12,7 +12,8 @@ const VIEWPORTS = [
 const PAGES = [
   { name: 'DT dashboard', path: '/reports/drive-test', ready: 'On air vs DT done', fits: true },
   // The Monthly Plan tabs: monthlyPlan.spec.js.
-  // The Health check, Drive test and All sites work pages: workPages.spec.js.
+  // The Health check, Drive test and Explorer list pages: workPages.spec.js.
+  // Explorer's site record page: explorer.spec.js.
   { name: 'Acceptance Fully accepted', path: '/reports/acceptance', ready: 'Fully accepted against plan', fits: true },
   { name: 'Acceptance ICT', path: '/reports/acceptance?tab=ict', ready: 'ICT approvals against plan', fits: true },
   { name: 'Acceptance CRA', path: '/reports/acceptance?tab=cra', ready: 'CRA approvals against plan', fits: true },

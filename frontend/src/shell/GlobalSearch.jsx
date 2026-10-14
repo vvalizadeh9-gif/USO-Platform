@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import api from '../api/client'
 import Icon from '../components/Icon'
 import { roleLabel } from '../lib/roles'
+import { EXPLORER_PATH, explorerListPath, siteRecordPath } from '../lib/explorerLinks'
 import { appState } from './appRegistry'
 
 /** "⌘ K" on Apple keyboards, "Ctrl K" elsewhere. */
@@ -51,7 +52,7 @@ export function resultGroups(pages, data) {
           key: `site:${s.id}`,
           label: s.site_code,
           meta: [s.province, s.stage].filter(Boolean).join(' · '),
-          to: `/work-items/${s.id}`,
+          to: siteRecordPath(s.id),
         })),
       },
       {
@@ -61,7 +62,7 @@ export function resultGroups(pages, data) {
           key: `village:${v.work_item_id}:${v.village_code ?? i}`,
           label: v.village_name || v.village_code,
           meta: `Site ${v.site_code}`,
-          to: `/work-items/${v.work_item_id}`,
+          to: siteRecordPath(v.work_item_id, v.village_code),
         })),
       },
       {
@@ -71,7 +72,7 @@ export function resultGroups(pages, data) {
           key: `province:${p.id}`,
           label: p.name,
           meta: 'All sites in this province',
-          to: `/work-items?province_id=${p.id}`,
+          to: explorerListPath({ province_id: p.id }),
         })),
       },
       {
@@ -81,7 +82,7 @@ export function resultGroups(pages, data) {
           key: `contractor:${c.id}`,
           label: c.name,
           meta: 'All sites for this contractor',
-          to: `/work-items?contractor_id=${c.id}`,
+          to: explorerListPath({ contractor_id: c.id }),
         })),
       },
       {
@@ -146,14 +147,14 @@ export default function GlobalSearch({ apps }) {
     }
   }, [term])
 
-  const canListSites = apps.some((a) => a.pages.some((p) => p.route === '/work-items'))
+  const canListSites = apps.some((a) => a.pages.some((p) => p.route === EXPLORER_PATH))
   const groups = useMemo(() => {
     const found = resultGroups(matchPages(apps, term), remote.term === term ? remote.data : null)
     if (canListSites && term.length >= MIN_QUERY) {
       found.push({
         id: 'all',
         label: null,
-        items: [{ key: 'all-sites', label: `Search all sites for “${term}”`, to: `/work-items?q=${encodeURIComponent(term)}`, icon: 'search' }],
+        items: [{ key: 'all-sites', label: `Search all sites for “${term}”`, to: explorerListPath({ q: term }), icon: 'search' }],
       })
     }
     return found

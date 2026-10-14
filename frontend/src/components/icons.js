@@ -2,6 +2,22 @@
 // icon is fetched at run time. No other pack is mixed in on UEP-foundation
 // pages. Each icon has Carbon's 16px glyph and its 20px glyph; the Icon
 // component picks the one drawn for the size asked for.
+import car16 from '@carbon/icons/es/car/16.js'
+import car20 from '@carbon/icons/es/car/20.js'
+import portfolio16 from '@carbon/icons/es/portfolio/16.js'
+import portfolio20 from '@carbon/icons/es/portfolio/20.js'
+import connectionSignal16 from '@carbon/icons/es/connection-signal/16.js'
+import connectionSignal20 from '@carbon/icons/es/connection-signal/20.js'
+import building16 from '@carbon/icons/es/building/16.js'
+import building20 from '@carbon/icons/es/building/20.js'
+import taskComplete16 from '@carbon/icons/es/task--complete/16.js'
+import taskComplete20 from '@carbon/icons/es/task--complete/20.js'
+import hourglass16 from '@carbon/icons/es/hourglass/16.js'
+import hourglass20 from '@carbon/icons/es/hourglass/20.js'
+import meter16 from '@carbon/icons/es/meter/16.js'
+import meter20 from '@carbon/icons/es/meter/20.js'
+import pending16 from '@carbon/icons/es/pending/16.js'
+import pending20 from '@carbon/icons/es/pending/20.js'
 import close16 from '@carbon/icons/es/close/16.js'
 import close20 from '@carbon/icons/es/close/20.js'
 import download16 from '@carbon/icons/es/download/16.js'
@@ -133,6 +149,15 @@ export const ICONS = Object.freeze({
   location: { 16: location16, 20: location20 },
   'user--multiple': { 16: userMultiple16, 20: userMultiple20 },
   'chevron--left': { 16: chevronLeft16, 20: chevronLeft20 },
+  // Explorer's record page (UEP-11).
+  'car': { 16: car16, 20: car20 },
+  'portfolio': { 16: portfolio16, 20: portfolio20 },
+  'connection-signal': { 16: connectionSignal16, 20: connectionSignal20 },
+  'building': { 16: building16, 20: building20 },
+  'task--complete': { 16: taskComplete16, 20: taskComplete20 },
+  'hourglass': { 16: hourglass16, 20: hourglass20 },
+  'meter': { 16: meter16, 20: meter20 },
+  'pending': { 16: pending16, 20: pending20 },
 })
 
 /** @typedef {keyof typeof ICONS} IconName */

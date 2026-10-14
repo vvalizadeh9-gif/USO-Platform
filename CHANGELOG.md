@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- **Drive test rail: Dashboard removed (still under Insights › Dashboards). All sites is now Explorer: a site record page with general information, the journey with aging between steps, and ICT/CRA acceptance per village; header search opens it directly (UEP-11).**
+  - Part A: the Drive test app opens on its first queue for the role (staff: HC check; contractor: HC check; category owners: Fix queue). `/reports/drive-test` and every link to it still work; the Acceptance app keeps its own Dashboard.
+  - Routes: `/explorer` (the list), `/explorer/sites/:workItemId` and `?village=V10232` to highlight a village. `/work-items` redirects to `/explorer` keeping its query; `/work-items/:id` to `/explorer/sites/:id`. Header search opens a site's record, a village result opens its site with the village highlighted, and "Search all sites for …" opens `/explorer?q=…`. The DT dashboard's site list and My Work's village record link to the record page.
+  - List: titled Explorer, search also matches village ID (and village name, as before), a Villages column, and a row opens the record when the stage is not one sites are selected on.
+  - Record page: General information (seven rows with colour icon tiles), the step path in process order (On air → Health check → Assigned → DT done → Acceptance) with an aging pill between steps, four compact aging tiles, and Acceptance by village (two panels up to six villages, one table with a scrolling body above). Every date on Explorer is Gregorian, "6 Oct 2026" (`lib/dates.formatGregorian`).
+  - The old detail page's forms (assign, submit DT, return to coordinator, DT review) are kept, unchanged, in a **Take action** drawer shown only when the user has one of them. Assignment is now offered only on sites awaiting it (Ready for assignment, Returned by contractor), as on the list; the server refused it everywhere else.
+  - API: new read-only `GET /explorer/sites/{work_item_id}` (`api/explorer.py`, `services/explorer.py`, `services/explorer_journey.py`), a fixed number of queries per request. `GET /work-items?q=` also matches village codes and ignores removed villages. `GET /work-items/{id}` is unchanged.
+  - Database: `work_items.site_contractor_id` (nullable FK to `contractors`, indexed), filled by the CPM import from column 31 on every import with the DT contractor's name matching. Raw rows of earlier imports are not kept, so it fills on the next import.
+  - My Work reads `?q=` from its address (Explorer's "Open in My Work" and "File letter").
+  - Removed: `pages/WorkItemDetail.jsx`, `pages/WorkItems.jsx` (now `pages/explorer/ExplorerList.jsx`), the unused `queueLink` and the `.detail-grid` / `.detail-rail` / `.rail-row` CSS. New tokens: `--uep-field-*` and the `--uep-explorer-*` sizes and motion values. New Carbon icons: `car`, `portfolio`, `connection-signal`, `building`, `task--complete`, `hourglass`, `meter`, `pending`.
+
 - **Acceptance dashboard: moved into the Acceptance app, DT dashboard look, one Shamsi year per chart with planned months, PIP card replaces the rings (UEP-07).**
   - Fixes the blank screen on `/reports/acceptance`: the view model had moved to the new shapes while the page still read the old ones, so the first render threw.
   - API: `GET /acceptance/progress` gains `year` (that year's twelve months; future months carry plans, `approved: null` and `is_future: true`) and `years` for the dropdown. Without `year` the response is unchanged.

@@ -124,11 +124,14 @@ def _seed_site_with_open_fix(category_name):
 
     Returns ``(work_item_id, category_id)``. Built through the ORM so the
     foreign keys and defaults come from the models rather than from hand-
-    written SQL that has to be kept in step with them.
+    written SQL that has to be kept in step with them -- except the work item.
+    This runs against the schema as it stood at :data:`PREVIOUS`, and today's
+    ``WorkItem`` names columns added after it (``site_contractor_id``), so that
+    one row is written with only the columns every revision has.
     """
     from app.models.health_check import HcAssignment, HcRemediation, HcTask
     from app.models.reference import Contractor, ProblemCategory
-    from app.models.workitem import Site, WorkItem
+    from app.models.workitem import Site
 
     db = SessionLocal()
     try:
@@ -147,9 +150,13 @@ def _seed_site_with_open_fix(category_name):
         site = Site(site_code=f"TAXO-{category.id:04d}")
         db.add(site)
         db.flush()
-        wi = WorkItem(site_id=site.id, site_type="Greenfield")
-        db.add(wi)
-        db.flush()
+        wi_id = db.execute(
+            text(
+                "INSERT INTO work_items (site_id, site_type, current_stage) "
+                "VALUES (:site, 'Greenfield', 'New')"
+            ),
+            {"site": site.id},
+        ).lastrowid
 
         now = datetime.now(timezone.utc)
         assignment = HcAssignment(
@@ -159,20 +166,20 @@ def _seed_site_with_open_fix(category_name):
         db.add(assignment)
         db.flush()
         task = HcTask(
-            hc_assignment_id=assignment.id, work_item_id=wi.id, round_no=1,
+            hc_assignment_id=assignment.id, work_item_id=wi_id, round_no=1,
             overall_result="NotReady", problem_category=category_name,
             completed_at=now,
         )
         db.add(task)
         db.flush()
         db.add(HcRemediation(
-            hc_task_id=task.id, work_item_id=wi.id,
+            hc_task_id=task.id, work_item_id=wi_id,
             problem_category_id=category.id,
             owner_role_id=category.owner_role_id,
             status=HcRemediation.STATUS_OPEN, opened_at=now,
         ))
         db.commit()
-        return wi.id, category.id
+        return wi_id, category.id
     finally:
         db.close()
 

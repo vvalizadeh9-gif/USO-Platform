@@ -36,7 +36,8 @@ export function useMyWork() {
   const urlTab = params.get('tab')
 
   const [sort, setSort] = useState(SORTS[0].key)
-  const [query, setQuery] = useState('')
+  // Explorer's "Open in My Work" arrives with ?q= (the site ID).
+  const [query, setQuery] = useState(() => params.get('q') || '')
   const settledQuery = useDebounced(query, SEARCH_DELAY_MS)
   const codes = useMemo(() => pastedCodes(settledQuery), [settledQuery])
 

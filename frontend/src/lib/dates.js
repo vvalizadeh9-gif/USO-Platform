@@ -64,3 +64,15 @@ export function daysBetween(from, to) {
 }
 
 export { MONTHS }
+
+const GREGORIAN = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+
+/**
+ * "6 Oct 2026" from an ISO date: Explorer's one date format (UEP-11 §B8),
+ * Gregorian in English digits. Null for nothing or a date that does not exist,
+ * so the caller decides what an empty date reads as.
+ */
+export function formatGregorian(value) {
+  const d = fromIso(value)
+  return d ? GREGORIAN.format(d) : null
+}

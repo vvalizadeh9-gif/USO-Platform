@@ -81,10 +81,9 @@ export const APPS = Object.freeze([
     tint: '--uep-app-drive-test-tint',
     group: 'rollout',
     roles: [...DT_ROLES, ...CATEGORY_OWNER_ROLES],
+    // No Dashboard here (UEP-11): the Drive Test dashboard lives under
+    // Insights › Dashboards, so the app opens on its first queue.
     pages: [
-      // The dashboard leads the rail, set off from the queues by a divider,
-      // and carries no count: it is a view, not a pile of work.
-      { id: 'dashboard', label: 'Dashboard', route: '/reports/drive-test', roles: DT_ROLES, divider: true },
       { id: 'hc-check', label: 'HC check', route: '/my-health-check', roles: ['Contractor'], queues: ['hc_submit'] },
       // The pipeline's steps and side loops each light the rail item of the
       // part of the work they belong to; History lights none.
@@ -99,7 +98,8 @@ export const APPS = Object.freeze([
       },
       { id: 'dt-review', label: 'DT review', route: '/drive-test?tab=review', roles: STAFF, queues: ['dt_review'] },
       { id: 'in-progress', label: 'In progress', route: '/my-drive-tests', roles: ['Contractor'], queues: ['dt_todo', 'dt_redo'] },
-      { id: 'all-sites', label: 'All sites', route: '/work-items', roles: DT_ROLES },
+      // Every site in scope, and each site's record page under it.
+      { id: 'explorer', label: 'Explorer', route: '/explorer', roles: DT_ROLES },
       // A fix is health-check remediation, so it lives here. A category owner
       // sees this page and no other in the rail.
       { id: 'fixes', label: 'Fix queue', route: '/my-fix-queue', roles: CATEGORY_OWNER_ROLES, queues: ['hc_fixes'] },
@@ -115,8 +115,8 @@ export const APPS = Object.freeze([
     group: 'rollout',
     roles: ACCEPTANCE_ROLES,
     pages: [
-      // As in Drive test: the dashboard leads the rail behind a divider and
-      // carries no count. Insights → Acceptance dashboard opens the same page.
+      // The dashboard leads the rail behind a divider and carries no count.
+      // Insights → Acceptance dashboard opens the same page.
       { id: 'dashboard', label: 'Dashboard', route: '/reports/acceptance', divider: true },
       { id: 'filing', label: 'ICT and CRA filing', route: '/my-work', queues: ['ict_pending', 'cra_pending'] },
       { id: 'validation', label: 'Validation', route: '/my-work?tab=filled', roles: ['PM', 'Coordinator'], queues: ['ict_to_validate', 'cra_to_validate'] },

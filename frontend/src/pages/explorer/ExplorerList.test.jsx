@@ -1,8 +1,9 @@
-// All sites (UEP-06 §9): stage chips over one list, bulk assign on the
-// stages awaiting an assignment, the export and the pages.
+// Explorer's list (UEP-11 §B2, the All sites list of UEP-06 §9): stage chips
+// over one list, bulk assign on the stages awaiting an assignment, the export,
+// the pages, the Villages column and rows that open the site's record.
 import { act, fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const COUNTS = { All: 230, 'Ready for Assignment': 2, Assigned: 228 }
@@ -12,13 +13,13 @@ const site = (id, stage, over = {}) => ({
   contractor_name: null, ...over,
 })
 
-vi.mock('../api/client', () => ({ default: { get: vi.fn(), post: vi.fn() } }))
-vi.mock('../context/AuthContext', () => ({ useAuth: () => ({ user: { role: { name: 'PM' } } }) }))
-vi.mock('../shell/HomeData', () => ({ useHomeData: () => ({ data: null, error: null }) }))
+vi.mock('../../api/client', () => ({ default: { get: vi.fn(), post: vi.fn() } }))
+vi.mock('../../context/AuthContext', () => ({ useAuth: () => ({ user: { role: { name: 'PM' } } }) }))
+vi.mock('../../shell/HomeData', () => ({ useHomeData: () => ({ data: null, error: null }) }))
 
-const api = (await import('../api/client')).default
-const WorkItems = (await import('./WorkItems')).default
-const { ToastProvider } = await import('../context/ToastContext')
+const api = (await import('../../api/client')).default
+const ExplorerList = (await import('./ExplorerList')).default
+const { ToastProvider } = await import('../../context/ToastContext')
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -36,19 +37,30 @@ beforeEach(() => {
   })
 })
 
-async function draw(path = '/work-items') {
+function Where() {
+  const { pathname, search } = useLocation()
+  return <output data-testid="where">{pathname + search}</output>
+}
+
+async function draw(path = '/explorer') {
   render(
     <MemoryRouter initialEntries={[path]}>
-      <ToastProvider><WorkItems /></ToastProvider>
+      <ToastProvider>
+        <Routes>
+          <Route path="/explorer" element={<ExplorerList />} />
+          <Route path="*" element={null} />
+        </Routes>
+        <Where />
+      </ToastProvider>
     </MemoryRouter>,
   )
   await act(async () => {})
 }
 
-describe('All sites', () => {
+describe('Explorer list', () => {
   it('heads the page with every site in scope', async () => {
     await draw()
-    expect(screen.getByRole('heading', { level: 1, name: 'All sites' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { level: 1, name: 'Explorer' })).toBeInTheDocument()
     expect(screen.getByText('230 sites', { selector: '.uw-heading-meta b' })).toBeInTheDocument()
   })
 
@@ -75,14 +87,14 @@ describe('All sites', () => {
   it('shows the fixed columns and the Stage as dot and word', async () => {
     await draw()
     const heads = screen.getAllByRole('columnheader').map((h) => h.textContent)
-    expect(heads).toEqual(['Site ID', 'Province', 'Type', 'Requested tech', 'Stage', 'Contractor', 'On air'])
+    expect(heads).toEqual(['Site ID', 'Province', 'Type', 'Requested tech', 'Villages', 'Stage', 'Contractor', 'On air'])
     const first = screen.getByText('KRM-10').closest('tr')
     expect(within(first).getByText('Assigned').closest('.uw-stage')).toHaveClass('is-ongoing')
     expect(within(first).getByText('۱۴۰۵/۰۷/۰۱')).toHaveAttribute('lang', 'fa')
   })
 
   it('adds a stage’s own date columns', async () => {
-    await draw('/work-items?stage=Assigned')
+    await draw('/explorer?stage=Assigned')
     expect(screen.getAllByRole('columnheader').map((h) => h.textContent)).toEqual(
       expect.arrayContaining(['Assigned', 'Aging (days)', 'Assigned by']),
     )
@@ -99,7 +111,7 @@ describe('All sites', () => {
   it('bulk-assigns on Ready for assignment with the contractor cards', async () => {
     const user = userEvent.setup()
     api.post.mockResolvedValue({ data: { assigned: 2, batch_id: 8 } })
-    await draw('/work-items?stage=Ready%20for%20Assignment')
+    await draw('/explorer?stage=Ready%20for%20Assignment')
     await user.click(screen.getByRole('checkbox', { name: 'Select every site shown' }))
     const card = screen.getAllByRole('button').find((b) => b.classList.contains('uw-assign-card'))
     await user.click(card)
@@ -120,8 +132,41 @@ describe('All sites', () => {
     api.get.mockImplementation((url, config) =>
       url === '/work-items/export' ? Promise.resolve({ data: new Blob(['x']) }) : serve(url, config),
     )
-    await draw('/work-items?stage=Assigned')
+    await draw('/explorer?stage=Assigned')
     await user.click(screen.getByRole('button', { name: 'Export' }))
     expect(api.get).toHaveBeenCalledWith('/work-items/export', expect.objectContaining({ params: expect.objectContaining({ stage: 'Assigned' }) }))
+  })
+
+  it('counts each site’s villages', async () => {
+    const serve = api.get.getMockImplementation()
+    api.get.mockImplementation((url, config) =>
+      url === '/work-items' ? Promise.resolve({ data: [site(7, 'Assigned', { village_count: 6 })] }) : serve(url, config),
+    )
+    await draw()
+    const row = screen.getByText('KRM-7').closest('tr')
+    expect(within(row).getAllByRole('cell')[4]).toHaveTextContent('6')
+  })
+
+  it('opens the site record from the row and from the site ID', async () => {
+    const user = userEvent.setup()
+    await draw()
+    expect(screen.getByRole('link', { name: 'KRM-10' })).toHaveAttribute('href', '/explorer/sites/10')
+    await user.click(within(screen.getByText('KRM-11').closest('tr')).getByText('Greenfield'))
+    expect(screen.getByTestId('where')).toHaveTextContent('/explorer/sites/11')
+  })
+
+  it('searches by village ID as well', async () => {
+    const user = userEvent.setup()
+    await draw()
+    await user.type(screen.getByRole('searchbox', { name: /village ID/ }), 'V10232')
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 350))
+    })
+    expect(api.get).toHaveBeenCalledWith('/work-items', expect.objectContaining({ params: expect.objectContaining({ q: 'V10232' }) }))
+  })
+
+  it('opens with the search a link carried', async () => {
+    await draw('/explorer?q=W4318')
+    expect(screen.getByRole('searchbox', { name: /village ID/ })).toHaveValue('W4318')
   })
 })

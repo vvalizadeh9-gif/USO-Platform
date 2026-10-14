@@ -119,6 +119,17 @@ used up to 16px, its 20px glyph above.
 | Show / hide password | `view` / `view--off` |
 | New security question | `renew` |
 | Caps Lock warning | `warning--alt` |
+| On air / tower (Explorer) | `cell-tower` |
+| Drive test date, DT done step | `car` |
+| Site contractor | `tools` |
+| DT contractor | `portfolio` |
+| Requested technology, health check step | `connection-signal` |
+| Province | `location` |
+| Hadaf villages | `building` |
+| Assigned step | `task--complete` |
+| Acceptance step | `certificate--check` |
+| Aging: total, current step, longest, oldest pending | `time`, `hourglass`, `meter`, `pending` |
+| Status mark: approved, pending, rejected | `checkmark`, `time`, `close` |
 
 Add an icon by importing its two glyphs in `components/icons.js`.
 
@@ -263,7 +274,7 @@ The 360px right panel of DT review: the Site ID (18px/600) with type, province a
 
 ### RecentActions (History)
 
-`?tab=history` on either page (and `/work-items?view=history`): "Your recent actions. Each one can be undone for 2 minutes." Columns are Time · Action · Undo, with "{s} s left", then "Can no longer be undone" or "Undone". The server decides whether an undo is still allowed (same user, two minutes, nothing acted on since).
+`?tab=history` on either page (and `/explorer?view=history`): "Your recent actions. Each one can be undone for 2 minutes." Columns are Time · Action · Undo, with "{s} s left", then "Can no longer be undone" or "Undone". The server decides whether an undo is still allowed (same user, two minutes, nothing acted on since).
 
 ### States
 
@@ -271,6 +282,95 @@ The 360px right panel of DT review: the Site ID (18px/600) with type, province a
 - **Loading:** strip and row skeletons at their final size, never a spinner.
 - **Error:** "Couldn't load {step}." with Retry inside the card; the rest of the page still renders.
 - **Saving:** the pressed control is disabled with `aria-busy`.
+
+## Explorer: the record page (UEP-11)
+
+A site's record (`pages/explorer/`, `styles/explorer.css`) on Home's frame
+(`.uep-home`), Home's card and header (`.hw-card`, `.hw-head`), Home's colour
+tiles (`.uep-app-tile`) and the work pages' buttons (`.uw-btn`). It fills the
+height under the shell: no page scroll at 1440×900 up to six villages; at
+1366×768 only the village lists scroll. Every date on Explorer is Gregorian,
+"6 Oct 2026" (`lib/dates.formatGregorian`, `Intl` en-GB), an exception to the
+Shamsi rule that holds on Explorer only.
+
+**Colour roles.** Cobalt `--uep-accent` is the journey and primary actions;
+deep cobalt `--uep-brand-deep` is the ICT and CRA labels. Green, yellow and red
+are approved, pending and rejected, and nothing else. Everything else is grey.
+Every status has an icon and a word.
+
+### Header
+
+Breadcrumb "Explorer / {site ID}", then the site ID (24/600) and **one** badge
+for the current step ("Acceptance in progress" on `--uep-accent-tint`,
+"Acceptance done" on `--uep-status-success-soft`). Nothing under the title. On
+the right: Take action (secondary, only when the user has an action), Open in
+My Work (secondary) and File letter (primary, filing roles only).
+
+### General information list with colour icon tiles
+
+A fixed 360px card. Rows are 62px: a 36px rounded tile in the field's colour
+with a 20px white Carbon icon, the label (14px `--uep-text`) and the value
+right-aligned (14/600), with hairline `--uep-divider` rules. One token per tile:
+`--uep-field-on-air`, `-dt-date`, `-site-contractor`, `-dt-contractor`,
+`-technology`, `-province`, `-villages`; each holds at least 4.5:1 against the
+white icon. A missing value is "—" in `--uep-text-3`. Persian values are
+wrapped in `<bdi dir="rtl" lang="fa">` in Vazirmatn (`Fa`).
+
+### Compact aging tiles
+
+Four equal tiles in one row (1px border, radius 8, padding `7px 12px`): a 26px
+tinted icon tile, a 12px label, then the value (14/600) and a 12px muted
+context on one line. They stay smaller than the steps below. Oldest pending is
+the yellow one and is left out when nothing is pending. A value that cannot be
+computed is "—".
+
+### Step path with aging pills
+
+Five steps on one line, in the process's order (On air, Health check,
+Assigned, DT done, Acceptance), as an ordered list whose items are named
+"{Step}: {state}, {date}". Each step is a 48px circle with its icon, the name
+(15/600) and the date (13px). Done: filled cobalt and a solid cobalt line in.
+Current: white with a 2px cobalt ring, a dashed `--uep-explorer-step-dash` line
+in, and "In progress" in cobalt. Between two steps a pill shows the days from
+the previous one ("+7 d"; "+8 d so far" on the open step, cobalt tint). A gap
+the server cannot measure is "—", never negative; a step without a date reads
+"No date". No "Day N", no "N of 5" counter.
+
+### Acceptance: the two-panel / table switch at six rows
+
+Title "Acceptance by village" with an **All n / Open n** filter
+(`role="tablist"`, ←/→, Home/End) that cross-fades the rows (160ms). Rows are
+ordered once for both authorities: any rejection, then more pending sides, then
+the longest wait, fully approved last.
+
+- **Up to six villages:** ICT and CRA as two panels. A light grey head with the
+  deep-cobalt label (32px, 14/700 white) and three large counts (24/600 in the
+  status ink, the word under each; zero is grey). Rows: name (14/600) and ID
+  (12px muted), then the status cell. 62px rows up to three villages, 50px for
+  four to six.
+- **Above six:** one table. A sticky light-grey header row "Village | ICT + its
+  counts | CRA + its counts", 52px rows, and a thin visible scrollbar; only the
+  body scrolls, inside a focusable, labelled region.
+- `?village=` tints the row (`--uep-accent-tint`), scrolls it into view and
+  focuses it.
+
+### The fixed status column and the status mark
+
+The status cell is a fixed 250px, left-aligned, so the marks line up in one
+column. The mark is a 28px circle with a tinted fill and a coloured icon
+(approved: green tick; pending: amber clock; rejected: red cross), the word in
+the status ink (14/600) and a 12px muted line under it ("6 Oct 2026, took 4
+days", "Answer filed 7 Oct 2026, with coordinator", "Not filed yet"). A
+Re-filed or Returned chip sits beside a pending word. Data without dates shows
+the word only.
+
+### Motion and states
+
+The page fades in once (240ms); hover is 120ms; nothing else animates, and
+under reduced motion nothing does. Loading draws skeletons at their final size;
+an error reads "Couldn't load {section}." with Retry inside each card. "No
+hadaf villages on this site." and "Acceptance starts when the site is on air
+and drive-tested." stand in for the village block.
 
 ## Roles Performance: measure list and deviation bar (UEP-09)
 

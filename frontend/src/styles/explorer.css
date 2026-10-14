@@ -1,0 +1,348 @@
+/* ===================================================================
+   Explorer: the site record page (UEP-11 §B3–B5).
+   Built on Home's frame (.uep-home), its card and header (.hw-card,
+   .hw-head), its colour tiles (.uep-app-tile) and the work pages' buttons
+   (.uw-btn). Every value is a token from uep-tokens.css.
+   1440×900: no page scroll up to six villages. 1366×768: only the village
+   lists scroll.
+   =================================================================== */
+
+/* ---- Frame ---- */
+.ex-page {
+  /* One fade, shorter than Home's entry, and no movement. */
+  animation: ex-enter var(--uep-dur-explorer-enter) var(--uep-ease-entrance) both;
+}
+@keyframes ex-enter {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.ex-missing { color: var(--uep-text-3); }
+.ex-missing-card { padding: var(--uep-space-24); color: var(--uep-text-2); }
+
+/* ---- Breadcrumb and header row ---- */
+.ex-crumbs ol { display: flex; gap: var(--uep-space-8); margin: 0; padding: 0; list-style: none; font-size: var(--uep-fs-small); color: var(--uep-text-3); }
+.ex-crumbs li + li::before { content: '/'; margin-right: var(--uep-space-8); color: var(--uep-text-3); }
+.ex-crumbs a { color: var(--uep-accent); text-decoration: none; }
+.ex-crumbs a:hover { text-decoration: underline; }
+.ex-crumbs [aria-current='page'] { color: var(--uep-text-2); }
+
+.ex-header { display: flex; align-items: center; flex-wrap: wrap; gap: var(--uep-space-12); }
+.ex-header h1 {
+  margin: 0;
+  font-size: var(--uep-fs-page-title);
+  font-weight: var(--uep-weight-semibold);
+  letter-spacing: var(--uep-tracking-heading);
+}
+.ex-header-spacer { flex: 1; }
+.ex-header .uw-btn { text-decoration: none; }
+.ex-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--uep-space-4);
+  height: var(--uep-control-sm);
+  padding: 0 var(--uep-space-12);
+  border-radius: var(--uep-radius-pill);
+  font-size: var(--uep-fs-small);
+  font-weight: var(--uep-weight-medium);
+}
+.ex-badge.is-progress { background: var(--uep-accent-tint); color: var(--uep-accent); }
+.ex-badge.is-done { background: var(--uep-status-success-soft); color: var(--uep-status-success-ink); }
+
+/* ---- The two cards. Each ends where its content ends. ---- */
+.ex-cards {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--uep-space-16);
+}
+.ex-card { display: flex; flex-direction: column; max-height: 100%; min-height: 0; }
+.ex-card.hw-card:hover { box-shadow: none; }
+.ex-card-title { flex: 1; margin: 0; font-size: var(--uep-fs-card-title); font-weight: var(--uep-weight-semibold); }
+
+/* ---- General information ---- */
+.ex-info { flex: 0 0 var(--uep-explorer-info-width); }
+.ex-fields { margin: 0; padding: 0 var(--uep-space-16); overflow: auto; }
+.ex-field {
+  display: flex;
+  align-items: center;
+  gap: var(--uep-space-12);
+  min-height: var(--uep-explorer-field-row);
+  border-bottom: var(--uep-border-width) solid var(--uep-divider);
+}
+.ex-field:last-child { border-bottom: 0; }
+.ex-field dt { flex: 1; font-size: var(--uep-fs-body); color: var(--uep-text); }
+.ex-field dd { margin: 0; text-align: right; font-size: var(--uep-fs-body); font-weight: var(--uep-weight-semibold); }
+.ex-field .uw-chips { justify-content: flex-end; }
+.ex-skel-value { width: 88px; height: 14px; }
+
+/* ---- Journey ---- */
+.ex-journey { flex: 1 1 0; min-width: 0; }
+.ex-journey-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--uep-space-16);
+  padding: var(--uep-space-16);
+}
+
+/* Aging: four equal compact tiles, smaller than the steps below them. */
+.ex-aging { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--uep-space-12); margin: 0; padding: 0; list-style: none; }
+.ex-aging-tile {
+  display: flex;
+  align-items: center;
+  gap: var(--uep-space-8);
+  padding: 7px var(--uep-space-12);
+  border: var(--uep-border-width) solid var(--uep-border);
+  border-radius: var(--uep-radius-tile);
+  min-width: 0;
+}
+.ex-aging-icon {
+  flex: 0 0 auto;
+  width: var(--uep-explorer-aging-icon);
+  height: var(--uep-explorer-aging-icon);
+  display: grid;
+  place-items: center;
+  border-radius: var(--uep-radius-control);
+  background: var(--uep-accent-tint);
+  color: var(--uep-accent);
+}
+.ex-aging-tile.is-pending .ex-aging-icon { background: var(--uep-status-pending-soft); color: var(--uep-status-pending-ink); }
+.ex-aging-text { display: flex; flex-direction: column; min-width: 0; }
+.ex-aging-label { font-size: var(--uep-fs-caption); color: var(--uep-text-3); }
+.ex-aging-line { display: flex; align-items: baseline; gap: var(--uep-space-4); white-space: nowrap; overflow: hidden; }
+.ex-aging-value { font-size: var(--uep-fs-body); font-weight: var(--uep-weight-semibold); }
+.ex-aging-context { font-size: var(--uep-fs-caption); color: var(--uep-text-3); overflow: hidden; text-overflow: ellipsis; }
+.ex-skel-tile { height: 48px; }
+
+/* The step path: five steps on one line, a pill on the line between two. */
+.ex-steps { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); margin: 0; padding: 0; list-style: none; }
+.ex-step {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--uep-space-4);
+  text-align: center;
+}
+/* The line from the previous step's centre to this one's. */
+.ex-step + .ex-step::before {
+  content: '';
+  position: absolute;
+  top: calc(var(--uep-explorer-step-circle) / 2 - var(--uep-explorer-step-line) / 2);
+  right: 50%;
+  width: 100%;
+  border-top: var(--uep-explorer-step-line) solid var(--uep-border-strong);
+}
+.ex-step.is-done::before { border-top-color: var(--uep-accent); }
+.ex-step.is-in_progress::before { border-top-style: dashed; border-top-color: var(--uep-explorer-step-dash); }
+.ex-step-circle {
+  position: relative;
+  z-index: 1;
+  width: var(--uep-explorer-step-circle);
+  height: var(--uep-explorer-step-circle);
+  display: grid;
+  place-items: center;
+  border-radius: var(--uep-radius-pill);
+  border: var(--uep-explorer-step-line) solid var(--uep-border-strong);
+  background: var(--uep-surface);
+  color: var(--uep-text-3);
+}
+.ex-step.is-done .ex-step-circle { background: var(--uep-accent); border-color: var(--uep-accent); color: var(--uep-on-accent); }
+.ex-step.is-in_progress .ex-step-circle { border-color: var(--uep-accent); color: var(--uep-accent); }
+.ex-step-badge {
+  position: absolute;
+  right: -2px;
+  bottom: -2px;
+  width: 18px;
+  height: 18px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--uep-radius-pill);
+  border: var(--uep-border-width) solid var(--uep-surface);
+  background: var(--uep-surface);
+  color: var(--uep-accent);
+}
+.ex-step.is-done .ex-step-badge { background: var(--uep-surface); color: var(--uep-accent); }
+.ex-step-name { font-size: var(--uep-fs-15); font-weight: var(--uep-weight-semibold); }
+.ex-step.is-upcoming .ex-step-name { color: var(--uep-text-3); }
+.ex-step-date { font-size: var(--uep-fs-small); color: var(--uep-text-2); }
+.ex-step-date.is-muted, .ex-step.is-upcoming .ex-step-date { color: var(--uep-text-3); }
+.ex-step.is-in_progress .ex-step-date { color: var(--uep-accent); font-weight: var(--uep-weight-medium); }
+.ex-step-pill {
+  position: absolute;
+  z-index: 2;
+  top: calc(var(--uep-explorer-step-circle) / 2);
+  left: 0;
+  transform: translate(-50%, -50%);
+  padding: 1px var(--uep-space-8);
+  border: var(--uep-border-width) solid var(--uep-border);
+  border-radius: var(--uep-radius-pill);
+  background: var(--uep-surface);
+  font-size: var(--uep-fs-caption);
+  color: var(--uep-text-2);
+  white-space: nowrap;
+}
+.ex-step-pill.is-open { border-color: var(--uep-accent-on-tint); background: var(--uep-accent-tint); color: var(--uep-accent); }
+.ex-skel-step { height: 96px; margin: 0 var(--uep-space-8); }
+
+/* ---- Acceptance by village ---- */
+.ex-acceptance { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: var(--uep-space-12); }
+.ex-section-head { display: flex; align-items: center; gap: var(--uep-space-12); }
+.ex-section-head h3 { flex: 1; margin: 0; font-size: var(--uep-fs-15); font-weight: var(--uep-weight-semibold); }
+.ex-filter .ui-seg-option { height: var(--uep-control-sm); font-size: var(--uep-fs-small); }
+.ex-filter-n { font-variant-numeric: tabular-nums; }
+.ex-acceptance-body { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+.ex-empty { margin: 0; padding: var(--uep-space-16); font-size: var(--uep-fs-body); color: var(--uep-text-2); }
+.ex-skel-block { height: 220px; }
+
+/* Cross-fade when All / Open changes the rows. */
+.ex-fade { animation: ex-enter var(--uep-dur-explorer-filter) var(--uep-ease-productive) both; }
+
+/* ICT and CRA heads: the deep-cobalt label and three large counts. */
+.ex-authority-head { display: flex; align-items: center; gap: var(--uep-space-16); }
+.ex-authority {
+  display: inline-grid;
+  place-items: center;
+  height: var(--uep-explorer-authority-height);
+  padding: 0 var(--uep-space-12);
+  border-radius: var(--uep-radius-control);
+  background: var(--uep-brand-deep);
+  color: var(--uep-on-brand);
+  font-size: var(--uep-fs-body);
+  font-weight: var(--uep-weight-bold);
+}
+.ex-counts { display: flex; gap: var(--uep-space-16); margin: 0 0 0 auto; }
+.ex-count { display: flex; flex-direction: column-reverse; align-items: center; }
+.ex-count dt { font-size: var(--uep-fs-caption); font-weight: var(--uep-weight-regular); color: var(--uep-text-3); }
+.ex-count dd { margin: 0; font-size: var(--uep-fs-explorer-count); font-weight: var(--uep-weight-semibold); line-height: 1.2; }
+.ex-count.is-approved dd { color: var(--uep-status-success-ink); }
+.ex-count.is-pending dd { color: var(--uep-status-pending-ink); }
+.ex-count.is-rejected dd { color: var(--uep-status-danger-ink); }
+.ex-count.is-zero dd { color: var(--uep-text-3); }
+
+/* Up to six villages: two panels. */
+.ex-panels { flex: 1 1 auto; min-height: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--uep-space-16); }
+.ex-panels-empty { grid-column: 1 / -1; }
+.ex-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border: var(--uep-border-width) solid var(--uep-border);
+  border-radius: var(--uep-radius-tile);
+  overflow: hidden;
+}
+.ex-panel > .ex-authority-head { padding: var(--uep-space-8) var(--uep-space-12); background: var(--uep-page); border-bottom: var(--uep-border-width) solid var(--uep-border); }
+.ex-rows { position: relative; margin: 0; padding: 0; list-style: none; overflow: auto; min-height: 0; }
+.ex-row {
+  display: flex;
+  align-items: center;
+  gap: var(--uep-space-12);
+  padding: 0 var(--uep-space-12);
+  border-bottom: var(--uep-border-width) solid var(--uep-divider);
+  transition: background-color var(--uep-dur-explorer-hover) var(--uep-ease-productive);
+}
+.ex-row:last-child { border-bottom: 0; }
+.ex-row:hover { background: var(--uep-row-hover); }
+.is-roomy .ex-row { min-height: var(--uep-explorer-row-roomy); }
+.is-compact .ex-row { min-height: var(--uep-explorer-row-compact); }
+.ex-row.is-highlight, .ex-table tr.is-highlight { background: var(--uep-accent-tint); }
+
+.ex-village { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.ex-village-name { font-size: var(--uep-fs-body); font-weight: var(--uep-weight-semibold); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ex-village-id { font-size: var(--uep-fs-caption); color: var(--uep-text-3); font-variant-numeric: tabular-nums; }
+
+/* The status mark: a fixed-width cell so the icons line up in one column. */
+.ex-mark { flex: 0 0 var(--uep-explorer-status-cell); width: var(--uep-explorer-status-cell); display: flex; align-items: center; gap: var(--uep-space-8); text-align: left; }
+.ex-mark-circle {
+  flex: 0 0 auto;
+  width: var(--uep-explorer-mark);
+  height: var(--uep-explorer-mark);
+  display: grid;
+  place-items: center;
+  border-radius: var(--uep-radius-pill);
+}
+.ex-mark.is-approved .ex-mark-circle { background: var(--uep-status-success-soft); color: var(--uep-status-success-ink); }
+.ex-mark.is-pending .ex-mark-circle { background: var(--uep-status-pending-soft); color: var(--uep-status-pending-ink); }
+.ex-mark.is-rejected .ex-mark-circle { background: var(--uep-status-danger-soft); color: var(--uep-status-danger-ink); }
+.ex-mark-text { display: flex; flex-direction: column; min-width: 0; }
+.ex-mark-word { display: flex; align-items: center; gap: var(--uep-space-8); font-size: var(--uep-fs-body); font-weight: var(--uep-weight-semibold); }
+.ex-mark.is-approved .ex-mark-word { color: var(--uep-status-success-ink); }
+.ex-mark.is-pending .ex-mark-word { color: var(--uep-status-pending-ink); }
+.ex-mark.is-rejected .ex-mark-word { color: var(--uep-status-danger-ink); }
+.ex-mark-chip {
+  padding: 0 6px;
+  border: var(--uep-border-width) solid var(--uep-border);
+  border-radius: var(--uep-radius-pill);
+  font-size: var(--uep-fs-caption);
+  font-weight: var(--uep-weight-medium);
+  color: var(--uep-text-2);
+}
+.ex-mark-line { font-size: var(--uep-fs-caption); color: var(--uep-text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* Above six villages: one table; only its body scrolls, under a fixed head. */
+.ex-acceptance.is-table { flex: 1 1 auto; }
+.ex-table-scroll {
+  /* Positioned, so the screen-reader-only labels inside rows that are
+     scrolled out of view stay in here rather than lengthening the page. */
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  border: var(--uep-border-width) solid var(--uep-border);
+  border-radius: var(--uep-radius-tile);
+  scrollbar-width: thin;
+  scrollbar-color: var(--uep-border-strong) transparent;
+}
+.ex-table-scroll::-webkit-scrollbar { width: var(--uep-explorer-scrollbar); }
+.ex-table-scroll::-webkit-scrollbar-thumb { background: var(--uep-border-strong); border-radius: var(--uep-radius-pill); }
+.ex-table { width: 100%; border-collapse: separate; border-spacing: 0; table-layout: fixed; }
+.ex-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: var(--uep-space-8) var(--uep-space-12);
+  background: var(--uep-page);
+  border-bottom: var(--uep-border-width) solid var(--uep-border);
+  text-align: left;
+  text-transform: none;
+  letter-spacing: normal;
+  font-size: var(--uep-fs-small);
+  font-weight: var(--uep-weight-semibold);
+  color: var(--uep-text);
+}
+.ex-table .ex-table-village { width: 22%; }
+/* Three counts beside the label must fit one status column. */
+.ex-table .ex-authority-head, .ex-table .ex-counts { gap: var(--uep-space-12); }
+.ex-table tbody th, .ex-table tbody td {
+  height: var(--uep-explorer-table-row);
+  padding: 0 var(--uep-space-12);
+  border-bottom: var(--uep-border-width) solid var(--uep-divider);
+  text-align: left;
+  font-weight: var(--uep-weight-regular);
+  transition: background-color var(--uep-dur-explorer-hover) var(--uep-ease-productive);
+}
+.ex-table tbody tr:hover { background: var(--uep-row-hover); }
+.ex-table tbody tr:last-child > * { border-bottom: 0; }
+
+/* The table layout needs the Journey card to reach the bottom. */
+.ex-journey:has(.ex-acceptance.is-table) { align-self: stretch; }
+
+/* ---- Take action drawer ---- */
+.ex-drawer-forms { display: grid; gap: var(--uep-space-16); }
+
+/* ---- 1366×768: tighter; only the village lists scroll ---- */
+@media (max-height: 820px) {
+  .ex-journey-body { gap: var(--uep-space-12); padding: var(--uep-space-12); }
+  .ex-field { min-height: 52px; }
+}
+
+/* ---- Reduced motion: nothing animates ---- */
+@media (prefers-reduced-motion: reduce) {
+  .ex-page, .ex-fade { animation: none; }
+  .ex-page *, .ex-page *::before, .ex-page *::after { transition: none !important; }
+}
+html[data-uep-motion='reduce'] .ex-page,
+html[data-uep-motion='reduce'] .ex-fade { animation: none; }
+html[data-uep-motion='reduce'] .ex-page * { transition: none !important; }
