@@ -5,7 +5,7 @@ import { act, fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import css from '../../styles/explorer.css?raw'
+import { readFileSync } from 'node:fs'
 import { FILTER_OPTIONS, siteVillages, sitesPage } from './fixtures'
 
 vi.mock('../../api/client', () => ({ default: { get: vi.fn(), post: vi.fn() } }))
@@ -25,6 +25,9 @@ class FakeObserver {
   disconnect() { observed = observed.filter((o) => o !== this) }
 }
 const reachEnd = () => act(async () => observed.forEach((o) => o.callback([{ isIntersecting: true }])))
+
+// Vitest runs from frontend/ and serves CSS imports empty, so read the file.
+const css = readFileSync('src/styles/explorer.css', 'utf8')
 
 const listCalls = () => api.get.mock.calls.filter(([url]) => url === '/explorer/sites')
 
@@ -149,9 +152,10 @@ describe('Explorer list: filters and search', () => {
 
     // The active value chosen again removes the filter.
     await userEvent.click(screen.getByRole('button', { name: 'Filter' }))
-    await userEvent.click(screen.getByRole('button', { name: 'Province' }))
-    expect(screen.getByRole('button', { name: 'تهران' })).toHaveAttribute('aria-pressed', 'true')
-    await userEvent.click(screen.getByRole('button', { name: 'تهران' }))
+    const again = screen.getByRole('dialog', { name: 'Filter by' })
+    await userEvent.click(within(again).getByRole('button', { name: 'Province' }))
+    expect(within(again).getByRole('button', { name: 'تهران' })).toHaveAttribute('aria-pressed', 'true')
+    await userEvent.click(within(again).getByRole('button', { name: 'تهران' }))
     expect(where()).toBe('/explorer')
   })
 
