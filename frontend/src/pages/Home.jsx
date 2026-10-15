@@ -13,7 +13,9 @@ import '../styles/home.css'
 /**
  * UEP Home (UEP-02 §3): greeting, four KPIs, "Your work" cards and the Apps
  * panel, from one GET /me/home that the whole shell shares. Fits 1440×900
- * without page scrolling. See docs/design/uep-home.md.
+ * without page scrolling. The greeting spans the page; under it the Apps
+ * panel shares the KPI strip's top edge and the work cards' bottom edge
+ * (UEP-12). See docs/design/uep-home.md.
  */
 
 function Retry({ what, onRetry }) {
@@ -122,14 +124,14 @@ export default function Home() {
 
   return (
     <div className="uep-home">
-      <div className="h-columns">
+      <div className="h-layout">
+        <section className="h-greet">
+          <p className="h-date">{englishDate(now)}</p>
+          <h1>{greeting(now)}{firstName ? `, ${firstName}` : ''}</h1>
+        </section>
         <div className="h-main" aria-busy={!data && !error}>
-          <section className="h-greet">
-            <p className="h-date">{englishDate(now)}</p>
-            <h1>{greeting(now)}{firstName ? `, ${firstName}` : ''}</h1>
-          </section>
-          {kpis}
-          {work}
+          {kpis && <div className="h-kpis">{kpis}</div>}
+          <div className="h-work">{work}</div>
         </div>
         <AppsPanel roleName={roleName} counts={counts} />
       </div>

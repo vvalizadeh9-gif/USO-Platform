@@ -154,8 +154,7 @@
   --uep-header-height: 56px;
   --uep-header-control: 36px;
   --uep-logo-tile: 24px;
-  --uep-search-max: 520px;
-  --uep-search-height: 34px;
+  --uep-search-height: 34px;      /* the launcher's filter field */
   --uep-badge-size: 16px;
   --uep-avatar-size: 32px;
   --uep-launcher-width: 380px;
@@ -164,10 +163,42 @@
   --uep-backdrop: rgba(20, 23, 31, 0.16);
   --uep-dur-card-hover: 200ms;
 
+  /* ---- Component: header search (UEP-12) ----
+     A filled field that widens on focus; results that enter and leave.
+     Exits are faster than entrances and accelerate out. */
+  --uep-header-search-width: 480px;
+  --uep-header-search-width-open: 640px;
+  --uep-header-search-height: 36px;
+  --uep-search-fill: var(--uep-divider);
+  --uep-search-fill-hover: #E6E9EE;
+  --uep-search-radius: 8px;
+  --uep-search-kbd-radius: 5px;
+  --uep-search-tile: 28px;
+  --uep-search-tile-radius: 7px;
+  --uep-search-row: 42px;
+  --uep-search-footer: 36px;
+  --uep-search-gap: 6px;              /* field to panel */
+  --uep-search-rise: 4px;             /* rows and the Enter arrow */
+  --uep-search-hint-shift: 3px;       /* Ctrl K / Esc cross-fade */
+  --uep-search-panel-shift: -6px;
+  --uep-search-panel-scale: 0.985;
+  --uep-search-progress: 2px;
+  --uep-shadow-search: 0 16px 40px rgba(20, 23, 31, 0.12), 0 2px 6px rgba(20, 23, 31, 0.06);
+  --uep-surface-sunken: #FAFBFC;
+  --uep-search-tile-insights: var(--uep-cra-soft);  /* Insights' hue, softened */
+  --uep-dur-search-move: 240ms;       /* width change, panel enter */
+  --uep-dur-search-fade: 160ms;       /* colour changes, hint swap */
+  --uep-dur-search-exit: 120ms;       /* panel exit */
+  --uep-dur-search-hi: 120ms;         /* active-row highlight slide */
+  --uep-dur-search-panel-fade: 180ms;
+  --uep-dur-search-row: 220ms;
+  --uep-search-row-stagger: 14ms;     /* first 10 rows only */
+  --uep-dur-search-progress: 900ms;
+  --uep-ease-exit: cubic-bezier(0.3, 0, 1, 1);
+
   /* ---- Component: Home (UEP-02) ---- */
   --uep-home-max: 1280px;
-  --uep-home-apps-basis: 280px;
-  --uep-home-main-basis: 640px;
+  --uep-home-apps-width: 340px;   /* every app description fits on one line */
   --uep-home-card-min: 270px;
   --uep-spark-height: 28px;
   --uep-progress-height: 6px;

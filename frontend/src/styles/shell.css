@@ -91,22 +91,50 @@
 .uep-crumbs a:hover { color: var(--uep-accent); }
 .uep-crumbs [aria-current] { color: var(--uep-text); font-weight: var(--uep-weight-medium); }
 
-.uep-search {
+/* ---- Header search (UEP-12) ----
+   A filled field centred in the space between the logo and the avatar. It
+   widens while focused; its results panel enters and leaves. The --s-*
+   durations drop to 1ms under reduced motion (end of this file). */
+.uep-search-zone {
   flex: 1 1 auto;
-  max-width: var(--uep-search-max);
-  margin: 0 auto;
-  height: var(--uep-search-height);
+  min-width: 0;
+  display: flex;
+  justify-content: center;
+}
+.uep-search {
+  --s-move: var(--uep-dur-search-move);
+  --s-fade: var(--uep-dur-search-fade);
+  --s-exit: var(--uep-dur-search-exit);
+  --s-hi: var(--uep-dur-search-hi);
+  --s-panel-fade: var(--uep-dur-search-panel-fade);
+  --s-row: var(--uep-dur-search-row);
+  --s-stagger: var(--uep-search-row-stagger);
+  position: relative;
+  width: var(--uep-header-search-width);
+  max-width: 100%;
+  height: var(--uep-header-search-height);
   display: flex;
   align-items: center;
   gap: var(--uep-space-8);
   padding: 0 var(--uep-space-8) 0 var(--uep-space-12);
-  border: var(--uep-border-width) solid var(--uep-border);
-  border-radius: var(--uep-radius-control);
-  background: var(--uep-page);
+  border: var(--uep-border-width) solid transparent;
+  border-radius: var(--uep-search-radius);
+  background: var(--uep-search-fill);
   color: var(--uep-text-3);
+  transition: width var(--s-move) var(--uep-ease-standard),
+    background-color var(--s-fade) var(--uep-ease-productive),
+    border-color var(--s-fade) var(--uep-ease-productive),
+    box-shadow var(--s-move) var(--uep-ease-standard);
 }
-.uep-search { position: relative; }
-.uep-search:focus-within { border-color: var(--uep-accent); box-shadow: var(--uep-focus-ring); }
+.uep-search:hover { background: var(--uep-search-fill-hover); }
+.uep-search.is-open {
+  width: var(--uep-header-search-width-open);
+  background: var(--uep-surface);
+  border-color: var(--uep-accent);
+  box-shadow: var(--uep-focus-ring);
+}
+.uep-search-icon { flex: 0 0 auto; transition: color var(--s-fade) var(--uep-ease-productive); }
+.uep-search.is-open .uep-search-icon { color: var(--uep-accent); }
 .uep-search input {
   flex: 1;
   min-width: 0;
@@ -117,16 +145,32 @@
   color: var(--uep-text);
   outline: none;
 }
+/* The field's border and ring are the focus indicator. */
+.uep-search input:focus-visible { outline: none; }
 .uep-search input::placeholder { color: var(--uep-text-3); }
+.uep-search input::-webkit-search-cancel-button { display: none; }
 .uep-search kbd {
   font: inherit;
   font-size: var(--uep-fs-caption);
+  font-weight: var(--uep-weight-medium);
   padding: 0 var(--uep-space-4);
   border: var(--uep-border-width) solid var(--uep-border);
-  border-radius: var(--uep-space-4);
+  border-radius: var(--uep-search-kbd-radius);
   background: var(--uep-surface);
+  color: var(--uep-text-3);
   white-space: nowrap;
 }
+/* Ctrl K at rest, Esc while open: the outgoing hint moves up, the incoming
+   one comes from below. */
+.uep-search-kbd { display: grid; justify-items: end; }
+.uep-search-kbd kbd {
+  grid-area: 1 / 1;
+  transition: opacity var(--s-fade) var(--uep-ease-productive),
+    transform var(--s-fade) var(--uep-ease-productive);
+}
+.uep-search-kbd .is-esc { opacity: 0; transform: translateY(var(--uep-search-hint-shift)); }
+.uep-search.is-open .uep-search-kbd .is-rest { opacity: 0; transform: translateY(calc(-1 * var(--uep-search-hint-shift))); }
+.uep-search.is-open .uep-search-kbd .is-esc { opacity: 1; transform: none; }
 
 .uep-avatar {
   flex: 0 0 auto;
@@ -165,16 +209,80 @@
   from { opacity: 0; transform: scale(var(--uep-pop-scale)); }
   to { opacity: 1; transform: none; }
 }
-/* The search's results hang from the search field itself. */
-.uep-search-results {
-  top: calc(100% + var(--uep-space-4));
+/* The search's results hang 6px under the field, as wide as the open field.
+   The panel stays mounted: data-state drives it in and out (exits are
+   faster and accelerate), and it is inert while hidden. */
+.uep-search-panel {
+  position: absolute;
+  top: calc(100% + var(--uep-search-gap));
   left: 0;
   right: 0;
-  max-height: min(70vh, 520px);
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--uep-surface);
+  border: var(--uep-border-width) solid var(--uep-border);
+  border-radius: var(--uep-radius-card);
+  box-shadow: var(--uep-shadow-search);
+  color: var(--uep-text);
+  transform-origin: top center;
+  opacity: 0;
+  transform: translateY(var(--uep-search-panel-shift)) scale(var(--uep-search-panel-scale));
+  visibility: hidden;
+  transition: opacity var(--s-exit) var(--uep-ease-exit),
+    transform var(--s-exit) var(--uep-ease-exit),
+    visibility 0s linear var(--s-exit);
+}
+.uep-search-panel[data-state='showing'] {
+  opacity: 1;
+  transform: none;
+  visibility: visible;
+  transition: opacity var(--s-panel-fade) var(--uep-ease-standard),
+    transform var(--s-move) var(--uep-ease-standard),
+    visibility 0s;
+}
+/* Loading: a 2px cobalt line across the panel's top edge. */
+.uep-search-progress {
+  position: absolute;
+  inset: 0 0 auto;
+  z-index: 2;
+  height: var(--uep-search-progress);
+  overflow: hidden;
+  opacity: 0;
+  transition: opacity var(--s-fade) var(--uep-ease-productive);
+}
+.uep-search-progress[data-active='true'] { opacity: 1; }
+.uep-search-progress i {
+  display: block;
+  width: 40%;
+  height: 100%;
+  background: var(--uep-accent);
+  animation: uep-search-progress var(--uep-dur-search-progress) linear infinite;
+}
+@keyframes uep-search-progress {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(250%); }
+}
+.uep-search-results {
+  position: relative;
+  max-height: min(60vh, 460px);
   overflow-y: auto;
   padding: var(--uep-space-8);
-  transform-origin: top center;
-  color: var(--uep-text);
+}
+.uep-search-results:empty, .uep-search-results:has(> .uep-search-hi:only-child) { display: none; }
+/* One shared highlight behind the rows; GlobalSearch slides it. */
+.uep-search-hi {
+  position: absolute;
+  top: 0;
+  left: var(--uep-space-8);
+  right: var(--uep-space-8);
+  height: 0;
+  opacity: 0;
+  border-radius: var(--uep-radius-tile);
+  background: var(--uep-accent-tint);
+  transition: transform var(--s-hi) var(--uep-ease-standard),
+    height var(--s-hi) var(--uep-ease-standard);
 }
 .uep-search-group + .uep-search-group { margin-top: var(--uep-space-8); }
 .uep-search-group-label {
@@ -184,24 +292,91 @@
   color: var(--uep-text-3);
 }
 .uep-search-option {
+  position: relative;
   width: 100%;
+  min-height: var(--uep-search-row);
   display: flex;
   align-items: center;
   gap: var(--uep-space-8);
-  padding: var(--uep-space-8);
+  padding: var(--uep-space-4) var(--uep-space-8);
   border: 0;
-  border-radius: var(--uep-radius-control);
+  border-radius: var(--uep-radius-tile);
   background: transparent;
   color: var(--uep-text);
   font: inherit;
-  font-size: var(--uep-fs-small);
+  font-size: var(--uep-fs-body);
   text-align: left;
   cursor: pointer;
 }
-.uep-search-option.is-active { background: var(--uep-accent-tint); }
-.uep-search-option-label { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: var(--uep-weight-medium); }
-.uep-search-option-meta { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: right; color: var(--uep-text-3); font-size: var(--uep-fs-caption); }
-.uep-search-status { padding: var(--uep-space-8); font-size: var(--uep-fs-small); color: var(--uep-text-3); }
+.uep-shell .uep-search-option:active { transform: none; }
+.uep-search-tile {
+  flex: 0 0 auto;
+  width: var(--uep-search-tile);
+  height: var(--uep-search-tile);
+  display: grid;
+  place-items: center;
+  margin-right: var(--uep-space-4);
+  border-radius: var(--uep-search-tile-radius);
+  background: var(--uep-page);
+  color: var(--uep-text-2);
+}
+.uep-search-tile[data-tone='drive-test'] { background: var(--uep-app-drive-test-tint); color: var(--uep-app-drive-test); }
+.uep-search-tile[data-tone='acceptance'] { background: var(--uep-app-acceptance-tint); color: var(--uep-app-acceptance); }
+.uep-search-tile[data-tone='insights'] { background: var(--uep-search-tile-insights); color: var(--uep-app-insights); }
+.uep-search-tile[data-tone='accent'] { background: var(--uep-accent-tint); color: var(--uep-accent); }
+.uep-search-option-label {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: var(--uep-weight-medium);
+}
+.uep-search-option-label b { font-weight: var(--uep-weight-semibold); color: var(--uep-accent); }
+.uep-search-option-meta {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--uep-text-3);
+  font-size: var(--uep-fs-caption);
+}
+.uep-search-fa { font-family: var(--uep-font-persian); }
+.uep-search-enter {
+  flex: 0 0 auto;
+  margin-left: auto;
+  color: var(--uep-accent);
+  opacity: 0;
+  transform: translateX(calc(-1 * var(--uep-search-rise)));
+  transition: opacity var(--s-fade) var(--uep-ease-productive),
+    transform var(--s-fade) var(--uep-ease-productive);
+}
+.uep-search-option.is-active .uep-search-enter { opacity: 1; transform: none; }
+/* Rows rise in when the panel opens or a group first appears. */
+.uep-search-panel .is-rising {
+  animation: uep-search-rise var(--s-row) var(--uep-ease-standard) both;
+  animation-delay: calc(var(--rise, 0) * var(--s-stagger));
+}
+@keyframes uep-search-rise {
+  from { opacity: 0; transform: translateY(var(--uep-search-rise)); }
+  to { opacity: 1; transform: none; }
+}
+.uep-search-status { padding: var(--uep-space-16); text-align: center; font-size: var(--uep-fs-small); color: var(--uep-text-3); }
+.uep-search-status.is-quiet { padding: 0; }
+.uep-search-foot {
+  flex: 0 0 var(--uep-search-footer);
+  display: flex;
+  align-items: center;
+  gap: var(--uep-space-16);
+  padding: 0 var(--uep-space-16);
+  border-top: var(--uep-border-width) solid var(--uep-divider);
+  background: var(--uep-surface-sunken);
+  font-size: var(--uep-fs-caption);
+  color: var(--uep-text-3);
+}
+.uep-search-foot span { display: inline-flex; align-items: center; gap: var(--uep-space-4); }
+.uep-search-foot kbd { padding: 0 var(--uep-space-4); }
 
 .uep-launcher { left: var(--uep-space-12); width: var(--uep-launcher-width); transform-origin: top left; }
 .uep-account { right: var(--uep-space-12); width: var(--uep-account-width); transform-origin: top right; padding: var(--uep-space-8); }
@@ -332,15 +507,25 @@
 @media (max-width: 720px) {
   .uep-shell-body { flex-direction: column; }
   .uep-rail { width: auto; flex: 0 0 auto; border-right: 0; border-bottom: var(--uep-border-width) solid var(--uep-border); }
-  .uep-search kbd, .uep-crumbs { display: none; }
+  .uep-crumbs { display: none; }
   .uep-launcher { width: calc(100vw - 2 * var(--uep-space-12)); }
+}
+
+/* Below 760px the search drops its hint and opens to the whole zone. */
+@media (max-width: 760px) {
+  .uep-search-kbd { display: none; }
+  .uep-search.is-open { width: 100%; }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .uep-pop { animation: none; }
   .uep-shell :is(button, a):active { transform: none; }
+  .uep-search { --s-move: 1ms; --s-fade: 1ms; --s-exit: 1ms; --s-hi: 1ms; --s-panel-fade: 1ms; --s-row: 1ms; --s-stagger: 0ms; }
+  .uep-search-progress i { animation: none; }
 }
 html[data-uep-motion='reduce'] .uep-pop { animation: none; }
+html[data-uep-motion='reduce'] .uep-search { --s-move: 1ms; --s-fade: 1ms; --s-exit: 1ms; --s-hi: 1ms; --s-panel-fade: 1ms; --s-row: 1ms; --s-stagger: 0ms; }
+html[data-uep-motion='reduce'] .uep-search-progress i { animation: none; }
 
 /* A page set apart from the queues below it (Drive test → Dashboard). */
 .uep-rail-item.has-divider { position: relative; margin-bottom: 9px; }

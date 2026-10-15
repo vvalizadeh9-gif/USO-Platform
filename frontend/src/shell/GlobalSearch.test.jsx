@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import api from '../api/client'
 import { appsFor } from './appRegistry'
 import GlobalSearch, { matchPages, resultGroups } from './GlobalSearch'
+import { GROUP_LOOK } from './searchLook'
 
 vi.mock('../api/client', () => ({ default: { get: vi.fn() } }))
 
@@ -139,5 +140,110 @@ describe('GlobalSearch', () => {
     })
 
     expect(screen.getByRole('status')).toHaveTextContent('Nothing matches “zz9”.')
+  })
+
+  it('Escape clears the text first, then leaves the field', () => {
+    renderSearch()
+    const input = screen.getByRole('combobox')
+    input.focus()
+    fireEvent.change(input, { target: { value: 'h' } })
+    expect(input).toHaveAttribute('aria-expanded', 'true')
+
+    fireEvent.keyDown(input, { key: 'Escape' })
+    expect(input).toHaveValue('')
+    expect(input).toHaveFocus()
+    expect(input).toHaveAttribute('aria-expanded', 'false')
+
+    fireEvent.keyDown(input, { key: 'Escape' })
+    expect(input).not.toHaveFocus()
+  })
+
+  it('tells screen readers it is searching while the server answers', () => {
+    api.get.mockReturnValue(new Promise(() => {}))
+    renderSearch()
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'teh' } })
+
+    const status = screen.getByRole('status')
+    expect(status).toHaveTextContent('Searching…')
+    expect(status.querySelector('.sr-only')).toHaveTextContent('Searching…')
+  })
+
+  it('keeps the panel in the page, inert and hidden, while it leaves', () => {
+    const { container } = renderSearch()
+    const panel = container.querySelector('.uep-search-panel')
+    expect(panel).toHaveAttribute('data-state', 'hidden')
+    expect(panel).toHaveAttribute('inert')
+    expect(panel).toHaveAttribute('aria-hidden', 'true')
+
+    const input = screen.getByRole('combobox')
+    input.focus()
+    fireEvent.change(input, { target: { value: 'h' } })
+    expect(panel).toHaveAttribute('data-state', 'showing')
+    expect(panel).not.toHaveAttribute('inert')
+
+    fireEvent.keyDown(input, { key: 'Escape' })
+    // Same node, still holding the rows it showed, while it animates out.
+    expect(container.querySelector('.uep-search-panel')).toBe(panel)
+    expect(panel).toHaveAttribute('data-state', 'hidden')
+    expect(panel).toHaveAttribute('inert')
+    expect(panel.querySelector('[role="option"]')).not.toBeNull()
+  })
+
+  it('bolds the matched text and isolates Persian parts in <bdi>', async () => {
+    api.get.mockResolvedValue({
+      data: { ...EMPTY, sites: [{ id: 7, site_code: 'TEH-001', province: 'کرمان', stage: 'Acceptance' }] },
+    })
+    renderSearch()
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'teh' } })
+    await act(async () => {
+      vi.advanceTimersByTime(250)
+    })
+
+    const option = screen.getByRole('option', { name: /TEH-001/ })
+    expect(option.querySelector('.uep-search-option-label b')).toHaveTextContent('TEH')
+    const persian = option.querySelector('bdi[lang="fa"]')
+    expect(persian).toHaveTextContent('کرمان')
+    expect([...option.querySelectorAll('.uep-search-option-meta bdi')].map((b) => b.textContent)).toEqual([
+      'کرمان',
+      'Acceptance',
+    ])
+  })
+
+  it('draws each group with its own icon', async () => {
+    api.get.mockResolvedValue({
+      data: {
+        sites: [{ id: 7, site_code: 'TEH-001', province: null, stage: null }],
+        villages: [{ work_item_id: 7, village_name: 'Tehran-e Now', village_code: 'V1', site_code: 'TEH-001' }],
+        provinces: [{ id: 3, name: 'Tehran' }],
+        contractors: [{ id: 4, name: 'Teh Towers' }],
+        people: [],
+      },
+    })
+    renderSearch()
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: 'teh' } })
+    await act(async () => {
+      vi.advanceTimersByTime(250)
+    })
+
+    const icon = (name) => screen.getByRole('option', { name }).querySelector('.uep-search-tile svg').dataset.icon
+    expect(icon(/^TEH-001/)).toBe('cell-tower')
+    expect(icon(/Tehran-e Now/)).toBe('home')
+    expect(icon(/^Tehran,/)).toBe('location')
+    expect(icon(/Teh Towers/)).toBe('enterprise')
+    expect(icon(/Search all sites/)).toBe('search')
+  })
+})
+
+describe('GROUP_LOOK', () => {
+  it('maps every group to its Carbon icon', () => {
+    expect(Object.fromEntries(Object.entries(GROUP_LOOK).map(([k, v]) => [k, v.icon]))).toEqual({
+      pages: 'document',
+      sites: 'cell-tower',
+      villages: 'home',
+      provinces: 'location',
+      contractors: 'enterprise',
+      people: 'user',
+      all: 'search',
+    })
   })
 })
