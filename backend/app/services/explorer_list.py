@@ -213,7 +213,7 @@ def _after(keys: Sequence[_Key], values: Sequence) -> ColumnElement[bool]:
     """Rows strictly after ``values`` in the order ``keys`` define."""
     clauses = []
     for i, key in enumerate(keys):
-        equal = [k.expr == v for k, v in zip(keys[:i], values[:i])]
+        equal = [k.expr == v for k, v in zip(keys[:i], values[:i], strict=True)]
         step = key.expr < values[i] if key.descending else key.expr > values[i]
         clauses.append(and_(*equal, step))
     return or_(*clauses)
