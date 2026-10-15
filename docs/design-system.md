@@ -152,6 +152,21 @@ Add an icon by importing its two glyphs in `components/icons.js`.
   corner.
 - Animate `transform` and `opacity` only.
 
+**Lists and cards rising in (UEP-11a).** On Explorer, list rows rise 6px
+and fade in over 360ms (`--uep-ease-grow`), 24ms apart, on the first load and
+after a new search, filter or sort; only the first 20 rows, and rows that
+arrive by scrolling appear without it. The record page's cards do the same,
+Journey 60ms after General information. Popovers and chips fade and slide 4px
+in 160ms; an opening strip takes 200ms, a bulk bar 220ms. No count-ups, no
+pulsing.
+
+**Full-height pages: one scroll region (UEP-11a Part A).** In a column that
+fills the height under the shell, every fixed row (title row, tool bar, header
+row, footer) is `flex: none`, and the single region that scrolls is
+`flex: 1 1 auto; min-height: 0; overflow: auto`. `styles/work.css` applies it
+to every `.uw-page` and `.uw-card`. A row that only scrolls sideways is still
+a fixed row: left at `flex-shrink: 1` it collapses to its scrollbar.
+
 **Reduced motion.** `lib/motionPreference.js` writes
 `<html data-uep-motion="reduce|full">` from the system's
 `prefers-reduced-motion`, and stylesheets key off that attribute. **Review
@@ -283,6 +298,45 @@ The 360px right panel of DT review: the Site ID (18px/600) with type, province a
 - **Error:** "Couldn't load {step}." with Retry inside the card; the rest of the page still renders.
 - **Saving:** the pressed control is disabled with `aria-busy`.
 
+## Explorer: the list (UEP-11a)
+
+The list of all sites (`pages/explorer/ExplorerList.jsx`, `styles/explorer.css`,
+`.exl-*`). Max width 1200px plus 24px gutters; one card fills the height:
+
+- **Title row:** "Explorer" and a neutral count pill (`.uw-count-pill`, 12px,
+  grey tint with a 1px inset border; `PageHeading` with `pill`), History and
+  Export on the right.
+- **Tool bar (56px):** a 380px search field whose focus is a cobalt border
+  plus `--uep-focus-ring`, with a clear button; active filter chips in
+  cobalt tint ("Province **کرمان** ×"); **Filter** on the right opening a 230px
+  popover: an uppercase 12px "FILTER BY" title, the fields, then one field's
+  values behind a back row. No Sort button: the headers sort.
+- **Header row (40px, sticky):** 12px, 600, uppercase, letter-spacing .06em,
+  muted, as the Roles Performance group titles. Each label is a button; the
+  sorted one is in ink with an arrow and carries `aria-sort`.
+- **Rows (48px):** one CSS grid template for header and rows, so no column
+  takes all the spare width. The site code is the row's link, its `::after`
+  stretched over the row; the checkbox and the villages pill sit above it
+  (`z-index: 1`). Hover: `--uep-row-hover-accent` with a 3px cobalt inset edge,
+  the code turns cobalt and a cobalt chevron slides in 4px. A focused row
+  (`:focus-visible` on its link) gets a 2px cobalt inset ring. Selected:
+  `--uep-row-selected` and a filled checkbox, which otherwise shows only on
+  hover or focus.
+- **Field icons** are the record page's General information hues
+  (`FIELD_ICONS`, `--uep-field-*`) as 16px line icons at 80% opacity, no tile:
+  pin for province, signal for technology, building for villages, briefcase
+  for DT contractor; grey when the value is missing. No other colour on the
+  list: cobalt is only for actions, links, selection and focus.
+- **Inline villages:** a strip under the row (page grey, 52px indent), a
+  chip per village (name 600, ID 12px muted); the one a search matched is
+  marked with `--uep-search-mark` and a cobalt border.
+- **Footer (44px):** "Showing **50** of 4,201 sites" ("matching sites" when
+  narrowed) and the keyboard hints.
+- **Bulk bar:** deep cobalt (`--uep-brand-deep`), white text, bottom centre
+  of the card: "{n} selected", Export, Copy IDs, ×.
+- **States:** 12 shimmering skeleton rows under the real header; "No sites
+  match" with **Clear search and filters**; "Couldn't load sites." with Retry.
+
 ## Explorer: the record page (UEP-11)
 
 A site's record (`pages/explorer/`, `styles/explorer.css`) on Home's frame
@@ -366,8 +420,9 @@ the word only.
 
 ### Motion and states
 
-The page fades in once (240ms); hover is 120ms; nothing else animates, and
-under reduced motion nothing does. Loading draws skeletons at their final size;
+The page fades in once (240ms); the two cards rise in, Journey 60ms after
+General information (see Motion); hover is 120ms; under reduced motion nothing
+animates. Loading draws skeletons at their final size;
 an error reads "Couldn't load {section}." with Retry inside each card. "No
 hadaf villages on this site." and "Acceptance starts when the site is on air
 and drive-tested." stand in for the village block.

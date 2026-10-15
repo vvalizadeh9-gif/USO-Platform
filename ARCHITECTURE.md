@@ -1783,6 +1783,38 @@ village). `/work-items` and `/work-items/{id}` redirect there. The Drive Test
 dashboard left the Drive test rail at the same time; it is Insights ›
 Dashboards (docs/design/navigation.md).
 
+### The list: `GET /explorer/sites` and friends (UEP-11a)
+
+Read-only, in `api/explorer.py` → `services/explorer_list.py`. The fixed
+paths are declared before `/sites/{work_item_id}`.
+
+| Endpoint | Answers |
+|---|---|
+| `GET /explorer/sites` | `{items, total, next_cursor}`. Params: `q`; `province`, `type`, `tech`, `dt_contractor` (each repeatable); `sort` = `site` (default) · `province` · `type` · `tech` · `villages` · `dt_contractor`; `dir` = `asc` · `desc`; `cursor`, `limit` (default 50, max 100) |
+| `GET /explorer/sites/{id}/villages` | `[{code, name}]`, the site's hadaf villages; 404 outside scope |
+| `GET /explorer/sites/filters` | `{provinces, types, technologies, dt_contractors}` the caller's own sites carry |
+| `GET /explorer/sites/export` | the list's rows as .xlsx, same params, plus `ids` to narrow to a selection (≤ 20,000 rows) |
+
+An item: `{id, site_code, province, type, requested_technology: ["3G","4G"],
+hadaf_villages, dt_contractor: {id, name} | null, village_match: {code, name} | null}`.
+
+- **Scope** is `visible_work_item_ids`, the same rule as every list; filters
+  and search are applied inside it, so they can only narrow it.
+- **Search** matches site code, province name, and the code or name of a live
+  هدف village (`village_match` names the first). The term goes through
+  `digits.to_latin` and `normalize_persian`; the searched columns fold ي/ك and
+  zero-width marks in SQL with nested `replace()` (PostgreSQL and SQLite alike).
+- **Hadaf count** is one grouped subquery over live villages whose
+  classification is in `kpi.target_values` (what `is_pure_target` accepts):
+  the record page's count, held equal by a test.
+- **Keyset paging.** The order is the chosen column (empty values last in
+  either direction), then site code and id ascending; the cursor is those
+  values, base64 JSON, and is refused (400) for another sort. The page reads
+  `limit + 1` rows to know there is more.
+- **Queries per request are fixed**: the هدف values, the total, the page, and
+  (when searching) the matched villages. A test holds 1 and 100 rows to the
+  same count.
+
 ### `GET /explorer/sites/{work_item_id}`
 
 Read-only, in `api/explorer.py` → `services/explorer.py` (loading) and
@@ -1833,7 +1865,9 @@ the assignment screens rely on that.
 | Requested technology | `requested_technology` through `tech_parser` |
 | Hadaf villages | live villages passing `cpm_columns.is_pure_target`. For a DT-done site this is exactly the acceptance universe (`in_dt_done_universe`); before the drive test it still counts the site's villages rather than reading 0 |
 
-**The step path follows the process.** A site goes on air first: the health
+**The step path follows the process** (confirmed in UEP-11a: no site has a
+health check or assignment dated before its on-air date; 569 have a DT date
+before it, shown with a "—" pill). A site goes on air first: the health
 check pool is every on-air site whose drive test is not Done. So the steps are
 On air → Health check → Assigned → DT done → Acceptance. A step is done when
 it, or any later step, is done (a drive test seeded Done from CPM proves the
@@ -1842,7 +1876,8 @@ site was assigned). Dates: on air as above; health check is the latest
 `health_checks` table; assigned is `relevant_assignment().assigned_at`; DT
 done is `dt_date_gregorian`; acceptance is the date the last village became
 fully approved (the latest ICT and CRA verdict date), when every village has
-one. Acceptance starts when the drive test is Done.
+one. Acceptance starts when the drive test is Done. Total aging runs from
+the on-air date only; without it, `total_days` is `null`.
 
 **A village side** is My Work's state (`villages.ict_status` / `cra_status`
 read through `my_work_status.display_status`), in three words with a phase:
@@ -1862,7 +1897,9 @@ means both sides approved, which is the existing `village_verdict`.
 
 ### The page
 
-`pages/explorer/`: `ExplorerList` (the All sites list, renamed),
+`pages/explorer/`: `ExplorerList` (the list: `useSiteList`, `SiteRows`,
+`FilterPopover`, `BulkBar`, with its URL, words and back-navigation memory in
+`listModel.js`),
 `SiteRecord` (one request, `useSiteRecord`), `GeneralInfoCard`, `JourneyCard`
 (`AgingTiles`, `StepPath`, `VillageAcceptance`) and `TakeActionDrawer`.
 Labels, the row order and which workflow forms apply are in `explorerModel.js`.

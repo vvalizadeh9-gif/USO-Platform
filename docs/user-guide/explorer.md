@@ -12,17 +12,48 @@ UEP still shows Shamsi dates.
 
 ## The list
 
-The list is the one All sites used to be, under a new name. The stage chips,
-the province and contractor filters, paging and **Export** work as before.
+Explorer opens on the list of every site you can see. Its job is to find one
+site fast and open its record. The count beside the title is every site you
+can see.
 
-- **Search** finds a site by its site ID, its province, or any of its villages
-  by village ID or village name.
-- **Villages** is the number of the site's هدف villages.
-- **Click a row** (or its site ID) to open the site's record. On *Ready for
-  assignment* and *Returned* a click selects the row for bulk assignment, as
-  before; the site ID still opens the record.
+- **Search** (*Find a site by ID, village ID or village name*) narrows the
+  list as you type: site ID, village ID, village name or province. Persian
+  names match however the letters were typed. The matching part of a site ID
+  is highlighted; when a site was found through one of its villages, that
+  village is highlighted when you open the row's villages, and on the record
+  page. **Esc** or **×** clears it.
+- **Filter** filters by Province, Site type, Requested tech or DT contractor:
+  choose a field, then a value. Each filter shows as a chip after the search;
+  **×** on a chip removes it, and choosing the active value again does too.
+- **Sort** by clicking a column header (Site, Province, Type, Technology,
+  Villages, DT contractor); click it again to reverse. The list starts sorted
+  by site ID.
+- Search, filters and sort are in the page address, so you can share a view
+  by sharing its link.
 
-Old links to `/work-items` still work and land here.
+Each row shows the site ID, province, type (*New site* or *Add tech*), the
+requested technologies, the number of the site's هدف villages, and the DT
+contractor (*Not assigned* when there is none).
+
+- **Click anywhere on a row** to open the site's record. The checkbox and the
+  villages pill do not open it.
+- **The villages pill** shows the site's هدف villages, name and ID, under the
+  row. One row is open at a time.
+- **More rows load by themselves** as you scroll to the end, fifty at a time.
+  The footer says how many are shown. When you come back from a record, the
+  list is where you left it.
+- **Select rows** with their checkboxes (the header checkbox selects every row
+  loaded so far). A bar appears at the bottom: **Export** downloads the
+  selected sites, **Copy IDs** copies their site IDs, **×** clears the
+  selection. The **Export** button at the top downloads the whole list as you
+  see it, with its search, filters and sort.
+- **Keyboard:** Tab to the first row, **↑** and **↓** move between rows,
+  **Enter** opens the record.
+- **History** beside Export lists your recent actions with Undo, as before.
+
+Stage chips, numbered pages and bulk assignment are no longer on Explorer;
+assign drive tests from the Drive test page. Old links to `/work-items` still
+work and land here.
 
 ## A site's record
 
@@ -50,18 +81,21 @@ column and appears after the next CPM import.
 The five steps a site goes through, in the order they happen: **On air →
 Health check → Assigned → DT done → Acceptance**. A finished step is a filled
 blue circle with its date; the current step has a blue ring and says *In
-progress*. Between two steps a pill shows how many days the step took
+progress*. On air is always the first step: a site goes on air, then it is
+health-checked. Between two steps a pill shows how many days the step took
 ("+7 d"), and on the current step how long it has been going ("+8 d so far").
 
 Sites imported from CPM before Mehr 1405 may have no dates for early steps.
 Those steps read *No date*, and any number that needs the date shows a dash.
+Some sites have a drive test dated before their on-air date; the steps keep
+their order, show the real dates, and the pill between them shows a dash.
 Nothing is ever guessed.
 
 Above the steps, four small tiles:
 
 | Tile | What it counts |
 |---|---|
-| Total aging | Days from the first dated step to today (to the acceptance date once acceptance is done) |
+| Total aging | Days since the site went on air, to today (to the acceptance date once acceptance is done). A dash when the on-air date is not known |
 | In current step | Days since the current step started |
 | Longest step | The longest gap between two steps |
 | Oldest pending | The longest wait among ICT or CRA sides still pending, and how many villages that authority has pending. Hidden when nothing is pending |

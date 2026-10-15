@@ -6,6 +6,7 @@ import axe from 'axe-core'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 import * as F from '../../../e2e/workFixtures.js'
+import { FILTER_OPTIONS, sitesPage } from '../explorer/fixtures.js'
 
 const ROUTES = {
   '/drive-test/pipeline/summary': F.pipelineSummary,
@@ -21,6 +22,8 @@ const ROUTES = {
   '/hc/queues/reroutes': F.reroutes,
   '/work-items/counts': F.workItemCounts,
   '/reference/provinces': [{ id: 1, name: 'تهران' }],
+  '/explorer/sites': sitesPage({ total: 60 }),
+  '/explorer/sites/filters': FILTER_OPTIONS,
 }
 
 vi.mock('../../api/client', () => ({
@@ -44,7 +47,7 @@ const VIEWS = [
   '/health-check?tab=pool', '/health-check?tab=running', '/health-check?tab=review',
   '/drive-test?tab=assignment', '/drive-test?tab=in-progress', '/drive-test?tab=review',
   '/drive-test?tab=done', '/health-check?tab=remediation', '/health-check?tab=reroutes',
-  '/drive-test?tab=sent-back', '/health-check?tab=history', '/explorer', '/explorer?stage=Ready%20for%20Assignment',
+  '/drive-test?tab=sent-back', '/health-check?tab=history', '/explorer', '/explorer?q=W40&province=1&sort=villages&dir=desc',
 ]
 
 describe('the work pages have no axe violations', () => {

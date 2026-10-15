@@ -5,7 +5,8 @@
 
 export const EXPLORER_PATH = '/explorer'
 
-/** The list, optionally filtered (`q`, `province_id`, `contractor_id`, `stage`). */
+/** The list, optionally searched, filtered or sorted (`q`, `province`, `type`,
+ * `tech`, `dt_contractor`, `sort`, `dir`; see pages/explorer/listModel.js). */
 export function explorerListPath(params = {}) {
   const query = new URLSearchParams(
     Object.entries(params).filter(([, v]) => v != null && v !== ''),

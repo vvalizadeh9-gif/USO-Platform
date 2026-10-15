@@ -7,7 +7,8 @@ import * as W from './workFixtures.js'
 import { villagesXlsx } from './xlsx.js'
 import { myWorkList, myWorkSuggestions, myWorkVillage } from './myWorkFixtures.js'
 import { rpArea, rpMonth } from './rolesFixtures.js'
-import { explorerSite } from './explorerFixtures.js'
+import { explorerSite, explorerSites } from './explorerFixtures.js'
+import { FILTER_OPTIONS, siteVillages } from '../src/pages/explorer/fixtures.js'
 
 const ROUTES = {
   '/auth/me': F.PM,
@@ -41,6 +42,8 @@ const ROUTES = {
   '/hc/queues/reroutes': W.reroutes,
   '/work-items': W.workItems,
   '/work-items/counts': W.workItemCounts,
+  '/explorer/sites': explorerSites,
+  '/explorer/sites/filters': FILTER_OPTIONS,
 }
 
 // Endpoints answered late, on purpose: the dashboard's side cards arriving
@@ -54,6 +57,7 @@ const PATTERNS = [
   [/^\/acceptance\/villages\/\d+\/suggestions$/, myWorkSuggestions],
   [/^\/acceptance\/villages\/\d+$/, myWorkVillage],
   [/^\/acceptance\/my-work$/, myWorkList],
+  [/^\/explorer\/sites\/\d+\/villages$/, () => siteVillages(3)],
   [/^\/explorer\/sites\/\d+$/, explorerSite],
 ]
 

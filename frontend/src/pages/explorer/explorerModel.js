@@ -22,6 +22,21 @@ export const STEP_META = Object.freeze({
   acceptance: { label: 'Acceptance', phrase: 'acceptance', icon: 'certificate--check', waiting: 'Acceptance in progress' },
 })
 
+/**
+ * One icon and one hue per site field, shared by the record page's General
+ * information tiles and the list's column icons (UEP-11a §B4), so a field
+ * looks the same wherever it appears.
+ */
+export const FIELD_ICONS = Object.freeze({
+  on_air: { icon: 'cell-tower', hue: '--uep-field-on-air' },
+  dt_date: { icon: 'car', hue: '--uep-field-dt-date' },
+  site_contractor: { icon: 'tools', hue: '--uep-field-site-contractor' },
+  dt_contractor: { icon: 'portfolio', hue: '--uep-field-dt-contractor' },
+  technology: { icon: 'connection-signal', hue: '--uep-field-technology' },
+  province: { icon: 'location', hue: '--uep-field-province' },
+  villages: { icon: 'building', hue: '--uep-field-villages' },
+})
+
 export const SIDE_META = Object.freeze({
   approved: { label: 'Approved', icon: 'checkmark' },
   pending: { label: 'Pending', icon: 'time' },

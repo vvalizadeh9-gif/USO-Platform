@@ -259,6 +259,29 @@
   --uep-dur-explorer-hover: 120ms;
   --uep-dur-explorer-filter: 160ms;       /* All / Open cross-fade */
 
+  /* ---- Component: Explorer list (UEP-11a) ----
+     One colour rule: cobalt for actions, links, selection and focus; the
+     field icons reuse the record tiles' hues above, softened. */
+  --uep-explorer-list-max: 1200px;
+  --uep-explorer-toolbar: 56px;
+  --uep-explorer-footer: 44px;
+  --uep-explorer-row: 48px;
+  --uep-explorer-search: 380px;
+  --uep-explorer-popover: 230px;
+  --uep-explorer-pill: 26px;
+  --uep-explorer-strip-indent: 52px;
+  --uep-explorer-field-icon-opacity: 0.8;  /* still 3:1 against white */
+  --uep-row-hover-accent: #F5F8FE;         /* very light cobalt: a row under the pointer */
+  --uep-row-selected: #EDF2FD;             /* a checked row */
+  --uep-search-mark: #FDF0C4;              /* soft yellow under matched text */
+  --uep-explorer-rise-distance: 6px;
+  --uep-dur-explorer-rise: 360ms;          /* rows and record cards rise in */
+  --uep-explorer-rise-stagger: 24ms;       /* per row, first 20 rows only */
+  --uep-explorer-card-stagger: 60ms;       /* Journey after General information */
+  --uep-dur-explorer-strip: 200ms;         /* the villages strip opening */
+  --uep-dur-explorer-bulk: 220ms;          /* the bulk bar sliding up */
+  --uep-explorer-pop-distance: 4px;        /* popovers and chips slide in this far */
+
   /* ---- Component: sign-in ---- */
   --uep-signin-half-basis: 520px;
   --uep-signin-breakpoint: 960px;  /* documentation only: media queries cannot read it */
