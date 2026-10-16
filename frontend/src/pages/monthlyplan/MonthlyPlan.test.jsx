@@ -5,12 +5,13 @@
 // longer theirs to change, and offering a decision to somebody who cannot
 // make one. Both are re-checked by the server — these tests are about what
 // the interface offers, which is what decides whether a person can work.
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ToastProvider } from '../../context/ToastContext'
 import { currentShamsiPeriod, nextPeriod, shamsiMonthName } from '../../lib/shamsi'
+import { pickOption } from '../../test/pickOption'
 
 vi.mock('../../api/client', () => ({
   default: { get: vi.fn(), post: vi.fn(), put: vi.fn() },
@@ -503,7 +504,7 @@ describe('a contractor filing next month', () => {
     expect(row).toHaveAttribute('data-revision', 'DT')
     await userEvent.click(within(row).getByRole('button', { name: 'Request revision' }))
     await userEvent.type(within(row).getByRole('spinbutton'), '35')
-    await userEvent.selectOptions(within(row).getByRole('combobox'), 'SITES_BLOCKED')
+    await pickOption(within(row).getByRole('combobox'), 'SITES_BLOCKED')
     await userEvent.click(within(row).getByRole('button', { name: 'Send to PM' }))
 
     await waitFor(() =>
@@ -521,7 +522,7 @@ describe('a contractor filing next month', () => {
     const row = (await screen.findAllByRole('button', { name: 'Request revision' }))[0].closest('[data-revision]')
     await userEvent.click(within(row).getByRole('button', { name: 'Request revision' }))
     await userEvent.type(within(row).getByRole('spinbutton'), '35')
-    await userEvent.selectOptions(within(row).getByRole('combobox'), 'OTHER')
+    await pickOption(within(row).getByRole('combobox'), 'OTHER')
     await userEvent.click(within(row).getByRole('button', { name: 'Send to PM' }))
 
     expect(await screen.findByText('Add a comment')).toBeInTheDocument()
@@ -1107,7 +1108,7 @@ describe('History', () => {
     serveOverview()
     const { container } = show('/monthly-plan?tab=history')
     await screen.findByRole('table')
-    await userEvent.selectOptions(screen.getByLabelText('Contractor'), 'Alpha Telecom')
+    await pickOption(screen.getByLabelText('Contractor'), 'Alpha Telecom')
     const below = container.querySelectorAll('[data-result="below"]')
     expect(below).toHaveLength(RUNNING.month > 2 ? 1 : 0)
     if (RUNNING.month > 2) expect(within(rowOf(shamsiMonthName(2))).getByText('Below 80%')).toBeInTheDocument()
@@ -1119,13 +1120,13 @@ describe('History', () => {
     show('/monthly-plan?tab=history')
     const table = await screen.findByRole('table')
 
-    await userEvent.selectOptions(screen.getByLabelText('Contractor'), 'Alpha Telecom')
+    await pickOption(screen.getByLabelText('Contractor'), 'Alpha Telecom')
     expect([...table.querySelectorAll('thead th')].map((th) => th.textContent)).toEqual([
       'Month', 'Contractor plan', 'Delivered', '% of plan', 'Result',
     ])
     expect(cells(rowOf(shamsiMonthName(1)))).toEqual(['10', '10', '100%', 'Met plan'])
 
-    await userEvent.selectOptions(screen.getByLabelText('Contractor'), 'Beta Networks')
+    await pickOption(screen.getByLabelText('Contractor'), 'Beta Networks')
     // No plan: a dash, never 0, and no verdict.
     expect(cells(rowOf(shamsiMonthName(1)))).toEqual(['—', '4', '—', '—'])
 
@@ -1133,8 +1134,10 @@ describe('History', () => {
     expect(cells(rowOf(shamsiMonthName(1)))).toEqual(['—', '8', '—', '—'])
 
     const years = screen.getByLabelText('Year')
-    expect(years.options[0].textContent).toBe(persian(RUNNING.year))
-    await userEvent.selectOptions(years, String(RUNNING.year - 1))
+    fireEvent.click(years)
+    expect(screen.getAllByRole('option')[0].textContent).toBe(persian(RUNNING.year))
+    fireEvent.click(years)
+    await pickOption(years, String(RUNNING.year - 1))
     await waitFor(() =>
       expect(api.get).toHaveBeenCalledWith('/pip/overview', { params: { period: 'year', year: RUNNING.year - 1, month: 1 } }),
     )

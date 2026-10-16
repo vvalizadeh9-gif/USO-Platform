@@ -16,6 +16,7 @@ import ResetRequestsPanel from './ResetRequestsPanel'
 import UserAuditDrawer from './UserAuditDrawer'
 import UserStatusDialog from './UserStatusDialog'
 import PasswordResetDialog from './PasswordResetDialog'
+import Select from '../../components/Select'
 
 const CONTRACTOR_ROLE_NAME = 'Contractor'
 const EMPTY_FILTERS = { search: '', status: '', role_id: '' }
@@ -126,7 +127,7 @@ export default function UsersTab() {
           </div>
           <div className="field" style={{ marginBottom: 0, minWidth: 150 }}>
             <label htmlFor="user-status-filter">Status</label>
-            <select
+            <Select
               id="user-status-filter"
               className="input"
               value={filters.status}
@@ -134,11 +135,11 @@ export default function UsersTab() {
             >
               <option value="">All statuses</option>
               {USER_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
-            </select>
+            </Select>
           </div>
           <div className="field" style={{ marginBottom: 0, minWidth: 180 }}>
             <label htmlFor="user-role-filter">Role</label>
-            <select
+            <Select
               id="user-role-filter"
               className="input"
               value={filters.role_id}
@@ -148,7 +149,7 @@ export default function UsersTab() {
               {roles.map((r) => (
                 <option key={r.id} value={r.id}>{roleLabel(r.name)}</option>
               ))}
-            </select>
+            </Select>
           </div>
           {hasFilters && (
             <button className="btn btn-sm btn-ghost" onClick={() => setFilters(EMPTY_FILTERS)}>
@@ -538,7 +539,7 @@ function UserForm({ mode, user, roles, provinces, contractors, categories, onDon
         )}
         <div className="field">
           <label htmlFor="user-role">Role</label>
-          <select
+          <Select
             id="user-role"
             className="input"
             value={form.role_id}
@@ -546,7 +547,7 @@ function UserForm({ mode, user, roles, provinces, contractors, categories, onDon
           >
             <option value="">Select…</option>
             {roles.map((r) => <option key={r.id} value={r.id}>{roleLabel(r.name)}</option>)}
-          </select>
+          </Select>
           <CategoryOwnershipHint role={selectedRole} categories={ownedCategories} />
         </div>
       </div>
@@ -554,7 +555,7 @@ function UserForm({ mode, user, roles, provinces, contractors, categories, onDon
       {isContractorRole && (
         <div className="field">
           <label htmlFor="user-contractor">Contractor</label>
-          <select
+          <Select
             id="user-contractor"
             className="input"
             value={form.contractor_id}
@@ -562,7 +563,7 @@ function UserForm({ mode, user, roles, provinces, contractors, categories, onDon
           >
             <option value="">Select the contractor this user belongs to…</option>
             {contractors.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-          </select>
+          </Select>
           <span className="dim" style={{ fontSize: 12, marginTop: 4, display: 'block' }}>
             This user will only see assignments belonging to this contractor.
           </span>

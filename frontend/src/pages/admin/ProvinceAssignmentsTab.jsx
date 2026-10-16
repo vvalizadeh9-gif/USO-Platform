@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import api from '../../api/client'
 import { Loading } from '../../components/ui'
 import { useToast } from '../../context/ToastContext'
+import Select from '../../components/Select'
 
 /**
  * Who owns each province, for Coordinator and Regional Manager.
@@ -103,7 +104,7 @@ export default function ProvinceAssignmentsTab() {
                 {p.name}
               </td>
               <td>
-                <select
+                <Select
                   className="input"
                   value={p.coordinator_user_id ?? ''}
                   disabled={savingId === p.id}
@@ -119,10 +120,10 @@ export default function ProvinceAssignmentsTab() {
                       {u.full_name}
                     </option>
                   ))}
-                </select>
+                </Select>
               </td>
               <td>
-                <select
+                <Select
                   className="input"
                   value={p.regional_manager_user_id ?? ''}
                   disabled={savingId === p.id}
@@ -138,7 +139,7 @@ export default function ProvinceAssignmentsTab() {
                       {u.full_name}
                     </option>
                   ))}
-                </select>
+                </Select>
               </td>
               <td>{savingId === p.id && <div className="spinner" />}</td>
             </tr>

@@ -14,6 +14,7 @@ import {
   LAST_SHAMSI_YEAR as LAST_YEAR,
   SHAMSI_MONTHS as MONTHS,
 } from '../lib/shamsi'
+import Select from './Select'
 
 const pad = (n) => String(n).padStart(2, '0')
 
@@ -43,7 +44,7 @@ export default function ShamsiDate({ value, onChange, disabled }) {
 
   return (
     <div className="row" style={{ gap: 6 }}>
-      <select
+      <Select
         className="input"
         style={{ flex: '0 0 86px' }}
         value={year}
@@ -55,8 +56,8 @@ export default function ShamsiDate({ value, onChange, disabled }) {
         {Array.from({ length: LAST_YEAR - FIRST_YEAR + 1 }, (_, i) => FIRST_YEAR + i).map((y) => (
           <option key={y} value={y}>{y}</option>
         ))}
-      </select>
-      <select
+      </Select>
+      <Select
         className="input"
         style={{ flex: 1, minWidth: 104 }}
         value={month}
@@ -68,8 +69,8 @@ export default function ShamsiDate({ value, onChange, disabled }) {
         {MONTHS.map((name, i) => (
           <option key={name} value={i + 1}>{pad(i + 1)} — {name}</option>
         ))}
-      </select>
-      <select
+      </Select>
+      <Select
         className="input"
         style={{ flex: '0 0 72px' }}
         value={day}
@@ -81,7 +82,7 @@ export default function ShamsiDate({ value, onChange, disabled }) {
         {days.map((d) => (
           <option key={d} value={d}>{pad(d)}</option>
         ))}
-      </select>
+      </Select>
     </div>
   )
 }

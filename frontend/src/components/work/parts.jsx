@@ -4,6 +4,7 @@ import { isLate } from '../../lib/siteOrder'
 import { useActionLog } from '../../lib/actionLog'
 import { useWork } from './WorkContext'
 import { formatNumber } from '../../lib/numbers'
+import Select from '../Select'
 
 /** Persian data -- a province, contractor or village name, a field note --
  * isolated and set in Vazirmatn. Renders "—" for nothing. */
@@ -179,12 +180,12 @@ export function SearchBox({ value, onChange, label = 'Search site ID', placehold
 /** A select in the tool bar, 34px like every control. */
 export function ToolSelect({ label, value, onChange, options, allLabel }) {
   return (
-    <select className="uw-select" aria-label={label} value={value} onChange={(e) => onChange(e.target.value)}>
+    <Select className="uw-select" aria-label={label} value={value} onChange={(e) => onChange(e.target.value)}>
       <option value="">{allLabel}</option>
       {options.map((o) => (
         <option key={o} value={o}>{o}</option>
       ))}
-    </select>
+    </Select>
   )
 }
 

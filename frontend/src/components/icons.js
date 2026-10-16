@@ -178,6 +178,8 @@ import userFollow16 from '@carbon/icons/es/user--follow/16.js'
 import userFollow20 from '@carbon/icons/es/user--follow/20.js'
 import searchLocate16 from '@carbon/icons/es/search--locate/16.js'
 import searchLocate20 from '@carbon/icons/es/search--locate/20.js'
+import chevronUp16 from '@carbon/icons/es/chevron--up/16.js'
+import chevronUp20 from '@carbon/icons/es/chevron--up/20.js'
 
 /**
  * @typedef {{ elem: string, attrs: Record<string, string | number>, content?: CarbonNode[] }} CarbonNode
@@ -277,6 +279,7 @@ export const ICONS = Object.freeze({
   'upload': { 16: upload16, 20: upload20 },
   'user--follow': { 16: userFollow16, 20: userFollow20 },
   'search--locate': { 16: searchLocate16, 20: searchLocate20 },
+  'chevron--up': { 16: chevronUp16, 20: chevronUp20 },
 })
 
 /** @typedef {keyof typeof ICONS} IconName */

@@ -10,6 +10,7 @@ import { useAuth } from '../../context/AuthContext'
 import { useToast } from '../../context/ToastContext'
 import { BUCKET_LABEL, PAGE_SIZE, UNATTRIBUTED } from './constants'
 import { count } from './format'
+import UepSelect from '../../components/Select'
 
 /**
  * The sites behind one figure on the Drive Test dashboard.
@@ -554,7 +555,7 @@ function Select({ label, value, onChange, options, placeholder }) {
   return (
     <label className="row" style={{ gap: 6, alignItems: 'center' }}>
       <span className="muted">{label}</span>
-      <select
+      <UepSelect
         className="input"
         value={value}
         aria-label={label}
@@ -566,7 +567,7 @@ function Select({ label, value, onChange, options, placeholder }) {
             {o.label}
           </option>
         ))}
-      </select>
+      </UepSelect>
     </label>
   )
 }

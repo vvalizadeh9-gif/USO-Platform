@@ -5,6 +5,7 @@ import DriveTestSubmitForm from '../../components/DriveTestSubmitForm'
 import ReturnToCoordinatorForm from '../../components/ReturnToCoordinatorForm'
 import { ConfirmDialog, Drawer } from '../../components/ui'
 import { useToast } from '../../context/ToastContext'
+import Select from '../../components/Select'
 
 /**
  * Take action (UEP-11 §B3): the workflow forms the old work-item page held --
@@ -95,10 +96,10 @@ function AssignAction({ contractors, onSubmit }) {
       </p>
       <div className="field" style={{ maxWidth: 320 }}>
         <label htmlFor="ex-assign-contractor">Contractor</label>
-        <select id="ex-assign-contractor" className="input" value={contractorId} onChange={(e) => setContractorId(e.target.value)}>
+        <Select id="ex-assign-contractor" className="input" value={contractorId} onChange={(e) => setContractorId(e.target.value)}>
           <option value="">Select…</option>
           {contractors.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-        </select>
+        </Select>
       </div>
       <button
         className="btn btn-primary"

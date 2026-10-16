@@ -5,6 +5,7 @@ import api from '../../api/client'
 import { EmptyState, Loading, PageHead } from '../../components/ui'
 import { importStamp } from './kpiTheme'
 import { formatNumber } from '../../lib/numbers'
+import Select from '../../components/Select'
 
 /**
  * Performance → Roles Performance → Mapping. PM only, on the server as well.
@@ -208,7 +209,7 @@ function LinksPanel() {
           {users.map((user) => (
             <li key={user.id}>
               <span className="kpi-person-name">{user.full_name}</span>
-              <select
+              <Select
                 className="input"
                 aria-label={`Person for ${user.full_name}`}
                 value={user.kpi_person_name ?? ''}
@@ -222,7 +223,7 @@ function LinksPanel() {
                 ).map((name) => (
                   <option key={name} value={name}>{name}</option>
                 ))}
-              </select>
+              </Select>
             </li>
           ))}
         </ul>

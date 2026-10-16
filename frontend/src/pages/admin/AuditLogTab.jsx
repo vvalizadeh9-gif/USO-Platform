@@ -15,6 +15,7 @@ import {
   describeAuditEntry,
   formatDateTime,
 } from '../../lib/auditLog'
+import Select from '../../components/Select'
 
 const PAGE_SIZE = 25
 const EMPTY_FILTERS = {
@@ -106,7 +107,7 @@ export default function AuditLogTab() {
         <div className="row wrap" style={{ gap: 12, alignItems: 'flex-end' }}>
           <div className="field" style={{ marginBottom: 0, minWidth: 190 }}>
             <label htmlFor="audit-action">Action</label>
-            <select
+            <Select
               id="audit-action"
               className="input"
               value={filters.action}
@@ -128,11 +129,11 @@ export default function AuditLogTab() {
                   <option key={a} value={a}>{actionLabel(a)}</option>
                 ))}
               </optgroup>
-            </select>
+            </Select>
           </div>
           <div className="field" style={{ marginBottom: 0, minWidth: 150 }}>
             <label htmlFor="audit-module">Module</label>
-            <select
+            <Select
               id="audit-module"
               className="input"
               value={filters.module}
@@ -140,11 +141,11 @@ export default function AuditLogTab() {
             >
               <option value="">All modules</option>
               {AUDIT_MODULES.map((m) => <option key={m} value={m}>{m}</option>)}
-            </select>
+            </Select>
           </div>
           <div className="field" style={{ marginBottom: 0, minWidth: 170 }}>
             <label htmlFor="audit-entity">Entity type</label>
-            <select
+            <Select
               id="audit-entity"
               className="input"
               value={filters.entity_type}
@@ -152,11 +153,11 @@ export default function AuditLogTab() {
             >
               <option value="">All entity types</option>
               {AUDIT_ENTITY_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
-            </select>
+            </Select>
           </div>
           <div className="field" style={{ marginBottom: 0, minWidth: 170 }}>
             <label htmlFor="audit-user">User</label>
-            <select
+            <Select
               id="audit-user"
               className="input"
               value={filters.user_id}
@@ -164,11 +165,11 @@ export default function AuditLogTab() {
             >
               <option value="">All users</option>
               {users.map((u) => <option key={u.id} value={u.id}>{u.full_name}</option>)}
-            </select>
+            </Select>
           </div>
           <div className="field" style={{ marginBottom: 0, minWidth: 130 }}>
             <label htmlFor="audit-result">Result</label>
-            <select
+            <Select
               id="audit-result"
               className="input"
               value={filters.result}
@@ -176,7 +177,7 @@ export default function AuditLogTab() {
             >
               <option value="">Any result</option>
               {AUDIT_RESULTS.map((r) => <option key={r} value={r}>{r}</option>)}
-            </select>
+            </Select>
           </div>
           <div className="field" style={{ marginBottom: 0, minWidth: 170 }}>
             <label htmlFor="audit-search">Reason contains</label>

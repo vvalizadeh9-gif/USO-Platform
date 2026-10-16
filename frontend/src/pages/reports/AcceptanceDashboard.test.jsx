@@ -21,6 +21,7 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter, useLocation } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ToastProvider } from '../../context/ToastContext'
+import { pickOption } from '../../test/pickOption'
 
 vi.mock('../../api/client', () => ({ default: { get: vi.fn() } }))
 
@@ -177,15 +178,16 @@ describe('the year', () => {
     await loaded()
     expect(api.get).toHaveBeenCalledWith('/acceptance/progress', { params: { year: 1405 } })
     const select = screen.getByRole('combobox', { name: 'Year' })
-    expect(select).toHaveValue('1405')
-    expect(within(select).getAllByRole('option').map((o) => o.textContent)).toEqual(['۱۴۰۵', '۱۴۰۴'])
+    expect(select).toHaveTextContent('۱۴۰۵')
+    fireEvent.click(select)
+    expect(screen.getAllByRole('option').map((o) => o.textContent)).toEqual(['۱۴۰۵', '۱۴۰۴'])
   })
 
   it('goes in the address and refetches when it changes', async () => {
     serve()
     show('/reports/acceptance?month=1405-06')
     await loaded()
-    await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Year' }), '1404')
+    await pickOption(screen.getByRole('combobox', { name: 'Year' }), '1404')
     expect(screen.getByTestId('location')).toHaveTextContent('?year=1404')
     expect(screen.getByTestId('location')).not.toHaveTextContent('month=')
     await waitFor(() => expect(api.get).toHaveBeenCalledWith('/acceptance/progress', { params: { year: 1404 } }))

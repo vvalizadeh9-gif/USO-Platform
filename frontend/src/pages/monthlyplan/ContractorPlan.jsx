@@ -10,6 +10,7 @@ import SixMonthChart, { ChartLegend } from './SixMonthChart'
 import { FigureCards, Standing } from './Standing'
 import { STREAM_LIST } from './streams'
 import { formatNumber } from '../../lib/numbers'
+import Select from '../../components/Select'
 
 // What the server accepts (services/monthly_plan.MAX_COMMITTED_COUNT). Checked
 // here so a typo is refused where it was typed, not after a round trip; the
@@ -485,12 +486,12 @@ function RevisionRow({ stream, planning, onChanged, onHistory }) {
           </label>
           <label className="pip-entry-field" style={{ gap: 4 }}>
             <span className="pip-lbl">Reason</span>
-            <select className="input" value={reason} disabled={busy} onChange={(e) => setReason(e.target.value)}>
+            <Select className="input" value={reason} disabled={busy} onChange={(e) => setReason(e.target.value)}>
               <option value="">Choose…</option>
               {REASONS.map((r) => (
                 <option key={r.value} value={r.value}>{r.label}</option>
               ))}
-            </select>
+            </Select>
           </label>
           <label className="pip-entry-field" style={{ gap: 4, flex: 1, minWidth: 180 }}>
             <span className="pip-lbl">Comment{reason === 'OTHER' ? '' : ' (optional)'}</span>

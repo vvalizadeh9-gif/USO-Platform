@@ -5,6 +5,7 @@ import { EmptyState, Loading } from '../../components/ui'
 import { useToast } from '../../context/ToastContext'
 import { isCategoryOwner, roleLabel } from '../../lib/roles'
 import { formatNumber } from '../../lib/numbers'
+import Select from '../../components/Select'
 
 /**
  * The remediation routing table, as a screen.
@@ -212,7 +213,7 @@ function CategoryForm({ category, roles, busy, onSave, onCancel }) {
         </div>
         <div className="field" style={{ flex: 2, minWidth: 200, margin: 0 }}>
           <label>Owning team</label>
-          <select
+          <Select
             className="input"
             value={ownerRoleId}
             onChange={(e) => setOwnerRoleId(e.target.value)}
@@ -221,7 +222,7 @@ function CategoryForm({ category, roles, busy, onSave, onCancel }) {
             {roles.map((r) => (
               <option key={r.id} value={r.id}>{roleLabel(r.name)}</option>
             ))}
-          </select>
+          </Select>
         </div>
         <div className="field" style={{ width: 110, margin: 0 }}>
           <label>SLA (days)</label>

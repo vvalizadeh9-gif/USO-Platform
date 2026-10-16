@@ -5,13 +5,14 @@ import SiteHistoryDrawer from '../../components/SiteHistoryDrawer'
 import SiteTable from '../../components/work/SiteTable'
 import {
   EmptyStep, Fa, Flag, HistoryButton, SearchBox, SiteIdButton, StepError, TechChips,
-  ToolSelect, ToolToggle, WaitingCell, WorkListCard,
+  ToolSelect, WaitingCell, WorkListCard,
 } from '../../components/work/parts'
 import { useWork } from '../../components/work/WorkContext'
 import { useToast } from '../../context/ToastContext'
 import { orderSites } from '../../lib/siteOrder'
 import useStepData, { useExportRows } from './useStepData'
 import { formatNumber } from '../../lib/numbers'
+import Select from '../../components/Select'
 
 /** The server takes at most this many sites in one assignment. */
 const MAX_ASSIGN = 500
@@ -81,7 +82,8 @@ export default function AssignStep({ process, step, figures, panelProps, onExpor
   const [selected, setSelected] = useState(() => new Set())
   const [query, setQuery] = useState('')
   const [province, setProvince] = useState('')
-  const [byProvince, setByProvince] = useState(true)
+  // Longest waiting first by default (UEP-13 §3.10); Province on request.
+  const [byProvince, setByProvince] = useState(false)
   const [limit, setLimit] = useState(PAGE)
   const [busyId, setBusyId] = useState(null)
   const [history, setHistory] = useState({ id: null, code: null })
@@ -185,7 +187,16 @@ export default function AssignStep({ process, step, figures, panelProps, onExpor
         <>
           <SearchBox value={query} onChange={setQuery} />
           <ToolSelect label="Province" value={province} onChange={setProvince} options={provinces} allLabel="All provinces" />
-          <ToolToggle pressed={byProvince} onChange={setByProvince}>Sort by province</ToolToggle>
+          <Select
+            aria-label="Sort"
+            className="uw-tool-select"
+            value={byProvince ? 'province' : 'waiting'}
+            onChange={(e) => setByProvince(e.target.value === 'province')}
+            options={[
+              { value: 'waiting', label: 'Longest waiting' },
+              { value: 'province', label: 'Province' },
+            ]}
+          />
         </>
       }
       description={config.since}

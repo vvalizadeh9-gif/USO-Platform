@@ -14,6 +14,7 @@ import { act, fireEvent, render, screen, waitFor, within } from '@testing-librar
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { toPersianDigits } from '../../lib/persianDigits'
 
 vi.mock('../../api/client', () => ({
   default: { get: vi.fn() },
@@ -2758,10 +2759,12 @@ describe('the month in the card headers', () => {
     const moved = await section('What moved')
     const pipMonth = pip.querySelector('.dt-section-head [data-testid="dt-month-label"]')
     const movedMonth = moved.querySelector('.dt-section-head [data-testid="dt-month-label"]')
-    expect(pipMonth).toHaveTextContent(planDelivery().month_label)
+    // Shamsi months are wholly in Persian digits, isolated RTL (UEP-13 §3.7).
+    expect(pipMonth).toHaveTextContent(toPersianDigits(planDelivery().month_label))
+    expect(pipMonth.tagName).toBe('BDI')
     expect(pipMonth).toHaveClass('dt-month-label')
     const { label, shamsi_year: year, is_open: open } = trend().latest_flows
-    expect(movedMonth).toHaveTextContent(`${label} ${year}`)
+    expect(movedMonth).toHaveTextContent(toPersianDigits(`${label} ${year}`))
     expect(movedMonth).toHaveClass('dt-month-label')
     // The suffix sits outside the bold element, in the note's own style.
     expect(movedMonth).not.toHaveTextContent('in progress')

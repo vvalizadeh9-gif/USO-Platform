@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { manyVillages, record, side, village } from './fixtures'
+import { pickOption } from '../../test/pickOption'
 
 const auth = vi.hoisted(() => ({ role: 'Coordinator' }))
 vi.mock('../../api/client', () => ({ default: { get: vi.fn(), post: vi.fn() } }))
@@ -284,7 +285,7 @@ describe('Take action', () => {
     api.post.mockResolvedValue({ data: {} })
     await draw()
     await user.click(screen.getByRole('button', { name: /Take action/ }))
-    await user.selectOptions(await screen.findByLabelText('Contractor'), '5')
+    await pickOption(await screen.findByLabelText('Contractor'), '5')
     await user.click(screen.getByRole('button', { name: 'Assign for drive test' }))
     expect(api.post).toHaveBeenCalledWith('/work-items/7/assignment', { assignment_type: 'official', contractor_id: 5 })
   })
