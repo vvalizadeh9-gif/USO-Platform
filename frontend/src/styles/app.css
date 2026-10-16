@@ -1499,7 +1499,9 @@ a.stepper-step:focus-visible { outline: 2px solid var(--uep-accent); outline-off
   font-size: var(--uep-fs-small); line-height: var(--uep-lh-meta); color: var(--uep-text-3); font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
-.dt-freshness-dot { width: 8px; height: 8px; border-radius: var(--uep-radius-pill); background: var(--uep-status-success-ink); flex: none; }
+/* Never green (green means approved): grey while fresh, amber once older than a day. */
+.dt-freshness-dot { width: 8px; height: 8px; border-radius: var(--uep-radius-pill); background: var(--uep-text-3); flex: none; }
+.dt-freshness[data-stale] .dt-freshness-dot { background: var(--uep-status-pending-dot); }
 .dt-spin { animation: spin 0.9s linear infinite; }
 
 /* ---------- the bench ---------- */

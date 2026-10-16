@@ -186,4 +186,3 @@
 }
 
 /* Green means approved, and nothing else: the freshness dot is neutral here. */
-.acc-page .dt-freshness-dot { background: var(--uep-neutral-data); }

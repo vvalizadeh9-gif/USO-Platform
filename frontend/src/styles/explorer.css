@@ -202,6 +202,7 @@
 .ex-fade { animation: ex-enter var(--uep-dur-explorer-filter) var(--uep-ease-productive) both; }
 
 /* ICT and CRA heads: the deep-cobalt label and three large counts. */
+.ex-authority[data-authority='cra'] { background: var(--uep-cra-soft); color: var(--uep-cra); }
 .ex-authority-head { display: flex; align-items: center; gap: var(--uep-space-16); }
 .ex-authority {
   display: inline-grid;
@@ -209,8 +210,9 @@
   height: var(--uep-explorer-authority-height);
   padding: 0 var(--uep-space-12);
   border-radius: var(--uep-radius-control);
-  background: var(--uep-brand-deep);
-  color: var(--uep-on-brand);
+  /* ICT plum / CRA ocean soft chips, the same on every page (UEP-13 §3.8). */
+  background: var(--uep-ict-soft);
+  color: var(--uep-ict);
   font-size: var(--uep-fs-body);
   font-weight: var(--uep-weight-bold);
 }

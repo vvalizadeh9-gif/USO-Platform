@@ -122,11 +122,11 @@ export function StatusMark({ side, authority }) {
   )
 }
 
-/** "ICT" on deep cobalt, then the three large counts. */
+/** "ICT" / "CRA" as its authority's soft chip, then the three large counts. */
 function AuthorityHead({ label, count }) {
   return (
     <div className="ex-authority-head">
-      <span className="ex-authority">{label}</span>
+      <span className="ex-authority" data-authority={label.toLowerCase()}>{label}</span>
       <dl className="ex-counts">
         {['approved', 'pending', 'rejected'].map((status) => (
           <div key={status} className={`ex-count is-${status} ${count[status] === 0 ? 'is-zero' : ''}`.trim()}>

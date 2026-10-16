@@ -393,7 +393,7 @@ function Label({ shape, small, selected, lit }) {
   const classes = [
     'cov-label',
     small && 'small',
-    band?.ink === '#FFFFFF' && 'on-dark',
+    band?.dark && 'on-dark',
     selected && 'is-sel',
     lit && 'is-hl',
   ]
