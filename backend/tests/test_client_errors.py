@@ -22,6 +22,8 @@ BODY = {"error_id": "UEP-A1B2C3", "route": "/home", "message": "boom", "stack": 
 
 @pytest.fixture(scope="module")
 def client():
+    if os.path.exists("/tmp/uep_client_errors_pytest.db"):
+        os.remove("/tmp/uep_client_errors_pytest.db")
     create_schema()
     from app.main import app
 
