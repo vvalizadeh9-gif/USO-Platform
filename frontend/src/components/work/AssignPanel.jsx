@@ -4,6 +4,7 @@ import { coveredProvinces, orderContractors, suggestContractor } from '../../lib
 import { ActionNotice, Fa } from './parts'
 import { useWork } from './WorkContext'
 import { formatNumber } from '../../lib/numbers'
+import MetaLine from '../MetaLine'
 
 const PROCESS = {
   hc: { url: '/hc/contractors/load', holding: 'in check now', noun: 'in check' },
@@ -111,9 +112,13 @@ export default function AssignPanel({ process, selectedCount, selectedProvinces,
                     <i style={{ width: `${(100 * c.open) / maxOpen}%` }} />
                   </span>
                   <span className="uw-assign-meta" aria-hidden="true">
-                    {isSuggested && <b className="uw-suggested">Suggested · </b>}
-                    {c.late > 0 && <b className="uw-late">{formatNumber(c.late)} late · </b>}
-                    {c.avg_submit_days != null && <span>avg {Math.round(c.avg_submit_days)} d</span>}
+                    <MetaLine
+                      parts={[
+                        isSuggested && <b className="uw-suggested">Suggested</b>,
+                        c.late > 0 && <b className="uw-late">{formatNumber(c.late)} late</b>,
+                        c.avg_submit_days != null && <span>avg {Math.round(c.avg_submit_days)} d</span>,
+                      ]}
+                    />
                   </span>
                 </button>
               )

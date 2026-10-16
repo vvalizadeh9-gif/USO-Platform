@@ -187,16 +187,16 @@ describe('the first screen', () => {
     ])
   })
 
-  it('shows the Mojri tiles empty, not guessed, before any Mojri import', async () => {
+  it('shows one compact empty state for Mojri before any import, with no grids', async () => {
     mock({ overview: payload({ last_mojri_import: null }) })
     draw()
     const hits = await tiles()
-    expect(hits[4]).toHaveAccessibleName('ICT Not in Mojri: no Mojri import yet')
-    const tile = hits[4].closest('[data-testid="waffle-tile"]')
-    expect(tile.querySelector('.waffle[data-empty]')).not.toBeNull()
-    expect(within(tile).getByText('—')).toBeInTheDocument()
-    expect(within(tile).getByText('No Mojri import yet')).toBeInTheDocument()
-    expect(tile).toHaveTextContent('3,070 approved in UEP')
+    expect(hits).toHaveLength(4)
+    const empty = screen.getByTestId('mojri-empty')
+    expect(empty).toHaveTextContent('No Mojri import yet')
+    expect(empty).toHaveTextContent('ICT and CRA checks appear after the first import')
+    expect(empty.querySelector('.waffle')).toBeNull()
+    expect(empty).not.toHaveTextContent('—')
     expect(screen.queryByTestId('waffle-breakdown')).not.toBeInTheDocument()
   })
 })
@@ -309,19 +309,6 @@ describe('the drawer', () => {
     expect(screen.getByRole('dialog')).toHaveTextContent('1 coordinator holds these 230 villages')
     expect(screen.getByTestId('gap-checksum')).toHaveTextContent('Adds up to 230 ✓')
   })
-
-  it('replaces the list with an empty state for a Mojri gap before any import', async () => {
-    mock({ overview: payload({ last_mojri_import: null }) })
-    draw()
-    await userEvent.click((await tiles())[5])
-    const drawer = screen.getByRole('dialog')
-    expect(within(drawer).getByRole('group', { name: 'Group by' })).toBeInTheDocument()
-    expect(within(drawer).queryByRole('table')).not.toBeInTheDocument()
-    expect(drawer).toHaveTextContent('Nothing to compare yet.')
-    expect(drawer).toHaveTextContent(
-      'the villages approved in UEP but missing in Mojri are listed here by coordinator.'
-    )
-  })
 })
 
 describe('export behind every number', () => {
@@ -339,16 +326,6 @@ describe('export behind every number', () => {
     ])
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     expect(await screen.findByText('Exported 2,257 villages')).toBeInTheDocument()
-  })
-
-  it("exports the Mojri tiles' approved-in-UEP counts before any import", async () => {
-    mock({ overview: payload({ last_mojri_import: null }) })
-    draw()
-    await tiles()
-    await userEvent.click(
-      screen.getByRole('button', { name: 'Export 3,070 villages (ICT approved in UEP) to Excel' })
-    )
-    expect(exported()[0][1].params).toEqual({ gap: 'ict_approved_all' })
   })
 
   it('exports the drawer hero and each drawer row by its owner', async () => {

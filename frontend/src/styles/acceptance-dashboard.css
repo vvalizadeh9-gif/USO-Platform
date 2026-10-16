@@ -37,7 +37,9 @@
 .acc-page .acc-kpis .dt-kpi-figure.drill { align-self: flex-start; text-align: left; border-bottom-width: 1px; }
 .acc-page .acc-kpis .dt-kpi-card { min-height: 104px; }
 .acc-page .dt-kpi-change .drill { font-size: inherit; line-height: inherit; }
-.acc-line-fig { display: inline-flex; align-items: baseline; gap: 0; }
+.acc-line-fig { display: inline-flex; align-items: baseline; gap: 0.25em; }
+/* A zero is not news: it reads in the quiet ink whatever its tone. */
+.acc-line-fig .acc-tone-zero, .acc-line-fig .acc-tone-zero b { color: var(--uep-text-3); }
 .acc-line-fig b { font-weight: var(--uep-weight-semibold); }
 .acc-tone-danger, .acc-tone-danger b { color: var(--uep-danger); }
 .acc-tone-pending, .acc-tone-pending b { color: var(--uep-status-pending-ink); }
@@ -151,8 +153,8 @@
 /* The bar: the DT PIP bar (amber fill, Today tick), without its top rule. */
 .acc-page .acc-pip-section .acc-plan-bar.dt-plan-progress { margin-block: 8px 0; }
 .acc-page .acc-pip-section .acc-plan-bar.dt-plan-progress::before { content: none; }
-.acc-page .acc-pip-section .acc-plan-bar:has(.dt-plan-pace) { margin-block-end: 14px; }
-.acc-plan-line { margin: 6px 0 0; font-size: 12px; line-height: 16px; color: var(--uep-text-3); }
+.acc-page .acc-pip-section .acc-plan-bar:has(.dt-plan-pace) { margin-block-start: 20px; }
+.acc-plan-line { margin: 8px 0 0; font-size: 12px; line-height: 16px; color: var(--uep-text-3); }
 .acc-plan-line b { font-weight: var(--uep-weight-semibold); }
 
 .acc-pip-todate {

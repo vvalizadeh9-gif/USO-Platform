@@ -205,12 +205,12 @@
 .dt-page .dt-pip-tiles.is-uncommitted dd { color: var(--uep-text-3); }
 .dt-page .dt-pip-section .dt-plan-progress {
   position: relative; display: block; height: 6px; border-radius: 3px;
-  margin-block: 12px 18px; padding-block-start: 0;
+  margin-block: 30px 8px; padding-block-start: 0;
   background: var(--uep-divider);
   border-block-start: 0;
 }
 .dt-page .dt-pip-section .dt-plan-progress::before {
-  content: ''; position: absolute; inset-inline: 0; top: -12px;
+  content: ''; position: absolute; inset-inline: 0; top: -30px;
   border-block-start: 1px solid var(--uep-divider);
 }
 .dt-page .dt-pip-section .dt-plan-progress-fill {
@@ -222,8 +222,10 @@
   position: absolute; top: -4px; width: 2px; height: 14px;
   background: var(--uep-text); border-radius: 1px; transform: translateX(-1px);
 }
+/* "Today" sits above the bar, centred on the tick, so it can never run into
+   the line under the bar (UEP-13 §3.4). */
 .dt-plan-pace-label {
-  position: absolute; top: 15px; left: 50%; transform: translateX(-50%);
+  position: absolute; bottom: calc(100% + 2px); left: 50%; transform: translateX(-50%);
   font-size: 11px; line-height: 14px; font-weight: var(--uep-weight-medium);
   color: var(--uep-text); white-space: nowrap;
 }
@@ -354,7 +356,8 @@
   .dt-page .hk-strip .dt-kpi-card { padding: 6px 12px 4px; }
   .dt-page .hk-strip .dt-kpi-figure { font-size: 26px; }
   .dt-page .hk-strip .dt-kpi-card .hk-spark { height: 22px; padding-top: 2px; }
-  .dt-page .dt-pip-section .dt-plan-progress { margin-block: 8px 15px; }
+  .dt-page .dt-pip-section .dt-plan-progress { margin-block: 24px 8px; }
+  .dt-page .dt-pip-section .dt-plan-progress::before { top: -24px; }
   .dt-wf-row { padding-block: 2px; }
   .dt-page .dt-tables { gap: 12px; }
 }

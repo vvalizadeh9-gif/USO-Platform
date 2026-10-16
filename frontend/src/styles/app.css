@@ -3360,6 +3360,16 @@ a.lifecycle-step:focus-visible { outline: 2px solid var(--accent); outline-offse
 /* Bottom-aligned, so a card whose description wraps keeps its tiles level
    with its neighbours' (every card stretches to the tallest). */
 .gap-tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: auto; }
+.gap-mojri-empty {
+  flex: 1 1 auto; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: var(--uep-space-8); padding: var(--uep-space-24); text-align: center;
+}
+.gap-mojri-empty-tile {
+  display: grid; place-items: center; width: 40px; height: 40px;
+  border-radius: var(--uep-radius-tile); background: var(--uep-divider); color: var(--uep-text-3);
+}
+.gap-mojri-empty-title { margin: 0; font-size: var(--uep-fs-body); font-weight: var(--uep-weight-semibold); color: var(--uep-text); }
+.gap-mojri-empty-line { margin: 0 0 var(--uep-space-4); font-size: var(--uep-fs-small); color: var(--uep-text-3); }
 @media (max-width: 900px) { .gap-cards { grid-template-columns: minmax(0, 1fr); } }
 
 /* The authority chip (ui.jsx AuthorityChip): soft fill, authority ink. CRA

@@ -2,7 +2,8 @@ import { useNavigate } from 'react-router-dom'
 import Icon from '../../components/Icon'
 import AppTile from '../../shell/AppTile'
 import { APPS } from '../../shell/appRegistry'
-import { metaText } from './homeLogic'
+import MetaLine from '../../components/MetaLine'
+import { oldestText, ownersText } from './homeLogic'
 import { formatNumber } from '../../lib/numbers'
 
 // Each card is its app's: tile colour, icon and header tint from the registry.
@@ -12,14 +13,18 @@ const appById = (id) => APPS.find((a) => a.id === id)
 /** One queue. Every row looks the same: none is singled out as "next". */
 function QueueRow({ ticket }) {
   const navigate = useNavigate()
-  const meta = metaText(ticket)
   return (
     <button type="button" className="hw-row" data-queue={ticket.queue_key} onClick={() => navigate(ticket.url)}>
       <span className="hw-row-text">
         <span className="hw-row-label">{ticket.short_label}</span>
         <span className="hw-row-meta">
-          {ticket.late > 0 && <span className="hw-late">{formatNumber(ticket.late)} late · </span>}
-          {meta}
+          <MetaLine
+            parts={[
+              ticket.late > 0 && <span className="hw-late">{formatNumber(ticket.late)} late</span>,
+              oldestText(ticket),
+              ownersText(ticket),
+            ]}
+          />
         </span>
       </span>
       <span className="hw-row-count">{formatNumber(ticket.count)}</span>

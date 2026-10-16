@@ -76,11 +76,11 @@ function LinePart({ part, first }) {
             authority={part.drill.authority}
             label={part.drill.label}
             value={part.figure}
-            className={`tnum acc-tone-${part.tone}`}
+            className={`tnum acc-tone-${part.figure === 0 ? 'zero' : part.tone}`}
           >
             <b>{fmt(part.figure)}</b>
-          </DrillFigure>{' '}
-          {part.text}
+          </DrillFigure>
+          <span>{part.text}</span>
         </span>
       </>
     )

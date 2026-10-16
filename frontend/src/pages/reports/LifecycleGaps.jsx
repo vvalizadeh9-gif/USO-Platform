@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { AlertTriangle, ClipboardList, Hourglass, Scale } from 'lucide-react'
 import api from '../../api/client'
 import ExportNumber, { ExportFeedback } from '../../components/ExportNumber'
 import GapDrawer from '../../components/GapDrawer'
+import Icon from '../../components/Icon'
 import PageFrame from '../../components/PageFrame'
 import WaffleTile from '../../components/WaffleTile'
 import { useAuth } from '../../context/AuthContext'
@@ -151,6 +152,7 @@ export default function LifecycleGaps() {
             data={data}
             lens={lens}
             isPm={isPm}
+            canImport={user?.role?.name === 'PM'}
             selected={selected}
             onSelect={setSelected}
             onLens={setLens}
@@ -177,7 +179,7 @@ function readError(err, fallback) {
    The Gaps tab: three cards, six tiles, one legend line.
    --------------------------------------------------------------------------- */
 
-function GapsTab({ data, lens, isPm, selected, onSelect, onLens }) {
+function GapsTab({ data, lens, isPm, canImport, selected, onSelect, onLens }) {
   return (
     <div className="gap-tab">
       <div className="gap-cards">
@@ -190,6 +192,9 @@ function GapsTab({ data, lens, isPm, selected, onSelect, onLens }) {
             description={card.description}
             className="gap-card"
           >
+            {card.key === 'mojri' && !card.gaps.some((key) => hasData(key, data)) ? (
+              <MojriEmpty canImport={canImport} />
+            ) : (
             <div className="gap-tiles">
               {card.gaps.map((key) => (
                 <GapTile
@@ -201,6 +206,7 @@ function GapsTab({ data, lens, isPm, selected, onSelect, onLens }) {
                 />
               ))}
             </div>
+            )}
           </Card>
         ))}
       </div>
@@ -237,7 +243,6 @@ function GapTile({ gapKey, data, selected, onOpen }) {
   const meta = GAPS[gapKey]
   const gap = data.gaps[gapKey]
   const ready = hasData(gapKey, data)
-  const approved = meta.approvedGap && data.totals[meta.approvedGap]
 
   return (
     <WaffleTile
@@ -251,13 +256,6 @@ function GapTile({ gapKey, data, selected, onOpen }) {
       selected={selected}
       empty={!ready}
       emptyNote="No Mojri import yet"
-      emptyFigure={
-        meta.mojri && (
-          <>
-            <GapFigure gap={meta.approvedGap} value={approved} /> approved in UEP
-          </>
-        )
-      }
       openLabel={
         ready
           ? `${meta.authority} ${meta.tileLabel}: ${fmt(gap.count)} villages, ` +
@@ -266,6 +264,24 @@ function GapTile({ gapKey, data, selected, onOpen }) {
       }
       onOpen={onOpen}
     />
+  )
+}
+
+/** The Mojri card before the first import: one compact state, no empty grids. */
+function MojriEmpty({ canImport }) {
+  return (
+    <div className="gap-mojri-empty" data-testid="mojri-empty">
+      <span className="gap-mojri-empty-tile" aria-hidden="true">
+        <Icon name="document" size={20} />
+      </span>
+      <p className="gap-mojri-empty-title">No Mojri import yet</p>
+      <p className="gap-mojri-empty-line">ICT and CRA checks appear after the first import</p>
+      {canImport && (
+        <Link className="btn" to="/mojri-tracker">
+          Import tracker
+        </Link>
+      )}
+    </div>
   )
 }
 
