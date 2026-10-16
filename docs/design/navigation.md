@@ -185,3 +185,34 @@ The shell is not touched.
 The Admin console has no separate "Organizations" or "HC import" screen, and
 the Action Center has no "Due soon" or "Done" view (both open the whole
 board). Those pages appear once the screens exist.
+
+## One count per queue (UEP-13)
+
+For every queue, the Home work-card row, the app-rail badge and the page
+header show the same number: the items waiting on the signed-in user, read
+from the queue's `count` in `GET /me/home`. Pages with a header count
+(`PageHeading`, Monthly plan Approvals) read that field through
+`useHomeData().counts`; `/drive-test/pipeline/summary` counts through the same
+queue service and is only the fallback while `/me/home` loads. A page that
+lists more than the waiting items shows the wider list as a filter with its
+own count, never under the same name (`pool_total` in an API).
+
+| Queue key | Where | Counts |
+|---|---|---|
+| `hc_assign` | HC assignment | Sites on air with no health check assigned, in the user's scope |
+| `hc_review` | HC review | Submitted health-check results nobody has reviewed |
+| `hc_reroutes` | Re-routes | Fixes whose owner disputes the category |
+| `hc_submit` | HC check (contractor) | Health checks assigned to the contractor and not submitted |
+| `hc_fixes` | Fix queue | Open fixes owned by the user's role |
+| `dt_assign` | DT assignment | Confirmed-Ready sites with no official drive-test assignment |
+| `dt_review` | DT review | Submitted drive tests awaiting the PM/Coordinator's decision |
+| `dt_todo` / `dt_redo` | In progress (contractor) | Drive tests with the contractor / sent back to them |
+| `ict_*` / `cra_*` | Filing, Validation | My Work buckets, per authority |
+| `plans_approve` | Monthly plan › Approvals | Plans Submitted for the planning month (next month) + revision requests on the running month |
+| `cpm_changes` | Data › CPM changes | CPM change requests pending validation, in scope |
+| `plan_submit` | Monthly plan (contractor) | Streams the contractor has not filed, plus returned plans still answerable |
+
+Why Monthly plan used to disagree (2 in the menu, 15 on the tab): Home
+counted every current Submitted/RevisionRequested plan of any month, the tab
+counted per stream for the planning month only. Both now use the tab's
+definition (`plans_awaiting_pm`).

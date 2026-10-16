@@ -93,7 +93,7 @@ function PipelineView({ page, resolved, highlightTaskId }) {
   const navigate = useNavigate()
   const location = useLocation()
   const { headingRef, clearNotice } = useWork()
-  const { data: home, error: homeError } = useHomeData()
+  const { data: home, error: homeError, counts } = useHomeData()
   const summary = useSummary(canReview(user))
   const exportRef = useRef(null)
   const [exporting, setExporting] = useState(false)
@@ -149,7 +149,9 @@ function PipelineView({ page, resolved, highlightTaskId }) {
     <div className="uep-home uw-page">
       <PageHeading
         title={step ? step.name : 'History'}
-        count={figures?.count}
+        // One count per queue (UEP-13 §3.2): the header leads with the number
+        // Home and the rail show, read from the same /me/home field.
+        count={step?.queue && counts[step.queue] !== undefined ? counts[step.queue] : figures?.count}
         late={figures?.late}
         headingRef={headingRef}
         historyOpen={!step}

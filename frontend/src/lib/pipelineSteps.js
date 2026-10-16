@@ -10,6 +10,7 @@
 /**
  * @typedef {object} PipelineStep
  * @property {string} key        The summary key (GET /drive-test/pipeline/summary).
+ * @property {string} [queue]    The GET /me/home queue it is: the header leads with that count.
  * @property {PipelinePage} page The page that shows it.
  * @property {string} tab        Its `?tab=` on that page.
  * @property {string} name       The page heading.
@@ -21,16 +22,16 @@
 
 /** @type {readonly PipelineStep[]} In strip order: the arrow keys follow it. */
 export const STEPS = Object.freeze([
-  { key: 'hc1', page: 'hc', tab: 'pool', number: 1, name: 'Assign health check', short: 'To assign', group: 'hc', owner: 'waiting on you' },
-  { key: 'hc2', page: 'hc', tab: 'running', number: 2, name: 'In health check', short: 'In check', group: 'hc', owner: 'with health-check contractors' },
-  { key: 'hc3', page: 'hc', tab: 'review', number: 3, name: 'Review results', short: 'To review', group: 'hc', owner: 'waiting on you' },
-  { key: 'dt4', page: 'dt', tab: 'assignment', number: 4, name: 'Assign drive test', short: 'To assign', group: 'dt', owner: 'waiting on you' },
-  { key: 'dt5', page: 'dt', tab: 'in-progress', number: 5, name: 'With contractor', short: 'In test', group: 'dt', owner: 'with contractors' },
-  { key: 'dt6', page: 'dt', tab: 'review', number: 6, name: 'Review drive test', short: 'To review', group: 'dt', owner: 'waiting on you' },
+  { key: 'hc1', queue: 'hc_assign', page: 'hc', tab: 'pool', number: 1, name: 'Assign health check', short: 'To assign', group: 'hc', owner: 'waiting on you' },
+  { key: 'hc2', queue: 'hc_in_check', page: 'hc', tab: 'running', number: 2, name: 'In health check', short: 'In check', group: 'hc', owner: 'with health-check contractors' },
+  { key: 'hc3', queue: 'hc_review', page: 'hc', tab: 'review', number: 3, name: 'Review results', short: 'To review', group: 'hc', owner: 'waiting on you' },
+  { key: 'dt4', queue: 'dt_assign', page: 'dt', tab: 'assignment', number: 4, name: 'Assign drive test', short: 'To assign', group: 'dt', owner: 'waiting on you' },
+  { key: 'dt5', queue: 'dt_in_test', page: 'dt', tab: 'in-progress', number: 5, name: 'With contractor', short: 'In test', group: 'dt', owner: 'with contractors' },
+  { key: 'dt6', queue: 'dt_review', page: 'dt', tab: 'review', number: 6, name: 'Review drive test', short: 'To review', group: 'dt', owner: 'waiting on you' },
   { key: 'done', page: 'dt', tab: 'done', name: 'DT done', short: 'DT done', group: 'outcome', owner: 'on to acceptance' },
-  { key: 'remediation', page: 'hc', tab: 'remediation', name: 'Remediation', short: 'Remediation', group: 'loop', owner: 'with the owning teams' },
-  { key: 'reroutes', page: 'hc', tab: 'reroutes', name: 'Re-routes', short: 'Re-routes', group: 'loop', owner: 'waiting on you' },
-  { key: 'sent_back', page: 'dt', tab: 'sent-back', name: 'Sent back', short: 'Sent back', group: 'loop', owner: 'with contractors' },
+  { key: 'remediation', queue: 'hc_remediation', page: 'hc', tab: 'remediation', name: 'Remediation', short: 'Remediation', group: 'loop', owner: 'with the owning teams' },
+  { key: 'reroutes', queue: 'hc_reroutes', page: 'hc', tab: 'reroutes', name: 'Re-routes', short: 'Re-routes', group: 'loop', owner: 'waiting on you' },
+  { key: 'sent_back', queue: 'dt_sent_back', page: 'dt', tab: 'sent-back', name: 'Sent back', short: 'Sent back', group: 'loop', owner: 'with contractors' },
 ])
 
 /** History is a view on either page, not a step on the strip. */

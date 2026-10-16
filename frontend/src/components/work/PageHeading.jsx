@@ -2,7 +2,7 @@ import Icon from '../Icon'
 
 /**
  * The page heading (UEP-06 §2): the current step's name as the H1, and on
- * its baseline "196 sites · 3 late". History and Export on the right. The H1
+ * its baseline "196 waiting · 3 late" (the /me/home count, UEP-13 §3.2). History and Export on the right. The H1
  * takes focus after an action (`headingRef`), so it carries tabindex -1.
  * `pill` shows the count as a neutral pill beside the title instead (Explorer).
  */
@@ -17,7 +17,7 @@ export default function PageHeading({ title, count, late, pill = false, headingR
       )}
       {!pill && count != null && (
         <p className="uw-heading-meta">
-          <b>{count.toLocaleString('en-US')} {count === 1 ? 'site' : 'sites'}</b>
+          <b>{count.toLocaleString('en-US')} waiting</b>
           {late > 0 && (
             <>
               {' · '}

@@ -17,6 +17,7 @@ import useOverview from './useOverview'
 import usePlanBoard from './usePlanBoard'
 import { downloadXlsx } from './xlsx'
 import '../../styles/monthly-plan.css'
+import { useHomeData } from '../../shell/HomeData'
 
 const PANEL_ID = 'mp-panel'
 
@@ -67,7 +68,10 @@ export default function PmPlan({ canDecide, canSetTarget, canSeeInternal }) {
     params: { period: 'month', year: planning?.year, month: planning?.month },
     enabled: canSeeInternal && tab === 'internal' && Boolean(planning),
   })
-  const waiting = countWaiting(board)
+  // One count per queue (UEP-13 §3.2): the rail's /me/home number when it has
+  // one, so menu, Home and page agree; the board's own count otherwise.
+  const { counts } = useHomeData()
+  const waiting = counts.plans_approve ?? countWaiting(board)
 
   function selectTab(next) {
     const nextParams = new URLSearchParams(params)
