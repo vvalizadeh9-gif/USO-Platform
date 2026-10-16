@@ -443,3 +443,5 @@ a.rp-rank-row:hover { background: var(--uep-row-hover); }
   .rp-owner-col { border-inline-start: 0; border-top: var(--uep-border-width) solid var(--uep-divider); }
 }
 .rp-header-note { font-size: var(--uep-fs-small); color: var(--uep-text-3); white-space: nowrap; }
+/* Persian names start at the same edge as English ones (UEP-13 §3.14d). */
+.rp-owner-name, .rp-rank-name { text-align: start; unicode-bidi: plaintext; }

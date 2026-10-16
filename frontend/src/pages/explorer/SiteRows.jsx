@@ -86,15 +86,14 @@ function SiteRow({ row, index, term, checked, onSelect, expanded, onToggle, rise
           <Marked text={row.site_code} term={term} />
         </Link>
       </span>
-      <span role="cell" className="exl-with-icon">
-        <FieldIcon field="province" muted={!row.province} />
+      {/* No decorative icons in the rows (UEP-13 §3.14b); they stay on the record page. */}
+      <span role="cell">
         <Fa>{row.province}</Fa>
       </span>
       <span role="cell" className={`exl-type ${isNewSite(row.type) ? 'is-new' : ''}`.trim()}>
         {typeLabel(row.type) || <span className="uw-none">—</span>}
       </span>
-      <span role="cell" className="exl-with-icon">
-        <FieldIcon field="technology" muted={row.requested_technology.length === 0} />
+      <span role="cell">
         {row.requested_technology.length ? (
           <span className="exl-techs">
             {row.requested_technology.map((t) => <span key={t} className="exl-tech">{t}</span>)}
@@ -113,8 +112,7 @@ function SiteRow({ row, index, term, checked, onSelect, expanded, onToggle, rise
           disabled={count === 0}
           onClick={() => onToggle(row.id)}
         >
-          <FieldIcon field="villages" />
-          <span className="uw-num">{formatNumber(count)}</span>
+          <span className="uw-num">{formatNumber(count)} {count === 1 ? 'village' : 'villages'}</span>
           <Icon name="chevron--down" size={16} />
         </button>
       </span>

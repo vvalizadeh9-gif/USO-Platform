@@ -580,7 +580,7 @@
 .exl-field-icon { display: inline-flex; flex: none; opacity: var(--uep-explorer-field-icon-opacity); }
 .exl-field-icon.is-muted { color: var(--uep-neutral-data); opacity: 1; }
 .exl-type { font-size: var(--uep-fs-small); color: var(--uep-text-2); }
-.exl-type.is-new { color: var(--uep-accent); font-weight: var(--uep-weight-medium); }
+.exl-type.is-new { color: var(--uep-text); font-weight: var(--uep-weight-medium); }
 .exl-techs { display: inline-flex; gap: var(--uep-space-4); }
 .exl-tech {
   display: inline-flex;
@@ -776,3 +776,15 @@
 }
 html[data-uep-motion='reduce'] :is(.ex-page, .ex-fade, .exl-page) { animation: none; }
 html[data-uep-motion='reduce'] :is(.ex-page, .exl-page) * { animation: none !important; transition: none !important; }
+
+/* General information tiles: one style for every row (UEP-13 §3.14c). */
+.ex-field-tile {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--uep-radius-tile);
+  background: var(--uep-accent-tint);
+  color: var(--uep-brand-deep);
+}

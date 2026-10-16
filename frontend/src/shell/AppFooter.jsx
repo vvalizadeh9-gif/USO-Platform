@@ -1,3 +1,4 @@
+import Icon from '../components/Icon'
 import { clock } from '../pages/home/homeLogic'
 
 /** System status from GET /me/home's health check, data time and version.
@@ -7,7 +8,8 @@ export default function AppFooter({ data, failed }) {
   return (
     <footer className="hf-footer">
       <span className={`hf-status ${degraded ? 'is-down' : ''}`.trim()} role="status">
-        <i aria-hidden="true" />
+        {/* A real health check (UEP-13 §3.14f): a Carbon mark, no dot. */}
+        <Icon name={degraded ? 'warning--alt' : 'checkmark--outline'} size={14} />
         {degraded ? 'Some services are degraded' : 'All systems normal'}
       </span>
       {data?.generated_at && <span>Data as of {clock(new Date(data.generated_at))}</span>}

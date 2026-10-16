@@ -185,8 +185,8 @@
   color: var(--uep-text-3);
 }
 .hf-status { display: inline-flex; align-items: center; gap: 6px; }
-.hf-status i { width: 8px; height: 8px; border-radius: var(--uep-radius-pill); background: var(--uep-border-strong); }
-.hf-status.is-down i { background: var(--uep-danger); }
+.hf-status svg { color: var(--uep-text-3); }
+.hf-status.is-down, .hf-status.is-down svg { color: var(--uep-status-pending-ink); }
 .hf-spacer { flex: 1; }
 
 /* ---- States ---- */

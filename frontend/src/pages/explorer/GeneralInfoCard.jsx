@@ -9,8 +9,7 @@ const Missing = () => <span className="ex-missing">—</span>
 const textOr = (value) => (value ? value : <Missing />)
 const dateOr = (value) => textOr(formatGregorian(value))
 
-/** The seven rows (UEP-11 §B4). Each field's icon and tile colour is
- * FIELD_ICONS[key], the same the list uses. */
+/** The seven rows (UEP-11 §B4). Each field's icon is FIELD_ICONS[key]. */
 const FIELDS = [
   { key: 'on_air', label: 'On air date', value: (g) => dateOr(g.on_air_date) },
   { key: 'dt_date', label: 'DT date', value: (g) => dateOr(g.dt_date) },
@@ -37,8 +36,9 @@ export default function GeneralInfoCard({ general, status, onRetry }) {
         <dl className="ex-fields">
           {FIELDS.map((f) => (
             <div key={f.key} className="ex-field" data-field={f.key}>
-              <span className="uep-app-tile ex-field-tile" style={{ '--tile-size': '36px', background: `var(${FIELD_ICONS[f.key].hue})` }} aria-hidden="true">
-                <Icon name={FIELD_ICONS[f.key].icon} size={20} />
+              {/* One tile style for every row (UEP-13 §3.14c). */}
+              <span className="ex-field-tile" aria-hidden="true">
+                <Icon name={FIELD_ICONS[f.key].icon} size={16} />
               </span>
               <dt>{f.label}</dt>
               <dd>{general ? f.value(general) : <span className="h-skel ex-skel-value" />}</dd>
