@@ -3131,8 +3131,10 @@ a.lifecycle-step:focus-visible { outline: 2px solid var(--uep-accent); outline-o
 .gap-total strong { color: var(--uep-text); font-weight: 600; }
 
 /* ----- The Gaps tab: three cards in one row, two tiles in each ----- */
-.gap-tab { display: flex; flex-direction: column; gap: 12px; min-height: 0; }
-.gap-cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.gap-tab { display: flex; flex-direction: column; gap: 12px; min-height: 0; flex: 1 1 auto; }
+/* Full height (UEP-13 §3.11): the three cards stretch to the bottom, the
+   legend is the footer row of the cards area. */
+.gap-cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; flex: 1 1 auto; min-height: 0; }
 .gap-card.ui-card { padding: 16px; gap: 14px; min-width: 0; }
 .gap-card .ui-card-desc { font-size: var(--uep-fs-small); line-height: var(--uep-lh-meta); }
 /* Bottom-aligned, so a card whose description wraps keeps its tiles level
@@ -3169,8 +3171,9 @@ a.lifecycle-step:focus-visible { outline: 2px solid var(--uep-accent); outline-o
 .waffle i { display: block; aspect-ratio: 1; border-radius: var(--uep-radius-sm); background: var(--auth-base); }
 .waffle i.on { background: var(--auth); }
 .waffle[data-empty] i { background: transparent; border: 1px dotted var(--uep-border-strong); }
-.waffle-tile-grid { width: 100%; max-width: 220px; }
-@media (max-width: 1300px) { .waffle-tile-grid { max-width: 180px; } }
+/* Square cells that grow with the height: 14px cells at 1440×900, 8px at
+   1280×720 (10 cells + 9 gaps of 4px). */
+.waffle-tile-grid { width: 100%; max-width: clamp(116px, calc(116px + (100vh - 720px) / 3), 176px); }
 .waffle-size-hero { grid-template-columns: repeat(var(--waffle-cols, 10), 7px); gap: 2px; }
 .waffle-size-hero i { border-radius: var(--uep-radius-sm); }
 .waffle-size-mark { grid-template-columns: repeat(var(--waffle-cols, 20), 5px); gap: 1px; }
@@ -3220,6 +3223,7 @@ a.lifecycle-step:focus-visible { outline: 2px solid var(--uep-accent); outline-o
 
 /* The one legend line under the cards. */
 .gap-legend {
+  flex: none; padding-top: 10px; border-top: 1px solid var(--uep-border);
   display: flex; flex-wrap: wrap; align-items: center; gap: 6px 18px;
   font-size: var(--uep-fs-small); line-height: var(--uep-lh-meta); color: var(--uep-text-3);
 }

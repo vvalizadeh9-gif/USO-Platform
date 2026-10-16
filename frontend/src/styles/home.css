@@ -95,7 +95,7 @@
   display: flex;
   align-items: center;
   gap: var(--uep-space-12);
-  padding: 10px var(--uep-space-8);
+  padding: 14px var(--uep-space-8);
   border: 0;
   border-bottom: var(--uep-border-width) solid var(--uep-divider);
   background: transparent;
@@ -231,3 +231,10 @@
   .uep-home, .hw-plan-bar i { animation: none; }
 }
 html[data-uep-motion='reduce'] :is(.uep-home, .hw-plan-bar i) { animation: none; }
+
+/* Full height, footer on the bottom edge (UEP-13 §3.11, Option 1). The cards
+   keep their natural height; only the footer moves down. */
+.uep-home-page { min-height: 100%; box-sizing: border-box; }
+.uep-home-page > .hf-footer { margin-top: auto; }
+/* Below 820px high the rows stay tight (the rule above), so 1366×768 and
+   1280×720 still fit with no page scroll. */

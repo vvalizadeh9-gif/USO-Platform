@@ -84,3 +84,39 @@ for (const viewport of VIEWPORTS) {
     }
   })
 }
+
+// UEP-13 §3.11: Home (footer on the bottom edge) and Lifecycle gaps (cards to
+// the bottom) fill the screen without scrolling it, down to 1280×720.
+for (const viewport of [
+  { width: 1440, height: 900 },
+  { width: 1366, height: 768 },
+  { width: 1280, height: 720 },
+]) {
+  test.describe(`full-height pages ${viewport.width}×${viewport.height}`, () => {
+    test.use({ viewport })
+
+    test('Home pins its footer and does not scroll', async ({ page }) => {
+      await signIn(page)
+      await page.goto('/home')
+      await page.waitForLoadState('networkidle')
+      const m = await pageScroll(page)
+      expect(m.scrollHeight).toBeLessThanOrEqual(m.innerHeight)
+      const outlet = await page.locator('.page-outlet').evaluate((el) => [el.scrollHeight, el.clientHeight])
+      expect(outlet[0]).toBeLessThanOrEqual(outlet[1])
+      const footer = await page.locator('.hf-footer').boundingBox()
+      const main = await page.locator('.page-outlet').boundingBox()
+      expect(Math.abs(footer.y + footer.height - (main.y + main.height))).toBeLessThanOrEqual(24)
+    })
+
+    test('Lifecycle gaps fills the viewport and does not scroll', async ({ page }) => {
+      await signIn(page)
+      await page.goto('/reports/gaps')
+      await expect(page.getByRole('heading', { name: 'Lifecycle gaps' })).toBeVisible()
+      await page.waitForLoadState('networkidle')
+      const m = await pageScroll(page)
+      expect(m.scrollHeight).toBeLessThanOrEqual(m.innerHeight)
+      const body = await page.locator('.page-body').evaluate((el) => [el.scrollHeight, el.clientHeight])
+      expect(body[0]).toBeLessThanOrEqual(body[1])
+    })
+  })
+}

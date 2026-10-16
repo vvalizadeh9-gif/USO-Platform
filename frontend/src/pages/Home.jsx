@@ -123,7 +123,7 @@ export default function Home() {
   }
 
   return (
-    <div className="uep-home">
+    <div className="uep-home uep-home-page">
       <div className="h-layout">
         <section className="h-greet">
           <p className="h-date">{englishDate(now)}</p>
