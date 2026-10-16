@@ -48,12 +48,12 @@ export const STAGE_DT_DONE = 'DT Done'
  * beside three saturated states without adding a colour to learn.
  */
 export const STATE_COLOR = {
-  done: 'var(--dt-done)',
-  ongoing: 'var(--dt-ongoing)',
-  problematic: 'var(--dt-problem)',
+  done: 'var(--uep-status-success-ink)',
+  ongoing: 'var(--uep-status-ongoing-ink)',
+  problematic: 'var(--uep-status-danger-ink)',
   // The neutral, not a fourth hue: nothing has happened to these sites, and
   // grey beside three saturated states reads as absence. See app.css.
-  not_started: 'var(--dt-notstarted)',
+  not_started: 'var(--uep-text-3)',
 }
 
 /** The ordinal ramp for the ongoing age bands.
@@ -65,12 +65,12 @@ export const STATE_COLOR = {
  * already has.
  */
 export const AGE_RAMP = [
-  'var(--dt-age-1)',
-  'var(--dt-age-2)',
-  'var(--dt-age-3)',
-  'var(--dt-age-4)',
-  'var(--dt-age-5)',
-  'var(--dt-age-6)',
+  'var(--uep-dt-age-1)',
+  'var(--uep-dt-age-2)',
+  'var(--uep-dt-age-3)',
+  'var(--uep-dt-age-4)',
+  'var(--uep-dt-age-5)',
+  'var(--uep-dt-age-6)',
 ]
 
 /** Which way "good" points for each KPI, for delta colouring.

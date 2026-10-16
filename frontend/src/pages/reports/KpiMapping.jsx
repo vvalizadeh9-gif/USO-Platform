@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { ArrowLeft, Link2, Pencil, Repeat } from 'lucide-react'
+import { ArrowLeft, Link2, Pencil, Repeat } from '../../components/carbon'
 import { Link } from 'react-router-dom'
 import api from '../../api/client'
 import { EmptyState, Loading, PageHead } from '../../components/ui'

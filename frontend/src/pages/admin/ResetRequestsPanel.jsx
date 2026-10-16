@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion'
-import { KeyRound, LifeBuoy, X } from 'lucide-react'
+import { KeyRound, LifeBuoy, X } from '../../components/carbon'
 import { useEffect, useState } from 'react'
 import api from '../../api/client'
 import { useToast } from '../../context/ToastContext'
@@ -46,7 +46,7 @@ export default function ResetRequestsPanel({ version, onResetUser, onChanged }) 
       className="card card-pad mb-16"
       initial={{ opacity: 0, y: -8 }}
       animate={{ opacity: 1, y: 0 }}
-      style={{ borderColor: 'var(--amber)', borderWidth: 1.5 }}
+      style={{ borderColor: 'var(--uep-status-pending-ink)', borderWidth: 1.5 }}
     >
       <div className="row" style={{ gap: 8, marginBottom: 4 }}>
         <LifeBuoy size={16} />

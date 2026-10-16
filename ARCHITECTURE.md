@@ -1541,7 +1541,7 @@ between cards and O toggles the Overdue tab. The motion is one entrance,
 done in about a second, with every number final on first paint; with
 `prefers-reduced-motion` nothing moves. The sidebar badge is the board's
 `totals.pending`. The component and its tokens are in
-`design-system-cobalt.md`, "Task board".
+`docs/design-system.md`, "Task board".
 
 ---
 
@@ -1607,7 +1607,7 @@ version). The Apps panel and its visibility are `lib/nav.js` (`app` on an
 item, `appsFor`), so it and the sidebar cannot disagree; the sidebar gains a
 Home item. It refreshes after any write (`DATA_CHANGED_EVENT`) and every
 minute. At 1440x900 and 1280x800 the document does not scroll; long cards
-scroll inside themselves. Tokens and components: `design-system-cobalt.md`,
+scroll inside themselves. Tokens and components: `docs/design-system.md`,
 "UEP Home".
 
 ---

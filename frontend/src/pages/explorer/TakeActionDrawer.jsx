@@ -1,4 +1,4 @@
-import { CheckCircle2, XCircle } from 'lucide-react'
+import { CheckCircle2, XCircle } from '../../components/carbon'
 import { useEffect, useState } from 'react'
 import api from '../../api/client'
 import DriveTestSubmitForm from '../../components/DriveTestSubmitForm'
@@ -133,7 +133,7 @@ function CoordinatorReviewAction({ submissionDate, onDecide }) {
 
   return (
     <div className="card card-pad">
-      <div className="row" style={{ gap: 8, marginBottom: 4, color: 'var(--amber)' }}>
+      <div className="row" style={{ gap: 8, marginBottom: 4, color: 'var(--uep-status-pending-ink)' }}>
         <CheckCircle2 size={17} />
         <h3 style={{ fontSize: 15 }}>Drive test awaiting your validation</h3>
       </div>
@@ -164,7 +164,7 @@ function CoordinatorReviewAction({ submissionDate, onDecide }) {
         </button>
         <button
           className="btn"
-          style={{ padding: '11px 22px', color: 'var(--red)', borderColor: 'var(--red)' }}
+          style={{ padding: '11px 22px', color: 'var(--uep-status-danger-ink)', borderColor: 'var(--uep-status-danger-ink)' }}
           disabled={comment.trim().length < 3}
           onClick={() => setPending('Rejected')}
         >

@@ -1,4 +1,4 @@
-import { Download, ExternalLink, X } from 'lucide-react'
+import { Download, ExternalLink, X } from '../../components/carbon'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import api from '../../api/client'

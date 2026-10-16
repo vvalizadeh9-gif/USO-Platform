@@ -1,4 +1,4 @@
-import { AlertCircle, RefreshCw } from 'lucide-react'
+import { AlertCircle, RefreshCw } from '../../../components/carbon'
 
 /**
  * A source that failed, in the KPI strip's place: the Drive test dashboard's

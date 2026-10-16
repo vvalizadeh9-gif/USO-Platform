@@ -1,4 +1,4 @@
-import { X } from 'lucide-react'
+import { X } from '../../components/carbon'
 import { useCallback, useEffect, useState } from 'react'
 import api from '../../api/client'
 import { Loading, StatusPill } from '../../components/ui'
@@ -86,7 +86,7 @@ export default function DecisionDrawer({ target, canDecide, onClose, onDecided }
         <div className="mp-drawer-head">
           <div>
             <div className="mp-drawer-title">{row?.contractor_name || target.name}</div>
-            <div className="dim" style={{ fontSize: 'var(--fs-meta)' }}>
+            <div className="dim" style={{ fontSize: 'var(--uep-fs-small)' }}>
               {streamName} · {label || `${target.year}/${target.month}`}
             </div>
           </div>
@@ -155,7 +155,7 @@ export default function DecisionDrawer({ target, canDecide, onClose, onDecided }
                 </div>
               )}
               {waiting && !canDecide && (
-                <div className="dim" style={{ fontSize: 'var(--fs-meta)', marginTop: 12 }}>Waiting on the PM’s decision.</div>
+                <div className="dim" style={{ fontSize: 'var(--uep-fs-small)', marginTop: 12 }}>Waiting on the PM’s decision.</div>
               )}
 
               <Revisions

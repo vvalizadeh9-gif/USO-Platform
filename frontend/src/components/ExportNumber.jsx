@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { Download } from 'lucide-react'
+import { Download } from './carbon'
 import api from '../api/client'
 import { describeBlobError, filenameFrom, saveBlob } from '../lib/download'
 import { exportDescription, fmt } from '../pages/reports/lifecycleGaps'

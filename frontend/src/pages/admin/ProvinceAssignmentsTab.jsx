@@ -1,4 +1,4 @@
-import { MapPin } from 'lucide-react'
+import { MapPin } from '../../components/carbon'
 import { useEffect, useState } from 'react'
 import api from '../../api/client'
 import { Loading } from '../../components/ui'

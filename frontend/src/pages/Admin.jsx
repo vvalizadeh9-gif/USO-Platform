@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from 'framer-motion'
-import { LayoutDashboard, UploadCloud, History, GitCompare, Users, ScrollText, Wrench, MapPin, FileSpreadsheet, Timer } from 'lucide-react'
+import { LayoutDashboard, UploadCloud, History, GitCompare, Users, ScrollText, Wrench, MapPin, FileSpreadsheet, Timer } from '../components/carbon'
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import api from '../api/client'
@@ -80,8 +80,8 @@ export default function Admin() {
                     height: 18,
                     padding: '0 5px',
                     borderRadius: 9,
-                    background: 'var(--red)',
-                    color: '#fff',
+                    background: 'var(--uep-status-danger-ink)',
+                    color: 'var(--uep-on-accent)',
                     fontSize: 11,
                     fontWeight: 700,
                     display: 'inline-flex',

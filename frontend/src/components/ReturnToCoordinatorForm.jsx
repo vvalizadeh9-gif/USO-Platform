@@ -1,4 +1,4 @@
-import { ChevronDown, CornerUpLeft } from 'lucide-react'
+import { ChevronDown, CornerUpLeft } from './carbon'
 import { useState } from 'react'
 import { ConfirmDialog } from './ui'
 

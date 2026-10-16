@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion'
-import { AlertCircle, History } from 'lucide-react'
+import { AlertCircle, History } from '../../components/carbon'
 import { useCallback, useEffect, useState } from 'react'
 import api from '../../api/client'
 import { EmptyState, Loading, StatusPill, fadeUp, stagger } from '../../components/ui'
@@ -217,7 +217,7 @@ export default function ContractorPlan({ period }) {
               {open.some((s) => ANSWERING.includes(planning[s.key].planning.status)) ? 'Resubmit' : 'Submit'}
             </button>
             {open.length < STREAMS.length && (
-              <span className="dim" style={{ fontSize: 'var(--fs-meta)' }}>
+              <span className="dim" style={{ fontSize: 'var(--uep-fs-small)' }}>
                 Hands in your {andList(open.map((s) => s.name))} PIP only; the{' '}
                 {STREAMS.length - open.length === 1 ? 'other is' : 'others are'} with the PM already.
               </span>
@@ -316,7 +316,7 @@ function PlanRow({ stream, planning, value, onChange, busy, onHistory }) {
             <div className="pip-note-msg">{planning.return_comment}</div>
           </div>
         ) : (
-          <div className="dim mt-8" style={{ fontSize: 'var(--fs-meta)' }}>
+          <div className="dim mt-8" style={{ fontSize: 'var(--uep-fs-small)' }}>
             Returned earlier: “{planning.return_comment}”
           </div>
         )
@@ -436,7 +436,7 @@ function RevisionRow({ stream, planning, onChanged, onHistory }) {
     <div data-revision={stream.key} style={{ marginTop: 12 }}>
       <div className="row wrap" style={{ gap: 10, alignItems: 'baseline' }}>
         <span style={{ minWidth: 90, fontWeight: 600 }}>{stream.name}</span>
-        <span className="tnum" style={{ fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 700 }}>
+        <span className="tnum" style={{ fontFamily: 'var(--uep-font-sans)', fontSize: 20, fontWeight: 700 }}>
           {figure(planning.in_force_count)}
         </span>
         {planning.in_force_version && <span className="pill pill-dim">v{planning.in_force_version}</span>}

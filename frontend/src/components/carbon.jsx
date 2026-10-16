@@ -1,0 +1,88 @@
+// Carbon icons as components, for the places that pass an icon around as a
+// component (a card's `icon`, a tab's `icon`). Each one is the Carbon glyph
+// drawn by Icon.jsx; Lucide is retired (UEP-13). Prefer <Icon name> directly.
+import Icon from './Icon'
+
+// Card-header tiles draw 18-20px, everything else 16px (UEP-13 §3.16).
+const SIZES = [16, 20]
+const snap = (size) => (size == null ? 16 : SIZES.reduce((a, b) => (Math.abs(b - size) < Math.abs(a - size) ? b : a)))
+
+function make(name) {
+  function CarbonIcon({ size, className, style, 'aria-label': label }) {
+    return <Icon name={name} size={snap(size)} className={className} style={style} label={label} />
+  }
+  CarbonIcon.displayName = `Icon(${name})`
+  return CarbonIcon
+}
+
+export const Activity = make('activity')
+export const AlertCircle = make('warning')
+export const AlertTriangle = make('warning--alt')
+export const Archive = make('archive')
+export const ArrowLeft = make('arrow--left')
+export const ArrowRight = make('arrow--right')
+export const ArrowRightLeft = make('arrows--horizontal')
+export const BarChart3 = make('chart--column')
+export const Briefcase = make('portfolio')
+export const Building2 = make('building')
+export const Calendar = make('calendar')
+export const Check = make('checkmark')
+export const CheckCircle2 = make('checkmark--outline')
+export const ChevronDown = make('chevron--down')
+export const ChevronLeft = make('chevron--left')
+export const ChevronRight = make('chevron--right')
+export const ClipboardCheck = make('task--complete')
+export const ClipboardList = make('task')
+export const Copy = make('copy')
+export const CornerUpLeft = make('undo')
+export const Database = make('data--base')
+export const Dot = make('dot-mark')
+export const Download = make('download')
+export const ExternalLink = make('launch')
+export const Eye = make('view')
+export const EyeOff = make('view--off')
+export const FileSpreadsheet = make('table')
+export const FileText = make('document')
+export const Filter = make('filter')
+export const GitBranch = make('direction--fork')
+export const GitCompare = make('compare')
+export const HelpCircle = make('help')
+export const History = make('recently-viewed')
+export const Hourglass = make('hourglass')
+export const House = make('home')
+export const Inbox = make('document--blank')
+export const Info = make('information')
+export const KeyRound = make('password')
+export const LayoutDashboard = make('dashboard')
+export const LifeBuoy = make('help')
+export const Link2 = make('link')
+export const Link2Off = make('unlink')
+export const ListChecks = make('list--checked')
+export const MapPin = make('location')
+export const MapPinned = make('location--filled')
+export const Minus = make('subtract')
+export const Paperclip = make('attachment')
+export const Pencil = make('edit')
+export const Plus = make('add')
+export const Radio = make('connection-signal')
+export const RefreshCw = make('renew')
+export const Repeat = make('repeat')
+export const Scale = make('scales')
+export const ScrollText = make('document')
+export const Search = make('search')
+export const Send = make('send')
+export const ShieldAlert = make('warning--alt')
+export const ShieldCheck = make('security')
+export const ShieldOff = make('locked')
+export const Table2 = make('table')
+export const Timer = make('timer')
+export const Trash2 = make('trash-can')
+export const TrendingDown = make('arrow--down-right')
+export const TrendingUp = make('arrow--up-right')
+export const Upload = make('upload')
+export const UploadCloud = make('cloud--upload')
+export const UserPlus = make('user--follow')
+export const Users = make('user--multiple')
+export const Wrench = make('tools')
+export const X = make('close')
+export const XCircle = make('misuse')

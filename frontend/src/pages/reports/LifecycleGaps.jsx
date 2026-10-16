@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { AlertTriangle, ClipboardList, Hourglass, Scale } from 'lucide-react'
+import { AlertTriangle, ClipboardList, Hourglass, Scale } from '../../components/carbon'
 import api from '../../api/client'
 import ExportNumber, { ExportFeedback } from '../../components/ExportNumber'
 import GapDrawer from '../../components/GapDrawer'

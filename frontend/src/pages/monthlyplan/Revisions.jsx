@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion'
-import { X } from 'lucide-react'
+import { X } from '../../components/carbon'
 import { useEffect, useState } from 'react'
 import api from '../../api/client'
 import { Loading, StatusPill } from '../../components/ui'
@@ -49,8 +49,8 @@ export default function Revisions({ period, stream = 'DT', isContractor, onClose
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.2 }}
     >
-      <div className="row wrap" style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)' }}>
-        <b style={{ fontFamily: 'var(--font-display)', fontSize: 'var(--fs-body)' }}>Revision history</b>
+      <div className="row wrap" style={{ padding: '16px 20px', borderBottom: '1px solid var(--uep-border)' }}>
+        <b style={{ fontFamily: 'var(--uep-font-sans)', fontSize: 'var(--uep-fs-15)' }}>Revision history</b>
         {data && (
           <span className="dim text-data" style={{ fontSize: 13 }}>
             {data.contractor_name} · {streamMeta(data.stream).short} · {data.shamsi_month_name} {data.shamsi_year}
@@ -84,10 +84,10 @@ export default function Revisions({ period, stream = 'DT', isContractor, onClose
 function Entry({ entry, last }) {
   const tone =
     entry.status === 'Approved'
-      ? 'var(--green)'
+      ? 'var(--uep-status-success-ink)'
       : entry.status === 'Returned'
-        ? 'var(--red)'
-        : 'var(--amber)'
+        ? 'var(--uep-status-danger-ink)'
+        : 'var(--uep-status-pending-ink)'
 
   return (
     <div style={{ display: 'grid', gridTemplateColumns: '22px 1fr', gap: 12 }}>
@@ -102,21 +102,21 @@ function Entry({ entry, last }) {
             flexShrink: 0,
           }}
         />
-        {!last && <span style={{ flex: 1, width: 2, background: 'var(--border)', minHeight: 14 }} />}
+        {!last && <span style={{ flex: 1, width: 2, background: 'var(--uep-border)', minHeight: 14 }} />}
       </div>
 
       <div style={{ paddingBottom: last ? 0 : 18 }}>
         <div className="row wrap" style={{ gap: 8 }}>
           <span className="pill pill-dim">v{entry.version}</span>
           <StatusPill status={entry.status} />
-          <span className="tnum" style={{ fontFamily: 'var(--font-display)', fontWeight: 600 }}>
+          <span className="tnum" style={{ fontFamily: 'var(--uep-font-sans)', fontWeight: 600 }}>
             {entry.committed_count ?? '—'}
           </span>
           {entry.is_late && <span className="pill pill-amber">Late</span>}
           {entry.is_current && <span className="pill pill-cyan">Current</span>}
         </div>
 
-        <div className="dim" style={{ fontSize: 'var(--fs-caption)', marginTop: 3 }}>
+        <div className="dim" style={{ fontSize: 'var(--uep-fs-caption)', marginTop: 3 }}>
           {entry.submitted_shamsi && <>Handed in {entry.submitted_shamsi}</>}
           {entry.decided_shamsi && (
             <>
@@ -130,14 +130,14 @@ function Entry({ entry, last }) {
         {entry.return_comment && (
           <div
             style={{
-              background: 'var(--surface-subtle)',
-              borderInlineStart: '2px solid var(--amber)',
+              background: 'var(--uep-surface-subtle)',
+              borderInlineStart: '2px solid var(--uep-status-pending-ink)',
               padding: '8px 11px',
               borderRadius: '0 6px 6px 0',
-              fontSize: 'var(--fs-meta)',
-              color: 'var(--text-secondary)',
+              fontSize: 'var(--uep-fs-small)',
+              color: 'var(--uep-text-2)',
               marginTop: 8,
-              fontFamily: 'var(--font-farsi)',
+              fontFamily: 'var(--uep-font-persian)',
               lineHeight: 1.6,
             }}
           >

@@ -1,7 +1,7 @@
 import { AnimatePresence, motion } from 'framer-motion'
 import {
   History, KeyRound, LifeBuoy, MapPin, Pencil, Plus, Search, ShieldOff, UserPlus, X,
-} from 'lucide-react'
+} from '../../components/carbon'
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import api from '../../api/client'
@@ -112,7 +112,7 @@ export default function UsersTab() {
             <div style={{ position: 'relative' }}>
               <Search
                 size={15}
-                style={{ position: 'absolute', left: 10, top: 11, color: 'var(--text-dim)' }}
+                style={{ position: 'absolute', left: 10, top: 11, color: 'var(--uep-text-3)' }}
               />
               <input
                 id="user-search"
@@ -280,7 +280,7 @@ export default function UsersTab() {
                         {u.id !== currentUser?.id && (
                           <button
                             className="btn btn-sm btn-ghost"
-                            style={u.status === ACTIVE ? { color: 'var(--red)' } : undefined}
+                            style={u.status === ACTIVE ? { color: 'var(--uep-status-danger-ink)' } : undefined}
                             onClick={() => setStatusTarget(u)}
                             title="Change this user's account status"
                           >
@@ -358,7 +358,7 @@ function ProvincePopup({ user, onClose }) {
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 6 }}>
           {user.provinces.map((p) => (
-            <span key={p.id} className="text-data" style={{ padding: '7px 11px', background: 'var(--surface-2)', borderRadius: 6, fontSize: 13 }}>
+            <span key={p.id} className="text-data" style={{ padding: '7px 11px', background: 'var(--uep-surface-subtle)', borderRadius: 6, fontSize: 13 }}>
               {p.name}
             </span>
           ))}
@@ -391,7 +391,7 @@ function CategoryOwnershipHint({ role, categories }) {
       {categories.length > 0 ? (
         <>
           Fixes for{' '}
-          <strong style={{ color: 'var(--text)' }}>
+          <strong style={{ color: 'var(--uep-text)' }}>
             {categories.map((c) => c.name).join(', ')}
           </strong>{' '}
           are routed to this role — they will appear in this user&apos;s Fix Queue.
@@ -590,7 +590,7 @@ function UserForm({ mode, user, roles, provinces, contractors, categories, onDon
       </div>
 
       {isEdit && (
-        <div className="row" style={{ gap: 7, marginTop: 14, color: 'var(--text-muted)', fontSize: 12.5 }}>
+        <div className="row" style={{ gap: 7, marginTop: 14, color: 'var(--uep-text-2)', fontSize: 12.5 }}>
           <LifeBuoy size={13} />
           <span>
             To set this person&apos;s password, use the key button in their row.

@@ -39,6 +39,7 @@
   --uep-track: #F1F2F5;          /* bar tracks */
 
   --uep-danger: #B42318;
+  --uep-danger-hover: #962621;
   --uep-danger-tint: #FDECEC;
   --uep-approved: #146C2E;       /* Approved status only. Green means nothing else. */
   --uep-approved-tint: #E7F5EC;
@@ -80,6 +81,7 @@
 
   /* ---- Typography ---- */
   --uep-font-sans: 'IBM Plex Sans', 'Segoe UI', sans-serif;
+  --uep-font-mono: ui-monospace, 'Cascadia Mono', Consolas, monospace;
   --uep-font-persian: 'Vazirmatn', 'IBM Plex Sans', 'Segoe UI', sans-serif;
   --uep-weight-regular: 400;
   --uep-weight-medium: 500;
@@ -102,8 +104,9 @@
   --uep-tracking-brand: -0.03em;
 
   /* ---- Shape ---- */
-  --uep-radius-control: 6px;  /* inputs, buttons */
-  --uep-radius-logo: 7px;
+  --uep-radius-sm: 4px;       /* chips, bar ends, small marks */
+  --uep-radius-control: 8px;  /* inputs, buttons */
+  --uep-radius-logo: 8px;
   --uep-radius-tile: 8px;     /* tiles, rail items, KPI tiles */
   --uep-radius-card: 12px;
   --uep-radius-pill: 999px;
@@ -172,9 +175,9 @@
   --uep-search-fill: var(--uep-divider);
   --uep-search-fill-hover: #E6E9EE;
   --uep-search-radius: 8px;
-  --uep-search-kbd-radius: 5px;
+  --uep-search-kbd-radius: 4px;
   --uep-search-tile: 28px;
-  --uep-search-tile-radius: 7px;
+  --uep-search-tile-radius: 8px;
   --uep-search-row: 42px;
   --uep-search-footer: 36px;
   --uep-search-gap: 6px;              /* field to panel */
@@ -341,4 +344,60 @@
   --uep-signin-icon-nudge: 3px;
   --uep-signin-icon-nudge-duration: 200ms;
   --uep-signin-spinner-turn: 700ms;
+
+  /* ---- Migrated from the retired Cobalt block in app.css (UEP-13) ----
+     Tokens the UEP set had no equivalent for; values kept, old blues
+     moved onto the UEP blue. */
+  --uep-surface-subtle: #F6F8FB;
+  --uep-accent-wash: #F3F6FD;
+  --uep-ict-base: #EBD3E4;
+  --uep-cra-base: #BAE0F7;
+  --uep-banner-info-bg: #E8EEFC;
+  --uep-banner-info-border: #C5D5F5;
+  --uep-banner-info-text: #1E40AF;
+  --uep-banner-info-icon: #1D4ED8;
+  --uep-banner-warning-bg: #FCF0D9;
+  --uep-banner-warning-border: #F0D8A6;
+  --uep-banner-warning-text: #5C3B00;
+  --uep-banner-warning-icon: #9A5F00;
+  --uep-banner-error-bg: #FBE6E4;
+  --uep-banner-error-border: #F0C3BF;
+  --uep-banner-error-text: #6E1F18;
+  --uep-banner-error-icon: #B42F2A;
+  --uep-banner-success-bg: #E2F3E9;
+  --uep-banner-success-border: #B7DDC6;
+  --uep-banner-success-text: #134A2F;
+  --uep-banner-success-icon: #1D7A4B;
+  --uep-nav-tone-monthend: #9A5F00;
+  --uep-dt-age-1: #C2A7EE;
+  --uep-dt-age-2: #AE8FE3;
+  --uep-dt-age-3: #9977D7;
+  --uep-dt-age-4: #8460CC;
+  --uep-dt-age-5: #6D49C1;
+  --uep-dt-age-6: #5737A8;
+  --uep-dt-ghost: rgba(85, 99, 122, 0.17);
+  --uep-dt-gap: 10px;
+  --uep-dt-muted: #8391A7;
+  --uep-dt-pending-bar: #6B788D;
+  --uep-stage-hc-ink: #475569;
+  --uep-stage-dt-ink: #1E40AF;
+  --uep-stage-plans-ink: #5F6B7E;
+  --uep-step-line: #C4CCD8;
+  --uep-lh-display: 36px;
+  --uep-lh-figure: 38px;
+  --uep-lh-heading: 24px;
+  --uep-lh-title: 22px;
+  --uep-lh-body: 22px;
+  --uep-lh-control: 20px;
+  --uep-lh-meta: 18px;
+  --uep-lh-caption: 16px;
+  /* Heatmap cells on the KPI page: better / worse than the country. */
+  --uep-kpi-better-strong: #9FDDD2;
+  --uep-kpi-better: #E3F5F2;
+  --uep-kpi-worse: #FCE9E7;
+  --uep-kpi-worse-strong: #F4B9B3;
+  --uep-kpi-up-ink: #0A7D72;
+  --uep-kpi-down-ink: #C5362F;
+  --uep-kpi-bar: #5CC4B3;
+  --uep-shadow-1: 0 1px 2px rgba(20, 27, 43, 0.04);
 }

@@ -1,5 +1,5 @@
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
-import { Download, ExternalLink, X } from 'lucide-react'
+import { Download, ExternalLink, X } from '../../components/carbon'
 import {
   createContext,
   useCallback,

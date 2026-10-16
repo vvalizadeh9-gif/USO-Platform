@@ -101,7 +101,7 @@ describe('DT review', () => {
     await draw(DtReviewStep, 'dt6')
     expect(screen.getByRole('heading', { level: 2, name: 'YZD-1' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'YZD-1' })).toHaveAttribute('aria-current', 'true')
-    expect(within(screen.getByText('YZD-1').closest('tr')).getByText('1 file')).toBeInTheDocument()
+    expect(within(screen.getByRole('button', { name: 'YZD-1' }).closest('tr')).getByText('1 file')).toBeInTheDocument()
     expect(within(screen.getByText('YZD-2').closest('tr')).getByText('No report')).toHaveClass('uw-chip-neutral')
   })
 

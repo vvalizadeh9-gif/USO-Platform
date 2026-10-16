@@ -1,4 +1,4 @@
-import { Plus, Wrench } from 'lucide-react'
+import { Plus, Wrench } from '../../components/carbon'
 import { Fragment, useEffect, useState } from 'react'
 import api from '../../api/client'
 import { EmptyState, Loading } from '../../components/ui'
@@ -128,7 +128,7 @@ export default function ProblemCategoriesTab() {
                 <tr style={{ opacity: c.active ? 1 : 0.55 }}>
                   <td style={{ fontWeight: 500 }}>
                     <span className="row" style={{ gap: 7 }}>
-                      <Wrench size={14} style={{ color: 'var(--text-dim)' }} />
+                      <Wrench size={14} style={{ color: 'var(--uep-text-3)' }} />
                       {c.name}
                       {!c.active && <span className="pill pill-dim">Inactive</span>}
                     </span>
@@ -137,13 +137,13 @@ export default function ProblemCategoriesTab() {
                     {c.owner_role_name ? (
                       roleLabel(c.owner_role_name)
                     ) : (
-                      <span style={{ color: 'var(--red)' }}>
+                      <span style={{ color: 'var(--uep-status-danger-ink)' }}>
                         No owner — fixes land nowhere
                       </span>
                     )}
                   </td>
                   <td className="tnum">{c.sla_days} days</td>
-                  <td className="tnum" style={{ color: c.open_fixes ? 'var(--amber)' : undefined }}>
+                  <td className="tnum" style={{ color: c.open_fixes ? 'var(--uep-status-pending-ink)' : undefined }}>
                     {formatNumber(c.open_fixes)}
                   </td>
                   <td className="tnum dim">{formatNumber(c.total_fixes)}</td>
@@ -158,7 +158,7 @@ export default function ProblemCategoriesTab() {
                 </tr>
                 {editing === c.id && (
                   <tr>
-                    <td colSpan={6} style={{ background: 'var(--surface-2)', padding: '12px 14px' }}>
+                    <td colSpan={6} style={{ background: 'var(--uep-surface-subtle)', padding: '12px 14px' }}>
                       <CategoryForm
                         category={c}
                         roles={roles}

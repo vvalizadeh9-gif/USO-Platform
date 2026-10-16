@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion'
-import { Download, Upload, ChevronRight, CheckCircle2, XCircle, Info, HelpCircle } from 'lucide-react'
+import { Download, Upload, ChevronRight, CheckCircle2, XCircle, Info, HelpCircle } from '../components/carbon'
 import { useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import api from '../api/client'
@@ -77,7 +77,7 @@ function AssignmentCard({ assignment, active, onOpen }) {
       className="card card-pad"
       whileHover={{ y: -2 }}
       onClick={onOpen}
-      style={{ cursor: 'pointer', borderColor: active ? 'var(--signal)' : 'var(--border)', borderWidth: active ? 1.5 : 1 }}
+      style={{ cursor: 'pointer', borderColor: active ? 'var(--uep-accent)' : 'var(--uep-border)', borderWidth: active ? 1.5 : 1 }}
     >
       <div className="row between">
         <span style={{ fontWeight: 600, fontSize: 14 }}>{assignment.title || assignment.code}</span>
@@ -85,10 +85,10 @@ function AssignmentCard({ assignment, active, onOpen }) {
       </div>
       <div className="row between" style={{ marginTop: 10 }}>
         <span className="dim" style={{ fontSize: 12.5 }}>{formatNumber(done)}/{formatNumber(total)} sites done</span>
-        <ChevronRight size={16} style={{ color: 'var(--text-dim)' }} />
+        <ChevronRight size={16} style={{ color: 'var(--uep-text-3)' }} />
       </div>
-      <div style={{ height: 5, background: 'var(--surface-3)', borderRadius: 3, marginTop: 8, overflow: 'hidden' }}>
-        <div style={{ width: `${total ? (done / total) * 100 : 0}%`, height: '100%', background: 'var(--green)' }} />
+      <div style={{ height: 5, background: 'var(--uep-track)', borderRadius: 3, marginTop: 8, overflow: 'hidden' }}>
+        <div style={{ width: `${total ? (done / total) * 100 : 0}%`, height: '100%', background: 'var(--uep-status-success-ink)' }} />
       </div>
     </motion.div>
   )
@@ -180,8 +180,8 @@ function AssignmentDetail({ assignment, onRefresh, autoOpenTaskId, onAutoOpened 
                   </div>
                 </td>
                 <td>
-                  {t.overall_result === 'Ready' && <span className="row" style={{ gap: 5, color: 'var(--green)', fontSize: 13 }}><CheckCircle2 size={14} /> Ready</span>}
-                  {t.overall_result === 'NotReady' && <span className="row" style={{ gap: 5, color: 'var(--red)', fontSize: 13 }}><XCircle size={14} /> Not Ready</span>}
+                  {t.overall_result === 'Ready' && <span className="row" style={{ gap: 5, color: 'var(--uep-status-success-ink)', fontSize: 13 }}><CheckCircle2 size={14} /> Ready</span>}
+                  {t.overall_result === 'NotReady' && <span className="row" style={{ gap: 5, color: 'var(--uep-status-danger-ink)', fontSize: 13 }}><XCircle size={14} /> Not Ready</span>}
                   {!t.overall_result && <span className="dim" style={{ fontSize: 12.5 }}>Pending</span>}
                 </td>
                 <td>
@@ -277,9 +277,9 @@ function TaskFormModal({ task, onClose, onSaved }) {
         </div>
 
         {/* Tutorial */}
-        <div style={{ background: 'var(--signal-glow)', borderRadius: 'var(--radius-sm)', padding: '11px 13px', marginBottom: 16, display: 'flex', gap: 9 }}>
-          <Info size={16} style={{ color: 'var(--signal-strong)', flexShrink: 0, marginTop: 1 }} />
-          <div style={{ fontSize: 12.5, lineHeight: 1.6, color: 'var(--text-muted)' }}>
+        <div style={{ background: 'var(--uep-accent-tint)', borderRadius: 'var(--uep-radius-control)', padding: '11px 13px', marginBottom: 16, display: 'flex', gap: 9 }}>
+          <Info size={16} style={{ color: 'var(--uep-accent-hover)', flexShrink: 0, marginTop: 1 }} />
+          <div style={{ fontSize: 12.5, lineHeight: 1.6, color: 'var(--uep-text-2)' }}>
             For each technology below, pick <b>Normal</b> if the site is fine for that
             technology. Pick <b>Not Normal</b> if there's a problem — then write a short
             <b> comment</b> explaining it. When all technologies are Normal the site
@@ -290,24 +290,24 @@ function TaskFormModal({ task, onClose, onSaved }) {
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           {techs.map((tech) => (
-            <div key={tech} style={{ border: '1px solid var(--border-soft)', borderRadius: 'var(--radius-sm)', padding: 12 }}>
+            <div key={tech} style={{ border: '1px solid var(--uep-divider)', borderRadius: 'var(--uep-radius-control)', padding: 12 }}>
               <div className="row between">
                 <span style={{ fontWeight: 600, fontSize: 15 }}>{tech}</span>
                 <div className="row" style={{ gap: 6 }}>
-                  <ToggleBtn active={rows[tech]?.result === 'Normal'} onClick={() => setField(tech, 'result', 'Normal')} color="var(--green)">Normal</ToggleBtn>
-                  <ToggleBtn active={rows[tech]?.result === 'NotNormal'} onClick={() => setField(tech, 'result', 'NotNormal')} color="var(--red)">Not Normal</ToggleBtn>
+                  <ToggleBtn active={rows[tech]?.result === 'Normal'} onClick={() => setField(tech, 'result', 'Normal')} color="var(--uep-status-success-ink)">Normal</ToggleBtn>
+                  <ToggleBtn active={rows[tech]?.result === 'NotNormal'} onClick={() => setField(tech, 'result', 'NotNormal')} color="var(--uep-status-danger-ink)">Not Normal</ToggleBtn>
                 </div>
               </div>
               {rows[tech]?.result === 'NotNormal' && (
                 <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
                   <div>
-                    <label style={{ fontSize: 12, color: 'var(--text-dim)', display: 'block', marginBottom: 3 }}>Comment</label>
+                    <label style={{ fontSize: 12, color: 'var(--uep-text-3)', display: 'block', marginBottom: 3 }}>Comment</label>
                     <input className="input" placeholder="Describe the problem…" value={rows[tech].comment} onChange={(e) => setField(tech, 'comment', e.target.value)} />
                   </div>
                 </div>
               )}
               {!rows[tech]?.result && (
-                <div className="row" style={{ gap: 5, marginTop: 8, color: 'var(--text-dim)', fontSize: 11.5 }}>
+                <div className="row" style={{ gap: 5, marginTop: 8, color: 'var(--uep-text-3)', fontSize: 11.5 }}>
                   <HelpCircle size={13} /> Choose Normal or Not Normal
                 </div>
               )}
@@ -337,9 +337,9 @@ function ToggleBtn({ active, onClick, color, children }) {
       className="btn btn-sm"
       onClick={onClick}
       style={{
-        background: active ? color : 'var(--surface-2)',
-        color: active ? '#fff' : 'var(--text-muted)',
-        border: active ? 'none' : '1px solid var(--border)',
+        background: active ? color : 'var(--uep-surface-subtle)',
+        color: active ? 'var(--uep-on-accent)' : 'var(--uep-text-2)',
+        border: active ? 'none' : '1px solid var(--uep-border)',
       }}
     >
       {children}

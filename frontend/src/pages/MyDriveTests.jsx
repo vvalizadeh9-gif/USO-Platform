@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion'
-import { ChevronRight, Search, X } from 'lucide-react'
+import { ChevronRight, Search, X } from '../components/carbon'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import api from '../api/client'
@@ -163,7 +163,7 @@ export default function MyDriveTests() {
             <div className="card card-pad" style={{ marginBottom: 16 }}>
               <div className="row between wrap" style={{ gap: 12 }}>
                 <div style={{ position: 'relative', flex: 1, minWidth: 200 }}>
-                  <Search size={15} style={{ position: 'absolute', left: 10, top: 11, color: 'var(--text-dim)' }} />
+                  <Search size={15} style={{ position: 'absolute', left: 10, top: 11, color: 'var(--uep-text-3)' }} />
                   <input
                     className="input"
                     style={{ paddingLeft: 32 }}
@@ -181,7 +181,7 @@ export default function MyDriveTests() {
               </div>
               {statusFilter && tab === 'todo' && (
                 <div className="row" style={{ marginTop: 8, gap: 8 }}>
-                  <span className="dim" style={{ fontSize: 'var(--fs-meta)' }}>
+                  <span className="dim" style={{ fontSize: 'var(--uep-fs-small)' }}>
                     Showing {STATUS_FILTERS[statusFilter]} only
                   </span>
                   <button type="button" className="btn btn-ghost btn-sm" onClick={clearStatusFilter}>
@@ -320,8 +320,8 @@ function ToDoPanel({ row, onClose, onSubmit, onReturn }) {
         {sentBack && row.sent_back_comment && (
           <div
             style={{
-              marginTop: 10, background: 'var(--red-dim)', borderRadius: 'var(--radius-sm)',
-              padding: '10px 12px', fontSize: 12.5, color: 'var(--red)', lineHeight: 1.5,
+              marginTop: 10, background: 'var(--uep-status-danger-soft)', borderRadius: 'var(--uep-radius-control)',
+              padding: '10px 12px', fontSize: 12.5, color: 'var(--uep-status-danger-ink)', lineHeight: 1.5,
             }}
           >
             <b>Sent back:</b> {row.sent_back_comment}

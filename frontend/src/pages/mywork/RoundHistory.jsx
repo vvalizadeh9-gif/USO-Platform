@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Check, CornerUpLeft, Dot, X } from 'lucide-react'
+import { Check, CornerUpLeft, Dot, X } from '../../components/carbon'
 import { roundSummary, shown } from './roundText'
 import { formatNumber } from '../../lib/numbers'
 

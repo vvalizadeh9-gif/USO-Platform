@@ -151,7 +151,7 @@ function PipelineView({ page, resolved, highlightTaskId }) {
         title={step ? step.name : 'History'}
         // One count per queue (UEP-13 §3.2): the header leads with the number
         // Home and the rail show, read from the same /me/home field.
-        count={step?.queue && counts[step.queue] !== undefined ? counts[step.queue] : figures?.count}
+        count={counts?.[step?.queue] ?? figures?.count}
         late={figures?.late}
         headingRef={headingRef}
         historyOpen={!step}

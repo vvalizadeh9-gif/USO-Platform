@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { AlertTriangle, CheckCircle2, FileSpreadsheet, UploadCloud } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, FileSpreadsheet, UploadCloud } from '../../components/carbon'
 import api from '../../api/client'
 import { EmptyState, PageHead } from '../../components/ui'
 import { describeBlobError, filenameFrom, saveBlob } from '../../lib/download'

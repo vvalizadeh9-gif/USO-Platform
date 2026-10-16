@@ -1,5 +1,5 @@
 import { motion, useReducedMotion } from 'framer-motion'
-import { Minus, TrendingDown, TrendingUp } from 'lucide-react'
+import { Minus, TrendingDown, TrendingUp } from '../../components/carbon'
 import KpiSpark from '../../components/KpiSpark'
 import { KPI_DIRECTION } from './constants'
 import { count, deltaTone, kpiPercent, share, TONE_COLOR } from './format'

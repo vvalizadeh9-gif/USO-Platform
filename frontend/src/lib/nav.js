@@ -22,7 +22,7 @@ import {
   ListChecks,
   Users,
   Wrench,
-} from 'lucide-react'
+} from '../components/carbon'
 import { CATEGORY_OWNER_ROLES, HOME_ROLES, KPI_ROLES, MONTHLY_PLAN_ROLES } from './roles'
 
 // The sidebar, grouped by project: each project's dashboard sits beside the

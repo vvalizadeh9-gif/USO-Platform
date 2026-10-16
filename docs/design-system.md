@@ -5,8 +5,19 @@ in `frontend/src/styles/uep-tokens.css` (the source of truth) and are mirrored
 for script in `frontend/src/design/tokens.js`; `tokens.test.js` fails if the
 two disagree. Change a token there, then here.
 
-Pages not yet moved over still use the older "Cobalt" system
-(`design-system-cobalt.md`, `app.css`). They move one page per change.
+Since UEP-13 this is the **only** design system: every page is on it. The
+older "Cobalt" system (its `:root` block in `app.css`, Inter, Lucide icons and
+`design-system-cobalt.md`) is retired. Tokens the Cobalt pages needed that UEP
+had no name for were moved into `uep-tokens.css` under "Migrated from the
+retired Cobalt block".
+
+**Guardrails.** `npm run lint` runs ESLint (no `lucide-react` import, no hex
+colour literal and no `'NNpx'` inline style in components) and stylelint
+(`.stylelintrc.json`: no hex outside `uep-tokens.css`; `border-radius` and
+`font-family` take tokens or `inherit` only). Radii are 4 / 8 / 12 / 999
+(`--uep-radius-sm`, `-tile`/`-control`, `-card`, `-pill`); type sizes are the
+`--uep-fs-*` steps. `e2e/designSystem.spec.js` checks every page's computed
+fonts, colours and icons and keeps a screenshot baseline per page.
 
 **No hard-coded colours or sizes in components.** Every value is a `--uep-*`
 token. **Nothing is fetched from the internet at run time**: fonts and icons are

@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion'
-import { ChevronDown, ChevronRight, Filter, ShieldAlert, X } from 'lucide-react'
+import { ChevronDown, ChevronRight, Filter, ShieldAlert, X } from '../../components/carbon'
 import { Fragment, useEffect, useState } from 'react'
 import api from '../../api/client'
 import { EmptyState, Loading } from '../../components/ui'
@@ -87,7 +87,7 @@ export default function AuditLogTab() {
       <div className="card card-pad mb-16">
         <div className="row between" style={{ marginBottom: 14 }}>
           <div className="row" style={{ gap: 8 }}>
-            <Filter size={15} style={{ color: 'var(--text-muted)' }} />
+            <Filter size={15} style={{ color: 'var(--uep-text-2)' }} />
             <h3 style={{ fontSize: 14.5 }}>Filters</h3>
           </div>
           <span className="dim" style={{ fontSize: 12 }}>
@@ -253,7 +253,7 @@ export default function AuditLogTab() {
                         onClick={() => hasDetail && toggle(e.id)}
                         style={{ cursor: hasDetail ? 'pointer' : 'default' }}
                       >
-                        <td style={{ color: 'var(--text-dim)' }}>
+                        <td style={{ color: 'var(--uep-text-3)' }}>
                           {hasDetail ? (isOpen ? <ChevronDown size={15} /> : <ChevronRight size={15} />) : null}
                         </td>
                         <td className="dim tnum" style={{ fontSize: 12.5, whiteSpace: 'nowrap' }}>
@@ -294,7 +294,7 @@ export default function AuditLogTab() {
                       {isOpen && hasDetail && (
                         <tr>
                           <td></td>
-                          <td colSpan={8} style={{ background: 'var(--surface-2)', padding: '10px 14px' }}>
+                          <td colSpan={8} style={{ background: 'var(--uep-surface-subtle)', padding: '10px 14px' }}>
                             <div className="grid" style={{ gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                               <RawValue label="Previous value" value={e.old_value} />
                               <RawValue label="New value" value={e.new_value} />
@@ -338,7 +338,7 @@ function RawValue({ label, value }) {
     <div>
       <div className="dim" style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.3, marginBottom: 4 }}>{label}</div>
       {value ? (
-        <pre style={{ fontSize: 12, background: 'var(--surface-1)', border: '1px solid var(--border-soft)', borderRadius: 'var(--radius-sm)', padding: 8, overflowX: 'auto', margin: 0 }}>
+        <pre style={{ fontSize: 12, background: 'var(--uep-surface)', border: '1px solid var(--uep-divider)', borderRadius: 'var(--uep-radius-control)', padding: 8, overflowX: 'auto', margin: 0 }}>
           {JSON.stringify(value, null, 2)}
         </pre>
       ) : (

@@ -1,7 +1,7 @@
 // Small shared presentational components. Keeping status→style mapping
 // in one place avoids duplicating the logic across every table.
 import { motion } from 'framer-motion'
-import { AlertTriangle, CheckCircle2, ChevronRight, Inbox, Info, XCircle } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, ChevronRight, Inbox, Info, XCircle } from './carbon'
 import { Fragment, useId, useRef } from 'react'
 import { useDialogFocus } from './useDialogFocus'
 
@@ -27,7 +27,7 @@ const STATUS_CLASS = {
 
 /**
  * ICT or CRA, always in words: the authority's soft fill and its ink. CRA's
- * ink is `--cra-ink`, never `--cra` (which is graphics only).
+ * ink is `--uep-cra`, never `--uep-cra` (which is graphics only).
  */
 export function AuthorityChip({ authority, className = '' }) {
   return (
@@ -64,7 +64,7 @@ export function EmptyState({ title, hint }) {
   return (
     <div className="empty">
       <Inbox size={38} strokeWidth={1.5} />
-      <div style={{ fontWeight: 600, color: 'var(--text-secondary)' }}>{title}</div>
+      <div style={{ fontWeight: 600, color: 'var(--uep-text-2)' }}>{title}</div>
       {hint && <div style={{ marginTop: 4 }}>{hint}</div>}
     </div>
   )
@@ -72,7 +72,7 @@ export function EmptyState({ title, hint }) {
 
 export function Loading({ label = 'Loading' }) {
   return (
-    <div className="row" style={{ padding: 40, justifyContent: 'center', color: 'var(--text-tertiary)' }}>
+    <div className="row" style={{ padding: 40, justifyContent: 'center', color: 'var(--uep-text-3)' }}>
       <div className="spinner" />
       <span>{label}…</span>
     </div>
@@ -97,7 +97,7 @@ export const fadeUp = {
  *
  * A tab may also carry:
  *
- * * `icon` -- a lucide icon drawn before the label;
+ * * `icon` -- an icon component (components/carbon) drawn before the label;
  * * `count` -- a neutral count chip (accent on the selected tab), shown when
  *   above zero;
  * * `alert` -- a second chip in danger ink, e.g. "4 late";

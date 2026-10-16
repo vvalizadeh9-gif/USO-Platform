@@ -1,4 +1,4 @@
-import { Timer } from 'lucide-react'
+import { Timer } from '../../components/carbon'
 import { useEffect, useState } from 'react'
 import api from '../../api/client'
 import { EmptyState, Loading } from '../../components/ui'

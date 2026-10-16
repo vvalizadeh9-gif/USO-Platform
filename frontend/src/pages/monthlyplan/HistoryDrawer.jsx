@@ -1,4 +1,4 @@
-import { X } from 'lucide-react'
+import { X } from '../../components/carbon'
 import { useEffect } from 'react'
 import Revisions from './Revisions'
 import { STREAMS } from './streams'
@@ -23,7 +23,7 @@ export default function HistoryDrawer({ contractor, period, label, onClose }) {
         <div className="mp-drawer-head">
           <div>
             <div className="mp-drawer-title">{contractor.name}</div>
-            <div className="dim" style={{ fontSize: 'var(--fs-meta)' }}>Plan history · {label}</div>
+            <div className="dim" style={{ fontSize: 'var(--uep-fs-small)' }}>Plan history · {label}</div>
           </div>
           <button type="button" className="btn btn-ghost btn-sm" onClick={onClose} aria-label="Close">
             <X size={15} />

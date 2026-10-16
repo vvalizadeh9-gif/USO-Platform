@@ -39,6 +39,6 @@ describe('Icon', () => {
   })
 
   it('refuses an icon outside the set', () => {
-    expect(() => glyphFor('lucide-anything', 16)).toThrow(/Unknown icon/)
+    expect(() => glyphFor('not-an-icon', 16)).toThrow(/Unknown icon/)
   })
 })

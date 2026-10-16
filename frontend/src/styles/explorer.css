@@ -557,7 +557,7 @@
 .exl-site::after { content: ''; position: absolute; inset: 0; }
 .exl-site:focus { outline: none; }
 .exl-site-row:hover .exl-site { color: var(--uep-accent); }
-.exl-site mark { background: var(--uep-search-mark); color: inherit; border-radius: 2px; }
+.exl-site mark { background: var(--uep-search-mark); color: inherit; border-radius: var(--uep-radius-sm); }
 .exl-row > .exl-check-cell { position: relative; z-index: 1; display: inline-flex; overflow: visible; }
 .exl-villages-pill { position: relative; z-index: 1; }
 

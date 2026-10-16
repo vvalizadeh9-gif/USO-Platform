@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from 'framer-motion'
-import { X } from 'lucide-react'
+import { X } from './carbon'
 import { useEffect, useState } from 'react'
 import api from '../api/client'
 import { Loading } from './ui'
@@ -7,11 +7,11 @@ import { Loading } from './ui'
 // Each kind of event gets a dot colour so a long history can be skimmed for
 // the shape of it — where it failed, who fixed it — without reading every row.
 const DOT = {
-  passed: 'var(--green)',
-  failed: 'var(--red)',
-  routed: 'var(--amber)',
-  fixed: 'var(--accent)',
-  assigned: 'var(--border)',
+  passed: 'var(--uep-status-success-ink)',
+  failed: 'var(--uep-status-danger-ink)',
+  routed: 'var(--uep-status-pending-ink)',
+  fixed: 'var(--uep-accent)',
+  assigned: 'var(--uep-border)',
 }
 
 function formatDate(value) {
@@ -102,9 +102,9 @@ export default function SiteHistoryDrawer({ workItemId, siteCode, onClose }) {
               right: 0,
               height: '100vh',
               width: 'min(520px, 94vw)',
-              background: 'var(--surface-1)',
-              borderLeft: '1px solid var(--border)',
-              boxShadow: 'var(--shadow-2)',
+              background: 'var(--uep-surface)',
+              borderLeft: '1px solid var(--uep-border)',
+              boxShadow: 'var(--uep-shadow-popover)',
               zIndex: 61,
               display: 'flex',
               flexDirection: 'column',
@@ -114,7 +114,7 @@ export default function SiteHistoryDrawer({ workItemId, siteCode, onClose }) {
               className="row"
               style={{
                 padding: '20px 22px',
-                borderBottom: '1px solid var(--border)',
+                borderBottom: '1px solid var(--uep-border)',
                 alignItems: 'flex-start',
               }}
             >
@@ -124,7 +124,7 @@ export default function SiteHistoryDrawer({ workItemId, siteCode, onClose }) {
                     fontSize: 11,
                     letterSpacing: '0.14em',
                     textTransform: 'uppercase',
-                    color: 'var(--accent-ink)',
+                    color: 'var(--uep-accent-hover)',
                     fontWeight: 600,
                   }}
                 >
@@ -154,7 +154,7 @@ export default function SiteHistoryDrawer({ workItemId, siteCode, onClose }) {
                       fontSize: 11,
                       letterSpacing: '0.1em',
                       textTransform: 'uppercase',
-                      color: 'var(--text-tertiary)',
+                      color: 'var(--uep-text-3)',
                       marginBottom: 14,
                     }}
                   >
@@ -168,7 +168,7 @@ export default function SiteHistoryDrawer({ workItemId, siteCode, onClose }) {
                         top: 6,
                         bottom: 6,
                         width: 2,
-                        background: 'var(--border)',
+                        background: 'var(--uep-border)',
                       }}
                     />
                     {group.events.map((ev, i) => (
@@ -184,12 +184,12 @@ export default function SiteHistoryDrawer({ workItemId, siteCode, onClose }) {
                             width: 11,
                             height: 11,
                             borderRadius: '50%',
-                            background: DOT[ev.kind] || 'var(--border)',
+                            background: DOT[ev.kind] || 'var(--uep-border)',
                           }}
                         />
                         <div
                           className="tnum"
-                          style={{ fontSize: 11.5, color: 'var(--text-tertiary)' }}
+                          style={{ fontSize: 11.5, color: 'var(--uep-text-3)' }}
                         >
                           {formatDate(ev.at)}
                         </div>
@@ -250,16 +250,16 @@ export function SiteCodeButton({ workItemId, siteCode, onOpen, className }) {
         padding: 0,
         font: 'inherit',
         fontWeight: 600,
-        color: 'var(--text)',
+        color: 'var(--uep-text)',
         cursor: 'pointer',
         fontVariantNumeric: 'tabular-nums',
       }}
       onMouseEnter={(e) => {
-        e.currentTarget.style.color = 'var(--accent-ink)'
+        e.currentTarget.style.color = 'var(--uep-accent-hover)'
         e.currentTarget.style.textDecoration = 'underline'
       }}
       onMouseLeave={(e) => {
-        e.currentTarget.style.color = 'var(--text)'
+        e.currentTarget.style.color = 'var(--uep-text)'
         e.currentTarget.style.textDecoration = 'none'
       }}
     >

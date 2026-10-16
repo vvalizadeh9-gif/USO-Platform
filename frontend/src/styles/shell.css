@@ -587,7 +587,7 @@ html[data-uep-motion='reduce'] .uep-search-progress i { animation: none; }
   color: var(--uep-text-3);
 }
 .uep-error-id code {
-  font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  font-family: var(--uep-font-mono);
 }
 .uep-error-copy {
   padding: 0;

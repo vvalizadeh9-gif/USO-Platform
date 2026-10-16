@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion'
-import { AlertCircle, RefreshCw } from 'lucide-react'
+import { AlertCircle, RefreshCw } from './carbon'
 import Icon from './Icon'
 import { CardBoundary } from './ErrorBoundary'
 

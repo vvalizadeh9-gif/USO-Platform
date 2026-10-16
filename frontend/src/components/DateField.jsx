@@ -1,4 +1,4 @@
-import { Calendar, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Calendar, ChevronLeft, ChevronRight } from './carbon'
 import { useEffect, useRef, useState } from 'react'
 import { MONTHS, formatLong, fromIso, toIso, todayIso } from '../lib/dates'
 

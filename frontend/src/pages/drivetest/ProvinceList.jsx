@@ -1,4 +1,4 @@
-import { Search } from 'lucide-react'
+import { Search } from '../../components/carbon'
 import { useMemo, useState } from 'react'
 import { useAuth } from '../../context/AuthContext'
 import { count, percent } from './format'

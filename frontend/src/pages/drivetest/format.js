@@ -76,9 +76,9 @@ export function deltaTone(delta, goodDirection = 'up') {
 }
 
 export const TONE_COLOR = {
-  good: 'var(--dt-done)',
-  bad: 'var(--dt-problem)',
-  flat: 'var(--text-tertiary)',
+  good: 'var(--uep-status-success-ink)',
+  bad: 'var(--uep-status-danger-ink)',
+  flat: 'var(--uep-text-3)',
 }
 
 /** At or above target, close to it, or short of it.
@@ -94,18 +94,18 @@ export const TONE_COLOR = {
  * honest reading of 85% anyway — it is work on its way, not a warning.
  */
 export function bandColor(value) {
-  if (value == null) return 'var(--text-tertiary)'
-  if (value >= 100) return 'var(--dt-done)'
-  if (value >= 80) return 'var(--dt-ongoing)'
-  return 'var(--dt-problem)'
+  if (value == null) return 'var(--uep-text-3)'
+  if (value >= 100) return 'var(--uep-status-success-ink)'
+  if (value >= 80) return 'var(--uep-status-ongoing-ink)'
+  return 'var(--uep-status-danger-ink)'
 }
 
 /** Progress colour for a completion percentage. Same three bands, same
  * reason — see `bandColor`. */
 export function progressColor(value) {
-  if (value >= 70) return 'var(--dt-done)'
-  if (value >= 30) return 'var(--dt-ongoing)'
-  return 'var(--dt-problem)'
+  if (value >= 70) return 'var(--uep-status-success-ink)'
+  if (value >= 30) return 'var(--uep-status-ongoing-ink)'
+  return 'var(--uep-status-danger-ink)'
 }
 
 /** How stale a payload is, in words.

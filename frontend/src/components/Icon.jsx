@@ -21,7 +21,7 @@ function renderNode({ elem: Element, attrs = {}, content = [] }, key) {
 /**
  * @param {{ name: import('./icons').IconName, size?: 16|18|20|22, label?: string, className?: string }} props
  */
-export default function Icon({ name, size = 16, label, className }) {
+export default function Icon({ name, size = 16, label, className, style }) {
   const glyph = glyphFor(name, size)
   return (
     <svg
@@ -32,6 +32,7 @@ export default function Icon({ name, size = 16, label, className }) {
       fill="currentColor"
       focusable="false"
       className={className}
+      style={style}
       data-icon={name}
       {...(label ? { role: 'img', 'aria-label': label } : { 'aria-hidden': true })}
     >
