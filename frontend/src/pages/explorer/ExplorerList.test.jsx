@@ -248,12 +248,12 @@ describe('Explorer list: rows', () => {
     const pill = within(bodyRows()[1]).getByRole('button', { name: 'Show 2 villages of W4002' })
     await userEvent.click(pill)
     expect(pill).toHaveAttribute('aria-expanded', 'true')
-    const strip = screen.getByRole('list', { name: 'Hadaf villages of W4002' })
+    const strip = screen.getByRole('list', { name: 'Target villages of W4002' })
     expect(within(strip).getAllByRole('listitem')).toHaveLength(3)
     expect(api.get).toHaveBeenCalledWith('/explorer/sites/2/villages')
     await userEvent.click(within(bodyRows()[2]).getByRole('button', { name: /villages of W4003/ }))
-    expect(screen.queryByRole('list', { name: 'Hadaf villages of W4002' })).not.toBeInTheDocument()
-    expect(screen.getByRole('list', { name: 'Hadaf villages of W4003' })).toBeInTheDocument()
+    expect(screen.queryByRole('list', { name: 'Target villages of W4002' })).not.toBeInTheDocument()
+    expect(screen.getByRole('list', { name: 'Target villages of W4003' })).toBeInTheDocument()
   })
 
   it('highlights the village a search matched, and links the record to it', async () => {

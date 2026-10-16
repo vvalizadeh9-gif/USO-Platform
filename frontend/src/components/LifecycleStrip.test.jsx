@@ -32,33 +32,33 @@ describe('steps this person can open', () => {
   it('gives a PM all three as links', () => {
     stripAs('PM', 'dt')
     expect(linkFor('Monthly Plan')).toHaveAttribute('href', '/monthly-plan')
-    expect(linkFor('Health Check')).toHaveAttribute('href', '/health-check')
+    expect(linkFor('Health check')).toHaveAttribute('href', '/health-check')
   })
 
   it('gives a Coordinator the same', () => {
     stripAs('Coordinator', 'dt')
     expect(linkFor('Monthly Plan')).toHaveAttribute('href', '/monthly-plan')
-    expect(linkFor('Health Check')).toHaveAttribute('href', '/health-check')
+    expect(linkFor('Health check')).toHaveAttribute('href', '/health-check')
   })
 })
 
 describe('steps this person cannot open', () => {
   it('shows a contractor Health Check and Drive Test as plain text', () => {
     stripAs('Contractor', 'plan')
-    expect(linkFor('Health Check')).toBeNull()
-    expect(linkFor('Drive Test')).toBeNull()
+    expect(linkFor('Health check')).toBeNull()
+    expect(linkFor('Drive test')).toBeNull()
   })
 
   it('still shows them, because the process has three parts either way', () => {
     stripAs('Contractor', 'plan')
-    expect(screen.getByText('Health Check')).toBeInTheDocument()
-    expect(screen.getByText('Drive Test')).toBeInTheDocument()
+    expect(screen.getByText('Health check')).toBeInTheDocument()
+    expect(screen.getByText('Drive test')).toBeInTheDocument()
   })
 
   it('shows a category owner every step as plain text', () => {
     stripAs('CpgPower', 'hc')
     expect(linkFor('Monthly Plan')).toBeNull()
-    expect(linkFor('Drive Test')).toBeNull()
+    expect(linkFor('Drive test')).toBeNull()
   })
 })
 
@@ -68,8 +68,8 @@ describe('the contractor variant', () => {
     expect(linkFor('My Health Check')).toHaveAttribute('href', '/my-health-check')
     expect(linkFor('My Drive Tests')).toHaveAttribute('href', '/my-drive-tests')
     // The staff labels are not on this variant at all.
-    expect(screen.queryByText('Health Check')).toBeNull()
-    expect(screen.queryByText('Drive Test')).toBeNull()
+    expect(screen.queryByText('Health check')).toBeNull()
+    expect(screen.queryByText('Drive test')).toBeNull()
   })
 
   it('marks My Drive Tests as current rather than linking it', () => {
@@ -86,7 +86,7 @@ describe('the contractor variant', () => {
 
   it('defaults to the staff variant when none is given', () => {
     stripAs('PM', 'dt')
-    expect(screen.getByText('Drive Test')).toBeInTheDocument()
+    expect(screen.getByText('Drive test')).toBeInTheDocument()
     expect(screen.queryByText('My Drive Tests')).toBeNull()
   })
 })
@@ -94,14 +94,14 @@ describe('the contractor variant', () => {
 describe('the step you are on', () => {
   it('is marked as the current page and is not a link', () => {
     stripAs('PM', 'hc')
-    const step = screen.getByText('Health Check').closest('[aria-current]')
+    const step = screen.getByText('Health check').closest('[aria-current]')
     expect(step).toHaveAttribute('aria-current', 'page')
-    expect(linkFor('Health Check')).toBeNull()
+    expect(linkFor('Health check')).toBeNull()
   })
 
   it('marks the drive test instead when that is the page', () => {
     stripAs('PM', 'dt')
-    expect(screen.getByText('Drive Test').closest('[aria-current]')).not.toBeNull()
-    expect(screen.getByText('Health Check').closest('[aria-current]')).toBeNull()
+    expect(screen.getByText('Drive test').closest('[aria-current]')).not.toBeNull()
+    expect(screen.getByText('Health check').closest('[aria-current]')).toBeNull()
   })
 })

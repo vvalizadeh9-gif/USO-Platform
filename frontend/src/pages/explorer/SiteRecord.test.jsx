@@ -79,7 +79,7 @@ describe('General information', () => {
     const card = screen.getByRole('region', { name: 'General information' })
     const terms = within(card).getAllByRole('term').map((t) => t.textContent)
     expect(terms).toEqual([
-      'On air date', 'DT date', 'Site contractor', 'DT contractor', 'Requested technology', 'Province', 'Hadaf villages',
+      'On air date', 'DT date', 'Site contractor', 'DT contractor', 'Requested technology', 'Province', 'Target villages',
     ])
     expect(within(card).getByText('2 Sept 2026')).toBeInTheDocument()
     expect(within(card).getByText('30 Sept 2026')).toBeInTheDocument()

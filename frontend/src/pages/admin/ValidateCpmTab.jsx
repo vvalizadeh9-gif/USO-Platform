@@ -48,8 +48,7 @@ export default function ValidateCpmTab({ onDecided, highlightId }) {
     return (
       <div className="card">
         <EmptyState
-          title="No pending changes"
-          hint="Only three change types need validation: site type, village quantity, and requested technology. They appear here after a monthly re-import."
+          title="No CPM changes to review"
         />
       </div>
     )

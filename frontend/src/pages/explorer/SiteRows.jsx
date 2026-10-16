@@ -151,7 +151,7 @@ function VillageStrip({ row, villages }) {
             {[0, 1, 2].map((i) => <span key={i} className="h-skel exl-skel-chip" />)}
           </span>
         ) : (
-          <ul className="exl-strip-chips" aria-label={`Hadaf villages of ${row.site_code}`}>
+          <ul className="exl-strip-chips" aria-label={`Target villages of ${row.site_code}`}>
             {villages.list.map((v) => (
               <li key={v.code ?? v.name} className={`exl-village ${v.code && v.code === match ? 'is-match' : ''}`.trim()}>
                 <Fa className="exl-village-name">{v.name}</Fa>

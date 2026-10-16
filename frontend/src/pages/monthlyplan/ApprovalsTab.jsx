@@ -219,7 +219,7 @@ function Block({ block: b, revision }) {
       />
       <div className="mp-meta tnum">{compareWord} {fmt(b.compare)}</div>
       {revision && b.reason && <div className="mp-meta">{REASON_LABEL[b.reason] || b.reason}</div>}
-      {b.above != null && <div className="mp-alert tnum">{b.above} above sites held</div>}
+      {b.above != null && <div className="mp-alert tnum">Plan is {b.above} above sites held</div>}
       {b.behind != null && <div className="mp-alert tnum">{b.behind} behind</div>}
     </div>
   )

@@ -142,7 +142,7 @@ export default function CpmImportTab() {
           </p>
           {result.changed_count > 0 && (
             <p className="muted" style={{ fontSize: 12.5, marginTop: 12 }}>
-              Review flagged changes in the <b>Validate CPM</b> tab.
+              Review flagged changes in <b>CPM changes</b>.
             </p>
           )}
         </motion.div>

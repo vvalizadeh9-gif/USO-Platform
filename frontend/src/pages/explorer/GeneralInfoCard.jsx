@@ -21,7 +21,7 @@ const FIELDS = [
     value: (g) => (g.requested_technology?.length ? <TechChips techs={g.requested_technology} /> : <Missing />),
   },
   { key: 'province', label: 'Province', value: (g) => (g.province ? <Fa>{g.province}</Fa> : <Missing />) },
-  { key: 'villages', label: 'Hadaf villages', value: (g) => formatNumber(g.hadaf_villages ?? 0) },
+  { key: 'villages', label: 'Target villages', value: (g) => formatNumber(g.hadaf_villages ?? 0) },
 ]
 
 /** The left card: what the site is, at a glance. */

@@ -23,7 +23,7 @@ function stepperAs(roleName, current) {
 describe('ProcessStepper', () => {
   it('numbers the three steps and marks the current one', () => {
     stepperAs('PM', 'hc')
-    const current = screen.getByText('Health Check').closest('[aria-current="step"]')
+    const current = screen.getByText('Health check').closest('[aria-current="step"]')
     expect(current).toHaveClass('is-current')
     expect(current).toHaveTextContent('2')
     expect(screen.getAllByRole('listitem')).toHaveLength(3)
@@ -32,8 +32,8 @@ describe('ProcessStepper', () => {
   it('links the other steps a PM can open', () => {
     stepperAs('PM', 'hc')
     expect(screen.getByText('Monthly Plan').closest('a')).toHaveAttribute('href', '/monthly-plan')
-    expect(screen.getByText('Drive Test').closest('a')).toHaveAttribute('href', '/drive-test')
-    expect(screen.getByText('Health Check').closest('a')).toBeNull()
+    expect(screen.getByText('Drive test').closest('a')).toHaveAttribute('href', '/drive-test')
+    expect(screen.getByText('Health check').closest('a')).toBeNull()
   })
 
   it('keeps a step this person cannot open as plain text', () => {

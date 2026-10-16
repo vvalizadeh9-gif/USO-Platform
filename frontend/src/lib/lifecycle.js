@@ -9,8 +9,8 @@
 
 export const STAFF_STEPS = [
   { key: 'plan', label: 'Monthly Plan', hint: 'Target for the month', to: '/monthly-plan' },
-  { key: 'hc', label: 'Health Check', hint: 'Check · confirm · route fixes', to: '/health-check' },
-  { key: 'dt', label: 'Drive Test', hint: 'Assign · progress · review', to: '/drive-test' },
+  { key: 'hc', label: 'Health check', hint: 'Check · confirm · route fixes', to: '/health-check' },
+  { key: 'dt', label: 'Drive test', hint: 'Assign · progress · review', to: '/drive-test' },
 ]
 
 export const CONTRACTOR_STEPS = [

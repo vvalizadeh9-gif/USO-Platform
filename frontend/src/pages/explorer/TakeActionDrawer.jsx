@@ -177,7 +177,7 @@ function CoordinatorReviewAction({ submissionDate, onDecide }) {
         title={pending === 'Approved' ? 'Approve this drive test?' : 'Reject this drive test?'}
         message={
           pending === 'Approved'
-            ? 'This completes the drive test for this site. It will be marked DT Done and counted on the Drive Test dashboard. This is the final step — there is no further approval.'
+            ? 'This completes the drive test for this site. It will be marked DT Done and counted on the Drive test dashboard. This is the final step — there is no further approval.'
             : 'The contractor will be notified and can resubmit. The site returns to their queue.'
         }
         confirmLabel={pending === 'Approved' ? 'Yes, approve' : 'Yes, reject'}
