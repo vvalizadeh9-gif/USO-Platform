@@ -9,7 +9,7 @@ import WaffleTile from '../../components/WaffleTile'
 import { useAuth } from '../../context/AuthContext'
 import { canCompare } from '../../lib/roles'
 import { Banner, Card, EmptyState, PageBar, Tabs } from '../../components/ui'
-import CoverageMap from './CoverageMap'
+import CoverageMap from './CoverageMap.jsx'
 import {
   ATTRIBUTION_NOTES,
   CARDS,

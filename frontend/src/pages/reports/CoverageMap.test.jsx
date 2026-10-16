@@ -22,7 +22,7 @@ vi.mock('../../lib/download', async (importOriginal) => ({
 }))
 
 const api = (await import('../../api/client')).default
-const CoverageMap = (await import('./CoverageMap')).default
+const CoverageMap = (await import('./CoverageMap.jsx')).default
 
 const fig = (stopped, reached) => ({
   stopped,
