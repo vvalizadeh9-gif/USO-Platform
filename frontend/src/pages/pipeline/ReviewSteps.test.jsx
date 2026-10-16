@@ -22,9 +22,9 @@ const result = (id, code, overall, over = {}) => ({
 })
 const RESULTS = [result(1, 'KRM-1', 'Ready'), result(2, 'KRM-2', 'NotReady'), result(3, 'KRM-3', 'Ready')]
 
-const submission = (id, code, files = 1) => ({
+const submission = (id, code, files = 1, days = 4) => ({
   drive_test_id: id, work_item_id: id, site_code: code, site_type: 'Rooftop', province: 'یزد',
-  contractor_name: 'آریا موج', execution_date: '2026-10-01', submitted_at: '2026-10-05T08:00:00Z', days_waiting: 4,
+  contractor_name: 'آریا موج', execution_date: '2026-10-01', submitted_at: '2026-10-05T08:00:00Z', days_waiting: days,
   report_link: null,
   evidence: Array.from({ length: files }, (_, i) => ({ id: id * 10 + i, original_filename: `r${i}.pdf`, content_type: 'application/pdf', size_bytes: 2048, uploaded_at: null })),
 })
@@ -97,11 +97,45 @@ describe('HC review', () => {
 })
 
 describe('DT review', () => {
-  it('opens the first submission in the panel, Files saying None in words', async () => {
+  it('opens the first submission in the panel; Files reads 1 file or a grey No report', async () => {
     await draw(DtReviewStep, 'dt6')
     expect(screen.getByRole('heading', { level: 2, name: 'YZD-1' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'YZD-1' })).toHaveAttribute('aria-current', 'true')
-    expect(within(screen.getByText('YZD-2').closest('tr')).getByText('None')).toBeInTheDocument()
+    expect(within(screen.getByText('YZD-1').closest('tr')).getByText('1 file')).toBeInTheDocument()
+    expect(within(screen.getByText('YZD-2').closest('tr')).getByText('No report')).toHaveClass('uw-chip-neutral')
+  })
+
+  it('lists the longest waiting first, and says so', async () => {
+    api.get.mockImplementation((url) =>
+      Promise.resolve({
+        data:
+          url === '/hc/queues/dt-review'
+            ? [submission(21, 'A-0', 1, 0), submission(22, 'A-16', 1, 16), submission(23, 'A-5', 1, 5)]
+            : [],
+      }),
+    )
+    await draw(DtReviewStep, 'dt6')
+    const ids = screen.getAllByRole('button', { name: /^A-/ }).map((b) => b.textContent)
+    expect(ids).toEqual(['A-16', 'A-5', 'A-0'])
+    expect(screen.getByText('Sorted: longest waiting first')).toBeInTheDocument()
+  })
+
+  it('keeps Approve disabled without a report until the outside check is ticked', async () => {
+    const user = userEvent.setup()
+    api.post.mockResolvedValue({ data: {} })
+    await draw(DtReviewStep, 'dt6')
+    await user.click(screen.getByRole('button', { name: 'YZD-2' }))
+    const approve = screen.getByRole('button', { name: /Approve/ })
+    expect(approve).toBeDisabled()
+    await user.click(screen.getByRole('checkbox', { name: 'I checked the report outside UEP' }))
+    expect(approve).toBeEnabled()
+    await user.click(approve)
+    await user.click(screen.getByRole('button', { name: 'Yes, approve' }))
+    expect(api.post).toHaveBeenCalledWith('/drive-tests/12/coordinator-review', {
+      decision: 'Approved',
+      comment: null,
+      report_checked_outside: true,
+    })
   })
 
   it('moves with J and K only while focus is in the list', async () => {

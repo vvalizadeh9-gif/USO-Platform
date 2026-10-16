@@ -20,6 +20,14 @@ const EXPORT_COLUMNS = [
   { label: 'Waiting (days)', value: (r) => r.days_waiting },
 ]
 
+/** Waiting days, most first; a row with no clock goes last. */
+// eslint-disable-next-line react-refresh/only-export-components -- tested on its own
+export function byLongestWaiting(a, b) {
+  return (b.days_waiting ?? -1) - (a.days_waiting ?? -1)
+}
+
+const filesLabel = (n) => `${n} ${n === 1 ? 'file' : 'files'}`
+
 /**
  * Step 6 (UEP-06 §5.2): submitted drive tests, the list on the left and the
  * open one in the panel on the right. J and K move through the list while
@@ -36,6 +44,7 @@ export default function DtReviewStep({ step, figures, panelProps, onExport }) {
   const [contractor, setContractor] = useState('')
   const [openId, setOpenId] = useState(null)
   const [comments, setComments] = useState({})
+  const [checkedOutside, setCheckedOutside] = useState({})
   const [pending, setPending] = useState(null) // decision awaiting its dialog
   const [busy, setBusy] = useState(null)
   const slaDays = figures?.sla_days
@@ -44,12 +53,14 @@ export default function DtReviewStep({ step, figures, panelProps, onExport }) {
   const shown = useMemo(() => {
     if (!rows) return []
     const q = query.trim().toLowerCase()
-    return rows.filter(
-      (r) =>
-        (!province || r.province === province) &&
-        (!contractor || r.contractor_name === contractor) &&
-        (!q || (r.site_code || '').toLowerCase().includes(q)),
-    )
+    return rows
+      .filter(
+        (r) =>
+          (!province || r.province === province) &&
+          (!contractor || r.contractor_name === contractor) &&
+          (!q || (r.site_code || '').toLowerCase().includes(q)),
+      )
+      .sort(byLongestWaiting)
   }, [rows, query, province, contractor])
   useExportRows(onExport, EXPORT_COLUMNS, rows ? shown : null)
 
@@ -86,6 +97,9 @@ export default function DtReviewStep({ step, figures, panelProps, onExport }) {
       await api.post(`/drive-tests/${row.drive_test_id}/coordinator-review`, {
         decision,
         comment: comments[row.drive_test_id] || null,
+        ...(decision === 'Approved' && row.evidence.length === 0 && checkedOutside[row.drive_test_id]
+          ? { report_checked_outside: true }
+          : {}),
       })
       setPending(null)
       // The next row opens: the one after this in the list.
@@ -125,7 +139,7 @@ export default function DtReviewStep({ step, figures, panelProps, onExport }) {
             <ToolSelect label="Contractor" value={contractor} onChange={setContractor} options={options('contractor_name')} allLabel="All contractors" />
           </>
         }
-        description="Oldest submission first"
+        description="Sorted: longest waiting first"
       >
         {error && !rows ? (
           <StepError stepName={step.name} onRetry={retry} />
@@ -176,7 +190,11 @@ export default function DtReviewStep({ step, figures, panelProps, onExport }) {
                         <td><Fa>{r.contractor_name}</Fa></td>
                         <td className="uw-num"><Fa>{shamsiDayLabel(r.execution_date)}</Fa></td>
                         <td className="uw-num">
-                          {r.evidence.length ? r.evidence.length : <span className="uw-none-files">None</span>}
+                          {r.evidence.length ? (
+                            filesLabel(r.evidence.length)
+                          ) : (
+                            <span className="uw-chip-neutral">No report</span>
+                          )}
                         </td>
                         <td><WaitingCell days={r.days_waiting} slaDays={slaDays} /></td>
                       </tr>
@@ -194,6 +212,8 @@ export default function DtReviewStep({ step, figures, panelProps, onExport }) {
           slaDays={slaDays}
           comment={current ? comments[current.drive_test_id] : ''}
           onComment={(text) => setComments((c) => ({ ...c, [current.drive_test_id]: text }))}
+          checkedOutside={current ? Boolean(checkedOutside[current.drive_test_id]) : false}
+          onCheckedOutside={(value) => setCheckedOutside((c) => ({ ...c, [current.drive_test_id]: value }))}
           onDecide={setPending}
           onDownload={download}
           busy={busy}

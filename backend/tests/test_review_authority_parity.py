@@ -93,7 +93,7 @@ LIFECYCLE_WRITES = [
     ("post", "/api/v1/work-items/999999/assignment",
      {"assignment_type": "official", "contractor_id": 1}),
     ("post", "/api/v1/drive-tests/999999/coordinator-review",
-     {"decision": "Approved"}),
+     {"decision": "Approved", "report_checked_outside": True}),
     ("post", "/api/v1/hc/fixes/999999/reroute/decide", {"approve": True}),
     ("post", "/api/v1/hc/assignments",
      {"contractor_id": 1, "work_item_ids": [999999]}),

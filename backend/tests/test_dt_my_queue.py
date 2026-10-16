@@ -204,7 +204,7 @@ def _decide_dt(client, dt_id, decision, comment=None):
     r = client.post(
         f"/api/v1/drive-tests/{dt_id}/coordinator-review",
         headers=_login(client, "my_coord"),
-        json={"decision": decision, "comment": comment},
+        json={"decision": decision, "comment": comment, "report_checked_outside": True},
     )
     assert r.status_code == 200, r.text
 

@@ -198,7 +198,7 @@ def test_pm_can_still_reach_hc_upload(client, tokens):
         (
             "post",
             "/api/v1/drive-tests/1/coordinator-review",
-            {"json": {"decision": "Approved"}},
+            {"json": {"decision": "Approved", "report_checked_outside": True}},
         ),
         (
             "patch",
