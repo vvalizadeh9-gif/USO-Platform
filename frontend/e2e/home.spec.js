@@ -80,7 +80,8 @@ test('the KPI strip keeps its standard size: a 32px figure and a 28px sparkline'
 })
 
 // UEP-12: the greeting spans the page; under it the Apps panel shares the KPI
-// strip's top edge and the work cards' bottom edge, with its contents at top.
+// strip's top edge and the work cards' bottom edge, with its contents at top,
+// and never scrolls: the work cards stretch down when the apps reach lower.
 for (const viewport of [{ width: 1440, height: 900 }, { width: 1366, height: 768 }]) {
   for (const [name, who, summary] of HOME_ROLES.filter(([n]) => ['pm', 'coordinator', 'contractor'].includes(n))) {
     test(`${viewport.width}×${viewport.height} ${name}: the Apps panel lines up with the KPI strip and the work cards`, async ({ page }) => {
@@ -101,6 +102,9 @@ for (const viewport of [{ width: 1440, height: 900 }, { width: 1366, height: 768
       expect(Math.abs(greet.width - layout.width)).toBeLessThanOrEqual(1)
       // Contents stay at the top: the title sits one padding under the frame.
       expect(title.top - apps.top).toBeLessThan(24)
+      // The panel never scrolls: the bottom edge goes as low as the apps need.
+      const inner = await page.locator('.ha-panel').evaluate((el) => el.scrollHeight - el.clientHeight)
+      expect(inner).toBeLessThanOrEqual(0)
 
       const sh = await page.evaluate(() => document.scrollingElement.scrollHeight - window.innerHeight)
       expect(sh).toBeLessThanOrEqual(0)

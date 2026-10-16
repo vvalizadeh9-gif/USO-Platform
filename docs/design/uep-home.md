@@ -25,11 +25,13 @@ first build; where they disagree with this section, this section wins.
   every app description on one line) and three rows. The KPI strip (row 2)
   and Your work (row 3) fill the left column; the Apps panel spans rows 2-3,
   so its top is the KPI strip's top and its bottom the work cards' bottom.
-- **The left column sets the height.** The panel has `contain: size`, so it
-  never makes a row taller; its frame stretches (`align-self: stretch`), its
-  contents stay at the top and are never padded or spread to fill. If a role
-  ever has more apps than fit, the panel scrolls inside itself; the page
-  never scrolls.
+- **The Apps panel never scrolls.** The shared bottom edge is the lower of
+  the work cards' and the app list's. The work row is `1fr`: when a role's
+  apps reach lower than its cards (a contractor with one short card, say),
+  that row grows and the cards stretch down to meet the panel; when the cards
+  reach lower, the panel's frame stretches (`align-self: stretch`). Contents
+  stay at the top in both and are never padded or spread to fill. The page
+  still fits 1440×900 and 1366×768 without scrolling.
 - **Loading, error and empty** states sit in the same cells: the KPI
   skeleton or Retry in row 2 (`.h-kpis`), the card skeleton, Retry or note
   in row 3 (`.h-work`). `aria-busy` is on `.h-main`, a `display: contents`
