@@ -234,6 +234,7 @@ export default function DriveTestProject() {
     <DrillProvider>
       <PageFrame
         className="dt-page"
+        smallScreenNote
         bar={
           <PageBar
             title="Drive test dashboard"

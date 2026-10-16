@@ -6,6 +6,8 @@ import ErrorBoundary from '../components/ErrorBoundary'
 import { useAuth } from '../context/AuthContext'
 import AppHeader from './AppHeader'
 import AppRail from './AppRail'
+import MobileBar from './MobileBar'
+import { hasHome } from '../lib/roles'
 import { appRoute, appState, appsFor, locate } from './appRegistry'
 import { useHomeData } from './HomeData'
 import { useSessionKeepAlive } from './useSessionKeepAlive'
@@ -110,6 +112,7 @@ export default function AppShell() {
           </PageCrumbContext.Provider>
         </main>
       </div>
+      <MobileBar apps={apps} hasHome={hasHome(user?.role?.name)} />
     </div>
   )
 }

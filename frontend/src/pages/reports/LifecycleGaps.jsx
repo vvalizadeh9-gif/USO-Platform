@@ -129,7 +129,7 @@ export default function LifecycleGaps() {
 
   return (
     <ExportFeedback>
-      <PageFrame className="gap-page" bar={bar}>
+      <PageFrame className="gap-page" bar={bar} smallScreenNote>
         {notesOpen && notes.length > 0 && (
           <Banner tone="warning" title="Data quality.">
             {notes.map((note) => (

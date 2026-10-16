@@ -249,7 +249,8 @@ function ToDoTable({ rows, openId, onFillIn, onOpenHistory }) {
 
   return (
     <div className="card" style={{ overflow: 'hidden' }}>
-      <table>
+      {/* On a phone the rows become cards (UEP-13 §3.15). */}
+      <table className="uep-cardable">
         <thead>
           <tr>
             <th>Site</th>
@@ -271,16 +272,16 @@ function ToDoTable({ rows, openId, onFillIn, onOpenHistory }) {
                     onOpen={onOpenHistory}
                   />
                 </td>
-                <td className="text-data dim">{r.province || '—'}</td>
+                <td className="text-data dim" data-line="2">{r.province || '—'}</td>
                 <td>
                   <span className={`pill ${sentBack ? 'pill-red' : 'pill-dim'}`}>
                     {sentBack ? 'Sent back' : 'New'}
                   </span>
                 </td>
-                <td>
+                <td data-line="1">
                   <WaitingPill days={r.days_since_assigned} />
                 </td>
-                <td>
+                <td data-line="3">
                   <button
                     className={`btn btn-sm ${openId === r.work_item_id ? 'btn-primary' : ''}`}
                     onClick={() => onFillIn(r.work_item_id)}
@@ -351,7 +352,8 @@ function SubmittedTable({ rows, onOpenHistory }) {
 
   return (
     <div className="card" style={{ overflow: 'hidden' }}>
-      <table>
+      {/* On a phone the rows become cards (UEP-13 §3.15). */}
+      <table className="uep-cardable">
         <thead>
           <tr>
             <th>Site</th>

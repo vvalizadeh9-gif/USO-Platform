@@ -17,14 +17,18 @@ const DockSlotContext = createContext(null)
  * Rendering this puts the shell in fill mode (see pageMode.js); a page that
  * does not render it keeps the ordinary scrolling frame.
  */
-export default function PageFrame({ bar, className = '', children }) {
+export default function PageFrame({ bar, className = '', smallScreenNote = false, children }) {
   useFillPage()
   const [slot, setSlot] = useState(null)
   return (
     <div className={`page-frame ${className}`.trim()}>
       {bar}
       <DockSlotContext.Provider value={slot}>
-        <div className="page-body">{children}</div>
+        <div className="page-body">
+          {/* Dashboards are not redesigned for phones (UEP-13 §3.15). */}
+          {smallScreenNote && <p className="uep-small-screen-note">Best viewed on a larger screen</p>}
+          {children}
+        </div>
       </DockSlotContext.Provider>
       <div className="page-dock" ref={setSlot} />
     </div>

@@ -40,6 +40,7 @@ export default function PerfHeader({
   const picker = comparer && typeof title !== 'string' ? title : null
 
   return (
+    <>
     <PageHeader
       title={heading}
       filters={(picker || subtitle) && (
@@ -63,5 +64,7 @@ export default function PerfHeader({
         />
       }
     />
+    {comparer && <p className="uep-small-screen-note">Best viewed on a larger screen</p>}
+    </>
   )
 }

@@ -115,7 +115,7 @@ export default function AcceptanceDashboard() {
   )
 
   return (
-    <PageFrame className="dt-page acc-page" bar={bar}>
+    <PageFrame className="dt-page acc-page" bar={bar} smallScreenNote>
       <AcceptanceDrillProvider scope={scope}>
         <div className="dt-bench acc-bench">
           <CardBoundary title="Totals" tile="certificate--check" onRetry={refresh}>

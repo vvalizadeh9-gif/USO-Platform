@@ -785,3 +785,92 @@ html[data-uep-motion='reduce'] .uep-select-menu { animation: none; }
 .uep-select-check { flex: none; color: var(--uep-accent); }
 .uep-select-group { padding: var(--uep-space-8) var(--uep-space-8) var(--uep-space-4); font-size: var(--uep-fs-caption); color: var(--uep-text-3); }
 .uep-select-empty { padding: var(--uep-space-8); font-size: var(--uep-fs-small); color: var(--uep-text-3); }
+
+/* ===================================================================
+   Phones (UEP-13 §3.15): below 768px. Designed and tested for Contractor.
+   Pages scroll vertically; nothing scrolls sideways.
+   =================================================================== */
+.uep-mobile-bar { display: none; }
+.uep-small-screen-note { display: none; }
+@media (max-width: 767px) {
+  .uep-shell { overflow-x: hidden; }
+  .uep-rail { display: none; }
+  .uep-mobile-bar {
+    display: flex;
+    flex: 0 0 auto;
+    height: calc(56px + env(safe-area-inset-bottom, 0px));
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    background: var(--uep-surface);
+    border-top: var(--uep-border-width) solid var(--uep-border);
+  }
+  .uep-mobile-item {
+    flex: 1 1 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    min-height: 44px;
+    border: 0;
+    background: none;
+    color: var(--uep-text-2);
+    font: inherit;
+    font-size: var(--uep-fs-caption);
+  }
+  .uep-mobile-item.active { color: var(--uep-accent); }
+  /* The header keeps the launcher, logo and avatar; search lives in the bar
+     and opens over the header. */
+  .uep-search:not(.is-open) { display: none; }
+  .uep-search-zone:has(.uep-search.is-open) { position: absolute; inset: 0; z-index: 50; background: var(--uep-surface); padding: var(--uep-space-8); }
+
+  /* Pages scroll down on a phone. */
+  .main .page-outlet { overflow-y: auto; overflow-x: hidden; padding: var(--uep-space-16); }
+  .page-frame, .page-body { min-height: auto; }
+  .uep-page-header { height: auto; min-height: 56px; padding: var(--uep-space-8) var(--uep-space-16); }
+  .uep-page-header-row { height: auto; flex-wrap: wrap; row-gap: var(--uep-space-4); }
+  .uep-page-header.has-tabs { height: auto; }
+  .uep-page-header-tabs { overflow-x: auto; }
+  .main-scroll .page-outlet > .uep-page-header:first-child,
+  .main-scroll .page-outlet > :first-child > .uep-page-header:first-child { margin: calc(-1 * var(--uep-space-16)) calc(-1 * var(--uep-space-16)) var(--uep-space-16); top: calc(-1 * var(--uep-space-16)); padding-inline: var(--uep-space-16); }
+
+  /* Home: KPI strip 2×2, work cards stacked, no Apps panel (the launcher has it). */
+  .uep-home-page .hk-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .uep-home-page .h-layout { display: flex; flex-direction: column; }
+  .uep-home-page .hw-grid { grid-template-columns: minmax(0, 1fr); }
+  .uep-home-page .ha-panel { display: none; }
+
+  /* Lifecycle strip: a row of chips that scrolls sideways inside itself. */
+  .lifecycle { display: flex; flex-wrap: nowrap; overflow-x: auto; gap: var(--uep-space-8); }
+  .lifecycle-cell { flex: none; }
+  .lifecycle-hint { display: none; }
+
+  /* Tables marked cardable become one card per row: site + waiting on line 1,
+     province on line 2, the action on line 3 (44px tap target). */
+  table.uep-cardable, table.uep-cardable tbody { display: block; width: 100%; }
+  table.uep-cardable thead { display: none; }
+  table.uep-cardable tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: var(--uep-space-4) var(--uep-space-8);
+    padding: var(--uep-space-12);
+    border-bottom: var(--uep-border-width) solid var(--uep-border);
+  }
+  table.uep-cardable td { display: block; padding: 0; border: 0; min-width: 0; }
+  table.uep-cardable td:first-child { font-weight: var(--uep-weight-semibold); }
+  table.uep-cardable td[data-line='1'] { justify-self: end; }
+  table.uep-cardable td[data-line='2'] { grid-column: 1 / -1; font-family: var(--uep-font-persian); }
+  table.uep-cardable td[data-line='3'] { grid-column: 1 / -1; justify-self: end; }
+  table.uep-cardable td[data-line='3'] .btn { min-height: 44px; }
+
+  /* Filing: the village list and the forms stack; forms open full width. */
+  .mw-body { display: flex; flex-direction: column; }
+  .mp-page .mp-blocks, .mp-cards { grid-template-columns: minmax(0, 1fr) !important; }
+
+  /* PM / Viewer dashboards: no redesign, one line to say so. */
+  .uep-small-screen-note {
+    display: block;
+    margin: 0 0 var(--uep-space-12);
+    font-size: var(--uep-fs-small);
+    color: var(--uep-text-3);
+  }
+}
