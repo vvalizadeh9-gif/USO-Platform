@@ -572,3 +572,13 @@ export const homeSummaryPm = {
   plan: { stream: 'DT', shamsi_year: 1405, shamsi_month: 7, month_name: 'Mehr', pip: 64, delivered: 41, days_left: 13 },
   app_badges: homeBadges,
 }
+
+// GET /search for the header search (UEP-12): whatever the term, one site
+// with a Persian province and a village, so rows, meta and <bdi> all render.
+export const searchResults = {
+  sites: [{ id: 7, site_code: 'W4-1021', province: 'کرمان', stage: 'Acceptance' }],
+  villages: [{ work_item_id: 7, village_name: 'دهنو', village_code: 'V10232', site_code: 'W4-1021' }],
+  provinces: [],
+  contractors: [],
+  people: [],
+}

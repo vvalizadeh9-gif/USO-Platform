@@ -14,6 +14,60 @@
   the content below 720px.
 - **Home** is the only page with the full Apps panel. It has no rail.
 
+## Header search (UEP-12)
+
+`shell/GlobalSearch.jsx` (state and keyboard), `shell/SearchOption.jsx` (a
+result row), `shell/searchLook.js` (group icons and tones, matched text),
+styles in `styles/shell.css`. What it finds, its routes, the 200ms debounce
+and the role scoping are unchanged; only the presentation moved.
+
+**Field.** Centred in a flex zone between the logo and the avatar.
+
+| State | Look |
+|---|---|
+| Rest | 480px × 36px (`--uep-header-search-width`, `--uep-header-search-height`), radius 8, `--uep-search-fill`, no visible border (1px transparent), icon and placeholder `--uep-text-3`, a `Ctrl K` / `⌘ K` hint |
+| Hover | `--uep-search-fill-hover` |
+| Focused | 640px (`--uep-header-search-width-open`), white, `--uep-accent` border and `--uep-focus-ring` (the focus indicator: the input's own outline is off), cobalt icon; the hint cross-fades to `Esc`, the old one moving 3px up and the new one coming from 3px below |
+
+Below 760px the hint is hidden and the open field takes the whole zone. Width
+grows over 240ms (`--uep-ease-standard`); colours change over 160ms
+(`--uep-ease-productive`).
+
+**Results panel.** 6px under the field, as wide as the open field, radius
+12, `--uep-shadow-search`; the list is at most `min(60vh, 460px)` and scrolls
+inside. It enters (fade 180ms, rise from `translateY(-6px) scale(.985)` over
+240ms, origin top centre) and leaves faster (120ms, `--uep-ease-exit`). It
+stays mounted with `data-state="showing|hidden"` and is `inert` and
+`aria-hidden` while hidden, so it never pops off mid-animation.
+
+- Groups: "Apps and pages", "Sites", "Villages", "Provinces", "Contractors",
+  "People" (12px/600). "Search all sites for “…”" is last, for roles that can
+  open Explorer.
+- Rows (42px): a 28px tile with the group's Carbon icon in an app hue
+  (pages and people neutral, sites Drive test teal, villages Acceptance
+  violet, provinces and contractors Insights blue, "Search all sites"
+  cobalt), the label with the matched text in 600 cobalt, the meta right
+  after it, and a cobalt Enter arrow on the active row. Persian labels and
+  meta parts are Vazirmatn inside `<bdi>`, so "کرمان · Acceptance" never
+  reorders. Each option is named by its label and meta (`aria-label`).
+- One `--uep-accent-tint` highlight behind the rows slides to the active row
+  (120ms); it jumps when the list changes. Hover moves it; ↑ ↓ move it and
+  scroll the row into view.
+- Rows rise 4px and fade in (220ms, 14ms apart, first 10) when the panel
+  opens and when a group first appears, such as server results landing.
+  Typing within groups already shown does not replay it.
+- Loading is a 2px cobalt line across the panel's top edge (900ms loop); a
+  visually hidden `role="status"` says "Searching…".
+- A footer lists ↑ ↓ Move · ↵ Open · Esc Close (`aria-hidden`).
+
+**Keys.** Ctrl K / ⌘ K focuses and selects. ↑ ↓ cycle, Enter opens the active
+result (or the first). **Esc** clears the text if there is any (the field
+stays focused and open); on an empty field it leaves it, and the field
+shrinks back.
+
+**Reduced motion.** Width, panel, highlight and hint changes take 1ms, rows
+do not stagger, and the loading line stands still at 40%.
+
 ## The registry
 
 `frontend/src/shell/appRegistry.js` declares every app:

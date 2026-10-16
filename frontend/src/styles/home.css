@@ -20,13 +20,34 @@
   from { opacity: 0; transform: translateY(var(--uep-enter-distance)); }
   to { opacity: 1; transform: none; }
 }
-.h-columns { display: flex; flex-wrap: wrap; gap: var(--uep-space-24); align-items: flex-start; }
-.h-main {
-  flex: 999 1 var(--uep-home-main-basis);
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--h-gap);
+/* The greeting is the page header and spans the width. Under it the two
+   columns share one top edge (the KPI strip) and one bottom edge (the work
+   cards): the left column sets the row heights, and the Apps panel's frame
+   stretches to them while its contents stay at the top, scrolling inside
+   if a role ever has more apps than fit (UEP-12). */
+.h-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--uep-home-apps-width);
+  grid-template-rows: auto auto auto;
+  column-gap: var(--uep-space-24);
+  row-gap: var(--h-gap);
+  align-items: start;
+}
+.h-main { display: contents; }
+.h-greet { grid-column: 1 / -1; grid-row: 1; }
+.h-kpis { grid-column: 1; grid-row: 2; min-width: 0; }
+.h-work { grid-column: 1; grid-row: 3; min-width: 0; }
+.ha-panel {
+  grid-column: 2;
+  grid-row: 2 / 4;
+  align-self: stretch;
+  contain: size;
+  min-height: 0;
+  overflow-y: auto;
+}
+@media (max-width: 1100px) {
+  .h-layout { grid-template-columns: minmax(0, 1fr); }
+  .ha-panel { grid-column: 1; grid-row: auto; contain: none; overflow: visible; }
 }
 
 /* ---- Greeting ---- */
@@ -119,7 +140,6 @@
 
 /* ---- Apps panel ---- */
 .ha-panel {
-  flex: 1 1 var(--uep-home-apps-basis);
   padding: var(--uep-space-16);
   background: var(--uep-surface);
   border: var(--uep-border-width) solid var(--uep-border);

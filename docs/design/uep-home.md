@@ -16,6 +16,30 @@ Action Center's queue registry and adds nothing that could disagree with it.
 This section describes Home as it is now. Sections 1–9 below record the
 first build; where they disagree with this section, this section wins.
 
+### 0.0 Layout (UEP-12)
+
+- **The greeting is the page header.** `section.h-greet` spans the full
+  content width, above both columns.
+- **One top edge, one bottom edge.** Under it, `.h-layout` is a grid of two
+  columns (`minmax(0, 1fr)` and `--uep-home-apps-width`, 340px, which keeps
+  every app description on one line) and three rows. The KPI strip (row 2)
+  and Your work (row 3) fill the left column; the Apps panel spans rows 2-3,
+  so its top is the KPI strip's top and its bottom the work cards' bottom.
+- **The left column sets the height.** The panel has `contain: size`, so it
+  never makes a row taller; its frame stretches (`align-self: stretch`), its
+  contents stay at the top and are never padded or spread to fill. If a role
+  ever has more apps than fit, the panel scrolls inside itself; the page
+  never scrolls.
+- **Loading, error and empty** states sit in the same cells: the KPI
+  skeleton or Retry in row 2 (`.h-kpis`), the card skeleton, Retry or note
+  in row 3 (`.h-work`). `aria-busy` is on `.h-main`, a `display: contents`
+  wrapper of both.
+- **Below 1100px** the grid is one column and the panel drops under the work
+  cards at its natural height.
+- Tested in `e2e/home.spec.js`: at 1440×900 and 1366×768, for PM,
+  coordinator and contractor, both edges line up within 1px and the greeting
+  is as wide as the layout.
+
 ### 0.1 Rules
 
 | Rule | What it means |

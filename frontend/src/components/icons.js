@@ -108,6 +108,10 @@ import arrowUp16 from '@carbon/icons/es/arrow--up/16.js'
 import arrowUp20 from '@carbon/icons/es/arrow--up/20.js'
 import arrowDown16 from '@carbon/icons/es/arrow--down/16.js'
 import arrowDown20 from '@carbon/icons/es/arrow--down/20.js'
+import enterprise16 from '@carbon/icons/es/enterprise/16.js'
+import enterprise20 from '@carbon/icons/es/enterprise/20.js'
+import return16 from '@carbon/icons/es/return/16.js'
+import return20 from '@carbon/icons/es/return/20.js'
 
 /**
  * @typedef {{ elem: string, attrs: Record<string, string | number>, content?: CarbonNode[] }} CarbonNode
@@ -171,6 +175,9 @@ export const ICONS = Object.freeze({
   'copy': { 16: copy16, 20: copy20 },
   'arrow--up': { 16: arrowUp16, 20: arrowUp20 },
   'arrow--down': { 16: arrowDown16, 20: arrowDown20 },
+  // Header search results (UEP-12).
+  'enterprise': { 16: enterprise16, 20: enterprise20 },
+  'return': { 16: return16, 20: return20 },
 })
 
 /** @typedef {keyof typeof ICONS} IconName */

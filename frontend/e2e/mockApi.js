@@ -44,6 +44,7 @@ const ROUTES = {
   '/work-items/counts': W.workItemCounts,
   '/explorer/sites': explorerSites,
   '/explorer/sites/filters': FILTER_OPTIONS,
+  '/search': F.searchResults,
 }
 
 // Endpoints answered late, on purpose: the dashboard's side cards arriving

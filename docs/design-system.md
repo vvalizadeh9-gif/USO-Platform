@@ -167,6 +167,30 @@ row, footer) is `flex: none`, and the single region that scrolls is
 to every `.uw-page` and `.uw-card`. A row that only scrolls sideways is still
 a fixed row: left at `flex-shrink: 1` it collapses to its scrollbar.
 
+**Exits are faster than entrances (UEP-12).** Something leaving takes about
+half the time it took to arrive and accelerates out (`--uep-ease-exit`,
+`cubic-bezier(0.3, 0, 1, 1)`); entrances decelerate (`--uep-ease-standard`).
+A panel that animates out stays mounted until it has gone, `inert` and
+`aria-hidden`.
+
+| Token | Value | For |
+|---|---|---|
+| `--uep-header-search-width` / `-open` | 480px / 640px | The header search at rest / focused |
+| `--uep-header-search-height` | 36px | Its height (`--uep-search-height`, 34px, stays the launcher's filter) |
+| `--uep-search-fill` / `-fill-hover` | `--uep-divider` / `#E6E9EE` | The filled field |
+| `--uep-search-radius` | 8px | The field |
+| `--uep-shadow-search` | `0 16px 40px rgba(20,23,31,.12), 0 2px 6px rgba(20,23,31,.06)` | The results panel |
+| `--uep-surface-sunken` | `#FAFBFC` | The panel's footer |
+| `--uep-dur-search-move` | 240ms | Width change, panel enter |
+| `--uep-dur-search-fade` | 160ms | Colour changes, hint swap |
+| `--uep-dur-search-exit` | 120ms | Panel exit |
+| `--uep-dur-search-hi` | 120ms | Active-row highlight slide |
+| `--uep-ease-exit` | `cubic-bezier(0.3, 0, 1, 1)` | Exits only |
+
+`--uep-search-max` was removed. Search tiles reuse the app hues; the Insights
+tile tint is `--uep-search-tile-insights`, an alias of `--uep-cra-soft` (the
+same blue), not a new colour.
+
 **Reduced motion.** `lib/motionPreference.js` writes
 `<html data-uep-motion="reduce|full">` from the system's
 `prefers-reduced-motion`, and stylesheets key off that attribute. **Review
@@ -200,7 +224,8 @@ Home and `GET /me/home`: [design/uep-home.md](design/uep-home.md).
 
 | Component | File | Key tokens |
 |---|---|---|
-| Header | `shell/AppHeader.jsx` | `--uep-header-height`, `--uep-search-max`, `--uep-search-height` |
+| Header | `shell/AppHeader.jsx` | `--uep-header-height` |
+| Header search | `shell/GlobalSearch.jsx` | `--uep-header-search-*`, `--uep-search-*`, `--uep-dur-search-*`, `--uep-ease-exit`, `--uep-shadow-search` |
 | App launcher | `shell/AppLauncher.jsx` | `--uep-launcher-width`, `--uep-backdrop`, `--uep-dur-pop` |
 | Account menu | `shell/AccountPopover.jsx` | `--uep-account-width`, `--uep-dur-pop` |
 | App rail | `shell/AppRail.jsx` | `--uep-rail-width`, `--uep-accent-tint` (active) |
