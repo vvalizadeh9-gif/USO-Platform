@@ -112,6 +112,8 @@ import enterprise16 from '@carbon/icons/es/enterprise/16.js'
 import enterprise20 from '@carbon/icons/es/enterprise/20.js'
 import return16 from '@carbon/icons/es/return/16.js'
 import return20 from '@carbon/icons/es/return/20.js'
+import warning16 from '@carbon/icons/es/warning/16.js'
+import warning20 from '@carbon/icons/es/warning/20.js'
 
 /**
  * @typedef {{ elem: string, attrs: Record<string, string | number>, content?: CarbonNode[] }} CarbonNode
@@ -178,6 +180,7 @@ export const ICONS = Object.freeze({
   // Header search results (UEP-12).
   'enterprise': { 16: enterprise16, 20: enterprise20 },
   'return': { 16: return16, 20: return20 },
+  'warning': { 16: warning16, 20: warning20 },
 })
 
 /** @typedef {keyof typeof ICONS} IconName */

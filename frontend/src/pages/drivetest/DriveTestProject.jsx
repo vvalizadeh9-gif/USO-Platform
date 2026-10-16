@@ -6,6 +6,7 @@ import { describeBlobError, filenameFrom, saveBlob } from '../../lib/download'
 import PageFrame from '../../components/PageFrame'
 import { Banner, PageBar, Tabs } from '../../components/ui'
 import { useToast } from '../../context/ToastContext'
+import { CardBoundary } from '../../components/ErrorBoundary'
 import BreakdownCard, { BreakdownTabs } from './BreakdownCard'
 import { DrillProvider } from './DrillPanel'
 import ContractorScorecard from './ContractorScorecard'
@@ -279,7 +280,11 @@ export default function DriveTestProject() {
               {overview.loading && !data ? (
                 <KpiSkeleton />
               ) : (
-                data && <KpiBand kpis={data.kpis} provinceId={provinceId} series={sparkSeries} />
+                data && (
+                  <CardBoundary title="Totals" tile="cell-tower">
+                    <KpiBand kpis={data.kpis} provinceId={provinceId} series={sparkSeries} />
+                  </CardBoundary>
+                )
               )}
 
               {/* The trend and the month side by side: the chart takes the rest

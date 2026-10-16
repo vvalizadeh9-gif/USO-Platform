@@ -2,6 +2,7 @@ import { motion } from 'framer-motion'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Outlet, useLocation } from 'react-router-dom'
 import { PAGE_MODE, PageModeContext } from '../components/pageMode'
+import ErrorBoundary from '../components/ErrorBoundary'
 import { useAuth } from '../context/AuthContext'
 import AppHeader from './AppHeader'
 import AppRail from './AppRail'
@@ -93,7 +94,9 @@ export default function AppShell() {
               animate={{ opacity: 1 }}
               transition={{ duration: 0.12 }}
             >
-              <Outlet />
+              <ErrorBoundary level="page" resetKey={location.pathname}>
+                <Outlet />
+              </ErrorBoundary>
             </motion.div>
           </PageModeContext.Provider>
         </main>

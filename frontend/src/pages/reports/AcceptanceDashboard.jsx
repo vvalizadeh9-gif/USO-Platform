@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import api from '../../api/client'
+import { CardBoundary } from '../../components/ErrorBoundary'
 import PageFrame from '../../components/PageFrame'
 import { PageBar, Tabs } from '../../components/ui'
 import { useAuth } from '../../context/AuthContext'
@@ -118,7 +119,9 @@ export default function AcceptanceDashboard() {
     <PageFrame className="dt-page acc-page" bar={bar}>
       <AcceptanceDrillProvider scope={scope}>
         <div className="dt-bench acc-bench">
-          <KpiBand state={overview} stream={tab} thisMonth={thisMonth} />
+          <CardBoundary title="Totals" tile="certificate--check" onRetry={refresh}>
+            <KpiBand state={overview} stream={tab} thisMonth={thisMonth} />
+          </CardBoundary>
           <div className="dt-grid2 acc-grid">
             <ProgressChart
               state={progress}

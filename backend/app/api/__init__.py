@@ -5,6 +5,7 @@ from app.api import (
     acceptance,
     admin,
     auth,
+    client_errors,
     drive_test,
     explorer,
     gaps,
@@ -39,3 +40,4 @@ api_router.include_router(misc.router)
 api_router.include_router(work_queues.router)
 api_router.include_router(home.router)
 api_router.include_router(search.router)
+api_router.include_router(client_errors.router)
