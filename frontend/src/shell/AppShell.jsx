@@ -9,6 +9,8 @@ import AppRail from './AppRail'
 import { appRoute, appState, appsFor, locate } from './appRegistry'
 import { useHomeData } from './HomeData'
 import { useSessionKeepAlive } from './useSessionKeepAlive'
+import { PageCrumbContext } from './crumbs'
+import { lastListSearch } from '../pages/explorer/listModel'
 import '../styles/shell.css'
 
 /**
@@ -21,12 +23,16 @@ function pageKey(pathname) {
   return section === 'reports' ? `reports/${sub}` : section
 }
 
-/** "/ {App}" inside an app, nothing on Home. A site's record page draws its
- * own "Explorer / {site ID}" trail under the header. */
+/** "/ {App}" inside an app, nothing on Home; "/ Explorer / W4303" on a
+ * site's record page (the page names its site through usePageCrumb). */
 // eslint-disable-next-line react-refresh/only-export-components -- tested on its own
-export function crumbsFor(pathname, app) {
+export function crumbsFor(pathname, app, pageCrumb = null, listSearch = '') {
   if (pathname === '/home' || !app) return []
-  return [{ label: app.name, to: appRoute(app), state: appState(app) }]
+  // On a record page the app crumb goes back to the list with its filters.
+  const to = pageCrumb && app.id === 'explorer' ? `${appRoute(app)}${listSearch}` : appRoute(app)
+  const crumbs = [{ label: app.name, to, state: appState(app) }]
+  if (pageCrumb) crumbs.push({ label: pageCrumb })
+  return crumbs
 }
 
 const LAST_APP_KEY = 'uep.lastApp'
@@ -49,6 +55,7 @@ export default function AppShell() {
   const location = useLocation()
   const { counts } = useHomeData()
   const [pageMode, setPageMode] = useState(PAGE_MODE.scroll)
+  const [pageCrumb, setPageCrumb] = useState(null)
   const pageModeValue = useMemo(() => ({ setMode: setPageMode }), [])
   useSessionKeepAlive(Boolean(user))
 
@@ -80,12 +87,13 @@ export default function AppShell() {
       <AppHeader
         user={user}
         apps={apps}
-        crumbs={crumbsFor(location.pathname, app)}
+        crumbs={crumbsFor(location.pathname, app, pageCrumb, pageCrumb ? lastListSearch() : '')}
         onSignOut={logout}
       />
       <div className="uep-shell-body">
         {!isHome && <AppRail app={app} activePage={page} counts={counts} />}
         <main className={`main main-${pageMode} uep-shell-main ${isHome ? 'is-home' : ''}`.trim()}>
+          <PageCrumbContext.Provider value={setPageCrumb}>
           <PageModeContext.Provider value={pageModeValue}>
             <motion.div
               key={pageKey(location.pathname)}
@@ -99,6 +107,7 @@ export default function AppShell() {
               </ErrorBoundary>
             </motion.div>
           </PageModeContext.Provider>
+          </PageCrumbContext.Provider>
         </main>
       </div>
     </div>

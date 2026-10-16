@@ -216,3 +216,21 @@ Why Monthly plan used to disagree (2 in the menu, 15 on the tab): Home
 counted every current Submitted/RevisionRequested plan of any month, the tab
 counted per stream for the planning month only. Both now use the tab's
 definition (`plans_awaiting_pm`).
+
+## Where things live (UEP-13)
+
+- **Explorer** is its own app, first in Rollout (Drive test roles). One page,
+  so no rail. The record page's breadcrumb is in the header only:
+  `UEP / Explorer / W4303`, where "Explorer" goes back to the list with its
+  filters (`usePageCrumb` in `shell/crumbs.js`).
+- **Insights** rail: Drive test dashboard · Acceptance dashboard · Roles
+  performance · Lifecycle gaps · Exports.
+- **Acceptance** rail: Dashboard · Filing · Validation · Letters. One
+  workspace (`/my-work`), titled by its rail page: Filing (the filing buckets
+  as a filter), Validation (`?tab=filled`), Letters (`?tab=all`).
+- **Monthly plan**, **Admin** and **Data** draw no tab bar of their own; the
+  rail is the menu and the page title is the rail label.
+- Lifecycle gaps has no map tab; `/reports/gaps?tab=map` goes to Roles
+  performance › Map, the only map.
+- Remaining case: the Health check / Drive test pipeline pages keep the step
+  name as the title (the strip is the view inside one page).

@@ -45,11 +45,9 @@ beforeEach(() => {
 })
 
 describe('the header', () => {
-  it('shows the breadcrumb, the site ID and one status badge, nothing under the title', async () => {
+  it('shows the site ID and one status badge, with no in-page breadcrumb (it is in the header)', async () => {
     await draw()
-    const crumbs = screen.getByRole('navigation', { name: 'Breadcrumb' })
-    expect(within(crumbs).getByRole('link', { name: 'Explorer' })).toHaveAttribute('href', '/explorer')
-    expect(within(crumbs).getByText('W4318')).toHaveAttribute('aria-current', 'page')
+    expect(screen.queryByRole('navigation', { name: 'Breadcrumb' })).toBeNull()
     expect(screen.getByRole('heading', { level: 1, name: 'W4318' })).toBeInTheDocument()
     expect(screen.getByText('Acceptance in progress')).toHaveClass('ex-badge', 'is-progress')
   })

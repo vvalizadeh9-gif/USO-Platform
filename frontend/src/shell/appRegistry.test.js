@@ -9,7 +9,7 @@ describe('app registry role filtering', () => {
     expect(ids(apps)).not.toContain('data')
     expect(ids(apps)).not.toContain('admin')
     const dt = apps.find((a) => a.id === 'drive-test')
-    expect(dt.pages.map((p) => p.id)).toEqual(['hc-check', 'in-progress', 'explorer'])
+    expect(dt.pages.map((p) => p.id)).toEqual(['hc-check', 'in-progress'])
   })
 
   it('lists the Monthly plan pages in tab order, Approvals first, staff-only past it', () => {
@@ -100,8 +100,10 @@ describe('Drive test rail without Dashboard', () => {
   it.each(['PM', 'Coordinator', 'Contractor', 'RegionalManager', 'Viewer', 'CpgPower'])(
     'has no Dashboard for %s',
     (role) => {
+      // RM and Viewer had only Explorer here; with Explorer its own app the
+      // Drive test app is not theirs at all.
       const dt = appsFor(role).find((a) => a.id === 'drive-test')
-      expect(dt.pages.map((p) => p.route)).not.toContain('/reports/drive-test')
+      expect((dt?.pages ?? []).map((p) => p.route)).not.toContain('/reports/drive-test')
     },
   )
 
@@ -124,11 +126,22 @@ describe('Drive test rail without Dashboard', () => {
     expect(locate(apps, '/reports/drive-test', '', 'drive-test').app.id).toBe('insights')
   })
 
-  it('names the site list Explorer, for the Drive test roles', () => {
+  it('makes Explorer its own app, first in Rollout, for the Drive test roles only', () => {
     for (const role of ['PM', 'Coordinator', 'Contractor', 'RegionalManager', 'Viewer']) {
-      const page = appsFor(role).find((a) => a.id === 'drive-test').pages.find((p) => p.id === 'explorer')
-      expect(page).toMatchObject({ label: 'Explorer', route: '/explorer' })
+      const apps = appsFor(role)
+      const rollout = apps.filter((a) => a.group === 'rollout')
+      expect(rollout[0]).toMatchObject({ id: 'explorer', name: 'Explorer', icon: 'search--locate' })
+      expect(rollout[0].pages).toEqual([expect.objectContaining({ label: 'Explorer', route: '/explorer' })])
+      expect((apps.find((a) => a.id === 'drive-test')?.pages ?? []).map((p) => p.id)).not.toContain('explorer')
     }
-    expect(locate(appsFor('PM'), '/explorer/sites/7', '').page.id).toBe('explorer')
+    expect(ids(appsFor('CpgPower'))).not.toContain('explorer')
+    expect(locate(appsFor('PM'), '/explorer/sites/7', '').app.id).toBe('explorer')
+  })
+
+  it('labels and orders the Insights rail', () => {
+    const insights = appsFor('PM').find((a) => a.id === 'insights')
+    expect(insights.pages.map((p) => p.label)).toEqual([
+      'Drive test dashboard', 'Acceptance dashboard', 'Roles performance', 'Lifecycle gaps', 'Exports',
+    ])
   })
 })
