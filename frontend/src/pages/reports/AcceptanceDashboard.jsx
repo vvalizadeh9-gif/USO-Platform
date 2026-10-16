@@ -99,8 +99,7 @@ export default function AcceptanceDashboard() {
 
   const bar = (
     <PageBar
-      eyebrow="Acceptance"
-      title="Dashboard"
+      title="Acceptance dashboard"
       context={isContractor ? null : <ScopePicker scope={picked} onChange={setPicked} />}
       actions={
         <DashboardActions

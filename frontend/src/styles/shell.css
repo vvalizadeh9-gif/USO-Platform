@@ -611,3 +611,102 @@ html[data-uep-motion='reduce'] .uep-search-progress i { animation: none; }
 .uep-error-card-icon {
   color: var(--uep-text-3);
 }
+
+/* ---- The one page header (UEP-13 §3.5) ----
+   Fixed height: 64px, or 104px with the 40px tab row, so a tab switch never
+   moves the page. White band, bottom border; the body sits on --uep-page. */
+.uep-page-header {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  height: 64px;
+  padding: 0 var(--uep-space-24);
+  background: var(--uep-surface);
+  border-bottom: var(--uep-border-width) solid var(--uep-border);
+}
+.uep-page-header.has-tabs { height: 104px; }
+.uep-page-header-row {
+  display: flex;
+  align-items: center;
+  gap: var(--uep-space-16);
+  height: 64px;
+  min-width: 0;
+  flex: none;
+}
+.uep-page-header-title {
+  flex: none;
+  margin: 0;
+  font-size: var(--uep-fs-page-title);
+  font-weight: var(--uep-weight-semibold);
+  line-height: 32px;
+  letter-spacing: var(--uep-tracking-heading);
+  color: var(--uep-text);
+  white-space: nowrap;
+}
+.uep-page-header-title:focus { outline: none; }
+.uep-page-header-count {
+  flex: none;
+  font-size: var(--uep-fs-body);
+  color: var(--uep-text-2);
+  white-space: nowrap;
+}
+.uep-page-header-count b { font-weight: var(--uep-weight-semibold); color: var(--uep-text); }
+.uep-page-header-count .uep-page-header-late { color: var(--uep-danger); }
+.uep-page-header-filters {
+  display: flex;
+  align-items: center;
+  gap: var(--uep-space-8);
+  min-width: 0;
+}
+.uep-page-header-end {
+  display: flex;
+  align-items: center;
+  gap: var(--uep-space-8);
+  margin-inline-start: auto;
+  flex: none;
+}
+.uep-page-header-fresh { font-size: var(--uep-fs-small); color: var(--uep-text-3); white-space: nowrap; }
+.uep-page-header-btn {
+  display: inline-grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: var(--uep-border-width) solid var(--uep-border);
+  border-radius: var(--uep-radius-control);
+  background: var(--uep-surface);
+  color: var(--uep-text-2);
+}
+.uep-page-header-btn:hover { border-color: var(--uep-border-strong); color: var(--uep-text); }
+.uep-page-header-tabs {
+  display: flex;
+  align-items: center;
+  gap: var(--uep-space-12);
+  height: 40px;
+  min-width: 0;
+  flex: none;
+}
+.uep-page-header-tabs > .ui-tabs { flex: 1 1 auto; flex-wrap: nowrap; min-width: 0; align-items: stretch; height: 40px; }
+.uep-page-header .ui-tab { height: 40px; }
+.uep-page-header-tabs-end { display: flex; align-items: center; gap: var(--uep-space-8); margin-inline-start: auto; flex: none; }
+.uep-page-header-linktabs { display: flex; align-items: stretch; gap: var(--uep-space-4); height: 40px; }
+.uep-page-header-linktab {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--uep-space-8);
+  padding: 0 var(--uep-space-12);
+  border-bottom: 2px solid transparent;
+  font-size: var(--uep-fs-body);
+  font-weight: var(--uep-weight-medium);
+  color: var(--uep-text-2);
+}
+.uep-page-header-linktab.active { color: var(--uep-accent); border-bottom-color: var(--uep-accent); }
+/* On a scrolling page the header band sits on the outlet's top edge, full
+   width, and stays put while the page scrolls under it. */
+.main-scroll .page-outlet > .uep-page-header:first-child,
+.main-scroll .page-outlet > :first-child > .uep-page-header:first-child {
+  position: sticky;
+  top: -30px;
+  z-index: 5;
+  margin: -30px calc(-1 * max(38px, calc(100% - 1280px + 38px))) 24px -38px;
+  padding-inline: 38px;
+}

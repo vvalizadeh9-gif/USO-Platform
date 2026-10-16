@@ -66,15 +66,9 @@ export default function ChangePassword() {
 
   return (
     <>
-      <PageHead
-        eyebrow="Your account"
-        title={forced ? 'Choose a new password' : 'Change your password'}
-        subtitle={
-          forced
-            ? 'Your password was reset by an administrator. Choose your own before continuing.'
-            : 'Set a new password for your account.'
-        }
-      />
+      <PageHead title={forced ? 'Choose a new password' : 'Change password'} />
+      {/* The one sentence that says why they are here and cannot go elsewhere. */}
+      {forced && <p className="cp-forced-note">Your password was reset by an administrator. Choose your own before continuing.</p>}
 
       <motion.div
         className="card card-pad"

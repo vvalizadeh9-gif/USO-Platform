@@ -13,7 +13,7 @@ const VIEWPORTS = [
 async function open(page, user) {
   await signIn(page, user)
   await page.goto('/my-work')
-  await expect(page.getByRole('heading', { name: 'My Work' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Filing' })).toBeVisible()
   await expect(page.getByRole('region', { name: 'Village', exact: true })).toBeVisible()
 }
 

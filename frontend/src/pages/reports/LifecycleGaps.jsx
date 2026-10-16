@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
+import { Link, Navigate, useSearchParams } from 'react-router-dom'
 import { AlertTriangle, ClipboardList, Hourglass, Scale } from '../../components/carbon'
 import api from '../../api/client'
 import ExportNumber, { ExportFeedback } from '../../components/ExportNumber'
@@ -9,8 +9,7 @@ import PageFrame from '../../components/PageFrame'
 import WaffleTile from '../../components/WaffleTile'
 import { useAuth } from '../../context/AuthContext'
 import { canCompare } from '../../lib/roles'
-import { Banner, Card, EmptyState, PageBar, Tabs } from '../../components/ui'
-import CoverageMap from './CoverageMap'
+import { Banner, Card, EmptyState, PageBar } from '../../components/ui'
 import {
   ATTRIBUTION_NOTES,
   CARDS,
@@ -63,7 +62,6 @@ export default function LifecycleGaps() {
   const askedLens = LENSES.some((l) => l.key === search.get('lens')) ? search.get('lens') : null
 
   const [lens, setLens] = useState(null)
-  const [tab, setTab] = useState('gaps')
   const [selected, setSelected] = useState(null)
   const [notesOpen, setNotesOpen] = useState(false)
   const [data, setData] = useState(null)
@@ -98,10 +96,13 @@ export default function LifecycleGaps() {
 
   const notes = dataNotes(data?.data_quality)
 
+  // Roles performance › Map is the only map (UEP-13 §3.12); old links to the
+  // retired Coverage map tab land there.
+  if (search.get('tab') === 'map') return <Navigate to="/reports/kpi/map" replace />
+
   const bar = (
     <PageBar
-      eyebrow="Performance"
-      title="Lifecycle Gaps"
+      title="Lifecycle gaps"
       actions={
         <>
           {notes.length > 0 && (
@@ -123,7 +124,6 @@ export default function LifecycleGaps() {
           )}
         </>
       }
-      tabs={<Tabs tabs={TABS} value={tab} onChange={setTab} label="Gap views" />}
     />
   )
 
@@ -139,9 +139,7 @@ export default function LifecycleGaps() {
         )}
         {error && data && <Banner tone="error">{error}</Banner>}
 
-        {tab === 'map' ? (
-          <CoverageMap />
-        ) : error && !data ? (
+        {error && !data ? (
           <Card>
             <EmptyState title="Nothing to show" hint={error} />
           </Card>
@@ -162,11 +160,6 @@ export default function LifecycleGaps() {
     </ExportFeedback>
   )
 }
-
-const TABS = [
-  { key: 'gaps', label: 'Gaps' },
-  { key: 'map', label: 'Coverage map' },
-]
 
 const CARD_ICONS = { pending: Hourglass, remained: Scale, mojri: ClipboardList }
 

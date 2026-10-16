@@ -107,11 +107,7 @@ export default function MojriImport() {
 
   return (
     <div className="kpi gap">
-      <PageHead
-        eyebrow="Month-end"
-        title="Mojri Tracker"
-        subtitle="Is ICT HQ's own tracker up to date with the villages we have already approved?"
-      />
+      <PageHead title="Mojri tracker" />
 
       {error && <div className="kpi-error">{error}</div>}
 

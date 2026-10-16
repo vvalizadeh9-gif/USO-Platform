@@ -50,12 +50,7 @@ function ContractorMonthlyPlan() {
 
   return (
     <>
-      <PageHead
-        eyebrow="Operations"
-        title="Monthly Plan"
-        subtitle="The drive tests and acceptances you commit to for next month, and how the month now running is going. The PM approves each number, or sends it back with a comment."
-        actions={<PeriodPicker period={period} onChange={setPeriod} />}
-      />
+      <PageHead title="Monthly plan" actions={<PeriodPicker period={period} onChange={setPeriod} />} />
       {complete ? (
         <ContractorPlan period={period} />
       ) : (

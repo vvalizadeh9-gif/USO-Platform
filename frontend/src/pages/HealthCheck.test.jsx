@@ -102,8 +102,8 @@ describe('the heading and the strip', () => {
   it('names the step, its sites and how many are late', async () => {
     await landOn('/health-check')
     expect(heading()).toHaveTextContent('Assign health check')
-    expect(screen.getByText('196 waiting')).toBeInTheDocument()
-    expect(screen.getByText('3 late', { selector: '.uw-heading-meta b' })).toHaveClass('uw-late')
+    expect(document.querySelector('.uw-heading-meta')).toHaveTextContent('196 waiting · 3 late')
+    expect(screen.getByText('3 late', { selector: '.uw-heading-meta b' })).toHaveClass('uep-page-header-late')
     expect(heading()).toHaveAttribute('tabindex', '-1')
     expect(api.get).toHaveBeenCalledWith('/drive-test/pipeline/summary')
     expect(api.get).not.toHaveBeenCalledWith('/hc/queues/counts')

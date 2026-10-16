@@ -236,8 +236,7 @@ export default function DriveTestProject() {
         className="dt-page"
         bar={
           <PageBar
-            eyebrow="Drive Test"
-            title="Dashboard"
+            title="Drive test dashboard"
             context={
               <ProvinceScope
                 provinces={provinces}
@@ -264,7 +263,7 @@ export default function DriveTestProject() {
             <Banner
               tone="error"
               className="dt-page-error"
-              title="Could not load the Drive Test figures."
+              title="Could not load the drive test figures."
             >
               <p>Everything on this tab comes from that request, so there is nothing to show.</p>
               <button type="button" className="btn" onClick={refresh}>
@@ -505,7 +504,7 @@ export default function DriveTestProject() {
                 {has('province_breakdown') && (
                   <div className="dt-tables-cell">
                     <Section
-                      title="Drive Test progress by province"
+                      title="Drive test progress by province"
                       subtitle={
                         data &&
                         `Gap = On air − DT done · ${

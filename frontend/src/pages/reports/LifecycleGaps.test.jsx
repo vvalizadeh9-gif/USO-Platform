@@ -11,7 +11,7 @@
 //   * no Mojri figure until Mojri has been imported.
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('../../api/client', () => ({ default: { get: vi.fn() } }))
@@ -367,14 +367,14 @@ describe('export behind every number', () => {
 })
 
 describe('around the tiles', () => {
-  it('heads the page with the PageBar: eyebrow, title, total and the two tabs', async () => {
+  it('heads the page with the one PageHeader: title and total, no eyebrow, no tabs', async () => {
     mock()
     draw()
     await tiles()
-    const bar = document.querySelector('.page-bar')
-    expect(within(bar).getByRole('heading', { level: 1, name: 'Lifecycle Gaps' })).toBeInTheDocument()
-    expect(within(bar).getByText('Performance')).toBeInTheDocument()
-    expect(within(bar).getAllByRole('tab').map((t) => t.textContent)).toEqual(['Gaps', 'Coverage map'])
+    const bar = screen.getByTestId('page-header')
+    expect(within(bar).getByRole('heading', { level: 1, name: 'Lifecycle gaps' })).toBeInTheDocument()
+    expect(within(bar).queryByText('Performance')).toBeNull()
+    expect(within(bar).queryAllByRole('tab')).toHaveLength(0)
     expect(within(bar).getByTestId('gap-total')).toHaveTextContent('4,812 villages with drive test done')
   })
 
@@ -420,13 +420,16 @@ describe('around the tiles', () => {
     expect(await screen.findByText('Not your scope')).toBeInTheDocument()
   })
 
-  it('opens the coverage map on its own tab', async () => {
+  it('has no map tab; an old ?tab=map link goes to Roles performance › Map', async () => {
     mock()
-    draw()
-    await tiles()
-    expect(screen.getByRole('tab', { name: 'Gaps' })).toHaveAttribute('aria-selected', 'true')
-    await userEvent.click(screen.getByRole('tab', { name: 'Coverage map' }))
-    expect(api.get).toHaveBeenCalledWith('/gaps/map')
-    expect(screen.queryByText('Pending approval')).not.toBeInTheDocument()
+    render(
+      <MemoryRouter initialEntries={['/reports/gaps?tab=map']}>
+        <Routes>
+          <Route path="/reports/gaps" element={<LifecycleGaps />} />
+          <Route path="/reports/kpi/map" element={<p>the map</p>} />
+        </Routes>
+      </MemoryRouter>
+    )
+    expect(await screen.findByText('the map')).toBeInTheDocument()
   })
 })

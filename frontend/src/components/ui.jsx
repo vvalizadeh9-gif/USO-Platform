@@ -3,6 +3,7 @@
 import { motion } from 'framer-motion'
 import { AlertTriangle, CheckCircle2, ChevronRight, Inbox, Info, XCircle } from './carbon'
 import { Fragment, useId, useRef } from 'react'
+import PageHeader from './PageHeader'
 import { useDialogFocus } from './useDialogFocus'
 
 const STATUS_CLASS = {
@@ -42,22 +43,11 @@ export function StatusPill({ status }) {
   return <span className={`pill ${cls}`}>{status || '—'}</span>
 }
 
-export function PageHead({ eyebrow, title, subtitle, actions }) {
-  return (
-    <motion.div
-      className="page-head"
-      initial={{ opacity: 0, y: -8 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3 }}
-    >
-      <div>
-        {eyebrow && <div className="eyebrow">{eyebrow}</div>}
-        <h1>{title}</h1>
-        {subtitle && <p>{subtitle}</p>}
-      </div>
-      {actions && <div className="row">{actions}</div>}
-    </motion.div>
-  )
+/** Kept for the pages that call it: the one PageHeader (UEP-13 §3.5). No
+ * eyebrow and no subtitle any more -- the breadcrumb names the app. */
+// eslint-disable-next-line no-unused-vars
+export function PageHead({ eyebrow, title, subtitle, count, actions }) {
+  return <PageHeader title={title} count={count} actions={actions} />
 }
 
 export function EmptyState({ title, hint }) {
@@ -228,34 +218,13 @@ function TabButton({ tab, selected, onSelect, panelId }) {
 }
 
 /**
- * The header of a one-screen page, the same on every page that has one.
- *
- * Row 1: the eyebrow over the title (and an optional `subtitle` under it),
- * then `context` after a divider (a process stepper, a scope button), then
- * `actions` pushed to the far end.
- * Row 2, when there are `tabs`: the page's tabs (normally a `<Tabs>`), then
- * `tabsRight` -- the controls that act on the tab's view -- at the far end.
+ * The header of a one-screen page: now the one PageHeader (UEP-13 §3.5).
+ * `context` becomes its filters; `tabs`/`tabsRight` its tab row. The
+ * eyebrow and subtitle are no longer drawn.
  */
-export function PageBar({ eyebrow, title, subtitle, context, actions, tabs, tabsRight }) {
-  return (
-    <header className="page-bar">
-      <div className="page-bar-row">
-        <div className="page-bar-titles">
-          {eyebrow && <div className="page-bar-eyebrow">{eyebrow}</div>}
-          <h1 className="page-bar-title">{title}</h1>
-          {subtitle && <p className="page-bar-subtitle">{subtitle}</p>}
-        </div>
-        {context && <div className="page-bar-context">{context}</div>}
-        {actions && <div className="page-bar-actions">{actions}</div>}
-      </div>
-      {(tabs || tabsRight) && (
-        <div className="page-bar-tabs">
-          {tabs}
-          {tabsRight && <div className="page-bar-tabs-right">{tabsRight}</div>}
-        </div>
-      )}
-    </header>
-  )
+// eslint-disable-next-line no-unused-vars
+export function PageBar({ eyebrow, title, subtitle, count, context, actions, tabs, tabsRight }) {
+  return <PageHeader title={title} count={count} filters={context} actions={actions} tabs={tabs} tabsEnd={tabsRight} />
 }
 
 /**

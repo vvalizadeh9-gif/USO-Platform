@@ -45,7 +45,7 @@ export default function KpiMapping() {
   if (error) {
     return (
       <>
-        <PageHead eyebrow="Roles Performance" title="Province mapping" />
+        <PageHead title="Exports" />
         <div className="card card-pad"><EmptyState title="Not available" hint={error} /></div>
       </>
     )
@@ -55,8 +55,7 @@ export default function KpiMapping() {
   return (
     <div className="kpi">
       <PageHead
-        eyebrow="Roles Performance"
-        title="Province mapping"
+        title="Exports"
         subtitle={`Last CPM import · ${importStamp(data.last_cpm_import)}`}
         actions={
           <Link className="btn btn-ghost kpi-round" to="/reports/kpi">

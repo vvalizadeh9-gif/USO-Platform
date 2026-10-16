@@ -118,7 +118,7 @@ export const APPS = Object.freeze([
       // The dashboard leads the rail behind a divider and carries no count.
       // Insights → Acceptance dashboard opens the same page.
       { id: 'dashboard', label: 'Dashboard', route: '/reports/acceptance', divider: true },
-      { id: 'filing', label: 'ICT and CRA filing', route: '/my-work', queues: ['ict_pending', 'cra_pending'] },
+      { id: 'filing', label: 'Filing', route: '/my-work', queues: ['ict_pending', 'cra_pending'] },
       { id: 'validation', label: 'Validation', route: '/my-work?tab=filled', roles: ['PM', 'Coordinator'], queues: ['ict_to_validate', 'cra_to_validate'] },
       { id: 'letters', label: 'Letters', route: '/my-work?tab=all' },
     ],
