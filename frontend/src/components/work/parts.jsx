@@ -18,6 +18,9 @@ export function Fa({ children, className = '' }) {
 
 /** "21 d" and a bar filling toward the SLA; red, and read out as late, past it.
  * `late` overrides the day count for items late against their own due date. */
+/** How many SLAs the waiting bar spans. */
+const WAIT_SPAN = 3
+
 export function WaitingCell({ days, slaDays, late: lateOverride }) {
   if (days == null) {
     return (
@@ -28,14 +31,21 @@ export function WaitingCell({ days, slaDays, late: lateOverride }) {
     )
   }
   const late = lateOverride ?? isLate(days, slaDays)
-  const fill = late ? 100 : slaDays ? Math.min(100, (100 * days) / slaDays) : 0
+  // Less red (UEP-13 §3.9): neutral up to the SLA, danger only for the part
+  // beyond it. The bar spans three SLAs, with the SLA marked on the track.
+  const span = slaDays ? slaDays * WAIT_SPAN : Math.max(days, 1)
+  const pct = (n) => Math.min(100, (100 * Math.max(0, n)) / span)
+  const within = pct(slaDays ? Math.min(days, slaDays) : days)
+  const beyond = late && slaDays ? pct(days) - within : 0
   return (
     <span className={`uw-wait ${late ? 'is-late' : ''}`.trim()}>
       <span className="uw-wait-days">
         {formatNumber(days)} d{late && <span className="uw-sr-only"> late</span>}
       </span>
       <span className="uw-wait-bar" aria-hidden="true">
-        <i style={{ width: `${fill}%` }} />
+        <i className="uw-wait-within" style={{ width: `${within}%` }} />
+        {beyond > 0 && <i className="uw-wait-beyond" style={{ width: `${beyond}%` }} />}
+        {slaDays ? <b className="uw-wait-sla" style={{ left: `${pct(slaDays)}%` }} /> : null}
       </span>
     </span>
   )

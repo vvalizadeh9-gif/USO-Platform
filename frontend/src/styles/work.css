@@ -390,12 +390,15 @@
   min-width: var(--uep-target-min);
   height: var(--uep-waiting-bar-height);
   border-radius: var(--uep-radius-pill);
-  background: var(--uep-track);
+  background: var(--uep-divider);
   overflow: hidden;
+  position: relative;
+  display: flex;
 }
-.uw-wait-bar i { display: block; height: 100%; border-radius: inherit; background: var(--uep-neutral-data); }
+.uw-wait-bar i { display: block; height: 100%; background: var(--uep-bar-neutral); }
+.uw-wait-bar .uw-wait-beyond { background: var(--uep-danger); }
+.uw-wait-sla { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--uep-border-strong); }
 .uw-wait.is-late .uw-wait-days { color: var(--uep-danger); }
-.uw-wait.is-late .uw-wait-bar i { background: var(--uep-danger); }
 .uw-late-note { display: block; font-size: var(--uep-fs-caption); }
 .uw-chip-neutral {
   display: inline-block; padding: 1px 8px; border-radius: var(--uep-radius-pill);
@@ -624,3 +627,8 @@
 }
 html[data-uep-motion='reduce'] .uw-page * { transition: none !important; }
 html[data-uep-motion='reduce'] :is(.uw-btn, .uw-tile, .uw-assign-card):active { transform: none; }
+
+/* The page header runs edge to edge over the padded work column (UEP-13 §3.5). */
+.uep-home.uw-page > .uep-page-header:first-child {
+  margin: calc(-1 * var(--h-pad-y)) calc(-1 * var(--uep-space-24)) 0;
+}

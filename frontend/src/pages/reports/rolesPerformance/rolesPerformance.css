@@ -310,7 +310,9 @@ button.rp-owner-row:hover { background: var(--uep-row-hover); color: var(--uep-t
 /* ----- Area: ranked against national ----- */
 .rp-gap { font-size: var(--uep-fs-small); font-weight: var(--uep-weight-semibold); color: var(--uep-text-3); }
 .rp-gap-worse { color: var(--uep-danger); }
-.rp-gap-better { color: var(--uep-accent); }
+.rp-gap-better { color: var(--uep-text); }
+/* Only the three rows furthest behind national read in danger ink. */
+.rp-gap-behind { color: var(--uep-text-3); }
 .rp-mrow-sub .rp-gap { font-size: inherit; }
 
 .rp-behind {
@@ -364,11 +366,8 @@ a.rp-rank-row:hover { background: var(--uep-row-hover); }
 .rp-rankbar-fill { left: 0; border-radius: var(--uep-radius-sm) 0 0 var(--uep-radius-sm); background: var(--uep-neutral-data); }
 .rp-rankbar-national .rp-rankbar-fill { background: var(--uep-text-2); border-radius: var(--uep-radius-sm); }
 .rp-rankbar-diff { animation-delay: var(--uep-grow-follow); }
-.rp-rankbar-better { background: var(--uep-accent); border-radius: 0 var(--uep-radius-sm) var(--uep-radius-sm) 0; }
-.rp-rankbar-worse {
-  background: repeating-linear-gradient(135deg, var(--uep-danger-stripe) 0 3px, var(--uep-danger-tint) 3px 6px);
-  box-shadow: inset 0 0 0 1px var(--uep-danger-edge);
-}
+.rp-rankbar-better { background: var(--uep-neutral-data); border-radius: 0 var(--uep-radius-sm) var(--uep-radius-sm) 0; }
+.rp-rankbar-worse { background: none; } /* Less red (UEP-13 §3.9): no gap fill when behind. */
 .rp-rankbar-tick {
   position: absolute; top: -5px; bottom: -5px; width: 2px; margin-left: -1px;
   border-radius: var(--uep-radius-sm); background: var(--uep-text);
@@ -443,3 +442,4 @@ a.rp-rank-row:hover { background: var(--uep-row-hover); }
   .rp-owner-grid { grid-template-columns: 1fr; }
   .rp-owner-col { border-inline-start: 0; border-top: var(--uep-border-width) solid var(--uep-divider); }
 }
+.rp-header-note { font-size: var(--uep-fs-small); color: var(--uep-text-3); white-space: nowrap; }
