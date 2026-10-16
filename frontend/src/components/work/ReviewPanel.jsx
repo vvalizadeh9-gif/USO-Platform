@@ -1,6 +1,6 @@
 import { useId } from 'react'
 import Icon from '../Icon'
-import { shamsiDayLabel } from '../../lib/shamsi'
+import DateText from '../DateText'
 import { Fa, WaitingCell } from './parts'
 
 const MIN_COMMENT = 3
@@ -53,11 +53,11 @@ export default function ReviewPanel({
       <dl className="uw-review-facts">
         <div>
           <dt>Carried out</dt>
-          <dd>{shamsiDayLabel(row.execution_date) || '—'}</dd>
+          <dd><DateText value={row.execution_date} /></dd>
         </div>
         <div>
           <dt>Submitted</dt>
-          <dd>{shamsiDayLabel(row.submitted_at) || '—'}</dd>
+          <dd><DateText value={row.submitted_at} /></dd>
         </div>
         <div>
           <dt>Waiting</dt>

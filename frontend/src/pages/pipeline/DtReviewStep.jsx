@@ -8,7 +8,7 @@ import {
 import { useWork } from '../../components/work/WorkContext'
 import { useToast } from '../../context/ToastContext'
 import { saveBlob } from '../../lib/download'
-import { shamsiDayLabel } from '../../lib/shamsi'
+import DateText from '../../components/DateText'
 import useStepData, { useExportRows } from './useStepData'
 
 const EXPORT_COLUMNS = [
@@ -188,7 +188,7 @@ export default function DtReviewStep({ step, figures, panelProps, onExport }) {
                         </td>
                         <td><Fa>{r.province}</Fa></td>
                         <td><Fa>{r.contractor_name}</Fa></td>
-                        <td className="uw-num"><Fa>{shamsiDayLabel(r.execution_date)}</Fa></td>
+                        <td className="uw-num"><DateText value={r.execution_date} /></td>
                         <td className="uw-num">
                           {r.evidence.length ? (
                             filesLabel(r.evidence.length)

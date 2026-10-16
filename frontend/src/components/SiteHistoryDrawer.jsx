@@ -2,6 +2,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { X } from './carbon'
 import { useEffect, useState } from 'react'
 import api from '../api/client'
+import { gregorianText } from './DateText'
 import { Loading } from './ui'
 
 // Each kind of event gets a dot colour so a long history can be skimmed for
@@ -18,11 +19,8 @@ function formatDate(value) {
   if (!value) return ''
   const d = new Date(value)
   if (Number.isNaN(d.getTime())) return ''
-  return d.toLocaleDateString(undefined, {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-  })
+  // The date rule (UEP-13 §3.7): Gregorian day dates, "1 Oct 2026".
+  return gregorianText(d) ?? ''
 }
 
 /**

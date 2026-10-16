@@ -3894,3 +3894,8 @@ a.lifecycle-step:focus-visible { outline: 2px solid var(--uep-accent); outline-o
 .mw-requested-many .mw-req-body { max-height: 160px; overflow: auto; }
 @keyframes mw-fade { from { opacity: 0; } to { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .mw-record.ui-card { animation: none; } }
+.cp-forced-note { margin: 0 0 var(--uep-space-16); font-size: var(--uep-fs-body); color: var(--uep-text-2); }
+
+/* Shamsi text (UEP-13 §3.7): Vazirmatn, isolated right-to-left. */
+.uep-shamsi { font-family: var(--uep-font-persian); unicode-bidi: isolate; }
+.datefield-both { font-size: var(--uep-fs-caption); }
