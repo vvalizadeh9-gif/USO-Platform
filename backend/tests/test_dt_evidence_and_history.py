@@ -233,7 +233,7 @@ def test_evidence_is_refused_once_the_drive_test_has_been_decided(client):
     dt_id = _assign_and_submit(client, wi_id, date.today())
     client.post(
         f"/api/v1/drive-tests/{dt_id}/coordinator-review",
-        headers=_h(client, "coord"), json={"decision": "Approved"},
+        headers=_h(client, "coord"), json={"decision": "Approved", "report_checked_outside": True},
     )
 
     r = client.post(
@@ -302,7 +302,7 @@ def test_history_runs_from_health_check_through_dt_done(client):
     client.post(
         f"/api/v1/drive-tests/{dt_id}/coordinator-review",
         headers=_h(client, "coord"),
-        json={"decision": "Approved", "comment": "Coverage verified"},
+        json={"decision": "Approved", "comment": "Coverage verified", "report_checked_outside": True},
     )
 
     events = client.get(
@@ -396,3 +396,39 @@ def test_a_submitted_result_reads_as_hc_review_until_someone_decides(client):
         assert db.get(WorkItem, wi_id).current_stage == "Ready for Assignment"
     finally:
         db.close()
+
+
+# ---- UEP-13 §3.3: approving without a report needs the reviewer's word ----
+
+def test_approving_without_a_report_or_the_flag_is_refused(client):
+    wi_id = _fresh_site()
+    _pass_health_check(client, wi_id)
+    dt_id = _assign_and_submit(client, wi_id, date.today())
+    r = client.post(
+        f"/api/v1/drive-tests/{dt_id}/coordinator-review",
+        headers=_h(client, "coord"), json={"decision": "Approved"},
+    )
+    assert r.status_code == 422, r.text
+    assert r.json()["detail"] == "Attach a report or confirm you checked it outside UEP"
+
+
+def test_approving_with_the_flag_is_audited(client):
+    from app.models import AuditLog
+
+    wi_id = _fresh_site()
+    _pass_health_check(client, wi_id)
+    dt_id = _assign_and_submit(client, wi_id, date.today())
+    r = client.post(
+        f"/api/v1/drive-tests/{dt_id}/coordinator-review",
+        headers=_h(client, "coord"),
+        json={"decision": "Approved", "report_checked_outside": True},
+    )
+    assert r.status_code == 200, r.text
+    with SessionLocal() as db:
+        entry = (
+            db.query(AuditLog)
+            .filter(AuditLog.entity_type == "DriveTest", AuditLog.entity_id == dt_id)
+            .order_by(AuditLog.id.desc())
+            .first()
+        )
+        assert entry.new_value["report_checked_outside"] is True

@@ -58,14 +58,17 @@ describe('tabs, counts and labels', () => {
   it('a contractor sees their tabs, counts and Send buttons', async () => {
     await renderAs('Contractor')
     const tabs = screen.getAllByRole('tab').map((t) => t.textContent)
-    expect(tabs).toEqual(['Your move44', 'New letter needed10', 'Returned10', 'Not filed24', 'With coordinator13'])
+    // Filing: the filing buckets only; "With coordinator" is the Validation page (UEP-13 §3.6).
+    expect(screen.getByRole('heading', { level: 1, name: 'Filing' })).toBeInTheDocument()
+    expect(tabs).toEqual(['Your move44', 'New letter needed10', 'Returned10', 'Not filed24'])
     expect(within(card('ICT')).getByRole('button', { name: 'Send ICT' })).toBeInTheDocument()
   })
 
-  it('a coordinator sees To check first and Save buttons', async () => {
+  it('a coordinator opens on Validation with Save buttons', async () => {
     await renderAs('Coordinator')
-    expect(screen.getAllByRole('tab')[0]).toHaveTextContent('To check13')
-    expect(screen.getAllByRole('tab')[0]).toHaveAttribute('aria-selected', 'true')
+    // The server opens a coordinator on To check: the Validation page, no tab bar.
+    expect(screen.getByRole('heading', { level: 1, name: 'Validation' })).toBeInTheDocument()
+    expect(screen.queryByRole('tablist')).toBeNull()
     expect(within(card('ICT')).getByRole('button', { name: 'Save ICT' })).toBeInTheDocument()
   })
 })

@@ -42,3 +42,16 @@ describe('Sparkline', () => {
     expect(describeSeries('Done', [null, null])).toBe('Done over the last 2 days: no data yet')
   })
 })
+
+describe('flat series (UEP-13 §3.14a)', () => {
+  it('draws a mid-height line and no area', async () => {
+    const { render } = await import('@testing-library/react')
+    const { default: KpiSpark } = await import('./KpiSpark')
+    const { container } = render(<Sparkline values={[5, 5, 5.4, 5]} label="Flat" />)
+    expect(container.querySelector('.sparkline-area')).toBeNull()
+    expect(container.querySelector('.sparkline-line').getAttribute('d')).toMatch(/^M0 16L/)
+    const kpi = render(<KpiSpark values={[3, 3, 3]} title="Flat" />)
+    expect(kpi.container.querySelector('.hk-area')).toBeNull()
+    expect(kpi.container.querySelector('.hk-line')).not.toBeNull()
+  })
+})

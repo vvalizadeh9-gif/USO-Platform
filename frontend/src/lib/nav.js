@@ -22,7 +22,7 @@ import {
   ListChecks,
   Users,
   Wrench,
-} from 'lucide-react'
+} from '../components/carbon'
 import { CATEGORY_OWNER_ROLES, HOME_ROLES, KPI_ROLES, MONTHLY_PLAN_ROLES } from './roles'
 
 // The sidebar, grouped by project: each project's dashboard sits beside the
@@ -61,7 +61,7 @@ export const NAV_SECTIONS = [
     // health check that confirms a site is Ready, and the drive test that
     // follows it. The rail says they are one process rather than unrelated
     // screens that happen to be next to each other.
-    label: 'Drive Test',
+    label: 'Drive test',
     items: [
       { to: '/reports/drive-test', label: 'Dashboard', icon: LayoutDashboard },
       // Two shapes behind Monthly Plan: the contractor's own form, and the
@@ -69,11 +69,11 @@ export const NAV_SECTIONS = [
       // absent from MONTHLY_PLAN_ROLES, which is what keeps it out of their
       // sidebar.
       { to: '/monthly-plan', label: 'Monthly Plan', step: true, roles: MONTHLY_PLAN_ROLES },
-      { to: '/health-check', label: 'Health Check', step: true, roles: ['PM', 'Coordinator'], key: 'hc' },
+      { to: '/health-check', label: 'Health check', step: true, roles: ['PM', 'Coordinator'], key: 'hc' },
       { to: '/my-health-check', label: 'My Health Check', step: true, roles: ['Contractor'] },
       // Same two roles as Health Check: assigning a drive test and approving
       // one are the same authority as reviewing a health check.
-      { to: '/drive-test', label: 'Drive Test', step: true, roles: ['PM', 'Coordinator'], key: 'dt' },
+      { to: '/drive-test', label: 'Drive test', step: true, roles: ['PM', 'Coordinator'], key: 'dt' },
       // One place for a contractor to work instead of knowing which sites to
       // open on Work Items -- the same reason My Health Check exists.
       { to: '/my-drive-tests', label: 'My Drive Tests', step: true, roles: ['Contractor'], key: 'mydt' },

@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion'
-import { ChevronDown, ChevronRight, CheckCircle2, XCircle, Download } from 'lucide-react'
+import { ChevronDown, ChevronRight, CheckCircle2, XCircle, Download } from '../../components/carbon'
 import { Fragment, useEffect, useState } from 'react'
 import SiteHistoryDrawer, { SiteCodeButton } from '../../components/SiteHistoryDrawer'
 import api from '../../api/client'
@@ -129,16 +129,16 @@ export default function HcHistoryTab() {
                     onClick={() => toggle(a.id)}
                     style={{ cursor: 'pointer' }}
                   >
-                    <td style={{ color: 'var(--text-tertiary)' }}>
+                    <td style={{ color: 'var(--uep-text-3)' }}>
                       {isOpen ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
                     </td>
                     <td style={{ fontWeight: 500 }}>{a.code}</td>
                     <td className="text-data">{contractors[a.contractor_id] || '—'}</td>
-                    <td className="dim" style={{ fontSize: 'var(--fs-meta)' }}>{formatDate(a.created_at)}</td>
+                    <td className="dim" style={{ fontSize: 'var(--uep-fs-small)' }}>{formatDate(a.created_at)}</td>
                     <td className="tnum">{formatNumber(a.task_count ?? a.tasks?.length)}</td>
-                    <td className="tnum" style={{ color: 'var(--green)', fontWeight: 500 }}>{a.sites_ready ?? '—'}</td>
-                    <td className="tnum" style={{ color: 'var(--red)', fontWeight: 500 }}>{a.sites_not_ready ?? '—'}</td>
-                    <td className="dim" style={{ fontSize: 'var(--fs-meta)' }}>{formatAging(a)}</td>
+                    <td className="tnum" style={{ color: 'var(--uep-status-success-ink)', fontWeight: 500 }}>{a.sites_ready ?? '—'}</td>
+                    <td className="tnum" style={{ color: 'var(--uep-status-danger-ink)', fontWeight: 500 }}>{a.sites_not_ready ?? '—'}</td>
+                    <td className="dim" style={{ fontSize: 'var(--uep-fs-small)' }}>{formatAging(a)}</td>
                     <td>
                       <span className={`pill ${a.status === 'Completed' ? 'pill-green' : 'pill-amber'}`}>{a.status}</span>
                     </td>
@@ -146,15 +146,15 @@ export default function HcHistoryTab() {
                   {isOpen && (
                     <tr>
                       <td></td>
-                      <td colSpan={8} style={{ background: 'var(--surface-subtle)', padding: '10px 14px' }}>
+                      <td colSpan={8} style={{ background: 'var(--uep-surface-subtle)', padding: '10px 14px' }}>
                         <AssignmentSummary
                           assignment={a}
                           exporting={exportingId === a.id}
                           onExport={() => exportAssignment(a)}
                         />
-                        {detail?.loading && <span className="dim" style={{ fontSize: 'var(--fs-meta)' }}>Loading sites…</span>}
+                        {detail?.loading && <span className="dim" style={{ fontSize: 'var(--uep-fs-small)' }}>Loading sites…</span>}
                         {detail && !detail.loading && !detail.data && (
-                          <span className="dim" style={{ fontSize: 'var(--fs-meta)' }}>Couldn't load detail.</span>
+                          <span className="dim" style={{ fontSize: 'var(--uep-fs-small)' }}>Couldn't load detail.</span>
                         )}
                         {detail?.data && <AssignmentDetail data={detail.data} />}
                       </td>
@@ -177,9 +177,9 @@ function ViewChip({ active, onClick, children }) {
       className="btn btn-sm"
       onClick={onClick}
       style={{
-        background: active ? 'var(--accent)' : 'var(--surface-subtle)',
-        color: active ? '#fff' : 'var(--text-secondary)',
-        border: active ? 'none' : '1px solid var(--border)',
+        background: active ? 'var(--uep-accent)' : 'var(--uep-surface-subtle)',
+        color: active ? 'var(--uep-on-accent)' : 'var(--uep-text-2)',
+        border: active ? 'none' : '1px solid var(--uep-border)',
       }}
     >
       {children}
@@ -260,11 +260,11 @@ function DecidedResults() {
                 <td className="tnum">{r.round_no}</td>
                 <td>
                   {r.overall_result === 'Ready' ? (
-                    <span className="row" style={{ gap: 5, color: 'var(--green)', fontSize: 13 }}>
+                    <span className="row" style={{ gap: 5, color: 'var(--uep-status-success-ink)', fontSize: 13 }}>
                       <CheckCircle2 size={14} /> Ready
                     </span>
                   ) : (
-                    <span className="row" style={{ gap: 5, color: 'var(--red)', fontSize: 13 }}>
+                    <span className="row" style={{ gap: 5, color: 'var(--uep-status-danger-ink)', fontSize: 13 }}>
                       <XCircle size={14} /> Not Ready
                     </span>
                   )}
@@ -275,7 +275,7 @@ function DecidedResults() {
                     : r.problem_category) || '—'}
                 </td>
                 <td className="text-data">{r.contractor_name || '—'}</td>
-                <td className="dim" style={{ fontSize: 'var(--fs-meta)' }}>{r.assignment_code}</td>
+                <td className="dim" style={{ fontSize: 'var(--uep-fs-small)' }}>{r.assignment_code}</td>
               </tr>
             ))}
           </tbody>
@@ -294,8 +294,8 @@ function DecidedResults() {
 function AssignmentSummary({ assignment: a, exporting, onExport }) {
   const stats = [
     { label: 'Sites assigned', value: a.task_count ?? '—' },
-    { label: 'Became Ready', value: a.sites_ready ?? '—', color: 'var(--green)' },
-    { label: 'Became Not Ready', value: a.sites_not_ready ?? '—', color: 'var(--red)' },
+    { label: 'Became Ready', value: a.sites_ready ?? '—', color: 'var(--uep-status-success-ink)' },
+    { label: 'Became Not Ready', value: a.sites_not_ready ?? '—', color: 'var(--uep-status-danger-ink)' },
     ...(a.sites_pending ? [{ label: 'Pending feedback', value: a.sites_pending }] : []),
     { label: 'Assignment date', value: formatDate(a.created_at) },
     { label: 'Feedback received', value: a.feedback_received_at ? formatDate(a.feedback_received_at) : 'Awaiting' },
@@ -304,13 +304,13 @@ function AssignmentSummary({ assignment: a, exporting, onExport }) {
   return (
     <div
       className="row between wrap"
-      style={{ gap: 16, alignItems: 'flex-end', paddingBottom: 10, marginBottom: 10, borderBottom: '1px solid var(--border-soft)' }}
+      style={{ gap: 16, alignItems: 'flex-end', paddingBottom: 10, marginBottom: 10, borderBottom: '1px solid var(--uep-divider)' }}
     >
       <div className="row wrap" style={{ gap: 18 }}>
         {stats.map((s) => (
           <div key={s.label} style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <span className="dim" style={{ fontSize: 'var(--fs-caption)', textTransform: 'uppercase', letterSpacing: 0.3 }}>{s.label}</span>
-            <span style={{ fontSize: 14, fontWeight: 600, color: s.color || 'var(--text)' }}>{formatNumber(s.value)}</span>
+            <span className="dim" style={{ fontSize: 'var(--uep-fs-caption)', textTransform: 'uppercase', letterSpacing: 0.3 }}>{s.label}</span>
+            <span style={{ fontSize: 14, fontWeight: 600, color: s.color || 'var(--uep-text)' }}>{formatNumber(s.value)}</span>
           </div>
         ))}
       </div>
@@ -324,17 +324,17 @@ function AssignmentSummary({ assignment: a, exporting, onExport }) {
 function AssignmentDetail({ data }) {
   const tasks = data.tasks || []
   if (tasks.length === 0) {
-    return <span className="dim" style={{ fontSize: 'var(--fs-meta)' }}>No sites in this assignment.</span>
+    return <span className="dim" style={{ fontSize: 'var(--uep-fs-small)' }}>No sites in this assignment.</span>
   }
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
       {tasks.map((t) => (
-        <div key={t.work_item_id} style={{ borderBottom: '1px solid var(--border-soft)', paddingBottom: 8 }}>
+        <div key={t.work_item_id} style={{ borderBottom: '1px solid var(--uep-divider)', paddingBottom: 8 }}>
           <div className="row wrap" style={{ gap: 10, alignItems: 'center' }}>
             <span className="text-data" style={{ fontWeight: 600, minWidth: 90 }}>{t.site_code || `#${t.work_item_id}`}</span>
             <span className="pill pill-dim">{t.site_type}</span>
             {(t.requested_technologies || []).map((tech) => (
-              <span key={tech} className="pill pill-dim" style={{ fontSize: 'var(--fs-caption)' }}>{tech}</span>
+              <span key={tech} className="pill pill-dim" style={{ fontSize: 'var(--uep-fs-caption)' }}>{tech}</span>
             ))}
             <span style={{ flex: 1 }} />
             <Outcome task={t} />
@@ -347,7 +347,7 @@ function AssignmentDetail({ data }) {
                 </div>
               ))}
               {t.problem_category && (
-                <div style={{ fontSize: 12, color: 'var(--amber-strong, var(--amber))' }}>
+                <div style={{ fontSize: 12, color: 'var(--amber-strong, var(--uep-status-pending-ink))' }}>
                   Category: <b>{t.problem_category}</b>{t.reviewed ? ' · validated' : ' · pending validation'}
                 </div>
               )}
@@ -361,17 +361,17 @@ function AssignmentDetail({ data }) {
 
 function Outcome({ task }) {
   if (!task.overall_result) {
-    return <span className="dim" style={{ fontSize: 'var(--fs-meta)' }}>Pending</span>
+    return <span className="dim" style={{ fontSize: 'var(--uep-fs-small)' }}>Pending</span>
   }
   if (task.overall_result === 'Ready') {
     return (
-      <span className="row" style={{ gap: 4, color: 'var(--green)', fontSize: 'var(--fs-meta)', fontWeight: 500 }}>
+      <span className="row" style={{ gap: 4, color: 'var(--uep-status-success-ink)', fontSize: 'var(--uep-fs-small)', fontWeight: 500 }}>
         <CheckCircle2 size={14} /> Ready
       </span>
     )
   }
   return (
-    <span className="row" style={{ gap: 4, color: 'var(--red)', fontSize: 'var(--fs-meta)', fontWeight: 500 }}>
+    <span className="row" style={{ gap: 4, color: 'var(--uep-status-danger-ink)', fontSize: 'var(--uep-fs-small)', fontWeight: 500 }}>
       <XCircle size={14} /> Not Ready
     </span>
   )

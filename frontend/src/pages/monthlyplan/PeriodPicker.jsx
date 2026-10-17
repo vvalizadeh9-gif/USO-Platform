@@ -3,6 +3,7 @@ import {
   LAST_SHAMSI_YEAR,
   SHAMSI_MONTHS,
 } from '../../lib/shamsi'
+import Select from '../../components/Select'
 
 const YEARS = Array.from(
   { length: LAST_SHAMSI_YEAR - FIRST_SHAMSI_YEAR + 1 },
@@ -26,7 +27,7 @@ export default function PeriodPicker({ period, onChange, disabled }) {
 
   return (
     <div className="row wrap" style={{ gap: 6 }}>
-      <select
+      <Select
         className="input"
         style={{ flex: '0 1 96px', minWidth: 82 }}
         aria-label="Year"
@@ -38,8 +39,8 @@ export default function PeriodPicker({ period, onChange, disabled }) {
         {YEARS.map((y) => (
           <option key={y} value={y}>{y}</option>
         ))}
-      </select>
-      <select
+      </Select>
+      <Select
         className="input"
         style={{ flex: '0 1 140px', minWidth: 112 }}
         aria-label="Month"
@@ -51,7 +52,7 @@ export default function PeriodPicker({ period, onChange, disabled }) {
         {SHAMSI_MONTHS.map((name, i) => (
           <option key={name} value={i + 1}>{name}</option>
         ))}
-      </select>
+      </Select>
     </div>
   )
 }

@@ -1,9 +1,9 @@
 import { AnimatePresence, motion } from 'framer-motion'
-import { LayoutDashboard, UploadCloud, History, GitCompare, Users, ScrollText, Wrench, MapPin, FileSpreadsheet, Timer } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import api from '../api/client'
 import { useAuth } from '../context/AuthContext'
+import { HeaderCount } from '../components/PageHeader'
 import { PageHead } from '../components/ui'
 import OverviewTab from './admin/OverviewTab'
 import CpmImportTab from './admin/CpmImportTab'
@@ -16,24 +16,26 @@ import ProvinceAssignmentsTab from './admin/ProvinceAssignmentsTab'
 import MojriTemplateTab from './admin/MojriTemplateTab'
 import ActionSlaTab from './admin/ActionSlaTab'
 
-// Every tab besides Validate CPM hits Admin-only endpoints (see backend
-// app/api/admin.py) — PM only ever sees Validate CPM, which the backend
-// also allows for the PM role.
+// Every view besides CPM changes hits Admin-only endpoints (see backend
+// app/api/admin.py); PM sees only CPM changes, which the backend allows for
+// the PM role. The app rail (Admin app, or Data for PM) lists these views,
+// so the page draws no tab bar of its own and its title is the rail label
+// word for word (UEP-13 §3.6).
 const TABS = [
-  { key: 'overview', label: 'Overview', icon: LayoutDashboard, adminOnly: true },
-  { key: 'import', label: 'CPM Import', icon: UploadCloud, adminOnly: true },
-  { key: 'history', label: 'Import History', icon: History, adminOnly: true },
-  { key: 'validate', label: 'Validate CPM', icon: GitCompare },
-  { key: 'users', label: 'Users & Permissions', icon: Users, adminOnly: true },
-  { key: 'categories', label: 'Problem Categories', icon: Wrench, adminOnly: true },
-  { key: 'provinces', label: 'Province Assignments', icon: MapPin, adminOnly: true },
-  // Overdue thresholds for the Action Center's queues (default 14 days).
-  { key: 'action-sla', label: 'Action SLA', icon: Timer, adminOnly: true },
+  { key: 'overview', label: 'Overview', adminOnly: true },
+  { key: 'import', label: 'CPM import', adminOnly: true },
+  { key: 'history', label: 'Import history', adminOnly: true },
+  { key: 'validate', label: 'CPM changes' },
+  { key: 'users', label: 'Users and roles', adminOnly: true },
+  { key: 'categories', label: 'Reference data', adminOnly: true },
+  { key: 'provinces', label: 'Province assignments', adminOnly: true },
+  // Overdue thresholds for the queues (default 14 days).
+  { key: 'action-sla', label: 'SLA and digest', adminOnly: true },
   // A download, and only a download: it reads villages we have already
   // approved and writes nothing, which is the only reason it may be Admin's.
   // The import that brings the filled file back is PM's alone.
-  { key: 'mojri', label: 'Mojri Template', icon: FileSpreadsheet, adminOnly: true },
-  { key: 'audit', label: 'Audit Log', icon: ScrollText, adminOnly: true },
+  { key: 'mojri', label: 'Mojri template', adminOnly: true },
+  { key: 'audit', label: 'Audit log', adminOnly: true },
 ]
 
 export default function Admin() {
@@ -50,6 +52,7 @@ export default function Admin() {
     if (linkedTab) setTab(linkedTab)
   }, [linkedTab])
   const [pendingCount, setPendingCount] = useState(0)
+  const current = visibleTabs.find((t) => t.key === tab) ?? visibleTabs[0]
 
   function refreshPending() {
     api.get('/admin/cpm/change-requests/count')
@@ -63,40 +66,9 @@ export default function Admin() {
   return (
     <>
       <PageHead
-        eyebrow="Administration"
-        title={isAdmin ? 'Admin Console' : 'CPM Validation'}
-        subtitle={isAdmin ? 'Import master data, manage user access, and review CPM changes.' : 'Review pending CPM changes awaiting your decision.'}
+        title={current.label}
+        count={tab === 'validate' && pendingCount > 0 ? <HeaderCount waiting={pendingCount} /> : null}
       />
-
-      <div className="tabs">
-        {visibleTabs.map((t) => (
-          <button key={t.key} className={`tab ${tab === t.key ? 'active' : ''}`} onClick={() => setTab(t.key)}>
-            <span className="row" style={{ gap: 8 }}>
-              <t.icon size={15} /> {t.label}
-              {t.key === 'validate' && pendingCount > 0 && (
-                <span
-                  style={{
-                    minWidth: 18,
-                    height: 18,
-                    padding: '0 5px',
-                    borderRadius: 9,
-                    background: 'var(--red)',
-                    color: '#fff',
-                    fontSize: 11,
-                    fontWeight: 700,
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    lineHeight: 1,
-                  }}
-                >
-                  {pendingCount > 99 ? '99+' : pendingCount}
-                </span>
-              )}
-            </span>
-          </button>
-        ))}
-      </div>
 
       <AnimatePresence mode="wait">
         <motion.div

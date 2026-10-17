@@ -12,6 +12,7 @@ import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { pickOption } from '../../test/pickOption'
 
 vi.mock('../../api/client', () => ({
   default: { get: vi.fn() },
@@ -252,7 +253,7 @@ describe('the filter bar', () => {
     draw('/drive-test/sites?bucket=problematic&category=Temp%20Power')
 
     await screen.findByText('K-0001')
-    await userEvent.selectOptions(screen.getByLabelText('Figure'), 'ongoing')
+    await pickOption(screen.getByLabelText('Figure'), 'ongoing')
 
     await waitFor(() =>
       expect(lastCall('/drive-test/sites')[1].params).toEqual({

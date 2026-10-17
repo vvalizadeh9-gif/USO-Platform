@@ -1,4 +1,4 @@
-import { Check, Search, X } from 'lucide-react'
+import { Check, Search, X } from '../../components/carbon'
 import { useMemo, useState } from 'react'
 
 // Searchable multi-select province picker. Clearer than a flat button list
@@ -50,7 +50,7 @@ export default function ProvincePicker({ provinces, selected, onChange }) {
         <div style={{ position: 'relative', flex: 1 }}>
           <Search
             size={15}
-            style={{ position: 'absolute', left: 10, top: 11, color: 'var(--text-dim)' }}
+            style={{ position: 'absolute', left: 10, top: 11, color: 'var(--uep-text-3)' }}
           />
           <input
             className="input"
@@ -72,8 +72,8 @@ export default function ProvincePicker({ provinces, selected, onChange }) {
         style={{
           maxHeight: 220,
           overflowY: 'auto',
-          border: '1px solid var(--border)',
-          borderRadius: 'var(--radius-sm)',
+          border: '1px solid var(--uep-border)',
+          borderRadius: 'var(--uep-radius-control)',
           padding: 6,
           display: 'grid',
           gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))',
@@ -91,12 +91,12 @@ export default function ProvincePicker({ provinces, selected, onChange }) {
                 padding: '7px 10px',
                 borderRadius: 6,
                 cursor: 'pointer',
-                background: on ? 'var(--signal-glow)' : 'transparent',
+                background: on ? 'var(--uep-accent-tint)' : 'transparent',
                 transition: 'background 0.13s',
               }}
             >
               <input type="checkbox" checked={on} onChange={() => toggle(p.id)} />
-              <span className="text-data" style={{ color: on ? 'var(--signal-strong)' : 'var(--text)' }}>
+              <span className="text-data" style={{ color: on ? 'var(--uep-accent-hover)' : 'var(--uep-text)' }}>
                 {p.name}
               </span>
             </label>

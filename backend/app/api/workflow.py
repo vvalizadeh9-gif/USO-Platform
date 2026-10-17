@@ -385,6 +385,9 @@ def review_drive_test(
         raise HTTPException(400, "decision must be Approved, Rejected or Returned")
     dt = _load_drive_test(drive_test_id, db, user)
     wi = _load_work_item(dt.work_item_id, db, user)
+    checked_outside = payload.decision == "Approved" and payload.report_checked_outside
+    if payload.decision == "Approved" and not dt.evidence and not checked_outside:
+        raise HTTPException(422, "Attach a report or confirm you checked it outside UEP")
 
     dt.status = payload.decision
     dt.coordinator_reviewed_by = user.id
@@ -406,7 +409,11 @@ def review_drive_test(
             else audit_actions.REJECTED
         ),
         module="DriveTest", entity_type="DriveTest",
-        entity_id=dt.id, new_value={"coordinator_decision": payload.decision},
+        entity_id=dt.id,
+        new_value={
+            "coordinator_decision": payload.decision,
+            **({"report_checked_outside": True} if checked_outside and not dt.evidence else {}),
+        },
     )
     if payload.decision != "Approved":
         notify_roles(

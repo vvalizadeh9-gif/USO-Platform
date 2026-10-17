@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { HeaderCount } from '../../components/PageHeader'
 import PageFrame from '../../components/PageFrame'
 import { Banner, Loading, PageBar, Tabs } from '../../components/ui'
 import { useAuth } from '../../context/AuthContext'
@@ -15,6 +16,11 @@ import { useLetterActions } from './useLetterActions'
 import { useMyWork } from './useMyWork'
 
 const DECIDING_ROLES = ['Coordinator', 'PM']
+
+/** The buckets that belong to Validation and Letters, not Filing. */
+const NOT_FILING = new Set(['filled', 'all'])
+const PAGE_TITLES = { filing: 'Filing', validation: 'Validation', letters: 'Letters' }
+const pageOf = (tab) => (tab === 'filled' ? 'validation' : tab === 'all' ? 'letters' : 'filing')
 
 /**
  * Acceptance → My Work: every village whose ICT or CRA letter still needs
@@ -62,10 +68,20 @@ export default function MyWork() {
   const tabs = (mw.list?.tabs || []).map((t) => ({ key: t.key, label: tabLabel(t.key, view), count: t.count }))
   const firstTab = mw.list?.tabs?.[0]?.key
 
+  // Three rail pages share this workspace (UEP-13 §3.6): Filing (the filing
+  // buckets, as a segmented filter), Validation (?tab=filled) and Letters
+  // (?tab=all). The title is the rail label; no five-tab bar.
+  const page = pageOf(mw.tab)
+  const filingTabs = tabs.filter((t) => !NOT_FILING.has(t.key))
   const bar = (
     <PageBar
-      title="My Work"
-      tabs={tabs.length > 0 && <Tabs label="Show villages" tabs={tabs} value={mw.tab} onChange={mw.setTab} />}
+      title={PAGE_TITLES[page]}
+      count={page === 'filing' && filingTabs.length > 0 ? (
+        <HeaderCount waiting={filingTabs.reduce((n, t) => n + (t.count || 0), 0)} />
+      ) : null}
+      tabs={page === 'filing' && filingTabs.length > 0 && (
+        <Tabs label="Filing buckets" tabs={filingTabs} value={mw.tab} onChange={mw.setTab} className="mw-buckets" />
+      )}
     />
   )
 

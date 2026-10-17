@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useState } from 'react'
-import { ArrowLeft, Link2, Pencil, Repeat } from 'lucide-react'
+import { ArrowLeft, Link2, Pencil, Repeat } from '../../components/carbon'
 import { Link } from 'react-router-dom'
 import api from '../../api/client'
 import { EmptyState, Loading, PageHead } from '../../components/ui'
 import { importStamp } from './kpiTheme'
 import { formatNumber } from '../../lib/numbers'
+import Select from '../../components/Select'
 
 /**
  * Performance → Roles Performance → Mapping. PM only, on the server as well.
@@ -45,7 +46,7 @@ export default function KpiMapping() {
   if (error) {
     return (
       <>
-        <PageHead eyebrow="Roles Performance" title="Province mapping" />
+        <PageHead title="Exports" />
         <div className="card card-pad"><EmptyState title="Not available" hint={error} /></div>
       </>
     )
@@ -55,8 +56,7 @@ export default function KpiMapping() {
   return (
     <div className="kpi">
       <PageHead
-        eyebrow="Roles Performance"
-        title="Province mapping"
+        title="Exports"
         subtitle={`Last CPM import · ${importStamp(data.last_cpm_import)}`}
         actions={
           <Link className="btn btn-ghost kpi-round" to="/reports/kpi">
@@ -209,7 +209,7 @@ function LinksPanel() {
           {users.map((user) => (
             <li key={user.id}>
               <span className="kpi-person-name">{user.full_name}</span>
-              <select
+              <Select
                 className="input"
                 aria-label={`Person for ${user.full_name}`}
                 value={user.kpi_person_name ?? ''}
@@ -223,7 +223,7 @@ function LinksPanel() {
                 ).map((name) => (
                   <option key={name} value={name}>{name}</option>
                 ))}
-              </select>
+              </Select>
             </li>
           ))}
         </ul>

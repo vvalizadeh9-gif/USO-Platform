@@ -1,4 +1,4 @@
-import { Paperclip, Radio } from 'lucide-react'
+import { Paperclip, Radio } from './carbon'
 import { useRef, useState } from 'react'
 import api from '../api/client'
 import { useToast } from '../context/ToastContext'
@@ -56,7 +56,7 @@ export default function DriveTestSubmitForm({ onSubmit, footer }) {
 
   return (
     <div className="card card-pad">
-      <div className="row" style={{ gap: 8, marginBottom: 4, color: 'var(--accent)' }}>
+      <div className="row" style={{ gap: 8, marginBottom: 4, color: 'var(--uep-accent)' }}>
         <Radio size={17} />
         <h3 style={{ fontSize: 15 }}>Submit drive test</h3>
       </div>

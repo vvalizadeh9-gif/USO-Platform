@@ -135,7 +135,7 @@ function renderAt(path, role, name = 'Pat Person') {
 
 const where = () => screen.getByTestId('where').textContent
 const tabNames = () =>
-  within(screen.getByRole('tablist', { name: 'Roles Performance views' }))
+  within(screen.getByRole('tablist', { name: 'Roles performance views' }))
     .getAllByRole('tab').map((t) => t.textContent)
 
 beforeEach(() => {
@@ -178,7 +178,7 @@ describe('tabs and landing per role', () => {
     expect(await screen.findByRole('heading', { name: /Reza Nobakht/ })).toBeInTheDocument()
     expect(await screen.findByText('6 provinces · 2 CRA regions')).toBeInTheDocument()
     expect(screen.queryByRole('combobox', { name: 'Whose figures' })).toBeNull()
-    expect(screen.getByText(/Roles Performance · Regional manager/)).toBeInTheDocument()
+    expect(screen.queryByText(/Roles Performance ·/)).toBeNull()
   })
 
   it('sends Admin home', async () => {

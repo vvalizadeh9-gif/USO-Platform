@@ -18,7 +18,6 @@ import {
   OWNER_COLUMNS,
   SECTION_ICONS,
   UNATTRIBUTED,
-  fa,
   fmtCount,
   monthLabel,
   monthParam,
@@ -106,7 +105,8 @@ export default function MonthTab({ search, onOpenOwner }) {
 
 function Subtitle({ data }) {
   if (data.running) {
-    return <>So far · day <Fa>{fa(data.day)}</Fa> of <Fa>{fa(data.days_in_month)}</Fa></>
+    // An English sentence keeps Latin digits (UEP-13 §3.7: no mixed digits).
+    return <>So far · day {data.day} of {data.days_in_month}</>
   }
   return <>Whole month</>
 }

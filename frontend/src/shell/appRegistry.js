@@ -73,6 +73,18 @@ export const HOME_APP = Object.freeze({
 /** @type {readonly AppDef[]} */
 export const APPS = Object.freeze([
   {
+    // Every site and village in scope, and each site's record page under it
+    // (UEP-13 §3.12). One page, so the shell shows no rail.
+    id: 'explorer',
+    name: 'Explorer',
+    description: 'Every site and village and its full record',
+    icon: 'search--locate',
+    color: '--uep-app-explorer',
+    group: 'rollout',
+    roles: DT_ROLES,
+    pages: [{ id: 'explorer', label: 'Explorer', route: '/explorer' }],
+  },
+  {
     id: 'drive-test',
     name: 'Drive test',
     description: 'Health checks and drive tests per site',
@@ -98,8 +110,6 @@ export const APPS = Object.freeze([
       },
       { id: 'dt-review', label: 'DT review', route: '/drive-test?tab=review', roles: STAFF, queues: ['dt_review'] },
       { id: 'in-progress', label: 'In progress', route: '/my-drive-tests', roles: ['Contractor'], queues: ['dt_todo', 'dt_redo'] },
-      // Every site in scope, and each site's record page under it.
-      { id: 'explorer', label: 'Explorer', route: '/explorer', roles: DT_ROLES },
       // A fix is health-check remediation, so it lives here. A category owner
       // sees this page and no other in the rail.
       { id: 'fixes', label: 'Fix queue', route: '/my-fix-queue', roles: CATEGORY_OWNER_ROLES, queues: ['hc_fixes'] },
@@ -118,7 +128,7 @@ export const APPS = Object.freeze([
       // The dashboard leads the rail behind a divider and carries no count.
       // Insights → Acceptance dashboard opens the same page.
       { id: 'dashboard', label: 'Dashboard', route: '/reports/acceptance', divider: true },
-      { id: 'filing', label: 'ICT and CRA filing', route: '/my-work', queues: ['ict_pending', 'cra_pending'] },
+      { id: 'filing', label: 'Filing', route: '/my-work', queues: ['ict_pending', 'cra_pending'] },
       { id: 'validation', label: 'Validation', route: '/my-work?tab=filled', roles: ['PM', 'Coordinator'], queues: ['ict_to_validate', 'cra_to_validate'] },
       { id: 'letters', label: 'Letters', route: '/my-work?tab=all' },
     ],
@@ -150,7 +160,7 @@ export const APPS = Object.freeze([
     group: 'insights',
     roles: NOT_ADMIN,
     pages: [
-      { id: 'dashboards', label: 'Dashboards', route: '/reports/drive-test' },
+      { id: 'dashboards', label: 'Drive test dashboard', route: '/reports/drive-test' },
       { id: 'acceptance-dashboard', label: 'Acceptance dashboard', route: '/reports/acceptance' },
       { id: 'roles', label: 'Roles performance', route: '/reports/kpi', roles: KPI_ROLES },
       { id: 'gaps', label: 'Lifecycle gaps', route: '/reports/gaps', roles: KPI_ROLES },

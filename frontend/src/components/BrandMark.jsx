@@ -15,12 +15,12 @@ export default function BrandMark({ size = 34 }) {
       aria-hidden="true"
       focusable="false"
     >
-      <rect width="32" height="32" rx="9" fill="#2F5FD0" />
-      <g fill="none" stroke="#FFFFFF" strokeWidth="2.4" strokeLinecap="round">
+      <rect width="32" height="32" rx="9" style={{ fill: 'var(--uep-accent)' }} />
+      <g fill="none" style={{ stroke: 'var(--uep-on-accent)' }} strokeWidth="2.4" strokeLinecap="round">
         <path d="M9.5 15 A7.5 7.5 0 0 1 17 22.5" />
         <path d="M9.5 9.5 A13 13 0 0 1 22.5 22.5" strokeOpacity="0.55" />
       </g>
-      <circle cx="9.5" cy="22.5" r="2.6" fill="#FFFFFF" />
+      <circle cx="9.5" cy="22.5" r="2.6" style={{ fill: 'var(--uep-on-accent)' }} />
     </svg>
   )
 }

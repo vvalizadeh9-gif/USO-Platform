@@ -11,15 +11,13 @@
 export const STRONG_AT = 5
 
 export const SHADES = {
-  betterStrong: '#9FDDD2',
-  better: '#E3F5F2',
-  worse: '#FCE9E7',
-  worseStrong: '#F4B9B3',
+  betterStrong: 'var(--uep-kpi-better-strong)',
+  better: 'var(--uep-kpi-better)',
+  worse: 'var(--uep-kpi-worse)',
+  worseStrong: 'var(--uep-kpi-worse-strong)',
   none: 'transparent',
 }
 
-/** The four steps of the funnel, darkening along it. */
-export const FUNNEL_STEPS = ['#D5DBE3', '#9FDDD2', '#5CC4B3', '#0EA394']
 
 /**
  * The background a heatmap cell gets.

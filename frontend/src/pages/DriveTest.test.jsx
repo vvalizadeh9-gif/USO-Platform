@@ -5,6 +5,7 @@ import { act, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { pickOption } from '../test/pickOption'
 
 const READY = [
   { work_item_id: 1, site_code: 'YZD-1', province: 'یزد', village: 'ده نو', village_count: 1, requested_technologies: ['4G'], rounds_taken: 1, hc_contractor: 'پارس تل', days_waiting: 7, returned_reason: null },
@@ -67,15 +68,13 @@ describe('the site table', () => {
     expect(within(row('YZD-2')).getByText('late')).toHaveClass('uw-sr-only')
   })
 
-  it('sorts by province (provinces by their longest wait) by default, else by wait', async () => {
-    const user = userEvent.setup()
+  it('sorts longest waiting first by default, or by province from the Sort select', async () => {
     await draw()
     const order = () => screen.getAllByRole('row').slice(1).map((r) => r.querySelector('.uw-site-id').textContent)
-    expect(order()).toEqual(['YZD-2', 'YZD-1', 'THR-1'])
-    const toggle = screen.getByRole('button', { name: 'Sort by province' })
-    expect(toggle).toHaveAttribute('aria-pressed', 'true')
-    await user.click(toggle)
+    expect(screen.getByRole('combobox', { name: 'Sort' })).toHaveTextContent('Longest waiting')
     expect(order()).toEqual(['YZD-2', 'THR-1', 'YZD-1'])
+    await pickOption(screen.getByRole('combobox', { name: 'Sort' }), 'Province')
+    expect(order()).toEqual(['YZD-2', 'YZD-1', 'THR-1'])
   })
 
   it('toggles a row by clicking it, and the header selects the filtered set', async () => {
@@ -86,11 +85,11 @@ describe('the site table', () => {
     await user.click(within(row('YZD-1')).getByText('ده نو'))
     expect(within(row('YZD-1')).getByRole('checkbox')).not.toBeChecked()
 
-    await user.selectOptions(screen.getByRole('combobox', { name: 'Province' }), 'یزد')
+    await pickOption(screen.getByRole('combobox', { name: 'Province' }), 'یزد')
     await user.click(screen.getByRole('checkbox', { name: 'Select every site shown' }))
     expect(screen.getByText('Assign 2 sites to')).toBeInTheDocument()
     // Selection survives filtering.
-    await user.selectOptions(screen.getByRole('combobox', { name: 'Province' }), '')
+    await pickOption(screen.getByRole('combobox', { name: 'Province' }), '')
     expect(screen.getByText('Assign 2 sites to')).toBeInTheDocument()
     expect(within(row('THR-1')).getByRole('checkbox')).not.toBeChecked()
   })

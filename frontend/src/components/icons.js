@@ -112,6 +112,74 @@ import enterprise16 from '@carbon/icons/es/enterprise/16.js'
 import enterprise20 from '@carbon/icons/es/enterprise/20.js'
 import return16 from '@carbon/icons/es/return/16.js'
 import return20 from '@carbon/icons/es/return/20.js'
+import warning16 from '@carbon/icons/es/warning/16.js'
+import warning20 from '@carbon/icons/es/warning/20.js'
+import activity16 from '@carbon/icons/es/activity/16.js'
+import activity20 from '@carbon/icons/es/activity/20.js'
+import add16 from '@carbon/icons/es/add/16.js'
+import add20 from '@carbon/icons/es/add/20.js'
+import archive16 from '@carbon/icons/es/archive/16.js'
+import archive20 from '@carbon/icons/es/archive/20.js'
+import arrowDownRight16 from '@carbon/icons/es/arrow--down-right/16.js'
+import arrowDownRight20 from '@carbon/icons/es/arrow--down-right/20.js'
+import arrowUpRight16 from '@carbon/icons/es/arrow--up-right/16.js'
+import arrowUpRight20 from '@carbon/icons/es/arrow--up-right/20.js'
+import arrowsHorizontal16 from '@carbon/icons/es/arrows--horizontal/16.js'
+import arrowsHorizontal20 from '@carbon/icons/es/arrows--horizontal/20.js'
+import cloudUpload16 from '@carbon/icons/es/cloud--upload/16.js'
+import cloudUpload20 from '@carbon/icons/es/cloud--upload/20.js'
+import compare16 from '@carbon/icons/es/compare/16.js'
+import compare20 from '@carbon/icons/es/compare/20.js'
+import dashboard16 from '@carbon/icons/es/dashboard/16.js'
+import dashboard20 from '@carbon/icons/es/dashboard/20.js'
+import documentBlank16 from '@carbon/icons/es/document--blank/16.js'
+import documentBlank20 from '@carbon/icons/es/document--blank/20.js'
+import dotMark16 from '@carbon/icons/es/dot-mark/16.js'
+import dotMark20 from '@carbon/icons/es/dot-mark/20.js'
+import edit16 from '@carbon/icons/es/edit/16.js'
+import edit20 from '@carbon/icons/es/edit/20.js'
+import help16 from '@carbon/icons/es/help/16.js'
+import help20 from '@carbon/icons/es/help/20.js'
+import information16 from '@carbon/icons/es/information/16.js'
+import information20 from '@carbon/icons/es/information/20.js'
+import launch16 from '@carbon/icons/es/launch/16.js'
+import launch20 from '@carbon/icons/es/launch/20.js'
+import link16 from '@carbon/icons/es/link/16.js'
+import link20 from '@carbon/icons/es/link/20.js'
+import listChecked16 from '@carbon/icons/es/list--checked/16.js'
+import listChecked20 from '@carbon/icons/es/list--checked/20.js'
+import locationFilled16 from '@carbon/icons/es/location--filled/16.js'
+import locationFilled20 from '@carbon/icons/es/location--filled/20.js'
+import locked16 from '@carbon/icons/es/locked/16.js'
+import locked20 from '@carbon/icons/es/locked/20.js'
+import misuse16 from '@carbon/icons/es/misuse/16.js'
+import misuse20 from '@carbon/icons/es/misuse/20.js'
+import repeat16 from '@carbon/icons/es/repeat/16.js'
+import repeat20 from '@carbon/icons/es/repeat/20.js'
+import scales16 from '@carbon/icons/es/scales/16.js'
+import scales20 from '@carbon/icons/es/scales/20.js'
+import security16 from '@carbon/icons/es/security/16.js'
+import security20 from '@carbon/icons/es/security/20.js'
+import send16 from '@carbon/icons/es/send/16.js'
+import send20 from '@carbon/icons/es/send/20.js'
+import subtract16 from '@carbon/icons/es/subtract/16.js'
+import subtract20 from '@carbon/icons/es/subtract/20.js'
+import table16 from '@carbon/icons/es/table/16.js'
+import table20 from '@carbon/icons/es/table/20.js'
+import timer16 from '@carbon/icons/es/timer/16.js'
+import timer20 from '@carbon/icons/es/timer/20.js'
+import trashCan16 from '@carbon/icons/es/trash-can/16.js'
+import trashCan20 from '@carbon/icons/es/trash-can/20.js'
+import unlink16 from '@carbon/icons/es/unlink/16.js'
+import unlink20 from '@carbon/icons/es/unlink/20.js'
+import upload16 from '@carbon/icons/es/upload/16.js'
+import upload20 from '@carbon/icons/es/upload/20.js'
+import userFollow16 from '@carbon/icons/es/user--follow/16.js'
+import userFollow20 from '@carbon/icons/es/user--follow/20.js'
+import searchLocate16 from '@carbon/icons/es/search--locate/16.js'
+import searchLocate20 from '@carbon/icons/es/search--locate/20.js'
+import chevronUp16 from '@carbon/icons/es/chevron--up/16.js'
+import chevronUp20 from '@carbon/icons/es/chevron--up/20.js'
 
 /**
  * @typedef {{ elem: string, attrs: Record<string, string | number>, content?: CarbonNode[] }} CarbonNode
@@ -178,6 +246,40 @@ export const ICONS = Object.freeze({
   // Header search results (UEP-12).
   'enterprise': { 16: enterprise16, 20: enterprise20 },
   'return': { 16: return16, 20: return20 },
+  'warning': { 16: warning16, 20: warning20 },
+  'activity': { 16: activity16, 20: activity20 },
+  'add': { 16: add16, 20: add20 },
+  'archive': { 16: archive16, 20: archive20 },
+  'arrow--down-right': { 16: arrowDownRight16, 20: arrowDownRight20 },
+  'arrow--up-right': { 16: arrowUpRight16, 20: arrowUpRight20 },
+  'arrows--horizontal': { 16: arrowsHorizontal16, 20: arrowsHorizontal20 },
+  'cloud--upload': { 16: cloudUpload16, 20: cloudUpload20 },
+  'compare': { 16: compare16, 20: compare20 },
+  'dashboard': { 16: dashboard16, 20: dashboard20 },
+  'document--blank': { 16: documentBlank16, 20: documentBlank20 },
+  'dot-mark': { 16: dotMark16, 20: dotMark20 },
+  'edit': { 16: edit16, 20: edit20 },
+  'help': { 16: help16, 20: help20 },
+  'information': { 16: information16, 20: information20 },
+  'launch': { 16: launch16, 20: launch20 },
+  'link': { 16: link16, 20: link20 },
+  'list--checked': { 16: listChecked16, 20: listChecked20 },
+  'location--filled': { 16: locationFilled16, 20: locationFilled20 },
+  'locked': { 16: locked16, 20: locked20 },
+  'misuse': { 16: misuse16, 20: misuse20 },
+  'repeat': { 16: repeat16, 20: repeat20 },
+  'scales': { 16: scales16, 20: scales20 },
+  'security': { 16: security16, 20: security20 },
+  'send': { 16: send16, 20: send20 },
+  'subtract': { 16: subtract16, 20: subtract20 },
+  'table': { 16: table16, 20: table20 },
+  'timer': { 16: timer16, 20: timer20 },
+  'trash-can': { 16: trashCan16, 20: trashCan20 },
+  'unlink': { 16: unlink16, 20: unlink20 },
+  'upload': { 16: upload16, 20: upload20 },
+  'user--follow': { 16: userFollow16, 20: userFollow20 },
+  'search--locate': { 16: searchLocate16, 20: searchLocate20 },
+  'chevron--up': { 16: chevronUp16, 20: chevronUp20 },
 })
 
 /** @typedef {keyof typeof ICONS} IconName */

@@ -130,7 +130,7 @@ export default function SixMonthChart({ months = [] }) {
               x={centre}
               y={221}
               textAnchor="middle"
-              fill={m.in_progress ? 'var(--accent-ink)' : bandColor(pct)}
+              fill={m.in_progress ? 'var(--uep-accent-hover)' : bandColor(pct)}
             >
               {pct == null ? '—' : `${pct}%${m.in_progress ? ' so far' : ''}`}
             </text>

@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { Search, X } from 'lucide-react'
+import { Search, X } from '../../components/carbon'
 import { BarLegend, MiniBar } from './StatusBar'
 import { formatNumber } from '../../lib/numbers'
 

@@ -11,7 +11,7 @@
 //   * no Mojri figure until Mojri has been imported.
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('../../api/client', () => ({ default: { get: vi.fn() } }))
@@ -187,16 +187,16 @@ describe('the first screen', () => {
     ])
   })
 
-  it('shows the Mojri tiles empty, not guessed, before any Mojri import', async () => {
+  it('shows one compact empty state for Mojri before any import, with no grids', async () => {
     mock({ overview: payload({ last_mojri_import: null }) })
     draw()
     const hits = await tiles()
-    expect(hits[4]).toHaveAccessibleName('ICT Not in Mojri: no Mojri import yet')
-    const tile = hits[4].closest('[data-testid="waffle-tile"]')
-    expect(tile.querySelector('.waffle[data-empty]')).not.toBeNull()
-    expect(within(tile).getByText('—')).toBeInTheDocument()
-    expect(within(tile).getByText('No Mojri import yet')).toBeInTheDocument()
-    expect(tile).toHaveTextContent('3,070 approved in UEP')
+    expect(hits).toHaveLength(4)
+    const empty = screen.getByTestId('mojri-empty')
+    expect(empty).toHaveTextContent('No Mojri import yet')
+    expect(empty).toHaveTextContent('ICT and CRA checks appear after the first import')
+    expect(empty.querySelector('.waffle')).toBeNull()
+    expect(empty).not.toHaveTextContent('—')
     expect(screen.queryByTestId('waffle-breakdown')).not.toBeInTheDocument()
   })
 })
@@ -309,19 +309,6 @@ describe('the drawer', () => {
     expect(screen.getByRole('dialog')).toHaveTextContent('1 coordinator holds these 230 villages')
     expect(screen.getByTestId('gap-checksum')).toHaveTextContent('Adds up to 230 ✓')
   })
-
-  it('replaces the list with an empty state for a Mojri gap before any import', async () => {
-    mock({ overview: payload({ last_mojri_import: null }) })
-    draw()
-    await userEvent.click((await tiles())[5])
-    const drawer = screen.getByRole('dialog')
-    expect(within(drawer).getByRole('group', { name: 'Group by' })).toBeInTheDocument()
-    expect(within(drawer).queryByRole('table')).not.toBeInTheDocument()
-    expect(drawer).toHaveTextContent('Nothing to compare yet.')
-    expect(drawer).toHaveTextContent(
-      'the villages approved in UEP but missing in Mojri are listed here by coordinator.'
-    )
-  })
 })
 
 describe('export behind every number', () => {
@@ -339,16 +326,6 @@ describe('export behind every number', () => {
     ])
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     expect(await screen.findByText('Exported 2,257 villages')).toBeInTheDocument()
-  })
-
-  it("exports the Mojri tiles' approved-in-UEP counts before any import", async () => {
-    mock({ overview: payload({ last_mojri_import: null }) })
-    draw()
-    await tiles()
-    await userEvent.click(
-      screen.getByRole('button', { name: 'Export 3,070 villages (ICT approved in UEP) to Excel' })
-    )
-    expect(exported()[0][1].params).toEqual({ gap: 'ict_approved_all' })
   })
 
   it('exports the drawer hero and each drawer row by its owner', async () => {
@@ -390,14 +367,14 @@ describe('export behind every number', () => {
 })
 
 describe('around the tiles', () => {
-  it('heads the page with the PageBar: eyebrow, title, total and the two tabs', async () => {
+  it('heads the page with the one PageHeader: title and total, no eyebrow, no tabs', async () => {
     mock()
     draw()
     await tiles()
-    const bar = document.querySelector('.page-bar')
-    expect(within(bar).getByRole('heading', { level: 1, name: 'Lifecycle Gaps' })).toBeInTheDocument()
-    expect(within(bar).getByText('Performance')).toBeInTheDocument()
-    expect(within(bar).getAllByRole('tab').map((t) => t.textContent)).toEqual(['Gaps', 'Coverage map'])
+    const bar = screen.getByTestId('page-header')
+    expect(within(bar).getByRole('heading', { level: 1, name: 'Lifecycle gaps' })).toBeInTheDocument()
+    expect(within(bar).queryByText('Performance')).toBeNull()
+    expect(within(bar).queryAllByRole('tab')).toHaveLength(0)
     expect(within(bar).getByTestId('gap-total')).toHaveTextContent('4,812 villages with drive test done')
   })
 
@@ -443,13 +420,16 @@ describe('around the tiles', () => {
     expect(await screen.findByText('Not your scope')).toBeInTheDocument()
   })
 
-  it('opens the coverage map on its own tab', async () => {
+  it('has no map tab; an old ?tab=map link goes to Roles performance › Map', async () => {
     mock()
-    draw()
-    await tiles()
-    expect(screen.getByRole('tab', { name: 'Gaps' })).toHaveAttribute('aria-selected', 'true')
-    await userEvent.click(screen.getByRole('tab', { name: 'Coverage map' }))
-    expect(api.get).toHaveBeenCalledWith('/gaps/map')
-    expect(screen.queryByText('Pending approval')).not.toBeInTheDocument()
+    render(
+      <MemoryRouter initialEntries={['/reports/gaps?tab=map']}>
+        <Routes>
+          <Route path="/reports/gaps" element={<LifecycleGaps />} />
+          <Route path="/reports/kpi/map" element={<p>the map</p>} />
+        </Routes>
+      </MemoryRouter>
+    )
+    expect(await screen.findByText('the map')).toBeInTheDocument()
   })
 })

@@ -1,4 +1,4 @@
-import { X } from 'lucide-react'
+import { X } from '../../components/carbon'
 import { Link } from 'react-router-dom'
 import { siteRecordPath } from '../../lib/explorerLinks'
 import { shown } from './roundText'

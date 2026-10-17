@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Check } from 'lucide-react'
+import { Check } from '../../components/carbon'
 import { viewScan } from './api'
 import { shown } from './roundText'
 

@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion'
-import { History } from 'lucide-react'
+import { History } from '../../components/carbon'
 import { useEffect, useState } from 'react'
 import api from '../../api/client'
 import { EmptyState } from '../../components/ui'
@@ -20,7 +20,7 @@ export default function ImportHistoryTab() {
     <div className="card">
       <div className="card-pad" style={{ paddingBottom: 12 }}>
         <div className="row" style={{ gap: 8 }}>
-          <History size={16} style={{ color: 'var(--text-muted)' }} />
+          <History size={16} style={{ color: 'var(--uep-text-2)' }} />
           <h3 style={{ fontSize: 15 }}>Import history</h3>
         </div>
       </div>
@@ -46,7 +46,7 @@ function HistoryList({ history }) {
           transition={{ delay: Math.min(i * 0.03, 0.3) }}
           style={{
             padding: '12px 0',
-            borderBottom: i < history.length - 1 ? '1px solid var(--border-soft)' : 'none',
+            borderBottom: i < history.length - 1 ? '1px solid var(--uep-divider)' : 'none',
           }}
         >
           <div className="row between">

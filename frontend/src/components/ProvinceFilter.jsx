@@ -1,4 +1,4 @@
-import { ChevronDown } from 'lucide-react'
+import { ChevronDown } from './carbon'
 import { useState } from 'react'
 
 /**
@@ -21,7 +21,7 @@ export default function ProvinceFilter({ options, selected, onToggle, onClear })
             ? 'All provinces'
             : `${selected.size} province${selected.size > 1 ? 's' : ''}`}
         </span>
-        <ChevronDown size={15} style={{ color: 'var(--text-tertiary)' }} />
+        <ChevronDown size={15} style={{ color: 'var(--uep-text-3)' }} />
       </button>
       {open && (
         <>

@@ -7,19 +7,23 @@
 // Kept out of the component so each rule can be tested on its own.
 
 /**
- * The six approval bands, worst to best. Fixed, not fitted to the data, so a
+ * The six approval bands, low to high. Fixed, not fitted to the data, so a
  * colour means the same approval rate on both maps, in the table, and from
  * one month to the next.
  *
- * `ink` is the label colour that stays readable on each fill.
+ * Six shades of the UEP blue, light = low, dark = high (UEP-13 §3.8): no red
+ * and no green, because red means late and green means approved. Mirrored as
+ * --uep-map-1…6 in uep-tokens.css (SVG fill attributes cannot read a CSS
+ * variable, so the map data holds the values). `ink` is the label colour:
+ * deep blue on the light bands, white on the dark ones, each ≥ 4.5:1.
  */
 export const BANDS = [
-  { below: 25, label: '< 25%', fill: '#8B2323', ink: '#FFFFFF' },
-  { below: 40, label: '25–40%', fill: '#C0522E', ink: '#FFFFFF' },
-  { below: 55, label: '40–55%', fill: '#E0A030', ink: '#3A2A08' },
-  { below: 70, label: '55–70%', fill: '#9DC75B', ink: '#1F3310' },
-  { below: 85, label: '70–85%', fill: '#2E9E82', ink: '#FFFFFF' },
-  { below: Infinity, label: '85%+', fill: '#0A6B5E', ink: '#FFFFFF' },
+  { below: 25, label: '< 25%', fill: '#E3EAFB', ink: '#0F1F4B', dark: false },
+  { below: 40, label: '25–40%', fill: '#BFD0F6', ink: '#0F1F4B', dark: false },
+  { below: 55, label: '40–55%', fill: '#8DABEF', ink: '#0F1F4B', dark: false },
+  { below: 70, label: '55–70%', fill: '#4270E1', ink: '#FFFFFF', dark: true },
+  { below: 85, label: '70–85%', fill: '#2A55D6', ink: '#FFFFFF', dark: true },
+  { below: Infinity, label: '85%+', fill: '#14318F', ink: '#FFFFFF', dark: true },
 ]
 
 /**

@@ -355,7 +355,7 @@ function Shape({ shape, stretch, selected, lit, onPick, onHover, onLeave, region
   const band = bandOf(figures)
   // Three states: coloured by band; hatched (in scope, not comparable); grey
   // (outside this account's scope -- no figures were sent for it at all).
-  const fill = band ? band.fill : figures ? 'url(#cov-hatch)' : 'var(--track)'
+  const fill = band ? band.fill : figures ? 'url(#cov-hatch)' : 'var(--uep-track)'
   const state = band ? 'coloured' : figures ? 'hatched' : 'outside'
   const classes = ['cov-shape', region && 'is-region', selected && 'is-sel', lit && 'is-hl']
     .filter(Boolean)
@@ -393,7 +393,7 @@ function Label({ shape, small, selected, lit }) {
   const classes = [
     'cov-label',
     small && 'small',
-    band?.ink === '#FFFFFF' && 'on-dark',
+    band?.dark && 'on-dark',
     selected && 'is-sel',
     lit && 'is-hl',
   ]
@@ -406,7 +406,7 @@ function Label({ shape, small, selected, lit }) {
       // A halo in the opposite tone keeps a label readable where it spills
       // past its own shape -- onto a neighbour, or onto the page.
       className={classes}
-      style={{ fill: band ? band.ink : 'var(--text)' }}
+      style={{ fill: band ? band.ink : 'var(--uep-text)' }}
       aria-hidden="true"
     >
       <tspan x={x} dy="-0.2em" className="cov-label-name">

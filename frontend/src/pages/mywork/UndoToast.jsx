@@ -1,4 +1,4 @@
-import { Check, X } from 'lucide-react'
+import { Check, X } from '../../components/carbon'
 
 /** "Sent ICT for سرآسیاب" with Undo, while the send is still held. The ×
  * sends it now rather than dropping it. */

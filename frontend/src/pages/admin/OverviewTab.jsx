@@ -1,7 +1,7 @@
 import { motion } from 'framer-motion'
 import {
   Users, Building2, Database, GitBranch, UploadCloud, GitCompare, Activity, ScrollText, ArrowRight,
-} from 'lucide-react'
+} from '../../components/carbon'
 import { useEffect, useState } from 'react'
 import api from '../../api/client'
 import { Loading, fadeUp, stagger } from '../../components/ui'
@@ -26,8 +26,8 @@ export default function OverviewTab({ onNavigateTab }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
       <motion.div className="grid grid-kpi" variants={stagger} initial="hidden" animate="show">
-        <KpiCard icon={Users} label="Active Users" value={stats ? stats.active_users_count : '—'} color="var(--signal)" />
-        <KpiCard icon={Building2} label="Active Contractors" value={stats ? stats.active_contractors_count : '—'} color="var(--violet, #6d5bd0)" />
+        <KpiCard icon={Users} label="Active Users" value={stats ? stats.active_users_count : '—'} color="var(--uep-accent)" />
+        <KpiCard icon={Building2} label="Active Contractors" value={stats ? stats.active_contractors_count : '—'} color="var(--uep-status-ongoing-ink)" />
       </motion.div>
 
       <div className="grid" style={{ gridTemplateColumns: '1fr 1fr', alignItems: 'start' }}>
@@ -53,7 +53,7 @@ function SystemHealthWidget({ health, onNavigateTab }) {
   return (
     <div className="card card-pad">
       <div className="row" style={{ gap: 8, marginBottom: 14 }}>
-        <Database size={16} style={{ color: 'var(--text-muted)' }} />
+        <Database size={16} style={{ color: 'var(--uep-text-2)' }} />
         <h3 style={{ fontSize: 15 }}>System health</h3>
       </div>
 
@@ -74,9 +74,9 @@ function SystemHealthWidget({ health, onNavigateTab }) {
             tone={health.alembic_mismatch ? 'amber' : 'green'}
           />
 
-          <div style={{ borderTop: '1px solid var(--border-soft)', paddingTop: 12 }}>
+          <div style={{ borderTop: '1px solid var(--uep-divider)', paddingTop: 12 }}>
             <div className="row" style={{ gap: 7, marginBottom: 6 }}>
-              <UploadCloud size={14} style={{ color: 'var(--text-dim)' }} />
+              <UploadCloud size={14} style={{ color: 'var(--uep-text-3)' }} />
               <span className="muted" style={{ fontSize: 12.5, fontWeight: 500 }}>Last CPM import</span>
             </div>
             {health.last_cpm_import ? (
@@ -98,9 +98,9 @@ function SystemHealthWidget({ health, onNavigateTab }) {
             )}
           </div>
 
-          <div className="row between" style={{ borderTop: '1px solid var(--border-soft)', paddingTop: 12 }}>
+          <div className="row between" style={{ borderTop: '1px solid var(--uep-divider)', paddingTop: 12 }}>
             <div className="row" style={{ gap: 7 }}>
-              <GitCompare size={14} style={{ color: 'var(--text-dim)' }} />
+              <GitCompare size={14} style={{ color: 'var(--uep-text-3)' }} />
               <span style={{ fontSize: 13 }}>
                 <b className="tnum">{formatNumber(health.pending_change_requests_count)}</b> pending change request{health.pending_change_requests_count === 1 ? '' : 's'}
               </span>
@@ -122,7 +122,7 @@ function HealthRow({ icon: Icon, label, value, tone }) {
   return (
     <div className="row between">
       <div className="row" style={{ gap: 7 }}>
-        <Icon size={14} style={{ color: 'var(--text-dim)' }} />
+        <Icon size={14} style={{ color: 'var(--uep-text-3)' }} />
         <span style={{ fontSize: 13 }}>{label}</span>
       </div>
       <span className={`pill ${pillClass}`}>{value}</span>
@@ -134,7 +134,7 @@ function RecentActivityWidget({ entries }) {
   return (
     <div className="card card-pad">
       <div className="row" style={{ gap: 8, marginBottom: 14 }}>
-        <Activity size={16} style={{ color: 'var(--text-muted)' }} />
+        <Activity size={16} style={{ color: 'var(--uep-text-2)' }} />
         <h3 style={{ fontSize: 15 }}>Recent activity</h3>
       </div>
       {entries.length === 0 ? (
@@ -159,7 +159,7 @@ function AuditLogPreview({ entries, onNavigateTab }) {
       <div className="card-pad" style={{ paddingBottom: 12 }}>
         <div className="row between">
           <div className="row" style={{ gap: 8 }}>
-            <ScrollText size={16} style={{ color: 'var(--text-muted)' }} />
+            <ScrollText size={16} style={{ color: 'var(--uep-text-2)' }} />
             <h3 style={{ fontSize: 15 }}>Audit log</h3>
           </div>
           <button className="btn btn-sm btn-ghost" onClick={() => onNavigateTab('audit')}>
@@ -170,7 +170,7 @@ function AuditLogPreview({ entries, onNavigateTab }) {
       {entries.length === 0 ? (
         <div style={{ padding: '0 20px 20px' }} className="dim">No entries yet.</div>
       ) : (
-        <div className="table-wrap" style={{ border: 'none', borderRadius: 0, borderTop: '1px solid var(--border)' }}>
+        <div className="table-wrap" style={{ border: 'none', borderRadius: 0, borderTop: '1px solid var(--uep-border)' }}>
           <table>
             <thead>
               <tr>

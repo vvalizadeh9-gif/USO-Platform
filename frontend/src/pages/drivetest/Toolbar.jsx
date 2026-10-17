@@ -1,4 +1,4 @@
-import { Check, ChevronDown, Download, MapPin, RefreshCw, X } from 'lucide-react'
+import { Check, ChevronDown, Download, MapPin, RefreshCw, X } from '../../components/carbon'
 import { useEffect, useRef, useState } from 'react'
 import { freshness } from './format'
 
@@ -131,12 +131,18 @@ export function ScopeMenu({ icon, what, all, options: items, value, valueName, o
 }
 
 /** The header's actions: how fresh the figures are, Refresh, and Export. */
+const DAY_MS = 24 * 60 * 60 * 1000
+
 export default function DashboardActions({ onRefresh, refreshing, generatedAt, onExport, exporting }) {
   const age = useTicking(generatedAt)
   return (
     <>
       {age && (
-        <span className="dt-freshness" title={new Date(generatedAt).toLocaleString()}>
+        <span
+          className="dt-freshness"
+          title={new Date(generatedAt).toLocaleString()}
+          data-stale={Date.now() - new Date(generatedAt).getTime() > DAY_MS || undefined}
+        >
           <span className="dt-freshness-dot" aria-hidden="true" />
           Updated {age}
         </span>

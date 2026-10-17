@@ -54,10 +54,10 @@ export default function FlowLedger({ flows, monthLabel }) {
    * to it. New on air is the darker neutral and drive tests done the accent
    * (the "done" series, as everywhere on this page). Every figure is ink. */
   const bars = [
-    { key: 'opening', label: 'Opened at', kind: 'balance', top: opening, bottom: floor, figure: count(opening) },
+    { key: 'opening', label: 'Start of month', kind: 'balance', top: opening, bottom: floor, figure: count(opening) },
     { key: 'arrived', label: 'New on air', kind: 'up', top: afterArrivals, bottom: opening, figure: `+${count(arrived)}` },
     { key: 'completed', label: 'Drive tests done', kind: 'down', top: afterArrivals, bottom: closing, figure: `−${count(completed)}` },
-    { key: 'closing', label: 'Closed at', kind: 'balance', top: closing, bottom: floor, figure: count(closing) },
+    { key: 'closing', label: 'Today', kind: 'balance', top: closing, bottom: floor, figure: count(closing) },
   ]
   // The level each connector runs at: from the top of the bar before it.
   const linkLevel = [null, opening, afterArrivals, closing]

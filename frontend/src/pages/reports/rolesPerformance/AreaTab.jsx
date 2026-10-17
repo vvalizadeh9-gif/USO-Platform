@@ -9,13 +9,13 @@ import { useCallback, useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { SegmentedControl } from '../../../components/ui'
 import { useToast } from '../../../context/ToastContext'
-import { shamsiDayLabel } from '../../../lib/shamsi'
+import DateText from '../../../components/DateText'
 import MeasureList from './MeasureList'
 import PerfHeader from './PerfHeader'
 import RankBar from './RankBar'
 import ScopePicker from './ScopePicker'
 import { useExport, useRpData } from './hooks'
-import { Fa, IconTile, Num, RpCard } from './parts'
+import { IconTile, Num, RpCard } from './parts'
 import {
   AREA_DEFAULT_MEASURE,
   AREA_MEASURES,
@@ -31,6 +31,9 @@ import {
   scopeParams,
   scopeValue,
 } from './model'
+
+/** How many rows furthest behind national have their gap in danger ink. */
+const LOUD_BEHIND = 3
 
 export default function AreaTab({ scope, onScope, search }) {
   const toast = useToast()
@@ -52,7 +55,6 @@ export default function AreaTab({ scope, onScope, search }) {
     setParams(next, { replace: true })
   }
   const scoped = Boolean(data && data.scope.lens !== 'country')
-  const stamp = shamsiDayLabel(data?.as_of)
 
   return (
     <>
@@ -61,7 +63,7 @@ export default function AreaTab({ scope, onScope, search }) {
         scopeLabel={scopeKind(data?.scope ?? scope)}
         title={<ScopePicker scope={scope} onChange={onScope} />}
         chip={data?.scope?.chip}
-        subtitle={<>Today · as of the last CPM import {stamp ? <Fa>{stamp}</Fa> : 'not yet run'}</>}
+        subtitle={<>Today · as of the last CPM import {data?.as_of ? <DateText value={data.as_of} /> : 'not yet run'}</>}
         search={search}
         onExport={exporter.run}
         exporting={exporter.busy}
@@ -176,8 +178,10 @@ function Ranking({ data, measure, breakdown, onBreakdown }) {
           <Num className="rp-rank-rate">{fmtRate(national)}</Num>
           <span className="rp-gap" />
         </li>
-        {compared.map((row) => {
+        {compared.map((row, i) => {
           const gap = fmtGap(row.gap)
+          // Red for the three furthest behind only (UEP-13 §3.9).
+          const tone = gap.tone === 'worse' && i >= LOUD_BEHIND ? 'behind' : gap.tone
           return (
             <li key={row.name}>
               <Link to={gapsLink(breakdown, row)} className="rp-rank-row"
@@ -186,7 +190,7 @@ function Ranking({ data, measure, breakdown, onBreakdown }) {
                 <RankBar rate={row.rate} reference={national}
                   label={rankLabel(row.name, row.rate, national)} />
                 <Num className="rp-rank-rate">{fmtRate(row.rate)}</Num>
-                <Num className={`rp-gap rp-gap-${gap.tone}`}>{gap.text}</Num>
+                <Num className={`rp-gap rp-gap-${tone}`}>{gap.text}</Num>
               </Link>
             </li>
           )

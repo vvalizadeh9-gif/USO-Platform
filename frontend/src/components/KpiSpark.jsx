@@ -1,4 +1,4 @@
-import { describeSeries, segments } from './Sparkline'
+import { describeSeries, isFlat, segments } from './Sparkline'
 
 const W = 140
 const H = 28
@@ -21,7 +21,8 @@ export default function KpiSpark({ values, title, label, baseline = 'zero', test
   const max = fit ? Math.max(...known) : Math.max(1, ...known)
   const span = max - min || 1
   const step = values.length > 1 ? W / (values.length - 1) : 0
-  const y = (v) => (max === min ? H / 2 : PAD + (1 - (v - min) / span) * (H - 2 * PAD))
+  const flat = isFlat(values)
+  const y = (v) => (flat ? H / 2 : PAD + (1 - (v - min) / span) * (H - 2 * PAD))
   const runs = segments(values).filter((r) => r.length > 1)
   const line = (run) => run.map(([i, v], n) => `${n ? 'L' : 'M'}${i * step} ${y(v)}`).join('')
   return (
@@ -33,7 +34,7 @@ export default function KpiSpark({ values, title, label, baseline = 'zero', test
       aria-label={label ?? describeSeries(title, values)}
       data-testid={testId}
     >
-      {runs.map((run) => (
+      {!flat && runs.map((run) => (
         <path
           key={`a${run[0][0]}`}
           className="hk-area"

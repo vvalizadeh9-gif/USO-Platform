@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion'
-import { History, X } from 'lucide-react'
+import { History, X } from '../../components/carbon'
 import { useEffect, useState } from 'react'
 import api from '../../api/client'
 import { EmptyState, Loading } from '../../components/ui'

@@ -1,4 +1,4 @@
-import { Info } from 'lucide-react'
+import { Info } from '../../components/carbon'
 import { useEffect, useId, useRef, useState } from 'react'
 
 /**

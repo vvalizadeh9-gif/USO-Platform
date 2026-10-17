@@ -202,6 +202,7 @@
 .ex-fade { animation: ex-enter var(--uep-dur-explorer-filter) var(--uep-ease-productive) both; }
 
 /* ICT and CRA heads: the deep-cobalt label and three large counts. */
+.ex-authority[data-authority='cra'] { background: var(--uep-cra-soft); color: var(--uep-cra); }
 .ex-authority-head { display: flex; align-items: center; gap: var(--uep-space-16); }
 .ex-authority {
   display: inline-grid;
@@ -209,8 +210,9 @@
   height: var(--uep-explorer-authority-height);
   padding: 0 var(--uep-space-12);
   border-radius: var(--uep-radius-control);
-  background: var(--uep-brand-deep);
-  color: var(--uep-on-brand);
+  /* ICT plum / CRA ocean soft chips, the same on every page (UEP-13 §3.8). */
+  background: var(--uep-ict-soft);
+  color: var(--uep-ict);
   font-size: var(--uep-fs-body);
   font-weight: var(--uep-weight-bold);
 }
@@ -557,7 +559,7 @@
 .exl-site::after { content: ''; position: absolute; inset: 0; }
 .exl-site:focus { outline: none; }
 .exl-site-row:hover .exl-site { color: var(--uep-accent); }
-.exl-site mark { background: var(--uep-search-mark); color: inherit; border-radius: 2px; }
+.exl-site mark { background: var(--uep-search-mark); color: inherit; border-radius: var(--uep-radius-sm); }
 .exl-row > .exl-check-cell { position: relative; z-index: 1; display: inline-flex; overflow: visible; }
 .exl-villages-pill { position: relative; z-index: 1; }
 
@@ -578,7 +580,7 @@
 .exl-field-icon { display: inline-flex; flex: none; opacity: var(--uep-explorer-field-icon-opacity); }
 .exl-field-icon.is-muted { color: var(--uep-neutral-data); opacity: 1; }
 .exl-type { font-size: var(--uep-fs-small); color: var(--uep-text-2); }
-.exl-type.is-new { color: var(--uep-accent); font-weight: var(--uep-weight-medium); }
+.exl-type.is-new { color: var(--uep-text); font-weight: var(--uep-weight-medium); }
 .exl-techs { display: inline-flex; gap: var(--uep-space-4); }
 .exl-tech {
   display: inline-flex;
@@ -774,3 +776,15 @@
 }
 html[data-uep-motion='reduce'] :is(.ex-page, .ex-fade, .exl-page) { animation: none; }
 html[data-uep-motion='reduce'] :is(.ex-page, .exl-page) * { animation: none !important; transition: none !important; }
+
+/* General information tiles: one style for every row (UEP-13 §3.14c). */
+.ex-field-tile {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--uep-radius-tile);
+  background: var(--uep-accent-tint);
+  color: var(--uep-brand-deep);
+}

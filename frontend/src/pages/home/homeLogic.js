@@ -1,6 +1,7 @@
 // UEP Home's wording rules, kept apart from the components so they are tested
 // on their own.
 
+import { joinMeta } from '../../lib/joinMeta'
 import { formatNumber } from '../../lib/numbers'
 
 /** For which KPIs a rise is bad. Done today is the one where a fall is. */
@@ -46,7 +47,7 @@ export function oldestText(ticket) {
 
 /** The meta line after the late part: "Oldest 21 days · 5 contractors". */
 export function metaText(ticket) {
-  return [oldestText(ticket), ownersText(ticket)].filter(Boolean).join(' · ')
+  return joinMeta(oldestText(ticket), ownersText(ticket))
 }
 
 /** "Saturday, 10 October 2026", in the viewer's own time zone. */

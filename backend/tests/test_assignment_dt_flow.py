@@ -149,7 +149,7 @@ def test_coordinator_approval_writes_dt_status_through(client):
     r = client.post(
         f"/api/v1/drive-tests/{dt_id}/coordinator-review",
         headers=_auth(coordinator_token),
-        json={"decision": "Approved"},
+        json={"decision": "Approved", "report_checked_outside": True},
     )
     assert r.status_code == 200, r.text
     # Approval is terminal — no PM step, no "DT Completed".
@@ -210,7 +210,7 @@ def test_pm_review_endpoint_is_gone(client):
     r = client.post(
         "/api/v1/drive-tests/1/pm-review",
         headers=_auth(token),
-        json={"decision": "Approved"},
+        json={"decision": "Approved", "report_checked_outside": True},
     )
     assert r.status_code == 404
 

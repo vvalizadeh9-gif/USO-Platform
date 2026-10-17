@@ -1,4 +1,4 @@
-import { ChevronRight } from 'lucide-react'
+import { ChevronRight } from './carbon'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { CONTRACTOR_STEPS, STAFF_STEPS } from '../lib/lifecycle'

@@ -142,7 +142,7 @@ const heights = (page) =>
   page.evaluate(() => {
     const h = (sel) => document.querySelector(sel)?.getBoundingClientRect().height ?? 0
     return {
-      title: h('.uw-heading'), toolbar: h('.exl-toolbar'), head: h('.exl-head'), footer: h('.exl-footer'),
+      title: h('.uep-page-header'), toolbar: h('.exl-toolbar'), head: h('.exl-head'), footer: h('.exl-footer'),
     }
   })
 

@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion'
-import { Check, Copy, KeyRound, X } from 'lucide-react'
+import { Check, Copy, KeyRound, X } from '../../components/carbon'
 import { useState } from 'react'
 import api from '../../api/client'
 import { detailMessage } from '../../lib/apiError'
@@ -90,9 +90,9 @@ export default function PasswordResetDialog({ user, onClose, onError }) {
             <div
               className="row between"
               style={{
-                background: 'var(--surface-2)',
-                border: '1px solid var(--border)',
-                borderRadius: 'var(--radius-sm)',
+                background: 'var(--uep-surface-subtle)',
+                border: '1px solid var(--uep-border)',
+                borderRadius: 'var(--uep-radius-control)',
                 padding: '12px 14px',
                 marginBottom: 12,
               }}

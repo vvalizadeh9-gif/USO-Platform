@@ -446,7 +446,7 @@ def test_dt_review_holds_a_submission_until_it_is_decided(client):
 
     client.post(
         f"/api/v1/drive-tests/{dt_id}/coordinator-review",
-        headers=_h(client, "coord"), json={"decision": "Approved"},
+        headers=_h(client, "coord"), json={"decision": "Approved", "report_checked_outside": True},
     )
     assert code not in _codes(_queue(client, "dt-review"))
 
@@ -490,7 +490,7 @@ def _decide_dt(client, dt_id, decision, comment=None):
     r = client.post(
         f"/api/v1/drive-tests/{dt_id}/coordinator-review",
         headers=_h(client, "coord"),
-        json={"decision": decision, "comment": comment},
+        json={"decision": decision, "comment": comment, "report_checked_outside": True},
     )
     assert r.status_code == 200, r.text
 

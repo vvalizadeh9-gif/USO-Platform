@@ -6,6 +6,7 @@ import { describeBlobError, filenameFrom, saveBlob } from '../../lib/download'
 import PageFrame from '../../components/PageFrame'
 import { Banner, PageBar, Tabs } from '../../components/ui'
 import { useToast } from '../../context/ToastContext'
+import { CardBoundary } from '../../components/ErrorBoundary'
 import BreakdownCard, { BreakdownTabs } from './BreakdownCard'
 import { DrillProvider } from './DrillPanel'
 import ContractorScorecard from './ContractorScorecard'
@@ -233,10 +234,10 @@ export default function DriveTestProject() {
     <DrillProvider>
       <PageFrame
         className="dt-page"
+        smallScreenNote
         bar={
           <PageBar
-            eyebrow="Drive Test"
-            title="Dashboard"
+            title="Drive test dashboard"
             context={
               <ProvinceScope
                 provinces={provinces}
@@ -263,7 +264,7 @@ export default function DriveTestProject() {
             <Banner
               tone="error"
               className="dt-page-error"
-              title="Could not load the Drive Test figures."
+              title="Could not load the drive test figures."
             >
               <p>Everything on this tab comes from that request, so there is nothing to show.</p>
               <button type="button" className="btn" onClick={refresh}>
@@ -279,7 +280,11 @@ export default function DriveTestProject() {
               {overview.loading && !data ? (
                 <KpiSkeleton />
               ) : (
-                data && <KpiBand kpis={data.kpis} provinceId={provinceId} series={sparkSeries} />
+                data && (
+                  <CardBoundary title="Totals" tile="cell-tower">
+                    <KpiBand kpis={data.kpis} provinceId={provinceId} series={sparkSeries} />
+                  </CardBoundary>
+                )
               )}
 
               {/* The trend and the month side by side: the chart takes the rest
@@ -500,7 +505,7 @@ export default function DriveTestProject() {
                 {has('province_breakdown') && (
                   <div className="dt-tables-cell">
                     <Section
-                      title="Drive Test progress by province"
+                      title="Drive test progress by province"
                       subtitle={
                         data &&
                         `Gap = On air − DT done · ${

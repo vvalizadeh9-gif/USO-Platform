@@ -522,6 +522,9 @@ class ReturnToCoordinatorRequest(BaseModel):
 class ReviewRequest(BaseModel):
     decision: str  # Approved | Rejected | Returned
     comment: str | None = None
+    # A drive test with no report attached may be approved only when the
+    # reviewer says they checked the report outside UEP (UEP-13 §3.3).
+    report_checked_outside: bool = False
 
 
 class AcceptanceUpdate(BaseModel):

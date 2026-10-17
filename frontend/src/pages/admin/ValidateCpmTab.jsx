@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion'
-import { Check, X, Archive, ArrowRightLeft, MapPinned, Radio } from 'lucide-react'
+import { Check, X, Archive, ArrowRightLeft, MapPinned, Radio } from '../../components/carbon'
 import { useEffect, useRef, useState } from 'react'
 import api from '../../api/client'
 import { useToast } from '../../context/ToastContext'
@@ -7,10 +7,10 @@ import { EmptyState, Loading } from '../../components/ui'
 
 // Friendly label + icon per tracked change type.
 const CHANGE_META = {
-  site_type: { label: 'Site type change', icon: ArrowRightLeft, color: 'var(--amber)' },
-  village_qty: { label: 'Village quantity change', icon: MapPinned, color: 'var(--signal-strong)' },
-  requested_tech: { label: 'Requested technology change', icon: Radio, color: 'var(--violet, var(--signal-strong))' },
-  field: { label: 'Field change', icon: ArrowRightLeft, color: 'var(--text-muted)' },
+  site_type: { label: 'Site type change', icon: ArrowRightLeft, color: 'var(--uep-status-pending-ink)' },
+  village_qty: { label: 'Village quantity change', icon: MapPinned, color: 'var(--uep-accent-hover)' },
+  requested_tech: { label: 'Requested technology change', icon: Radio, color: 'var(--uep-status-ongoing-ink, var(--uep-accent-hover))' },
+  field: { label: 'Field change', icon: ArrowRightLeft, color: 'var(--uep-text-2)' },
 }
 
 export default function ValidateCpmTab({ onDecided, highlightId }) {
@@ -48,8 +48,7 @@ export default function ValidateCpmTab({ onDecided, highlightId }) {
     return (
       <div className="card">
         <EmptyState
-          title="No pending changes"
-          hint="Only three change types need validation: site type, village quantity, and requested technology. They appear here after a monthly re-import."
+          title="No CPM changes to review"
         />
       </div>
     )
@@ -76,13 +75,13 @@ export default function ValidateCpmTab({ onDecided, highlightId }) {
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: Math.min(i * 0.03, 0.3) }}
-              style={isHighlighted ? { borderColor: 'var(--signal)', borderWidth: 1.5 } : undefined}
+              style={isHighlighted ? { borderColor: 'var(--uep-accent)', borderWidth: 1.5 } : undefined}
             >
               <div className="row between wrap" style={{ gap: 14 }}>
                 <div style={{ minWidth: 220, flex: 1 }}>
                   <div className="row" style={{ gap: 8 }}>
                     <span className="text-data" style={{ fontWeight: 600 }}>{cr.site_code}</span>
-                    <span className="row pill" style={{ gap: 5, background: 'var(--surface-2)', color: meta.color }}>
+                    <span className="row pill" style={{ gap: 5, background: 'var(--uep-surface-subtle)', color: meta.color }}>
                       <Icon size={12} /> {meta.label}
                     </span>
                   </div>

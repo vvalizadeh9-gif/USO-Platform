@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion'
-import { AlertCircle, RefreshCw } from 'lucide-react'
+import { AlertCircle, RefreshCw } from './carbon'
 import Icon from './Icon'
+import { CardBoundary } from './ErrorBoundary'
 
 /**
  * Card chrome with its three states in one place: loading, failed, loaded.
@@ -117,13 +118,21 @@ export default function Section({
         ) : loading && !data ? (
           <Skeleton rows={skeletonRows} />
         ) : data ? (
-          typeof children === 'function' ? children(data) : children
+          // A card that throws while drawing keeps its header; only its body
+          // says so, and the rest of the page keeps working.
+          <CardBoundary onRetry={onRetry}>
+            {typeof children === 'function' ? <RenderFn fn={children} data={data} /> : children}
+          </CardBoundary>
         ) : (
           <div className="dt-empty">Nothing to show yet.</div>
         )}
       </div>
     </motion.section>
   )
+}
+
+function RenderFn({ fn, data }) {
+  return fn(data)
 }
 
 function Skeleton({ rows }) {

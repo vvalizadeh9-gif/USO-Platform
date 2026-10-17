@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { manyVillages, record, side, village } from './fixtures'
+import { pickOption } from '../../test/pickOption'
 
 const auth = vi.hoisted(() => ({ role: 'Coordinator' }))
 vi.mock('../../api/client', () => ({ default: { get: vi.fn(), post: vi.fn() } }))
@@ -45,11 +46,9 @@ beforeEach(() => {
 })
 
 describe('the header', () => {
-  it('shows the breadcrumb, the site ID and one status badge, nothing under the title', async () => {
+  it('shows the site ID and one status badge, with no in-page breadcrumb (it is in the header)', async () => {
     await draw()
-    const crumbs = screen.getByRole('navigation', { name: 'Breadcrumb' })
-    expect(within(crumbs).getByRole('link', { name: 'Explorer' })).toHaveAttribute('href', '/explorer')
-    expect(within(crumbs).getByText('W4318')).toHaveAttribute('aria-current', 'page')
+    expect(screen.queryByRole('navigation', { name: 'Breadcrumb' })).toBeNull()
     expect(screen.getByRole('heading', { level: 1, name: 'W4318' })).toBeInTheDocument()
     expect(screen.getByText('Acceptance in progress')).toHaveClass('ex-badge', 'is-progress')
   })
@@ -79,7 +78,7 @@ describe('General information', () => {
     const card = screen.getByRole('region', { name: 'General information' })
     const terms = within(card).getAllByRole('term').map((t) => t.textContent)
     expect(terms).toEqual([
-      'On air date', 'DT date', 'Site contractor', 'DT contractor', 'Requested technology', 'Province', 'Hadaf villages',
+      'On air date', 'DT date', 'Site contractor', 'DT contractor', 'Requested technology', 'Province', 'Target villages',
     ])
     expect(within(card).getByText('2 Sept 2026')).toBeInTheDocument()
     expect(within(card).getByText('30 Sept 2026')).toBeInTheDocument()
@@ -286,7 +285,7 @@ describe('Take action', () => {
     api.post.mockResolvedValue({ data: {} })
     await draw()
     await user.click(screen.getByRole('button', { name: /Take action/ }))
-    await user.selectOptions(await screen.findByLabelText('Contractor'), '5')
+    await pickOption(await screen.findByLabelText('Contractor'), '5')
     await user.click(screen.getByRole('button', { name: 'Assign for drive test' }))
     expect(api.post).toHaveBeenCalledWith('/work-items/7/assignment', { assignment_type: 'official', contractor_id: 5 })
   })

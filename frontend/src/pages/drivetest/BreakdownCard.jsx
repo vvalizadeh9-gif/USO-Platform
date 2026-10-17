@@ -1,5 +1,5 @@
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
-import { BarChart3, Table2 } from 'lucide-react'
+import { BarChart3, Table2 } from '../../components/carbon'
 import { useState } from 'react'
 import { count, share } from './format'
 import RankedBars from './charts/RankedBars'

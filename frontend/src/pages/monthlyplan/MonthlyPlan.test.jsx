@@ -5,12 +5,13 @@
 // longer theirs to change, and offering a decision to somebody who cannot
 // make one. Both are re-checked by the server — these tests are about what
 // the interface offers, which is what decides whether a person can work.
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter, useLocation, useNavigationType } from 'react-router-dom'
+import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ToastProvider } from '../../context/ToastContext'
 import { currentShamsiPeriod, nextPeriod, shamsiMonthName } from '../../lib/shamsi'
+import { pickOption } from '../../test/pickOption'
 
 vi.mock('../../api/client', () => ({
   default: { get: vi.fn(), post: vi.fn(), put: vi.fn() },
@@ -503,7 +504,7 @@ describe('a contractor filing next month', () => {
     expect(row).toHaveAttribute('data-revision', 'DT')
     await userEvent.click(within(row).getByRole('button', { name: 'Request revision' }))
     await userEvent.type(within(row).getByRole('spinbutton'), '35')
-    await userEvent.selectOptions(within(row).getByRole('combobox'), 'SITES_BLOCKED')
+    await pickOption(within(row).getByRole('combobox'), 'SITES_BLOCKED')
     await userEvent.click(within(row).getByRole('button', { name: 'Send to PM' }))
 
     await waitFor(() =>
@@ -521,7 +522,7 @@ describe('a contractor filing next month', () => {
     const row = (await screen.findAllByRole('button', { name: 'Request revision' }))[0].closest('[data-revision]')
     await userEvent.click(within(row).getByRole('button', { name: 'Request revision' }))
     await userEvent.type(within(row).getByRole('spinbutton'), '35')
-    await userEvent.selectOptions(within(row).getByRole('combobox'), 'OTHER')
+    await pickOption(within(row).getByRole('combobox'), 'OTHER')
     await userEvent.click(within(row).getByRole('button', { name: 'Send to PM' }))
 
     expect(await screen.findByText('Add a comment')).toBeInTheDocument()
@@ -732,21 +733,6 @@ const NOTHING_WAITING = queuesBy({
   running: { DT: [queueRow({ status: 'Approved' })], ACCEPTANCE: [] },
 })
 
-/** Where the router is, and whether it got there by a push. */
-function LocationProbe() {
-  const location = useLocation()
-  const type = useNavigationType()
-  return <output data-testid="location">{`${type} ${location.search}`}</output>
-}
-const showWithProbe = (path = '/monthly-plan') =>
-  render(
-    <MemoryRouter initialEntries={[path]}>
-      <ToastProvider><MonthlyPlan /><LocationProbe /></ToastProvider>
-    </MemoryRouter>,
-  )
-
-const tabNames = () => screen.getAllByRole('tab').map((t) => t.textContent)
-const selectedTab = () => screen.getAllByRole('tab').find((t) => t.getAttribute('aria-selected') === 'true')
 const { monthLabel } = await import('./planBoard')
 const PLANNING = nextPeriod(RUNNING.year, RUNNING.month)
 const persian = (n) => String(n).replace(/\d/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[d])
@@ -786,18 +772,18 @@ const card = (name) => screen.getByRole('listitem', { name })
 const grid = () => screen.getByRole('region', { name: 'Waiting for approval' })
 
 // ------------------------------------------------------------- navigation
-describe('the staff page: four tabs', () => {
-  it('has Approvals, Plans, History, Internal PIP and opens on Approvals', async () => {
+describe('the staff page: the rail is the menu (UEP-13 §3.6)', () => {
+  const title = () => screen.getByRole('heading', { level: 1 })
+
+  it('opens on Approvals with no tab bar and no stepper', async () => {
     signedInAs('PM')
     serveOverview(overview(), { queues: WAITING_QUEUES })
     show()
 
     await approvalsLoaded()
-    expect(tabNames().map((t) => t.replace(/\d.*$/, ''))).toEqual(['Approvals', 'Plans', 'History', 'Internal PIP'])
-    expect(selectedTab()).toHaveTextContent('Approvals')
-    const panel = screen.getByRole('tabpanel')
-    expect(panel).toHaveAttribute('aria-labelledby', selectedTab().id)
-    for (const tab of screen.getAllByRole('tab')) expect(tab).toHaveAttribute('aria-controls', panel.id)
+    expect(title()).toHaveTextContent('Approvals')
+    expect(screen.queryByRole('tablist')).toBeNull()
+    expect(screen.queryByText('Health Check')).toBeNull()
     // The planning month on Approvals.
     expect(screen.getByTestId('mp-period')).toHaveTextContent(monthLabel(PLANNING))
   })
@@ -809,11 +795,11 @@ describe('the staff page: four tabs', () => {
     ['?tab=internal', 'Internal PIP'],
     ['?tab=pip', 'Approvals'],
     ['?tab=nonsense', 'Approvals'],
-  ])('opens %s on %s', async (search, name) => {
+  ])('titles %s with the rail label %s', async (search, name) => {
     signedInAs('PM')
     serveOverview(overview(), { queues: WAITING_QUEUES })
     show(`/monthly-plan${search}`)
-    await waitFor(() => expect(selectedTab()).toHaveTextContent(name))
+    await waitFor(() => expect(title()).toHaveTextContent(name))
   })
 
   it('shows the running month in the header on History', async () => {
@@ -824,45 +810,21 @@ describe('the staff page: four tabs', () => {
     expect(screen.getByTestId('mp-period')).toHaveTextContent(monthLabel(RUNNING))
   })
 
-  it('moves along the tabs with the arrows, Home and End, pushing each into history', async () => {
-    signedInAs('PM')
-    serveOverview(overview(), { queues: WAITING_QUEUES })
-    showWithProbe()
-    await approvalsLoaded()
-
-    const tabs = () => screen.getAllByRole('tab')
-    expect(tabs().map((t) => t.tabIndex)).toEqual([0, -1, -1, -1])
-    tabs()[0].focus()
-    await userEvent.keyboard('{ArrowRight}')
-    expect(selectedTab()).toHaveTextContent('Plans')
-    expect(document.activeElement).toBe(tabs()[1])
-    expect(screen.getByTestId('location')).toHaveTextContent('PUSH ?tab=plans')
-    await userEvent.keyboard('{End}')
-    expect(selectedTab()).toHaveTextContent('Internal PIP')
-    await userEvent.keyboard('{ArrowRight}')
-    expect(selectedTab()).toHaveTextContent('Approvals')
-    await userEvent.keyboard('{ArrowLeft}')
-    expect(selectedTab()).toHaveTextContent('Internal PIP')
-    await userEvent.keyboard('{Home}')
-    expect(selectedTab()).toHaveTextContent('Approvals')
-    expect(screen.getByTestId('location').textContent).toBe('PUSH ')
-  })
-
-  it('counts every decision waiting, revisions included, on the Approvals tab', async () => {
+  it('leads the Approvals header with every decision waiting, revisions included', async () => {
     signedInAs('PM')
     serveOverview(overview(), { queues: WAITING_QUEUES })
     show()
     await approvalsLoaded()
     // Alpha's DT and Acceptance plans, and Gamma's revision.
-    expect(screen.getByRole('tab', { name: /Approvals/ })).toHaveTextContent('Approvals3 waiting')
+    expect(document.querySelector('.uep-page-header-count')).toHaveTextContent('3 waiting')
   })
 
-  it('hides the badge when nothing is waiting', async () => {
+  it('shows no count when nothing is waiting', async () => {
     signedInAs('PM')
     serveOverview(overview(), { queues: NOTHING_WAITING })
     show()
     await screen.findByText('All plans decided')
-    expect(screen.getByRole('tab', { name: /Approvals/ }).textContent).toBe('Approvals')
+    expect(document.querySelector('.uep-page-header-count')).toBeNull()
   })
 
   it('still sends a contractor to their own screen, with no tabs', async () => {
@@ -917,7 +879,7 @@ describe('Approvals', () => {
     expect(await within(card('Beta Networks')).findByText('5 behind')).toBeInTheDocument()
     expect(within(card('Beta Networks')).queryByText(/above sites held/)).toBeNull()
     // Alpha: 40 against 30 held, and ahead of pace in the running month.
-    expect(within(card('Alpha Telecom')).getByText('10 above sites held')).toBeInTheDocument()
+    expect(within(card('Alpha Telecom')).getByText('Plan is 10 above sites held')).toBeInTheDocument()
     expect(within(card('Alpha Telecom')).queryByText(/behind/)).toBeNull()
   })
 
@@ -1146,7 +1108,7 @@ describe('History', () => {
     serveOverview()
     const { container } = show('/monthly-plan?tab=history')
     await screen.findByRole('table')
-    await userEvent.selectOptions(screen.getByLabelText('Contractor'), 'Alpha Telecom')
+    await pickOption(screen.getByLabelText('Contractor'), 'Alpha Telecom')
     const below = container.querySelectorAll('[data-result="below"]')
     expect(below).toHaveLength(RUNNING.month > 2 ? 1 : 0)
     if (RUNNING.month > 2) expect(within(rowOf(shamsiMonthName(2))).getByText('Below 80%')).toBeInTheDocument()
@@ -1158,13 +1120,13 @@ describe('History', () => {
     show('/monthly-plan?tab=history')
     const table = await screen.findByRole('table')
 
-    await userEvent.selectOptions(screen.getByLabelText('Contractor'), 'Alpha Telecom')
+    await pickOption(screen.getByLabelText('Contractor'), 'Alpha Telecom')
     expect([...table.querySelectorAll('thead th')].map((th) => th.textContent)).toEqual([
       'Month', 'Contractor plan', 'Delivered', '% of plan', 'Result',
     ])
     expect(cells(rowOf(shamsiMonthName(1)))).toEqual(['10', '10', '100%', 'Met plan'])
 
-    await userEvent.selectOptions(screen.getByLabelText('Contractor'), 'Beta Networks')
+    await pickOption(screen.getByLabelText('Contractor'), 'Beta Networks')
     // No plan: a dash, never 0, and no verdict.
     expect(cells(rowOf(shamsiMonthName(1)))).toEqual(['—', '4', '—', '—'])
 
@@ -1172,8 +1134,10 @@ describe('History', () => {
     expect(cells(rowOf(shamsiMonthName(1)))).toEqual(['—', '8', '—', '—'])
 
     const years = screen.getByLabelText('Year')
-    expect(years.options[0].textContent).toBe(persian(RUNNING.year))
-    await userEvent.selectOptions(years, String(RUNNING.year - 1))
+    fireEvent.click(years)
+    expect(screen.getAllByRole('option')[0].textContent).toBe(persian(RUNNING.year))
+    fireEvent.click(years)
+    await pickOption(years, String(RUNNING.year - 1))
     await waitFor(() =>
       expect(api.get).toHaveBeenCalledWith('/pip/overview', { params: { period: 'year', year: RUNNING.year - 1, month: 1 } }),
     )

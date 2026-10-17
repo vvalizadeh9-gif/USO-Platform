@@ -194,7 +194,7 @@ export function useMyWork() {
   )
 
   return {
-    scope, authority, tab, setTab, sort, setSort, query, setQuery,
+    scope, authority, tab, urlTab, setTab, sort, setSort, query, setQuery,
     list, rows, listError, loadMore, loadingMore, paste,
     focusId: currentId, focus, step, ticked, tickedRows, multi, tick, toggleTick,
     clearTicks: () => setTicked([]),

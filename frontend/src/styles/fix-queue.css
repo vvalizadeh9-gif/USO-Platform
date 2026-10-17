@@ -57,7 +57,7 @@
   border-bottom: var(--uep-border-width) solid var(--uep-divider);
 }
 .fq-tile {
-  width: 28px; height: 28px; border-radius: 7px; flex: none;
+  width: 28px; height: 28px; border-radius: var(--uep-radius-tile); flex: none;
   display: grid; place-items: center;
   background: var(--uep-app-drive-test); color: var(--uep-on-accent);
 }
@@ -76,7 +76,7 @@
   animation-delay: calc(var(--i, 0) * 40ms);
 }
 .fq-row:last-child { border-bottom: 0; }
-.fq-bar { border-radius: 3px; background: var(--uep-divider); }
+.fq-bar { border-radius: var(--uep-radius-sm); background: var(--uep-divider); }
 .fq-bar.is-late { background: var(--uep-danger); }
 .fq-main { min-width: 0; }
 .fq-top { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--uep-space-4) var(--uep-space-12); }
@@ -90,7 +90,7 @@
 .fq-province { font-size: var(--uep-fs-body); color: var(--uep-text-2); }
 .fq-chip {
   display: inline-flex; align-items: center; height: 20px; padding: 0 var(--uep-space-8);
-  border-radius: 6px; background: var(--uep-divider);
+  border-radius: var(--uep-radius-tile); background: var(--uep-divider);
   font-size: var(--uep-fs-caption); font-weight: var(--uep-weight-medium); color: var(--uep-text-2);
 }
 .fq-issue { margin: 6px 0 0; max-width: 72ch; font-size: var(--uep-fs-body); color: var(--uep-text-2); }
@@ -161,7 +161,7 @@ textarea.fq-input { resize: vertical; font-family: var(--uep-font-sans), var(--u
 .fq-state-title { margin: 0; font-size: var(--uep-fs-15); font-weight: var(--uep-weight-semibold); }
 .fq-state-hint { margin: 0; font-size: var(--uep-fs-body); color: var(--uep-text-2); max-width: 48ch; }
 .fq-skel {
-  display: block; height: 12px; border-radius: 6px; background: var(--uep-divider);
+  display: block; height: 12px; border-radius: var(--uep-radius-tile); background: var(--uep-divider);
   animation: fq-pulse 1.4s ease-in-out infinite;
 }
 .fq-skel-text { display: inline-block; width: 220px; vertical-align: middle; }

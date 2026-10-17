@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { AlertTriangle, CheckCircle2, FileSpreadsheet, UploadCloud } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, FileSpreadsheet, UploadCloud } from '../../components/carbon'
 import api from '../../api/client'
 import { EmptyState, PageHead } from '../../components/ui'
 import { describeBlobError, filenameFrom, saveBlob } from '../../lib/download'
@@ -107,11 +107,7 @@ export default function MojriImport() {
 
   return (
     <div className="kpi gap">
-      <PageHead
-        eyebrow="Month-end"
-        title="Mojri Tracker"
-        subtitle="Is ICT HQ's own tracker up to date with the villages we have already approved?"
-      />
+      <PageHead title="Mojri tracker" />
 
       {error && <div className="kpi-error">{error}</div>}
 

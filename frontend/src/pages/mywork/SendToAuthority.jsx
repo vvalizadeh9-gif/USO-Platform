@@ -1,4 +1,4 @@
-import { Send } from 'lucide-react'
+import { Send } from '../../components/carbon'
 import { useState } from 'react'
 import { toLatinDigits } from '../../lib/persianDigits'
 import { sendToAuthority } from './api'

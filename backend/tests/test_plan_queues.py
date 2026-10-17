@@ -96,10 +96,10 @@ def world(db):
     return {"ids": ids, "a": a.id, "b": b.id}
 
 
-def _awaiting_pm(db):
+def _awaiting_pm(db, today=None):
     from app.services.action_queues.sources import plans
 
-    return {plan.id for plan, _name in plans.plans_awaiting_pm(db)}
+    return {plan.id for plan, _name in plans.plans_awaiting_pm(db, today or _day(10))}
 
 
 def _gaps(db, contractor_id, today):
@@ -114,6 +114,12 @@ def _gaps(db, contractor_id, today):
 def test_pm_sees_plans_and_revisions_waiting(db, world):
     ids = world["ids"]
     assert _awaiting_pm(db) == {ids["a_dt_planning"], ids["b_dt_revision"]}
+
+
+def test_pm_counts_only_what_the_approvals_page_lists(db, world):
+    """UEP-13 §3.2: next month's submissions and this month's revisions only.
+    A month later the same plans are no longer the planning/running pair."""
+    assert _awaiting_pm(db, _day(10, PLANNING)) == set()
 
 
 def test_a_decided_plan_leaves_the_pm_list(db, world):

@@ -337,7 +337,7 @@ def test_out_of_province_coordinator_cannot_approve_a_drive_test(client, world):
     r = client.post(
         f"/api/v1/drive-tests/{drive_test_id}/coordinator-review",
         headers=world["foreign_coordinator"],
-        json={"decision": "Approved"},
+        json={"decision": "Approved", "report_checked_outside": True},
     )
     assert r.status_code == 404, r.text
 
@@ -357,7 +357,7 @@ def test_an_in_scope_coordinator_can_still_approve(client, world):
     r = client.post(
         f"/api/v1/drive-tests/{active['active_drive_test_id']}/coordinator-review",
         headers=coordinator,
-        json={"decision": "Approved"},
+        json={"decision": "Approved", "report_checked_outside": True},
     )
     assert r.status_code == 200, r.text
 

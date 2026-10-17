@@ -3,13 +3,14 @@
 // people who owned provinces once (their past months are still theirs).
 import { useRpData } from './hooks'
 import { COUNTRY, SCOPE_GROUPS, parseScopeValue, scopeValue } from './model'
+import Select from '../../../components/Select'
 
 export default function ScopePicker({ scope, onChange }) {
   const { data } = useRpData('/kpi/lenses')
   const labels = data?.labels?.province ?? {}
 
   return (
-    <select
+    <Select
       className="rp-scope-picker"
       aria-label="Whose figures"
       value={scopeValue(scope)}
@@ -43,7 +44,7 @@ export default function ScopePicker({ scope, onChange }) {
       {scope && scope.lens !== 'country' && !listed(data, scope) && (
         <option value={scopeValue(scope)}>{scope.key}</option>
       )}
-    </select>
+    </Select>
   )
 }
 

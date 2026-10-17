@@ -8,7 +8,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date, datetime, time
 
-from sqlalchemy import Select, select
+from sqlalchemy import Select, and_, or_, select
 from sqlalchemy.orm import Session
 
 from app.core import jalali
@@ -36,16 +36,39 @@ PM_OWNER = OwnerRef("role", None, "PM")
 # --------------------------------------------------------------------------
 # Shared queries
 # --------------------------------------------------------------------------
-def plans_awaiting_pm(db: Session) -> list[tuple[ContractorMonthlyPlan, str]]:
-    """Current plans and revision requests waiting on the PM's decision."""
+def plans_awaiting_pm(
+    db: Session, today: date | None = None
+) -> list[tuple[ContractorMonthlyPlan, str]]:
+    """Decisions waiting on the PM: plans Submitted for the month being planned
+    (next month) and revision requests on the month now running.
+
+    The same definition as the Monthly plan Approvals page (UEP-13 §3.2), so
+    Home, the rail badge and the page header show one number. A Submitted
+    plan for any other month is not on that page and is not counted.
+    ``today`` is the Tehran wall-clock day (the platform's clock by default).
+    """
+    running = jalali.to_shamsi(today or jalali.tehran_today())
+    planning = jalali.next_period(*running)
+    plan = ContractorMonthlyPlan
     return [
         tuple(row)
         for row in db.execute(
-            select(ContractorMonthlyPlan, Contractor.name)
-            .join(Contractor, Contractor.id == ContractorMonthlyPlan.contractor_id)
+            select(plan, Contractor.name)
+            .join(Contractor, Contractor.id == plan.contractor_id)
             .where(
-                ContractorMonthlyPlan.is_current.is_(True),
-                ContractorMonthlyPlan.status.in_([STATUS_SUBMITTED, STATUS_REVISION_REQUESTED]),
+                plan.is_current.is_(True),
+                or_(
+                    and_(
+                        plan.status == STATUS_SUBMITTED,
+                        plan.shamsi_year == planning[0],
+                        plan.shamsi_month == planning[1],
+                    ),
+                    and_(
+                        plan.status == STATUS_REVISION_REQUESTED,
+                        plan.shamsi_year == running[0],
+                        plan.shamsi_month == running[1],
+                    ),
+                ),
             )
         ).all()
     ]

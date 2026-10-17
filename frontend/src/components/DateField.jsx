@@ -1,6 +1,8 @@
-import { Calendar, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Calendar, ChevronLeft, ChevronRight } from './carbon'
 import { useEffect, useRef, useState } from 'react'
 import { MONTHS, formatLong, fromIso, toIso, todayIso } from '../lib/dates'
+import { shamsiDayLabel } from '../lib/shamsi'
+import { Shamsi } from './DateText'
 
 /**
  * A Gregorian date field that reads the same for everybody.
@@ -147,8 +149,15 @@ export default function DateField({ value, onChange, id, disabled }) {
       {invalid ? (
         <small className="field-error">Use YYYY-MM-DD — that is not a real date.</small>
       ) : (
-        <small className="dim" style={{ fontSize: 12 }}>
+        // The chosen day in both calendars (UEP-13 §3.7).
+        <small className="dim datefield-both">
           {value === today ? 'Today' : formatLong(value)}
+          {fromIso(value) && shamsiDayLabel(fromIso(value)) && (
+            <>
+              {' · '}
+              <Shamsi>{shamsiDayLabel(fromIso(value))}</Shamsi>
+            </>
+          )}
         </small>
       )}
 

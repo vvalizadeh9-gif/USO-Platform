@@ -2,8 +2,8 @@ import { useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import Icon from '../../components/Icon'
 import PageFrame from '../../components/PageFrame'
-import ProcessStepper from '../../components/ProcessStepper'
-import { PageBar, Tabs } from '../../components/ui'
+import { HeaderCount } from '../../components/PageHeader'
+import { PageBar } from '../../components/ui'
 import { useToast } from '../../context/ToastContext'
 import { currentShamsiPeriod, nextPeriod } from '../../lib/shamsi'
 import ApprovalsTab from './ApprovalsTab'
@@ -17,6 +17,7 @@ import useOverview from './useOverview'
 import usePlanBoard from './usePlanBoard'
 import { downloadXlsx } from './xlsx'
 import '../../styles/monthly-plan.css'
+import { useHomeData } from '../../shell/HomeData'
 
 const PANEL_ID = 'mp-panel'
 
@@ -49,7 +50,7 @@ function tabFromParams(params, canSeeInternal) {
  */
 export default function PmPlan({ canDecide, canSetTarget, canSeeInternal }) {
   const toast = useToast()
-  const [params, setParams] = useSearchParams()
+  const [params] = useSearchParams()
   const tab = tabFromParams(params, canSeeInternal)
   const [linked] = useState(() => linkedTarget(params))
   const [running] = useState(() => currentShamsiPeriod())
@@ -67,14 +68,10 @@ export default function PmPlan({ canDecide, canSetTarget, canSeeInternal }) {
     params: { period: 'month', year: planning?.year, month: planning?.month },
     enabled: canSeeInternal && tab === 'internal' && Boolean(planning),
   })
-  const waiting = countWaiting(board)
-
-  function selectTab(next) {
-    const nextParams = new URLSearchParams(params)
-    if (next === 'approvals') nextParams.delete('tab')
-    else nextParams.set('tab', next)
-    setParams(nextParams)
-  }
+  // One count per queue (UEP-13 §3.2): the rail's /me/home number when it has
+  // one, so menu, Home and page agree; the board's own count otherwise.
+  const { counts } = useHomeData()
+  const waiting = counts?.plans_approve ?? countWaiting(board)
 
   function reloadAll() {
     board.reload()
@@ -96,21 +93,18 @@ export default function PmPlan({ canDecide, canSetTarget, canSeeInternal }) {
     }
   }
 
-  const tabs = [
-    { key: 'approvals', label: 'Approvals', count: waiting, countLabel: 'waiting' },
-    { key: 'plans', label: 'Plans' },
-    { key: 'history', label: 'History' },
-    ...(canSeeInternal ? [{ key: 'internal', label: 'Internal PIP' }] : []),
-  ]
+  // The rail lists Approvals, Plans, History and Internal PIP; the page draws
+  // no tab bar of its own and no stepper, and its title is the rail label
+  // (UEP-13 §3.6).
+  const TITLES = { approvals: 'Approvals', plans: 'Plans', history: 'History', internal: 'Internal PIP' }
 
   return (
     <PageFrame
       className="mp-page"
       bar={
         <PageBar
-          eyebrow="Planning"
-          title="Monthly Plan"
-          context={<ProcessStepper current="plan" />}
+          title={TITLES[tab]}
+          count={tab === 'approvals' && waiting > 0 ? <HeaderCount waiting={waiting} /> : null}
           actions={
             <>
               <span className="mp-month-chip mp-fa" data-testid="mp-period">{monthLabel(headerPeriod)}</span>
@@ -119,15 +113,13 @@ export default function PmPlan({ canDecide, canSetTarget, canSeeInternal }) {
               </button>
             </>
           }
-          tabs={<Tabs tabs={tabs} value={tab} onChange={selectTab} label="Monthly plan" panelId={PANEL_ID} />}
         />
       }
     >
       <div
         className="mp-panel"
-        role="tabpanel"
         id={PANEL_ID}
-        aria-labelledby={`${PANEL_ID}-tab-${tab}`}
+        aria-label={TITLES[tab]}
         data-tab={tab}
       >
         {tab === 'approvals' && (

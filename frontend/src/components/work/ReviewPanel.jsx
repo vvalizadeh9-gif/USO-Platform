@@ -1,6 +1,6 @@
 import { useId } from 'react'
 import Icon from '../Icon'
-import { shamsiDayLabel } from '../../lib/shamsi'
+import DateText from '../DateText'
 import { Fa, WaitingCell } from './parts'
 
 const MIN_COMMENT = 3
@@ -11,8 +11,19 @@ const MIN_COMMENT = 3
  * Send back needs a comment of at least three characters; the help text that
  * says so is linked to both the field and the button.
  */
-export default function ReviewPanel({ row, slaDays, comment, onComment, onDecide, onDownload, busy }) {
+export default function ReviewPanel({
+  row,
+  slaDays,
+  comment,
+  onComment,
+  checkedOutside = false,
+  onCheckedOutside,
+  onDecide,
+  onDownload,
+  busy,
+}) {
   const helpId = useId()
+  const checkId = useId()
   const fieldId = useId()
   if (!row) {
     return (
@@ -22,8 +33,17 @@ export default function ReviewPanel({ row, slaDays, comment, onComment, onDecide
     )
   }
   const canSendBack = (comment || '').trim().length >= MIN_COMMENT
+  const noReport = row.evidence.length === 0
+  // Without a report, Approve waits for the reviewer's word (UEP-13 §3.3).
+  const canApprove = !noReport || checkedOutside
+  // Space toggles the check while the panel (not a field or button) has focus.
+  const onPanelKey = (e) => {
+    if (!noReport || e.key !== ' ' || e.target.closest('input, textarea, button, select, a')) return
+    e.preventDefault()
+    onCheckedOutside?.(!checkedOutside)
+  }
   return (
-    <aside className="uw-review-panel" aria-label={`Drive test of ${row.site_code}`}>
+    <aside className="uw-review-panel" aria-label={`Drive test of ${row.site_code}`} tabIndex={-1} onKeyDown={onPanelKey}>
       <header className="uw-review-head">
         <h2>{row.site_code}</h2>
         <p>
@@ -33,11 +53,11 @@ export default function ReviewPanel({ row, slaDays, comment, onComment, onDecide
       <dl className="uw-review-facts">
         <div>
           <dt>Carried out</dt>
-          <dd>{shamsiDayLabel(row.execution_date) || '—'}</dd>
+          <dd><DateText value={row.execution_date} /></dd>
         </div>
         <div>
           <dt>Submitted</dt>
-          <dd>{shamsiDayLabel(row.submitted_at) || '—'}</dd>
+          <dd><DateText value={row.submitted_at} /></dd>
         </div>
         <div>
           <dt>Waiting</dt>
@@ -46,8 +66,16 @@ export default function ReviewPanel({ row, slaDays, comment, onComment, onDecide
       </dl>
       <section className="uw-review-files" aria-label="Report">
         <h3>Report</h3>
-        {row.evidence.length === 0 ? (
-          <p className="uw-review-note">No report attached. Approve only if you have seen it elsewhere.</p>
+        {noReport ? (
+          <label className="uw-review-check" htmlFor={checkId}>
+            <input
+              id={checkId}
+              type="checkbox"
+              checked={checkedOutside}
+              onChange={(e) => onCheckedOutside?.(e.target.checked)}
+            />
+            I checked the report outside UEP
+          </label>
         ) : (
           row.evidence.map((e) => (
             <button key={e.id} type="button" className="uw-btn uw-file" onClick={() => onDownload(e)}>
@@ -73,7 +101,7 @@ export default function ReviewPanel({ row, slaDays, comment, onComment, onDecide
         <button
           type="button"
           className="uw-btn uw-btn-primary"
-          disabled={busy}
+          disabled={Boolean(busy) || !canApprove}
           aria-busy={busy === 'Approved' || undefined}
           onClick={() => onDecide('Approved')}
         >

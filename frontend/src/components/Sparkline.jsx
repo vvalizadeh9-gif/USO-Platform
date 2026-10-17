@@ -24,6 +24,13 @@ export function segments(values) {
   return runs
 }
 
+/** A flat series (all equal, or a range under 1) draws a mid-height line and
+ * no area: never a filled rectangle (UEP-13 §3.14a). */
+export function isFlat(values) {
+  const known = values.filter((v) => v !== null && v !== undefined && !Number.isNaN(v))
+  return known.length > 0 && Math.max(...known) - Math.min(...known) < 1
+}
+
 /** "Overdue over the last 14 days, falling from 9 to 5". */
 export function describeSeries(label, values) {
   const known = values.filter((v) => v !== null && v !== undefined)
@@ -43,7 +50,8 @@ export default function Sparkline({ values = [], label, tone = 'brand', classNam
   const step = values.length > 1 ? WIDTH / (values.length - 1) : 0
   const x = (i) => i * step
   // A flat series sits in the middle rather than on the floor.
-  const y = (v) => (max === min ? HEIGHT / 2 : PAD + (1 - (v - min) / (max - min)) * (HEIGHT - 2 * PAD))
+  const flat = isFlat(values)
+  const y = (v) => (flat ? HEIGHT / 2 : PAD + (1 - (v - min) / (max - min)) * (HEIGHT - 2 * PAD))
 
   const runs = segments(values)
   const line = (run) => {
@@ -56,7 +64,7 @@ export default function Sparkline({ values = [], label, tone = 'brand', classNam
     return run.map(([i, v], n) => `${n ? 'L' : 'M'}${x(i)} ${y(v)}`).join('')
   }
   const area = (run) =>
-    run.length < 2 ? null : `${line(run)}L${x(run[run.length - 1][0])} ${HEIGHT}L${x(run[0][0])} ${HEIGHT}Z`
+    run.length < 2 || flat ? null : `${line(run)}L${x(run[run.length - 1][0])} ${HEIGHT}L${x(run[0][0])} ${HEIGHT}Z`
 
   return (
     <svg

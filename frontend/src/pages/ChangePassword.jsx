@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion'
-import { Eye, EyeOff, KeyRound, ShieldCheck } from 'lucide-react'
+import { Eye, EyeOff, KeyRound, ShieldCheck } from '../components/carbon'
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import api from '../api/client'
@@ -66,15 +66,9 @@ export default function ChangePassword() {
 
   return (
     <>
-      <PageHead
-        eyebrow="Your account"
-        title={forced ? 'Choose a new password' : 'Change your password'}
-        subtitle={
-          forced
-            ? 'Your password was reset by an administrator. Choose your own before continuing.'
-            : 'Set a new password for your account.'
-        }
-      />
+      <PageHead title={forced ? 'Choose a new password' : 'Change password'} />
+      {/* The one sentence that says why they are here and cannot go elsewhere. */}
+      {forced && <p className="cp-forced-note">Your password was reset by an administrator. Choose your own before continuing.</p>}
 
       <motion.div
         className="card card-pad"
@@ -168,7 +162,7 @@ export default function ChangePassword() {
             )}
           </div>
 
-          <div className="row" style={{ gap: 7, margin: '4px 0 16px', color: 'var(--text-muted)', fontSize: 12.5 }}>
+          <div className="row" style={{ gap: 7, margin: '4px 0 16px', color: 'var(--uep-text-2)', fontSize: 12.5 }}>
             <ShieldCheck size={14} />
             <span>
               Every other device signed in to this account will be signed out.

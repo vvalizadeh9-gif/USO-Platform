@@ -2,6 +2,7 @@ import { useId, useState } from 'react'
 import Section from '../../../components/Section'
 import { axisTicks, chartSeries, chartSummary, faDigits, fmt, readout, streamOf, yearTrack } from './model'
 import useElementSize from './useElementSize'
+import Select from '../../../components/Select'
 
 const PAD_LEFT = 36
 const PAD_TOP = 18
@@ -62,13 +63,13 @@ function YearSelect({ year, years, onYear }) {
   if (year == null) return null
   const options = years?.length ? years : [year]
   return (
-    <select className="acc-year" aria-label="Year" value={year} onChange={(e) => onYear(Number(e.target.value))}>
+    <Select className="acc-year" aria-label="Year" value={year} onChange={(e) => onYear(Number(e.target.value))}>
       {(options.includes(year) ? options : [year, ...options]).map((y) => (
         <option key={y} value={y}>
           {faDigits(y)}
         </option>
       ))}
-    </select>
+    </Select>
   )
 }
 

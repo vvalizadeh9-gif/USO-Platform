@@ -86,15 +86,14 @@ function SiteRow({ row, index, term, checked, onSelect, expanded, onToggle, rise
           <Marked text={row.site_code} term={term} />
         </Link>
       </span>
-      <span role="cell" className="exl-with-icon">
-        <FieldIcon field="province" muted={!row.province} />
+      {/* No decorative icons in the rows (UEP-13 §3.14b); they stay on the record page. */}
+      <span role="cell">
         <Fa>{row.province}</Fa>
       </span>
       <span role="cell" className={`exl-type ${isNewSite(row.type) ? 'is-new' : ''}`.trim()}>
         {typeLabel(row.type) || <span className="uw-none">—</span>}
       </span>
-      <span role="cell" className="exl-with-icon">
-        <FieldIcon field="technology" muted={row.requested_technology.length === 0} />
+      <span role="cell">
         {row.requested_technology.length ? (
           <span className="exl-techs">
             {row.requested_technology.map((t) => <span key={t} className="exl-tech">{t}</span>)}
@@ -113,8 +112,7 @@ function SiteRow({ row, index, term, checked, onSelect, expanded, onToggle, rise
           disabled={count === 0}
           onClick={() => onToggle(row.id)}
         >
-          <FieldIcon field="villages" />
-          <span className="uw-num">{formatNumber(count)}</span>
+          <span className="uw-num">{formatNumber(count)} {count === 1 ? 'village' : 'villages'}</span>
           <Icon name="chevron--down" size={16} />
         </button>
       </span>
@@ -151,7 +149,7 @@ function VillageStrip({ row, villages }) {
             {[0, 1, 2].map((i) => <span key={i} className="h-skel exl-skel-chip" />)}
           </span>
         ) : (
-          <ul className="exl-strip-chips" aria-label={`Hadaf villages of ${row.site_code}`}>
+          <ul className="exl-strip-chips" aria-label={`Target villages of ${row.site_code}`}>
             {villages.list.map((v) => (
               <li key={v.code ?? v.name} className={`exl-village ${v.code && v.code === match ? 'is-match' : ''}`.trim()}>
                 <Fa className="exl-village-name">{v.name}</Fa>

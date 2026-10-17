@@ -533,3 +533,256 @@ html[data-uep-motion='reduce'] .uep-search-progress i { animation: none; }
   content: ''; position: absolute; left: 0; right: 0; bottom: -5px;
   height: 1px; background: var(--uep-divider);
 }
+
+/* ---- Error screens (UEP-13 §3.1) ---- */
+.uep-error-page {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--uep-space-8);
+  min-height: 100%;
+  padding: var(--uep-space-48) var(--uep-space-24);
+  text-align: center;
+}
+.uep-error-app {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--uep-space-12);
+  background: var(--uep-surface);
+  font-family: var(--uep-font-sans);
+}
+.uep-error-tile {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--uep-radius-tile);
+  background: var(--uep-divider);
+  color: var(--uep-text-3);
+}
+.uep-error-title {
+  margin: var(--uep-space-8) 0 0;
+  font-size: var(--uep-fs-section);
+  font-weight: var(--uep-weight-semibold);
+  color: var(--uep-text);
+}
+.uep-error-line {
+  margin: 0;
+  font-size: var(--uep-fs-body);
+  color: var(--uep-text-2);
+}
+.uep-error-actions {
+  display: flex;
+  gap: var(--uep-space-8);
+  margin-top: var(--uep-space-12);
+}
+.uep-error-id {
+  margin: var(--uep-space-12) 0 0;
+  font-size: var(--uep-fs-caption);
+  color: var(--uep-text-3);
+}
+.uep-error-id code {
+  font-family: var(--uep-font-mono);
+}
+.uep-error-copy {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: var(--uep-accent);
+  cursor: pointer;
+}
+.uep-error-card-body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--uep-space-8);
+  min-height: 120px;
+  padding: var(--uep-space-24);
+  font-size: var(--uep-fs-body);
+  color: var(--uep-text-2);
+}
+.uep-error-card-icon {
+  color: var(--uep-text-3);
+}
+
+/* ---- The one page header (UEP-13 §3.5) ----
+   Fixed height: 64px, or 104px with the 40px tab row, so a tab switch never
+   moves the page. White band, bottom border; the body sits on --uep-page. */
+.uep-page-header {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  height: 64px;
+  padding: 0 var(--uep-space-24);
+  background: var(--uep-surface);
+  border-bottom: var(--uep-border-width) solid var(--uep-border);
+}
+.uep-page-header.has-tabs { height: 104px; }
+.uep-page-header-row {
+  display: flex;
+  align-items: center;
+  gap: var(--uep-space-16);
+  height: 64px;
+  min-width: 0;
+  flex: none;
+}
+.uep-page-header-title {
+  flex: none;
+  margin: 0;
+  font-size: var(--uep-fs-page-title);
+  font-weight: var(--uep-weight-semibold);
+  line-height: 32px;
+  letter-spacing: var(--uep-tracking-heading);
+  color: var(--uep-text);
+  white-space: nowrap;
+}
+.uep-page-header-title:focus { outline: none; }
+.uep-page-header-count {
+  flex: none;
+  font-size: var(--uep-fs-body);
+  color: var(--uep-text-2);
+  white-space: nowrap;
+}
+.uep-page-header-count b { font-weight: var(--uep-weight-semibold); color: var(--uep-text); }
+.uep-page-header-count .uep-page-header-late { color: var(--uep-danger); }
+.uep-page-header-filters {
+  display: flex;
+  align-items: center;
+  gap: var(--uep-space-8);
+  min-width: 0;
+}
+.uep-page-header-end {
+  display: flex;
+  align-items: center;
+  gap: var(--uep-space-8);
+  margin-inline-start: auto;
+  flex: none;
+}
+.uep-page-header-fresh { font-size: var(--uep-fs-small); color: var(--uep-text-3); white-space: nowrap; }
+.uep-page-header-btn {
+  display: inline-grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: var(--uep-border-width) solid var(--uep-border);
+  border-radius: var(--uep-radius-control);
+  background: var(--uep-surface);
+  color: var(--uep-text-2);
+}
+.uep-page-header-btn:hover { border-color: var(--uep-border-strong); color: var(--uep-text); }
+.uep-page-header-tabs {
+  display: flex;
+  align-items: center;
+  gap: var(--uep-space-12);
+  height: 40px;
+  min-width: 0;
+  flex: none;
+}
+.uep-page-header-tabs > .ui-tabs { flex: 1 1 auto; flex-wrap: nowrap; min-width: 0; align-items: stretch; height: 40px; }
+.uep-page-header .ui-tab { height: 40px; }
+.uep-page-header-tabs-end { display: flex; align-items: center; gap: var(--uep-space-8); margin-inline-start: auto; flex: none; }
+.uep-page-header-linktabs { display: flex; align-items: stretch; gap: var(--uep-space-4); height: 40px; }
+.uep-page-header-linktab {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--uep-space-8);
+  padding: 0 var(--uep-space-12);
+  border-bottom: 2px solid transparent;
+  font-size: var(--uep-fs-body);
+  font-weight: var(--uep-weight-medium);
+  color: var(--uep-text-2);
+}
+.uep-page-header-linktab.active { color: var(--uep-accent); border-bottom-color: var(--uep-accent); }
+/* On a scrolling page the header band sits on the outlet's top edge, full
+   width, and stays put while the page scrolls under it. */
+.main-scroll .page-outlet > .uep-page-header:first-child,
+.main-scroll .page-outlet > :first-child > .uep-page-header:first-child {
+  position: sticky;
+  top: -30px;
+  z-index: 5;
+  margin: -30px calc(-1 * max(38px, calc(100% - 1280px + 38px))) 24px -38px;
+  padding-inline: 38px;
+}
+
+/* ---- The one dropdown (UEP-13 §3.10) ---- */
+.uep-select { position: relative; display: inline-flex; min-width: 0; font-family: var(--uep-font-sans); }
+.uep-select-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--uep-space-8);
+  width: 100%;
+  height: 34px;
+  padding: 0 var(--uep-space-8) 0 var(--uep-space-12);
+  border: var(--uep-border-width) solid var(--uep-border);
+  border-radius: var(--uep-radius-control);
+  background: var(--uep-surface);
+  color: var(--uep-text);
+  font: inherit;
+  font-size: var(--uep-fs-small);
+  font-weight: var(--uep-weight-medium);
+  text-align: start;
+  cursor: pointer;
+}
+.uep-select-trigger:hover:not(:disabled) { border-color: var(--uep-border-strong); }
+.uep-select-trigger:disabled { cursor: not-allowed; color: var(--uep-text-3); background: var(--uep-page); }
+.uep-select-trigger:focus-visible,
+.uep-select.is-open .uep-select-trigger { outline: none; border-color: var(--uep-accent); box-shadow: var(--uep-focus-ring); }
+.uep-select-value { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.uep-select-value.is-placeholder { color: var(--uep-text-3); }
+.uep-select-chevron { flex: none; color: var(--uep-text-3); }
+.uep-select-menu {
+  position: absolute;
+  z-index: 40;
+  top: calc(100% + 4px);
+  inset-inline-start: 0;
+  min-width: 100%;
+  max-width: 360px;
+  padding: var(--uep-space-4);
+  border: var(--uep-border-width) solid var(--uep-border);
+  border-radius: var(--uep-radius-card);
+  background: var(--uep-surface);
+  box-shadow: var(--uep-shadow-popover);
+  transform-origin: top;
+  animation: uep-select-in 120ms var(--uep-ease-productive, ease-out);
+}
+@keyframes uep-select-in { from { opacity: 0; transform: scale(0.98); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .uep-select-menu { animation: none; } }
+html[data-uep-motion='reduce'] .uep-select-menu { animation: none; }
+.uep-select-menu ul { list-style: none; margin: 0; padding: 0; max-height: 280px; overflow-y: auto; }
+.uep-select-search {
+  width: 100%;
+  height: 32px;
+  margin-bottom: var(--uep-space-4);
+  padding: 0 var(--uep-space-8);
+  border: var(--uep-border-width) solid var(--uep-border);
+  border-radius: var(--uep-radius-control);
+  font: inherit;
+  font-size: var(--uep-fs-small);
+}
+.uep-select-option {
+  display: flex;
+  align-items: center;
+  gap: var(--uep-space-8);
+  min-height: 32px;
+  padding: 0 var(--uep-space-8);
+  border-radius: var(--uep-radius-sm);
+  font-size: var(--uep-fs-small);
+  color: var(--uep-text);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.uep-select-option > span { flex: 1 1 auto; }
+.uep-select-option.is-active { background: var(--uep-page); }
+.uep-select-option[aria-selected='true'] { background: var(--uep-accent-tint); color: var(--uep-accent-hover); }
+.uep-select-option[aria-disabled='true'] { color: var(--uep-text-3); cursor: not-allowed; }
+.uep-select-check { flex: none; color: var(--uep-accent); }
+.uep-select-group { padding: var(--uep-space-8) var(--uep-space-8) var(--uep-space-4); font-size: var(--uep-fs-caption); color: var(--uep-text-3); }
+.uep-select-empty { padding: var(--uep-space-8); font-size: var(--uep-fs-small); color: var(--uep-text-3); }
+

@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion'
-import { ChevronDown, ChevronRight, Filter, ShieldAlert, X } from 'lucide-react'
+import { ChevronDown, ChevronRight, Filter, ShieldAlert, X } from '../../components/carbon'
 import { Fragment, useEffect, useState } from 'react'
 import api from '../../api/client'
 import { EmptyState, Loading } from '../../components/ui'
@@ -15,6 +15,7 @@ import {
   describeAuditEntry,
   formatDateTime,
 } from '../../lib/auditLog'
+import Select from '../../components/Select'
 
 const PAGE_SIZE = 25
 const EMPTY_FILTERS = {
@@ -87,7 +88,7 @@ export default function AuditLogTab() {
       <div className="card card-pad mb-16">
         <div className="row between" style={{ marginBottom: 14 }}>
           <div className="row" style={{ gap: 8 }}>
-            <Filter size={15} style={{ color: 'var(--text-muted)' }} />
+            <Filter size={15} style={{ color: 'var(--uep-text-2)' }} />
             <h3 style={{ fontSize: 14.5 }}>Filters</h3>
           </div>
           <span className="dim" style={{ fontSize: 12 }}>
@@ -106,7 +107,7 @@ export default function AuditLogTab() {
         <div className="row wrap" style={{ gap: 12, alignItems: 'flex-end' }}>
           <div className="field" style={{ marginBottom: 0, minWidth: 190 }}>
             <label htmlFor="audit-action">Action</label>
-            <select
+            <Select
               id="audit-action"
               className="input"
               value={filters.action}
@@ -128,11 +129,11 @@ export default function AuditLogTab() {
                   <option key={a} value={a}>{actionLabel(a)}</option>
                 ))}
               </optgroup>
-            </select>
+            </Select>
           </div>
           <div className="field" style={{ marginBottom: 0, minWidth: 150 }}>
             <label htmlFor="audit-module">Module</label>
-            <select
+            <Select
               id="audit-module"
               className="input"
               value={filters.module}
@@ -140,11 +141,11 @@ export default function AuditLogTab() {
             >
               <option value="">All modules</option>
               {AUDIT_MODULES.map((m) => <option key={m} value={m}>{m}</option>)}
-            </select>
+            </Select>
           </div>
           <div className="field" style={{ marginBottom: 0, minWidth: 170 }}>
             <label htmlFor="audit-entity">Entity type</label>
-            <select
+            <Select
               id="audit-entity"
               className="input"
               value={filters.entity_type}
@@ -152,11 +153,11 @@ export default function AuditLogTab() {
             >
               <option value="">All entity types</option>
               {AUDIT_ENTITY_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
-            </select>
+            </Select>
           </div>
           <div className="field" style={{ marginBottom: 0, minWidth: 170 }}>
             <label htmlFor="audit-user">User</label>
-            <select
+            <Select
               id="audit-user"
               className="input"
               value={filters.user_id}
@@ -164,11 +165,11 @@ export default function AuditLogTab() {
             >
               <option value="">All users</option>
               {users.map((u) => <option key={u.id} value={u.id}>{u.full_name}</option>)}
-            </select>
+            </Select>
           </div>
           <div className="field" style={{ marginBottom: 0, minWidth: 130 }}>
             <label htmlFor="audit-result">Result</label>
-            <select
+            <Select
               id="audit-result"
               className="input"
               value={filters.result}
@@ -176,7 +177,7 @@ export default function AuditLogTab() {
             >
               <option value="">Any result</option>
               {AUDIT_RESULTS.map((r) => <option key={r} value={r}>{r}</option>)}
-            </select>
+            </Select>
           </div>
           <div className="field" style={{ marginBottom: 0, minWidth: 170 }}>
             <label htmlFor="audit-search">Reason contains</label>
@@ -253,7 +254,7 @@ export default function AuditLogTab() {
                         onClick={() => hasDetail && toggle(e.id)}
                         style={{ cursor: hasDetail ? 'pointer' : 'default' }}
                       >
-                        <td style={{ color: 'var(--text-dim)' }}>
+                        <td style={{ color: 'var(--uep-text-3)' }}>
                           {hasDetail ? (isOpen ? <ChevronDown size={15} /> : <ChevronRight size={15} />) : null}
                         </td>
                         <td className="dim tnum" style={{ fontSize: 12.5, whiteSpace: 'nowrap' }}>
@@ -294,7 +295,7 @@ export default function AuditLogTab() {
                       {isOpen && hasDetail && (
                         <tr>
                           <td></td>
-                          <td colSpan={8} style={{ background: 'var(--surface-2)', padding: '10px 14px' }}>
+                          <td colSpan={8} style={{ background: 'var(--uep-surface-subtle)', padding: '10px 14px' }}>
                             <div className="grid" style={{ gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                               <RawValue label="Previous value" value={e.old_value} />
                               <RawValue label="New value" value={e.new_value} />
@@ -338,7 +339,7 @@ function RawValue({ label, value }) {
     <div>
       <div className="dim" style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.3, marginBottom: 4 }}>{label}</div>
       {value ? (
-        <pre style={{ fontSize: 12, background: 'var(--surface-1)', border: '1px solid var(--border-soft)', borderRadius: 'var(--radius-sm)', padding: 8, overflowX: 'auto', margin: 0 }}>
+        <pre style={{ fontSize: 12, background: 'var(--uep-surface)', border: '1px solid var(--uep-divider)', borderRadius: 'var(--uep-radius-control)', padding: 8, overflowX: 'auto', margin: 0 }}>
           {JSON.stringify(value, null, 2)}
         </pre>
       ) : (

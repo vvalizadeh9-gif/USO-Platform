@@ -1,0 +1,16 @@
+{
+  "$comment": "UEP-13 §3.16: colours, radii and fonts come from styles/uep-tokens.css only.",
+  "rules": {
+    "color-no-hex": true,
+    "declaration-property-value-allowed-list": {
+      "border-radius": ["/^(0|inherit|var\\(--uep-[a-z0-9-]+\\))( (0|var\\(--uep-[a-z0-9-]+\\)))*$/"],
+      "font-family": ["inherit", "/^var\\(--uep-font-[a-z0-9-]+\\)/"]
+    }
+  },
+  "overrides": [
+    {
+      "files": ["src/styles/uep-tokens.css", "src/styles/fonts.css"],
+      "rules": { "color-no-hex": null, "declaration-property-value-allowed-list": null }
+    }
+  ]
+}

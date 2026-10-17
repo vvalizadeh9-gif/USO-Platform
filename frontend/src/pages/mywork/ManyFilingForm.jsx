@@ -1,4 +1,4 @@
-import { X } from 'lucide-react'
+import { X } from '../../components/carbon'
 import { statusOf } from './status'
 import { LetterNumberDate, ScanAndSend } from './LetterFields'
 

@@ -1,15 +1,15 @@
 import { useEffect, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
-import { AlertTriangle, ClipboardList, Hourglass, Scale } from 'lucide-react'
+import { Link, Navigate, useSearchParams } from 'react-router-dom'
+import { AlertTriangle, ClipboardList, Hourglass, Scale } from '../../components/carbon'
 import api from '../../api/client'
 import ExportNumber, { ExportFeedback } from '../../components/ExportNumber'
 import GapDrawer from '../../components/GapDrawer'
+import Icon from '../../components/Icon'
 import PageFrame from '../../components/PageFrame'
 import WaffleTile from '../../components/WaffleTile'
 import { useAuth } from '../../context/AuthContext'
 import { canCompare } from '../../lib/roles'
-import { Banner, Card, EmptyState, PageBar, Tabs } from '../../components/ui'
-import CoverageMap from './CoverageMap.jsx'
+import { Banner, Card, EmptyState, PageBar } from '../../components/ui'
 import {
   ATTRIBUTION_NOTES,
   CARDS,
@@ -62,7 +62,6 @@ export default function LifecycleGaps() {
   const askedLens = LENSES.some((l) => l.key === search.get('lens')) ? search.get('lens') : null
 
   const [lens, setLens] = useState(null)
-  const [tab, setTab] = useState('gaps')
   const [selected, setSelected] = useState(null)
   const [notesOpen, setNotesOpen] = useState(false)
   const [data, setData] = useState(null)
@@ -97,10 +96,13 @@ export default function LifecycleGaps() {
 
   const notes = dataNotes(data?.data_quality)
 
+  // Roles performance › Map is the only map (UEP-13 §3.12); old links to the
+  // retired Coverage map tab land there.
+  if (search.get('tab') === 'map') return <Navigate to="/reports/kpi/map" replace />
+
   const bar = (
     <PageBar
-      eyebrow="Performance"
-      title="Lifecycle Gaps"
+      title="Lifecycle gaps"
       actions={
         <>
           {notes.length > 0 && (
@@ -122,13 +124,12 @@ export default function LifecycleGaps() {
           )}
         </>
       }
-      tabs={<Tabs tabs={TABS} value={tab} onChange={setTab} label="Gap views" />}
     />
   )
 
   return (
     <ExportFeedback>
-      <PageFrame className="gap-page" bar={bar}>
+      <PageFrame className="gap-page" bar={bar} smallScreenNote>
         {notesOpen && notes.length > 0 && (
           <Banner tone="warning" title="Data quality.">
             {notes.map((note) => (
@@ -138,9 +139,7 @@ export default function LifecycleGaps() {
         )}
         {error && data && <Banner tone="error">{error}</Banner>}
 
-        {tab === 'map' ? (
-          <CoverageMap />
-        ) : error && !data ? (
+        {error && !data ? (
           <Card>
             <EmptyState title="Nothing to show" hint={error} />
           </Card>
@@ -151,6 +150,7 @@ export default function LifecycleGaps() {
             data={data}
             lens={lens}
             isPm={isPm}
+            canImport={user?.role?.name === 'PM'}
             selected={selected}
             onSelect={setSelected}
             onLens={setLens}
@@ -160,11 +160,6 @@ export default function LifecycleGaps() {
     </ExportFeedback>
   )
 }
-
-const TABS = [
-  { key: 'gaps', label: 'Gaps' },
-  { key: 'map', label: 'Coverage map' },
-]
 
 const CARD_ICONS = { pending: Hourglass, remained: Scale, mojri: ClipboardList }
 
@@ -177,7 +172,7 @@ function readError(err, fallback) {
    The Gaps tab: three cards, six tiles, one legend line.
    --------------------------------------------------------------------------- */
 
-function GapsTab({ data, lens, isPm, selected, onSelect, onLens }) {
+function GapsTab({ data, lens, isPm, canImport, selected, onSelect, onLens }) {
   return (
     <div className="gap-tab">
       <div className="gap-cards">
@@ -190,6 +185,9 @@ function GapsTab({ data, lens, isPm, selected, onSelect, onLens }) {
             description={card.description}
             className="gap-card"
           >
+            {card.key === 'mojri' && !card.gaps.some((key) => hasData(key, data)) ? (
+              <MojriEmpty canImport={canImport} />
+            ) : (
             <div className="gap-tiles">
               {card.gaps.map((key) => (
                 <GapTile
@@ -201,6 +199,7 @@ function GapsTab({ data, lens, isPm, selected, onSelect, onLens }) {
                 />
               ))}
             </div>
+            )}
           </Card>
         ))}
       </div>
@@ -237,7 +236,6 @@ function GapTile({ gapKey, data, selected, onOpen }) {
   const meta = GAPS[gapKey]
   const gap = data.gaps[gapKey]
   const ready = hasData(gapKey, data)
-  const approved = meta.approvedGap && data.totals[meta.approvedGap]
 
   return (
     <WaffleTile
@@ -251,13 +249,6 @@ function GapTile({ gapKey, data, selected, onOpen }) {
       selected={selected}
       empty={!ready}
       emptyNote="No Mojri import yet"
-      emptyFigure={
-        meta.mojri && (
-          <>
-            <GapFigure gap={meta.approvedGap} value={approved} /> approved in UEP
-          </>
-        )
-      }
       openLabel={
         ready
           ? `${meta.authority} ${meta.tileLabel}: ${fmt(gap.count)} villages, ` +
@@ -266,6 +257,24 @@ function GapTile({ gapKey, data, selected, onOpen }) {
       }
       onOpen={onOpen}
     />
+  )
+}
+
+/** The Mojri card before the first import: one compact state, no empty grids. */
+function MojriEmpty({ canImport }) {
+  return (
+    <div className="gap-mojri-empty" data-testid="mojri-empty">
+      <span className="gap-mojri-empty-tile" aria-hidden="true">
+        <Icon name="document" size={20} />
+      </span>
+      <p className="gap-mojri-empty-title">No Mojri import yet</p>
+      <p className="gap-mojri-empty-line">ICT and CRA checks appear after the first import</p>
+      {canImport && (
+        <Link className="btn" to="/mojri-tracker">
+          Import tracker
+        </Link>
+      )}
+    </div>
   )
 }
 

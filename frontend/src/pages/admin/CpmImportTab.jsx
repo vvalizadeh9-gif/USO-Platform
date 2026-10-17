@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from 'framer-motion'
-import { UploadCloud, FileSpreadsheet, Trash2, AlertTriangle, X } from 'lucide-react'
+import { UploadCloud, FileSpreadsheet, Trash2, AlertTriangle, X } from '../../components/carbon'
 import { useRef, useState } from 'react'
 import api from '../../api/client'
 import { useToast } from '../../context/ToastContext'
@@ -54,12 +54,12 @@ export default function CpmImportTab() {
           onDrop={(e) => { e.preventDefault(); setDragOver(false); pick(e.dataTransfer.files[0]) }}
           onClick={() => inputRef.current?.click()}
           style={{
-            border: `1.5px dashed ${dragOver ? 'var(--signal)' : 'var(--border)'}`,
-            borderRadius: 'var(--radius)',
+            border: `1.5px dashed ${dragOver ? 'var(--uep-accent)' : 'var(--uep-border)'}`,
+            borderRadius: 'var(--uep-radius-card)',
             padding: '38px 20px',
             textAlign: 'center',
             cursor: 'pointer',
-            background: dragOver ? 'var(--signal-glow)' : 'var(--surface-2)',
+            background: dragOver ? 'var(--uep-accent-tint)' : 'var(--uep-surface-subtle)',
             transition: 'all 0.18s',
           }}
         >
@@ -72,12 +72,12 @@ export default function CpmImportTab() {
           />
           {file ? (
             <div className="row" style={{ justifyContent: 'center', gap: 10 }}>
-              <FileSpreadsheet size={22} style={{ color: 'var(--signal)' }} />
+              <FileSpreadsheet size={22} style={{ color: 'var(--uep-accent)' }} />
               <span style={{ fontWeight: 500 }}>{file.name}</span>
             </div>
           ) : (
             <>
-              <UploadCloud size={30} style={{ color: 'var(--text-dim)', marginBottom: 8 }} />
+              <UploadCloud size={30} style={{ color: 'var(--uep-text-3)', marginBottom: 8 }} />
               <div style={{ fontWeight: 500 }}>Drop your CPM Excel here</div>
               <div className="dim" style={{ fontSize: 12.5, marginTop: 3 }}>or click to browse</div>
             </>
@@ -99,11 +99,11 @@ export default function CpmImportTab() {
           className="card card-pad"
           initial={{ opacity: 0, scale: 0.98 }}
           animate={{ opacity: 1, scale: 1 }}
-          style={{ borderColor: 'var(--red)', borderWidth: 1.5 }}
+          style={{ borderColor: 'var(--uep-status-danger-ink)', borderWidth: 1.5 }}
         >
-          <div className="row" style={{ gap: 8, color: 'var(--red)' }}>
+          <div className="row" style={{ gap: 8, color: 'var(--uep-status-danger-ink)' }}>
             <AlertTriangle size={16} />
-            <h3 style={{ fontSize: 14.5, color: 'var(--red)' }}>
+            <h3 style={{ fontSize: 14.5, color: 'var(--uep-status-danger-ink)' }}>
               This file&rsquo;s column layout doesn&rsquo;t match what the importer expects
             </h3>
           </div>
@@ -114,7 +114,7 @@ export default function CpmImportTab() {
           </p>
           <ul style={{ margin: 0, paddingLeft: 18, fontSize: 12.5, lineHeight: 1.7 }}>
             {result.header_warnings.map((w) => (
-              <li key={w} style={{ color: 'var(--red)' }}>{w}</li>
+              <li key={w} style={{ color: 'var(--uep-status-danger-ink)' }}>{w}</li>
             ))}
           </ul>
         </motion.div>
@@ -124,35 +124,35 @@ export default function CpmImportTab() {
         <motion.div className="card card-pad" initial={{ opacity: 0, scale: 0.98 }} animate={{ opacity: 1, scale: 1 }}>
           <h3 style={{ fontSize: 15, marginBottom: 14 }}>Import summary</h3>
           <SummaryRow label="Total rows processed" value={result.total_rows} />
-          <SummaryRow label="New work items" value={result.new_count} accent="var(--green)" />
-          <SummaryRow label="New villages added" value={result.new_villages_count} accent="var(--green)" />
+          <SummaryRow label="New work items" value={result.new_count} accent="var(--uep-status-success-ink)" />
+          <SummaryRow label="New villages added" value={result.new_villages_count} accent="var(--uep-status-success-ink)" />
           <SummaryRow label="Unchanged work items" value={result.unchanged_count} />
-          <SummaryRow label="Changes needing validation" value={result.changed_count} accent="var(--amber)" />
+          <SummaryRow label="Changes needing validation" value={result.changed_count} accent="var(--uep-status-pending-ink)" />
           {result.changed_count > 0 && (
-            <div style={{ paddingLeft: 14, borderLeft: '2px solid var(--border-soft)', margin: '2px 0 2px 4px' }}>
-              <SummaryRow label="— Village quantity changes" value={result.changed_village_qty} accent="var(--amber)" />
-              <SummaryRow label="— Site type changes" value={result.changed_site_type} accent="var(--amber)" />
-              <SummaryRow label="— Requested technology changes" value={result.changed_requested_tech} accent="var(--amber)" />
+            <div style={{ paddingLeft: 14, borderLeft: '2px solid var(--uep-divider)', margin: '2px 0 2px 4px' }}>
+              <SummaryRow label="— Village quantity changes" value={result.changed_village_qty} accent="var(--uep-status-pending-ink)" />
+              <SummaryRow label="— Site type changes" value={result.changed_site_type} accent="var(--uep-status-pending-ink)" />
+              <SummaryRow label="— Requested technology changes" value={result.changed_requested_tech} accent="var(--uep-status-pending-ink)" />
             </div>
           )}
-          <SummaryRow label="Rows skipped (not هدف)" value={result.skipped_satellite} accent="var(--text-dim)" />
+          <SummaryRow label="Rows skipped (not هدف)" value={result.skipped_satellite} accent="var(--uep-text-3)" />
           <p className="muted" style={{ fontSize: 12, marginTop: 6 }}>
             Only villages classified exactly <b>هدف</b> are imported. All اقماری variants and the
             &ldquo;هدف (Verbally)&rdquo; / &ldquo;هدف (Removed Verbally)&rdquo; sub-flags are ignored.
           </p>
           {result.changed_count > 0 && (
             <p className="muted" style={{ fontSize: 12.5, marginTop: 12 }}>
-              Review flagged changes in the <b>Validate CPM</b> tab.
+              Review flagged changes in <b>CPM changes</b>.
             </p>
           )}
         </motion.div>
       )}
 
       {/* Danger zone */}
-      <div className="card card-pad" style={{ borderColor: 'var(--red)', borderWidth: 1.5 }}>
-        <div className="row" style={{ gap: 8, color: 'var(--red)' }}>
+      <div className="card card-pad" style={{ borderColor: 'var(--uep-status-danger-ink)', borderWidth: 1.5 }}>
+        <div className="row" style={{ gap: 8, color: 'var(--uep-status-danger-ink)' }}>
           <AlertTriangle size={16} />
-          <h3 style={{ fontSize: 14.5, color: 'var(--red)' }}>Danger zone</h3>
+          <h3 style={{ fontSize: 14.5, color: 'var(--uep-status-danger-ink)' }}>Danger zone</h3>
         </div>
         <p className="muted" style={{ fontSize: 12.5, marginTop: 8, marginBottom: 14 }}>
           Permanently erase all CPM-imported data (sites, work items, villages,
@@ -162,7 +162,7 @@ export default function CpmImportTab() {
         </p>
         <button
           className="btn btn-sm"
-          style={{ borderColor: 'var(--red)', color: 'var(--red)' }}
+          style={{ borderColor: 'var(--uep-status-danger-ink)', color: 'var(--uep-status-danger-ink)' }}
           onClick={() => setShowWipeModal(true)}
         >
           <Trash2 size={14} /> Erase all CPM data
@@ -186,9 +186,9 @@ export default function CpmImportTab() {
 
 function SummaryRow({ label, value, accent }) {
   return (
-    <div className="row between" style={{ padding: '9px 0', borderBottom: '1px solid var(--border-soft)' }}>
+    <div className="row between" style={{ padding: '9px 0', borderBottom: '1px solid var(--uep-divider)' }}>
       <span className="muted" style={{ fontSize: 13 }}>{label}</span>
-      <span className="tnum" style={{ fontWeight: 600, fontSize: 16, color: accent || 'var(--text)' }}>{formatNumber(value)}</span>
+      <span className="tnum" style={{ fontWeight: 600, fontSize: 16, color: accent || 'var(--uep-text)' }}>{formatNumber(value)}</span>
     </div>
   )
 }
@@ -229,13 +229,13 @@ function WipeConfirmModal({ onClose, onWiped }) {
         exit={{ opacity: 0, y: 16, scale: 0.97 }}
         transition={{ type: 'spring', stiffness: 340, damping: 28 }}
         className="card card-pad"
-        style={{ width: 440, borderColor: 'var(--red)', borderWidth: 1.5 }}
+        style={{ width: 440, borderColor: 'var(--uep-status-danger-ink)', borderWidth: 1.5 }}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="row between">
-          <div className="row" style={{ gap: 8, color: 'var(--red)' }}>
+          <div className="row" style={{ gap: 8, color: 'var(--uep-status-danger-ink)' }}>
             <AlertTriangle size={18} />
-            <h3 style={{ fontSize: 16, color: 'var(--red)' }}>Erase all CPM data?</h3>
+            <h3 style={{ fontSize: 16, color: 'var(--uep-status-danger-ink)' }}>Erase all CPM data?</h3>
           </div>
           <button className="btn btn-sm btn-ghost" onClick={onClose}><X size={15} /></button>
         </div>
@@ -247,7 +247,7 @@ function WipeConfirmModal({ onClose, onWiped }) {
         </p>
 
         <div className="field mt-16">
-          <label>Type <code style={{ color: 'var(--red)' }}>{CONFIRM_PHRASE}</code> to confirm</label>
+          <label>Type <code style={{ color: 'var(--uep-status-danger-ink)' }}>{CONFIRM_PHRASE}</code> to confirm</label>
           <input
             className="input"
             value={typed}
@@ -261,8 +261,8 @@ function WipeConfirmModal({ onClose, onWiped }) {
           <button
             className="btn"
             style={{
-              background: matches ? 'var(--red)' : 'var(--surface-2)',
-              color: matches ? '#fff' : 'var(--text-dim)',
+              background: matches ? 'var(--uep-status-danger-ink)' : 'var(--uep-surface-subtle)',
+              color: matches ? 'var(--uep-on-accent)' : 'var(--uep-text-3)',
               border: 'none',
             }}
             disabled={!matches || busy}

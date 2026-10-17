@@ -21,14 +21,15 @@
   to { opacity: 1; transform: none; }
 }
 /* The greeting is the page header and spans the width. Under it the two
-   columns share one top edge (the KPI strip) and one bottom edge (the work
-   cards): the left column sets the row heights, and the Apps panel's frame
-   stretches to them while its contents stay at the top, scrolling inside
-   if a role ever has more apps than fit (UEP-12). */
+   columns share one top edge (the KPI strip) and one bottom edge, which is
+   the lower of the work cards' and the Apps list's: the Apps panel never
+   scrolls. If its apps reach lower, the work row (1fr) grows and the cards
+   stretch down to meet it; if the cards reach lower, the panel's frame
+   stretches. Contents stay at the top either way (UEP-12). */
 .h-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr) var(--uep-home-apps-width);
-  grid-template-rows: auto auto auto;
+  grid-template-rows: auto auto 1fr;
   column-gap: var(--uep-space-24);
   row-gap: var(--h-gap);
   align-items: start;
@@ -36,18 +37,20 @@
 .h-main { display: contents; }
 .h-greet { grid-column: 1 / -1; grid-row: 1; }
 .h-kpis { grid-column: 1; grid-row: 2; min-width: 0; }
-.h-work { grid-column: 1; grid-row: 3; min-width: 0; }
-.ha-panel {
-  grid-column: 2;
-  grid-row: 2 / 4;
+.h-work {
+  grid-column: 1;
+  grid-row: 3;
   align-self: stretch;
-  contain: size;
-  min-height: 0;
-  overflow-y: auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
 }
+.h-work > .hw-section { flex: 1 1 auto; display: flex; flex-direction: column; }
+.h-work .hw-grid { flex: 1 1 auto; }
+.ha-panel { grid-column: 2; grid-row: 2 / 4; align-self: stretch; }
 @media (max-width: 1100px) {
-  .h-layout { grid-template-columns: minmax(0, 1fr); }
-  .ha-panel { grid-column: 1; grid-row: auto; contain: none; overflow: visible; }
+  .h-layout { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto; }
+  .ha-panel { grid-column: 1; grid-row: auto; }
 }
 
 /* ---- Greeting ---- */
@@ -92,7 +95,7 @@
   display: flex;
   align-items: center;
   gap: var(--uep-space-12);
-  padding: 10px var(--uep-space-8);
+  padding: 14px var(--uep-space-8);
   border: 0;
   border-bottom: var(--uep-border-width) solid var(--uep-divider);
   background: transparent;
@@ -182,8 +185,8 @@
   color: var(--uep-text-3);
 }
 .hf-status { display: inline-flex; align-items: center; gap: 6px; }
-.hf-status i { width: 8px; height: 8px; border-radius: var(--uep-radius-pill); background: var(--uep-border-strong); }
-.hf-status.is-down i { background: var(--uep-danger); }
+.hf-status svg { color: var(--uep-text-3); }
+.hf-status.is-down, .hf-status.is-down svg { color: var(--uep-status-pending-ink); }
 .hf-spacer { flex: 1; }
 
 /* ---- States ---- */
@@ -228,3 +231,10 @@
   .uep-home, .hw-plan-bar i { animation: none; }
 }
 html[data-uep-motion='reduce'] :is(.uep-home, .hw-plan-bar i) { animation: none; }
+
+/* Full height, footer on the bottom edge (UEP-13 §3.11, Option 1). The cards
+   keep their natural height; only the footer moves down. */
+.uep-home-page { min-height: 100%; box-sizing: border-box; }
+.uep-home-page > .hf-footer { margin-top: auto; }
+/* Below 820px high the rows stay tight (the rule above), so 1366×768 and
+   1280×720 still fit with no page scroll. */

@@ -1,9 +1,10 @@
 import { motion } from 'framer-motion'
-import { ShieldOff, X } from 'lucide-react'
+import { ShieldOff, X } from '../../components/carbon'
 import { useState } from 'react'
 import {
   ACTIVE, INACTIVE, STATUS_HELP, STATUS_VERB, SUSPENDED, USER_STATUSES,
 } from '../../lib/userStatus'
+import Select from '../../components/Select'
 
 // Moving one account between Active, Inactive and Suspended.
 //
@@ -46,7 +47,7 @@ export default function UserStatusDialog({ user, onCancel, onConfirm }) {
         className="card card-pad"
         style={{
           width: 480,
-          borderColor: leavingActive ? 'var(--red)' : 'var(--border)',
+          borderColor: leavingActive ? 'var(--uep-status-danger-ink)' : 'var(--uep-border)',
           borderWidth: leavingActive ? 1.5 : 1,
         }}
         onClick={(e) => e.stopPropagation()}
@@ -55,7 +56,7 @@ export default function UserStatusDialog({ user, onCancel, onConfirm }) {
         aria-labelledby="status-dialog-title"
       >
         <div className="row between" style={{ marginBottom: 12 }}>
-          <div className="row" style={{ gap: 8, color: leavingActive ? 'var(--red)' : 'var(--text)' }}>
+          <div className="row" style={{ gap: 8, color: leavingActive ? 'var(--uep-status-danger-ink)' : 'var(--uep-text)' }}>
             <ShieldOff size={18} />
             <h3 id="status-dialog-title" style={{ fontSize: 16, color: 'inherit' }}>
               Change account status
@@ -73,7 +74,7 @@ export default function UserStatusDialog({ user, onCancel, onConfirm }) {
 
         <div className="field">
           <label htmlFor="status-choice">New status</label>
-          <select
+          <Select
             id="status-choice"
             className="input"
             value={status}
@@ -82,7 +83,7 @@ export default function UserStatusDialog({ user, onCancel, onConfirm }) {
             {options.map((s) => (
               <option key={s} value={s}>{STATUS_VERB[s]} — {s}</option>
             ))}
-          </select>
+          </Select>
           <span className="dim" style={{ fontSize: 12.5, marginTop: 6, display: 'block' }}>
             {STATUS_HELP[status]}
           </span>
@@ -122,8 +123,8 @@ export default function UserStatusDialog({ user, onCancel, onConfirm }) {
           <button
             className="btn"
             style={leavingActive
-              ? { background: 'var(--red)', color: '#fff', border: 'none' }
-              : { background: 'var(--signal)', color: '#fff', border: 'none' }}
+              ? { background: 'var(--uep-status-danger-ink)', color: 'var(--uep-on-accent)', border: 'none' }
+              : { background: 'var(--uep-accent)', color: 'var(--uep-on-accent)', border: 'none' }}
             disabled={busy}
             onClick={submit}
           >

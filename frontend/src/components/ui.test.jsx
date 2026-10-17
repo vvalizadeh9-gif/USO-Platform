@@ -4,7 +4,7 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { useState } from 'react'
-import { Users } from 'lucide-react'
+import { Users } from './carbon'
 import { describe, expect, it, vi } from 'vitest'
 import {
   Banner,
@@ -54,18 +54,18 @@ function SegHarness() {
 }
 
 describe('PageHead', () => {
-  it('renders the eyebrow, the title as the page heading, the subtitle and actions', () => {
+  it('draws the title as the page heading and the actions, with no eyebrow or subtitle', () => {
     render(
       <PageHead
         eyebrow="Performance"
-        title="Lifecycle Gaps"
+        title="Lifecycle gaps"
         subtitle="Last CPM import"
         actions={<button type="button">Export</button>}
       />
     )
-    expect(screen.getByText('Performance')).toHaveClass('eyebrow')
-    expect(screen.getByRole('heading', { level: 1, name: 'Lifecycle Gaps' })).toBeInTheDocument()
-    expect(screen.getByText('Last CPM import')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { level: 1, name: 'Lifecycle gaps' })).toBeInTheDocument()
+    expect(screen.queryByText('Performance')).toBeNull()
+    expect(screen.queryByText('Last CPM import')).toBeNull()
     expect(screen.getByRole('button', { name: 'Export' })).toBeInTheDocument()
   })
 })
@@ -364,32 +364,33 @@ describe('Tabs: counts, groups and steps', () => {
 })
 
 describe('PageBar', () => {
-  it('puts each slot in its place', () => {
+  it('is the one PageHeader: title, filters, actions and the tab row', () => {
     const { container } = render(
       <PageBar
         eyebrow="Drive Test"
-        title="Dashboard"
+        title="Drive test dashboard"
         context={<span>scope</span>}
         actions={<button type="button">Export</button>}
         tabs={<Tabs tabs={TABS} value="road" onChange={() => {}} label="Views" />}
         tabsRight={<span>period</span>}
       />,
     )
-    expect(screen.getByRole('heading', { level: 1, name: 'Dashboard' })).toBeInTheDocument()
-    expect(container.querySelector('.page-bar-eyebrow')).toHaveTextContent('Drive Test')
-    expect(container.querySelector('.page-bar-context')).toHaveTextContent('scope')
-    expect(container.querySelector('.page-bar-actions')).toContainElement(
+    expect(screen.getByRole('heading', { level: 1, name: 'Drive test dashboard' })).toBeInTheDocument()
+    expect(screen.queryByText('Drive Test')).toBeNull()
+    expect(container.querySelector('.uep-page-header')).toHaveClass('has-tabs')
+    expect(container.querySelector('.uep-page-header-filters')).toHaveTextContent('scope')
+    expect(container.querySelector('.uep-page-header-end')).toContainElement(
       screen.getByRole('button', { name: 'Export' }),
     )
-    expect(container.querySelector('.page-bar-tabs [role="tablist"]')).toBeInTheDocument()
-    expect(container.querySelector('.page-bar-tabs-right')).toHaveTextContent('period')
+    expect(container.querySelector('.uep-page-header-tabs [role="tablist"]')).toBeInTheDocument()
+    expect(container.querySelector('.uep-page-header-tabs-end')).toHaveTextContent('period')
   })
 
   it('leaves out the slots it is not given', () => {
-    const { container } = render(<PageBar title="Monthly Plan" />)
-    expect(container.querySelector('.page-bar-context')).toBeNull()
-    expect(container.querySelector('.page-bar-actions')).toBeNull()
-    expect(container.querySelector('.page-bar-tabs')).toBeNull()
+    const { container } = render(<PageBar title="Monthly plan" />)
+    expect(container.querySelector('.uep-page-header')).not.toHaveClass('has-tabs')
+    expect(container.querySelector('.uep-page-header-filters')).toBeNull()
+    expect(container.querySelector('.uep-page-header-tabs')).toBeNull()
   })
 })
 

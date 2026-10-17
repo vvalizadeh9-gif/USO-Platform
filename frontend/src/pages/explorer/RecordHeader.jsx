@@ -1,11 +1,11 @@
 import { Link } from 'react-router-dom'
 import Icon from '../../components/Icon'
-import { EXPLORER_PATH, myWorkPath } from '../../lib/explorerLinks'
+import { myWorkPath } from '../../lib/explorerLinks'
+import { usePageCrumb } from '../../shell/crumbs'
 import { openVillages, siteBadge } from './explorerModel'
-import { lastListSearch } from './listModel'
 
 /**
- * The breadcrumb and the header row (UEP-11 §B3): the site ID with its one
+ * The header row (UEP-11 §B3; the breadcrumb is the shell's, UEP-13 §3.12): the site ID with its one
  * status badge, and nothing under it. Actions on the right: Take action (only
  * with an action to take), Open in My Work, and File letter for the roles that
  * file, while the site has open villages.
@@ -14,14 +14,10 @@ export default function RecordHeader({ record, siteLabel, headingRef, canFile, i
   const badge = record ? siteBadge(record.status) : null
   const site = record?.site_code
   const openCount = record ? openVillages(record.villages).length : 0
+  // The breadcrumb lives in the header only: UEP / Explorer / W4303.
+  usePageCrumb(siteLabel)
   return (
     <>
-      <nav className="ex-crumbs" aria-label="Breadcrumb">
-        <ol>
-          <li><Link to={EXPLORER_PATH + lastListSearch()}>Explorer</Link></li>
-          <li aria-current="page">{siteLabel}</li>
-        </ol>
-      </nav>
       <div className="ex-header">
         <h1 ref={headingRef} tabIndex={-1}>{siteLabel}</h1>
         {badge && (

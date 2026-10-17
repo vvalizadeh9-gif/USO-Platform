@@ -1,4 +1,4 @@
-import { Download, ExternalLink, X } from 'lucide-react'
+import { Download, ExternalLink, X } from '../../components/carbon'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import api from '../../api/client'
@@ -10,6 +10,7 @@ import { useAuth } from '../../context/AuthContext'
 import { useToast } from '../../context/ToastContext'
 import { BUCKET_LABEL, PAGE_SIZE, UNATTRIBUTED } from './constants'
 import { count } from './format'
+import UepSelect from '../../components/Select'
 
 /**
  * The sites behind one figure on the Drive Test dashboard.
@@ -319,7 +320,6 @@ export default function SiteList() {
   return (
     <>
       <PageHead
-        eyebrow="Drive Test"
         title={title}
         subtitle={scope}
         actions={
@@ -555,7 +555,7 @@ function Select({ label, value, onChange, options, placeholder }) {
   return (
     <label className="row" style={{ gap: 6, alignItems: 'center' }}>
       <span className="muted">{label}</span>
-      <select
+      <UepSelect
         className="input"
         value={value}
         aria-label={label}
@@ -567,7 +567,7 @@ function Select({ label, value, onChange, options, placeholder }) {
             {o.label}
           </option>
         ))}
-      </select>
+      </UepSelect>
     </label>
   )
 }

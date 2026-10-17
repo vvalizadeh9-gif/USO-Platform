@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion'
-import { AlertCircle, History } from 'lucide-react'
+import { AlertCircle, History } from '../../components/carbon'
 import { useCallback, useEffect, useState } from 'react'
 import api from '../../api/client'
 import { EmptyState, Loading, StatusPill, fadeUp, stagger } from '../../components/ui'
@@ -10,6 +10,7 @@ import SixMonthChart, { ChartLegend } from './SixMonthChart'
 import { FigureCards, Standing } from './Standing'
 import { STREAM_LIST } from './streams'
 import { formatNumber } from '../../lib/numbers'
+import Select from '../../components/Select'
 
 // What the server accepts (services/monthly_plan.MAX_COMMITTED_COUNT). Checked
 // here so a typo is refused where it was typed, not after a round trip; the
@@ -217,7 +218,7 @@ export default function ContractorPlan({ period }) {
               {open.some((s) => ANSWERING.includes(planning[s.key].planning.status)) ? 'Resubmit' : 'Submit'}
             </button>
             {open.length < STREAMS.length && (
-              <span className="dim" style={{ fontSize: 'var(--fs-meta)' }}>
+              <span className="dim" style={{ fontSize: 'var(--uep-fs-small)' }}>
                 Hands in your {andList(open.map((s) => s.name))} PIP only; the{' '}
                 {STREAMS.length - open.length === 1 ? 'other is' : 'others are'} with the PM already.
               </span>
@@ -316,7 +317,7 @@ function PlanRow({ stream, planning, value, onChange, busy, onHistory }) {
             <div className="pip-note-msg">{planning.return_comment}</div>
           </div>
         ) : (
-          <div className="dim mt-8" style={{ fontSize: 'var(--fs-meta)' }}>
+          <div className="dim mt-8" style={{ fontSize: 'var(--uep-fs-small)' }}>
             Returned earlier: “{planning.return_comment}”
           </div>
         )
@@ -436,7 +437,7 @@ function RevisionRow({ stream, planning, onChanged, onHistory }) {
     <div data-revision={stream.key} style={{ marginTop: 12 }}>
       <div className="row wrap" style={{ gap: 10, alignItems: 'baseline' }}>
         <span style={{ minWidth: 90, fontWeight: 600 }}>{stream.name}</span>
-        <span className="tnum" style={{ fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 700 }}>
+        <span className="tnum" style={{ fontFamily: 'var(--uep-font-sans)', fontSize: 20, fontWeight: 700 }}>
           {figure(planning.in_force_count)}
         </span>
         {planning.in_force_version && <span className="pill pill-dim">v{planning.in_force_version}</span>}
@@ -485,12 +486,12 @@ function RevisionRow({ stream, planning, onChanged, onHistory }) {
           </label>
           <label className="pip-entry-field" style={{ gap: 4 }}>
             <span className="pip-lbl">Reason</span>
-            <select className="input" value={reason} disabled={busy} onChange={(e) => setReason(e.target.value)}>
+            <Select className="input" value={reason} disabled={busy} onChange={(e) => setReason(e.target.value)}>
               <option value="">Choose…</option>
               {REASONS.map((r) => (
                 <option key={r.value} value={r.value}>{r.label}</option>
               ))}
-            </select>
+            </Select>
           </label>
           <label className="pip-entry-field" style={{ gap: 4, flex: 1, minWidth: 180 }}>
             <span className="pip-lbl">Comment{reason === 'OTHER' ? '' : ' (optional)'}</span>

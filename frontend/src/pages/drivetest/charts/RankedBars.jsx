@@ -1,5 +1,5 @@
 import { motion, useReducedMotion } from 'framer-motion'
-import { ChevronRight } from 'lucide-react'
+import { ChevronRight } from '../../../components/carbon'
 import { count, share } from '../format'
 import { DrillLink } from '../DrillPanel'
 
@@ -11,7 +11,7 @@ import { DrillLink } from '../DrillPanel'
  * vertical bars would rotate them into illegibility.
  *
  * Two changes from the bars this replaces. The track is now visible against
- * the card behind it (it was `--surface-3` on `--surface-1`, a two per cent
+ * the card behind it (it was `--uep-track` on `--uep-surface`, a two per cent
  * difference, so the unfilled remainder never read and the bars floated with
  * no scale). And a row with a destination is a link: the whole row, not a
  * small chevron, so the target is the size of the thing you are looking at.

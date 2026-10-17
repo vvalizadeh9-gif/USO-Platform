@@ -8,6 +8,7 @@ import { useToast } from '../context/ToastContext'
 import { roleLabel } from '../lib/roles'
 import '../styles/fix-queue.css'
 import { formatNumber } from '../lib/numbers'
+import Select from '../components/Select'
 
 /**
  * The Fix queue, in the Drive test app: the one page a category owner works.
@@ -279,7 +280,7 @@ export default function MyFixQueue() {
                       <label className="fq-label" htmlFor={`fq-team-${fix.id}`}>
                         Which team does this belong to?
                       </label>
-                      <select
+                      <Select
                         id={`fq-team-${fix.id}`}
                         className="fq-input"
                         autoFocus
@@ -294,7 +295,7 @@ export default function MyFixQueue() {
                               {c}
                             </option>
                           ))}
-                      </select>
+                      </Select>
                       <label className="fq-label" htmlFor={`fq-why-${fix.id}`}>
                         Why is this not your team&rsquo;s work?
                       </label>

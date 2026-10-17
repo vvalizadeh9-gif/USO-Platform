@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { FileSpreadsheet } from 'lucide-react'
+import { FileSpreadsheet } from '../../components/carbon'
 import api from '../../api/client'
 import { describeBlobError, filenameFrom, saveBlob } from '../../lib/download'
 

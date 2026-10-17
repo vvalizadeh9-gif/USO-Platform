@@ -65,6 +65,28 @@ export default [
       // Unused arguments are frequently a signature being honoured rather than
       // a mistake; unused *variables* are not.
       'no-unused-vars': ['error', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
+      // One icon set (UEP-13 §3.16): IBM Carbon through components/Icon.jsx.
+      'no-restricted-imports': [
+        'error',
+        { paths: [{ name: 'lucide-react', message: 'Use <Icon name="…" /> (IBM Carbon).' }] },
+      ],
+      // Colours come from uep-tokens.css, never a hex typed into a component.
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: 'Literal[value=/^#(?:[0-9a-fA-F]{3}){1,2}$/]',
+          message: 'Use a --uep-* colour token (styles/uep-tokens.css), not a hex value.',
+        },
+        {
+          selector: 'JSXAttribute[name.name="style"] Property > Literal[value=/^-?[0-9]+([.][0-9]+)?px$/]',
+          message: 'Use a token or a class for size and spacing; inline styles are for computed geometry only.',
+        },
+      ],
     },
+  },
+  {
+    // Map data, chart geometry and the token mirror may hold raw values.
+    files: ['src/design/tokens.js', 'src/pages/reports/coverageMap.js', '**/*.test.{js,jsx}', 'e2e/**'],
+    rules: { 'no-restricted-syntax': 'off' },
   },
 ]

@@ -6,6 +6,7 @@ import { contractorsOf, historyTable } from './history'
 import { TabState } from './parts'
 import { PIP_STREAMS, STREAM_LIST } from './streams'
 import useOverview from './useOverview'
+import Select from '../../components/Select'
 
 const STREAM_OPTIONS = STREAM_LIST.map((s) => ({ key: s.key, label: s.title }))
 const RESULT = { met: 'Met plan', near: 'Near plan', below: 'Below 80%', running: 'Running' }
@@ -43,7 +44,7 @@ export default function HistoryTab({ runningYear }) {
     <div className="mp-history">
       <div className="mp-history-controls">
         <label className="sr-only" htmlFor={ids.year}>Year</label>
-        <select
+        <Select
           id={ids.year}
           className="mp-select mp-fa"
           value={year}
@@ -52,9 +53,9 @@ export default function HistoryTab({ runningYear }) {
           {years.map((y) => (
             <option key={y} value={y}>{toPersianDigits(y)}</option>
           ))}
-        </select>
+        </Select>
         <label className="sr-only" htmlFor={ids.contractor}>Contractor</label>
-        <select
+        <Select
           id={ids.contractor}
           className="mp-select"
           value={all ? 'all' : String(contractorId)}
@@ -64,7 +65,7 @@ export default function HistoryTab({ runningYear }) {
           {people.map((p) => (
             <option key={p.id} value={p.id}>{p.name}</option>
           ))}
-        </select>
+        </Select>
         <SegmentedControl options={STREAM_OPTIONS} value={streamKey} onChange={setStreamKey} label="Stream" />
       </div>
 
