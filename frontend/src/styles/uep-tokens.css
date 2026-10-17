@@ -385,7 +385,7 @@
   --uep-stage-plans-ink: #5F6B7E;
   --uep-step-line: #C4CCD8;
   --uep-lh-display: 36px;
-  --uep-lh-figure: 38px;
+  --uep-lh-figure: 40px;  /* IBM Plex at 32px needs 40px; 38 clipped it */
   --uep-lh-heading: 24px;
   --uep-lh-title: 22px;
   --uep-lh-body: 22px;

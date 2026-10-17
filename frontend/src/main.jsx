@@ -12,6 +12,8 @@ import './styles/dt-dashboard.css'
 import './styles/acceptance-dashboard.css'
 import './styles/uep-tokens.css'
 import './styles/signin.css'
+// Last, so the phone layout wins over the desktop rules it replaces.
+import './styles/phone.css'
 
 // Before the first render, so no animation starts that should not.
 applyMotionPreference()

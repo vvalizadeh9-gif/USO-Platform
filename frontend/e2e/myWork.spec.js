@@ -10,10 +10,11 @@ const VIEWPORTS = [
   { width: 1280, height: 800 },
 ]
 
-async function open(page, user) {
+async function open(page, user, path = '/my-work') {
   await signIn(page, user)
-  await page.goto('/my-work')
-  await expect(page.getByRole('heading', { name: 'Filing' })).toBeVisible()
+  await page.goto(path)
+  // One workspace, three rail pages: staff open on Validation (To check).
+  await expect(page.getByRole('heading', { level: 1, name: /^(Filing|Validation|Letters)$/ })).toBeVisible()
   await expect(page.getByRole('region', { name: 'Village', exact: true })).toBeVisible()
 }
 
@@ -63,8 +64,8 @@ const STATES = [
   {
     name: 'PM, many villages',
     user: PM,
+    path: '/my-work?tab=not_filed',
     act: async (page) => {
-      await page.getByRole('tab', { name: /Not filed/ }).click()
       await tickRows(page, 4)
       await expect(page.getByRole('button', { name: /^Save ICT · \d+$/ })).toBeVisible()
     },
@@ -76,7 +77,7 @@ for (const viewport of VIEWPORTS) {
     test.use({ viewport })
     for (const state of STATES) {
       test(`${state.name}: the page does not scroll`, async ({ page }) => {
-        await open(page, state.user)
+        await open(page, state.user, state.path)
         await state.act(page)
         await page.waitForTimeout(250)
 

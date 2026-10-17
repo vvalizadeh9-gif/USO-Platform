@@ -34,11 +34,15 @@ async function expectNoPageScroll(page) {
 
 async function open(page, tab = 'gaps') {
   await signIn(page)
-  await page.goto('/reports/lifecycle-gaps')
-  await expect(page.getByRole('heading', { name: 'Pending approval' })).toBeVisible()
   if (tab === 'map') {
-    await page.getByRole('tab', { name: 'Coverage map' }).click()
+    // The map left Lifecycle gaps (UEP-13 §3.12): Roles performance › Map is
+    // the only map, and the old ?tab=map link lands there.
+    await page.goto('/reports/gaps?tab=map')
+    await expect(page).toHaveURL(/\/reports\/kpi\/map/)
     await expect(page.getByTestId('cov-map-ict')).toBeVisible()
+  } else {
+    await page.goto('/reports/lifecycle-gaps')
+    await expect(page.getByRole('heading', { name: 'Pending approval' })).toBeVisible()
   }
   await page.waitForLoadState('networkidle')
 }
@@ -55,7 +59,10 @@ for (const viewport of VIEWPORTS) {
 
     test('the Gaps tab fits, with no clipped text in a tile', async ({ page }) => {
       await open(page)
-      await expect(page.getByTestId('waffle-tile')).toHaveCount(6)
+      // The mock has no Mojri import yet: one compact empty state stands in
+      // for the two Mojri tiles (UEP-13 §3.4).
+      await expect(page.getByTestId('waffle-tile')).toHaveCount(4)
+      await expect(page.getByTestId('mojri-empty')).toBeVisible()
       await expectNoPageScroll(page)
 
       const clipped = await page.evaluate(() =>

@@ -36,15 +36,18 @@ PM_OWNER = OwnerRef("role", None, "PM")
 # --------------------------------------------------------------------------
 # Shared queries
 # --------------------------------------------------------------------------
-def plans_awaiting_pm(db: Session) -> list[tuple[ContractorMonthlyPlan, str]]:
+def plans_awaiting_pm(
+    db: Session, today: date | None = None
+) -> list[tuple[ContractorMonthlyPlan, str]]:
     """Decisions waiting on the PM: plans Submitted for the month being planned
     (next month) and revision requests on the month now running.
 
     The same definition as the Monthly plan Approvals page (UEP-13 §3.2), so
     Home, the rail badge and the page header show one number. A Submitted
     plan for any other month is not on that page and is not counted.
+    ``today`` is the Tehran wall-clock day (the platform's clock by default).
     """
-    running = jalali.current_shamsi_period()
+    running = jalali.to_shamsi(today or jalali.tehran_today())
     planning = jalali.next_period(*running)
     plan = ContractorMonthlyPlan
     return [
