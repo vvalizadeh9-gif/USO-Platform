@@ -26,7 +26,7 @@ vi.mock('../../context/AuthContext', () => ({
 }))
 
 const api = (await import('../../api/client')).default
-const LifecycleGaps = (await import('./LifecycleGaps')).default
+const LifecycleGaps = (await import('./LifecycleGaps.jsx')).default
 
 const row = (name, count, base, attribution = 'owned', extra = {}) => ({
   name,

@@ -9,7 +9,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ToastProvider } from '../../../context/ToastContext'
 
 vi.mock('../../../api/client', () => ({ default: { get: vi.fn() } }))
-vi.mock('../CoverageMap', () => ({ default: () => <div>coverage map</div> }))
+vi.mock('../CoverageMap.jsx', () => ({ default: () => <div>coverage map</div> }))
 
 const authUser = vi.hoisted(() => ({ current: { role: { name: 'PM' }, full_name: 'Pat PM' } }))
 vi.mock('../../../context/AuthContext', () => ({
@@ -17,7 +17,7 @@ vi.mock('../../../context/AuthContext', () => ({
 }))
 
 const api = (await import('../../../api/client')).default
-const RolesPerformance = (await import('./RolesPerformance')).default
+const RolesPerformance = (await import('./RolesPerformance.jsx')).default
 
 const month = (y, m, label) => ({ year: y, month: m, label_fa: label })
 const owner = (name, now) => ({
