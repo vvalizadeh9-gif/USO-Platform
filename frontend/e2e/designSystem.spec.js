@@ -68,9 +68,10 @@ for (const [role, user, pages] of [
         expect(found.oldBlue.slice(0, 5), 'elements in the old blue').toEqual([])
         expect(found.lucide, 'Lucide icons').toBe(0)
 
-        // Baselines live next to this file; refresh them with
-        // `npx playwright test designSystem --update-snapshots`.
-        if (process.env.VISUAL !== '0') {
+        // Screenshot baselines are opt-in until they are committed: they must
+        // be made on CI's Ubuntu Chromium, so run once with
+        // `VISUAL=1 npx playwright test designSystem --update-snapshots`.
+        if (process.env.VISUAL === '1') {
           await expect(page).toHaveScreenshot(`${role.toLowerCase()}-${p.name}.png`, {
             fullPage: false,
             animations: 'disabled',
