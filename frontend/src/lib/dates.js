@@ -76,3 +76,23 @@ export function formatGregorian(value) {
   const d = fromIso(value)
   return d ? GREGORIAN.format(d) : null
 }
+
+const SHORT_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+
+/** "17 Oct, 03:00": Gregorian, English, local time (UEP-14 §3). "—" for none. */
+export function formatDateTime(value) {
+  if (!value) return '—'
+  const d = value instanceof Date ? value : new Date(value)
+  if (Number.isNaN(d.getTime())) return '—'
+  const hh = String(d.getHours()).padStart(2, '0')
+  const mm = String(d.getMinutes()).padStart(2, '0')
+  return `${d.getDate()} ${SHORT_MONTHS[d.getMonth()]}, ${hh}:${mm}`
+}
+
+/** "17 Oct": the date alone. */
+export function formatDayMonth(value) {
+  if (!value) return '—'
+  const d = value instanceof Date ? value : new Date(value)
+  if (Number.isNaN(d.getTime())) return '—'
+  return `${d.getDate()} ${SHORT_MONTHS[d.getMonth()]}`
+}

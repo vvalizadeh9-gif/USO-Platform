@@ -31,6 +31,7 @@ from app.models.health_check import HcAssignment, HcRemediation, HcTask
 from app.models.reference import Contractor, User
 from app.models.workitem import Site, WorkItem
 from app.schemas import (
+    ReassignRequest,
     DtAssignmentRow,
     DtInProgressRow,
     DtReviewRow,
@@ -56,7 +57,7 @@ from app.schemas import (
 )
 from app.services import hc_queues
 from app.services import health_check as hc
-from app.services import contractor_load, evidence_store, undo
+from app.services import contractor_load, dt_workflow, evidence_store, undo
 from app.services.action_queues.context import QueueContext
 from app.services.audit import record_audit
 from app.services.tech_parser import parse_technologies
@@ -472,6 +473,10 @@ def submit_hc_result(
 ):
     """Subcontractor submits per-technology results for one site (final)."""
     task = _load_task(db, user, task_id)
+    if task.overall_result is not None:
+        raise HTTPException(
+            409, "This result is already submitted. Ask the reviewer to mark it problematic."
+        )
 
     requested = set(hc.requested_techs_for_task(task))
     provided = {t.technology for t in payload.technology_results}
@@ -784,7 +789,8 @@ def upload_template(
     task_by_wi = {t.work_item_id: t for t in assignment.tasks}
     for entry in parsed:
         task = task_by_wi.get(entry["work_item_id"])
-        if task is None:
+        # Submitted results are locked (UEP-14 §3.4): a re-upload skips them.
+        if task is None or task.overall_result is not None:
             continue
         hc.submit_task_result(
             db, task=task, technology_results=entry["technology_results"]
@@ -826,3 +832,57 @@ def export_assignment_feedback(
         media_type=_XLSX_MEDIA_TYPE,
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+# ---------------- Health check · Checks (UEP-14 §3.4) ----------------
+@router.get("/batches")
+def hc_batches(
+    status: str | None = None,
+    contractor_id: int | None = None,
+    q: str | None = None,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_review_authority),
+):
+    """Assignment batches with their result counts, and each filter's count."""
+    if status and status not in dt_workflow.BATCH_STATUSES:
+        raise HTTPException(400, f"status must be one of {', '.join(dt_workflow.BATCH_STATUSES)}")
+    return dt_workflow.batches(db, user, status=status, contractor_id=contractor_id, q=q)
+
+
+@router.get("/batches/{assignment_id}")
+def hc_batch_detail(
+    assignment_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_review_authority),
+):
+    """One batch's sites, villages, results and decisions."""
+    return dt_workflow.batch_detail(db, user, _load_assignment(db, user, assignment_id))
+
+
+@router.post("/tasks/{task_id}/reassign")
+def reassign_hc_task(
+    task_id: int,
+    payload: ReassignRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_roles(PM)),
+):
+    """Move a site still pending in its batch to another contractor."""
+    task = _load_task(db, user, task_id)
+    reason = payload.reason.strip()
+    if not reason:
+        raise HTTPException(422, "A reason is required.")
+    if db.get(Contractor, payload.contractor_id) is None:
+        raise HTTPException(404, "Contractor not found")
+    old = task.assignment.contractor_id
+    try:
+        target = dt_workflow.reassign_hc_task(db, task, payload.contractor_id, user)
+    except ValueError as exc:
+        raise HTTPException(409, str(exc)) from None
+    record_audit(
+        db, user_id=user.id, action=audit_actions.ASSIGNED,
+        module="HealthCheck", entity_type="HcTask", entity_id=task.id,
+        old_value={"contractor_id": old},
+        new_value={"contractor_id": payload.contractor_id, "batch": target.code, "reason": reason, "reassigned": True},
+    )
+    db.commit()
+    return {"status": "ok", "batch": target.code}

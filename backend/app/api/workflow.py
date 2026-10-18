@@ -45,7 +45,7 @@ from app.services import acceptance_workflow as acceptance_flow
 from app.services import evidence_store
 from app.services import hc_queues
 from app.services import health_check as hc
-from app.services import undo
+from app.services import dt_workflow, undo
 from app.services.audit import notify_roles, record_audit
 from app.services.visibility import apply_work_item_scope, visible_work_item_ids
 from app.services.workflow import refresh_stage
@@ -260,9 +260,15 @@ def bulk_assign(
     # undo restores from (services/undo.py).
     created: dict[str, int] = {}
     replaced: dict[str, list[int]] = {}
-    for wid in dict.fromkeys(payload.work_item_ids):  # de-dupe, preserve order
+    ids = list(dict.fromkeys(payload.work_item_ids))  # de-dupe, preserve order
+    # A site back in Assign only for villages CPM added later is assigned for
+    # those villages alone, and keeps its DT done (UEP-14 §4).
+    new_villages = dt_workflow.new_village_ids(db, ids)
+    villages_recorded = 0
+    for wid in ids:
         wi = _load_work_item(wid, db, user)
-        _assert_assignable(db, wi, payload.assignment_type)
+        if wid not in new_villages:
+            _assert_assignable(db, wi, payload.assignment_type)
         replaced[str(wi.id)] = [prev.id for prev in wi.assignments if prev.is_active]
         for prev in wi.assignments:
             if prev.is_active:
@@ -279,6 +285,7 @@ def bulk_assign(
         )
         wi.assignments.append(new)
         db.flush()
+        villages_recorded += dt_workflow.record_assignment_villages(db, new, only=new_villages.get(wid))
         created[str(wi.id)] = new.id
         refresh_stage(wi)
         assigned += 1
@@ -295,7 +302,10 @@ def bulk_assign(
     db.flush()
     db.commit()
     # ``batch_id`` names this assignment for POST /work-items/assign/{id}/undo.
-    return {"status": "ok", "assigned": assigned, "batch_id": entry.id}
+    return {
+        "status": "ok", "assigned": assigned, "batch_id": entry.id,
+        "villages": villages_recorded, "batch_code": f"DT-{entry.id}",
+    }
 
 
 @router.post("/work-items/assign/{batch_id}/undo")
@@ -395,6 +405,10 @@ def review_drive_test(
     dt.coordinator_comment = payload.comment
     db.flush()
 
+    if payload.decision != "Approved":
+        # Send back opens Round N+1 with the same contractor and a new SLA
+        # clock; the old assignment stays in history (UEP-14 §3.5).
+        dt_workflow.open_next_round(db, wi, user)
     if payload.decision == "Approved":
         # Write-back: the in-app workflow becomes the source of truth for
         # this site's drive-test outcome until the next CPM import.

@@ -11,39 +11,52 @@ import { WorkProvider, useWork } from '../../components/work/WorkContext'
 import { useAuth } from '../../context/AuthContext'
 import { useToast } from '../../context/ToastContext'
 import { downloadCsv } from '../../lib/csv'
-import { describeBlobError, saveBlob } from '../../lib/download'
-import { HISTORY_TAB, PAGE_PATH, resolveTab, stepUrl, tabId } from '../../lib/pipelineSteps'
+import { HISTORY_TAB, PAGE_PATH, resolveTab, stepFigures, stepUrl, tabId } from '../../lib/pipelineSteps'
 import { canReview } from '../../lib/roles'
 import AppFooter from '../../shell/AppFooter'
 import { useHomeData } from '../../shell/HomeData'
 import HcHistoryTab from '../healthcheck/HcHistoryTab'
 import AssignStep from './AssignStep'
-import DtReviewStep from './DtReviewStep'
-import HcReviewStep from './HcReviewStep'
-import HeldStep from './HeldStep'
-import { DoneStep, RemediationStep, ReroutesStep, SentBackStep } from './LoopSteps'
+import ChecksStep from './ChecksStep'
+import TestsStep from './TestsStep'
+import { DoneStep, RemediationStep, ReroutesStep } from './LoopSteps'
 import '../../styles/home.css'
 import '../../styles/work.css'
+import '../../styles/work-dt.css'
 
 const PANEL_ID = 'pipeline-panel'
 
-/** The steps whose list card carries its own confirmation (the assign panel). */
-const HAS_PANEL = new Set(['hc1', 'dt4'])
+/** The steps whose list card carries its own confirmation (the assign bar). */
+const HAS_PANEL = new Set(['hc_assign', 'dt_assign'])
 
 /** Views with no list of sites to download. */
 const NO_EXPORT = new Set(['done', 'reroutes'])
 
 const STEP_VIEWS = {
-  hc1: (p) => <AssignStep process="hc" {...p} />,
-  hc2: (p) => <HeldStep process="hc" {...p} />,
-  hc3: (p) => <HcReviewStep {...p} />,
-  dt4: (p) => <AssignStep process="dt" {...p} />,
-  dt5: (p) => <HeldStep process="dt" {...p} />,
-  dt6: (p) => <DtReviewStep {...p} />,
+  hc_assign: (p) => <AssignStep process="hc" {...p} />,
+  hc_checks: (p) => <ChecksStep {...p} />,
+  dt_assign: (p) => <AssignStep process="dt" {...p} />,
+  dt_tests: (p) => <TestsStep {...p} />,
   done: (p) => <DoneStep {...p} />,
   remediation: (p) => <RemediationStep {...p} />,
   reroutes: (p) => <ReroutesStep {...p} />,
-  sent_back: (p) => <SentBackStep {...p} />,
+}
+
+const plural = (n, one) => `${n.toLocaleString('en-US')} ${n === 1 ? one : `${one}s`}`
+
+/** The header's meta line (UEP-14 §3.2): "39 results to decide · 38 sites
+ * with contractors · 7 overdue" -- what is the user's, then what is not. */
+function metaLine(step, figures, homeCount) {
+  if (!step || !figures) return null
+  const parts = []
+  if (figures.decide != null) {
+    parts.push(`${plural(homeCount ?? figures.decide, step.key === 'hc_checks' ? 'result' : 'drive test')} to decide`)
+    parts.push(`${plural(figures.count, 'site')} with contractors`)
+  } else {
+    parts.push(`${plural(homeCount ?? figures.count, 'site')}${step.owner === 'You' ? ' waiting' : ''}`)
+  }
+  if (figures.late > 0) parts.push(`${figures.late.toLocaleString('en-US')} overdue`)
+  return parts.join(' · ')
 }
 
 /** The strip's figures, read again after every action. */
@@ -96,11 +109,11 @@ function PipelineView({ page, resolved, highlightTaskId }) {
   const { data: home, error: homeError, counts } = useHomeData()
   const summary = useSummary(canReview(user))
   const exportRef = useRef(null)
-  const [exporting, setExporting] = useState(false)
+  const exporting = false
   const [archive, setArchive] = useState(false)
 
   const step = resolved.history ? null : resolved.step
-  const figures = step ? summary?.[step.key] : null
+  const figures = step ? stepFigures(step, summary) : null
 
   // Leaving a step clears the on-screen confirmation, so a message never
   // stays over content it no longer describes (Undo stays in History).
@@ -120,19 +133,6 @@ function PipelineView({ page, resolved, highlightTaskId }) {
   }, [])
 
   async function exportList() {
-    if (step?.key === 'hc3') {
-      // The review step keeps the server's results workbook.
-      setExporting(true)
-      try {
-        const res = await api.get('/hc/results/export', { responseType: 'blob' })
-        saveBlob(res.data, 'hc_results.xlsx')
-      } catch (err) {
-        toast.error('Export failed', await describeBlobError(err, 'Could not generate the results file.'))
-      } finally {
-        setExporting(false)
-      }
-      return
-    }
     const payload = exportRef.current
     if (!payload?.columns || !payload.rows.length) {
       toast.info('Nothing to export', 'This list has no rows to download.')
@@ -149,10 +149,9 @@ function PipelineView({ page, resolved, highlightTaskId }) {
     <div className="uep-home uw-page">
       <PageHeading
         title={step ? step.name : 'History'}
-        // One count per queue (UEP-13 §3.2): the header leads with the number
-        // Home and the rail show, read from the same /me/home field.
-        count={counts?.[step?.queue] ?? figures?.count}
-        late={figures?.late}
+        // One count per queue (UEP-13 §3.2): the meta line leads with the
+        // number Home and the rail show, read from the same /me/home field.
+        meta={metaLine(step, figures, counts?.[step?.queue])}
         headingRef={headingRef}
         historyOpen={!step}
         onHistory={() => navigate(step ? `${PAGE_PATH[page]}?tab=${HISTORY_TAB}` : PAGE_PATH[page])}
@@ -168,7 +167,9 @@ function PipelineView({ page, resolved, highlightTaskId }) {
       />
       <div className="uw-content">
         {step ? (
-          STEP_VIEWS[step.key]({ key: step.key, step, figures, panelProps, onExport: onExportRows, highlightTaskId })
+          <div className="uw-step-enter" key={step.key}>
+            {STEP_VIEWS[step.key]({ step, figures, summary, panelProps, onExport: onExportRows, highlightTaskId })}
+          </div>
         ) : (
           <RecentActions
             panelProps={panelProps}

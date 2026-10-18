@@ -138,7 +138,12 @@ def contractor_load(ctx: QueueContext, process: str) -> list[dict]:
     open_, late = _open_and_late(ctx, process)
     spans, provinces = (_hc_history if process == "hc" else _dt_history)(ctx, since)
     contractors = ctx.db.execute(
-        select(Contractor.id, Contractor.name).where(Contractor.active.is_(True))
+        # Drive-test contractors only: site (execution) contractors and the
+        # status words an old CPM import turned into contractors never take
+        # a health check or a drive test (UEP-14 §5.1).
+        select(Contractor.id, Contractor.name).where(
+            Contractor.active.is_(True), Contractor.type == "drive_test"
+        )
     ).all()
     rows = [
         {

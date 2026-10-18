@@ -27,6 +27,7 @@ from app.models.reference import ProblemCategory, User
 from app.models.workitem import Site, WorkItem
 from app.services import cpm_columns as C
 from app.services.tech_parser import parse_technologies
+from app.services.action_queues.sla import category_sla_days
 from app.services.visibility import apply_work_item_scope, visible_work_item_ids
 from app.services.workflow import refresh_stage
 
@@ -39,6 +40,10 @@ class ScopeError(ValueError):
     touch would create an assignment that silently differs from the one they
     asked for.
     """
+
+
+class ResultLocked(ValueError):
+    """A second submission for a task whose result is already in."""
 
 
 class AlreadyInHealthCheck(ValueError):
@@ -495,6 +500,15 @@ def get_basket(db: Session, user, work_items: list[WorkItem] | None = None) -> l
                 "dt_status": C.normalize_dt_status(wi.dt_status),
                 "waiting_since": waiting_since,
                 "days_waiting": _days_since(waiting_since),
+                # A re-check goes back to whoever checked it last (UEP-14 §3.3).
+                "previous_contractor_id": (
+                    task.assignment.contractor_id if task is not None and task.assignment else None
+                ),
+                "previous_contractor": (
+                    task.assignment.contractor.name
+                    if task is not None and task.assignment and task.assignment.contractor
+                    else None
+                ),
             }
         )
     # Oldest first, same as every other queue. A site with no known
@@ -570,6 +584,7 @@ def create_assignment(
         .all()
     )
 
+    tasks = []
     for wi_id in work_item_ids:
         task = HcTask(
             hc_assignment_id=assignment.id,
@@ -577,8 +592,13 @@ def create_assignment(
             round_no=prior_counts.get(wi_id, 0) + 1,
         )
         db.add(task)
+        tasks.append(task)
 
     db.flush()
+    # Assignment is by site; the villages it covered are recorded (UEP-14 §4).
+    from app.services.dt_workflow import record_hc_villages
+
+    record_hc_villages(db, tasks)
     # The site is now being checked, and its stage has to say so. Without this
     # a site between assignment and submission kept whatever stage it carried
     # before -- the previous round's Problematic, or New -- so it appeared in a
@@ -625,7 +645,12 @@ def submit_task_result(
         re-submitting) a result therefore clears any prior category and
         resets the review state.
     """
-    # Replace any existing technology rows for idempotent re-submission.
+    # Results are locked once submitted (UEP-14 §3.4): a wrong result is
+    # corrected by the reviewer marking it problematic, never by an edit.
+    if task.overall_result is not None:
+        raise ResultLocked(
+            "This result is already submitted. Ask the reviewer to mark it problematic."
+        )
     task.technologies.clear()
     db.flush()
 
@@ -691,9 +716,12 @@ def review_task(
 
     names = [n.strip() for n in (problem_categories or []) if n and n.strip()]
 
+    if task.overall_result != "NotReady" and names:
+        # The reviewer overrules a Ready result: results are locked for the
+        # contractor, so marking it problematic is how a wrong one is
+        # corrected (UEP-14 §3.4). The submission stays in the audit log.
+        task.overall_result = "NotReady"
     if task.overall_result != "NotReady":
-        if names:
-            raise ValueError("A Ready site cannot be given a problem category.")
         task.problem_category = None
         _clear_open_remediations(db, task)
     else:
@@ -759,7 +787,7 @@ def _sync_remediations(
     for cat_id, cat in wanted.items():
         if cat_id in existing:
             continue
-        sla = cat.sla_days or 7
+        sla = category_sla_days(cat)
         task.remediations.append(
             HcRemediation(
                 work_item_id=task.work_item_id,
@@ -874,7 +902,7 @@ def decide_reroute(
         remediation.problem_category_id = target.id
         remediation.owner_role_id = target.owner_role_id
         remediation.opened_at = now
-        remediation.due_at = now + timedelta(days=target.sla_days or 7)
+        remediation.due_at = now + timedelta(days=category_sla_days(target))
 
     remediation.reroute_to_category_id = None
     remediation.reroute_reason = None

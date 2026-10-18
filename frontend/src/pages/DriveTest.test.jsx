@@ -48,13 +48,14 @@ async function draw() {
 }
 
 const row = (code) => screen.getByText(code).closest('tr')
-const card = (name) => screen.getAllByRole('button').find((b) => b.classList.contains('uw-assign-card') && b.textContent.includes(name))
+const card = (name) => screen.getAllByRole('radio').find((b) => b.textContent.includes(name))
+const assignButton = () => screen.getByRole('button', { name: /^Assign \d+ sites? ·/ })
 
 describe('the site table', () => {
   it('has Village and Province and no Type column', async () => {
     await draw()
     const heads = screen.getAllByRole('columnheader').map((h) => h.textContent)
-    expect(heads).toEqual(expect.arrayContaining(['Site ID', 'Village', 'Province', 'Requested tech', 'Rounds', 'HC by']))
+    expect(heads).toEqual(expect.arrayContaining(['Site ID', 'Villages', 'Province', 'Requested tech', 'HC by']))
     expect(heads).not.toContain('Type')
     expect(heads.find((h) => h.startsWith('Waiting'))).toMatch(/^Waiting · SLA 14 d/)
     expect(within(row('THR-1')).getByText('+2')).toBeInTheDocument()
@@ -73,7 +74,7 @@ describe('the site table', () => {
     const order = () => screen.getAllByRole('row').slice(1).map((r) => r.querySelector('.uw-site-id').textContent)
     expect(screen.getByRole('combobox', { name: 'Sort' })).toHaveTextContent('Longest waiting')
     expect(order()).toEqual(['YZD-2', 'THR-1', 'YZD-1'])
-    await pickOption(screen.getByRole('combobox', { name: 'Sort' }), 'Province')
+    await pickOption(screen.getByRole('combobox', { name: 'Sort' }), 'By province')
     expect(order()).toEqual(['YZD-2', 'YZD-1', 'THR-1'])
   })
 
@@ -87,10 +88,10 @@ describe('the site table', () => {
 
     await pickOption(screen.getByRole('combobox', { name: 'Province' }), 'یزد')
     await user.click(screen.getByRole('checkbox', { name: 'Select every site shown' }))
-    expect(screen.getByText('Assign 2 sites to')).toBeInTheDocument()
+    expect(screen.getByText('2 sites selected')).toBeInTheDocument()
     // Selection survives filtering.
     await pickOption(screen.getByRole('combobox', { name: 'Province' }), '')
-    expect(screen.getByText('Assign 2 sites to')).toBeInTheDocument()
+    expect(screen.getByText('2 sites selected')).toBeInTheDocument()
     expect(within(row('THR-1')).getByRole('checkbox')).not.toBeChecked()
   })
 })
@@ -99,17 +100,20 @@ describe('assigning', () => {
   it('assigns the selected sites in one click, keeps the confirmation, and undoes it', async () => {
     const user = userEvent.setup()
     api.post.mockImplementation((url) =>
-      Promise.resolve({ data: url === '/work-items/assign' ? { assigned: 1, batch_id: 77 } : { status: 'ok' } }),
+      Promise.resolve({ data: url === '/work-items/assign' ? { assigned: 1, batch_id: 77, batch_code: 'DT-77' } : { status: 'ok' } }),
     )
     await draw()
-    expect(card('آریا موج')).toHaveAttribute('aria-disabled', 'true')
+    expect(assignButton()).toBeDisabled()
     await user.click(within(row('YZD-1')).getByRole('checkbox'))
-    expect(card('آریا موج')).toHaveClass('is-suggested')
+    // The suggestion is pre-selected; a card click alone never assigns.
+    expect(card('آریا موج')).toHaveAttribute('aria-checked', 'true')
     await user.click(card('آریا موج'))
+    expect(api.post).not.toHaveBeenCalled()
+    await user.click(assignButton())
     expect(api.post).toHaveBeenCalledWith('/work-items/assign', {
       work_item_ids: [1], contractor_id: 5, assignment_type: 'official',
     })
-    const text = '✓ 1 site assigned to آریا موج.'
+    const text = 'Batch DT-77 sent to آریا موج · 1 site · 1 village recorded'
     expect(await screen.findByText(text, { selector: '.uw-notice-text' })).toBeInTheDocument()
     // Focus returns to the heading after the action.
     expect(document.activeElement).toBe(screen.getByRole('heading', { level: 1 }))
@@ -128,13 +132,14 @@ describe('assigning', () => {
     const user = userEvent.setup()
     api.post.mockImplementation((url) =>
       url === '/work-items/assign'
-        ? Promise.resolve({ data: { assigned: 1, batch_id: 9 } })
+        ? Promise.resolve({ data: { assigned: 1, batch_id: 9, batch_code: 'DT-9' } })
         : Promise.reject({ response: { status: 409, data: { detail: 'Too late to undo; reassign the sites instead.' } } }),
     )
     await draw()
     await user.click(within(row('YZD-1')).getByRole('checkbox'))
     await user.click(card('رعد'))
-    await screen.findByText('✓ 1 site assigned to رعد.', { selector: '.uw-notice-text' })
+    await user.click(assignButton())
+    await screen.findByText('Batch DT-9 sent to رعد · 1 site · 1 village recorded', { selector: '.uw-notice-text' })
     await user.click(screen.getByRole('button', { name: /Undo/ }))
     expect(await screen.findByText('Too late to undo; reassign the sites instead.', { selector: '.uw-notice-text' })).toBeInTheDocument()
   })

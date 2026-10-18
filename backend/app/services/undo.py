@@ -23,9 +23,9 @@ from sqlalchemy.orm import Session
 
 from app.core import audit_actions
 from app.models.acceptance import AuditLog
-from app.models.health_check import HcAssignment, HcTask
+from app.models.health_check import HcAssignment, HcTask, HcTaskVillage
 from app.models.reference import User
-from app.models.workitem import Assignment, DriveTest
+from app.models.workitem import Assignment, AssignmentVillage, DriveTest
 from app.services import health_check as hc
 from app.services.action_queues.sla import as_datetime
 from app.services.audit import record_audit
@@ -95,6 +95,7 @@ def undo_hc_assignment(db: Session, user: User, assignment: HcAssignment) -> Non
     work_item_ids = [t.work_item_id for t in assignment.tasks]
     old = {"code": assignment.code, "work_item_ids": work_item_ids}
     for task in list(assignment.tasks):
+        db.execute(HcTaskVillage.__table__.delete().where(HcTaskVillage.hc_task_id == task.id))
         db.delete(task)
     db.flush()
     db.delete(assignment)
@@ -142,6 +143,7 @@ def undo_dt_assignment(db: Session, user: User, batch_id: int, load_work_item) -
         wi = load_work_item(int(wi_id))
         a = rows[int(assignment_id)]
         wi.assignments.remove(a)
+        db.execute(AssignmentVillage.__table__.delete().where(AssignmentVillage.assignment_id == a.id))
         db.delete(a)
         previous = set(replaced.get(str(wi_id)) or [])
         for prev in wi.assignments:

@@ -49,3 +49,8 @@ export function applyMotionPreference(win = window) {
   media?.addEventListener?.('change', apply)
   return apply()
 }
+
+/** Whether motion is reduced now, as the stylesheets read it. */
+export function reducedMotion(doc = typeof document === 'undefined' ? null : document) {
+  return doc?.documentElement?.dataset?.uepMotion === 'reduce'
+}

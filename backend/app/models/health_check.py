@@ -181,3 +181,12 @@ class HcTaskTechnology(Base):
     comment: Mapped[str | None] = mapped_column(Text)
 
     task: Mapped[HcTask] = relationship(back_populates="technologies")
+
+
+class HcTaskVillage(Base):
+    """The villages an HC task covered when it was assigned (UEP-14 §4)."""
+
+    __tablename__ = "hc_task_villages"
+
+    hc_task_id: Mapped[int] = mapped_column(ForeignKey("hc_tasks.id"), primary_key=True)
+    village_id: Mapped[int] = mapped_column(ForeignKey("villages.id"), primary_key=True)

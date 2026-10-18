@@ -8,13 +8,15 @@ import PageHeader, { HeaderCount } from '../PageHeader'
  * H1 takes focus after an action (`headingRef`), so it carries tabindex -1.
  * `pill` counts sites instead of waiting items (Explorer).
  */
-export default function PageHeading({ title, count, late, pill = false, headingRef, historyOpen, onHistory, onExport, exporting, filters }) {
+export default function PageHeading({ title, count, late, meta, pill = false, headingRef, historyOpen, onHistory, onExport, exporting, filters }) {
   return (
     <PageHeader
       title={title}
       headingRef={headingRef}
       count={
-        count == null ? null : pill ? (
+        meta ? (
+          <span className="uw-heading-meta">{meta}</span>
+        ) : count == null ? null : pill ? (
           <span className="uw-count-pill uw-num">
             {count.toLocaleString('en-US')} {count === 1 ? 'site' : 'sites'}
           </span>

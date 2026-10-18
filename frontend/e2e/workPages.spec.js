@@ -11,16 +11,13 @@ import { expect, test } from '@playwright/test'
 import { signIn } from './mockApi.js'
 
 const STEPS = [
-  { name: 'Step 1 Assign health check', path: '/health-check?tab=pool', title: 'Assign health check', list: true, panel: true },
-  { name: 'Step 2 In health check', path: '/health-check?tab=running', title: 'In health check', list: true },
-  { name: 'Step 3 Review results', path: '/health-check?tab=review', title: 'Review results', list: true },
-  { name: 'Step 4 Assign drive test', path: '/drive-test?tab=assignment', title: 'Assign drive test', list: true, panel: true },
-  { name: 'Step 5 With contractor', path: '/drive-test?tab=in-progress', title: 'With contractor', list: true },
-  { name: 'Step 6 Review drive test', path: '/drive-test?tab=review', title: 'Review drive test', list: true },
+  { name: 'Step 1 Health check Assign', path: '/health-check?tab=assign', title: 'Health check · Assign', list: true, panel: true },
+  { name: 'Step 2 Checks', path: '/health-check?tab=checks', title: 'Health check · Checks', list: true },
+  { name: 'Step 3 Drive test Assign', path: '/drive-test?tab=assign', title: 'Drive test · Assign', list: true, panel: true },
+  { name: 'Step 4 Tests', path: '/drive-test?tab=tests', title: 'Drive test · Tests', list: true },
   { name: 'DT done', path: '/drive-test?tab=done', title: 'DT done' },
-  { name: 'Remediation', path: '/health-check?tab=remediation', title: 'Remediation', list: true },
-  { name: 'Re-routes', path: '/health-check?tab=reroutes', title: 'Re-routes' },
-  { name: 'Sent back', path: '/drive-test?tab=sent-back', title: 'Sent back' },
+  { name: 'Remediation', path: '/health-check?tab=remediation', title: 'Exceptions · Remediation', list: true },
+  { name: 'Re-routes', path: '/health-check?tab=reroutes', title: 'Exceptions · Re-routes' },
   { name: 'History', path: '/drive-test?tab=history', title: 'History' },
 ]
 
@@ -96,13 +93,17 @@ test.describe('accessibility', () => {
   }
 
   test('an assignment, its confirmation and History stay clean', async ({ page }) => {
-    await open(page, STEPS[3])
+    await open(page, STEPS[2])
     await page.getByRole('checkbox', { name: 'Select every site shown' }).check()
     await page.route('**/api/v1/work-items/assign', (r) =>
-      r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ assigned: 38, batch_id: 1 }) }),
+      r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ assigned: 38, batch_id: 1, batch_code: 'DT-1' }) }),
     )
-    await page.locator('.uw-assign-card').first().click()
-    await expect(page.locator('.uw-notice-text')).toContainText('assigned to')
+    await page.getByRole('radio').first().click()
+    await page.getByRole('button', { name: /^Assign \d+ sites ·/ }).click()
+    await expect(page.locator('.uw-notice-text')).toContainText('Batch DT-1 sent to')
+    // Rows slide out and the reloaded list fades in; measure once it settles.
+    await page.waitForLoadState('networkidle')
+    await page.waitForTimeout(800)
     const { violations } = await new AxeBuilder({ page }).include('.uw-page').withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']).analyze()
     expect(violations.map((v) => v.id)).toEqual([])
   })

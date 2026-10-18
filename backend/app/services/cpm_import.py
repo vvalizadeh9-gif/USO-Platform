@@ -537,7 +537,7 @@ class CpmImportService:
         )
         wi.dt_date_gregorian = self._date(self._get(raw, C.COL_HISTORY["dt_date"]))
         dt_sc = C.clean(self._get(raw, C.COL_HISTORY["dt_sc"]))
-        if dt_sc is not None:
+        if not C.is_status_word(dt_sc):
             wi.dt_sc_contractor = self._contractor(dt_sc, kind="drive_test")
 
     def _apply_site_contractor(self, wi: WorkItem, raw: list) -> None:
@@ -550,7 +550,7 @@ class CpmImportService:
         village, and one blank row must not clear what another row set.
         """
         name = C.clean(self._get(raw, C.COL["site_contractor"]))
-        if name is not None:
+        if not C.is_status_word(name):
             wi.site_contractor = self._contractor(name, kind="site")
 
     def _village_data(self, raw: list, code: str | None) -> dict:

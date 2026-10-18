@@ -7,7 +7,7 @@ import { signIn } from './mockApi.js'
 
 const PAGES = [
   { name: 'Home', path: '/home' },
-  { name: 'HC check', path: '/my-health-check' },
+  { name: 'Health check', path: '/my-health-check' },
   { name: 'In progress', path: '/my-drive-tests' },
   { name: 'Filing', path: '/my-work' },
   { name: 'Monthly plan', path: '/monthly-plan' },

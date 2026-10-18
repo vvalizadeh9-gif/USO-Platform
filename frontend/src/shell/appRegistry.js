@@ -29,6 +29,9 @@ import {
  * @property {string[]} [also]  Other routes that make this page the active one,
  *                               matched on their path and exact `tab` (the
  *                               pipeline's steps and loops; see UEP-06 §1).
+ * @property {string} [section] Rail group caption (UEP-14: Health check, Drive test, …).
+ * @property {IconName} [icon]   The rail item's white Carbon icon.
+ * @property {string} [tile]     CSS custom property for the rail item's colour tile.
  * @property {string[] | '*'} [queues] Home queue keys ('*' for all of them) whose counts make its pending
  *                               count (the count query). Read from GET /me/home,
  *                               so a rail count always equals Home's.
@@ -88,31 +91,53 @@ export const APPS = Object.freeze([
     id: 'drive-test',
     name: 'Drive test',
     description: 'Health checks and drive tests per site',
-    icon: 'cell-tower',
+    icon: 'connection-signal',
     color: '--uep-app-drive-test',
     tint: '--uep-app-drive-test-tint',
     group: 'rollout',
     roles: [...DT_ROLES, ...CATEGORY_OWNER_ROLES],
     // No Dashboard here (UEP-11): the Drive Test dashboard lives under
     // Insights › Dashboards, so the app opens on its first queue.
+    //
+    // UEP-14 §2: the staff rail runs Health check (Assign, Checks), Drive
+    // test (Assign, Tests), Exceptions (Remediation) and History. Each item
+    // carries its stage's colour tile and a white Carbon icon.
     pages: [
-      { id: 'hc-check', label: 'HC check', route: '/my-health-check', roles: ['Contractor'], queues: ['hc_submit'] },
-      // The pipeline's steps and side loops each light the rail item of the
-      // part of the work they belong to; History lights none.
+      { id: 'hc-check', label: 'Health check', route: '/my-health-check', roles: ['Contractor'], queues: ['hc_submit'], icon: 'task--approved', tile: '--uep-accent' },
       {
-        id: 'hc-pool', label: 'HC check', route: '/health-check?tab=pool', roles: STAFF, queues: ['hc_assign', 'hc_reroutes'],
-        also: ['/health-check', '/health-check?tab=basket', '/health-check?tab=running', '/health-check?tab=remediation', '/health-check?tab=reroutes'],
+        id: 'hc-assign', section: 'Health check', label: 'Assign', route: '/health-check?tab=assign', roles: STAFF, queues: ['hc_assign'],
+        icon: 'user--follow', tile: '--uep-accent',
+        also: ['/health-check', '/health-check?tab=pool', '/health-check?tab=basket'],
       },
-      { id: 'hc-review', label: 'HC review', route: '/health-check?tab=review', roles: STAFF, queues: ['hc_review'], also: ['/health-check?tab=results'] },
       {
-        id: 'assignment', label: 'Assignment', route: '/drive-test?tab=assignment', roles: STAFF, queues: ['dt_assign'],
-        also: ['/drive-test', '/drive-test?tab=in-progress', '/drive-test?tab=sent-back'],
+        id: 'hc-checks', section: 'Health check', label: 'Checks', route: '/health-check?tab=checks', roles: STAFF, queues: ['hc_review'],
+        icon: 'task--approved', tile: '--uep-accent',
+        also: ['/health-check?tab=running', '/health-check?tab=review', '/health-check?tab=results'],
       },
-      { id: 'dt-review', label: 'DT review', route: '/drive-test?tab=review', roles: STAFF, queues: ['dt_review'] },
-      { id: 'in-progress', label: 'In progress', route: '/my-drive-tests', roles: ['Contractor'], queues: ['dt_todo', 'dt_redo'] },
+      {
+        id: 'dt-assign', section: 'Drive test', label: 'Assign', route: '/drive-test?tab=assign', roles: STAFF, queues: ['dt_assign'],
+        icon: 'user--follow', tile: '--uep-app-drive-test',
+        also: ['/drive-test', '/drive-test?tab=assignment'],
+      },
+      {
+        id: 'dt-tests', section: 'Drive test', label: 'Tests', route: '/drive-test?tab=tests', roles: STAFF, queues: ['dt_review'],
+        icon: 'data--check', tile: '--uep-app-drive-test',
+        also: ['/drive-test?tab=in-progress', '/drive-test?tab=review', '/drive-test?tab=sent-back', '/drive-test?tab=done'],
+      },
+      {
+        id: 'remediation', section: 'Exceptions', label: 'Remediation', route: '/health-check?tab=remediation', roles: STAFF, queues: ['hc_reroutes'],
+        icon: 'tool-kit', tile: '--uep-app-monthly-plan',
+        also: ['/health-check?tab=reroutes'],
+      },
+      {
+        id: 'history', section: 'History', label: 'History', route: '/drive-test?tab=history', roles: STAFF,
+        icon: 'recently-viewed', tile: '--uep-app-data',
+        also: ['/health-check?tab=history'],
+      },
+      { id: 'in-progress', label: 'Drive tests', route: '/my-drive-tests', roles: ['Contractor'], queues: ['dt_todo', 'dt_redo'], icon: 'data--check', tile: '--uep-app-drive-test' },
       // A fix is health-check remediation, so it lives here. A category owner
       // sees this page and no other in the rail.
-      { id: 'fixes', label: 'Fix queue', route: '/my-fix-queue', roles: CATEGORY_OWNER_ROLES, queues: ['hc_fixes'] },
+      { id: 'fixes', label: 'Fix queue', route: '/my-fix-queue', roles: CATEGORY_OWNER_ROLES, queues: ['hc_fixes'], icon: 'tool-kit', tile: '--uep-app-monthly-plan' },
     ],
   },
   {

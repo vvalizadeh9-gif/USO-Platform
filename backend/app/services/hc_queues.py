@@ -270,6 +270,9 @@ def dt_assignment(
         work_items = scoped_work_items(db, user)
 
     contractors = _contractor_names(db)
+    from app.services.dt_workflow import new_village_ids
+
+    fresh = new_village_ids(db, [wi.id for wi in work_items if wi.assignments])
     out = []
     for wi in work_items:
         completed = [t for t in wi.hc_tasks if t.completed_at is not None]
@@ -282,7 +285,7 @@ def dt_assignment(
         # hands; a returned one means it is back and needs re-assigning, which
         # is the same action, so those stay.
         active = next((a for a in wi.assignments if a.is_active), None)
-        if active is not None and active.returned_at is None:
+        if active is not None and active.returned_at is None and wi.id not in fresh:
             continue
 
         site_code, province = _site_of(wi)
@@ -308,6 +311,7 @@ def dt_assignment(
                 # When the contractor handed it back, if they did: the clock
                 # for a returned site restarts there, not at the HC review.
                 "returned_at": _aware(active.returned_at) if active else None,
+                "new_villages": len(fresh.get(wi.id, [])),
             }
         )
     out.sort(key=lambda r: -r["days_waiting"])

@@ -40,6 +40,8 @@ const ROUTES = {
   '/hc/queues/dt-review': W.dtReview,
   '/hc/queues/remediations': W.remediations,
   '/hc/queues/reroutes': W.reroutes,
+  '/hc/batches': W.hcBatches,
+  '/drive-test/tests': W.dtTests,
   '/work-items': W.workItems,
   '/work-items/counts': W.workItemCounts,
   '/explorer/sites': explorerSites,

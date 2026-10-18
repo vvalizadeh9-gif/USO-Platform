@@ -1,14 +1,14 @@
-import { act, render, screen, within } from '@testing-library/react'
+import { act, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('../../api/client', () => ({ default: { get: vi.fn(), post: vi.fn() } }))
 const api = (await import('../../api/client')).default
 const AssignPanel = (await import('./AssignPanel')).default
-const { WorkProvider, useWork } = await import('./WorkContext')
+const { WorkProvider } = await import('./WorkContext')
 
 const LOAD = [
-  { contractor_id: 1, name: 'پارس تل', open: 7, late: 1, avg_submit_days: 5.2, provinces: [{ province: 'تهران', share: 0.6 }] },
+  { contractor_id: 1, name: 'پارس تل', open: 7, late: 1, avg_submit_days: 2, provinces: [{ province: 'تهران', share: 0.6 }] },
   { contractor_id: 2, name: 'رعد', open: 2, late: 0, avg_submit_days: null, provinces: [] },
 ]
 
@@ -17,83 +17,41 @@ beforeEach(() => {
   api.get.mockResolvedValue({ data: LOAD })
 })
 
-function Confirm() {
-  const { confirmAction } = useWork()
-  return <button onClick={() => confirmAction({ text: '✓ 2 sites assigned to رعد.', undoUrl: '/x/undo' })}>do</button>
-}
-
 async function draw(props = {}) {
   const onAssign = vi.fn().mockResolvedValue()
   render(
     <WorkProvider>
-      <Confirm />
-      <AssignPanel process="dt" selectedCount={0} selectedProvinces={[]} onClear={vi.fn()} onAssign={onAssign} busyId={null} {...props} />
+      <AssignPanel process="hc" selectedCount={0} villageCount={0} selectedProvinces={[]} onClear={vi.fn()} onAssign={onAssign} busy={false} {...props} />
     </WorkProvider>,
   )
   await act(async () => {})
   return onAssign
 }
 
-const cards = () => screen.getAllByRole('button').filter((b) => b.classList.contains('uw-assign-card'))
-
-describe('the assign panel', () => {
-  it('reads the drive-test load and orders cards by open load', async () => {
+describe('the assign bar', () => {
+  it('draws contractors as a radio group and keeps Assign disabled with no sites', async () => {
     await draw()
-    expect(api.get).toHaveBeenCalledWith('/drive-test/contractors/load')
-    expect(cards().map((c) => c.textContent)).toEqual([expect.stringContaining('رعد'), expect.stringContaining('پارس تل')])
+    expect(screen.getByRole('radiogroup', { name: 'Contractor' })).toBeInTheDocument()
+    expect(screen.getAllByRole('radio')).toHaveLength(2)
+    expect(screen.getByRole('button', { name: /^Assign 0 sites/ })).toBeDisabled()
   })
 
-  it('is disabled until sites are selected', async () => {
+  it('never assigns on a card click; the button does', async () => {
     const user = userEvent.setup()
-    const onAssign = await draw()
-    expect(screen.getByText('Contractors')).toBeInTheDocument()
-    for (const card of cards()) expect(card).toHaveAttribute('aria-disabled', 'true')
-    await user.click(cards()[0])
+    const onAssign = await draw({ selectedCount: 3, villageCount: 5, selectedProvinces: ['اصفهان'] })
+    await user.click(screen.getByRole('radio', { name: /رعد/ }))
     expect(onAssign).not.toHaveBeenCalled()
+    const go = screen.getByRole('button', { name: 'Assign 3 sites · 5 villages' })
+    expect(go).toBeEnabled()
+    await user.click(go)
+    expect(onAssign).toHaveBeenCalledWith(expect.objectContaining({ contractor_id: 2 }))
   })
 
-  it('suggests the contractor that covers the provinces, and assigns in one click', async () => {
-    const user = userEvent.setup()
-    const onAssign = await draw({ selectedCount: 2, selectedProvinces: ['تهران', 'تهران'] })
-    const [first] = cards()
-    expect(first).toHaveClass('is-suggested')
-    expect(first).toHaveAccessibleName(
-      'Assign 2 sites to پارس تل. 7 with them, 1 late, about 5 days to submit. Suggested: works in تهران',
-    )
-    expect(screen.getByText(/Suggested: works in/)).toBeInTheDocument()
-    await user.click(first)
-    expect(onAssign).toHaveBeenCalledWith(LOAD[0])
-  })
-
-  it('says Pick a contractor when nobody covers the selection, and hides avg without one', async () => {
-    await draw({ selectedCount: 1, selectedProvinces: ['کرمان'] })
-    expect(screen.getByText('Pick a contractor')).toBeInTheDocument()
-    const raad = cards().find((c) => c.textContent.includes('رعد'))
-    expect(within(raad).queryByText(/avg/)).toBeNull()
-    expect(cards().find((c) => c.textContent.includes('پارس')).textContent).toContain('avg 5 d')
-  })
-
-  it('keeps the confirmation until it is dismissed, and announces it', async () => {
-    const user = userEvent.setup()
-    await draw()
-    await user.click(screen.getByText('do'))
-    expect(screen.getByText('✓ 2 sites assigned to رعد.', { selector: '.uw-notice-text' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /Undo/ })).toBeInTheDocument()
-    await act(async () => {
-      await new Promise((r) => requestAnimationFrame(r))
-    })
-    expect(screen.getByTestId('work-live')).toHaveTextContent('✓ 2 sites assigned to رعد.')
-    await user.click(screen.getByRole('button', { name: 'Dismiss message' }))
-    expect(screen.queryByText('✓ 2 sites assigned to رعد.', { selector: '.uw-notice-text' })).toBeNull()
-  })
-
-  it('undoes through the endpoint the action named', async () => {
-    const user = userEvent.setup()
-    api.post.mockResolvedValue({ data: { status: 'ok' } })
-    await draw()
-    await user.click(screen.getByText('do'))
-    await user.click(screen.getByRole('button', { name: /Undo/ }))
-    expect(api.post).toHaveBeenCalledWith('/x/undo')
-    expect(await screen.findByText('Undone. The sites are back where they were.', { selector: '.uw-notice-text' })).toBeInTheDocument()
+  it('puts the previous contractor first and pre-selects it for a re-check', async () => {
+    await draw({ selectedCount: 1, villageCount: 1, selectedProvinces: ['اصفهان'], previousContractorId: 1 })
+    const radios = screen.getAllByRole('radio')
+    expect(radios[0]).toHaveTextContent('پارس تل')
+    expect(radios[0]).toHaveTextContent('Previous contractor')
+    expect(radios[0]).toHaveAttribute('aria-checked', 'true')
   })
 })

@@ -21,7 +21,7 @@ import { SkeletonRows } from './parts'
  *   filterIds?: number[], onOpen?: (row: object) => void,
  * }} props
  */
-export default function SiteTable({ rows, rowId, columns, selected, onSelect, label, siteLabel, loading, after, filterIds, onOpen }) {
+export default function SiteTable({ rows, rowId, columns, selected, onSelect, label, siteLabel, loading, after, filterIds, onOpen, leaving }) {
   const lastIndex = useRef(null)
   // A change event does not carry the Shift key; the click before it does.
   const shift = useRef(false)
@@ -91,7 +91,8 @@ export default function SiteTable({ rows, rowId, columns, selected, onSelect, la
             return (
               <tr
                 key={id}
-                className={`${selectable || openable ? 'is-selectable' : ''} ${on ? 'is-selected' : ''}`.trim() || undefined}
+                className={`${selectable || openable ? 'is-selectable' : ''} ${on ? 'is-selected' : ''} ${leaving?.has(id) ? 'is-leaving' : ''}`.trim() || undefined}
+                style={index < 14 ? { '--row-i': index } : undefined}
                 onClick={selectable || openable ? (e) => onRowClick(e, index) : undefined}
               >
                 {selectable && (

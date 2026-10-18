@@ -72,9 +72,9 @@ def _acceptance_queues(authority: str) -> list[QueueDefinition]:
 QUEUES: tuple[QueueDefinition, ...] = (
     # --- Health Check ----------------------------------------------------
     _q("hc_assign", Stage.HC, "Assign sites", "HC assignment",
-       "/health-check?tab=pool&state=ready", _STAFF, lifecycle.sites_to_assign),
+       "/health-check?tab=assign", _STAFF, lifecycle.sites_to_assign),
     _q("hc_review", Stage.HC, "Review HC results", "HC review",
-       "/health-check?tab=review", _STAFF, lifecycle.hc_results_to_review),
+       "/health-check?tab=checks&filter=to_decide", _STAFF, lifecycle.hc_results_to_review),
     _q("hc_reroutes", Stage.HC, "Decide re-routes", "Re-routes",
        "/health-check?tab=reroutes", _STAFF, lifecycle.reroute_decisions),
     _q("hc_submit", Stage.HC, "Submit health checks", "Health checks",
@@ -84,9 +84,9 @@ QUEUES: tuple[QueueDefinition, ...] = (
        unit="fixes"),
     # --- Drive Test ------------------------------------------------------
     _q("dt_assign", Stage.DT, "Assign drive tests", "DT assignment",
-       "/drive-test?tab=assignment", _STAFF, lifecycle.dt_to_assign),
+       "/drive-test?tab=assign", _STAFF, lifecycle.dt_to_assign),
     _q("dt_review", Stage.DT, "Review DT results", "DT review",
-       "/drive-test?tab=review", _STAFF, lifecycle.dt_results_to_review),
+       "/drive-test?tab=tests&view=review", _STAFF, lifecycle.dt_results_to_review),
     _q("dt_todo", Stage.DT, "Drive-test sites", "Drive tests",
        "/my-drive-tests?tab=todo&status=with_contractor", {CONTRACTOR},
        lifecycle.sites_to_drive_test),

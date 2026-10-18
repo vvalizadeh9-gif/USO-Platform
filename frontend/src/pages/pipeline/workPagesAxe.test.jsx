@@ -20,6 +20,8 @@ const ROUTES = {
   '/hc/queues/dt-review': F.dtReview,
   '/hc/queues/remediations': F.remediations,
   '/hc/queues/reroutes': F.reroutes,
+  '/hc/batches': F.hcBatches,
+  '/drive-test/tests': F.dtTests,
   '/work-items/counts': F.workItemCounts,
   '/reference/provinces': [{ id: 1, name: 'تهران' }],
   '/explorer/sites': sitesPage({ total: 60 }),
@@ -44,10 +46,8 @@ const ExplorerList = (await import('../explorer/ExplorerList')).default
 const { ToastProvider } = await import('../../context/ToastContext')
 
 const VIEWS = [
-  '/health-check?tab=pool', '/health-check?tab=running', '/health-check?tab=review',
-  '/drive-test?tab=assignment', '/drive-test?tab=in-progress', '/drive-test?tab=review',
-  '/drive-test?tab=done', '/health-check?tab=remediation', '/health-check?tab=reroutes',
-  '/drive-test?tab=sent-back', '/health-check?tab=history', '/explorer', '/explorer?q=W40&province=1&sort=villages&dir=desc',
+  '/health-check?tab=assign', '/health-check?tab=checks', '/drive-test?tab=assign', '/drive-test?tab=tests',
+  '/drive-test?tab=done', '/health-check?tab=remediation', '/health-check?tab=reroutes', '/health-check?tab=history', '/explorer', '/explorer?q=W40&province=1&sort=villages&dir=desc',
 ]
 
 describe('the work pages have no axe violations', () => {

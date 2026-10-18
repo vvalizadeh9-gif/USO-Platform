@@ -488,7 +488,24 @@
   text-decoration: none;
   transition: background var(--uep-dur-fast) var(--uep-ease-productive);
 }
-.uep-rail-item:hover { background: var(--uep-page); }
+.uep-rail-item:hover { background: var(--uep-hover); }
+.uep-rail-item { justify-content: flex-start; padding: var(--uep-space-6, 6px) var(--uep-space-8); }
+.uep-rail-label { flex: 1; min-width: 0; }
+.uep-rail-tile {
+  flex: 0 0 24px;
+  display: inline-grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--uep-radius-sm);
+  color: var(--uep-on-accent);
+}
+.uep-rail-section {
+  padding: var(--uep-space-12) var(--uep-space-8) var(--uep-space-4);
+  color: var(--uep-text-3);
+  font-size: var(--uep-fs-caption);
+  font-weight: var(--uep-weight-medium);
+}
 .uep-rail-item.is-active {
   background: var(--uep-accent-tint);
   color: var(--uep-accent);
