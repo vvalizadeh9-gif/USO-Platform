@@ -13,11 +13,11 @@ const MAX_DAYS = 365
 // Lifecycle order, three columns (UEP-15 §3).
 const COLUMNS = [['health_check', 'remediation'], ['drive_test', 'monthly_plan'], ['acceptance']]
 const AREA_STYLE = {
-  health_check: { color: '#1D4ED8', tint: 'var(--uep-accent-tint)', icon: 'network--3' },
-  remediation: { color: '#B45309', tint: 'var(--uep-app-monthly-plan-tint)', icon: 'tool-kit' },
-  drive_test: { color: '#0F766E', tint: 'var(--uep-app-drive-test-tint)', icon: 'connection-signal' },
-  monthly_plan: { color: '#B45309', tint: 'var(--uep-app-monthly-plan-tint)', icon: 'calendar' },
-  acceptance: { color: '#6D28D9', tint: 'var(--uep-app-acceptance-tint)', icon: 'certificate--check' },
+  health_check: { color: 'var(--uep-accent)', tint: 'var(--uep-accent-tint)', icon: 'network--3' },
+  remediation: { color: 'var(--uep-app-monthly-plan)', tint: 'var(--uep-app-monthly-plan-tint)', icon: 'tool-kit' },
+  drive_test: { color: 'var(--uep-app-drive-test)', tint: 'var(--uep-app-drive-test-tint)', icon: 'connection-signal' },
+  monthly_plan: { color: 'var(--uep-app-monthly-plan)', tint: 'var(--uep-app-monthly-plan-tint)', icon: 'calendar' },
+  acceptance: { color: 'var(--uep-app-acceptance)', tint: 'var(--uep-app-acceptance-tint)', icon: 'certificate--check' },
 }
 
 const isValid = (v) => /^\d+$/.test(String(v)) && Number(v) >= MIN_DAYS && Number(v) <= MAX_DAYS

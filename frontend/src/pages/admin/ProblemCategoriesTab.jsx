@@ -7,6 +7,7 @@ import { useToast } from '../../context/ToastContext'
 import { isCategoryOwner, roleLabel } from '../../lib/roles'
 import { formatNumber } from '../../lib/numbers'
 import Select from '../../components/Select'
+import '../../styles/sla-policies.css'
 
 /**
  * The remediation routing table, as a screen.
@@ -228,7 +229,7 @@ function CategoryForm({ category, roles, busy, onSave, onCancel }) {
         </div>
         <div className="field" style={{ width: 160, margin: 0 }}>
           <label>SLA</label>
-          <Link to="/admin/sla" style={{ lineHeight: '36px' }}>Set in SLA policies</Link>
+          <Link to="/admin/sla" className="sla-link-cell">Set in SLA policies</Link>
         </div>
       </div>
 

@@ -56,30 +56,45 @@ def _timestamps() -> list[sa.Column]:
     ]
 
 
+def _tables() -> set[str]:
+    return set(sa.inspect(op.get_bind()).get_table_names())
+
+
+def _columns(table: str) -> set[str]:
+    return {c["name"] for c in sa.inspect(op.get_bind()).get_columns(table)}
+
+
 def upgrade() -> None:
-    op.create_table(
-        "sla_policy",
-        sa.Column("step_key", sa.String(80), primary_key=True),
-        sa.Column("days", sa.Integer, nullable=False),
-        sa.Column("updated_by", sa.Integer, sa.ForeignKey("users.id")),
-        *_timestamps(),
-        sa.CheckConstraint("days >= 1 AND days <= 365", name="ck_sla_policy_days"),
-    )
-    op.create_table(
-        "sla_policy_history",
-        sa.Column("id", sa.Integer, primary_key=True),
-        sa.Column("change_id", sa.Uuid, nullable=False),
-        sa.Column("step_key", sa.String(80), nullable=False),
-        sa.Column("old_days", sa.Integer),
-        sa.Column("new_days", sa.Integer, nullable=False),
-        sa.Column("changed_by", sa.Integer, sa.ForeignKey("users.id")),
-        sa.Column("changed_at", sa.DateTime(timezone=True), nullable=False),
-        *_timestamps(),
-    )
-    op.create_index("ix_sla_policy_history_change_id", "sla_policy_history", ["change_id"])
+    # Guarded throughout: a database built by create_all already has these.
+    tables = _tables()
+    if "sla_policy" not in tables:
+        op.create_table(
+            "sla_policy",
+            sa.Column("step_key", sa.String(80), primary_key=True),
+            sa.Column("days", sa.Integer, nullable=False),
+            sa.Column("updated_by", sa.Integer, sa.ForeignKey("users.id")),
+            *_timestamps(),
+            sa.CheckConstraint("days >= 1 AND days <= 365", name="ck_sla_policy_days"),
+        )
+    if "sla_policy_history" not in tables:
+        op.create_table(
+            "sla_policy_history",
+            sa.Column("id", sa.Integer, primary_key=True),
+            sa.Column("change_id", sa.Uuid, nullable=False),
+            sa.Column("step_key", sa.String(80), nullable=False),
+            sa.Column("old_days", sa.Integer),
+            sa.Column("new_days", sa.Integer, nullable=False),
+            sa.Column("changed_by", sa.Integer, sa.ForeignKey("users.id")),
+            sa.Column("changed_at", sa.DateTime(timezone=True), nullable=False),
+            *_timestamps(),
+        )
+        op.create_index("ix_sla_policy_history_change_id", "sla_policy_history", ["change_id"])
+    existing = _columns("hc_remediations")
     with op.batch_alter_table("hc_remediations") as batch:
-        batch.add_column(sa.Column("sla_days_applied", sa.Integer))
-        batch.add_column(sa.Column("on_time", sa.Boolean))
+        if "sla_days_applied" not in existing:
+            batch.add_column(sa.Column("sla_days_applied", sa.Integer))
+        if "on_time" not in existing:
+            batch.add_column(sa.Column("on_time", sa.Boolean))
 
     bind = op.get_bind()
     values: dict[str, int] = {}
@@ -92,6 +107,10 @@ def upgrade() -> None:
     for step, days in DEFAULTS.items():
         values.setdefault(step, days)
     values = {k: min(max(v, 1), 365) for k, v in values.items()}
+    already = {r[0] for r in bind.execute(sa.text("SELECT step_key FROM sla_policy")).all()}
+    values = {k: v for k, v in values.items() if k not in already}
+    if not values:
+        return
 
     now = datetime.now(timezone.utc)
     policy = sa.table(
