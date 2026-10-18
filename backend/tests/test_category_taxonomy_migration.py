@@ -172,11 +172,14 @@ def _seed_site_with_open_fix(category_name):
         )
         db.add(task)
         db.flush()
-        db.add(HcRemediation(
+        # A Core insert of the columns that exist at PREVIOUS: the model
+        # carries later ones (UEP-15's sla_days_applied / on_time).
+        db.execute(HcRemediation.__table__.insert().values(
             hc_task_id=task.id, work_item_id=wi_id,
             problem_category_id=category.id,
             owner_role_id=category.owner_role_id,
             status=HcRemediation.STATUS_OPEN, opened_at=now,
+            created_at=now, updated_at=now,
         ))
         db.commit()
         return wi_id, category.id

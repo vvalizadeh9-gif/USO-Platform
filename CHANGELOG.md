@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- **Admin › SLA policies replaces the Action SLA tab: every step's SLA in days on one page, applied across UEP on Update (UEP-15).**
+  - Page `/admin/sla` (PM and Admin edit, Viewer reads, others 403): five cards in lifecycle order, a −/+ stepper per step (typeable, arrow keys, Enter updates), changed rows tinted with the old value struck through, `Use 1–365 days`, Discard, `Update N`, a toast with Revert, and a History drawer. `?tab=action-sla` redirects here. Problem categories' SLA column is read-only, "Set in SLA policies".
+  - Admin rail grouped People / Workflow / Data with 24px `--uep-app-admin` tiles; SLA policies uses `timer`.
+  - Backend: `sla_policy` + `sla_policy_history`, `services/sla_policy.py`; every SLA read (queues, pipeline, contractor load, Home, digest, remediation due dates) goes through it. API `GET/PUT /admin/sla-policies` (409 stale, 422 out of range), `/history`, `/revert/{change_id}`; all writes audit-logged. `/admin/action-sla` is a deprecated alias. Open fixes move with their category's SLA; closed fixes store `sla_days_applied` and `on_time`.
+  - Migration `c5e1a9d7f342`: seeds `sla_policy` from `action_queue_sla` and category `sla_days`, then the defaults; one System history entry. Old columns stay read-only for one release. Back up first.
+
 - **Drive test work pages rebuilt around one flow: Health check 1 Assign → 2 Checks, Drive test 3 Assign → 4 Tests, Exceptions (Remediation), History (UEP-14).**
   - Rail: grouped Health check / Drive test / Exceptions / History, each item with a 24px colour tile and a white Carbon icon; Drive test app icon `connection-signal`; "HC check" is now "Health check". Old `?tab=` links redirect (`pool`, `basket` → Assign; `running` → Checks; `review`, `results` → Checks › To decide; `assignment` → DT Assign; `in-progress`, `review`, `sent-back` → Tests).
   - Pipeline: two bands plus an Exceptions box; tiles show an owner line, the count, "N to decide" and overdue only when > 0.

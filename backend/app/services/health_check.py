@@ -815,6 +815,10 @@ def close_remediation(
 
     remediation.status = HcRemediation.STATUS_FIXED
     remediation.closed_at = _now()
+    # Frozen at close so a later SLA change never rewrites closed history.
+    remediation.sla_days_applied = category_sla_days(remediation.category)
+    due = _as_aware(remediation.due_at)
+    remediation.on_time = due is None or remediation.closed_at <= due
     remediation.closed_by = user.id
     remediation.resolution_note = (note or "").strip() or None
     # A closed fix supersedes any pending "not my area" proposal on it.

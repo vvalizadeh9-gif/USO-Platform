@@ -1,11 +1,13 @@
 import { Plus, Wrench } from '../../components/carbon'
 import { Fragment, useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import api from '../../api/client'
 import { EmptyState, Loading } from '../../components/ui'
 import { useToast } from '../../context/ToastContext'
 import { isCategoryOwner, roleLabel } from '../../lib/roles'
 import { formatNumber } from '../../lib/numbers'
 import Select from '../../components/Select'
+import '../../styles/sla-policies.css'
 
 /**
  * The remediation routing table, as a screen.
@@ -143,7 +145,10 @@ export default function ProblemCategoriesTab() {
                       </span>
                     )}
                   </td>
-                  <td className="tnum">{c.sla_days} days</td>
+                  <td className="tnum">
+                    {c.sla_days} days ·{' '}
+                    <Link to="/admin/sla">Set in SLA policies</Link>
+                  </td>
                   <td className="tnum" style={{ color: c.open_fixes ? 'var(--uep-status-pending-ink)' : undefined }}>
                     {formatNumber(c.open_fixes)}
                   </td>
@@ -184,17 +189,15 @@ function CategoryForm({ category, roles, busy, onSave, onCancel }) {
   const [ownerRoleId, setOwnerRoleId] = useState(
     category?.owner_role_id ? String(category.owner_role_id) : '',
   )
-  const [slaDays, setSlaDays] = useState(String(category?.sla_days ?? 7))
   const [active, setActive] = useState(category?.active ?? true)
 
   const isNew = !category
-  const valid = name.trim().length >= 2 && ownerRoleId && Number(slaDays) >= 1
+  const valid = name.trim().length >= 2 && ownerRoleId
 
   const submit = () =>
     onSave({
       name: name.trim(),
       owner_role_id: Number(ownerRoleId),
-      sla_days: Number(slaDays),
       ...(isNew ? {} : { active }),
     })
 
@@ -224,16 +227,9 @@ function CategoryForm({ category, roles, busy, onSave, onCancel }) {
             ))}
           </Select>
         </div>
-        <div className="field" style={{ width: 110, margin: 0 }}>
-          <label>SLA (days)</label>
-          <input
-            className="input tnum"
-            type="number"
-            min={1}
-            max={365}
-            value={slaDays}
-            onChange={(e) => setSlaDays(e.target.value)}
-          />
+        <div className="field" style={{ width: 160, margin: 0 }}>
+          <label>SLA</label>
+          <Link to="/admin/sla" className="sla-link-cell">Set in SLA policies</Link>
         </div>
       </div>
 

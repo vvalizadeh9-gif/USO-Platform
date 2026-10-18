@@ -205,6 +205,9 @@ export const APPS = Object.freeze([
       { id: 'cpm-validate', label: 'CPM changes', route: '/admin?tab=validate', roles: ['PM'], queues: ['cpm_changes'] },
       { id: 'mojri', label: 'Mojri tracker', route: '/mojri-tracker', roles: ['PM'] },
       { id: 'history', label: 'Import history', route: '/admin?tab=history', roles: ['Admin'] },
+      // PM's way in to Admin > SLA policies (UEP-15), without adding an app to
+      // PM's Home. Viewer reads the same page at /admin/sla.
+      { id: 'sla-policies', label: 'SLA policies', route: '/admin/sla', roles: ['PM'] },
     ],
   },
   {
@@ -216,13 +219,35 @@ export const APPS = Object.freeze([
     group: 'platform',
     roles: ['Admin'],
     pages: [
-      { id: 'overview', label: 'Overview', route: '/admin?tab=overview' },
-      { id: 'users', label: 'Users and roles', route: '/admin?tab=users' },
-      { id: 'provinces', label: 'Province assignments', route: '/admin?tab=provinces' },
-      { id: 'reference', label: 'Reference data', route: '/admin?tab=categories' },
-      { id: 'sla', label: 'SLA and digest', route: '/admin?tab=action-sla' },
-      { id: 'mojri-template', label: 'Mojri template', route: '/admin?tab=mojri' },
-      { id: 'audit', label: 'Audit log', route: '/admin?tab=audit' },
+      { id: 'overview', label: 'Overview', route: '/admin?tab=overview', roles: ['Admin'] },
+      {
+        id: 'users', section: 'People', label: 'Users & roles', route: '/admin?tab=users', roles: ['Admin'],
+        icon: 'user--multiple', tile: '--uep-app-admin',
+      },
+      {
+        id: 'provinces', section: 'People', label: 'Province assignments', route: '/admin?tab=provinces', roles: ['Admin'],
+        icon: 'location--filled', tile: '--uep-app-admin',
+      },
+      {
+        id: 'sla', section: 'Workflow', label: 'SLA policies', route: '/admin/sla', roles: ['Admin'],
+        icon: 'timer', tile: '--uep-app-admin',
+      },
+      {
+        id: 'reference', section: 'Workflow', label: 'Problem categories', route: '/admin?tab=categories', roles: ['Admin'],
+        icon: 'list--checked', tile: '--uep-app-admin',
+      },
+      {
+        id: 'cpm-import', section: 'Data', label: 'CPM import', route: '/admin?tab=import', roles: ['Admin'],
+        icon: 'data--base', tile: '--uep-app-admin',
+      },
+      {
+        id: 'mojri-template', section: 'Data', label: 'Mojri template', route: '/admin?tab=mojri', roles: ['Admin'],
+        icon: 'download', tile: '--uep-app-admin',
+      },
+      {
+        id: 'audit', section: 'Data', label: 'Audit log', route: '/admin?tab=audit', roles: ['Admin'],
+        icon: 'document', tile: '--uep-app-admin',
+      },
     ],
   },
 ])

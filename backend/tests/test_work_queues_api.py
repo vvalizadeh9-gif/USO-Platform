@@ -120,28 +120,36 @@ def test_the_router_is_tagged_work_queues(client):
 # --------------------------------------------------------------------------
 # SLA settings
 # --------------------------------------------------------------------------
-def test_sla_days_are_admin_only_and_default_to_fourteen(client):
+def test_the_deprecated_action_sla_reads_sla_policies(client):
     assert client.get(f"{API}/admin/action-sla", headers=_headers(client, "a_pm")).status_code == 403
     rows = client.get(f"{API}/admin/action-sla", headers=_admin(client)).json()
     by_key = {r["queue_key"]: r for r in rows}
-    assert by_key["dt_review"]["sla_days"] == 14
+    assert by_key["dt_review"]["sla_days"] == 1
+    assert by_key["ict_to_file"]["sla_days"] == 14
     assert by_key["hc_fixes"]["configurable"] is False
     assert by_key["plan_submit"]["configurable"] is False
 
 
-def test_changing_sla_days_shows_on_the_next_read(client):
+def test_changing_sla_policies_shows_on_the_next_read(client):
     admin = _admin(client)
-    r = client.put(f"{API}/admin/action-sla", headers=admin,
-                   json=[{"queue_key": "ict_to_file", "sla_days": 3}])
+    r = client.put(f"{API}/admin/sla-policies", headers=admin,
+                   json={"changes": [{"step_key": "ict_file", "days": 3, "expected_days": 14}]})
     assert r.status_code == 200, r.text
-    assert {x["queue_key"]: x["sla_days"] for x in r.json()}["ict_to_file"] == 3
-    # Out of range, unknown, or a queue measured against its own due date.
-    for bad in ({"queue_key": "ict_to_file", "sla_days": 0},
-                {"queue_key": "nope", "sla_days": 5},
-                {"queue_key": "hc_fixes", "sla_days": 5}):
-        assert client.put(f"{API}/admin/action-sla", headers=admin, json=[bad]).status_code == 422
-    client.put(f"{API}/admin/action-sla", headers=admin,
-               json=[{"queue_key": "ict_to_file", "sla_days": 14}])
+    rows = client.get(f"{API}/admin/action-sla", headers=admin).json()
+    assert {x["queue_key"]: x["sla_days"] for x in rows}["ict_to_file"] == 3
+    # Out of range or unknown: 422. Stale expected value: 409.
+    for bad in ({"step_key": "ict_file", "days": 0}, {"step_key": "nope", "days": 5}):
+        assert client.put(f"{API}/admin/sla-policies", headers=admin,
+                          json={"changes": [bad]}).status_code == 422
+    assert client.put(f"{API}/admin/sla-policies", headers=admin, json={"changes": [
+        {"step_key": "ict_file", "days": 5, "expected_days": 14}]}).status_code == 409
+    # The old endpoint no longer writes a mapped queue.
+    assert client.put(f"{API}/admin/action-sla", headers=admin,
+                      json=[{"queue_key": "ict_to_file", "sla_days": 5}]).status_code == 422
+    revert = client.post(f"{API}/admin/sla-policies/revert/{r.json()['change_id']}", headers=admin)
+    assert revert.status_code == 200, revert.text
+    assert {x["step_key"]: x["days"] for x in revert.json()["rows"]}["ict_file"] == 14
+    assert client.get(f"{API}/admin/sla-policies", headers=_headers(client, "a_viewer")).status_code == 200
 
 
 # --------------------------------------------------------------------------

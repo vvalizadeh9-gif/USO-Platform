@@ -50,6 +50,7 @@ from app.schemas import (
     UserStatusChange,
     UserUpdate,
 )
+from app.services.action_queues.sla import category_sla_days
 from app.services.audit import record_audit
 from app.services.cpm_import import CpmImportService
 from app.services import evidence_store
@@ -884,7 +885,8 @@ def _category_row(category: ProblemCategory, counts: dict) -> dict:
         "owner_role_name": (
             category.owner_role.name if category.owner_role else None
         ),
-        "sla_days": category.sla_days,
+        # Read-only here: set on Admin > SLA policies (UEP-15).
+        "sla_days": category_sla_days(category),
         "open_fixes": open_count,
         "total_fixes": total_count,
     }
@@ -972,6 +974,7 @@ def create_problem_category(
     category = ProblemCategory(
         name=name,
         owner_role_id=payload.owner_role_id,
+        # The starting value of its SLA policies row; changed there after.
         sla_days=payload.sla_days or 7,
         active=True if payload.active is None else payload.active,
     )
@@ -1040,8 +1043,8 @@ def update_problem_category(
         _assert_owner_role(db, payload.owner_role_id)
         category.owner_role_id = payload.owner_role_id
 
-    if payload.sla_days is not None:
-        category.sla_days = payload.sla_days
+    if payload.sla_days is not None and payload.sla_days != category_sla_days(category):
+        raise HTTPException(422, "A category's SLA is set in SLA policies")
 
     if payload.active is not None:
         if not payload.active:

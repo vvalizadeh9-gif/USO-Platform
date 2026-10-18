@@ -172,6 +172,8 @@ import subtract16 from '@carbon/icons/es/subtract/16.js'
 import subtract20 from '@carbon/icons/es/subtract/20.js'
 import table16 from '@carbon/icons/es/table/16.js'
 import table20 from '@carbon/icons/es/table/20.js'
+import network316 from '@carbon/icons/es/network--3/16.js'
+import network320 from '@carbon/icons/es/network--3/20.js'
 import timer16 from '@carbon/icons/es/timer/16.js'
 import timer20 from '@carbon/icons/es/timer/20.js'
 import trashCan16 from '@carbon/icons/es/trash-can/16.js'
@@ -279,6 +281,7 @@ export const ICONS = Object.freeze({
   'send': { 16: send16, 20: send20 },
   'subtract': { 16: subtract16, 20: subtract20 },
   'table': { 16: table16, 20: table20 },
+  'network--3': { 16: network316, 20: network320 },
   'timer': { 16: timer16, 20: timer20 },
   'trash-can': { 16: trashCan16, 20: trashCan20 },
   'unlink': { 16: unlink16, 20: unlink20 },

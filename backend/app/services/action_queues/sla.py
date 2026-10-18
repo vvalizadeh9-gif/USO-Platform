@@ -10,11 +10,12 @@ from __future__ import annotations
 from datetime import date, datetime, timedelta, timezone
 
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, object_session
 
 from app.core import jalali
 from app.core.config import get_settings
 from app.models.action_center import DEFAULT_SLA_DAYS, ActionQueueSla
+from app.services import sla_policy
 from app.services.action_queues.types import PendingItem, SlaKind
 
 TEHRAN = jalali.TEHRAN
@@ -92,21 +93,30 @@ def item_status(
 
 
 def sla_days_by_queue(db: Session, keys: list[str]) -> dict[str, int]:
-    """Each queue's SLA in days: its stored row, else the default."""
-    stored = dict(
+    """Each queue's SLA in days, from its step in SLA policies (UEP-15).
+
+    A queue not yet mapped to a step keeps its legacy ``action_queue_sla`` row
+    (read-only for one release), else the default.
+    """
+    unmapped = [k for k in keys if k not in sla_policy.QUEUE_STEP]
+    legacy = dict(
         db.execute(
             select(ActionQueueSla.queue_key, ActionQueueSla.sla_days).where(
-                ActionQueueSla.queue_key.in_(keys)
+                ActionQueueSla.queue_key.in_(unmapped)
             )
         ).all()
-    )
-    return {key: stored.get(key, DEFAULT_SLA_DAYS) for key in keys}
+    ) if unmapped else {}
+    return {
+        key: sla_policy.get_days(db, sla_policy.QUEUE_STEP[key])
+        if key in sla_policy.QUEUE_STEP
+        else legacy.get(key, DEFAULT_SLA_DAYS)
+        for key in keys
+    }
 
 
 def category_sla_days(category) -> int:
-    """A remediation's SLA: its owning team's category setting (UEP-14 §4).
-
-    The one place the fallback lives, so no service hard-codes a number.
-    """
-    days = getattr(category, "sla_days", None)
-    return days if days else DEFAULT_SLA_DAYS
+    """A remediation's SLA: its category's step in SLA policies (UEP-15)."""
+    db = object_session(category)
+    if db is None or category.id is None:
+        return sla_policy.DEFAULT_REMEDIATION_DAYS
+    return sla_policy.get_days(db, sla_policy.remediation_key(category.id))

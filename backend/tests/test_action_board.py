@@ -324,7 +324,8 @@ def test_a_contractor_only_ever_holds_their_own_work(db, username):
 # SLA
 # --------------------------------------------------------------------------
 def test_overdue_follows_the_configured_sla(db):
-    from app.models.action_center import ActionQueueSla
+    from app.models.sla_policy import SlaPolicy
+    from app.services import sla_policy
     from app.services.action_queues.board import queue_summaries
     from app.services.action_queues.context import QueueContext
     from app.services.action_queues.registry import QUEUES_BY_KEY
@@ -335,11 +336,13 @@ def test_overdue_follows_the_configured_sla(db):
     before = queue_summaries(QueueContext(db, user, later), [queue])[0]
     assert before.overdue == before.count > 0
 
-    db.merge(ActionQueueSla(queue_key="dt_review", sla_days=365))
+    db.merge(SlaPolicy(step_key="dt_review", days=365))
     db.commit()
+    sla_policy.invalidate(db)
     try:
         after = queue_summaries(QueueContext(db, user, later), [queue])[0]
         assert after.overdue == 0
     finally:
-        db.query(ActionQueueSla).delete()
+        db.merge(SlaPolicy(step_key="dt_review", days=1))
         db.commit()
+        sla_policy.invalidate(db)

@@ -30,6 +30,7 @@ const LifecycleGaps = lazy(() => import('./pages/reports/LifecycleGaps.jsx'))
 const MojriImport = lazy(() => import('./pages/mojri/MojriImport'))
 const KpiMapping = lazy(() => import('./pages/reports/KpiMapping'))
 const Admin = lazy(() => import('./pages/Admin'))
+const SlaPoliciesPage = lazy(() => import('./pages/admin/SlaPoliciesPage'))
 const ChangePassword = lazy(() => import('./pages/ChangePassword'))
 
 // The one screen an account on an administrator-issued password may use. The
@@ -229,6 +230,7 @@ export default function App() {
           <Route path="/acceptance" element={<Navigate to="/my-work" replace />} />
           <Route path="/my-acceptance" element={<Navigate to="/my-work" replace />} />
           <Route path="/admin" element={<Protected allowedRoles={['Admin', 'PM']}><Admin /></Protected>} />
+          <Route path="/admin/sla" element={<Protected allowedRoles={['Admin', 'PM', 'Viewer']}><SlaPoliciesPage /></Protected>} />
           {/* Reachable by anyone, including an account that can reach nothing
               else — see Protected above and app/core/deps.py. */}
           <Route path={CHANGE_PASSWORD_PATH} element={<ChangePassword />} />

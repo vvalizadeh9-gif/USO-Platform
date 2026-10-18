@@ -21,6 +21,7 @@ from app.schemas.action_center import (
     QueueSlaIn,
     QueueSlaOut,
 )
+from app.services import sla_policy
 from app.services.action_queues import sla
 from app.services.action_queues.registry import QUEUES, QUEUES_BY_KEY
 from app.services.action_queues.types import STAGE_LABELS, SlaKind
@@ -43,20 +44,22 @@ def _sla_rows(db: Session) -> list[QueueSlaOut]:
     ]
 
 
-@router.get("/admin/action-sla", response_model=list[QueueSlaOut])
+# Deprecated (UEP-15): a thin alias over SLA policies, kept for one release.
+@router.get("/admin/action-sla", response_model=list[QueueSlaOut], deprecated=True)
 def get_action_sla(
     db: Session = Depends(get_db), _: User = Depends(require_roles(ADMIN))
 ) -> list[QueueSlaOut]:
     return _sla_rows(db)
 
 
-@router.put("/admin/action-sla", response_model=list[QueueSlaOut])
+@router.put("/admin/action-sla", response_model=list[QueueSlaOut], deprecated=True)
 def put_action_sla(
     body: list[QueueSlaIn],
     db: Session = Depends(get_db),
     admin: User = Depends(require_roles(ADMIN)),
 ) -> list[QueueSlaOut]:
-    """Set the SLA days of one or more queues. Takes effect on the next read."""
+    """Deprecated: use PUT /admin/sla-policies. A queue mapped to a step there
+    must be changed there; only unmapped queues still write here."""
     for item in body:
         queue = QUEUES_BY_KEY.get(item.queue_key)
         if queue is None:
@@ -65,6 +68,8 @@ def put_action_sla(
             raise HTTPException(
                 422, f"{queue.label} is measured against its own due date, not SLA days"
             )
+        if item.queue_key in sla_policy.QUEUE_STEP:
+            raise HTTPException(422, f"{queue.label} is set in Admin > SLA policies")
     for item in body:
         row = db.get(ActionQueueSla, item.queue_key)
         old = row.sla_days if row else None
