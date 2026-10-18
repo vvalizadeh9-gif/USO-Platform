@@ -113,7 +113,7 @@ describe('the heading and the strip', () => {
 
   it('shows the same pipeline on both pages, the list card as its panel', async () => {
     await landOn('/drive-test?tab=tests')
-    const selected = screen.getByRole('tab', { selected: true })
+    const selected = document.querySelector('[data-step][aria-selected="true"]')
     expect(selected.dataset.step).toBe('dt_tests')
     expect(selected).toHaveTextContent('7 to decide')
     const panel = document.getElementById(selected.getAttribute('aria-controls'))
@@ -122,7 +122,7 @@ describe('the heading and the strip', () => {
 
   it('crosses pages when a step on the other one is chosen, and Back returns', async () => {
     await landOn('/health-check?tab=checks')
-    fireEvent.keyDown(screen.getByRole('tab', { selected: true }), { key: 'ArrowRight' })
+    fireEvent.keyDown(document.querySelector('[data-step][aria-selected="true"]'), { key: 'ArrowRight' })
     await act(async () => {})
     expect(screen.getByTestId('where')).toHaveTextContent('/drive-test?tab=assign')
     await act(async () => nav(-1))

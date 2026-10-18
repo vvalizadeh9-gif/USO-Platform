@@ -61,7 +61,7 @@ describe('counts come from the one /me/home response', () => {
 
   it('a rail count equals the queue row it sums', () => {
     const dt = appsFor('PM').find((a) => a.id === 'drive-test')
-    expect(pageCount(dt.pages.find((p) => p.id === 'dt-review'), counts)).toBe(4)
+    expect(pageCount(dt.pages.find((p) => p.id === 'dt-tests'), counts)).toBe(4)
     expect(appCount(dt, counts)).toBe(6)
   })
 
@@ -103,8 +103,8 @@ describe('Drive test rail without Dashboard', () => {
   )
 
   it.each([
-    ['PM', '/health-check?tab=pool'],
-    ['Coordinator', '/health-check?tab=pool'],
+    ['PM', '/health-check?tab=assign'],
+    ['Coordinator', '/health-check?tab=assign'],
     ['Contractor', '/my-health-check'],
     ['CpgPower', '/my-fix-queue'],
   ])('opens the app for %s on its first remaining page', (role, route) => {

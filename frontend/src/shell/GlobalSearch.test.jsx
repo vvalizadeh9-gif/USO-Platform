@@ -29,7 +29,7 @@ function renderSearch(role = 'PM') {
 describe('matchPages', () => {
   it('finds a page by its label and every page of an app by the app name', () => {
     const apps = appsFor('PM')
-    expect(matchPages(apps, 'checks').map((p) => p.label)).toEqual(['Checks'])
+    expect(matchPages(apps, 'remediation').map((p) => p.label)).toEqual(['Remediation'])
     expect(matchPages(apps, 'monthly').map((p) => p.label)).toEqual(['Approvals', 'Plans', 'History', 'Internal PIP'])
     expect(matchPages(apps, '  ')).toEqual([])
   })
@@ -86,7 +86,7 @@ describe('GlobalSearch', () => {
     renderSearch()
     fireEvent.change(screen.getByRole('combobox'), { target: { value: 'h' } })
 
-    expect(screen.getByRole('option', { name: /HC check/ })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: /History/ })).toBeInTheDocument()
     expect(api.get).not.toHaveBeenCalled()
   })
 
