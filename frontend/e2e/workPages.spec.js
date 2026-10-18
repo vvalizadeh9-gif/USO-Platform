@@ -101,6 +101,9 @@ test.describe('accessibility', () => {
     await page.getByRole('radio').first().click()
     await page.getByRole('button', { name: /^Assign \d+ sites ·/ }).click()
     await expect(page.locator('.uw-notice-text')).toContainText('Batch DT-1 sent to')
+    // Rows slide out and the reloaded list fades in; measure once it settles.
+    await page.waitForLoadState('networkidle')
+    await page.waitForTimeout(800)
     const { violations } = await new AxeBuilder({ page }).include('.uw-page').withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa']).analyze()
     expect(violations.map((v) => v.id)).toEqual([])
   })
