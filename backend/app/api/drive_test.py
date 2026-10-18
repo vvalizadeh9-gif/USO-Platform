@@ -34,9 +34,12 @@ from sqlalchemy.orm import Session
 from app.api.work_items import MAX_EXPORT_ROWS
 from app.core import jalali
 from app.core.database import get_db
-from app.core.deps import get_current_user, require_review_authority
-from app.models.reference import Province, User
+from app.core import audit_actions
+from app.core.deps import PM, get_current_user, require_review_authority, require_roles
+from app.models.reference import Contractor, Province, User
+from app.models.workitem import Assignment
 from app.schemas import (
+    ReassignRequest,
     ChartPoint,
     ContractorAchievementRow,
     ContractorLoadRow,
@@ -81,7 +84,9 @@ from app.services.drive_test_analytics import (
     DriveTestAnalytics,
 )
 from app.services.snapshots import get_month_over_month
-from app.services.visibility import visible_province_ids
+from app.services import dt_workflow
+from app.services.audit import record_audit
+from app.services.visibility import visible_province_ids, visible_work_item_ids
 
 router = APIRouter(prefix="/drive-test", tags=["drive-test"])
 
@@ -672,3 +677,63 @@ def dt_contractor_load(
 ):
     """Each contractor's drive-test workload, for the assign panel."""
     return contractor_load.contractor_load(QueueContext(db, user), "dt")
+
+
+# ---------------- Drive test · Tests (UEP-14 §3.5) ----------------
+# ``/drive-test/sites`` is already the dashboard's site list, so the work
+# page's site-based list lives at ``/drive-test/tests``.
+@router.get("/tests")
+def dt_tests(
+    tab: str = Query("review"),
+    contractor_id: int | None = None,
+    q: str | None = None,
+    sort: str = Query("aging"),
+    dir: str = Query("desc"),
+    db: Session = Depends(get_db),
+    user: User = Depends(require_review_authority),
+):
+    """Sites to review, with contractors, or reviewed, one row per site."""
+    if tab not in dt_workflow.TEST_TABS:
+        raise HTTPException(400, f"tab must be one of {', '.join(dt_workflow.TEST_TABS)}")
+    if sort not in dt_workflow.TEST_SORTS:
+        raise HTTPException(400, f"sort must be one of {', '.join(dt_workflow.TEST_SORTS)}")
+    return dt_workflow.tests_list(
+        db, user, tab=tab, contractor_id=contractor_id, q=q, sort=sort,
+        direction="asc" if dir == "asc" else "desc",
+    )
+
+
+@router.post("/assignments/{assignment_id}/reassign")
+def reassign_dt_assignment(
+    assignment_id: int,
+    payload: ReassignRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_roles(PM)),
+):
+    """Hand an open drive test to another contractor (PM only, reason required)."""
+    reason = payload.reason.strip()
+    if not reason:
+        raise HTTPException(422, "A reason is required.")
+    assignment = db.execute(
+        select(Assignment).where(
+            Assignment.id == assignment_id,
+            Assignment.work_item_id.in_(visible_work_item_ids(user, db)),
+        )
+    ).scalar_one_or_none()
+    if assignment is None:
+        raise HTTPException(404, "Assignment not found")
+    if db.get(Contractor, payload.contractor_id) is None:
+        raise HTTPException(404, "Contractor not found")
+    old = assignment.contractor_id
+    try:
+        nxt = dt_workflow.reassign_dt_assignment(db, assignment, payload.contractor_id, user)
+    except ValueError as exc:
+        raise HTTPException(409, str(exc)) from None
+    record_audit(
+        db, user_id=user.id, action=audit_actions.ASSIGNED,
+        module="Assignment", entity_type="Assignment", entity_id=nxt.id,
+        old_value={"contractor_id": old, "assignment_id": assignment.id},
+        new_value={"contractor_id": payload.contractor_id, "reason": reason, "reassigned": True},
+    )
+    db.commit()
+    return {"status": "ok", "assignment_id": nxt.id}

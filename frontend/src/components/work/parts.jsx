@@ -109,13 +109,13 @@ export function ActionNotice({ floating = false }) {
   )
 }
 
-/** "Nothing here right now", centred in the card. */
-export function EmptyStep({ stepName }) {
+/** "All clear" and one plain sentence, centred in the card (UEP-14 §3.7). */
+export function EmptyStep({ stepName, text }) {
   return (
     <div className="uw-state">
-      <span className="uw-state-icon"><Icon name="checkmark--filled" size={20} /></span>
-      <b>Nothing here right now</b>
-      <span>Sites appear in {stepName} as soon as they reach this step.</span>
+      <span className="uw-state-icon is-clear"><Icon name="checkmark--outline" size={20} /></span>
+      <b>All clear</b>
+      <span>{text || `Nothing waiting in ${stepName}.`}</span>
     </div>
   )
 }
@@ -148,9 +148,14 @@ export function SkeletonRows({ columns, rows = 8 }) {
 
 /** Home's card: a tinted tool bar (tools left, description right) over a
  * body that scrolls inside. `panelProps` make it the strip's tab panel. */
-export function WorkListCard({ tools, description, children, foot, className = '', busy, ...panelProps }) {
+export function WorkListCard({ tools, description, children, foot, className = '', busy, stage, chip, ...panelProps }) {
   return (
-    <section className={`uw-card ${className}`.trim()} aria-busy={busy || undefined} {...panelProps}>
+    <section className={`uw-card ${stage ? `is-stage-${stage}` : ''} ${className}`.trim()} aria-busy={busy || undefined} {...panelProps}>
+      {chip && (
+        <div className="uw-card-stage">
+          <span className="uw-stage-chip">{chip}</span>
+        </div>
+      )}
       <header className="uw-card-bar">
         <div className="uw-card-tools">{tools}</div>
         {description && <p className="uw-card-desc">{description}</p>}

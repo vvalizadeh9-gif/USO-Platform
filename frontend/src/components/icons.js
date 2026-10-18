@@ -46,6 +46,12 @@ import tools16 from '@carbon/icons/es/tools/16.js'
 import tools20 from '@carbon/icons/es/tools/20.js'
 import calendar16 from '@carbon/icons/es/calendar/16.js'
 import calendar20 from '@carbon/icons/es/calendar/20.js'
+import taskApproved16 from '@carbon/icons/es/task--approved/16.js'
+import taskApproved20 from '@carbon/icons/es/task--approved/20.js'
+import dataCheck16 from '@carbon/icons/es/data--check/16.js'
+import dataCheck20 from '@carbon/icons/es/data--check/20.js'
+import toolKit16 from '@carbon/icons/es/tool-kit/16.js'
+import toolKit20 from '@carbon/icons/es/tool-kit/20.js'
 import cellTower16 from '@carbon/icons/es/cell-tower/16.js'
 import cellTower20 from '@carbon/icons/es/cell-tower/20.js'
 import certificateCheck16 from '@carbon/icons/es/certificate--check/16.js'
@@ -280,6 +286,9 @@ export const ICONS = Object.freeze({
   'user--follow': { 16: userFollow16, 20: userFollow20 },
   'search--locate': { 16: searchLocate16, 20: searchLocate20 },
   'chevron--up': { 16: chevronUp16, 20: chevronUp20 },
+  'task--approved': { 16: taskApproved16, 20: taskApproved20 },
+  'data--check': { 16: dataCheck16, 20: dataCheck20 },
+  'tool-kit': { 16: toolKit16, 20: toolKit20 },
 })
 
 /** @typedef {keyof typeof ICONS} IconName */

@@ -143,3 +143,48 @@ export const dtInProgress = Array.from({ length: 96 }, (_, i) => ({
   assigned_at: null, days_since_assigned: i % 30, status: i % 9 ? 'with_contractor' : 'sent_back',
   sent_back_comment: i % 9 ? null : 'گزارش ناقص است', sent_back_at: null,
 }))
+
+/** UEP-14: Checks batches and Tests sites. */
+export const hcBatches = {
+  counts: { open: 6, to_decide: 3, overdue: 1, completed: 4 },
+  rows: Array.from({ length: 6 }, (_, i) => ({
+    id: i + 1,
+    code: `HC-16OCT-${String(i + 1).padStart(2, '0')}`,
+    contractor_id: (i % 3) + 1,
+    contractor: CONTRACTORS[i % CONTRACTORS.length],
+    assigned_at: '2026-10-16T08:00:00Z',
+    assigned_by: 'Sara PM',
+    due_at: '2026-10-18T08:00:00Z',
+    completed_at: null,
+    sla_days: 2,
+    round: i === 2 ? 2 : 1,
+    sites: 9,
+    counts: { ready: 5, not_ready: 1, pending: 3, to_decide: i % 2 ? 6 : 0 },
+    status: i % 2 ? 'to_decide' : 'open',
+  })),
+}
+
+export const dtTests = {
+  counts: { review: 8, with: 20, reviewed: 12 },
+  rows: Array.from({ length: 8 }, (_, i) => ({
+    work_item_id: 900 + i,
+    assignment_id: 500 + i,
+    drive_test_id: 700 + i,
+    site_code: `DT${String(i).padStart(3, '0')}`,
+    province: 'تهران',
+    contractor_id: 1,
+    contractor: CONTRACTORS[0],
+    batch: `DT-${500 + i}`,
+    round: i === 0 ? 2 : 1,
+    aging_days: 3 + i * 2,
+    sla_days: 14,
+    late: 3 + i * 2 > 14,
+    assigned_at: '2026-10-01T08:00:00Z',
+    assigned_by: 'Sara PM',
+    submitted_at: '2026-10-10T08:00:00Z',
+    evidence_count: i % 3,
+    outcome: null,
+    technologies: ['2G', '4G'],
+    villages: [{ id: 10 + i, code: `V${i}`, name: 'روستا', is_new: false }],
+  })),
+}

@@ -835,6 +835,8 @@ class HcBasketItem(BaseModel):
     # health_check._pool_waiting_since) — never a substitute date.
     waiting_since: datetime | None = None
     days_waiting: int | None = None
+    previous_contractor_id: int | None = None
+    previous_contractor: str | None = None
     # The first of the site's villages by name, and how many it has (see
     # hc_queues.with_villages). Both empty when the site carries none.
     village: str | None = None
@@ -1070,6 +1072,9 @@ class DtAssignmentRow(BaseModel):
     returned_reason: str | None = None
     village: str | None = None
     village_count: int = 0
+    # Villages CPM added after the site's drive test was assigned or done;
+    # the site is back in Assign for those alone (UEP-14 §4).
+    new_villages: int = 0
 
 
 class DtInProgressRow(BaseModel):
@@ -2578,3 +2583,11 @@ class KpiLinkableUser(ORMModel):
     full_name: str
     role_name: str
     kpi_person_name: str | None
+
+
+class ReassignRequest(BaseModel):
+    """PM-only reassignment of one site (UEP-14 §5.6). A reason is required
+    and lands in the audit log and the site's history."""
+
+    contractor_id: int
+    reason: str = Field(min_length=1, max_length=500)

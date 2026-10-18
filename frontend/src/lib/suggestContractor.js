@@ -7,10 +7,19 @@ function covered(contractor, provinces) {
   return [...provinces].filter((p) => theirs.has(p)).length
 }
 
+/** Days of work a contractor already holds: open load ÷ their normal daily
+ * throughput (sites a day, from their average days to submit). Lower means
+ * more remaining capacity (UEP-14 §3.3). */
+export function loadDays(c) {
+  const perDay = c.daily_throughput ?? (c.avg_submit_days ? 1 / c.avg_submit_days : 1)
+  return c.open / Math.max(perDay, 0.01)
+}
+
 /**
  * The contractor whose coverage includes the most provinces of the selected
- * sites; a tie goes to the lower open load (then the name, so the answer is
- * stable). None when nobody covers any of them.
+ * sites; a tie goes to the most remaining capacity (fewest days of held
+ * work), then the name, so the answer is stable. None when nobody covers any
+ * of them.
  * @param {{ contractor_id: number, name: string, open: number, provinces: {province: string}[] }[]} contractors
  * @param {Iterable<string>} provinces of the selected sites
  */
@@ -24,7 +33,7 @@ export function suggestContractor(contractors, provinces) {
     if (score === 0) continue
     const better =
       score > bestScore ||
-      (score === bestScore && (c.open < best.open || (c.open === best.open && c.name < best.name)))
+      (score === bestScore && (loadDays(c) < loadDays(best) || (loadDays(c) === loadDays(best) && c.name < best.name)))
     if (better) {
       best = c
       bestScore = score

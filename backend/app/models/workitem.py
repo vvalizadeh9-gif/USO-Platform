@@ -1,7 +1,7 @@
 """Core domain models: Site, WorkItem, Village and workflow entities."""
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from typing import TYPE_CHECKING
 
 from sqlalchemy import (
@@ -168,6 +168,13 @@ class Village(Base):
     )
 
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # When the CPM import first stored this village (UEP-14 §4). A village
+    # seen after its site was assigned or DT done is "new" to that site.
+    # Set on insert: the CPM import (and an accepted CPM village change) are
+    # what create villages.
+    first_seen_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )
 
     work_item: Mapped[WorkItem] = relationship(back_populates="villages")
     # See note above — no default eager load; opt in explicitly per query.
@@ -208,6 +215,9 @@ class Assignment(Base):
     assigned_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     remarks: Mapped[str | None] = mapped_column(Text)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    # 1 for the first assignment of a site's drive test; a send back opens
+    # the next round with the same contractor and a new clock (UEP-14 §3.5).
+    round_no: Mapped[int] = mapped_column(Integer, default=1, server_default="1", nullable=False)
 
     # A contractor hands the site back before attempting DT (road blocked,
     # site down, access denied, etc). The assignment stays active/visible to
@@ -219,6 +229,15 @@ class Assignment(Base):
 
     work_item: Mapped[WorkItem] = relationship(back_populates="assignments")
     contractor = relationship("Contractor")
+
+
+class AssignmentVillage(Base):
+    """The villages a DT assignment covered when it was made (UEP-14 §4)."""
+
+    __tablename__ = "assignment_villages"
+
+    assignment_id: Mapped[int] = mapped_column(ForeignKey("assignments.id"), primary_key=True)
+    village_id: Mapped[int] = mapped_column(ForeignKey("villages.id"), primary_key=True)
 
 
 

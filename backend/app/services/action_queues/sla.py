@@ -101,3 +101,12 @@ def sla_days_by_queue(db: Session, keys: list[str]) -> dict[str, int]:
         ).all()
     )
     return {key: stored.get(key, DEFAULT_SLA_DAYS) for key in keys}
+
+
+def category_sla_days(category) -> int:
+    """A remediation's SLA: its owning team's category setting (UEP-14 §4).
+
+    The one place the fallback lives, so no service hard-codes a number.
+    """
+    days = getattr(category, "sla_days", None)
+    return days if days else DEFAULT_SLA_DAYS

@@ -65,70 +65,68 @@ beforeEach(() => vi.clearAllMocks())
 
 describe('every route opens its step', () => {
   it.each([
-    ['/health-check?tab=pool', 'Assign health check'],
-    ['/health-check?tab=basket', 'Assign health check'],
-    ['/health-check', 'Assign health check'],
-    ['/health-check?tab=pool&state=ready', 'Assign health check'],
-    ['/health-check?tab=running', 'In health check'],
-    ['/health-check?tab=review', 'Review results'],
-    ['/health-check?tab=results', 'Review results'],
-    ['/health-check?tab=remediation', 'Remediation'],
-    ['/health-check?tab=reroutes', 'Re-routes'],
+    ['/health-check', 'Health check · Assign'],
+    ['/health-check?tab=assign', 'Health check · Assign'],
+    ['/health-check?tab=pool', 'Health check · Assign'],
+    ['/health-check?tab=basket', 'Health check · Assign'],
+    ['/health-check?tab=checks', 'Health check · Checks'],
+    ['/health-check?tab=running', 'Health check · Checks'],
+    ['/health-check?tab=review', 'Health check · Checks'],
+    ['/health-check?tab=results', 'Health check · Checks'],
+    ['/health-check?tab=remediation', 'Exceptions · Remediation'],
+    ['/health-check?tab=reroutes', 'Exceptions · Re-routes'],
     ['/health-check?tab=history', 'History'],
-    ['/drive-test', 'Assign drive test'],
-    ['/drive-test?tab=assignment', 'Assign drive test'],
-    ['/drive-test?tab=in-progress', 'With contractor'],
-    ['/drive-test?tab=review', 'Review drive test'],
+    ['/drive-test', 'Drive test · Assign'],
+    ['/drive-test?tab=assignment', 'Drive test · Assign'],
+    ['/drive-test?tab=tests', 'Drive test · Tests'],
+    ['/drive-test?tab=in-progress', 'Drive test · Tests'],
+    ['/drive-test?tab=review', 'Drive test · Tests'],
+    ['/drive-test?tab=sent-back', 'Drive test · Tests'],
     ['/drive-test?tab=done', 'DT done'],
-    ['/drive-test?tab=sent-back', 'Sent back'],
     ['/drive-test?tab=history', 'History'],
   ])('%s → %s', async (path, title) => {
     await landOn(path)
     expect(heading()).toHaveTextContent(title)
   })
 
-  it.each([
-    ['dt-assign', 'assignment', 'Assign drive test'],
-    ['dt-review', 'review', 'Review drive test'],
-  ])('?tab=%s on Health check is sent on to the drive test %s step', async (from, to, title) => {
-    await landOn(`/health-check?tab=${from}&site=ABC123`)
-    expect(screen.getByTestId('where').textContent).toContain(`/drive-test?tab=${to}`)
+  it('keeps the query when an old key is redirected', async () => {
+    await landOn('/health-check?tab=review&site=ABC123')
+    expect(screen.getByTestId('where').textContent).toContain('tab=checks')
+    expect(screen.getByTestId('where').textContent).toContain('filter=to_decide')
     expect(screen.getByTestId('where').textContent).toContain('site=ABC123')
-    expect(heading()).toHaveTextContent(title)
+  })
+
+  it('sends ?tab=dt-review on Health check to Drive test · Tests', async () => {
+    await landOn('/health-check?tab=dt-review')
+    expect(screen.getByTestId('where').textContent).toContain('/drive-test?tab=tests')
+    expect(heading()).toHaveTextContent('Drive test · Tests')
   })
 })
 
 describe('the heading and the strip', () => {
-  it('names the step, its sites and how many are late', async () => {
+  it('leads the meta line with the step count and overdue', async () => {
     await landOn('/health-check')
-    expect(heading()).toHaveTextContent('Assign health check')
-    expect(document.querySelector('.uw-heading-meta')).toHaveTextContent('196 waiting · 3 late')
-    expect(screen.getByText('3 late', { selector: '.uw-heading-meta b' })).toHaveClass('uep-page-header-late')
+    expect(document.querySelector('.uw-heading-meta')).toHaveTextContent('196 sites waiting · 3 overdue')
     expect(heading()).toHaveAttribute('tabindex', '-1')
     expect(api.get).toHaveBeenCalledWith('/drive-test/pipeline/summary')
-    expect(api.get).not.toHaveBeenCalledWith('/hc/queues/counts')
   })
 
-  it('shows the same strip on both pages, the list card as its panel', async () => {
-    await landOn('/drive-test?tab=in-progress')
+  it('shows the same pipeline on both pages, the list card as its panel', async () => {
+    await landOn('/drive-test?tab=tests')
     const selected = screen.getByRole('tab', { selected: true })
-    expect(selected.dataset.step).toBe('dt5')
+    expect(selected.dataset.step).toBe('dt_tests')
+    expect(selected).toHaveTextContent('7 to decide')
     const panel = document.getElementById(selected.getAttribute('aria-controls'))
     expect(panel).toHaveAttribute('role', 'tabpanel')
-    expect(panel).toHaveAttribute('aria-labelledby', selected.id)
   })
 
   it('crosses pages when a step on the other one is chosen, and Back returns', async () => {
-    await landOn('/health-check?tab=review')
+    await landOn('/health-check?tab=checks')
     fireEvent.keyDown(screen.getByRole('tab', { selected: true }), { key: 'ArrowRight' })
     await act(async () => {})
-    expect(screen.getByTestId('where')).toHaveTextContent('/drive-test?tab=assignment')
-    expect(heading()).toHaveTextContent('Assign drive test')
+    expect(screen.getByTestId('where')).toHaveTextContent('/drive-test?tab=assign')
     await act(async () => nav(-1))
-    expect(screen.getByTestId('where')).toHaveTextContent('/health-check?tab=review')
-    expect(heading()).toHaveTextContent('Review results')
-    await act(async () => nav(1))
-    expect(heading()).toHaveTextContent('Assign drive test')
+    expect(heading()).toHaveTextContent('Health check · Checks')
   })
 
   it('opens History from the heading, marked as the current view', async () => {

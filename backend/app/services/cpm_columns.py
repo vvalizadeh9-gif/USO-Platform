@@ -209,6 +209,19 @@ def normalize_dt_status(value: object) -> str | None:
     return text  # unknown — keep as-is rather than dropping data
 
 
+def is_status_word(value: object) -> bool:
+    """True for a contractor cell that names no company: blank, a DT status
+    (Done, Ongoing, Problematic and its misspelling) or "Site SC". The import
+    never creates a contractor from one (UEP-14 §5.1)."""
+    text = clean(value)
+    if text is None:
+        return True
+    low = " ".join(text.split()).lower()
+    if low == "site sc":
+        return True
+    return normalize_dt_status(text) in (DT_STATUS_DONE, DT_STATUS_ONGOING, DT_STATUS_PROBLEMATIC)
+
+
 # ----- Provinces (column D: استان) -----
 # Iran has exactly 31 provinces. We seed this canonical set and resolve every
 # CPM استان cell to one of them (see province normalisation below), so the

@@ -37,7 +37,7 @@ export default function MyHealthCheck() {
 
   return (
     <>
-      <PageHead title="HC check" />
+      <PageHead title="Health check" />
 
       <LifecycleStrip current="hc" variant="contractor" />
 

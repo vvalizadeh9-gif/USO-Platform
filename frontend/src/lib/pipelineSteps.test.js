@@ -1,23 +1,17 @@
 import { describe, expect, it } from 'vitest'
-import { STEPS, resolveTab, stepSpokenName, stepUrl, volumeWidths } from './pipelineSteps'
+import { STEPS, STRIP_STEPS, resolveTab, stepFigures, stepSpokenName, stepUrl } from './pipelineSteps'
 
 describe('the pipeline steps', () => {
-  it('run 1–6, then DT done, then the three loops', () => {
-    expect(STEPS.map((s) => s.key)).toEqual([
-      'hc1', 'hc2', 'hc3', 'dt4', 'dt5', 'dt6', 'done', 'remediation', 'reroutes', 'sent_back',
-    ])
+  it('run Assign, Checks, Assign, Tests, then Remediation and DT done', () => {
+    expect(STRIP_STEPS.map((s) => s.key)).toEqual(['hc_assign', 'hc_checks', 'dt_assign', 'dt_tests', 'remediation', 'done'])
   })
 
   it.each([
-    ['hc1', '/health-check?tab=pool'],
-    ['hc2', '/health-check?tab=running'],
-    ['hc3', '/health-check?tab=review'],
-    ['dt4', '/drive-test?tab=assignment'],
-    ['dt5', '/drive-test?tab=in-progress'],
-    ['dt6', '/drive-test?tab=review'],
+    ['hc_assign', '/health-check?tab=assign'],
+    ['hc_checks', '/health-check?tab=checks'],
+    ['dt_assign', '/drive-test?tab=assign'],
+    ['dt_tests', '/drive-test?tab=tests'],
     ['remediation', '/health-check?tab=remediation'],
-    ['reroutes', '/health-check?tab=reroutes'],
-    ['sent_back', '/drive-test?tab=sent-back'],
   ])('%s lives at %s', (key, url) => {
     expect(stepUrl(STEPS.find((s) => s.key === key))).toBe(url)
   })
@@ -25,42 +19,37 @@ describe('the pipeline steps', () => {
 
 describe('what a ?tab= opens', () => {
   it.each([
-    ['hc', 'pool', 'hc1'], ['hc', 'basket', 'hc1'], ['hc', null, 'hc1'],
-    ['hc', 'running', 'hc2'], ['hc', 'review', 'hc3'], ['hc', 'results', 'hc3'],
-    ['dt', null, 'dt4'], ['dt', 'assignment', 'dt4'], ['dt', 'in-progress', 'dt5'],
-    ['dt', 'review', 'dt6'], ['dt', 'done', 'done'], ['dt', 'sent-back', 'sent_back'],
-    ['hc', 'nonsense', 'hc1'],
+    ['hc', null, 'hc_assign'], ['hc', 'checks', 'hc_checks'], ['dt', null, 'dt_assign'],
+    ['dt', 'tests', 'dt_tests'], ['dt', 'done', 'done'], ['hc', 'nonsense', 'hc_assign'],
   ])('%s ?tab=%s is step %s', (page, tab, key) => {
     expect(resolveTab(page, tab).step.key).toBe(key)
   })
 
-  it('opens History on either page', () => {
-    expect(resolveTab('hc', 'history')).toEqual({ history: true })
-    expect(resolveTab('dt', 'history')).toEqual({ history: true })
+  it.each([
+    ['hc', 'pool', '/health-check?tab=assign'],
+    ['hc', 'basket', '/health-check?tab=assign'],
+    ['hc', 'running', '/health-check?tab=checks'],
+    ['hc', 'review', '/health-check?tab=checks&filter=to_decide'],
+    ['hc', 'results', '/health-check?tab=checks&filter=to_decide'],
+    ['dt', 'assignment', '/drive-test?tab=assign'],
+    ['dt', 'in-progress', '/drive-test?tab=tests&view=with'],
+    ['dt', 'review', '/drive-test?tab=tests&view=review'],
+    ['dt', 'sent-back', '/drive-test?tab=tests&view=with'],
+    ['hc', 'dt-assign', '/drive-test?tab=assign'],
+  ])('redirects %s ?tab=%s to %s', (page, tab, url) => {
+    expect(resolveTab(page, tab, new URLSearchParams(`tab=${tab}`)).redirect).toBe(url)
   })
 
-  it('sends the old drive-test keys on to the Drive test page, keeping the query', () => {
-    expect(resolveTab('hc', 'dt-assign').redirect).toBe('/drive-test?tab=assignment')
-    const r = resolveTab('hc', 'dt-review', new URLSearchParams('tab=dt-review&site=ABC'))
-    expect(r.redirect).toContain('tab=review')
-    expect(r.redirect).toContain('site=ABC')
+  it('opens History on either page', () => {
+    expect(resolveTab('hc', 'history')).toEqual({ history: true })
   })
 })
 
-describe('the strip', () => {
-  it('names a tab with its count, lateness and owner', () => {
-    const step = STEPS.find((s) => s.key === 'dt5')
-    expect(stepSpokenName(step, { count: 263, late: 4 })).toBe('Step 5, In test: 263 sites, 4 late, with contractors')
-    expect(stepSpokenName(step, { count: 1, late: 0 })).toBe('Step 5, In test: 1 site, with contractors')
-    expect(stepSpokenName(STEPS.find((s) => s.key === 'reroutes'), { count: 0, late: 0 })).toBe('Re-routes: 0 sites, waiting on you')
-  })
-
-  it('draws volume bars against the largest of the six steps, never under 3%', () => {
-    const w = volumeWidths({ hc1: { count: 200 }, hc2: { count: 100 }, hc3: { count: 0 }, dt4: { count: 50 }, done: { count: 9000 } })
-    expect(w.hc1).toBe(100)
-    expect(w.hc2).toBe(50)
-    expect(w.dt4).toBe(25)
-    expect(w.hc3).toBe(3)
-    expect(w.done).toBeUndefined()
+describe('the step tiles', () => {
+  it('add the to-decide count and lateness', () => {
+    const step = STEPS.find((s) => s.key === 'dt_tests')
+    const f = stepFigures(step, { dt5: { count: 200, late: 3 }, sent_back: { count: 5, late: 1 }, dt6: { count: 12, late: 0 } })
+    expect(f).toMatchObject({ count: 205, decide: 12, late: 4 })
+    expect(stepSpokenName(step, f)).toBe('Step 4, Tests: 205 sites, 12 to decide, 4 overdue, Contractors, then you')
   })
 })

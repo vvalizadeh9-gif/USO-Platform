@@ -14,7 +14,9 @@
   gap: var(--uep-space-16);
   color: var(--uep-text);
   font-variant-numeric: tabular-nums;
-  animation: h-enter var(--uep-dur-enter) var(--uep-ease-entrance) both;
+  /* backwards, never both: a finished entrance must leave no transform
+     behind, or it makes a stacking context menus open under (UEP-14 §3.8). */
+  animation: h-enter var(--uep-dur-enter) var(--uep-ease-entrance) backwards;
 }
 @keyframes h-enter {
   from { opacity: 0; transform: translateY(var(--uep-enter-distance)); }
@@ -123,7 +125,7 @@
   width: var(--pct);
   background: var(--uep-app-monthly-plan);
   border-radius: inherit;
-  animation: hw-grow var(--uep-progress-fill) var(--uep-ease-expressive) both;
+  animation: hw-grow var(--uep-progress-fill) var(--uep-ease-expressive) backwards;
 }
 @keyframes hw-grow { from { width: 0; } }
 .hw-plan-line { font-size: var(--uep-fs-caption); color: var(--uep-text-3); }

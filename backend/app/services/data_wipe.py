@@ -37,11 +37,18 @@ from app.models.acceptance_workflow import (
     AcceptanceSubmission,
     AcceptanceSubmissionTech,
 )
-from app.models.health_check import HcAssignment, HcRemediation, HcTask, HcTaskTechnology
+from app.models.health_check import (
+    HcAssignment,
+    HcRemediation,
+    HcTask,
+    HcTaskTechnology,
+    HcTaskVillage,
+)
 from app.models.mojri import MojriImportRun, MojriTrackerStatus
 from app.models.performance import LifecycleStatusHistory
 from app.models.workitem import (
     Assignment,
+    AssignmentVillage,
     DriveTest,
     DriveTestEvidence,
     HealthCheck,
@@ -72,6 +79,8 @@ WIPE_ORDER: tuple[tuple[str, Table], ...] = (
     ("acceptance_authority_requests", AcceptanceAuthorityRequest.__table__),
     # Health-check workflow. hc_remediations references hc_tasks (and
     # work_items) with no DB-level cascade, so it goes before hc_tasks.
+    ("hc_task_villages", HcTaskVillage.__table__),
+    ("assignment_villages", AssignmentVillage.__table__),
     ("hc_task_technologies", HcTaskTechnology.__table__),
     ("hc_remediations", HcRemediation.__table__),
     ("hc_tasks", HcTask.__table__),

@@ -24,6 +24,7 @@ from app.models.health_check import (
     HcRemediation,
     HcTask,
     HcTaskTechnology,
+    HcTaskVillage,
 )
 from app.models.kpi import ProvinceMapping
 from app.models.mojri import MojriImportRun, MojriTrackerStatus
@@ -40,6 +41,7 @@ from app.models.reference import (
 )
 from app.models.workitem import (
     Assignment,
+    AssignmentVillage,
     DriveTest,
     DriveTestEvidence,
     HealthCheck,
@@ -72,6 +74,7 @@ __all__ = [
     "SpentCaptcha",
     "HcTask",
     "HcTaskTechnology",
+    "HcTaskVillage",
     "Notification",
     "letter_villages",
     "Contractor",
@@ -86,6 +89,7 @@ __all__ = [
     "User",
     "user_province_access",
     "Assignment",
+    "AssignmentVillage",
     "DriveTest",
     "DriveTestEvidence",
     "HealthCheck",

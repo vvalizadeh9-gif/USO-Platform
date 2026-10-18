@@ -28,30 +28,25 @@ describe('app registry role filtering', () => {
   })
 
   it.each([
-    ['/health-check', '', 'hc-pool'],
-    ['/health-check', '?tab=pool&state=ready', 'hc-pool'],
-    ['/health-check', '?tab=running', 'hc-pool'],
-    ['/health-check', '?tab=remediation', 'hc-pool'],
-    ['/health-check', '?tab=reroutes', 'hc-pool'],
-    ['/health-check', '?tab=review', 'hc-review'],
-    ['/health-check', '?tab=results', 'hc-review'],
-    ['/drive-test', '', 'assignment'],
-    ['/drive-test', '?tab=in-progress', 'assignment'],
-    ['/drive-test', '?tab=sent-back', 'assignment'],
-    ['/drive-test', '?tab=review', 'dt-review'],
+    ['/health-check', '', 'hc-assign'],
+    ['/health-check', '?tab=assign', 'hc-assign'],
+    ['/health-check', '?tab=checks', 'hc-checks'],
+    ['/health-check', '?tab=remediation', 'remediation'],
+    ['/health-check', '?tab=reroutes', 'remediation'],
+    ['/drive-test', '', 'dt-assign'],
+    ['/drive-test', '?tab=assign', 'dt-assign'],
+    ['/drive-test', '?tab=tests', 'dt-tests'],
+    ['/drive-test', '?tab=done', 'dt-tests'],
+    ['/drive-test', '?tab=history', 'history'],
+    ['/health-check', '?tab=history', 'history'],
   ])('lights the rail item of each pipeline step: %s%s → %s', (path, search, id) => {
     expect(locate(appsFor('Coordinator'), path, search).page.id).toBe(id)
   })
 
-  it('lights no work item for History or DT done', () => {
-    expect(locate(appsFor('PM'), '/health-check', '?tab=history').page).toBeNull()
-    expect(locate(appsFor('PM'), '/drive-test', '?tab=done').page).toBeNull()
-  })
-
   it('locates the most specific page for a URL', () => {
-    const { app, page } = locate(appsFor('PM'), '/drive-test', '?tab=review')
+    const { app, page } = locate(appsFor('PM'), '/drive-test', '?tab=tests')
     expect(app.id).toBe('drive-test')
-    expect(page.id).toBe('dt-review')
+    expect(page.id).toBe('dt-tests')
   })
 })
 

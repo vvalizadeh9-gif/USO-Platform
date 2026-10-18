@@ -411,4 +411,19 @@
   /* Waiting bars up to the SLA (UEP-13 §3.9). */
   --uep-bar-neutral: #9AA3B2;
   --uep-shadow-1: 0 1px 2px rgba(20, 27, 43, 0.04);
+  /* Hover (UEP-14 §3.8): rows, rail, menus, buttons, cards, segments; the
+     strong one for steppers and icon buttons. #F9FAFB was too faint. */
+  --uep-hover: #EEF1F6;
+  --uep-hover-strong: #E6EAF1;
+  /* The Drive test stage tints and their selected-row shade. */
+  --uep-stage-hc: var(--uep-accent);
+  --uep-stage-hc-tint: var(--uep-accent-tint);
+  --uep-stage-hc-tint-hover: #DCE6FD;
+  --uep-stage-dt: var(--uep-app-drive-test);
+  --uep-stage-dt-tint: var(--uep-app-drive-test-tint);
+  --uep-stage-dt-tint-hover: #DDEEEC;
+  --uep-ready: #1D7A4B;
+  --uep-not-ready: #B42F2A;
+  --uep-waiting: #9A5F00;
+  --uep-waiting-tint: #FCF0D9;
 }

@@ -1,38 +1,55 @@
-import { useEffect, useRef } from 'react'
-import Icon from '../Icon'
-import { STEPS, stepSpokenName, tabId, volumeWidths } from '../../lib/pipelineSteps'
-import { formatNumber } from '../../lib/numbers'
+import { useEffect, useRef, useState } from 'react'
+import { STRIP_STEPS, stepFigures, stepSpokenName, tabId } from '../../lib/pipelineSteps'
+import { reducedMotion } from '../../lib/motionPreference'
 
-const GROUPS = [
-  { id: 'hc', caption: 'Health check' },
-  { id: 'dt', caption: 'Drive test' },
-  { id: 'outcome', caption: 'Outcome' },
-  { id: 'loop', caption: 'Side loops' },
+const BANDS = [
+  { id: 'hc', caption: 'Health check', note: 'Ready to Drive test · Problematic to Remediation' },
+  { id: 'dt', caption: 'Drive test', note: 'Accept to DT done · Send back as Round 2' },
+  { id: 'exceptions', caption: 'Exceptions' },
 ]
 
+/** A figure that counts to its new value after an action (≤ 700 ms). */
+function useCountTo(value) {
+  const [shown, setShown] = useState(value)
+  const from = useRef(value)
+  useEffect(() => {
+    if (value == null) return undefined
+    const start = from.current
+    from.current = value
+    if (start == null || start === value || reducedMotion()) {
+      setShown(value)
+      return undefined
+    }
+    let frame
+    const t0 = performance.now()
+    const tick = (now) => {
+      const p = Math.min(1, (now - t0) / 600)
+      setShown(Math.round(start + (value - start) * (1 - (1 - p) ** 3)))
+      if (p < 1) frame = requestAnimationFrame(tick)
+    }
+    frame = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(frame)
+  }, [value])
+  return shown
+}
+
 /**
- * The Health check → Drive test pipeline as one strip (UEP-06 §3): six step
- * tiles, the DT done outcome and three side loops, in four groups.
+ * The Drive test pipeline (UEP-14 §3.2): a Health check band (1 Assign →
+ * 2 Checks), a Drive test band (3 Assign → 4 Tests) and an Exceptions box
+ * (Remediation, DT done).
  *
- * One tablist. Every tile and loop row is a tab with a roving tabindex; the
- * arrow keys move through them in strip order (Home and End jump) and moving
- * selects, which changes the URL. The selected tab is Home's hero tile.
- *
- * @param {{ summary: Record<string, {count:number, late:number}> | null, selected: string | null,
- *   onSelect: (step: object, viaKeyboard: boolean) => void, panelId: string, focusSelected?: boolean }} props
+ * One tablist. Every tile is a tab with a roving tabindex; the arrow keys
+ * move through them in strip order (Home and End jump) and moving selects,
+ * which changes the URL. The selected tile is filled in its stage colour.
  */
 export default function PipelineStrip({ summary, selected, onSelect, panelId, focusSelected }) {
-  const listRef = useRef(null)
-  const widths = volumeWidths(summary)
-
-  // After a keyboard move that changed page, the new page focuses its tab.
   useEffect(() => {
     if (focusSelected && selected) document.getElementById(tabId(selected))?.focus()
   }, [focusSelected, selected])
 
   const onKeyDown = (event) => {
-    const index = STEPS.findIndex((s) => s.key === selected)
-    const last = STEPS.length - 1
+    const index = STRIP_STEPS.findIndex((s) => s.key === selected)
+    const last = STRIP_STEPS.length - 1
     const next = {
       ArrowRight: index < 0 ? 0 : Math.min(last, index + 1),
       ArrowLeft: index < 0 ? 0 : Math.max(0, index - 1),
@@ -41,51 +58,33 @@ export default function PipelineStrip({ summary, selected, onSelect, panelId, fo
     }[event.key]
     if (next === undefined) return
     event.preventDefault()
-    const step = STEPS[next]
+    const step = STRIP_STEPS[next]
     document.getElementById(tabId(step.key))?.focus()
     if (step.key !== selected) onSelect(step, true)
   }
 
-  const tab = (step) => {
-    const figures = summary?.[step.key]
-    const isSelected = step.key === selected
-    return {
-      id: tabId(step.key),
-      role: 'tab',
-      type: 'button',
-      'aria-selected': isSelected,
-      'aria-controls': panelId,
-      'aria-label': stepSpokenName(step, figures),
-      // Roving: only the selected tab is a tab stop (the first when none is).
-      tabIndex: isSelected || (!selected && step === STEPS[0]) ? 0 : -1,
-      onClick: () => !isSelected && onSelect(step, false),
-      'data-step': step.key,
-      figures,
-      isSelected,
-    }
-  }
-
   return (
-    <div className="uw-strip" role="tablist" aria-label="Site pipeline" ref={listRef} onKeyDown={onKeyDown}>
-      {GROUPS.map((g) => (
-        <div key={g.id} className={`uw-strip-group is-${g.id}`} role="presentation">
-          <span className="uw-strip-caption" aria-hidden="true">{g.caption}</span>
-          <div className="uw-strip-items" role="presentation">
-            {STEPS.filter((s) => s.group === g.id).map((step) => {
-              const { figures, isSelected, ...props } = tab(step)
-              if (g.id === 'loop') return <LoopRow key={step.key} step={step} figures={figures} selected={isSelected} {...props} />
-              return (
-                <StepTile
-                  key={step.key}
-                  step={step}
-                  figures={figures}
-                  selected={isSelected}
-                  width={widths[step.key]}
-                  loading={summary == null}
-                  {...props}
-                />
-              )
-            })}
+    <div className="uw-pipe" role="tablist" aria-label="Drive test pipeline" onKeyDown={onKeyDown}>
+      {BANDS.map((band) => (
+        <div key={band.id} className={`uw-pipe-band is-${band.id}`} role="presentation">
+          <span className="uw-pipe-caption" aria-hidden="true">
+            <b>{band.caption}</b>
+            {band.note && <span>{band.note}</span>}
+          </span>
+          <div className="uw-pipe-steps" role="presentation">
+            {STRIP_STEPS.filter((s) => s.band === band.id).map((step, i) => (
+              <StepTile
+                key={step.key}
+                step={step}
+                arrow={band.id !== 'exceptions' && i > 0}
+                figures={stepFigures(step, summary)}
+                loading={summary == null}
+                selected={step.key === selected}
+                tabbable={step.key === selected || (!selected && step === STRIP_STEPS[0])}
+                panelId={panelId}
+                onSelect={onSelect}
+              />
+            ))}
           </div>
         </div>
       ))}
@@ -93,45 +92,39 @@ export default function PipelineStrip({ summary, selected, onSelect, panelId, fo
   )
 }
 
-function Figure({ figures, loading }) {
-  if (loading) return <span className="uw-skel uw-skel-figure" aria-hidden="true" />
-  if (!figures) return <span className="uw-tile-figure">–</span>
-  return <span className="uw-tile-figure">{figures.count.toLocaleString('en-US')}</span>
-}
-
-function StepTile({ step, figures, selected, width, loading, ...props }) {
-  const outcome = step.group === 'outcome'
+function StepTile({ step, arrow, figures, loading, selected, tabbable, panelId, onSelect }) {
+  const count = useCountTo(figures?.count ?? null)
+  const owning = step.owner === 'Owning teams'
   return (
-    <button className={`uw-tile ${selected ? 'is-hero' : ''} ${outcome ? 'is-outcome' : ''}`.trim()} {...props}>
-      <span className="uw-tile-label" aria-hidden="true">
-        {outcome ? (
-          <span className="uw-tile-done"><Icon name="checkmark" size={16} /></span>
-        ) : (
-          <span className="uw-tile-num">{step.number}</span>
-        )}
-        <span className="uw-tile-name">{step.short}</span>
-      </span>
-      <span className="uw-tile-line" aria-hidden="true">
-        <Figure figures={figures} loading={loading} />
-        {figures?.late > 0 && <span className="uw-tile-late">{figures.late.toLocaleString('en-US')} late</span>}
-      </span>
-      {outcome ? (
-        <span className="uw-tile-meta" aria-hidden="true">To acceptance</span>
-      ) : (
-        <span className={`uw-tile-bar is-${step.group}`} aria-hidden="true">
-          <i style={{ width: `${figures ? width : 0}%` }} />
+    <>
+      {arrow && <span className="uw-pipe-arrow" aria-hidden="true">→</span>}
+      <button
+        id={tabId(step.key)}
+        role="tab"
+        type="button"
+        aria-selected={selected}
+        aria-controls={panelId}
+        aria-label={stepSpokenName(step, figures)}
+        tabIndex={tabbable ? 0 : -1}
+        data-step={step.key}
+        className={`uw-pipe-tile is-${step.band} ${selected ? 'is-selected' : ''} ${owning ? 'is-owning' : ''}`.trim()}
+        onClick={() => !selected && onSelect(step, false)}
+      >
+        <span className="uw-pipe-owner" aria-hidden="true">{step.owner}</span>
+        <span className="uw-pipe-name" aria-hidden="true">
+          {step.number && <span className="uw-pipe-num">{step.number}</span>}
+          {step.short}
         </span>
-      )}
-    </button>
-  )
-}
-
-function LoopRow({ step, figures, selected, ...props }) {
-  return (
-    <button className={`uw-loop ${selected ? 'is-selected' : ''}`.trim()} {...props}>
-      <span className="uw-loop-label" aria-hidden="true">{step.short}</span>
-      {figures?.late > 0 && <span className="uw-loop-late" aria-hidden="true">{formatNumber(figures.late)} late</span>}
-      <span className="uw-loop-count" aria-hidden="true">{figures ? figures.count.toLocaleString('en-US') : '–'}</span>
-    </button>
+        <span className="uw-pipe-line" aria-hidden="true">
+          {loading ? (
+            <span className="uw-skel uw-skel-figure" />
+          ) : (
+            <span className="uw-pipe-figure">{count == null ? '–' : count.toLocaleString('en-US')}</span>
+          )}
+          {figures?.decide > 0 && <span className="uw-pipe-decide">{figures.decide.toLocaleString('en-US')} to decide</span>}
+          {figures?.late > 0 && <span className="uw-pipe-late">{figures.late.toLocaleString('en-US')} overdue</span>}
+        </span>
+      </button>
+    </>
   )
 }

@@ -29,7 +29,7 @@ function renderSearch(role = 'PM') {
 describe('matchPages', () => {
   it('finds a page by its label and every page of an app by the app name', () => {
     const apps = appsFor('PM')
-    expect(matchPages(apps, 'review').map((p) => p.label)).toEqual(['HC review', 'DT review'])
+    expect(matchPages(apps, 'checks').map((p) => p.label)).toEqual(['Checks'])
     expect(matchPages(apps, 'monthly').map((p) => p.label)).toEqual(['Approvals', 'Plans', 'History', 'Internal PIP'])
     expect(matchPages(apps, '  ')).toEqual([])
   })
@@ -108,15 +108,15 @@ describe('GlobalSearch', () => {
     api.get.mockResolvedValue({ data: EMPTY })
     renderSearch()
     const input = screen.getByRole('combobox')
-    fireEvent.change(input, { target: { value: 'review' } })
+    fireEvent.change(input, { target: { value: 'assign' } })
     await act(async () => {
       vi.advanceTimersByTime(250)
     })
 
     fireEvent.keyDown(input, { key: 'ArrowDown' })
-    expect(screen.getByRole('option', { name: /DT review/ })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getAllByRole('option', { name: /Assign/ })[1]).toHaveAttribute('aria-selected', 'true')
     fireEvent.submit(input.closest('form'))
-    expect(screen.getByTestId('where')).toHaveTextContent('/drive-test?tab=review')
+    expect(screen.getByTestId('where')).toHaveTextContent('/drive-test?tab=assign')
   })
 
   it('always offers the full site list for the term', async () => {
