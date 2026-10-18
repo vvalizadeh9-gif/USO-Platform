@@ -497,8 +497,8 @@
   place-items: center;
   width: 24px;
   height: 24px;
-  border-radius: 6px;
-  color: #FFFFFF;
+  border-radius: var(--uep-radius-sm);
+  color: var(--uep-on-accent);
 }
 .uep-rail-section {
   padding: var(--uep-space-12) var(--uep-space-8) var(--uep-space-4);

@@ -92,7 +92,7 @@
 .uw-seg { display: inline-flex; padding: 2px; gap: 2px; border: var(--uep-border-width) solid var(--uep-border-strong); border-radius: var(--uep-radius-control); background: var(--uep-surface); }
 .uw-seg-btn {
   display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px;
-  border: 0; border-radius: 6px; background: transparent; color: var(--uep-text-2);
+  border: 0; border-radius: var(--uep-radius-sm); background: transparent; color: var(--uep-text-2);
   font: inherit; font-size: var(--uep-fs-small); cursor: pointer;
 }
 .uw-seg-btn:hover:not(:disabled) { background: var(--uep-hover); }
