@@ -1,6 +1,6 @@
 import { AnimatePresence, motion } from 'framer-motion'
 import { useEffect, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { Navigate, useSearchParams } from 'react-router-dom'
 import api from '../api/client'
 import { useAuth } from '../context/AuthContext'
 import { HeaderCount } from '../components/PageHeader'
@@ -14,7 +14,6 @@ import AuditLogTab from './admin/AuditLogTab'
 import ProblemCategoriesTab from './admin/ProblemCategoriesTab'
 import ProvinceAssignmentsTab from './admin/ProvinceAssignmentsTab'
 import MojriTemplateTab from './admin/MojriTemplateTab'
-import ActionSlaTab from './admin/ActionSlaTab'
 
 // Every view besides CPM changes hits Admin-only endpoints (see backend
 // app/api/admin.py); PM sees only CPM changes, which the backend allows for
@@ -26,11 +25,9 @@ const TABS = [
   { key: 'import', label: 'CPM import', adminOnly: true },
   { key: 'history', label: 'Import history', adminOnly: true },
   { key: 'validate', label: 'CPM changes' },
-  { key: 'users', label: 'Users and roles', adminOnly: true },
-  { key: 'categories', label: 'Reference data', adminOnly: true },
+  { key: 'users', label: 'Users & roles', adminOnly: true },
+  { key: 'categories', label: 'Problem categories', adminOnly: true },
   { key: 'provinces', label: 'Province assignments', adminOnly: true },
-  // Overdue thresholds for the queues (default 14 days).
-  { key: 'action-sla', label: 'SLA and digest', adminOnly: true },
   // A download, and only a download: it reads villages we have already
   // approved and writes nothing, which is the only reason it may be Admin's.
   // The import that brings the filled file back is PM's alone.
@@ -63,6 +60,9 @@ export default function Admin() {
     refreshPending()
   }, [tab])
 
+  // The Action SLA tab became Admin > SLA policies (UEP-15).
+  if (linkedTab === 'action-sla') return <Navigate to="/admin/sla" replace />
+
   return (
     <>
       <PageHead
@@ -85,7 +85,6 @@ export default function Admin() {
           {tab === 'users' && isAdmin && <UsersTab />}
           {tab === 'categories' && isAdmin && <ProblemCategoriesTab />}
           {tab === 'provinces' && isAdmin && <ProvinceAssignmentsTab />}
-          {tab === 'action-sla' && isAdmin && <ActionSlaTab />}
           {tab === 'mojri' && isAdmin && <MojriTemplateTab />}
           {tab === 'audit' && isAdmin && <AuditLogTab />}
         </motion.div>

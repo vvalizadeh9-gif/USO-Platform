@@ -1369,8 +1369,8 @@ is read by the Lifecycle Gaps overview's two "missing in Mojri" figures (§5c).
 > **UEP-05:** the Action Center screen and its board endpoints were removed.
 > Home (`/home`) is each user's single view of their pending work. The queue
 > services in `services/action_queues/` (registry, SLA, done, context) feed
-> Home, the app rail counts, the daily digest and the Admin *SLA and digest*
-> tab; the settings endpoints are in `api/work_queues.py`. Where the text below
+> Home, the app rail counts, the daily digest and Admin *SLA policies*
+> (`/admin/sla`, UEP-15); the settings endpoints are in `api/work_queues.py`. Where the text below
 > says "Action Center" or "board", read "the pending-work queues". The Fix
 > queue lives in the Drive test app, and is a category owner's only page there.
 
@@ -1466,9 +1466,12 @@ stays on "File villages" until the answer is filed.
 
 ### SLA and overdue (`sla.py`)
 
-- Default **14 days** per queue, stored in `action_queue_sla` (a missing row
-  is the default) and set by an Admin in **Admin → Action SLA** or
-  `PUT /admin/action-sla`. No deploy.
+- Since UEP-15 every SLA is a **step** in `sla_policy`, read through
+  `services/sla_policy.py` (`get_days`, `get_all`, cached per request). Each
+  queue maps to a step in `sla_policy.QUEUE_STEP`; remediation has one step per
+  problem category (`remediation:<id>`). Set by PM or Admin on **Admin → SLA
+  policies** or `PUT /admin/sla-policies`. No deploy. Queues not mapped to a
+  step still read `action_queue_sla` (read-only, removed next release).
 - An item is overdue when `now − started_at > sla_days`, strictly: 14 days
   exactly is on time.
 - **Fixes** are late after their own `due_at`, set from the problem category's

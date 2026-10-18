@@ -214,15 +214,38 @@ export const APPS = Object.freeze([
     icon: 'settings',
     color: '--uep-app-admin',
     group: 'platform',
-    roles: ['Admin'],
+    // PM edits and Viewer reads SLA policies (UEP-15); every other page is Admin's.
+    roles: ['Admin', 'PM', 'Viewer'],
     pages: [
-      { id: 'overview', label: 'Overview', route: '/admin?tab=overview' },
-      { id: 'users', label: 'Users and roles', route: '/admin?tab=users' },
-      { id: 'provinces', label: 'Province assignments', route: '/admin?tab=provinces' },
-      { id: 'reference', label: 'Reference data', route: '/admin?tab=categories' },
-      { id: 'sla', label: 'SLA and digest', route: '/admin?tab=action-sla' },
-      { id: 'mojri-template', label: 'Mojri template', route: '/admin?tab=mojri' },
-      { id: 'audit', label: 'Audit log', route: '/admin?tab=audit' },
+      { id: 'overview', label: 'Overview', route: '/admin?tab=overview', roles: ['Admin'] },
+      {
+        id: 'users', section: 'People', label: 'Users & roles', route: '/admin?tab=users', roles: ['Admin'],
+        icon: 'user--multiple', tile: '--uep-app-admin',
+      },
+      {
+        id: 'provinces', section: 'People', label: 'Province assignments', route: '/admin?tab=provinces', roles: ['Admin'],
+        icon: 'location--filled', tile: '--uep-app-admin',
+      },
+      {
+        id: 'sla', section: 'Workflow', label: 'SLA policies', route: '/admin/sla', roles: ['Admin', 'PM', 'Viewer'],
+        icon: 'timer', tile: '--uep-app-admin',
+      },
+      {
+        id: 'reference', section: 'Workflow', label: 'Problem categories', route: '/admin?tab=categories', roles: ['Admin'],
+        icon: 'list--checked', tile: '--uep-app-admin',
+      },
+      {
+        id: 'cpm-import', section: 'Data', label: 'CPM import', route: '/admin?tab=import', roles: ['Admin'],
+        icon: 'data--base', tile: '--uep-app-admin',
+      },
+      {
+        id: 'mojri-template', section: 'Data', label: 'Mojri template', route: '/admin?tab=mojri', roles: ['Admin'],
+        icon: 'download', tile: '--uep-app-admin',
+      },
+      {
+        id: 'audit', section: 'Data', label: 'Audit log', route: '/admin?tab=audit', roles: ['Admin'],
+        icon: 'document', tile: '--uep-app-admin',
+      },
     ],
   },
 ])

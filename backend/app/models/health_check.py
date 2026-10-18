@@ -16,6 +16,7 @@ from __future__ import annotations
 from datetime import datetime
 
 from sqlalchemy import (
+    Boolean,
     DateTime,
     ForeignKey,
     Integer,
@@ -138,6 +139,10 @@ class HcRemediation(Base):
     due_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     closed_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+    # Recorded when the fix closes (UEP-15), so closed history and past
+    # reports never change when the category's SLA changes later.
+    sla_days_applied: Mapped[int | None] = mapped_column(Integer)
+    on_time: Mapped[bool | None] = mapped_column(Boolean)
     resolution_note: Mapped[str | None] = mapped_column(Text)
 
     # "Not my area": the owner proposes a different category and gives a

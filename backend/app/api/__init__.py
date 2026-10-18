@@ -17,6 +17,7 @@ from app.api import (
     monthly_plan,
     my_work,
     search,
+    sla_policies,
     work_items,
     work_queues,
     workflow,
@@ -38,6 +39,7 @@ api_router.include_router(monthly_plan.router)
 api_router.include_router(admin.router)
 api_router.include_router(misc.router)
 api_router.include_router(work_queues.router)
+api_router.include_router(sla_policies.router)
 api_router.include_router(home.router)
 api_router.include_router(search.router)
 api_router.include_router(client_errors.router)

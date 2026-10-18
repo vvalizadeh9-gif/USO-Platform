@@ -187,22 +187,12 @@ def test_summary_has_every_strip_key_with_its_sla(client, pm):
 
 
 def test_summary_follows_the_admin_sla(client, pm):
-    from app.models.action_center import ActionQueueSla
-
-    db = SessionLocal()
-    try:
-        db.add(ActionQueueSla(queue_key="hc_in_check", sla_days=9))
-        db.commit()
-    finally:
-        db.close()
+    r = client.put(f"{API}/admin/sla-policies", headers=pm,
+                   json={"changes": [{"step_key": "hc_check", "days": 9}]})
+    assert r.status_code == 200, r.text
     body = client.get(f"{API}/drive-test/pipeline/summary", headers=pm).json()
     assert body["hc2"]["sla_days"] == 9
-    db = SessionLocal()
-    try:
-        db.query(ActionQueueSla).filter_by(queue_key="hc_in_check").delete()
-        db.commit()
-    finally:
-        db.close()
+    client.post(f"{API}/admin/sla-policies/revert/{r.json()['change_id']}", headers=pm)
 
 
 @pytest.mark.parametrize("role", ["pm", "coordinator"])

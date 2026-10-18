@@ -290,12 +290,13 @@ the email off from their account menu ("Daily email digest").
 
 ### Changing an SLA
 
-Each Action Center queue counts an item overdue after 14 days unless an
-administrator says otherwise: **Admin Console → Action SLA**, change the days,
-Save. It applies on the next read; no deploy or restart. (The same is
-`PUT /api/v1/admin/action-sla` with `[{"queue_key": "dt_review", "sla_days":
-7}]`.) Fixes follow their problem category's own SLA (Admin → Problem
-Categories), and the monthly plan its day-3 deadline.
+Every SLA in UEP is set on **Admin → SLA policies** (`/admin/sla`), by a PM
+or an Admin: change the days, press Update. It applies on the next read
+everywhere (Home, rail counts, Health check / Drive test pages, remediation due
+dates, the digest); no deploy or restart. History lists every change and Revert
+undoes one. The API is `PUT /api/v1/admin/sla-policies` with
+`{"changes": [{"step_key": "dt_review", "days": 2, "expected_days": 1}]}`.
+The monthly plan keeps its day-3 deadline.
 
 ---
 
