@@ -205,6 +205,9 @@ export const APPS = Object.freeze([
       { id: 'cpm-validate', label: 'CPM changes', route: '/admin?tab=validate', roles: ['PM'], queues: ['cpm_changes'] },
       { id: 'mojri', label: 'Mojri tracker', route: '/mojri-tracker', roles: ['PM'] },
       { id: 'history', label: 'Import history', route: '/admin?tab=history', roles: ['Admin'] },
+      // PM's way in to Admin > SLA policies (UEP-15), without adding an app to
+      // PM's Home. Viewer reads the same page at /admin/sla.
+      { id: 'sla-policies', label: 'SLA policies', route: '/admin/sla', roles: ['PM'] },
     ],
   },
   {
@@ -214,8 +217,7 @@ export const APPS = Object.freeze([
     icon: 'settings',
     color: '--uep-app-admin',
     group: 'platform',
-    // PM edits and Viewer reads SLA policies (UEP-15); every other page is Admin's.
-    roles: ['Admin', 'PM', 'Viewer'],
+    roles: ['Admin'],
     pages: [
       { id: 'overview', label: 'Overview', route: '/admin?tab=overview', roles: ['Admin'] },
       {
@@ -227,7 +229,7 @@ export const APPS = Object.freeze([
         icon: 'location--filled', tile: '--uep-app-admin',
       },
       {
-        id: 'sla', section: 'Workflow', label: 'SLA policies', route: '/admin/sla', roles: ['Admin', 'PM', 'Viewer'],
+        id: 'sla', section: 'Workflow', label: 'SLA policies', route: '/admin/sla', roles: ['Admin'],
         icon: 'timer', tile: '--uep-app-admin',
       },
       {
