@@ -147,7 +147,7 @@ export const dtInProgress = Array.from({ length: 96 }, (_, i) => ({
 /** UEP-14: Checks batches and Tests sites. */
 export const hcBatches = {
   counts: { open: 6, to_decide: 3, overdue: 1, completed: 4 },
-  rows: Array.from({ length: 6 }, (_, i) => ({
+  rows: Array.from({ length: 30 }, (_, i) => ({
     id: i + 1,
     code: `HC-16OCT-${String(i + 1).padStart(2, '0')}`,
     contractor_id: (i % 3) + 1,
@@ -166,7 +166,7 @@ export const hcBatches = {
 
 export const dtTests = {
   counts: { review: 8, with: 20, reviewed: 12 },
-  rows: Array.from({ length: 8 }, (_, i) => ({
+  rows: Array.from({ length: 30 }, (_, i) => ({
     work_item_id: 900 + i,
     assignment_id: 500 + i,
     drive_test_id: 700 + i,
