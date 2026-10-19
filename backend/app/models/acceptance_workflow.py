@@ -129,8 +129,16 @@ class AcceptanceSubmission(Base):
     reviewed_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
     reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     # Required when a submission is returned: the contractor has to be told
-    # what was wrong with it, and the reason belongs in the record.
+    # what was wrong with it, and the reason belongs in the record. One per
+    # submission, so a returned letter can carry a different reason per
+    # village (UEP-16).
     review_comment: Mapped[str | None] = mapped_column(Text)
+    # Bumped on every state change (correct, withdraw, confirm, return). A
+    # review names the version it was looking at, and a stale one is a 409:
+    # two coordinators on the same letter cannot both decide a village.
+    version: Mapped[int] = mapped_column(
+        Integer, default=0, server_default="0", nullable=False
+    )
 
     village = relationship("Village")
     technologies: Mapped[list[AcceptanceSubmissionTech]] = relationship(

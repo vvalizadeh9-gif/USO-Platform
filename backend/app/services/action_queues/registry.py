@@ -20,6 +20,7 @@ from app.services.action_queues.types import (
     PM,
     PROBLEM_OWNER,
     HOME_QUEUES,
+    RAIL_QUEUES,
     REGIONAL_MANAGER,
     STAGE_GROUP,
     QueueDefinition,
@@ -57,8 +58,10 @@ def _acceptance_queues(authority: str) -> list[QueueDefinition]:
         _q(f"{prefix}_to_file", stage, "File villages", f"{authority} to file",
            url(authority, S.TAB_NOT_FILED), {COORDINATOR, CONTRACTOR},
            acceptance.queue(authority, S.TAB_NOT_FILED, contractor_owns=True), unit="villages"),
+        # The PM validates too (UEP-16), so the PM's Home row, rail badge and
+        # page header read the same number as a coordinator's.
         _q(f"{prefix}_to_validate", stage, "Validate contractor filings", f"{authority} filings",
-           url(authority, S.TAB_FILLED), {COORDINATOR},
+           acceptance.validation_url(authority), _STAFF,
            acceptance.queue(authority, S.TAB_FILLED, contractor_owns=False), unit="villages"),
         _q(f"{prefix}_refile", stage, "Re-file rejected villages", f"{authority} re-filing",
            url(authority, S.TAB_NEW_LETTER), {CONTRACTOR},
@@ -95,6 +98,11 @@ QUEUES: tuple[QueueDefinition, ...] = (
        lifecycle.returned_to_redo),
     # --- ICT, then CRA ---------------------------------------------------
     *(q for authority in AUTHORITIES for q in _acceptance_queues(authority)),
+    # The Filing page's rail badge (UEP-16 §2): villages in Filing's own
+    # buckets, each once -- the number in the Filing header. Home's cards do
+    # not show it (types.RAIL_QUEUES).
+    _q("acceptance_filing", Stage.ICT, "File acceptance letters", "Filing",
+       "/my-work", _HOME_ACCEPTANCE, acceptance.filing, unit="villages", on_board=False),
     # --- Plans & Data ----------------------------------------------------
     _q("plans_approve", Stage.PLANS, "Approve plans", "Plan approvals",
        "/monthly-plan?tab=approvals", {PM}, plans.plans_to_approve, unit="plans"),
@@ -111,8 +119,18 @@ assert len(QUEUES_BY_KEY) == len(QUEUES), "queue keys must be unique"
 
 
 def queues_for(role: str, *, home_only: bool = False) -> list[QueueDefinition]:
-    """This role's board queues; with ``home_only``, Home's own queues too."""
-    return [q for q in QUEUES if role in q.roles and (q.on_board or home_only)]
+    """This role's board queues; with ``home_only``, Home's own queues too.
+    Rail-only queues are neither (:func:`rail_queues_for`)."""
+    return [
+        q for q in QUEUES
+        if role in q.roles and (q.on_board or home_only) and q.key not in RAIL_QUEUES
+    ]
+
+
+def rail_queues_for(role: str) -> list[QueueDefinition]:
+    """This role's rail-only queues (:data:`types.RAIL_QUEUES`): counted with
+    Home, shown on no card."""
+    return [q for q in QUEUES if q.key in RAIL_QUEUES and role in q.roles]
 
 
 def home_queues_for(role: str) -> list[QueueDefinition]:

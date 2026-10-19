@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Check, CornerUpLeft, Dot, X } from '../../components/carbon'
 import { roundSummary, shown } from './roundText'
+import LetterDate from '../../components/LetterDate'
 import { formatNumber } from '../../lib/numbers'
 
 const MARK = {
@@ -40,7 +41,7 @@ export default function RoundHistory({ rounds }) {
               <span className="mw-history-round">R{round.round_no}</span>
               <span className="mw-history-letter mw-fa-ltr">{shown(round.letter_number)}</span>
               <span className="mw-history-short" data-tone={mark.tone}>{short}</span>
-              <span className="mw-history-date mw-fa-ltr">{shown(round.letter_date_shamsi)}</span>
+              <span className="mw-history-date"><LetterDate shamsi={round.letter_date_shamsi} iso={round.letter_date} /></span>
             </li>
           )
         })}

@@ -50,7 +50,8 @@ const located = async (name) => {
 vi.mock('./pages/explorer/ExplorerList', () => located('explorer'))
 vi.mock('./pages/explorer/SiteRecord', () => located('site-record'))
 vi.mock('./pages/Home', () => page('home'))
-vi.mock('./pages/mywork/MyWork', () => page('my-work'))
+vi.mock('./pages/mywork/MyWork', () => located('my-work'))
+vi.mock('./pages/validation/ValidationPage', () => located('validation'))
 vi.mock('./pages/monthlyplan/MonthlyPlan', () => page('monthly-plan'))
 vi.mock('./pages/reports/AcceptanceDashboard', () => page('acceptance'))
 vi.mock('./pages/reports/rolesPerformance/RolesPerformance.jsx', () => page('kpi'))
@@ -265,6 +266,32 @@ describe('old paths people have bookmarked', () => {
   it('sends an unknown path home rather than showing nothing', async () => {
     signedInAs('Coordinator')
     expect(await landOn('/no-such-page')).toBe('home')
+  })
+})
+
+// UEP-16: Validation and Letters left My Work for their own pages.
+describe('acceptance validation routes', () => {
+  async function landAt(path) {
+    await landOn(path)
+    return screen.getByTestId('page').dataset.at
+  }
+
+  it.each([
+    ['/my-work?tab=filled', '/validation/ict'],
+    ['/my-work?tab=all', '/my-work'],
+    ['/my-work?tab=all&q=W4318', '/my-work?q=W4318'],
+    ['/acceptance', '/my-work'],
+    ['/validation', '/validation/ict'],
+    ['/validation/xyz', '/validation/ict'],
+    ['/validation/cra', '/validation/cra'],
+  ])('%s lands on %s', async (path, expected) => {
+    signedInAs('Coordinator')
+    expect(await landAt(path)).toBe(expected)
+  })
+
+  it.each(['Contractor', 'Viewer', 'RegionalManager'])('keeps %s out of validation', async (role) => {
+    signedInAs(role)
+    expect(await landOn('/validation/ict')).not.toBe('validation')
   })
 })
 

@@ -6,6 +6,7 @@ import * as F from './fixtures.js'
 import * as W from './workFixtures.js'
 import { villagesXlsx } from './xlsx.js'
 import { myWorkList, myWorkSuggestions, myWorkVillage } from './myWorkFixtures.js'
+import { validationEmail, validationGroup, validationList } from './validationFixtures.js'
 import { rpArea, rpMonth } from './rolesFixtures.js'
 import { explorerSite, explorerSites } from './explorerFixtures.js'
 import { FILTER_OPTIONS, siteVillages } from '../src/pages/explorer/fixtures.js'
@@ -60,6 +61,9 @@ const PATTERNS = [
   [/^\/acceptance\/villages\/\d+\/suggestions$/, myWorkSuggestions],
   [/^\/acceptance\/villages\/\d+$/, myWorkVillage],
   [/^\/acceptance\/my-work$/, myWorkList],
+  [/^\/acceptance\/my-work\/validation$/, validationList],
+  [/^\/acceptance\/my-work\/validation\/(letter|site)\/.+$/, validationGroup],
+  [/^\/acceptance\/my-work\/evidence\/\d+\/email$/, validationEmail],
   [/^\/explorer\/sites\/\d+\/villages$/, () => siteVillages(3)],
   [/^\/explorer\/sites\/\d+$/, explorerSite],
 ]

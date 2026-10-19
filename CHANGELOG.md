@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- **Acceptance is three pages: Filing, ICT validation and CRA validation (UEP-16).**
+  - Rail: Filing (`/my-work`) · ICT validation · CRA validation, each with its colour tile; no Dashboard (Insights keeps it) and no Letters. `/my-work?tab=filled` → `/validation/ict`, `/my-work?tab=all` → `/my-work`. The launcher opens Acceptance on Filing.
+  - Validation pages (PM, Coordinator): By letter (default) or By site (remembered per user), Late / Has rejection / Contractor filters (PM: Province, CRA region), a table per authority with Requested and Filed result (`2G not filed` in amber), bulk Confirm / Return with Undo, per-village return reasons, J/K/X/C/R shortcuts, and an evidence viewer for PDF, images and email (`.eml`/`.msg`, plain text only). By site shows the site's other authority in its own panel; each panel sends its own request. Letter dates in Shamsi with the Gregorian date on hover, here and on Filing.
+  - Fixes: the PM now has the `ict/cra_to_validate` queues (Home row, rail badge and header agree); the Filing rail badge reads the new rail-only `acceptance_filing` queue, the same number as the Filing header (each village once).
+  - Filing: `PageHeader`, `--uep-hover`, the standard selection; `filled` and `all` are no longer offered as buckets (still accepted as `tab=`).
+  - Backend: `GET /acceptance/my-work/validation`, `/validation/{group}/{key}`; `POST /letters/review` takes `items` (version, own reason), `shared_reason`, `evidence_checked_outside`, and answers 409 with who decided a stale item; letters carry up to 10 files (`scan_ids`); evidence view / download / zip / parsed email, each audited. SLA from SLA policies step `validate`.
+  - Migration `d6f2b8e4a915`: `acceptance_submissions.version`. nginx: only `/api/v1/acceptance/my-work/evidence/{id}` may be framed by the site.
+  - Not yet: pdf.js and `extract-msg` are not added (the build machine had no network). PDFs use the browser's own viewer in a frame; `.msg` is accepted and downloadable, and is parsed once `extract-msg` is installed.
+
 - **Admin › SLA policies replaces the Action SLA tab: every step's SLA in days on one page, applied across UEP on Update (UEP-15).**
   - Page `/admin/sla` (PM and Admin edit, Viewer reads, others 403): five cards in lifecycle order, a −/+ stepper per step (typeable, arrow keys, Enter updates), changed rows tinted with the old value struck through, `Use 1–365 days`, Discard, `Update N`, a toast with Revert, and a History drawer. `?tab=action-sla` redirects here. Problem categories' SLA column is read-only, "Set in SLA policies".
   - Admin rail grouped People / Workflow / Data with 24px `--uep-app-admin` tiles; SLA policies uses `timer`.

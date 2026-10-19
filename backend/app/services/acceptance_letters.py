@@ -1,7 +1,8 @@
 """One letter, one authority, many villages: filing it and deciding it.
 
 An ICT or CRA letter routinely covers a hundred villages. Here it is filed
-once -- one number, one date, one scan -- and becomes one round per village,
+once -- one number, one date, its evidence files (a scan, an email; up to
+``evidence_store.MAX_FILES_PER_SUBMISSION``) -- and becomes one round per village,
 each with that village's own per-technology claims, through the same
 ``acceptance_workflow`` rules a single filing goes through.
 
@@ -36,6 +37,7 @@ from app.models.acceptance_workflow import (
     AUTHORITIES,
     CLAIM_APPROVED,
     CLAIM_REJECTED,
+    REVIEW_PENDING,
     REVIEW_RETURNED,
     REVIEW_VALIDATED,
     SOURCE_CONTRACTOR,
@@ -48,7 +50,7 @@ from app.models.workitem import Village, WorkItem
 from app.services import acceptance_rounds as rounds
 from app.services import acceptance_workflow as flow
 from app.services import my_work_status as S
-from app.services import scan_tokens
+from app.services import evidence_store, scan_tokens
 from app.services.audit import notify, notify_roles, record_audit
 
 MAX_VILLAGES = 500
@@ -60,7 +62,7 @@ _REVIEW_STATUS = {DECISION_CONFIRM: REVIEW_VALIDATED, DECISION_RETURN: REVIEW_RE
 _CLAIM_STATUS = {"approved": CLAIM_APPROVED, "rejected": CLAIM_REJECTED}
 
 #: Codes meaning "this changed since you loaded it", answered with 409.
-CONFLICT_CODES = frozenset({"not_editable", "not_pending"})
+CONFLICT_CODES = frozenset({"not_editable", "not_pending", "stale"})
 
 
 # --------------------------------------------------------------------------
@@ -86,6 +88,20 @@ class LetterFiling:
     letter_date: str | None  # Shamsi
     scan_id: str | None
     items: tuple[LetterItem, ...]
+    #: Every evidence file of the letter (UEP-16). ``scan_id`` alone is still
+    #: accepted for one release.
+    scan_ids: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class ReviewItem:
+    """One filing to decide, as the reviewer saw it."""
+
+    submission_id: int
+    #: The version the reviewer loaded; a different one now is a 409.
+    version: int | None = None
+    #: This village's own return reason, over the shared one.
+    reason: str | None = None
 
 
 @dataclass(frozen=True)
@@ -95,18 +111,26 @@ class ItemError:
     field: str | None = None
     village_id: int | None = None
     tech: str | None = None
+    submission_id: int | None = None
+    #: For a stale item: who decided it, when, and how it stands now.
+    decided_by: str | None = None
+    decided_at: str | None = None
+    status: str | None = None
 
 
 class LetterError(Exception):
     """Nothing was filed or decided; ``errors`` says everything that was wrong."""
 
-    def __init__(self, message: str, errors: list[ItemError]):
+    def __init__(self, message: str, errors: list[ItemError], *, status: int | None = None):
         super().__init__(message)
         self.message = message
         self.errors = errors
+        self._status = status
 
     @property
     def status_code(self) -> int:
+        if self._status is not None:
+            return self._status
         codes = {e.code for e in self.errors}
         return 409 if codes and codes <= CONFLICT_CODES else 400
 
@@ -154,7 +178,29 @@ def _side_status(village: Village, authority: str) -> str:
 # --------------------------------------------------------------------------
 # Filing
 # --------------------------------------------------------------------------
-def _letter_field_errors(filing: LetterFiling, user: User) -> tuple[list[ItemError], date | None, scan_tokens.Scan | None]:
+def _redeem_scans(filing: LetterFiling, user: User) -> tuple[list[ItemError], list[scan_tokens.Scan]]:
+    """Every evidence file the letter names, once each by content."""
+    if not filing.scan_ids:
+        try:
+            return [], [scan_tokens.redeem(filing.scan_id, user_id=user.id)]
+        except scan_tokens.ScanError as exc:
+            return [ItemError(exc.code, str(exc), field="scan_id")], []
+    limit = evidence_store.MAX_FILES_PER_SUBMISSION
+    if len(filing.scan_ids) > limit:
+        return [ItemError("too_many_files", f"At most {limit} files per letter", field="scan_ids")], []
+    errors: list[ItemError] = []
+    scans: dict[str, scan_tokens.Scan] = {}
+    for scan_id in filing.scan_ids:
+        try:
+            scan = scan_tokens.redeem(scan_id, user_id=user.id)
+        except scan_tokens.ScanError as exc:
+            errors.append(ItemError(exc.code, str(exc), field="scan_ids"))
+            continue
+        scans.setdefault(scan.sha256, scan)
+    return errors, list(scans.values())
+
+
+def _letter_field_errors(filing: LetterFiling, user: User) -> tuple[list[ItemError], date | None, list[scan_tokens.Scan]]:
     errors: list[ItemError] = []
     if not normalize_letter_number(filing.letter_number):
         errors.append(ItemError("missing", field="letter_number"))
@@ -168,12 +214,8 @@ def _letter_field_errors(filing: LetterFiling, user: User) -> tuple[list[ItemErr
         except ValueError as exc:
             errors.append(ItemError("invalid_date", str(exc), field="letter_date"))
 
-    scan = None
-    try:
-        scan = scan_tokens.redeem(filing.scan_id, user_id=user.id)
-    except scan_tokens.ScanError as exc:
-        errors.append(ItemError(exc.code, str(exc), field="scan_id"))
-    return errors, letter_date, scan
+    scan_errors, scans = _redeem_scans(filing, user)
+    return errors + scan_errors, letter_date, scans
 
 
 def _duplicate_errors(items: tuple[LetterItem, ...]) -> list[ItemError]:
@@ -220,19 +262,22 @@ def _file_one(
     return flow.submit(db, source=SOURCE_CONTRACTOR, carry_over=True, **common)
 
 
-def _attach_scan(db: Session, scan: scan_tokens.Scan, submissions, user: User) -> None:
+def _attach_scans(db: Session, scans: list[scan_tokens.Scan], submissions, user: User) -> None:
+    """Link every file to every submission on the letter. The bytes are
+    stored once (content-addressed); each link is one row."""
     now = datetime.now(timezone.utc)
     for submission in submissions:
-        db.add(AcceptanceEvidence(
-            submission_id=submission.id,
-            sha256=scan.sha256,
-            stored_path=scan.stored_path,
-            original_filename=scan.filename,
-            content_type=scan.content_type,
-            size_bytes=scan.size_bytes,
-            uploaded_by=user.id,
-            uploaded_at=now,
-        ))
+        for scan in scans:
+            db.add(AcceptanceEvidence(
+                submission_id=submission.id,
+                sha256=scan.sha256,
+                stored_path=scan.stored_path,
+                original_filename=scan.filename,
+                content_type=scan.content_type,
+                size_bytes=scan.size_bytes,
+                uploaded_by=user.id,
+                uploaded_at=now,
+            ))
 
 
 def _failure_message(errors: list[ItemError], total: int) -> str:
@@ -251,7 +296,7 @@ def file_letter(db: Session, user: User, filing: LetterFiling) -> LetterOutcome:
             [ItemError("invalid_count", field="items")],
         )
 
-    errors, letter_date, scan = _letter_field_errors(filing, user)
+    errors, letter_date, scans = _letter_field_errors(filing, user)
     errors += _duplicate_errors(filing.items)
     # A placeholder keeps the per-village checks running when the number is
     # missing, so one response names every problem; nothing is kept.
@@ -281,7 +326,7 @@ def file_letter(db: Session, user: User, filing: LetterFiling) -> LetterOutcome:
         raise LetterError(_failure_message(errors, len(filing.items)), errors)
 
     db.flush()
-    _attach_scan(db, scan, [s for _v, s in filed], user)
+    _attach_scans(db, scans, [s for _v, s in filed], user)
     decided = S.decides_directly(user.role.name)
     _record_filing(db, user, authority, letter_number, filed, decided=decided)
     return LetterOutcome(
@@ -367,36 +412,127 @@ def _resolve(db: Session, user: User, authority: str, letter_number: str | None,
     return _resolve_by_ids(db, user, authority, ids)
 
 
+def _reason_errors(items: list[ReviewItem], shared: str | None, submissions) -> list[ItemError]:
+    """Return needs a reason on every filing: its own, or the shared one."""
+    village_of = {s.id: s.village_id for s in submissions}
+    return [
+        ItemError("reason_missing", "A reason is required to return", field="reason",
+                  submission_id=i.submission_id, village_id=village_of.get(i.submission_id))
+        for i in items
+        if not ((i.reason or "").strip() or shared)
+    ]
+
+
+def _stale_errors(db: Session, submissions, versions: dict[int, int | None]) -> list[ItemError]:
+    """Filings someone else decided, or the contractor changed or withdrew,
+    since the reviewer loaded them -- with who and when, for the 409."""
+    stale = [
+        s for s in submissions
+        if s.review_status != REVIEW_PENDING
+        or (versions.get(s.id) is not None and versions[s.id] != (s.version or 0))
+    ]
+    if not stale:
+        return []
+    reviewer_ids = {s.reviewed_by for s in stale if s.reviewed_by}
+    names = dict(db.execute(
+        select(User.id, User.full_name).where(User.id.in_(reviewer_ids))
+    ).all()) if reviewer_ids else {}
+    errors = []
+    for s in stale:
+        at = s.reviewed_at or s.updated_at
+        errors.append(ItemError(
+            "stale", "Already decided or changed by someone else",
+            submission_id=s.id, village_id=s.village_id,
+            decided_by=names.get(s.reviewed_by),
+            decided_at=at.isoformat() if at else None,
+            status=_side_status(s.village, s.authority) if s.village else None,
+        ))
+    return errors
+
+
+def _evidence_errors(submissions) -> list[ItemError]:
+    return [
+        ItemError("evidence_unchecked",
+                  "This filing has no evidence file: tick that you checked it outside UEP",
+                  field="evidence_checked_outside", submission_id=s.id, village_id=s.village_id)
+        for s in submissions if not s.evidence
+    ]
+
+
 def review_letter(
     db: Session, user: User, *, authority: str, decision: str,
     letter_number: str | None = None, submission_ids: list[int] | None = None,
-    reason: str | None = None,
+    reason: str | None = None, items: list[ReviewItem] | None = None,
+    shared_reason: str | None = None, evidence_checked_outside: bool = False,
 ) -> ReviewOutcome:
-    """Confirm or return pending rounds. Caller commits, or rolls back on error."""
+    """Confirm or return pending rounds. Caller commits, or rolls back on error.
+
+    ``items`` (UEP-16) names each filing with the version the reviewer saw
+    and, on return, its own reason; ``shared_reason`` covers the rest. Any
+    stale item makes the whole request a 409 listing who decided what. A
+    filing without evidence is confirmed only with ``evidence_checked_outside``.
+    """
     authority = _authority(authority)
-    review_status = _REVIEW_STATUS.get(str(decision).lower())
+    decision = str(decision).lower()
+    review_status = _REVIEW_STATUS.get(decision)
     if review_status is None:
         raise LetterError("Decision must be confirm or return", [ItemError("invalid_decision", field="decision")])
-    reason = (reason or "").strip() or None
-    if review_status == REVIEW_RETURNED and not reason:
-        raise LetterError("A reason is required to return", [ItemError("reason_missing", field="reason")])
+    shared = (shared_reason or reason or "").strip() or None
+    returning = review_status == REVIEW_RETURNED
 
-    submissions, errors = _resolve(db, user, authority, letter_number, submission_ids)
+    if items:
+        if letter_number or submission_ids:
+            raise LetterError(
+                "Give items, or a letter number or submission ids, not both",
+                [ItemError("invalid_target", field="items")],
+            )
+        items = list({i.submission_id: i for i in items}.values())
+        submissions, errors = _resolve_by_ids(db, user, authority, [i.submission_id for i in items])
+        if returning and not errors:
+            reason_errors = _reason_errors(items, shared, submissions)
+            if reason_errors:
+                raise LetterError("Every filing returned needs a reason", reason_errors, status=422)
+    else:
+        if returning and not shared:
+            raise LetterError("A reason is required to return", [ItemError("reason_missing", field="reason")])
+        submissions, errors = _resolve(db, user, authority, letter_number, submission_ids)
+        items = [ReviewItem(s.id) for s in submissions]
+    if errors:
+        raise LetterError("Nothing was decided", errors)
+
     flow.lock_villages(db, [s.village_id for s in submissions])
+    for submission in submissions:
+        # Read again under the lock: the version check must see the last commit.
+        db.refresh(submission)
+    stale = _stale_errors(db, submissions, {i.submission_id: i.version for i in items})
+    if stale:
+        raise LetterError(f"{len(stale)} already decided by someone else", stale)
+    if not returning and not evidence_checked_outside:
+        unchecked = _evidence_errors(submissions)
+        if unchecked:
+            raise LetterError("Some filings have no evidence file", unchecked, status=422)
+
+    own = {i.submission_id: (i.reason or "").strip() or None for i in items}
     decided: list[AcceptanceSubmission] = []
     for submission in submissions:
+        comment = (own.get(submission.id) or shared) if returning else None
         try:
-            flow.review(db, submission=submission, decision=review_status, comment=reason, user=user)
+            flow.review(db, submission=submission, decision=review_status, comment=comment, user=user)
         except flow.WorkflowError as exc:
-            errors.append(ItemError(exc.code, str(exc), village_id=submission.village_id))
+            errors.append(ItemError(exc.code, str(exc), village_id=submission.village_id,
+                                    submission_id=submission.id))
             continue
         decided.append(submission)
     if errors:
         raise LetterError("Nothing was decided", errors)
 
-    _record_review(db, user, authority, decision, decided, reason)
+    _record_review(
+        db, user, authority, decision, decided, shared,
+        own_reasons={k: v for k, v in own.items() if v} if returning else None,
+        evidence_checked_outside=evidence_checked_outside,
+    )
     return ReviewOutcome(
-        decision=str(decision).lower(),
+        decision=decision,
         results=[
             VillageOutcome(s.village_id, s.id, s.round_no, _side_status(s.village, authority))
             for s in decided
@@ -404,17 +540,27 @@ def review_letter(
     )
 
 
-def _record_review(db: Session, user: User, authority: str, decision: str, decided, reason: str | None) -> None:
+def _record_review(
+    db: Session, user: User, authority: str, decision: str, decided, reason: str | None,
+    *, own_reasons: dict[int, str] | None = None, evidence_checked_outside: bool = False,
+) -> None:
+    new_value = {
+        "authority": authority,
+        "decision": decision,
+        "submission_ids": [s.id for s in decided],
+        "results": {s.id: rounds.round_result(s) for s in decided},
+    }
+    if own_reasons:
+        new_value["reasons"] = own_reasons
+    if evidence_checked_outside:
+        # The reviewer's word that they saw the evidence elsewhere (UEP-16 §4).
+        new_value["evidence_checked_outside"] = True
+        new_value["without_evidence"] = [s.id for s in decided if not s.evidence]
     record_audit(
         db, user_id=user.id,
         action=audit_actions.RETURNED if decision == DECISION_RETURN else audit_actions.REVIEWED,
         module=MODULE, entity_type="AcceptanceSubmission", entity_id=None,
-        new_value={
-            "authority": authority,
-            "decision": decision,
-            "submission_ids": [s.id for s in decided],
-            "results": {s.id: rounds.round_result(s) for s in decided},
-        },
+        new_value=new_value,
         reason=reason,
     )
     by_filer: dict[int, int] = {}

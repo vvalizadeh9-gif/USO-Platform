@@ -372,3 +372,88 @@ a village not seen by the caller is `not_found`, one already with the authority
 `already_with_authority`, one that is filed, returned or approved
 `not_requestable`. The side's status does not change.
 
+
+## 11. Validation and evidence (UEP-16)
+
+ICT validation and CRA validation (`/validation/ict`, `/validation/cra`) read
+the endpoints below. PM and Coordinator only; everyone else gets 403. All
+paths are under `/api/v1/acceptance`.
+
+### `GET /my-work/validation`
+
+`authority=ICT|CRA` (required), `group=letter|site`, `late`, `has_rejection`,
+`contractor_id`, `province_id` and `region_id` (PM only, else 403), `q` (letter
+number, site ID, village ID or contractor), `cursor`, `limit` (1–500).
+
+The population is exactly the Home queue `ict_to_validate` / `cra_to_validate`:
+`my_work_query.base_select` (scope `remaining`) with the `filled` tab predicate
+for one authority, joined to its pending submission. Late is
+`action_queues.sla.is_overdue` against SLA policies step `validate`.
+
+```jsonc
+{ "authority": "CRA", "group": "letter", "sla_days": 2,
+  "counts": { "waiting": 12, "late": 4,            // unfiltered: the Home row and header
+              "filtered": 9, "letter": 6, "site": 5, "has_rejection": 2 },  // after filters
+  "groups": [{ "key": "CRA/1405/3290", "kind": "letter", "label": "CRA/1405/3290",
+               "contractor": { "id": 3, "name": "…" }, "contractors": 1, "province": "…",
+               "letter_date": "2026-10-14", "letter_date_shamsi": "1405/07/22",
+               "waiting_days": 16, "late": true, "villages": 3, "rejected": 1, "letters": 1,
+               "other_waiting": 0 }],                 // site view: the other authority's filings on the site
+  "next_cursor": null,
+  "contractors": [...], "provinces": [...], "regions": [...] }   // filter options; provinces/regions PM only
+```
+
+### `GET /my-work/validation/{group}/{key}?authority=`
+
+A letter (this authority only) or a site (`key` = site id; both authorities,
+kept apart under `filings` and `other.filings`). Each filing: `submission_id`,
+`authority`, `version`, `village_id`, `village_code`, `village_name`, `site_id`,
+`site_code`, `letter_number`, `letter_date(_shamsi)`, `requested_techs`,
+`claims[{tech, result, reason}]`, `missing_techs`, `has_rejection`,
+`has_evidence`, `waiting_days`, `late`. Rejected or incomplete filings come
+first. `letters[]`: `authority`, `letter_number`, `letter_date(_shamsi)`,
+`villages`, `without_evidence`, `evidence[{id, filename, kind, content_type,
+size_bytes, pages}]` (once per file content), `duplicate_use{villages,
+contractors}` (the same authority and number on other villages, by another
+contractor or in an earlier round).
+
+### `POST /letters/review` (extended)
+
+```jsonc
+{ "authority": "ICT", "decision": "return",
+  "items": [{ "submission_id": 5602, "version": 3, "reason": "wrong village" },
+            { "submission_id": 5603, "version": 1 }],
+  "shared_reason": "illegible scan",
+  "evidence_checked_outside": false }
+```
+
+- `items` replaces `submission_ids` (still accepted for one release). Exactly
+  one of `items`, `submission_ids`, `letter_number`.
+- Return needs a reason on every item, its own or `shared_reason`: else 422
+  `reason_missing`, one error per item.
+- Confirm of a filing with no evidence file needs `evidence_checked_outside:
+  true` (audited): else 422 `evidence_unchecked`.
+- A stale `version`, or a filing no longer pending, is **409** with one
+  `stale` error per item: `submission_id`, `village_id`, `decided_by`,
+  `decided_at`, `status`. Nothing is decided.
+- All-or-nothing, one audit entry; per-village reasons are stored on each
+  submission (`review_comment`) and listed in the audit row.
+
+### Evidence
+
+| Endpoint | Answers |
+|---|---|
+| `GET /my-work/evidence/{id}` | The file: `inline` for a PDF or an image (the viewer frames it; nginx `evidence-frame.conf` allows framing by this site for this path only), `attachment` otherwise |
+| `GET /my-work/evidence/{id}/download` | Always `attachment` |
+| `GET /letters/evidence.zip?authority=&letter_number=` | Every file of the letter once, as `{authority}-{number}.zip` |
+| `GET /my-work/evidence/{id}/email` | `{from, to, cc, date, subject, text_body, attachments[{index, filename, content_type, size_bytes, kind}]}` — never HTML: an HTML-only body is converted to text on the server |
+| `GET /my-work/evidence/{id}/email/attachments/{index}` | One attachment; inline only when its bytes prove a PDF or image (`?download=true` forces a download) |
+
+Access follows the filing's scope: outside it is 404, the same as no such
+file. Every view and download writes `EVIDENCE_VIEWED` / `EVIDENCE_DOWNLOADED`
+to the audit log (who, file, letter).
+
+`POST /letters` takes `scan_ids` (1–10) for every file of the letter; `scan_id`
+alone is still accepted for one release. Uploads accept `.eml` (headers must
+parse) and `.msg` (OLE magic `D0 CF 11 E0`). Each file is stored once and
+linked to every submission on the letter.

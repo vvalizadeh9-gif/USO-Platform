@@ -84,6 +84,9 @@ QUEUE_STEP: dict[str, str] = {
     "dt_sent_back": "dt_test",
     "dt_review": "dt_review",
     "plans_approve": "pip_approve",
+    # Filing's own badge: the filing step's SLA. ICT and CRA filing share a
+    # default (14 days); the rail reads the ICT one.
+    "acceptance_filing": "ict_file",
     "ict_to_file": "ict_file",
     "cra_to_file": "cra_file",
     "ict_to_validate": "validate",

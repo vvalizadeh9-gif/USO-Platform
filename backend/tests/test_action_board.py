@@ -176,7 +176,9 @@ def _my_work_count(db, user, authority, tab):
     result = query.list_my_work(
         db, user, query.ListRequest(scope="remaining", tab=tab, authority=authority, limit=0)
     )
-    return dict(result.tabs)[tab]
+    # ``total`` is the tab's own count, offered as a Filing bucket or not
+    # (UEP-16: "filled" is the validation pages', still answered as tab=).
+    return result.total
 
 
 def _screen_count(db, user, key):  # noqa: C901 -- one branch per screen
@@ -268,8 +270,10 @@ def test_the_data_exercises_every_queue(db, username, must_be_live):
 
 def test_each_role_gets_exactly_its_queues(db):
     expected = {
+        # UEP-16: the PM validates contractor filings too.
         "p_pm": {"hc_assign", "hc_review", "hc_reroutes", "dt_assign", "dt_review",
-                 "ict_follow_up", "cra_follow_up", "plans_approve", "cpm_changes"},
+                 "ict_follow_up", "cra_follow_up", "ict_to_validate", "cra_to_validate",
+                 "plans_approve", "cpm_changes"},
         "p_coord_home": {"hc_assign", "hc_review", "hc_reroutes", "dt_assign", "dt_review",
                          "ict_to_file", "ict_to_validate", "cra_to_file", "cra_to_validate"},
         "p_sc0": {"hc_submit", "dt_todo", "dt_redo", "ict_to_file", "ict_refile",

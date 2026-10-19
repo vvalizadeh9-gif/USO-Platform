@@ -66,6 +66,11 @@ HOME_QUEUES: dict[HomeGroup, tuple[str, ...] | None] = {
     HomeGroup.PLANS: None,
 }
 
+#: Queues Home counts for an app rail badge and a page header but shows on no
+#: card: the Filing page's own number (UEP-16), which overlaps the headline
+#: Pending ICT / Pending CRA rows.
+RAIL_QUEUES: tuple[str, ...] = ("acceptance_filing",)
+
 #: Cards that show their queues even at zero. None since UEP-02: an empty
 #: queue's row is hidden, and a card with no rows is hidden.
 HOME_KEEPS_EMPTY: frozenset[HomeGroup] = frozenset()

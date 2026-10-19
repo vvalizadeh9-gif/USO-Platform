@@ -87,7 +87,7 @@ response (`shell/HomeData.jsx`), so a rail count, an Apps-panel pill, a card
 total and a KPI can never disagree.
 
 `pages[].divider` draws a 1px rule under the page in the rail, setting it apart
-from the queue pages below. The Acceptance app uses it for its **Dashboard**.
+from the queue pages below. No app uses it since UEP-16.
 
 The Drive test app has no Dashboard in its rail since UEP-11: the Drive Test
 dashboard (`/reports/drive-test`) is Insights → Dashboards, and the app opens
@@ -98,9 +98,9 @@ role as usual). **Explorer** (`/explorer`) is the site list, and every site's
 record page (`/explorer/sites/:id`) lights it too; `/work-items` and
 `/work-items/:id` redirect there.
 
-Acceptance's first page has been its **Dashboard** since UEP-07
-(`/reports/acceptance`, divider, no count), the page Insights → Acceptance
-dashboard also opens. Its address carries `?tab=village|ict|cra`,
+Since UEP-16 the Acceptance app opens on **Filing** (`/my-work`). The
+Acceptance dashboard (`/reports/acceptance`) is Insights → Acceptance
+dashboard only. Its address carries `?tab=village|ict|cra`,
 `?year=1405` (default the current Shamsi year) and `?month=1405-07`.
 
 The launcher, the Apps panel and every rail are generated from this list with
@@ -207,7 +207,9 @@ own count, never under the same name (`pool_total` in an API).
 | `dt_assign` | DT assignment | Confirmed-Ready sites with no official drive-test assignment |
 | `dt_review` | DT review | Submitted drive tests awaiting the PM/Coordinator's decision |
 | `dt_todo` / `dt_redo` | In progress (contractor) | Drive tests with the contractor / sent back to them |
-| `ict_*` / `cra_*` | Filing, Validation | My Work buckets, per authority |
+| `ict_*` / `cra_*` | Home, digest | My Work buckets, per authority |
+| `acceptance_filing` | Filing (rail and header only) | Villages in any of Filing's buckets, each once (`my_work_query.filing_predicate`); a rail-only queue (`types.RAIL_QUEUES`), sent as `rail_tickets` in `/me/home` and shown on no Home card |
+| `ict_to_validate` / `cra_to_validate` | ICT / CRA validation (PM, Coordinator) | Contractor filings waiting for that authority, SLA step `validate`; the page header and Home row read the same number |
 | `plans_approve` | Monthly plan › Approvals | Plans Submitted for the planning month (next month) + revision requests on the running month |
 | `cpm_changes` | Data › CPM changes | CPM change requests pending validation, in scope |
 | `plan_submit` | Monthly plan (contractor) | Streams the contractor has not filed, plus returned plans still answerable |
@@ -225,9 +227,13 @@ definition (`plans_awaiting_pm`).
   filters (`usePageCrumb` in `shell/crumbs.js`).
 - **Insights** rail: Drive test dashboard · Acceptance dashboard · Roles
   performance · Lifecycle gaps · Exports.
-- **Acceptance** rail: Dashboard · Filing · Validation · Letters. One
-  workspace (`/my-work`), titled by its rail page: Filing (the filing buckets
-  as a filter), Validation (`?tab=filled`), Letters (`?tab=all`).
+- **Acceptance** rail (UEP-16): Filing (`/my-work`, tile
+  `--uep-app-acceptance`, icon `edit`) · ICT validation (`/validation/ict`,
+  tile `--uep-ict`) · CRA validation (`/validation/cra`, tile `--uep-cra`),
+  both `task--approved` and PM / Coordinator only. No Dashboard (Insights
+  keeps it) and no Letters. Old links: `/my-work?tab=filled` →
+  `/validation/ict`, `/my-work?tab=all` → `/my-work`; `/acceptance` and
+  `/my-acceptance` → `/my-work`; any other `/validation/*` → ICT.
 - **Monthly plan**, **Admin** and **Data** draw no tab bar of their own; the
   rail is the menu and the page title is the rail label.
 - Lifecycle gaps has no map tab; `/reports/gaps?tab=map` goes to Roles

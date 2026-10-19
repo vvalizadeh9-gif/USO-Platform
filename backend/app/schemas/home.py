@@ -109,6 +109,8 @@ class HomeSummaryOut(BaseModel):
     plan: HomePlanOut | None
     #: Pending items per app, keyed by the path a ticket opens.
     app_badges: dict[str, HomeBadgeOut]
+    #: Rail-only queues (UEP-16): a page's own count and lateness, on no card.
+    rail_tickets: list[HomeTicketOut] = []
 
 
 class SystemStatusOut(BaseModel):

@@ -150,6 +150,7 @@ def my_work(
     return MyWorkList(
         scope=scope, tab=tab, view=result.view, read_only=result.read_only,
         tabs=[TabCount(key=k, count=c) for k, c in result.tabs],
+        filing_total=result.filing_total,
         authority_totals=AuthorityTotals(kind=result.totals_kind, **result.totals),
         total=result.total,
         rows=[_row_out(r) for r in result.rows],
@@ -323,6 +324,7 @@ def file_letter(
         letter_number=payload.letter_number,
         letter_date=payload.letter_date,
         scan_id=payload.scan_id,
+        scan_ids=tuple(payload.scan_ids or ()),
         items=tuple(
             letters.LetterItem(
                 village_id=i.village_id,
@@ -350,12 +352,19 @@ def review_letter(
     db: Session = Depends(get_db),
     user: User = Depends(require_decider),
 ) -> LetterReviewed:
-    """Confirm or return pending rounds -- one, or every one on a letter."""
+    """Confirm or return pending rounds -- the items given, or every one on a
+    letter. A stale item answers 409 listing who decided it and when."""
     try:
         outcome = letters.review_letter(
             db, user, authority=payload.authority, decision=payload.decision,
             letter_number=payload.letter_number, submission_ids=payload.submission_ids,
             reason=payload.reason,
+            items=[
+                letters.ReviewItem(i.submission_id, i.version, i.reason)
+                for i in payload.items or ()
+            ] or None,
+            shared_reason=payload.shared_reason,
+            evidence_checked_outside=payload.evidence_checked_outside,
         )
     except letters.LetterError as exc:
         db.rollback()

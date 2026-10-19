@@ -38,10 +38,10 @@ beforeEach(() => {
 })
 afterEach(() => vi.useRealTimers())
 
-async function renderAs(name) {
+async function renderAs(name, path = '/my-work') {
   role.name = name
   const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
-  const utils = render(<MemoryRouter initialEntries={['/my-work']}><MyWork /></MemoryRouter>)
+  const utils = render(<MemoryRouter initialEntries={[path]}><MyWork /></MemoryRouter>)
   await screen.findByRole('region', { name: 'Village' })
   return { user, ...utils }
 }
@@ -58,17 +58,20 @@ describe('tabs, counts and labels', () => {
   it('a contractor sees their tabs, counts and Send buttons', async () => {
     await renderAs('Contractor')
     const tabs = screen.getAllByRole('tab').map((t) => t.textContent)
-    // Filing: the filing buckets only; "With coordinator" is the Validation page (UEP-13 §3.6).
+    // Filing: the filing buckets only (UEP-16); the header counts each village once.
     expect(screen.getByRole('heading', { level: 1, name: 'Filing' })).toBeInTheDocument()
     expect(tabs).toEqual(['Your move44', 'New letter needed10', 'Returned10', 'Not filed24'])
+    expect(screen.getByTestId('page-header')).toHaveTextContent('44 villages waiting')
     expect(within(card('ICT')).getByRole('button', { name: 'Send ICT' })).toBeInTheDocument()
   })
 
-  it('a coordinator opens on Validation with Save buttons', async () => {
+  it('a coordinator opens on Filing with Save buttons', async () => {
     await renderAs('Coordinator')
-    // The server opens a coordinator on To check: the Validation page, no tab bar.
-    expect(screen.getByRole('heading', { level: 1, name: 'Validation' })).toBeInTheDocument()
-    expect(screen.queryByRole('tablist')).toBeNull()
+    // UEP-16: validation has its own pages; My Work is Filing for everyone.
+    expect(screen.getByRole('heading', { level: 1, name: 'Filing' })).toBeInTheDocument()
+    expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(
+      expect.arrayContaining([expect.stringMatching(/^Not filed/), expect.stringMatching(/^With authority/)]),
+    )
     expect(within(card('ICT')).getByRole('button', { name: 'Save ICT' })).toBeInTheDocument()
   })
 })
@@ -153,7 +156,9 @@ describe('many villages', () => {
 
 describe('review (coordinator and PM)', () => {
   async function reviewCard() {
-    const utils = await renderAs('Coordinator')
+    // The filed rows, as the old Validation bucket listed them: the API still
+    // answers tab=filled, and a filed side's card still offers its review.
+    const utils = await renderAs('Coordinator', '/my-work?tab=filled')
     const cra = card('CRA')
     await within(cra).findByRole('button', { name: 'Confirm' })
     return { ...utils, cra }

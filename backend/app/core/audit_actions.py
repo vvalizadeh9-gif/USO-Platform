@@ -58,6 +58,9 @@ REJECTED = "REJECTED"
 RETURNED = "RETURNED"
 ASSIGNED = "ASSIGNED"
 REVIEWED = "REVIEWED"
+#: An acceptance evidence file opened in the viewer, or downloaded (UEP-16).
+EVIDENCE_VIEWED = "EVIDENCE_VIEWED"
+EVIDENCE_DOWNLOADED = "EVIDENCE_DOWNLOADED"
 #: An assignment or confirmation taken back within its undo window.
 UNDONE = "UNDONE"
 DATA_WIPED = "DATA_WIPED"

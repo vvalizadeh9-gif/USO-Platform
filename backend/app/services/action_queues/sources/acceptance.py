@@ -36,6 +36,11 @@ def my_work_url(authority: str, tab: str | None = None) -> str:
     return f"{url}&tab={tab}" if tab else url
 
 
+def validation_url(authority: str) -> str:
+    """The authority's validation page (UEP-16)."""
+    return f"/validation/{authority.lower()}"
+
+
 def _owned(
     ctx: QueueContext, rows: list[tuple], *, contractor_owns: bool
 ) -> list[PendingItem]:
@@ -121,3 +126,18 @@ def queue(authority: str, tab: str, *, contractor_owns: bool) -> Callable[[Queue
 
     fetch.__name__ = f"{authority.lower()}_{tab}"
     return fetch
+
+
+def filing(ctx: QueueContext) -> list[PendingItem]:
+    """Villages in any of Filing's buckets for this viewer, each once
+    (``my_work_query.filing_predicate``) -- the Filing header's number --
+    timed by the village's own waiting clock."""
+    view = S.view_for(ctx.user.role.name)
+    stmt = (
+        query.base_select(ctx.db, ctx.user, scope=SCOPE_REMAINING)
+        .where(query.filing_predicate(view))
+        .with_only_columns(
+            Village.id, Village.work_item_id, WorkItem.dt_sc_contractor_id, query.waiting_since(),
+        )
+    )
+    return _owned(ctx, ctx.db.execute(stmt).all(), contractor_owns=True)

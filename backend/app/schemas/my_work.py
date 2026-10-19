@@ -64,6 +64,9 @@ class MyWorkList(BaseModel):
     view: Literal["contractor", "staff"]
     read_only: bool
     tabs: list[TabCount]
+    #: Villages in any Filing bucket, each once -- the Filing header and rail
+    #: badge number (UEP-16 §2).
+    filing_total: int = 0
     authority_totals: AuthorityTotals
     total: int
     rows: list[MyWorkRow]
@@ -191,7 +194,10 @@ class LetterIn(BaseModel):
     authority: Authority
     letter_number: str | None = Field(None, max_length=120)
     letter_date: str | None = Field(None, max_length=20)
+    #: Deprecated: one file. Accepted for one release; use ``scan_ids``.
     scan_id: str | None = Field(None, max_length=4000)
+    #: Every evidence file of the letter, 1-10 (UEP-16).
+    scan_ids: list[str] | None = Field(None, min_length=1, max_length=10)
     items: list[LetterItemIn] = Field(min_length=1, max_length=500)
 
 
@@ -210,12 +216,26 @@ class LetterFiled(BaseModel):
     results: list[VillageOutcomeOut]
 
 
+class ReviewItemIn(BaseModel):
+    submission_id: int
+    #: The version the reviewer loaded; a stale one makes the request a 409.
+    version: int | None = None
+    #: This village's own reason, over ``shared_reason`` (return only).
+    reason: str | None = Field(None, max_length=2000)
+
+
 class LetterReviewIn(BaseModel):
     authority: Authority
     letter_number: str | None = Field(None, max_length=120)
     submission_ids: list[int] | None = Field(None, min_length=1, max_length=500)
+    #: UEP-16: each filing with its version and optional own reason. Replaces
+    #: ``submission_ids``, which stays accepted for one release.
+    items: list[ReviewItemIn] | None = Field(None, min_length=1, max_length=500)
     decision: Literal["confirm", "return"]
     reason: str | None = Field(None, max_length=2000)
+    shared_reason: str | None = Field(None, max_length=2000)
+    #: The reviewer checked a filing that has no evidence file outside UEP.
+    evidence_checked_outside: bool = False
 
 
 class LetterReviewed(BaseModel):

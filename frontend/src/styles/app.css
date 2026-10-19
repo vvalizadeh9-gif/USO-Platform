@@ -3567,7 +3567,7 @@ a.lifecycle-step:focus-visible { outline: 2px solid var(--uep-accent); outline-o
   flex: none; width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center;
   border: none; border-radius: var(--uep-radius-control); background: transparent; color: var(--uep-text-2); cursor: pointer;
 }
-.mw-icon-btn:hover { background: var(--uep-surface-subtle); color: var(--uep-text); }
+.mw-icon-btn:hover { background: var(--uep-hover-strong); color: var(--uep-text); }
 .mw-square { width: 32px; padding: 0; }
 .mw-pill {
   flex: none; display: inline-flex; align-items: center; height: 24px; padding: 0 8px;
@@ -3648,9 +3648,13 @@ a.lifecycle-step:focus-visible { outline: 2px solid var(--uep-accent); outline-o
   display: flex; align-items: center; gap: 10px; height: 54px; padding: 0 16px;
   border-bottom: 1px solid var(--uep-divider); background: var(--uep-surface);
 }
-.mw-row:hover { background: var(--uep-surface-subtle); }
-.mw-row.is-ticked, .mw-row.is-ticked:hover { background: var(--uep-accent-wash); }
-.mw-row.is-focus, .mw-row.is-focus:hover { background: var(--uep-accent-wash); box-shadow: inset 3px 0 0 var(--uep-accent); }
+.mw-row:hover { background: var(--uep-hover); }
+/* UEP-16 §3.1: the standard selection. A ticked row is --uep-row-selected,
+   the focused row keeps its 3px accent stripe, and hover on either is one
+   step darker. */
+.mw-row.is-ticked { background: var(--uep-row-selected); }
+.mw-row.is-focus { background: var(--uep-row-selected); box-shadow: inset 3px 0 0 var(--uep-accent); }
+.mw-row.is-ticked:hover, .mw-row.is-focus:hover { background: var(--uep-accent-tint); }
 .mw-row-main {
   flex: 1 1 auto; min-width: 0; align-self: stretch; display: flex; align-items: center; gap: 10px;
   padding: 0; border: none; background: transparent; color: inherit; text-align: left; cursor: pointer;

@@ -59,9 +59,11 @@ export function myWorkRows(view) {
   })
 }
 
+// Filing's buckets, as the server offers them since UEP-16 (filled and all
+// are still answered as tab= for old links, but not offered).
 const TABS = {
-  contractor: ['your_move', 'new_letter', 'returned', 'not_filed', 'filled'],
-  staff: ['filled', 'not_filed', 'new_letter', 'returned', 'all'],
+  contractor: ['your_move', 'new_letter', 'returned', 'not_filed'],
+  staff: ['not_filed', 'new_letter', 'returned', 'with_authority'],
 }
 
 function inTab(row, tab) {
@@ -72,6 +74,7 @@ function inTab(row, tab) {
   if (tab === 'all') return true
   if (tab === 'filled') return s.includes('filled')
   if (tab === 'your_move') return exclusive !== null
+  if (tab === 'with_authority') return false
   return exclusive === tab
 }
 
@@ -91,6 +94,7 @@ export function myWorkList(url, view) {
     view,
     read_only: false,
     tabs: tabs.map((key) => ({ key, count: rows.filter((r) => inTab(r, key)).length })),
+    filing_total: rows.filter((r) => tabs.some((key) => inTab(r, key))).length,
     authority_totals: view === 'staff'
       ? { kind: 'to_check', ICT: rows.filter((r) => r.sides.ICT.status === 'filled').length, CRA: rows.filter((r) => r.sides.CRA.status === 'filled').length }
       : { kind: 'not_approved', ICT: rows.filter((r) => r.sides.ICT.status !== 'approved').length, CRA: rows.filter((r) => r.sides.CRA.status !== 'approved').length },

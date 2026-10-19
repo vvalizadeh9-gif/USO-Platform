@@ -278,7 +278,8 @@ def test_remaining_hides_not_on_air_and_universe_shows_it(client):
     assert on_id in _ids(remaining) and off_id not in _ids(remaining)
     universe = _list(client, headers, scope="universe", tab="all")
     assert {on_id, off_id} <= _ids(universe)
-    assert [t["key"] for t in universe["tabs"]][-1] == "all"
+    # "all" still answers as a tab= for old links, but Filing no longer offers it (UEP-16).
+    assert "all" not in [t["key"] for t in universe["tabs"]]
 
 
 def test_contractor_sees_only_their_own_villages(client):

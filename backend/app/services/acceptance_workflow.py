@@ -731,7 +731,13 @@ def update(
     # Replaced wholesale rather than merged: a correction states the complete
     # set of verdicts, and delete-orphan clears what is no longer claimed.
     submission.technologies = [AcceptanceSubmissionTech(**c) for c in validated]
+    bump_version(submission)
     return submission
+
+
+def bump_version(submission: AcceptanceSubmission) -> None:
+    """Mark a state change, so a review made against the old state is stale."""
+    submission.version = (submission.version or 0) + 1
 
 
 def withdraw(db: Session, *, submission: AcceptanceSubmission) -> AcceptanceSubmission:
@@ -739,6 +745,7 @@ def withdraw(db: Session, *, submission: AcceptanceSubmission) -> AcceptanceSubm
     if submission.review_status != REVIEW_PENDING:
         raise WorkflowError("Only a submission awaiting review can be withdrawn")
     submission.review_status = REVIEW_WITHDRAWN
+    bump_version(submission)
     refresh_authority_status(db, submission.village, submission.authority)
     return submission
 
@@ -829,6 +836,7 @@ def _decide(
     submission.review_comment = comment
     submission.reviewed_by = user.id
     submission.reviewed_at = _now()
+    bump_version(submission)
     refresh_authority_status(db, submission.village, submission.authority)
     return submission
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { appCount, appRoute, appsFor, locate, pageCount, queueCounts } from './appRegistry'
+import { appCount, appRoute, appsFor, locate, pageCount, queueCounts, queueLate } from './appRegistry'
 
 const ids = (apps) => apps.map((a) => a.id)
 
@@ -75,13 +75,12 @@ describe('counts come from the one /me/home response', () => {
     expect(appsFor('PM').find((a) => a.id === 'drive-test').pages.map((p) => p.id)).not.toContain('fixes')
   })
 
-  it('keeps the shared Acceptance dashboard in the app the user opened', () => {
+  it('keeps the Acceptance dashboard under Insights only (UEP-16)', () => {
     const apps = appsFor('PM')
-    expect(locate(apps, '/reports/acceptance', '').app.id).toBe('acceptance')
-    expect(locate(apps, '/reports/acceptance', '', 'acceptance').page.id).toBe('dashboard')
-    const insights = locate(apps, '/reports/acceptance', '', 'insights')
-    expect(insights.app.id).toBe('insights')
-    expect(insights.app.pages.map((p) => p.id)).toEqual(expect.arrayContaining(['roles', 'gaps']))
+    expect(locate(apps, '/reports/acceptance', '').app.id).toBe('insights')
+    expect(locate(apps, '/reports/acceptance', '', 'acceptance').app.id).toBe('insights')
+    const insights = apps.find((a) => a.id === 'insights')
+    expect(insights.pages.map((p) => p.id)).toContain('acceptance-dashboard')
   })
 
   it('ignores a preferred app that does not hold the page', () => {
@@ -138,5 +137,46 @@ describe('Drive test rail without Dashboard', () => {
     expect(insights.pages.map((p) => p.label)).toEqual([
       'Drive test dashboard', 'Acceptance dashboard', 'Roles performance', 'Lifecycle gaps', 'Exports',
     ])
+  })
+})
+
+// UEP-16: the Acceptance rail is Filing, ICT validation and CRA validation.
+describe('Acceptance rail', () => {
+  const pagesOf = (role) => appsFor(role).find((a) => a.id === 'acceptance')?.pages.map((p) => p.id)
+
+  it.each(['PM', 'Coordinator'])('gives %s Filing and both validation pages', (role) => {
+    expect(pagesOf(role)).toEqual(['filing', 'ict-validation', 'cra-validation'])
+  })
+
+  it.each(['Contractor', 'RegionalManager', 'Viewer'])('gives %s Filing only', (role) => {
+    expect(pagesOf(role)).toEqual(['filing'])
+  })
+
+  it('opens on Filing and has no Dashboard or Letters', () => {
+    const app = appsFor('PM').find((a) => a.id === 'acceptance')
+    expect(appRoute(app)).toBe('/my-work')
+    expect(app.pages.map((p) => p.route)).not.toContain('/reports/acceptance')
+    expect(app.pages.map((p) => p.id)).not.toContain('letters')
+  })
+
+  it('colours each validation tile by its authority and counts one queue each', () => {
+    const app = appsFor('Coordinator').find((a) => a.id === 'acceptance')
+    const ict = app.pages.find((p) => p.id === 'ict-validation')
+    const cra = app.pages.find((p) => p.id === 'cra-validation')
+    expect([ict.tile, cra.tile]).toEqual(['--uep-ict', '--uep-cra'])
+    const counts = { ict_to_validate: 12, cra_to_validate: 5, acceptance_filing: 30, ict_pending: 99 }
+    expect(pageCount(ict, counts)).toBe(12)
+    expect(pageCount(cra, counts)).toBe(5)
+    expect(pageCount(app.pages[0], counts)).toBe(30)
+    expect(locate(appsFor('Coordinator'), '/validation/cra', '').page.id).toBe('cra-validation')
+  })
+
+  it('reads rail-only tickets into the counts and the late figures', () => {
+    const home = {
+      groups: [{ tickets: [{ queue_key: 'ict_to_validate', count: 3, late: 1 }] }],
+      rail_tickets: [{ queue_key: 'acceptance_filing', count: 8, late: 2 }],
+    }
+    expect(queueCounts(home)).toEqual({ ict_to_validate: 3, acceptance_filing: 8 })
+    expect(queueLate(home)).toEqual({ ict_to_validate: 1, acceptance_filing: 2 })
   })
 })
