@@ -250,6 +250,22 @@ docker compose exec backend alembic downgrade c2e8f4a6b913
 
 That drops the column again; nothing else depends on it.
 
+### `d6f2b8e4a915` — a version on every acceptance submission (UEP-16)
+
+**Purely additive.** It adds `version` (an integer, default 0) to
+`acceptance_submissions`. Existing rows start at 0 and nothing is backfilled.
+The validation pages send the version they loaded with every Confirm or
+Return; a stale one is refused with "already decided by …", so two
+coordinators cannot decide the same village. A database built by
+`create_all` already has the column and the migration leaves it alone.
+
+It runs with every other migration (see "Running the migration" above).
+To undo it, step back one revision:
+
+```
+docker compose exec backend alembic downgrade c5e1a9d7f342
+```
+
 ## The `alembic_version` bookmark
 
 Alembic keeps a single row in a table called `alembic_version` recording which

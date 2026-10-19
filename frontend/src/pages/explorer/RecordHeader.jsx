@@ -38,7 +38,7 @@ export default function RecordHeader({ record, siteLabel, headingRef, canFile, i
           </Link>
         )}
         {site && canFile && record.acceptance_started && openCount > 0 && (
-          <Link className="uw-btn uw-btn-primary" to={myWorkPath({ q: site, tab: isContractor ? 'your_move' : 'all' })}>
+          <Link className="uw-btn uw-btn-primary" to={myWorkPath({ q: site, tab: isContractor ? 'your_move' : undefined })}>
             <Icon name="document" size={16} /> File letter
           </Link>
         )}

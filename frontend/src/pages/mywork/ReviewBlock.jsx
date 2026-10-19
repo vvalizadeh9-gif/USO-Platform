@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Check } from '../../components/carbon'
 import { viewScan } from './api'
+import LetterDate from '../../components/LetterDate'
 import { shown } from './roundText'
 
 /**
@@ -28,7 +29,7 @@ export default function ReviewBlock({ round, contractor, sameLetter, onConfirm, 
       <div className="mw-filed">
         <div className="mw-filed-head">
           <span className="mw-filed-letter mw-fa-ltr">{shown(round.letter_number)}</span>
-          <span className="mw-filed-date mw-fa-ltr">{shown(round.letter_date_shamsi)}</span>
+          <span className="mw-filed-date"><LetterDate shamsi={round.letter_date_shamsi} iso={round.letter_date} /></span>
           <span className="mw-filed-by">{contractor || round.submitted_by_name}</span>
           {round.scan && (
             <button

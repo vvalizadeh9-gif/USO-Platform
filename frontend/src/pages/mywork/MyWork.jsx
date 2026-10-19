@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { HeaderCount } from '../../components/PageHeader'
+import PageHeader, { HeaderCount } from '../../components/PageHeader'
 import PageFrame from '../../components/PageFrame'
-import { Banner, Loading, PageBar, Tabs } from '../../components/ui'
+import { Banner, Loading, Tabs } from '../../components/ui'
 import { useAuth } from '../../context/AuthContext'
 import { useToast } from '../../context/ToastContext'
+import { useHomeData } from '../../shell/HomeData'
 import { fetchSuggestions } from './api'
 import { ManyAuthorityCard, SingleAuthorityCard } from './AuthorityCard'
 import { RequestedMany, RequestedOne } from './RequestedCard'
@@ -16,11 +17,8 @@ import { useLetterActions } from './useLetterActions'
 import { useMyWork } from './useMyWork'
 
 const DECIDING_ROLES = ['Coordinator', 'PM']
-
-/** The buckets that belong to Validation and Letters, not Filing. */
-const NOT_FILING = new Set(['filled', 'all'])
-const PAGE_TITLES = { filing: 'Filing', validation: 'Validation', letters: 'Letters' }
-const pageOf = (tab) => (tab === 'filled' ? 'validation' : tab === 'all' ? 'letters' : 'filing')
+/** The Home queue whose number the Filing header and rail badge both show. */
+const FILING_QUEUE = 'acceptance_filing'
 
 /**
  * Acceptance → My Work: every village whose ICT or CRA letter still needs
@@ -68,19 +66,22 @@ export default function MyWork() {
   const tabs = (mw.list?.tabs || []).map((t) => ({ key: t.key, label: tabLabel(t.key, view), count: t.count }))
   const firstTab = mw.list?.tabs?.[0]?.key
 
-  // Three rail pages share this workspace (UEP-13 §3.6): Filing (the filing
-  // buckets, as a segmented filter), Validation (?tab=filled) and Letters
-  // (?tab=all). The title is the rail label; no five-tab bar.
-  const page = pageOf(mw.tab)
-  const filingTabs = tabs.filter((t) => !NOT_FILING.has(t.key))
+  // UEP-16: this workspace is Filing alone. Validation has its own pages
+  // and Letters is gone, so every bucket the server offers is a Filing one.
+  // The count is the rail badge's own figure (the acceptance_filing Home
+  // queue), read from the same /me/home response; the list's filing_total is
+  // the same rule and stands in until Home has answered.
+  const { data: home } = useHomeData()
+  const filingTicket = home?.rail_tickets?.find((t) => t.queue_key === FILING_QUEUE)
+  const waiting = filingTicket ? filingTicket.count : mw.list?.filing_total
   const bar = (
-    <PageBar
-      title={PAGE_TITLES[page]}
-      count={page === 'filing' && filingTabs.length > 0 ? (
-        <HeaderCount waiting={filingTabs.reduce((n, t) => n + (t.count || 0), 0)} />
+    <PageHeader
+      title="Filing"
+      count={waiting != null ? (
+        <HeaderCount waiting={waiting} late={filingTicket?.late || 0} noun={waiting === 1 ? 'village waiting' : 'villages waiting'} />
       ) : null}
-      tabs={page === 'filing' && filingTabs.length > 0 && (
-        <Tabs label="Filing buckets" tabs={filingTabs} value={mw.tab} onChange={mw.setTab} className="mw-buckets" />
+      tabs={tabs.length > 0 && (
+        <Tabs label="Filing buckets" tabs={tabs} value={mw.tab} onChange={mw.setTab} className="mw-buckets" />
       )}
     />
   )

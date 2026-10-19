@@ -13,8 +13,8 @@ const VIEWPORTS = [
 async function open(page, user, path = '/my-work') {
   await signIn(page, user)
   await page.goto(path)
-  // One workspace, three rail pages: staff open on Validation (To check).
-  await expect(page.getByRole('heading', { level: 1, name: /^(Filing|Validation|Letters)$/ })).toBeVisible()
+  // UEP-16: My Work is Filing for everyone; validation has its own pages.
+  await expect(page.getByRole('heading', { level: 1, name: 'Filing' })).toBeVisible()
   await expect(page.getByRole('region', { name: 'Village', exact: true })).toBeVisible()
 }
 

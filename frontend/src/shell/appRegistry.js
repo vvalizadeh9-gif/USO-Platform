@@ -150,12 +150,13 @@ export const APPS = Object.freeze([
     group: 'rollout',
     roles: ACCEPTANCE_ROLES,
     pages: [
-      // The dashboard leads the rail behind a divider and carries no count.
-      // Insights → Acceptance dashboard opens the same page.
-      { id: 'dashboard', label: 'Dashboard', route: '/reports/acceptance', divider: true },
-      { id: 'filing', label: 'Filing', route: '/my-work', queues: ['ict_pending', 'cra_pending'] },
-      { id: 'validation', label: 'Validation', route: '/my-work?tab=filled', roles: ['PM', 'Coordinator'], queues: ['ict_to_validate', 'cra_to_validate'] },
-      { id: 'letters', label: 'Letters', route: '/my-work?tab=all' },
+      // UEP-16: three pages. The dashboard lives under Insights only, and
+      // Letters is gone. Filing's count is the rail-only acceptance_filing
+      // queue -- the villages in Filing's own buckets, each once -- so it
+      // equals the Filing header. Each validation page counts one authority.
+      { id: 'filing', label: 'Filing', route: '/my-work', queues: ['acceptance_filing'], icon: 'edit', tile: '--uep-app-acceptance' },
+      { id: 'ict-validation', label: 'ICT validation', route: '/validation/ict', roles: STAFF, queues: ['ict_to_validate'], icon: 'task--approved', tile: '--uep-ict' },
+      { id: 'cra-validation', label: 'CRA validation', route: '/validation/cra', roles: STAFF, queues: ['cra_to_validate'], icon: 'task--approved', tile: '--uep-cra' },
     ],
   },
   {
@@ -320,13 +321,24 @@ export function locate(apps, pathname, search = '', preferAppId = null) {
  * that app when the page is shared with another. */
 export const appState = (app) => ({ app: app.id })
 
+const homeTickets = (home) => [
+  ...(home?.groups || []).flatMap((group) => group.tickets),
+  // Rail-only queues (UEP-16): a page's own number, on no Home card.
+  ...(home?.rail_tickets || []),
+]
+
 /** Pending counts per Home queue key, from a GET /me/home response. */
 export function queueCounts(home) {
   const counts = {}
-  for (const group of home?.groups || []) {
-    for (const t of group.tickets) counts[t.queue_key] = t.count
-  }
+  for (const t of homeTickets(home)) counts[t.queue_key] = t.count
   return counts
+}
+
+/** Late counts per Home queue key: a page header's "· N late". */
+export function queueLate(home) {
+  const late = {}
+  for (const t of homeTickets(home)) late[t.queue_key] = t.late || 0
+  return late
 }
 
 /** A page's pending count, or null when it has no count query. */

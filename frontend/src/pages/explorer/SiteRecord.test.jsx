@@ -56,7 +56,7 @@ describe('the header', () => {
   it('opens My Work on the site, and offers File letter to a filing role', async () => {
     await draw()
     expect(screen.getByRole('link', { name: /Open in My Work/ })).toHaveAttribute('href', '/my-work?q=W4318')
-    expect(screen.getByRole('link', { name: /File letter/ })).toHaveAttribute('href', '/my-work?tab=all&q=W4318')
+    expect(screen.getByRole('link', { name: /File letter/ })).toHaveAttribute('href', '/my-work?q=W4318')
   })
 
   it('offers no File letter to a role that does not file', async () => {

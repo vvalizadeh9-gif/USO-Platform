@@ -188,6 +188,16 @@ import searchLocate16 from '@carbon/icons/es/search--locate/16.js'
 import searchLocate20 from '@carbon/icons/es/search--locate/20.js'
 import chevronUp16 from '@carbon/icons/es/chevron--up/16.js'
 import chevronUp20 from '@carbon/icons/es/chevron--up/20.js'
+import zoomIn16 from '@carbon/icons/es/zoom--in/16.js'
+import zoomIn20 from '@carbon/icons/es/zoom--in/20.js'
+import zoomOut16 from '@carbon/icons/es/zoom--out/16.js'
+import zoomOut20 from '@carbon/icons/es/zoom--out/20.js'
+import documentPdf16 from '@carbon/icons/es/document--pdf/16.js'
+import documentPdf20 from '@carbon/icons/es/document--pdf/20.js'
+import image16 from '@carbon/icons/es/image/16.js'
+import image20 from '@carbon/icons/es/image/20.js'
+import email16 from '@carbon/icons/es/email/16.js'
+import email20 from '@carbon/icons/es/email/20.js'
 
 /**
  * @typedef {{ elem: string, attrs: Record<string, string | number>, content?: CarbonNode[] }} CarbonNode
@@ -292,6 +302,12 @@ export const ICONS = Object.freeze({
   'task--approved': { 16: taskApproved16, 20: taskApproved20 },
   'data--check': { 16: dataCheck16, 20: dataCheck20 },
   'tool-kit': { 16: toolKit16, 20: toolKit20 },
+  // UEP-16 evidence viewer.
+  'zoom--in': { 16: zoomIn16, 20: zoomIn20 },
+  'zoom--out': { 16: zoomOut16, 20: zoomOut20 },
+  'document--pdf': { 16: documentPdf16, 20: documentPdf20 },
+  'image': { 16: image16, 20: image20 },
+  'email': { 16: email16, 20: email20 },
 })
 
 /** @typedef {keyof typeof ICONS} IconName */

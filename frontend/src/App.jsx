@@ -23,6 +23,7 @@ const ExplorerList = lazy(() => import('./pages/explorer/ExplorerList'))
 const SiteRecord = lazy(() => import('./pages/explorer/SiteRecord'))
 const Home = lazy(() => import('./pages/Home'))
 const MyWork = lazy(() => import('./pages/mywork/MyWork'))
+const ValidationPage = lazy(() => import('./pages/validation/ValidationPage'))
 const MonthlyPlan = lazy(() => import('./pages/monthlyplan/MonthlyPlan'))
 const AcceptanceDashboard = lazy(() => import('./pages/reports/AcceptanceDashboard'))
 const RolesPerformance = lazy(() => import('./pages/reports/rolesPerformance/RolesPerformance.jsx'))
@@ -32,6 +33,32 @@ const KpiMapping = lazy(() => import('./pages/reports/KpiMapping'))
 const Admin = lazy(() => import('./pages/Admin'))
 const SlaPoliciesPage = lazy(() => import('./pages/admin/SlaPoliciesPage'))
 const ChangePassword = lazy(() => import('./pages/ChangePassword'))
+
+// UEP-16: Validation and Letters were My Work buckets. Their old addresses
+// land on the pages that replaced them; any other query (q=, village=) stays.
+function MyWorkRoute() {
+  const { search } = useLocation()
+  const params = new URLSearchParams(search)
+  const tab = params.get('tab')
+  if (tab === 'filled') return <Navigate to="/validation/ict" replace />
+  if (tab === 'all') {
+    params.delete('tab')
+    const rest = params.toString()
+    return <Navigate to={rest ? `/my-work?${rest}` : '/my-work'} replace />
+  }
+  return <MyWork />
+}
+
+const VALIDATION_AUTHORITIES = { ict: 'ICT', cra: 'CRA' }
+
+/** /validation/ict or /validation/cra; anything else lands on ICT. Keyed by
+ * authority, so switching pages starts the page over. */
+function ValidationRoute() {
+  const { authority } = useParams()
+  const name = VALIDATION_AUTHORITIES[String(authority || '').toLowerCase()]
+  if (!name || authority !== authority.toLowerCase()) return <Navigate to="/validation/ict" replace />
+  return <ValidationPage key={name} authority={name} />
+}
 
 // The one screen an account on an administrator-issued password may use. The
 // server refuses every other endpoint with a 403, so routing here is the
@@ -204,7 +231,17 @@ export default function App() {
               React Router, so selecting a village unmounted the workspace and
               remounted it — silently resetting the chosen bucket and the
               search box on every click. */}
-          <Route path="/my-work/*" element={<MyWork />} />
+          <Route path="/my-work/*" element={<MyWorkRoute />} />
+          {/* ICT and CRA validation (UEP-16): the PM's and coordinators'. */}
+          <Route
+            path="/validation/:authority"
+            element={
+              <Protected allowedRoles={['PM', 'Coordinator']}>
+                <ValidationRoute />
+              </Protected>
+            }
+          />
+          <Route path="/validation" element={<Navigate to="/validation/ict" replace />} />
           {/* Admin is not in MONTHLY_PLAN_ROLES, so this bounces them home:
               setting a contractor's monthly target is an operational act and
               Admin is a systems role. See lib/roles and ARCHITECTURE.md. */}
