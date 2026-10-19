@@ -47,8 +47,9 @@ test('a coordinator finishes a site across ICT and CRA', async ({ page }) => {
   await expect(viewer).toBeHidden()
 
   // Two ICT and one CRA: one request each.
-  const ict = page.getByRole('table', { name: 'ICT filings' }).locator('tbody tr.vl-tr')
-  const cra = page.getByRole('table', { name: 'CRA filings' }).locator('tbody tr.vl-tr')
+  // The village cell: in By site the Letter cell is a link that opens the viewer.
+  const ict = page.getByRole('table', { name: 'ICT filings' }).locator('tbody tr.vl-tr td.vl-village')
+  const cra = page.getByRole('table', { name: 'CRA filings' }).locator('tbody tr.vl-tr td.vl-village')
   await ict.nth(0).click()
   await ict.nth(1).click()
   await cra.nth(0).click()
@@ -84,7 +85,7 @@ for (const viewport of [
     await open(page)
     for (const view of ['By letter', 'By site']) {
       await page.getByRole('button', { name: new RegExp(view) }).click()
-      await page.getByRole('table', { name: 'ICT filings' }).locator('tbody tr.vl-tr').first().click()
+      await page.getByRole('table', { name: 'ICT filings' }).locator('tbody tr.vl-tr td.vl-village').first().click()
       await page.getByRole('button', { name: 'View' }).first().click()
       const scroll = await page.evaluate(() => ({
         page: document.scrollingElement.scrollHeight - window.innerHeight,

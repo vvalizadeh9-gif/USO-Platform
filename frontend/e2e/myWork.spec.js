@@ -58,7 +58,15 @@ const STATES = [
     name: 'coordinator, review',
     user: { ...PM, role: { name: 'Coordinator' } },
     act: async (page) => {
-      await expect(page.getByRole('button', { name: 'Confirm', exact: true }).first()).toBeVisible()
+      // Coordinators open on Not filed (UEP-16); focus a village whose other
+      // side is filed, which still offers its review on Filing.
+      const confirm = page.getByRole('button', { name: 'Confirm', exact: true }).first()
+      const rows = page.locator('.mw-row')
+      for (let i = 0; i < (await rows.count()) && !(await confirm.isVisible()); i += 1) {
+        await rows.nth(i).locator('.mw-row-main, .mw-row-name').first().click()
+        await page.waitForTimeout(150)
+      }
+      await expect(confirm).toBeVisible()
     },
   },
   {

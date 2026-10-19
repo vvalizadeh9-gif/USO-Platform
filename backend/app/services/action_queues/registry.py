@@ -119,8 +119,12 @@ assert len(QUEUES_BY_KEY) == len(QUEUES), "queue keys must be unique"
 
 
 def queues_for(role: str, *, home_only: bool = False) -> list[QueueDefinition]:
-    """This role's board queues; with ``home_only``, Home's own queues too."""
-    return [q for q in QUEUES if role in q.roles and (q.on_board or home_only)]
+    """This role's board queues; with ``home_only``, Home's own queues too.
+    Rail-only queues are neither (:func:`rail_queues_for`)."""
+    return [
+        q for q in QUEUES
+        if role in q.roles and (q.on_board or home_only) and q.key not in RAIL_QUEUES
+    ]
 
 
 def rail_queues_for(role: str) -> list[QueueDefinition]:

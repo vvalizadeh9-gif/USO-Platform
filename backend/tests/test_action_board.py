@@ -176,7 +176,9 @@ def _my_work_count(db, user, authority, tab):
     result = query.list_my_work(
         db, user, query.ListRequest(scope="remaining", tab=tab, authority=authority, limit=0)
     )
-    return dict(result.tabs)[tab]
+    # ``total`` is the tab's own count, offered as a Filing bucket or not
+    # (UEP-16: "filled" is the validation pages', still answered as tab=).
+    return result.total
 
 
 def _screen_count(db, user, key):  # noqa: C901 -- one branch per screen
