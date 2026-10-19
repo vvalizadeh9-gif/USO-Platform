@@ -148,10 +148,12 @@ def tab_clause(tab: str, sides: Sequence[ColumnElement]) -> ColumnElement[bool]:
 VIEW_CONTRACTOR = "contractor"
 VIEW_STAFF = "staff"
 
-CONTRACTOR_TABS = (TAB_YOUR_MOVE, TAB_NEW_LETTER, TAB_RETURNED, TAB_NOT_FILED, TAB_FILLED)
-STAFF_TABS = (
-    TAB_FILLED, TAB_NOT_FILED, TAB_NEW_LETTER, TAB_RETURNED, TAB_WITH_AUTHORITY, TAB_ALL,
-)
+#: Filing's buckets (UEP-16). "Filled" is the validation pages' work and
+#: "all" was the Letters page; both are still accepted as ``tab=`` for old
+#: links (:data:`EXTRA_TABS`) but no longer offered.
+CONTRACTOR_TABS = (TAB_YOUR_MOVE, TAB_NEW_LETTER, TAB_RETURNED, TAB_NOT_FILED)
+STAFF_TABS = (TAB_NOT_FILED, TAB_NEW_LETTER, TAB_RETURNED, TAB_WITH_AUTHORITY)
+EXTRA_TABS = (TAB_FILLED, TAB_ALL)
 
 #: Roles that file letters, and the subset that also decides them.
 FILING_ROLES = (CONTRACTOR, COORDINATOR, PM)
@@ -178,15 +180,17 @@ def decides_directly(role_name: str) -> bool:
     return role_name in DECIDING_ROLES
 
 
-def tabs_for(view: str, *, universe: bool) -> tuple[str, ...]:
-    """The tabs this viewer sees, in order; the first is the default.
+def tabs_for(view: str, *, universe: bool = False) -> tuple[str, ...]:  # noqa: ARG001
+    """Filing's buckets for this viewer, in order; the first is the default.
 
-    Under the dashboard's universe a fully approved village is in no other
-    tab, so a contractor gets ``all`` too.
+    ``universe`` is kept for callers; since UEP-16 it no longer adds ``all``.
     """
-    if view == VIEW_STAFF:
-        return STAFF_TABS
-    return CONTRACTOR_TABS + ((TAB_ALL,) if universe else ())
+    return STAFF_TABS if view == VIEW_STAFF else CONTRACTOR_TABS
+
+
+def accepted_tabs(view: str) -> tuple[str, ...]:
+    """Every ``tab=`` the list answers: the buckets, plus the old ones."""
+    return tabs_for(view) + EXTRA_TABS
 
 
 def totals_kind(view: str) -> str:

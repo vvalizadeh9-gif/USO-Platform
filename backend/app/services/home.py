@@ -30,7 +30,7 @@ from app.services.action_queues import board as boards
 from app.services.action_queues import done, sla
 from app.services.action_queues.board import NotOnBoard
 from app.services.action_queues.context import QueueContext, home_role
-from app.services.action_queues.registry import home_queues_for
+from app.services.action_queues.registry import home_queues_for, rail_queues_for
 from app.services.action_queues.types import (
     CONTRACTOR,
     COORDINATOR,
@@ -208,6 +208,13 @@ def _badges(tickets: list[dict]) -> dict[str, dict]:
     return badges
 
 
+def _rail_row(queue, ctx: QueueContext, sla_days: int, window) -> _Row:
+    items = queue.fetch(ctx)
+    summary = boards.summarize(queue, items, sla_days, ctx.now, due_soon_window=window)
+    return _Row(summary, _owners(items, ctx.user), _owner_type(items),
+                oldest_days(summary.oldest_started_at, ctx.now))
+
+
 def build(db: Session, user: User, now: datetime | None = None) -> dict:
     role = require_home_role(user)
     ctx = QueueContext(db, user) if now is None else QueueContext(db, user, now=now)
@@ -215,7 +222,8 @@ def build(db: Session, user: User, now: datetime | None = None) -> dict:
     window = sla.due_soon_window()
 
     queues = home_queues_for(role)
-    days = sla.sla_days_by_queue(db, [q.key for q in queues])
+    rail_queues = rail_queues_for(role)
+    days = sla.sla_days_by_queue(db, [q.key for q in (*queues, *rail_queues)])
     by_group: dict[HomeGroup, list[_Row]] = defaultdict(list)
     for queue in queues:
         items = queue.fetch(ctx)
@@ -283,6 +291,9 @@ def build(db: Session, user: User, now: datetime | None = None) -> dict:
         "groups": groups,
         "plan": _plan(db, user, role, today),
         "app_badges": _badges(tickets),
+        # Counted like a card's rows, shown on none: a page's own number for
+        # its rail badge and header (types.RAIL_QUEUES; UEP-16 Filing).
+        "rail_tickets": [_ticket(_rail_row(q, ctx, days[q.key], window)) for q in rail_queues],
     }
 
 

@@ -18,6 +18,7 @@ from app.api import (
     my_work,
     search,
     sla_policies,
+    validation,
     work_items,
     work_queues,
     workflow,
@@ -32,6 +33,7 @@ api_router.include_router(health_check.router)
 api_router.include_router(drive_test.router)
 api_router.include_router(acceptance.router)
 api_router.include_router(my_work.router)
+api_router.include_router(validation.router)
 api_router.include_router(kpi.router)
 api_router.include_router(gaps.router)
 api_router.include_router(mojri.router)

@@ -37,7 +37,7 @@ from app.models.workitem import Site, Village, WorkItem
 from app.services import acceptance_requests as requests
 from app.services import acceptance_workflow as flow
 from app.services import my_work_status as S
-from app.services.my_work_scope import SCOPE_UNIVERSE, scope_clause
+from app.services.my_work_scope import scope_clause
 from app.services.tech_parser import parse_technologies
 from app.services.visibility import visible_work_item_ids
 
@@ -113,6 +113,7 @@ class ListResult:
     total: int
     rows: list[RowFacts]
     next_cursor: str | None
+    filing_total: int = 0
 
 
 # --------------------------------------------------------------------------
@@ -201,6 +202,22 @@ def tab_predicate(
     return S.tab_clause(tab, side_columns(authority) if sides is None else sides)
 
 
+def filing_predicate(
+    view: str,
+    *,
+    sides: tuple[ColumnElement, ...] | None = None,
+    village_id: ColumnElement | None = None,
+) -> ColumnElement[bool]:
+    """In any of Filing's buckets for this viewer -- one test per village, so a
+    village in two buckets (ICT not filed, CRA with the authority) counts once.
+    The Filing header, its rail badge and the ``acceptance_filing`` queue all
+    read this."""
+    return or_(*(
+        tab_predicate(tab, None, sides=sides, village_id=village_id)
+        for tab in S.tabs_for(view)
+    ))
+
+
 def _ordering(sort: str) -> tuple:
     if sort == SORT_NAME:
         return (Village.village_name.asc(), Village.id.asc())
@@ -259,8 +276,17 @@ def _counts(
         .label(a)
         for a in AUTHORITIES
     ]
-    row = db.execute(select(*tab_counts, *totals).select_from(population)).one()._mapping
-    return {t: int(row[t]) for t in tabs}, {a: int(row[a]) for a in AUTHORITIES}
+    filing = (
+        func.count()
+        .filter(filing_predicate(
+            view, sides=_subquery_sides(population, None), village_id=population.c.id,
+        ))
+        .label("_filing")
+    )
+    row = db.execute(select(*tab_counts, *totals, filing).select_from(population)).one()._mapping
+    counts = {t: int(row[t]) for t in tabs}
+    counts["_filing"] = int(row["_filing"])
+    return counts, {a: int(row[a]) for a in AUTHORITIES}
 
 
 def _subquery_sides(population, authority: str | None) -> tuple[ColumnElement, ...]:
@@ -409,9 +435,10 @@ def _rows(db: Session, village_ids: list[int], viewer: User) -> list[RowFacts]:
 # --------------------------------------------------------------------------
 def list_my_work(db: Session, user: User, request: ListRequest) -> ListResult:
     view = S.view_for(user.role.name)
-    tabs = S.tabs_for(view, universe=request.scope == SCOPE_UNIVERSE)
-    if request.tab not in tabs:
-        raise QueryError(f"tab must be one of {', '.join(tabs)}", "invalid_tab")
+    tabs = S.tabs_for(view)
+    accepted = S.accepted_tabs(view)
+    if request.tab not in accepted:
+        raise QueryError(f"tab must be one of {', '.join(accepted)}", "invalid_tab")
     if request.sort not in SORTS:
         raise QueryError(f"sort must be one of {', '.join(SORTS)}", "invalid_sort")
     if request.authority not in (None, *AUTHORITIES):
@@ -421,7 +448,9 @@ def list_my_work(db: Session, user: User, request: ListRequest) -> ListResult:
     offset = decode_cursor(request)
 
     base = base_select(db, user, scope=request.scope, q=request.q)
-    counts, totals = _counts(db, base, view, tabs, request.authority)
+    # An old tab (filled, all) is counted too, so its total is still exact.
+    counted = tabs if request.tab in tabs else (*tabs, request.tab)
+    counts, totals = _counts(db, base, view, counted, request.authority)
 
     rows: list[RowFacts] = []
     next_cursor = None
@@ -452,4 +481,5 @@ def list_my_work(db: Session, user: User, request: ListRequest) -> ListResult:
         total=len(rows) if request.ids is not None else counts[request.tab],
         rows=rows,
         next_cursor=next_cursor,
+        filing_total=counts["_filing"],
     )

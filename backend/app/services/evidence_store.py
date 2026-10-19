@@ -18,6 +18,7 @@ from __future__ import annotations
 import hashlib
 import os
 import re
+from email.parser import BytesHeaderParser
 from pathlib import Path
 
 from app.core.config import get_settings
@@ -29,6 +30,9 @@ from app.core.config import get_settings
 # it for a scan attached to a letter.
 _ZIP_MAGIC = (b"PK\x03\x04", b"PK\x05\x06", b"PK\x07\x08")
 
+# An Outlook .msg is an OLE compound file.
+_OLE_MAGIC = (b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1",)
+
 # extension -> (human label, accepted magic-byte prefixes)
 ALLOWED_TYPES: dict[str, tuple[str, tuple[bytes, ...]]] = {
     "pdf": ("PDF document", (b"%PDF",)),
@@ -38,6 +42,10 @@ ALLOWED_TYPES: dict[str, tuple[str, tuple[bytes, ...]]] = {
     "webp": ("WebP image", (b"RIFF",)),
     "docx": ("Word document", _ZIP_MAGIC),
     "xlsx": ("Excel workbook", _ZIP_MAGIC),
+    # An authority's answer often arrives by email (UEP-16). An .eml has no
+    # magic number; its headers are parsed instead (see :func:`_check_eml`).
+    "eml": ("Email message", ()),
+    "msg": ("Outlook message", _OLE_MAGIC),
 }
 
 # What the upload box tells the user it accepts.
@@ -135,13 +143,36 @@ def validate(filename: str, content: bytes) -> str:
         )
 
     _label, magics = ALLOWED_TYPES[ext]
-    if not any(content.startswith(m) for m in magics):
+    if ext == "eml":
+        _check_eml(content)
+    elif not any(content.startswith(m) for m in magics):
         raise EvidenceError(f"The file does not look like a real {ext.upper()} file")
     # WebP is RIFF....WEBP; RIFF alone is also a WAV or an AVI.
     if ext == "webp" and content[8:12] != b"WEBP":
         raise EvidenceError("The file does not look like a real WEBP file")
 
     return ext
+
+
+#: Headers at least one of which every real message carries.
+_EML_HEADERS = ("from", "date", "subject", "message-id")
+
+
+def _check_eml(content: bytes) -> None:
+    """An .eml is text, so the check is that its header block parses as one.
+
+    Refused: anything that starts with markup (an HTML page renamed .eml), and
+    anything whose head holds none of the headers every message carries.
+    """
+    head = content[:64 * 1024].lstrip()
+    if head[:1] == b"<":
+        raise EvidenceError("The file does not look like a real EML file")
+    try:
+        headers = BytesHeaderParser().parsebytes(head)
+    except Exception:  # noqa: BLE001 -- any parser failure is "not an email"
+        raise EvidenceError("The file does not look like a real EML file") from None
+    if not any(headers.get(h) for h in _EML_HEADERS):
+        raise EvidenceError("The file does not look like a real EML file")
 
 
 def store(filename: str, content: bytes) -> dict:
@@ -186,7 +217,31 @@ _MEDIA_TYPES = {
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
     ),
     "xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "eml": "message/rfc822",
+    "msg": "application/vnd.ms-outlook",
 }
+
+#: How the evidence viewer shows each type (UEP-16): its tag and its renderer.
+KIND_PDF = "pdf"
+KIND_IMAGE = "image"
+KIND_EMAIL = "email"
+KIND_FILE = "file"
+_KINDS = {
+    "pdf": KIND_PDF,
+    "jpg": KIND_IMAGE, "jpeg": KIND_IMAGE, "png": KIND_IMAGE, "webp": KIND_IMAGE,
+    "eml": KIND_EMAIL, "msg": KIND_EMAIL,
+}
+
+#: Served inline (the viewer draws them); everything else downloads.
+INLINE_KINDS = frozenset({KIND_PDF, KIND_IMAGE})
+
+
+def kind_for(stored_path: str) -> str:
+    return _KINDS.get(_extension(stored_path), KIND_FILE)
+
+
+def extension_of(stored_path: str) -> str:
+    return _extension(stored_path)
 
 
 def media_type_for(stored_path: str) -> str:
