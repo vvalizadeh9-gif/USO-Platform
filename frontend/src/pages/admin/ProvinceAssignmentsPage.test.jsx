@@ -137,16 +137,19 @@ describe('editing', () => {
     expect(screen.queryByText(/unsaved change/)).not.toBeInTheDocument()
   })
 
-  it('an unlinked coordinator cannot be chosen and says why', async () => {
+  it('a new coordinator account is a column that can be given any region', async () => {
     const data = overview()
-    data.coordinators[3] = { ...data.coordinators[3], linked: false }
+    data.coordinators.push({ user_id: 15, name: 'Sara', initials: 'SR', colour_index: 4, linked: false, regions: 0, provinces: 0 })
+    data.regions[1] = { ...data.regions[1], coordinator_user_id: null }
     api.get.mockResolvedValue({ data })
     await ready()
-    const farid = cell('Central', 'Farid')
-    expect(farid).toHaveAttribute('aria-disabled', 'true')
-    expect(farid).toHaveAccessibleDescription(/Link it on the KPI mapping page first/)
-    await userEvent.click(farid)
-    expect(farid).toHaveAttribute('aria-checked', 'false')
+    expect(within(row('Central')).getByText('No coordinator yet')).toBeInTheDocument()
+    const sara = cell('Central', 'Sara')
+    expect(sara).not.toHaveAttribute('aria-disabled')
+    await userEvent.click(sara)
+    expect(sara).toHaveAttribute('aria-checked', 'true')
+    expect(within(row('Central')).getByText('No coordinator → Sara')).toBeInTheDocument()
+    expect(updateButton()).toHaveTextContent('Update 1')
   })
 })
 

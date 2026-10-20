@@ -143,7 +143,6 @@
   border: 0; border-radius: var(--uep-radius-pill);
   background: none; padding: 0; cursor: pointer;
 }
-.pa-choice[aria-disabled='true'] { cursor: not-allowed; }
 .pa-choice.is-readonly { cursor: default; }
 .pa-choice:focus { outline: none; }
 .pa-choice:focus-visible {
@@ -156,7 +155,7 @@
   transition: border-color var(--uep-dur-fast) var(--uep-ease-productive),
     background var(--uep-dur-fast) var(--uep-ease-productive);
 }
-.pa-choice:not([aria-disabled='true']):hover .pa-empty {
+.pa-choice:hover .pa-empty {
   border-color: var(--pa-colour);
   background: color-mix(in srgb, var(--pa-colour) 12%, transparent);
 }

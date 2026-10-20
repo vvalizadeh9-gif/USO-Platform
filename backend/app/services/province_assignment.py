@@ -240,12 +240,43 @@ def _eligible(db: Session, user_id: int) -> User:
     account = db.get(User, user_id)
     if account is None or account.role.name != COORDINATOR or not account.active:
         raise AssignmentError("That user is not an active Coordinator")
-    if not account.kpi_person_name:
-        raise AssignmentError(
-            f"{account.full_name}'s account is not linked to a coordinator name yet. "
-            "Link it on the KPI mapping page first."
-        )
     return account
+
+
+def _name_for(db: Session, account: User, actor: User) -> str:
+    """The name ``province_mapping`` records for this account.
+
+    An account is chosen on the page as itself; the mapping still records
+    coordinators by name (it names people the KPI pages report on), so an
+    account that has none yet gets its full name from Users & roles, set
+    here and audit-logged. Refuses (422) a name another coordinator account
+    already holds: the two would share each other's regions.
+    """
+    if account.kpi_person_name:
+        return account.kpi_person_name
+    name = account.full_name
+    taken = db.execute(
+        select(User.id)
+        .join(Role, User.role_id == Role.id)
+        .where(
+            Role.name == COORDINATOR,
+            User.id != account.id,
+            func.lower(User.kpi_person_name) == name.lower(),
+        )
+    ).first()
+    if taken:
+        raise AssignmentError(
+            f"Another coordinator account already reports as {name!r}. "
+            "Give one of them a different name in Users & roles."
+        )
+    account.kpi_person_name = name
+    record_audit(
+        db, user_id=actor.id, action=audit_actions.UPDATED, module="Admin",
+        entity_type="User", entity_id=account.id,
+        old_value={"kpi_person_name": None}, new_value={"kpi_person_name": name},
+        reason="Named in province_mapping when first given a CRA region",
+    )
+    return name
 
 
 def _move_grants(db: Session, provinces: list[Province], owner: User) -> None:
@@ -300,6 +331,7 @@ def _commit_plan(
         return change_id
     now = _now()
     for region, owner in plan:
+        _name_for(db, owner, actor)
         _apply(db, region, owner, actor, change_id, now)
     db.flush()
     record_audit(
@@ -361,6 +393,14 @@ def revert(db: Session, change_id: uuid.UUID, user: User) -> uuid.UUID:
             continue
         plan.append((region, _eligible(db, old)))
     return _commit_plan(db, plan, user, reason=f"Reverted change {change_id}")
+
+
+def changed_regions(db: Session, change_id: uuid.UUID) -> list[str]:
+    """The regions one change gave to someone, for the page's toast."""
+    return sorted(db.execute(
+        select(ProvinceAssignmentHistory.cra_region)
+        .where(ProvinceAssignmentHistory.change_id == change_id)
+    ).scalars())
 
 
 # --------------------------------------------------------------- history --
