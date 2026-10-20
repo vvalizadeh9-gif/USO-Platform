@@ -32,6 +32,7 @@ const MojriImport = lazy(() => import('./pages/mojri/MojriImport'))
 const KpiMapping = lazy(() => import('./pages/reports/KpiMapping'))
 const Admin = lazy(() => import('./pages/Admin'))
 const SlaPoliciesPage = lazy(() => import('./pages/admin/SlaPoliciesPage'))
+const ProvinceAssignmentsPage = lazy(() => import('./pages/admin/ProvinceAssignmentsPage'))
 const ChangePassword = lazy(() => import('./pages/ChangePassword'))
 
 // UEP-16: Validation and Letters were My Work buckets. Their old addresses
@@ -268,6 +269,7 @@ export default function App() {
           <Route path="/my-acceptance" element={<Navigate to="/my-work" replace />} />
           <Route path="/admin" element={<Protected allowedRoles={['Admin', 'PM']}><Admin /></Protected>} />
           <Route path="/admin/sla" element={<Protected allowedRoles={['Admin', 'PM', 'Viewer']}><SlaPoliciesPage /></Protected>} />
+          <Route path="/admin/provinces" element={<Protected allowedRoles={['Admin', 'PM', 'Viewer']}><ProvinceAssignmentsPage /></Protected>} />
           {/* Reachable by anyone, including an account that can reach nothing
               else — see Protected above and app/core/deps.py. */}
           <Route path={CHANGE_PASSWORD_PATH} element={<ChangePassword />} />

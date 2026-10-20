@@ -12,7 +12,6 @@ import UsersTab from './admin/UsersTab'
 import ValidateCpmTab from './admin/ValidateCpmTab'
 import AuditLogTab from './admin/AuditLogTab'
 import ProblemCategoriesTab from './admin/ProblemCategoriesTab'
-import ProvinceAssignmentsTab from './admin/ProvinceAssignmentsTab'
 import MojriTemplateTab from './admin/MojriTemplateTab'
 
 // Every view besides CPM changes hits Admin-only endpoints (see backend
@@ -27,7 +26,6 @@ const TABS = [
   { key: 'validate', label: 'CPM changes' },
   { key: 'users', label: 'Users & roles', adminOnly: true },
   { key: 'categories', label: 'Problem categories', adminOnly: true },
-  { key: 'provinces', label: 'Province assignments', adminOnly: true },
   // A download, and only a download: it reads villages we have already
   // approved and writes nothing, which is the only reason it may be Admin's.
   // The import that brings the filled file back is PM's alone.
@@ -62,6 +60,8 @@ export default function Admin() {
 
   // The Action SLA tab became Admin > SLA policies (UEP-15).
   if (linkedTab === 'action-sla') return <Navigate to="/admin/sla" replace />
+  // The Province Assignments tab became Admin > Province assignments (UEP-17).
+  if (linkedTab === 'provinces') return <Navigate to="/admin/provinces" replace />
 
   return (
     <>
@@ -84,7 +84,6 @@ export default function Admin() {
           {tab === 'validate' && <ValidateCpmTab onDecided={refreshPending} highlightId={highlightId} />}
           {tab === 'users' && isAdmin && <UsersTab />}
           {tab === 'categories' && isAdmin && <ProblemCategoriesTab />}
-          {tab === 'provinces' && isAdmin && <ProvinceAssignmentsTab />}
           {tab === 'mojri' && isAdmin && <MojriTemplateTab />}
           {tab === 'audit' && isAdmin && <AuditLogTab />}
         </motion.div>

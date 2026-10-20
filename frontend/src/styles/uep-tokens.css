@@ -110,6 +110,7 @@
   --uep-radius-logo: 8px;
   --uep-radius-tile: 8px;     /* tiles, rail items, KPI tiles */
   --uep-radius-card: 12px;
+  --uep-radius-avatar: 13px;  /* the 44px coordinator tile (UEP-17) */
   --uep-radius-pill: 999px;
   --uep-border-width: 1px;
 
@@ -415,6 +416,16 @@
      strong one for steppers and icon buttons. #F9FAFB was too faint. */
   --uep-hover: #EEF1F6;
   --uep-hover-strong: #E6EAF1;
+  /* Province assignments (UEP-17): province tags, the empty choice circle
+     (3.5:1 on white, so it reads as a control), and the coordinator palette
+     in column order, never green. White initials reach 4.5:1 on every one. */
+  --uep-tag: #F1F3F7;
+  --uep-line2: #808A9C;
+  --uep-coord-1: #1D4ED8;
+  --uep-coord-2: #6D28D9;
+  --uep-coord-3: #B45309;
+  --uep-coord-4: #0E7490;
+  --uep-scrim-drawer: rgba(20, 23, 31, 0.25);
   /* The Drive test stage tints and their selected-row shade. */
   --uep-stage-hc: var(--uep-accent);
   --uep-stage-hc-tint: var(--uep-accent-tint);

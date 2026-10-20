@@ -30,6 +30,7 @@ from app.models.kpi import ProvinceMapping
 from app.models.mojri import MojriImportRun, MojriTrackerStatus
 from app.models.performance import LifecycleStatusHistory
 from app.models.monthly_plan import ContractorMonthlyPlan
+from app.models.province_assignment import ProvinceAssignmentHistory
 from app.models.sla_policy import SlaPolicy, SlaPolicyHistory
 from app.models.reference import (
     Contractor,
@@ -52,6 +53,7 @@ from app.models.workitem import (
 )
 
 __all__ = [
+    "ProvinceAssignmentHistory",
     "SlaPolicy",
     "SlaPolicyHistory",
     "Acceptance",

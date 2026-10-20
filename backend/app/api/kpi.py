@@ -33,7 +33,7 @@ from app.schemas import (
     ProvinceMappingWrite,
 )
 from app.schemas.roles_performance import AreaPayload, MonthPayload
-from app.services import gap_export, kpi, kpi_export, kpi_mapping
+from app.services import gap_export, kpi, kpi_export, kpi_mapping, province_assignment
 from app.services.performance import area as perf_area
 from app.services.performance import export as perf_export
 from app.services.performance import month as perf_month
@@ -286,6 +286,18 @@ def get_mapping(
     return payload
 
 
+def _require_region_coordinator(db: Session, payload: ProvinceMappingWrite) -> None:
+    """A province's coordinator is its CRA region's (UEP-17). Set on Province
+    assignments; here only the regional manager may change. The payload's
+    name is replaced by the region's own spelling."""
+    try:
+        payload.pso_coordinator = province_assignment.require_region_coordinator(
+            db, payload.cra_region, payload.pso_coordinator
+        )
+    except province_assignment.AssignmentError as exc:
+        raise HTTPException(422, str(exc)) from exc
+
+
 @router.put("/mapping/{mapping_id}", response_model=ProvinceMappingOut)
 def correct_mapping(
     mapping_id: int,
@@ -300,6 +312,7 @@ def correct_mapping(
     reassignment would invent a handover that never happened.
     """
     row = kpi_mapping.get_open_row(db, mapping_id)
+    _require_region_coordinator(db, payload)
     before = _snapshot(row)
     kpi_mapping.correct(
         db,
@@ -333,6 +346,7 @@ def reassign_mapping(
 ) -> ProvinceMappingOut:
     """Hand a province over: close the current row, open a new one."""
     row = kpi_mapping.get_open_row(db, mapping_id)
+    _require_region_coordinator(db, payload)
     before = _snapshot(row)
     fresh = kpi_mapping.reassign(
         db,

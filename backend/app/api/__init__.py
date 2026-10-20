@@ -16,6 +16,7 @@ from app.api import (
     mojri,
     monthly_plan,
     my_work,
+    province_assignments,
     search,
     sla_policies,
     validation,
@@ -42,6 +43,7 @@ api_router.include_router(admin.router)
 api_router.include_router(misc.router)
 api_router.include_router(work_queues.router)
 api_router.include_router(sla_policies.router)
+api_router.include_router(province_assignments.router)
 api_router.include_router(home.router)
 api_router.include_router(search.router)
 api_router.include_router(client_errors.router)

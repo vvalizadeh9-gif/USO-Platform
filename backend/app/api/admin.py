@@ -53,7 +53,7 @@ from app.schemas import (
 from app.services.action_queues.sla import category_sla_days
 from app.services.audit import record_audit
 from app.services.cpm_import import CpmImportService
-from app.services import evidence_store
+from app.services import evidence_store, province_assignment
 from app.services.data_wipe import REQUIRED_CONFIRMATION_PHRASE, wipe_cpm_data
 
 logger = logging.getLogger("uep.admin")
@@ -1125,17 +1125,22 @@ def set_province_assignment(
     db: Session = Depends(get_db),
     user: User = Depends(require_roles(ADMIN)),
 ):
-    """Assign (or clear) this province's coordinator and regional manager.
+    """Assign (or clear) this province's regional manager.
 
-    Every filter that reads ``Province.coordinator_user_id`` /
-    ``regional_manager_user_id`` elsewhere trusts that whoever is named here
-    actually holds that role — so a mismatched pick is refused here, once,
-    rather than silently producing an empty result on some report far from
-    where the mistake was made.
+    Every filter that reads ``Province.regional_manager_user_id`` elsewhere
+    trusts that whoever is named here actually holds that role — so a
+    mismatched pick is refused here, once, rather than silently producing an
+    empty result on some report far from where the mistake was made.
+
+    The coordinator is no longer set here (UEP-17): it is assigned per CRA
+    region on Admin > Province assignments. The payload still carries it, and
+    any value other than the province's current coordinator is a 422.
     """
     province = db.get(Province, province_id)
     if province is None:
         raise HTTPException(404, "No such province")
+    if payload.coordinator_user_id != province.coordinator_user_id:
+        raise HTTPException(422, province_assignment.PER_REGION_ONLY)
 
     before = {
         "coordinator_user_id": province.coordinator_user_id,
@@ -1150,9 +1155,6 @@ def set_province_assignment(
             raise HTTPException(422, f"That user is not a {label}")
         return user_id
 
-    province.coordinator_user_id = _resolve(
-        payload.coordinator_user_id, COORDINATOR, "Coordinator"
-    )
     province.regional_manager_user_id = _resolve(
         payload.regional_manager_user_id, REGIONAL, "Regional Manager"
     )

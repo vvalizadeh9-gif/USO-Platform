@@ -192,12 +192,15 @@ def set_person_name(db: Session, account: User, name: str | None) -> User:
             func.lower(column) == cleaned.lower(),
         )
     ).scalars().first()
-    if match is None:
+    if match is None and lens != LENS_COORDINATOR:
         raise HTTPException(422, f"No province is currently mapped to {cleaned!r}")
 
     # Store it exactly as the mapping spells it, so the two never differ by a
-    # capital letter.
-    account.kpi_person_name = match
+    # capital letter. A coordinator may be linked to a name no region carries
+    # yet (UEP-17): regions are given to an account on Province assignments,
+    # which writes the account's name into the mapping, so a new coordinator
+    # has to be linked before they can own anything.
+    account.kpi_person_name = match or cleaned
     db.flush()
     return account
 
