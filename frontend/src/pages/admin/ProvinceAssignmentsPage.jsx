@@ -84,8 +84,9 @@ export default function ProvinceAssignmentsPage() {
       })
       setData(r.data)
       setDraft({})
-      setSaved(changed.map((region) => region.name))
-      setToast({ text: `${plural(changed.length, 'region')} updated across UEP`, revertId: r.data.change_id })
+      const done = r.data.changed_regions ?? changed.map((region) => region.name)
+      setSaved(done)
+      setToast({ text: `${plural(done.length, 'region')} updated across UEP`, revertId: r.data.change_id })
       titleRef.current?.focus()
     } catch (err) {
       if (err?.response?.status === 409) await keepWhatSurvived(err)
@@ -266,13 +267,8 @@ function AssignmentGrid({ data, draft, canEdit, saved, reduced, onAssign }) {
   )
 }
 
-/** The next coordinator in ``step`` direction a region can be given to. */
-function nextChoosable(coordinators, from, step) {
-  for (let i = from + step; i >= 0 && i < coordinators.length; i += step) {
-    if (coordinators[i].linked) return coordinators[i]
-  }
-  return null
-}
+/** The next coordinator in ``step`` direction, or null at the row's end. */
+const nextChoosable = (coordinators, from, step) => coordinators[from + step] ?? null
 
 function HeaderRow({ coordinators, load, total, hoverCol, onHover }) {
   return (
@@ -292,14 +288,10 @@ function HeaderRow({ coordinators, load, total, hoverCol, onHover }) {
           >
             <span className="pa-avatar" style={{ background: colour }} aria-hidden="true">{c.initials}</span>
             <span className="pa-col-name">{c.name}</span>
-            {c.linked ? (
-              <span className="pa-col-count">
-                <span>{plural(mine.regions, 'region')}</span>
-                <span>{plural(mine.provinces, 'province')}</span>
-              </span>
-            ) : (
-              <span className="pa-col-count">Not linked</span>
-            )}
+            <span className="pa-col-count">
+              <span>{plural(mine.regions, 'region')}</span>
+              <span>{plural(mine.provinces, 'province')}</span>
+            </span>
             <span className="pa-load" aria-hidden="true">
               <span style={{ width: `${total ? (mine.provinces / total) * 100 : 0}%`, background: colour }} />
             </span>
@@ -331,11 +323,11 @@ function RegionRow({ region, coordinators, owner, canEdit, saved, hoverCol, onHo
           <span className="pa-badge">{plural(region.provinces.length, 'province')}</span>
           {edited && (
             <span className="pa-change">
-              {previous?.name ?? region.coordinator_name ?? 'No coordinator'} → {current?.name}
+              {previous?.name ?? 'No coordinator'} → {current?.name}
             </span>
           )}
           {!edited && owner == null && (
-            <span className="pa-muted pa-unowned">{region.coordinator_name ?? 'No coordinator'} · no account</span>
+            <span className="pa-muted pa-unowned">No coordinator yet</span>
           )}
         </div>
         <ul className="pa-tags" aria-label={`${region.name} provinces`}>
@@ -357,8 +349,6 @@ function RegionRow({ region, coordinators, owner, canEdit, saved, hoverCol, onHo
 
 function CoordinatorCell({ region, coordinator, checked, wasOwner, tabbable, canEdit, hover, reduced, cellRef, onHover, onAssign, onKeyDown }) {
   const colour = colourOf(coordinator)
-  const choosable = canEdit && coordinator.linked
-  const why = coordinator.linked ? undefined : `${coordinator.name}'s account is not linked to a coordinator name. Link it on the KPI mapping page first.`
   return (
     <div className={`pa-cell ${hover ? 'is-col-hover' : ''}`.trim()} onMouseEnter={onHover}>
       <button
@@ -367,13 +357,10 @@ function CoordinatorCell({ region, coordinator, checked, wasOwner, tabbable, can
         role="radio"
         aria-checked={checked}
         aria-label={coordinator.name}
-        aria-disabled={choosable ? undefined : 'true'}
-        aria-describedby={why ? `pa-why-${coordinator.user_id}` : undefined}
-        title={why}
         tabIndex={tabbable ? 0 : -1}
         className={`pa-choice ${canEdit ? '' : 'is-readonly'}`.trim()}
         style={{ '--pa-colour': colour }}
-        onClick={() => { if (choosable && !checked) onAssign() }}
+        onClick={() => { if (canEdit && !checked) onAssign() }}
         onKeyDown={onKeyDown}
       >
         {wasOwner && <span className="pa-previous" aria-hidden="true" />}
@@ -392,7 +379,6 @@ function CoordinatorCell({ region, coordinator, checked, wasOwner, tabbable, can
           canEdit && <span className="pa-empty" aria-hidden="true" />
         )}
       </button>
-      {why && <span id={`pa-why-${coordinator.user_id}`} className="pa-sr-only">{why}</span>}
     </div>
   )
 }

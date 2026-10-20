@@ -306,8 +306,9 @@ Admin: click the coordinator's circle on the region's row, then Update. All
 the region's provinces follow, and the new coordinator sees the region's work
 on Home, Acceptance Validation, Lifecycle Gaps and Roles Performance at once,
 past months included; no restart. History lists every change and Revert
-undoes one. Viewers see the page read-only. A new coordinator account must
-first be linked to its coordinator name on the KPI mapping page. The API is
+undoes one. Viewers see the page read-only. A coordinator account created in
+Users & roles appears as a column at once and can be given any region; it
+reports under its full name. The API is
 `PUT /api/v1/admin/province-assignments` with
 `{"changes": [{"cra_region": "Central", "coordinator_user_id": 13, "expected_coordinator_user_id": 11}]}`.
 Regional managers and the province → region link are not edited there.

@@ -255,7 +255,7 @@ def test_a_stale_expected_owner_is_409_and_changes_nothing(client, people):
     assert _stores("West") == west
 
 
-@pytest.mark.parametrize("case", ["not_coordinator", "unknown_region", "unlinked", "repeated"])
+@pytest.mark.parametrize("case", ["not_coordinator", "unknown_region", "name_taken", "repeated"])
 def test_invalid_changes_are_422(client, people, case):
     pm_id = _USERS["pa_pm"]
     if case == "not_coordinator":
@@ -264,17 +264,76 @@ def test_invalid_changes_are_422(client, people, case):
     elif case == "unknown_region":
         r = _put(client, people["pm"], ("Atlantis", people["Amir"], None))
         assert "Unknown CRA region" in r.json()["detail"]
-    elif case == "unlinked":
-        uid, _ = _user(client, "Coordinator", "pa_unlinked", first="Sara", province_ids=[])
-        r = _put(client, people["pm"], ("West", uid, people["Hossein"]))
-        assert "Link it on the KPI mapping page first" in r.json()["detail"]
-        columns = {c["user_id"]: c for c in _overview(client, people["pm"])["coordinators"]}
-        assert columns[uid]["linked"] is False
+    elif case == "name_taken":
+        # Two new accounts with the same full name cannot both report under it.
+        first, _ = _user(client, "Coordinator", "pa_twin_1", first="Reza", family="Karimi", province_ids=[])
+        twin, _ = _user(client, "Coordinator", "pa_twin_2", first="Reza", family="Karimi", province_ids=[])
+        assert _put(client, people["pm"], ("West", first, people["Hossein"])).status_code == 200
+        r = _put(client, people["pm"], ("West", twin, first))
+        assert "already reports as 'Reza Karimi'" in r.json()["detail"]
+        assert _put(client, people["pm"], ("West", people["Hossein"], first)).status_code == 200
     else:
         r = _put(client, people["pm"],
                  ("West", people["Amir"], people["Hossein"]),
                  ("West", people["Farid"], people["Hossein"]))
     assert r.status_code == 422, r.text
+
+
+def test_a_new_coordinator_account_can_be_given_any_region_straight_away(client, people):
+    """Create the account in Users & roles, open the page, click, Update: no
+    other step. It reports under its full name."""
+    uid, _ = _user(client, "Coordinator", "pa_sara", first="Sara", family="Rahimi", province_ids=[])
+    columns = {c["user_id"]: c for c in _overview(client, people["pm"])["coordinators"]}
+    assert uid in columns
+
+    r = _put(client, people["pm"], ("West", uid, people["Hossein"]))
+    assert r.status_code == 200, r.text
+    assert r.json()["changed_regions"] == ["West"]
+    assert _stores("West") == ({uid}, {"Sara Rahimi"})
+    assert set(_province_ids(*_region_provinces("West"))) <= _grants(uid)
+    assert _person_name(uid) == "Sara Rahimi"
+    assert _put(client, people["pm"], ("West", people["Hossein"], uid)).status_code == 200
+
+
+def test_a_click_changes_only_the_region_clicked(client, people):
+    """The reported case: accounts that were never named in the mapping, and
+    regions that still carry the seed's placeholder names. Giving Azar to an
+    account changes Azar and nothing else."""
+    hossein = people["Hossein"]
+    db = SessionLocal()
+    db.execute(text("UPDATE users SET kpi_person_name = NULL WHERE id = :u"), {"u": hossein})
+    for region in ("Azar", "Central", "West"):
+        for fa in _region_provinces(region):
+            db.execute(text("UPDATE provinces SET coordinator_user_id = NULL WHERE name = :p"), {"p": fa})
+    db.commit()
+    db.close()
+    before = _overview(client, people["pm"])
+    assert _owner(before, "Azar") is None
+
+    r = _put(client, people["pm"], ("Azar", hossein, None))
+    assert r.status_code == 200, r.text
+    assert r.json()["changed_regions"] == ["Azar"]
+    assert _stores("Azar") == ({hossein}, {"Hossein Coordinator"})
+    assert _owner(r.json(), "Central") is None, "Central was not clicked"
+
+    # Restore the fixture's linked state for the tests that follow.
+    db = SessionLocal()
+    db.execute(text("UPDATE users SET kpi_person_name = 'Hossein' WHERE id = :u"), {"u": hossein})
+    for region in ("Azar", "Central", "West"):
+        for fa in _region_provinces(region):
+            db.execute(text("UPDATE provinces SET coordinator_user_id = :u WHERE name = :p"), {"u": hossein, "p": fa})
+            db.execute(text("UPDATE province_mapping SET pso_coordinator = 'Hossein' "
+                            "WHERE province_fa = :p AND effective_to IS NULL"), {"p": fa})
+    db.commit()
+    db.close()
+
+
+def _person_name(user_id) -> str | None:
+    db = SessionLocal()
+    try:
+        return db.execute(text("SELECT kpi_person_name FROM users WHERE id = :u"), {"u": user_id}).scalar()
+    finally:
+        db.close()
 
 
 def test_a_new_coordinator_can_be_linked_before_owning_a_region(client, people):

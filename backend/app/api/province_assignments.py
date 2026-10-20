@@ -38,6 +38,7 @@ def _response(db: Session, change_id: uuid.UUID | None = None) -> dict:
     out = province_assignment.get_overview(db)
     if change_id is not None:
         out["change_id"] = str(change_id)
+        out["changed_regions"] = province_assignment.changed_regions(db, change_id)
     return out
 
 

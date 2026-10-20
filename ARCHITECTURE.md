@@ -794,9 +794,11 @@ Nothing else may set a coordinator. `PUT /admin/provinces/{id}/assignment`
 and the KPI mapping's `PUT /kpi/mapping/{id}` and
 `POST /kpi/mapping/{id}/reassign` answer 422 *Coordinators are assigned per CRA
 region in Province assignments* for any coordinator other than the region's;
-regional managers are handled there as before. A coordinator account may be
-linked (`kpi_person_name`) to a name no region carries yet, so a new
-coordinator can be linked first and given regions after.
+regional managers are handled there as before. A coordinator is chosen as an
+account: one with no `kpi_person_name` yet is given its full name (from Users &
+roles) on its first region, in the same transaction and audit-logged, so a new
+account needs no separate linking step. Two coordinator accounts may not share
+a name (422).
 
 `province_assignment_history` keeps one row per region per change, grouped by
 `change_id`, for the page's History and Revert (a revert is a new change).
