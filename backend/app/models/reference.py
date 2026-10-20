@@ -20,8 +20,10 @@ class Province(Base):
     # Which Coordinator and Regional Manager own this province, so a report
     # can offer "filter by coordinator/RM" without needing a village-level
     # attribution neither role actually carries (unlike a contractor, who is
-    # attached to a work item directly). Set once, in Admin's Province
-    # Assignments screen; read everywhere such a filter appears. Nullable:
+    # attached to a work item directly). The coordinator is set per CRA region
+    # on Admin > Province assignments (UEP-17), which writes it together with
+    # ``province_mapping.pso_coordinator`` -- never per province. Read
+    # everywhere such a filter appears. Nullable:
     # a province can go unassigned, and a report filtering on it then simply
     # finds nothing there yet, rather than being blocked from loading.
     coordinator_user_id: Mapped[int | None] = mapped_column(

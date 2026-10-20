@@ -27,7 +27,16 @@ export const color = Object.freeze({
   approvedTint: '#E7F5EC',
   filed: '#5B21B6',
   filedTint: '#F1ECFB',
+  // Province assignments (UEP-17): the coordinator palette, in column order,
+  // repeated after the fourth. Never green: green means approved.
+  coord1: '#1D4ED8',
+  coord2: '#6D28D9',
+  coord3: '#B45309',
+  coord4: '#0E7490',
 })
+
+/** The coordinator colours, indexed by the API's `colour_index`. */
+export const coordinatorColors = Object.freeze([color.coord1, color.coord2, color.coord3, color.coord4])
 
 /** @type {Readonly<Record<AppId, { tile: string, tint: string | null }>>} */
 export const appColor = Object.freeze({

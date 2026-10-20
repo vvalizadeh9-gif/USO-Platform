@@ -209,6 +209,8 @@ export const APPS = Object.freeze([
       // PM's way in to Admin > SLA policies (UEP-15), without adding an app to
       // PM's Home. Viewer reads the same page at /admin/sla.
       { id: 'sla-policies', label: 'SLA policies', route: '/admin/sla', roles: ['PM'] },
+      // PM's way in to Admin > Province assignments (UEP-17), the same way.
+      { id: 'province-assignments', label: 'Province assignments', route: '/admin/provinces', roles: ['PM'] },
     ],
   },
   {
@@ -226,8 +228,8 @@ export const APPS = Object.freeze([
         icon: 'user--multiple', tile: '--uep-app-admin',
       },
       {
-        id: 'provinces', section: 'People', label: 'Province assignments', route: '/admin?tab=provinces', roles: ['Admin'],
-        icon: 'location--filled', tile: '--uep-app-admin',
+        id: 'provinces', section: 'People', label: 'Province assignments', route: '/admin/provinces', roles: ['Admin'],
+        icon: 'location', tile: '--uep-app-admin',
       },
       {
         id: 'sla', section: 'Workflow', label: 'SLA policies', route: '/admin/sla', roles: ['Admin'],

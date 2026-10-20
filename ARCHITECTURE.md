@@ -766,6 +766,45 @@ and only this table decides this page. `users.kpi_person_name` says which
 person in it an account is; contractors use `users.contractor_id`. An
 unlinked account is refused with a message saying so.
 
+### Coordinators are assigned per CRA region, and their stores are kept in sync (UEP-17)
+
+A coordinator owns whole CRA regions, never single provinces. The province →
+region link (`province_mapping.cra_region`, seeded from
+`core/province_directory.py`) is fixed: 9 regions, 31 provinces. Three
+existing places record who coordinates a province, and each screen keeps
+reading the one it always read:
+
+| Store | Read by |
+|---|---|
+| `provinces.coordinator_user_id` | Acceptance dashboard's coordinator filter, the Action Center's owner names, `/reference/coordinators` |
+| `province_mapping.pso_coordinator` (open rows, the account's `kpi_person_name`) | Roles Performance and Lifecycle Gaps, through `kpi.resolve_scope` |
+| the coordinator's province grants (`user_province_access`) | Home and Acceptance Validation, through `services/visibility` |
+
+`services/province_assignment.py` is the **only writer** of a coordinator for
+all three, and writes them in one transaction (Admin → Province assignments,
+`PUT /admin/province-assignments`). It locks the region's rows, checks the
+client's `expected_coordinator_user_id` (409 when stale), then for each changed
+region sets `coordinator_user_id`, corrects `pso_coordinator` in place on the
+open rows (`kpi_mapping.correct`: no new effective-dated row, so past months
+move to the new coordinator too, as agreed), and moves the region's province
+grants from every other coordinator account to the new one. Visibility
+follows on the next request; nothing is cached across a commit.
+
+Nothing else may set a coordinator. `PUT /admin/provinces/{id}/assignment`
+and the KPI mapping's `PUT /kpi/mapping/{id}` and
+`POST /kpi/mapping/{id}/reassign` answer 422 *Coordinators are assigned per CRA
+region in Province assignments* for any coordinator other than the region's;
+regional managers are handled there as before. A coordinator account may be
+linked (`kpi_person_name`) to a name no region carries yet, so a new
+coordinator can be linked first and given regions after.
+
+`province_assignment_history` keeps one row per region per change, grouped by
+`change_id`, for the page's History and Revert (a revert is a new change).
+Every write is also in the audit log (module `Admin`, entity
+`CraRegionCoordinator`). Migration `a3c9e6f1d274` made the stores agree where
+they had drifted (majority across both stores, ties to `province_mapping`),
+printed each fix, and wrote one `System` history entry.
+
 ### One definitions module
 
 Every measure is defined once, in `services/performance/definitions.py`, and

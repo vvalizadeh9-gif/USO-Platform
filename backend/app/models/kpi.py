@@ -14,6 +14,13 @@ It answers a different question and answers it differently:
 The two are left side by side rather than merged, because merging them would
 change who may edit the existing Admin screen and what the reports reading it
 see — neither of which this feature was asked to touch.
+
+The coordinator is the exception that is kept in step (UEP-17): it is assigned
+per CRA region on Admin > Province assignments, which writes ``pso_coordinator``
+on the open rows and ``provinces.coordinator_user_id`` in one transaction, as a
+correction in place rather than a new effective-dated row. Neither the KPI
+mapping endpoints nor any other screen may set a coordinator that differs from
+the region's.
 """
 from __future__ import annotations
 
