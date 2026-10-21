@@ -3,6 +3,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.services import cpm_columns
 from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.models.acceptance import Notification
@@ -63,7 +64,10 @@ def list_roles(db: Session = Depends(get_db), _: User = Depends(get_current_user
 
 @router.get("/reference/contractors", response_model=list[ContractorOut])
 def list_contractors(db: Session = Depends(get_db), _: User = Depends(get_current_user)):
-    return db.query(Contractor).filter(Contractor.active.is_(True)).all()
+    # A status word (Done, Ongoing, ...) is never a company, even if an old
+    # import left a row for it.
+    rows = db.query(Contractor).filter(Contractor.active.is_(True)).all()
+    return [c for c in rows if not cpm_columns.is_status_word(c.name)]
 
 
 @router.get("/reference/problem-categories", response_model=list[ProblemCategoryOut])

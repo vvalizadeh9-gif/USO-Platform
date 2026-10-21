@@ -1131,7 +1131,11 @@ class DriveTestAnalytics:
         own = self._own_contractor_id()
         if own is not None:
             stmt = stmt.where(Contractor.id == own)
-        return {cid: name for cid, name in self._db.execute(stmt).all()}
+        return {
+            cid: name
+            for cid, name in self._db.execute(stmt).all()
+            if not C.is_status_word(name)
+        }
 
     def _programme_achievement(self, year: int, month: int) -> float | None:
         """Programme-wide achievement for the month, unscoped, as a percentage.
