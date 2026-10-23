@@ -1,13 +1,12 @@
 /**
- * What the Monthly Plan tabs make of the PM queue (usePlanBoard) and of the
- * running month's GET /pip/overview. Pure functions of those responses, so
- * the count on the Approvals badge and the cards under it come from one place
- * and cannot disagree.
+ * What the Monthly Plan pages make of the PM queue (usePlanBoard). Pure
+ * functions of those responses, so the count on the rail and the lists on the
+ * Plans page come from one place and cannot disagree.
  */
 
 import { toPersianDigits } from '../../lib/persianDigits'
 import { periodLabel } from '../../lib/shamsi'
-import { STREAMS, streamMeta } from './streams'
+import { STREAMS } from './streams'
 
 export { STREAMS }
 
@@ -164,106 +163,132 @@ export function monthLabel(period) {
   return period ? toPersianDigits(periodLabel(period.year, period.month)) : ''
 }
 
+// ---------------------------------------------------------------------------
+// The Plans page (UEP-18): DT delivery and Acceptance, decided in place.
+// ---------------------------------------------------------------------------
+
+/** The two streams the PM decides on the Plans page, in order. */
+export const BAND_STREAMS = ['DT', 'ACCEPTANCE']
+
+/** Streams decided through the existing drawer instead. */
+export const OTHER_STREAMS = ['ICT', 'CRA']
+
+/** A stream as the Plans, History and Internal PIP pages title it. */
+export const BAND_TITLE = { DT: 'DT delivery', ACCEPTANCE: 'Acceptance', ICT: 'ICT', CRA: 'CRA' }
+
 /**
- * One contractor's running month for one stream, from the running month's
- * GET /pip/overview: `{ pip, delivered, behind }`, where `behind` is how far
- * delivered is under an even pace through the month (null when on or ahead
- * of it, or with no plan). Null when the overview has no row for them.
+ * One stream of one contractor, as the Plans page reads it.
+ *
+ * * `waiting` -- Submitted, the PM owes a decision. `asked` is the number
+ *   handed in.
+ * * `approved` -- Approved (or a revision pending/returned on top of an
+ *   approved plan: the number in force stands). `number` is the plan in force
+ *   and `asked` is what was asked when the PM changed it, else the same.
+ * * `notFiled` -- nothing, a Draft, or a Returned plan. A returned plan is
+ *   not "submitted" (audit finding A2): the contractor owes a new one.
  */
-export function runningFigures(running, stream, contractorId) {
-  const row = running?.[streamMeta(stream).key]?.rows?.find((r) => r.contractor_id === contractorId)
-  if (!row) return null
+export function planCell(row) {
+  const status = row?.status ?? null
+  const state =
+    status === 'Submitted'
+      ? 'waiting'
+      : status === 'Approved' || status === 'RevisionRequested' || status === 'RevisionReturned'
+        ? 'approved'
+        : 'notFiled'
+  const number =
+    state === 'approved' ? (row.in_force_count ?? row.committed_count ?? null) : state === 'waiting' ? row.committed_count : null
   return {
-    pip: row.pip ?? null,
-    delivered: row.delivered ?? 0,
-    behind: row.pace_diff != null && row.pace_diff < 0 ? -row.pace_diff : null,
+    planId: row?.plan_id ?? null,
+    state,
+    status,
+    number,
+    asked: state === 'waiting' ? number : state === 'approved' ? (row.asked_count ?? number) : null,
+    changedFrom: state === 'approved' && status === 'Approved' ? (row.asked_count ?? null) : null,
+    comment: state === 'approved' ? (row.decision_comment ?? null) : null,
+    submittedAt: row?.submitted_at ?? null,
+    isLate: Boolean(row?.is_late),
   }
 }
 
-/** The latest of some ISO timestamps, or null. */
-function latest(values) {
-  return values.filter(Boolean).sort().at(-1) ?? null
-}
-
 /**
- * The Approvals tab, from usePlanBoard's `ready` state and the running
- * month's overview (which may still be loading: then nothing is "behind").
+ * Everything the Plans page lists, from usePlanBoard's `ready` state.
  *
- * * `cards` -- one per contractor with a plan waiting on the PM for the
- *   planning month (`kind: 'plan'`), then one per contractor with a revision
- *   request pending on the running month (`kind: 'revision'`). Each carries
- *   one block per waiting stream, in stream order, with the plan id it is
- *   decided through. A red line is only ever a number: `above` (DT: the
- *   number exceeds the sites held) and `behind` (the running month is under
- *   pace), each null when not true.
- * * `decided` -- contractors who shared and have nothing left waiting:
- *   `Sent back` when any stream was returned, otherwise `Approved`.
+ * * `groups` -- `decision` (a stream waiting; oldest waiting first), `notFiled`
+ *   (a stream missing) and `decided` (both approved), each alphabetical after
+ *   its own order.
+ * * `revisions` -- requests pending on the running month, any stream.
+ * * `other` -- ICT/CRA plans waiting for the planning month, one per stream.
  */
-export function buildApprovals(board, running) {
-  const view = buildBoard(board)
-  const above = (stream, number, held) =>
-    stream === 'DT' && number != null && held != null && number > held ? number - held : null
-  const behind = (stream, id) => runningFigures(running, stream, id)?.behind ?? null
-
-  const planCards = view.contractors
-    .filter((c) => STREAMS.some((s) => c.cells[s].state === 'waiting'))
-    .map((c) => {
-      const streams = STREAMS.filter((s) => c.cells[s].state === 'waiting')
-      return {
-        key: `plan-${c.id}`,
-        kind: 'plan',
-        id: c.id,
-        name: c.name,
-        submittedAt: latest(streams.map((s) => rowsOf(board.planning, s).find((r) => r.contractor_id === c.id)?.submitted_at)),
-        blocks: streams.map((stream) => {
-          const cell = c.cells[stream]
-          return {
-            stream,
-            planId: cell.planId,
-            number: cell.number,
-            compare: cell.lastMonth,
-            above: above(stream, cell.number, cell.held),
-            behind: behind(stream, c.id),
-          }
-        }),
-      }
-    })
-
-  const revisionsById = new Map()
-  for (const stream of STREAMS) {
-    for (const r of rowsOf(board.running, stream)) {
-      if (r.status !== 'RevisionRequested') continue
-      const card = revisionsById.get(r.contractor_id) ?? {
-        key: `revision-${r.contractor_id}`,
-        kind: 'revision',
-        id: r.contractor_id,
-        name: r.contractor_name,
-        submittedAt: null,
-        blocks: [],
-      }
-      card.submittedAt = latest([card.submittedAt, r.submitted_at])
-      card.blocks.push({
-        stream,
-        planId: r.plan_id,
-        number: r.committed_count,
-        compare: r.in_force_count ?? null,
-        reason: r.revision_reason,
-        above: above(stream, r.committed_count, r.assignment ?? null),
-        behind: behind(stream, r.contractor_id),
-      })
-      revisionsById.set(r.contractor_id, card)
+export function buildPlans(board) {
+  const entries = new Map()
+  for (const stream of BAND_STREAMS) {
+    for (const row of rowsOf(board.planning, stream)) {
+      const entry = entries.get(row.contractor_id) ?? { id: row.contractor_id, name: row.contractor_name, rows: {} }
+      entry.rows[stream] = row
+      entries.set(row.contractor_id, entry)
     }
   }
-  const revisionCards = [...revisionsById.values()].sort(byName)
-  const pending = new Set([...planCards, ...revisionCards].map((c) => c.id))
+  const contractors = [...entries.values()].map(({ id, name, rows }) => {
+    const cells = Object.fromEntries(BAND_STREAMS.map((s) => [s, planCell(rows[s])]))
+    const waiting = BAND_STREAMS.filter((s) => cells[s].state === 'waiting')
+    const since = waiting.map((s) => cells[s].submittedAt).filter(Boolean).sort()[0] ?? null
+    const group = waiting.length ? 'decision' : BAND_STREAMS.some((s) => cells[s].state === 'notFiled') ? 'notFiled' : 'decided'
+    return { id, name, cells, group, since }
+  })
+  const byOldest = (a, b) => (a.since && b.since ? a.since.localeCompare(b.since) : 0) || byName(a, b)
+  const inGroup = (g) => contractors.filter((c) => c.group === g).sort(g === 'decision' ? byOldest : byName)
 
-  const decided = view.shared
-    .filter((c) => !pending.has(c.id))
-    .map((c) => ({
-      id: c.id,
-      name: c.name,
-      state: STREAMS.some((s) => c.cells[s].state === 'returned') ? 'returned' : 'approved',
-    }))
+  const other = OTHER_STREAMS.flatMap((stream) =>
+    rowsOf(board.planning, stream)
+      .filter((r) => r.status === 'Submitted')
+      .map((r) => ({ key: `${stream}-${r.contractor_id}`, contractorId: r.contractor_id, name: r.contractor_name, stream, planId: r.plan_id })),
+  ).sort(byName)
 
-  return { cards: [...planCards, ...revisionCards], decided, waiting: view.waiting }
+  return {
+    contractors,
+    groups: { decision: inGroup('decision'), notFiled: inGroup('notFiled'), decided: inGroup('decided') },
+    revisions: buildBoard(board).revisions,
+    other,
+  }
+}
+
+/** The button's words: what pressing it does to the number. */
+export function decisionLabel(asked, value) {
+  if (value === asked) return `Confirm ${value}`
+  return `${value < asked ? 'Decrease' : 'Increase'} to ${value}`
+}
+
+/** The number the PM has settled on for a waiting cell: their stepper, else what was asked. */
+export const decidedValue = (cell, decisions) => decisions?.[cell.planId]?.value ?? cell.asked
+
+/** Whether a waiting cell's decision differs from what was asked. */
+export const isChanged = (cell, decisions) => cell.state === 'waiting' && decidedValue(cell, decisions) !== cell.asked
+
+/**
+ * The KPI bar for one stream. A contractor counts as submitted when the stream
+ * has a plan Submitted, Approved or under revision; a Returned plan does not.
+ *
+ * `asked` sums what was asked, `after` what stands once the waiting plans are
+ * decided at the stepper values, and `approved`/`waiting` split `after` for
+ * the bar. `toCover` is the Internal PIP less `after` (null with no target).
+ */
+export function streamKpi(plans, stream, decisions, internal) {
+  const cells = plans.contractors.map((c) => c.cells[stream])
+  const submitted = cells.filter((c) => c.state !== 'notFiled')
+  const approved = submitted.filter((c) => c.state === 'approved').reduce((n, c) => n + (c.number ?? 0), 0)
+  const waiting = submitted.filter((c) => c.state === 'waiting').reduce((n, c) => n + (decidedValue(c, decisions) ?? 0), 0)
+  const asked = submitted.reduce((n, c) => n + (c.asked ?? 0), 0)
+  const after = approved + waiting
+  return {
+    dots: cells.map((c) => c.state !== 'notFiled'),
+    submitted: submitted.length,
+    total: cells.length,
+    asked,
+    after,
+    change: after - asked,
+    approved,
+    waiting,
+    internal: internal ?? null,
+    toCover: internal == null ? null : internal - after,
+  }
 }

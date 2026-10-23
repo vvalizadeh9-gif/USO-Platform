@@ -12,14 +12,14 @@ describe('app registry role filtering', () => {
     expect(dt.pages.map((p) => p.id)).toEqual(['hc-check', 'in-progress'])
   })
 
-  it('lists the Monthly plan pages in tab order, Approvals first, staff-only past it', () => {
+  it('lists the Monthly plan pages in tab order, Plans first, staff-only past it', () => {
     const pm = appsFor('PM').find((a) => a.id === 'monthly-plan')
-    expect(pm.pages.map((p) => p.label)).toEqual(['Approvals', 'Plans', 'History', 'Internal PIP'])
+    expect(pm.pages.map((p) => p.label)).toEqual(['Plans', 'History', 'Internal PIP'])
     expect(pm.pages[0].queues).toContain('plans_approve')
     const contractor = appsFor('Contractor').find((a) => a.id === 'monthly-plan')
-    expect(contractor.pages.map((p) => p.id)).toEqual(['approvals'])
-    expect(locate(appsFor('PM'), '/monthly-plan', '').page.id).toBe('approvals')
-    expect(locate(appsFor('PM'), '/monthly-plan', '?tab=approvals').page.id).toBe('approvals')
+    expect(contractor.pages.map((p) => p.id)).toEqual(['plans'])
+    expect(locate(appsFor('PM'), '/monthly-plan', '').page.id).toBe('plans')
+    expect(locate(appsFor('PM'), '/monthly-plan', '?tab=approvals').page.id).toBe('plans')
     expect(locate(appsFor('PM'), '/monthly-plan', '?tab=history').page.id).toBe('history')
   })
 
