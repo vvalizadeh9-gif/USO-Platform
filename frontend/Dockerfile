@@ -6,7 +6,7 @@
 #   node:20-alpine  (fetched 2026-08-14)
 # Node 20 reaches end of life inside this platform's expected lifetime, so this
 # line will need changing one day -- see RUNBOOK.md.
-FROM node@sha256:fb4cd12c85ee03686f6af5362a0b0d56d50c58a04632e6c0fb8363f609372293 AS build
+FROM node@sha256:1b84b89ada025e3b14543cbb837ffaa1c1b5273b841c5b94dd1a8f9c1d8cf7fe AS build
 WORKDIR /app
 
 # Both files, then `npm ci` -- not `npm install`.
