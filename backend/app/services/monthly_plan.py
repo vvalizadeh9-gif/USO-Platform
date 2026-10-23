@@ -870,6 +870,46 @@ def approve(
     return plan
 
 
+def approve_adjusted(
+    db: Session,
+    *,
+    plan: ContractorMonthlyPlan,
+    user: User,
+    committed_count: int,
+    comment: str,
+    today: date | None = None,
+) -> ContractorMonthlyPlan:
+    """Approve a submitted plan at a different number from the one asked.
+
+    The adjustment happens at the moment of approval, on a ``Submitted`` row,
+    so an ``Approved`` row is still never edited. The asked number is kept in
+    ``asked_count`` and the decision comment is required: a contractor told
+    "18, not 25" with no reason has learned nothing about what to ask next
+    time. A revision request is not adjustable here -- it keeps using
+    :func:`approve` and :func:`return_plan`. Same number as asked is plain
+    :func:`approve`.
+    """
+    if plan.status != STATUS_SUBMITTED:
+        raise PlanError("Only a submitted plan can be approved with a different number")
+    validate_count(committed_count, required=True)
+    if committed_count == plan.committed_count:
+        raise PlanError("The number is the one asked for; approve it as asked")
+    comment = (comment or "").strip()
+    if not comment:
+        raise PlanError("A comment is required when changing the number")
+    if len(comment) > MAX_RETURN_COMMENT:
+        raise PlanError(
+            f"The comment cannot be longer than {MAX_RETURN_COMMENT} characters"
+        )
+    asked = plan.committed_count
+    approve(db, plan=plan, user=user, today=today)
+    plan.asked_count = asked
+    plan.committed_count = committed_count
+    plan.decision_comment = comment
+    db.flush()
+    return plan
+
+
 def return_plan(
     db: Session, *, plan: ContractorMonthlyPlan, user: User, comment: str
 ) -> ContractorMonthlyPlan:
@@ -918,6 +958,8 @@ def audit_snapshot(plan: ContractorMonthlyPlan) -> dict:
         "return_comment": plan.return_comment,
         "revision_reason": plan.revision_reason,
         "revision_comment": plan.revision_comment,
+        "asked_count": plan.asked_count,
+        "decision_comment": plan.decision_comment,
     }
 
 

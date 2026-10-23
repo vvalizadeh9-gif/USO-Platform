@@ -1990,6 +1990,10 @@ class MonthlyPlanOut(ORMModel):
     return_comment: str | None
     revision_reason: str | None = None
     revision_comment: str | None = None
+    #: Set when the PM approved a different number: what was asked for, and
+    #: why it was changed. ``committed_count`` is then the approved figure.
+    asked_count: int | None = None
+    decision_comment: str | None = None
     #: Handed in after day 3 of the month it covers. Derived from
     #: ``submitted_at``, not stored -- see services/monthly_plan.is_late.
     is_late: bool = False
@@ -2164,6 +2168,8 @@ class MonthlyPlanQueueRow(BaseModel):
     in_force_count: int | None = None
     revision_reason: str | None = None
     revision_comment: str | None = None
+    asked_count: int | None = None
+    decision_comment: str | None = None
     #: Sites held in the month now running: carried in plus newly assigned.
     assignment: int = 0
     #: What was approved for the running month. None, never 0.
@@ -2517,6 +2523,15 @@ class MonthlyPlanReturn(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
+    comment: str = Field(min_length=1, max_length=MAX_RETURN_COMMENT)
+
+
+class MonthlyPlanApproveAdjusted(BaseModel):
+    """A PM approving a different number from the one asked, with the reason."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    committed_count: int = Field(strict=True, ge=0, le=MAX_COMMITTED_COUNT)
     comment: str = Field(min_length=1, max_length=MAX_RETURN_COMMENT)
 
 

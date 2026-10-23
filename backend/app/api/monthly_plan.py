@@ -52,6 +52,7 @@ from app.schemas import (
     InternalTargetOut,
     InternalTargetPeriod,
     InternalTargetWrite,
+    MonthlyPlanApproveAdjusted,
     MonthlyPlanContext,
     MonthlyPlanHistoryRow,
     MonthlyPlanOut,
@@ -399,6 +400,8 @@ def queue(
                 in_force_count=in_force.get(contractor.id),
                 revision_reason=plan.revision_reason if plan is not None else None,
                 revision_comment=plan.revision_comment if plan is not None else None,
+                asked_count=plan.asked_count if plan is not None else None,
+                decision_comment=plan.decision_comment if plan is not None else None,
                 # A contractor the running month never touched has no row in
                 # the scorecard, which is an answer and not a gap: they held
                 # nothing and delivered nothing.
@@ -462,6 +465,47 @@ def approve_plan(
     plan = _load_plan(plan_id, db)
     before = plans.audit_snapshot(plan)
     _guard(lambda: plans.approve(db, plan=plan, user=user))
+
+    record_audit(
+        db,
+        user_id=user.id,
+        action=audit_actions.APPROVED,
+        module="PIP",
+        entity_type="ContractorMonthlyPlan",
+        entity_id=plan.id,
+        old_value=before,
+        new_value=plans.audit_snapshot(plan),
+    )
+    db.commit()
+    return _as_out(plan)
+
+
+@router.post("/{plan_id}/approve-adjusted", response_model=MonthlyPlanOut)
+def approve_plan_adjusted(
+    plan_id: int,
+    payload: MonthlyPlanApproveAdjusted,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_pm),
+) -> MonthlyPlanOut:
+    """Approve a submitted plan at a different number, with the reason.
+
+    PM only. The adjustment is made at the moment of approval on a Submitted
+    row; the asked number is kept beside the approved one. A rule violation is
+    a 422 here (the number is the same, the comment is empty, the row is not
+    Submitted) -- "as asked" is plain ``/approve``.
+    """
+    plan = _load_plan(plan_id, db)
+    before = plans.audit_snapshot(plan)
+    try:
+        plans.approve_adjusted(
+            db,
+            plan=plan,
+            user=user,
+            committed_count=payload.committed_count,
+            comment=payload.comment,
+        )
+    except plans.PlanError as exc:
+        raise HTTPException(422, str(exc)) from None
 
     record_audit(
         db,

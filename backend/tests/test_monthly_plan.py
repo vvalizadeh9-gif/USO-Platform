@@ -769,3 +769,111 @@ def test_a_returned_plan_names_the_pm_who_sent_it_back(client, actors):
         _current(client, actors["a1"], other_year, other_month)["planning"]["returned_by"]
         is None
     )
+
+
+# ---------------------------------------------------------------------------
+# UEP-18. Approving a different number from the one asked
+# ---------------------------------------------------------------------------
+def _adjust(client, headers, plan_id, count, comment="Too high for the sites held"):
+    return client.post(
+        f"{PIP}/{plan_id}/approve-adjusted",
+        headers=headers,
+        json={"committed_count": count, "comment": comment},
+    )
+
+
+def test_adjusted_approval_keeps_what_was_asked(client, actors):
+    year, month = _future(30)
+    plan_id = _save(client, actors["a1"], year, month, 25, True).json()["id"]
+
+    r = _adjust(client, actors["pm"], plan_id, 18)
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["status"] == "Approved"
+    assert body["committed_count"] == 18
+    assert body["asked_count"] == 25
+    assert body["decision_comment"] == "Too high for the sites held"
+    assert body["decided_at"] is not None
+
+    # The number in force, everywhere it is read, is the adjusted one.
+    ctx = _current(client, actors["a1"], year, month)
+    assert ctx["planning"]["in_force_count"] == 18
+    assert ctx["plan"]["asked_count"] == 25
+    assert ctx["plan"]["decision_comment"] == "Too high for the sites held"
+
+    rows = _rows_for(actors["company_a"], year, month)
+    assert len(rows) == 1 and rows[0]["is_current"] is True
+
+    queue = client.get(
+        f"{PIP}/queue", headers=actors["pm"], params={"year": year, "month": month}
+    ).json()
+    row = next(r for r in queue["rows"] if r["contractor_id"] == actors["company_a"])
+    assert row["committed_count"] == 18 and row["asked_count"] == 25
+
+
+def test_adjusted_approval_is_audited_with_both_numbers(client, actors):
+    year, month = _future(31)
+    plan_id = _save(client, actors["a1"], year, month, 12, True).json()["id"]
+    assert _adjust(client, actors["pm"], plan_id, 20, "Capacity allows more").status_code == 200
+
+    logs = client.get(
+        "/api/v1/admin/audit-logs", headers=actors["admin"], params={"limit": 200}
+    ).json()["items"]
+    approval = next(
+        e for e in logs
+        if e["module"] == "PIP" and e["entity_id"] == plan_id and e["action"] == "APPROVED"
+    )
+    assert approval["old_value"]["committed_count"] == 12
+    assert approval["new_value"]["committed_count"] == 20
+    assert approval["new_value"]["asked_count"] == 12
+    assert approval["new_value"]["decision_comment"] == "Capacity allows more"
+
+
+@pytest.mark.parametrize(
+    "count,comment",
+    [(25, "same number"), (-1, "negative"), (10, ""), (10, "   ")],
+)
+def test_adjusted_approval_rejects_bad_input(client, actors, count, comment):
+    year, month = _future(32)
+    plan_id = _save(client, actors["a1"], year, month, 25, True).json()["id"]
+    r = _adjust(client, actors["pm"], plan_id, count, comment)
+    assert r.status_code == 422, r.text
+    again = client.get(
+        f"{PIP}/queue", headers=actors["pm"], params={"year": year, "month": month}
+    ).json()
+    row = next(x for x in again["rows"] if x["contractor_id"] == actors["company_a"])
+    assert row["status"] == "Submitted", "a refused adjustment decides nothing"
+
+
+def test_adjusted_approval_needs_a_submitted_row(client, actors, monkeypatch):
+    year, month = _future(33)
+    draft = _save(client, actors["a1"], year, month, 5, False).json()["id"]
+    assert _adjust(client, actors["pm"], draft, 9).status_code == 422
+
+    year, month = _future(34)
+    _inside_revision_window(monkeypatch, year, month)
+    first = _save(client, actors["a1"], year, month, 30, True).json()["id"]
+    client.post(f"{PIP}/{first}/approve", headers=actors["pm"])
+    assert _adjust(client, actors["pm"], first, 9).status_code == 422, "approved is immutable"
+
+    revision = _request_revision(client, actors["a1"], year, month, 40).json()["id"]
+    assert _adjust(client, actors["pm"], revision, 35).status_code == 422
+    # A revision still goes through the plain decisions.
+    assert client.post(f"{PIP}/{revision}/approve", headers=actors["pm"]).status_code == 200
+
+
+def test_adjusted_approval_is_the_pms_alone(client, actors):
+    year, month = _future(35)
+    plan_id = _save(client, actors["a1"], year, month, 8, True).json()["id"]
+    for who in ("admin", "coordinator", "a1", "b1"):
+        assert _adjust(client, actors[who], plan_id, 4).status_code == 403, who
+    assert _adjust(client, actors["pm"], 999999, 4).status_code == 404
+
+
+def test_plain_approval_leaves_the_new_fields_null(client, actors):
+    year, month = _future(36)
+    plan_id = _save(client, actors["a1"], year, month, 14, True).json()["id"]
+    body = client.post(f"{PIP}/{plan_id}/approve", headers=actors["pm"]).json()
+    assert body["asked_count"] is None and body["decision_comment"] is None
+    ctx = _current(client, actors["a1"], year, month)
+    assert ctx["plan"]["asked_count"] is None
