@@ -437,4 +437,11 @@
   --uep-not-ready: #B42F2A;
   --uep-waiting: #9A5F00;
   --uep-waiting-tint: #FCF0D9;
+  /* Monthly plan (UEP-18). The PIP line and dots are 3:1 on white (#9AA1AE
+     was not); the light accent is "waiting" and the area under the actual
+     line; months after the planned one are shaded; red on a selected row. */
+  --uep-pip-line: #7B8494;
+  --uep-accent-light: #B9CBF5;
+  --uep-future: #F7F8FB;
+  --uep-danger-on-accent: #FFD6D2;
 }

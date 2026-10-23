@@ -359,6 +359,13 @@ function PlanRow({ stream, planning, value, onChange, busy, onHistory }) {
           </div>
         </div>
       )}
+
+      {status === 'Approved' && planning.asked_count != null && (
+        <div className="dim mt-8" style={{ fontSize: 'var(--uep-fs-small)' }}>
+          Adjusted by the PM from {planning.asked_count} to {planning.committed_count}
+          {planning.decision_comment ? ` — ${planning.decision_comment}` : ''}
+        </div>
+      )}
     </div>
   )
 }

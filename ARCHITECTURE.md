@@ -527,7 +527,7 @@ streams simply have no ICT or CRA plan. Versioning (`version`, `is_current`,
 append on every change) is identical for every stream.
 
 On Monthly Plan the PM sets an Internal PIP per stream (the Internal PIP
-tab, see §5h), and a contractor files all four PIPs on one form, each
+page, see §5h), and a contractor files all four PIPs on one form, each
 decided, returned and revised on its own. The deadline and "not submitted"
 chips, the Action Center items and the export (one sheet per stream) cover
 all four. Only the PM sets an Internal PIP; a contractor never reads one.
@@ -1482,7 +1482,7 @@ queue held together by a parity test.
 | ICT/CRA | Validate contractor filings | Coord | submission `submitted_at` | My Work → To check |
 | ICT/CRA | Re-file rejected villages | Contractor | rejection `reviewed_at` | My Work → New letter needed |
 | ICT/CRA | Correct returned villages | Contractor | return `reviewed_at` | My Work → Returned |
-| Plans | Approve plans | PM | `submitted_at` (revisions too) | Monthly Plan → Approvals |
+| Plans | Approve plans | PM | `submitted_at` (revisions too) | Monthly Plan → Plans |
 | Plans | Validate CPM changes | PM | `cpm_change_requests.created_at` | Admin → Validate CPM |
 | Plans | Submit monthly plan | Contractor | **due** on the day-3 deadline | Monthly Plan |
 
@@ -1773,43 +1773,65 @@ whether the SLA clock restarts. That last point is a product decision.
 There are no database changes. Every role guard, list scope, validation
 message and confirmation dialog is as it was. "Ready" is cobalt, never green.
 
-## 5h. Monthly Plan, staff side (UEP-08)
+## 5h. Monthly Plan, staff side (UEP-08, redesigned in UEP-18)
 
 `/monthly-plan` is the contractor's own filing page (`ContractorPlan`) for a
-contractor and, for staff, `PmPlan`: four tabs under one `PageBar`, the tab in
-`?tab=`.
+contractor and, for staff, `PmPlan`: three pages under one `PageBar`, the page
+in `?tab=`. Approvals is gone as a page: its work moved into Plans, and
+`?tab=approvals` opens Plans.
 
-| Tab | `?tab=` | Month in the header | Reads |
+| Page | `?tab=` | Header | Reads |
 |---|---|---|---|
-| Approvals (default) | `approvals` or none | planning (next) | `GET /pip/queue` per stream, planning and running months (`usePlanBoard`); running `GET /pip/overview` for "behind" |
-| Plans | `plans` | planning | the same queue; running `GET /pip/overview` for delivered against plan |
-| History | `history` | running | `GET /pip/overview?period=year&year=` (each stream's `months[]`) |
-| Internal PIP | `internal` (staff who read it) | running | `GET /pip/overview` for the running and the planning month; the queue for planning coverage |
+| Plans (default) | `plans`, `approvals` or none | the planning (next) month | `GET /pip/queue` per stream, planning and running months (`usePlanBoard`); the planning month's `GET /pip/overview` for the Internal PIP |
+| History | `history` | a Shamsi year dropdown | `GET /pip/overview?period=year&year=` (each stream's `months[]`) and `GET /pip/scorecard?year=` for the DT assignment |
+| Internal PIP | `internal` (staff who read it) | Discard, Save | `GET /pip/internal-target` per stream and month (the target and last month's); `GET /pip/overview` for what approved contractor plans cover |
 
-Everything the tabs derive from the queue is in `planBoard.js`
-(`buildBoard`, `buildApprovals`, `countWaiting`), so the Approvals badge and
-the cards cannot disagree. The History arithmetic is in `history.js`.
+The three pages share one layout: a 288px list card on the left and a detail
+card on the right with DT delivery and Acceptance as two stacked bands. What
+the Plans page derives from the queue is in `planBoard.js` (`buildPlans`,
+`streamKpi`, `countWaiting`), so the KPI bar, the list and the rail count
+cannot disagree; the History arithmetic is in `history.js`.
 
-- **Approvals.** One card per contractor with a plan `Submitted` for the
-  planning month, then one per contractor with a `RevisionRequested` on the
-  running month. A card's Approve sends `POST /pip/{id}/approve` for every
-  waiting plan in parallel. If any fails, the toast names the stream and the
-  card stays. Return sends `POST /pip/{id}/return` with one required comment
-  (the shared `Modal`, with the page made `inert` behind it). The red lines
-  are only "N above sites held" (DT, plan above the running month's
-  assignment) and "N behind" (the running overview's `pace_diff` below zero).
-  There is no Undo: no endpoint reverses an approval. Roles that cannot decide
-  see the same cards with no buttons.
-- **Plans.** Read-only. Shared = Submitted, Returned or Approved (a pending or
-  returned revision keeps the approved number). Running-month progress per
-  stream comes from the overview, not from the queue row's `delivered`,
-  because that field is always the DT figure.
-- **History.** Closed months get a verdict: Met plan (100% or more), Near plan
-  (80–99%) or Below 80%, judged on the exact share. The running month is shown
-  but never judged and never totalled. Future months are a dash. One
-  contractor's view drops the Internal PIP columns.
+**The decision flow (Plans).** A contractor "submitted" a stream when its plan
+is `Submitted`, `Approved` or under revision; a `Returned` plan does not
+count. The list groups contractors by what they need: revision requests on the
+running month, then *Needs your decision* (oldest waiting first), *Not filed*
+and *Decided*, and last the ICT/CRA plans, which open the existing decision
+drawer. The selected contractor shows one band per stream:
+
+- **As asked** — `Confirm N` sends `POST /pip/{id}/approve`; `Confirm all as
+  asked` sends it for every waiting stream of that contractor (only shown
+  while no number has been changed).
+- **Adjusted** — the PM moves the number with the stepper (− / + only; holding
+  repeats) and must write a comment. `Decrease to N` / `Increase to N` sends
+  `POST /pip/{id}/approve-adjusted {committed_count, comment}`. The adjustment
+  happens at the moment of approval, on a `Submitted` row, so an `Approved`
+  row is still never edited: the service keeps what was asked in
+  `asked_count`, writes the approved figure to `committed_count` and the
+  reason to `decision_comment`. `in_force_plan` is unchanged and returns the
+  adjusted number, so every other screen reads it as the plan in force. The
+  audit entry (`APPROVED`) carries `asked_count` and `decision_comment`. A
+  revision request is not adjustable: it keeps using `/approve` and `/return`.
+  The contractor's own form shows one muted line,
+  `Adjusted by the PM from 25 to 18 — {comment}`.
+- There is no Undo, and the PM no longer returns a first submission from the
+  UI (a decrease with a comment replaces it); `/return` stays for revision
+  requests and the drawer.
+
+The KPI bar above recomputes as a number moves: asked, the total after the
+decisions (approved plus waiting at their stepper values) and the Internal PIP
+still to cover.
+
+- **History.** One contractor at a time, both streams, a Trend or a Table over
+  the twelve Shamsi months. Gap (actual less PIP) and the share of PIP are only
+  for completed months; the running month is a capsule and is never judged or
+  totalled; a month after the planned one is empty. A share under 85% is red.
+  *Assigned* exists for DT only. The list is worst first by the lower of the
+  two shares.
 - **Internal PIP.** `PUT /pip/internal-target` (PM only on the server, so
-  `canSetTarget` decides only whether the stepper is offered).
+  `canSetTarget` decides only whether the stepper is offered). One Save and one
+  Discard for the page write every changed target. The target is one number
+  per stream and month, so each band has one card (not one per coordinator).
 
 `GET /pip/overview?period=year` adds `months[]` to each stream
 (`OverviewYearMonth`): `plan` (in-force contractor plans summed, `null` when

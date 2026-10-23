@@ -1,16 +1,15 @@
-// The Monthly Plan staff page (UEP-08): each of its four tabs fits one screen
-// at 1440x900 and at 1366x768 without the page scrolling (the Approvals grid
-// and the History table scroll inside themselves), carries no serious axe
-// violation, and the Return dialog keeps focus and gives it back.
+// The Monthly Plan staff page (UEP-18): each of its three pages fits one screen
+// at 1440x900 and at 1366x768 without the page scrolling (the lists, bands and
+// tables scroll inside themselves), carries no serious axe violation, and a
+// decision changes the number, asks for a comment and keeps the focus ring.
 import AxeBuilder from '@axe-core/playwright'
 import { expect, test } from '@playwright/test'
 import { signIn } from './mockApi.js'
 
 const TABS = [
-  { name: 'Approvals', path: '/monthly-plan', ready: (page) => page.getByRole('list', { name: 'Contractors waiting' }) },
-  { name: 'Plans', path: '/monthly-plan?tab=plans', ready: (page) => page.getByRole('heading', { name: /plans$/ }) },
-  { name: 'History', path: '/monthly-plan?tab=history', ready: (page) => page.getByRole('table') },
-  { name: 'Internal PIP', path: '/monthly-plan?tab=internal', ready: (page) => page.getByText('Coverage by contractors') },
+  { name: 'Plans', path: '/monthly-plan', ready: (page) => page.getByRole('group', { name: 'Needs your decision' }) },
+  { name: 'History', path: '/monthly-plan?tab=history', ready: (page) => page.getByRole('group', { name: 'Worst first' }) },
+  { name: 'Internal PIP', path: '/monthly-plan?tab=internal', ready: (page) => page.getByText('MTN Internal PIP').first() },
 ]
 
 async function open(page, tab) {
@@ -56,27 +55,30 @@ for (const viewport of [
 test.describe('Monthly Plan behaviour', () => {
   test.use({ viewport: { width: 1440, height: 900 } })
 
-  test('Approvals shows every waiting card at once, the grid scrolling inside itself', async ({ page }) => {
+  test('Plans lists every waiting contractor, and a changed number asks for a comment', async ({ page }) => {
     await open(page, TABS[0])
-    // Seven planning-month cards and one revision card.
-    await expect(page.locator('.mp-card')).toHaveCount(8)
-    const grid = await page.locator('.mp-grid-wrap').evaluate((el) => [el.scrollHeight, el.clientHeight])
-    expect(grid[0]).toBeGreaterThan(grid[1])
+    await expect(page.getByRole('group', { name: 'Needs your decision' }).getByRole('button')).toHaveCount(8)
+    await expect(page.getByLabel('Comment')).toHaveCount(0)
+
+    const dt = page.getByRole('region', { name: 'DT delivery' }).last()
+    await dt.getByRole('button', { name: 'Increase' }).click()
+    await expect(dt.getByLabel(/Comment/)).toBeVisible()
+    await expect(dt.getByRole('button', { name: /^Increase to \d+$/ })).toBeDisabled()
+    await dt.getByLabel(/Comment/).fill('Capacity allows more')
+    await expect(dt.getByRole('button', { name: /^Increase to \d+$/ })).toBeEnabled()
+    await dt.getByRole('button', { name: 'Decrease' }).click()
+    await expect(dt.getByLabel(/Comment/)).toHaveCount(0)
   })
 
-  test('the Return dialog traps focus, closes on Escape and gives focus back', async ({ page }) => {
+  test('the stepper buttons show the focus ring from the keyboard', async ({ page }) => {
     await open(page, TABS[0])
-    const opener = page.getByRole('button', { name: /^Return / }).first()
-    await opener.click()
-    const dialog = page.getByRole('dialog')
-    await expect(dialog.getByLabel('What should they change?')).toBeFocused()
-    for (let i = 0; i < 4; i += 1) {
-      await page.keyboard.press('Tab')
-      expect(await dialog.evaluate((el) => el.contains(document.activeElement))).toBe(true)
-    }
-    await page.keyboard.press('Escape')
-    await expect(dialog).toHaveCount(0)
-    await expect(opener).toBeFocused()
+    const plus = page.getByRole('region', { name: 'DT delivery' }).last().getByRole('button', { name: 'Increase' })
+    await plus.focus()
+    await page.keyboard.press('Tab')
+    await page.keyboard.press('Shift+Tab')
+    await expect(plus).toBeFocused()
+    const outline = await plus.evaluate((el) => getComputedStyle(el).outlineStyle)
+    expect(outline).not.toBe('none')
   })
 
   for (const tab of TABS) {

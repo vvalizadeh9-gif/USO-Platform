@@ -21,6 +21,8 @@ const ROUTES = {
   '/drive-test/flow': F.dtFlow,
   '/pip/overview': F.pipOverview,
   '/pip/queue': F.pipQueue,
+  '/pip/internal-target': F.pipInternalTarget,
+  '/pip/scorecard': F.pipScorecard,
   '/hc/basket': W.hcBasket,
   '/hc/queues/in-progress': W.hcInProgress,
   '/hc/queues/dt-assignment': W.dtAssignment,

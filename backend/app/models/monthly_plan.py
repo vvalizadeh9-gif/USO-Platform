@@ -224,4 +224,12 @@ class ContractorMonthlyPlan(Base):
     #: ``OTHER``, optional otherwise.
     revision_comment: Mapped[str | None] = mapped_column(Text)
 
-    contractor = relationship("Contractor")
+    #: Set only when the PM approved a different number from the one asked
+    #: for: what the contractor submitted. ``committed_count`` then holds the
+    #: approved figure. Written at the moment of approval, on a Submitted row,
+    #: so an Approved row is still never edited afterwards.
+    asked_count: Mapped[int | None] = mapped_column(Integer)
+    #: The PM's reason for that adjustment. Required with ``asked_count``.
+    decision_comment: Mapped[str | None] = mapped_column(Text)
+
+    contractor =relationship("Contractor")

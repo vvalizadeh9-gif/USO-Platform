@@ -1,283 +1,134 @@
-import { useState } from 'react'
-import api from '../../api/client'
-import { SegmentedControl } from '../../components/ui'
-import { useToast } from '../../context/ToastContext'
-import { buildBoard, initials, monthLabel } from './planBoard'
-import { TabState } from './parts'
-import { STREAM_LIST } from './streams'
-
-const STEP = 5
-const MAX_TARGET = 1_000_000
-const fmt = (v) => (v == null ? '—' : Number(v).toLocaleString('en-US'))
-const percentOf = (part, whole) => (whole ? Math.round((100 * part) / whole) : null)
+import Icon from '../../components/Icon'
+import { signedNumber } from './history'
+import MeasureList from './MeasureList'
+import { Chip, TabState } from './parts'
+import { BAND_STREAMS, BAND_TITLE, monthLabel } from './planBoard'
+import Stepper from './Stepper'
+import { streamMeta } from './streams'
 
 /**
- * Internal PIP: MTN's own target per stream, for the running month or the
- * planning month, against what the contractors cover.
+ * Internal PIP: MTN's own monthly target per stream, for the planning month or
+ * the running one, against what the contractors' approved plans cover.
  *
- * The target is the overview's `kpis.internal_pip` for the month on screen,
- * saved through PUT /pip/internal-target (a new version; the server refuses
- * anyone but the PM). Coverage is, for the running month, each contractor's
- * delivered; for the planning month, each shared plan's number from the
- * queue, waiting ones hatched.
+ * Two stacked bands, DT delivery and Acceptance. Each shows the target, how
+ * much of it the approved contractor plans cover, and a card with the number
+ * to move (− / + only) beside last month's. Edits are held by
+ * useInternalTargets; the page header saves or discards them all at once.
+ * A role that cannot set targets reads the same numbers as text.
+ *
+ * The target is one number per stream and month on the server, so each band
+ * has one card, not one per coordinator.
  */
-export default function InternalTab({ month, onMonth, running, planning, board, canSetTarget }) {
-  const onRunning = month === 'running'
-  const overview = onRunning ? running : planning.overview
-  const options = [
-    { key: 'running', label: <MonthOption period={running.period} word="running" /> },
-    { key: 'planning', label: <MonthOption period={planning.period} word="planning" /> },
+export default function InternalTab({ month, onMonth, targets, overviews, periods, canSetTarget }) {
+  const overview = overviews[month]
+  const ready = targets.state === 'ready' && overview.state === 'ready'
+
+  const rows = [
+    { key: 'planning', name: monthLabel(periods.planning), tag: 'Planning' },
+    { key: 'running', name: monthLabel(periods.running), tag: 'Running' },
   ]
 
-  const ready = overview.state === 'ready' && (onRunning || board.state === 'ready')
-  const view = ready && !onRunning ? buildBoard(board) : null
-  const period = onRunning ? running.period : planning.period
-
   return (
-    <div className="mp-internal">
-      <SegmentedControl options={options} value={month} onChange={onMonth} label="Month" className="mp-month-seg" />
-      {!ready ? (
-        <TabState
-          state={overview.state !== 'ready' ? overview.state : board.state}
-          what="Internal PIP"
-          onRetry={() => {
-            overview.reload()
-            board.reload()
-          }}
+    <div className="mp2-page">
+      <div className="mp2-split mp2-split-full">
+        <MeasureList
+          label="Months"
+          groups={[{ key: 'month', title: 'Month', icon: 'calendar', rows }]}
+          value={month}
+          onChange={onMonth}
         />
-      ) : (
-        <div className="mp-list mp-internal-list">
-          <div className="mp-list-head" aria-hidden="true">
-            <span>Stream</span>
-            <span>Internal PIP</span>
-            <span>Coverage by contractors</span>
-          </div>
-          <ul aria-label={`Internal PIP, ${monthLabel(period)}`}>
-            {STREAM_LIST.map((meta) => (
-              <StreamRow
-                key={`${month}-${meta.key}`}
-                meta={meta}
-                period={period}
-                internal={overview.data[meta.key].kpis.internal_pip ?? null}
-                coverage={
-                  onRunning
-                    ? runningCoverage(overview.data[meta.key])
-                    : planningCoverage(view, meta.stream)
-                }
-                canSetTarget={canSetTarget}
-                onSaved={overview.reload}
-              />
-            ))}
-          </ul>
-        </div>
-      )}
-    </div>
-  )
-}
-
-function MonthOption({ period, word }) {
-  return (
-    <span className="mp-month-option">
-      <span className="mp-fa">{monthLabel(period)}</span>
-      <small>{word}</small>
-    </span>
-  )
-}
-
-/** The running month: each contractor's delivered, and the contractors' PIPs summed. */
-function runningCoverage(stream) {
-  const parts = stream.rows
-    .filter((r) => r.delivered > 0)
-    .map((r) => ({ id: r.contractor_id, name: r.name || '', value: r.delivered, waiting: false }))
-  return { kind: 'running', parts, total: stream.kpis.delivered ?? 0, pips: stream.kpis.contractor_pip ?? null }
-}
-
-/** The planning month: every shared plan's number, from the queue. */
-function planningCoverage(view, stream) {
-  const parts = view.shared
-    .map((c) => ({ c, cell: c.cells[stream] }))
-    .filter(({ cell }) => cell.state !== 'none' && cell.number)
-    .map(({ c, cell }) => ({ id: c.id, name: c.name, value: cell.number, waiting: cell.state === 'waiting' }))
-  return {
-    kind: 'planning',
-    parts,
-    total: parts.reduce((s, p) => s + p.value, 0),
-    waiting: parts.filter((p) => p.waiting).length,
-    notShared: view.contractors.filter((c) => c.cells[stream].state === 'none').length,
-  }
-}
-
-function StreamRow({ meta, period, internal, coverage, canSetTarget, onSaved }) {
-  return (
-    <li className="mp-internal-row" data-stream={meta.stream}>
-      <div>
-        <div className="mp-strong">{meta.title}</div>
-        <div className="mp-meta mp-fa">{monthLabel(period)}</div>
-      </div>
-      <div>
-        {canSetTarget ? (
-          <TargetStepper meta={meta} period={period} current={internal} onSaved={onSaved} />
+        {!ready ? (
+          <section className="mp2-card mp2-detail">
+            <TabState
+              state={targets.state !== 'ready' ? targets.state : overview.state}
+              what="Internal PIP"
+              onRetry={() => {
+                targets.reload()
+                overview.reload()
+              }}
+            />
+          </section>
         ) : (
-          <span className="mp-target tnum">{fmt(internal)}</span>
+          <section className="mp2-card mp2-detail" aria-label={`Internal PIP, ${monthLabel(periods[month])}`} key={month}>
+            <header className="mp2-detail-head">
+              <span className="mp2-avatar" aria-hidden="true">
+                <Icon name="meter" size={22} />
+              </span>
+              <div className="mp2-detail-who">
+                <h2>Internal PIP</h2>
+                <p className="mp-fa">{monthLabel(periods[month])}</p>
+              </div>
+            </header>
+            <div className="mp2-bands">
+              {BAND_STREAMS.map((stream) => (
+                <TargetBand
+                  key={stream}
+                  stream={stream}
+                  month={month}
+                  targets={targets}
+                  covered={overview.data?.[streamMeta(stream).key]?.kpis?.contractor_pip ?? 0}
+                  canSetTarget={canSetTarget}
+                />
+              ))}
+            </div>
+          </section>
         )}
       </div>
-      <Coverage coverage={coverage} internal={internal} title={meta.title} />
-    </li>
-  )
-}
-
-/** − / number / + in steps of 5, and Save once the number has changed. Enter saves. */
-function TargetStepper({ meta, period, current, onSaved }) {
-  const toast = useToast()
-  const [draft, setDraft] = useState(current == null ? '' : String(current))
-  const [busy, setBusy] = useState(false)
-  const raw = draft.trim()
-  const value = /^\d+$/.test(raw) ? Number(raw) : null
-  const valid = value != null && value <= MAX_TARGET
-  const changed = valid && value !== current
-  const base = value ?? current ?? 0
-
-  async function save() {
-    if (!changed || busy) return
-    setBusy(true)
-    try {
-      await api.put('/pip/internal-target', {
-        stream: meta.stream,
-        year: period.year,
-        month: period.month,
-        target_count: value,
-      })
-      toast.success('Internal PIP saved')
-      onSaved()
-    } catch (err) {
-      toast.error('Could not save the Internal PIP', err.response?.data?.detail || 'Please try again.')
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  return (
-    <div className="mp-stepper">
-      <button
-        type="button"
-        className="mp-step"
-        aria-label={`Decrease Internal PIP ${meta.title}`}
-        disabled={busy || base <= 0}
-        onClick={() => setDraft(String(Math.max(0, base - STEP)))}
-      >
-        −
-      </button>
-      <input
-        className="mp-step-input tnum"
-        type="number"
-        inputMode="numeric"
-        min={0}
-        step={STEP}
-        aria-label={`Internal PIP ${meta.title}`}
-        aria-invalid={raw !== '' && !valid ? true : undefined}
-        value={draft}
-        disabled={busy}
-        onChange={(e) => setDraft(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter') {
-            e.preventDefault()
-            save()
-          }
-        }}
-      />
-      <button
-        type="button"
-        className="mp-step"
-        aria-label={`Increase Internal PIP ${meta.title}`}
-        disabled={busy}
-        onClick={() => setDraft(String(Math.min(MAX_TARGET, base + STEP)))}
-      >
-        +
-      </button>
-      <button
-        type="button"
-        className="mp-btn mp-btn-primary"
-        aria-label={`Save Internal PIP ${meta.title}`}
-        disabled={!changed || busy}
-        onClick={save}
-      >
-        {busy ? 'Saving…' : 'Save'}
-      </button>
     </div>
   )
 }
 
-function Coverage({ coverage, internal, title }) {
-  const { parts, total } = coverage
-  const scale = Math.max(internal ?? 0, total) * 1.1 || 1
-  const at = (v) => `${(100 * v) / scale}%`
-  const share = percentOf(total, internal)
-
-  let sentence
-  if (coverage.kind === 'running') {
-    const gap = internal != null && coverage.pips != null ? internal - coverage.pips : null
-    sentence = (
-      <>
-        <b className="tnum">{fmt(total)}</b> delivered
-        {share != null && <> · <b className="tnum">{share}%</b> of Internal PIP</>}.
-        {coverage.pips != null && (
-          <>
-            {' '}Contractor PIPs total <span className="tnum">{fmt(coverage.pips)}</span>
-            {gap != null && gap !== 0 && <> ({fmt(Math.abs(gap))} {gap > 0 ? 'below' : 'above'} Internal PIP)</>}.
-          </>
-        )}
-      </>
-    )
-  } else {
-    const left = internal != null ? internal - total : null
-    sentence = (
-      <>
-        <b className="tnum">{fmt(total)}</b> shared
-        {share != null && <> · <b className="tnum">{share}%</b> of Internal PIP</>}.
-        {left != null && <> {left > 0 ? `${fmt(left)} still to cover` : 'Fully covered'}.</>}{' '}
-        {coverage.waiting} waiting for approval, {coverage.notShared} contractors have not shared.
-      </>
-    )
-  }
+function TargetBand({ stream, month, targets, covered, canSetTarget }) {
+  const title = BAND_TITLE[stream]
+  const total = targets.value(month, stream)
+  const last = targets.previous(month, stream)
+  const changed = targets.changed(month, stream)
+  const toCover = total - covered
+  const scale = Math.max(total, covered, 1)
 
   return (
-    <div className="mp-coverage">
-      <div
-        className="mp-stack"
-        role="img"
-        aria-label={`${title}: ${parts.map((p) => `${p.name} ${p.value}${p.waiting ? ' waiting' : ''}`).join(', ') || 'nothing yet'}${internal != null ? `; Internal PIP ${internal}` : ''}`}
-      >
-        <span className="mp-stack-fill" style={{ width: at(total) }}>
-          {parts.map((p, i) => (
-            <span
-              key={p.id}
-              className="mp-stack-part mp-fa"
-              data-alt={i % 2 === 1 || undefined}
-              data-waiting={p.waiting || undefined}
-              style={{ flexGrow: p.value }}
-            >
-              {initials(p.name)}
-            </span>
-          ))}
-        </span>
-        {internal != null && (
-          <span className="mp-stack-mark" style={{ left: at(internal) }}>
-            <em className="tnum">Internal {fmt(internal)}</em>
-          </span>
-        )}
+    <section className="mp2-band mp2-band-target" aria-label={title}>
+      <div className="mp2-target-head">
+        <h2>{title}</h2>
+        <span className="mp2-total tnum">{total}</span>
+        <div
+          className="mp2-cover"
+          role="img"
+          aria-label={`${title}: ${covered} of ${total} covered by approved contractor plans`}
+        >
+          <i className="mp2-cover-done" style={{ width: `${(100 * Math.min(covered, total)) / scale}%` }} />
+          {total > covered && <i className="mp2-cover-rest" style={{ left: `${(100 * covered) / scale}%`, width: `${(100 * (total - covered)) / scale}%` }} />}
+        </div>
+        <Chip>{covered} in contractor plans</Chip>
+        {toCover > 0 ? <Chip tone="danger">{toCover} to cover</Chip> : toCover === 0 ? <Chip>Covered</Chip> : <Chip tone="accent">{-toCover} over</Chip>}
       </div>
-      <p className="mp-sentence">{sentence}</p>
-      {parts.length > 0 && (
-        <p className="mp-meta mp-legend">
-          {parts.map((p, i) => (
-            <span key={p.id}>
-              {i > 0 && ' · '}
-              <bdi className="mp-fa">{p.name}</bdi> <span className="tnum">{fmt(p.value)}</span>
-              {p.waiting && ' (waiting)'}
+
+      <div className="mp2-cards">
+        <article className="mp2-pcard" data-changed={changed || undefined}>
+          <header>
+            <span className="mp2-avatar mp2-avatar-sm" aria-hidden="true">
+              <Icon name="meter" size={16} />
             </span>
-          ))}
-        </p>
-      )}
-    </div>
+            <h3>MTN Internal PIP</h3>
+          </header>
+          {canSetTarget ? (
+            <Stepper
+              size="target"
+              value={total}
+              changed={changed}
+              disabled={targets.saving}
+              label={`${title} Internal PIP`}
+              onChange={(n) => targets.setDraft(month, stream, n)}
+            />
+          ) : (
+            <span className="mp2-big tnum" role="status" aria-label={`${title} Internal PIP`}>{total}</span>
+          )}
+          <footer>
+            <span className="tnum">Last month {last ?? '—'}</span>
+            {last != null && (total === last ? <Chip>Same</Chip> : <Chip tone="accent">{signedNumber(total - last)}</Chip>)}
+          </footer>
+        </article>
+      </div>
+    </section>
   )
 }

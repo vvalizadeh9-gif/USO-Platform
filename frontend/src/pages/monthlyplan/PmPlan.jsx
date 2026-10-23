@@ -1,84 +1,99 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import Icon from '../../components/Icon'
 import PageFrame from '../../components/PageFrame'
-import { HeaderCount } from '../../components/PageHeader'
+import Select from '../../components/Select'
 import { PageBar } from '../../components/ui'
 import { useToast } from '../../context/ToastContext'
-import { currentShamsiPeriod, nextPeriod } from '../../lib/shamsi'
-import ApprovalsTab from './ApprovalsTab'
+import { toPersianDigits } from '../../lib/persianDigits'
+import { FIRST_SHAMSI_YEAR, currentShamsiPeriod, nextPeriod } from '../../lib/shamsi'
 import DecisionDrawer from './DecisionDrawer'
 import HistoryTab from './HistoryTab'
 import InternalTab from './InternalTab'
 import PlansTab from './PlansTab'
-import { countWaiting, monthLabel } from './planBoard'
+import { BAND_STREAMS, monthLabel } from './planBoard'
 import { streamMeta } from './streams'
+import useInternalTargets from './useInternalTargets'
 import useOverview from './useOverview'
 import usePlanBoard from './usePlanBoard'
 import { downloadXlsx } from './xlsx'
 import '../../styles/monthly-plan.css'
-import { useHomeData } from '../../shell/HomeData'
 
 const PANEL_ID = 'mp-panel'
 
-/** The tabs in order; `?tab=` carries the key. Approvals is the default. */
-const TAB_KEYS = ['approvals', 'plans', 'history', 'internal']
+/** The pages in order; `?tab=` carries the key. Plans is the default. */
+const TAB_KEYS = ['plans', 'history', 'internal']
 
-/** ?tab= names a tab this role has; anything else, or nothing, is Approvals. */
+/** ?tab= names a page this role has; anything else, `approvals` included, is Plans. */
 function tabFromParams(params, canSeeInternal) {
   const key = params.get('tab')
-  if (key === 'internal' && !canSeeInternal) return 'approvals'
-  return TAB_KEYS.includes(key) ? key : 'approvals'
+  if (key === 'internal' && !canSeeInternal) return 'plans'
+  return TAB_KEYS.includes(key) ? key : 'plans'
 }
 
+const TITLES = { plans: 'Plans', history: 'History', internal: 'Internal PIP' }
+
 /**
- * The staff side of the Monthly Plan: four tabs under one header.
+ * The staff side of the Monthly Plan: three pages under one header.
  *
- * * **Approvals** (default) -- every plan waiting on the PM for the planning
- *   month, and revision requests on the running month, on one page.
- * * **Plans** -- who shared a plan for the planning month, and progress in
- *   the running month.
- * * **History** -- plan against delivered, month by month, for any year.
- * * **Internal PIP** -- MTN's own target per stream, against coverage.
+ * * **Plans** (default) -- DT delivery and Acceptance for the planning month:
+ *   who submitted, what was asked, and the PM's decision in place. It took
+ *   over Approvals, so `?tab=approvals` opens it.
+ * * **History** -- each contractor's PIP, actual and assignment across a
+ *   Shamsi year, as a trend or a table.
+ * * **Internal PIP** -- MTN's own target per stream, planning against running.
  *
- * The header shows the planning month on Approvals and Plans and the running
- * month elsewhere. Role checks decide what is offered, never what is
- * allowed: the server re-checks every read and decision.
+ * Role checks decide what is offered, never what is allowed: the server
+ * re-checks every read and decision.
  *
- * An Action Center link (?year&month&contractor[&stream]) still opens that
- * plan's decision drawer.
+ * An Action Center link (?year&month&contractor[&stream]) selects that
+ * contractor on Plans, or opens the decision drawer for a revision request or
+ * an ICT/CRA plan, which are decided there.
  */
 export default function PmPlan({ canDecide, canSetTarget, canSeeInternal }) {
   const toast = useToast()
-  const [params] = useSearchParams()
+  const [params, setParams] = useSearchParams()
   const tab = tabFromParams(params, canSeeInternal)
   const [linked] = useState(() => linkedTarget(params))
   const [running] = useState(() => currentShamsiPeriod())
   const planning = running && nextPeriod(running.year, running.month)
-  const [drawer, setDrawer] = useState(linked?.contractorId ? linked : null)
-  const [internalMonth, setInternalMonth] = useState('running')
+  const linkedHere =
+    linked?.contractorId && planning && linked.year === planning.year && linked.month === planning.month && BAND_STREAMS.includes(linked.stream)
+  const [drawer, setDrawer] = useState(linked?.contractorId && !linkedHere ? linked : null)
+  const [internalMonth, setInternalMonth] = useState('planning')
+  const [historyYear, setHistoryYear] = useState(running?.year)
   const [announcement, setAnnouncement] = useState('')
 
+  // The old Approvals address opens Plans.
+  useEffect(() => {
+    if (params.get('tab') === 'approvals') {
+      const next = new URLSearchParams(params)
+      next.set('tab', 'plans')
+      setParams(next, { replace: true })
+    }
+  }, [params, setParams])
+
   const board = usePlanBoard({ period: planning, running, enabled: true })
-  const runningOverview = useOverview({
-    params: { period: 'month' },
-    enabled: canSeeInternal && tab !== 'history',
-  })
   const planningOverview = useOverview({
     params: { period: 'month', year: planning?.year, month: planning?.month },
-    enabled: canSeeInternal && tab === 'internal' && Boolean(planning),
+    enabled: canSeeInternal && (tab === 'plans' || tab === 'internal') && Boolean(planning),
   })
-  // One count per queue (UEP-13 §3.2): the rail's /me/home number when it has
-  // one, so menu, Home and page agree; the board's own count otherwise.
-  const { counts } = useHomeData()
-  const waiting = counts?.plans_approve ?? countWaiting(board)
+  const runningOverview = useOverview({ params: { period: 'month' }, enabled: canSeeInternal && tab === 'internal' })
+  const targets = useInternalTargets({ planning, running, enabled: canSeeInternal && tab === 'internal' })
+
+  const internalPip =
+    canSeeInternal && planningOverview.state === 'ready'
+      ? { DT: planningOverview.data.dt.kpis.internal_pip ?? null, ACCEPTANCE: planningOverview.data.acceptance.kpis.internal_pip ?? null }
+      : canSeeInternal
+        ? { DT: null, ACCEPTANCE: null }
+        : undefined
 
   function reloadAll() {
     board.reload()
-    runningOverview.reload()
+    planningOverview.reload()
   }
 
-  const headerPeriod = tab === 'approvals' || tab === 'plans' ? planning : running
+  const headerPeriod = tab === 'plans' ? planning : running
 
   async function exportExcel() {
     if (!headerPeriod) return
@@ -93,10 +108,8 @@ export default function PmPlan({ canDecide, canSetTarget, canSeeInternal }) {
     }
   }
 
-  // The rail lists Approvals, Plans, History and Internal PIP; the page draws
-  // no tab bar of its own and no stepper, and its title is the rail label
-  // (UEP-13 §3.6).
-  const TITLES = { approvals: 'Approvals', plans: 'Plans', history: 'History', internal: 'Internal PIP' }
+  const years = []
+  for (let y = running?.year; y >= FIRST_SHAMSI_YEAR; y -= 1) years.push(y)
 
   return (
     <PageFrame
@@ -104,10 +117,38 @@ export default function PmPlan({ canDecide, canSetTarget, canSeeInternal }) {
       bar={
         <PageBar
           title={TITLES[tab]}
-          count={tab === 'approvals' && waiting > 0 ? <HeaderCount waiting={waiting} /> : null}
           actions={
             <>
-              <span className="mp-month-chip mp-fa" data-testid="mp-period">{monthLabel(headerPeriod)}</span>
+              {tab === 'plans' && (
+                <span className="mp-month-chip mp-fa" data-testid="mp-period">{monthLabel(planning)}</span>
+              )}
+              {tab === 'history' && (
+                <Select
+                  aria-label="Year"
+                  className="mp-select mp-fa"
+                  value={historyYear}
+                  onChange={(e) => setHistoryYear(Number(e.target.value))}
+                >
+                  {years.map((y) => (
+                    <option key={y} value={y}>{toPersianDigits(y)}</option>
+                  ))}
+                </Select>
+              )}
+              {tab === 'internal' && canSetTarget && (
+                <>
+                  {targets.saved && !targets.dirty && (
+                    <span className="mp2-saved" role="status">
+                      <Icon name="checkmark" size={16} /> Saved
+                    </span>
+                  )}
+                  <button type="button" className="mp-btn" disabled={!targets.dirty || targets.saving} onClick={targets.discard}>
+                    Discard
+                  </button>
+                  <button type="button" className="mp-btn mp-btn-primary" disabled={!targets.dirty || targets.saving} onClick={targets.save}>
+                    {targets.saving ? 'Saving…' : 'Save'}
+                  </button>
+                </>
+              )}
               <button type="button" className="mp-btn" onClick={exportExcel}>
                 <Icon name="download" size={16} /> Export Excel
               </button>
@@ -116,32 +157,28 @@ export default function PmPlan({ canDecide, canSetTarget, canSeeInternal }) {
         />
       }
     >
-      <div
-        className="mp-panel"
-        id={PANEL_ID}
-        aria-label={TITLES[tab]}
-        data-tab={tab}
-      >
-        {tab === 'approvals' && (
-          <ApprovalsTab
+      <div className="mp-panel" id={PANEL_ID} aria-label={TITLES[tab]} data-tab={tab}>
+        {tab === 'plans' && (
+          <PlansTab
             board={board}
-            running={runningOverview.data}
+            planning={planning}
+            runningPeriod={running}
             canDecide={canDecide}
+            internal={internalPip}
+            initialContractor={linkedHere ? linked.contractorId : null}
             onDecided={reloadAll}
             announce={setAnnouncement}
+            openDrawer={setDrawer}
           />
         )}
-        {tab === 'plans' && (
-          <PlansTab board={board} running={runningOverview.data} planning={planning} runningPeriod={running} />
-        )}
-        {tab === 'history' && <HistoryTab runningYear={running?.year} />}
+        {tab === 'history' && <HistoryTab year={historyYear} />}
         {tab === 'internal' && (
           <InternalTab
             month={internalMonth}
             onMonth={setInternalMonth}
-            running={{ ...runningOverview, period: running }}
-            planning={{ overview: planningOverview, period: planning }}
-            board={board}
+            targets={targets}
+            overviews={{ running: runningOverview, planning: planningOverview }}
+            periods={{ running, planning }}
             canSetTarget={canSetTarget}
           />
         )}

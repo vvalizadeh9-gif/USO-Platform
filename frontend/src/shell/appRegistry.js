@@ -169,10 +169,9 @@ export const APPS = Object.freeze([
     group: 'planning',
     roles: MONTHLY_PLAN_ROLES,
     pages: [
-      // Approvals is the page's default (no ?tab=); a contractor lands on
-      // their own filing page at the same address.
-      { id: 'approvals', label: 'Approvals', route: '/monthly-plan', queues: ['plans_approve', 'plan_submit'], also: ['/monthly-plan?tab=approvals'] },
-      { id: 'plans', label: 'Plans', route: '/monthly-plan?tab=plans', roles: INTERNAL_PIP_ROLES },
+      // Plans is the page's default (no ?tab=) and took over Approvals; a
+      // contractor lands on their own filing page at the same address.
+      { id: 'plans', label: 'Plans', route: '/monthly-plan', queues: ['plans_approve', 'plan_submit'], also: ['/monthly-plan?tab=plans', '/monthly-plan?tab=approvals'] },
       { id: 'history', label: 'History', route: '/monthly-plan?tab=history', roles: INTERNAL_PIP_ROLES },
       { id: 'internal', label: 'Internal PIP', route: '/monthly-plan?tab=internal', roles: INTERNAL_PIP_ROLES },
     ],

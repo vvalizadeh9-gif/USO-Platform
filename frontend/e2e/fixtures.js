@@ -211,9 +211,9 @@ export const pipOverview = (url) => {
   }
 }
 
-// GET /pip/queue, UEP-08: every contractor (plus one more, so the Approvals
-// grid holds seven cards and scrolls inside itself) has DT and Acceptance
-// waiting for the planning month; one has a revision on the running month.
+// GET /pip/queue, UEP-08: every contractor (plus one more, so the Plans list
+// holds eight rows and scrolls inside itself) has DT and Acceptance waiting
+// for the planning month; one has a revision on the running month.
 const QUEUE_PEOPLE = [...CONTRACTORS, 'مخابرات نوین']
 export const pipQueue = (url) => {
   const params = new URL(url).searchParams
@@ -235,6 +235,15 @@ export const pipQueue = (url) => {
   }
   return { label: '', stream, rows, current_month: {} }
 }
+
+// GET /pip/internal-target (UEP-18): the target and last month's.
+export const pipInternalTarget = (url) => {
+  const stream = new URL(url).searchParams.get('stream')
+  return { stream, current: { stream, target_count: 150 }, previous: { stream, target_count: 145 }, history: [] }
+}
+
+// GET /pip/scorecard (UEP-18): the DT assignment, left empty here.
+export const pipScorecard = () => ({ months: [], summable: [], balances: [], is_contractor: false })
 
 // ----- Lifecycle Gaps ------------------------------------------------------
 //
@@ -531,7 +540,7 @@ const homeGroups = [
   },
   {
     key: 'plans', label: 'Plans', scope_label: null,
-    tickets: [homeTicket('plans_approve', 'Plan approvals', 'Approve plans', '/monthly-plan?tab=approvals', { due_soon: 2, age: 12 })],
+    tickets: [homeTicket('plans_approve', 'Plan approvals', 'Approve plans', '/monthly-plan', { due_soon: 2, age: 12 })],
   },
 ]
 
