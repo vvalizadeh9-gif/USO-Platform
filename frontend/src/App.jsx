@@ -108,7 +108,6 @@ function WorkItemRedirect() {
 
 function LoginRoute() {
   const { user } = useAuth()
-  const location = useLocation()
   if (user) return <Navigate to="/" replace />
   return <Login />
 }
