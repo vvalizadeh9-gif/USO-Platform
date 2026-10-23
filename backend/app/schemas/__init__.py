@@ -2044,6 +2044,10 @@ class PlanningMonth(BaseModel):
     #: On a revision request: why the contractor asked.
     revision_reason: str | None = None
     revision_comment: str | None = None
+    #: On an approved plan the PM changed: the number the contractor asked for
+    #: and the PM's reason. ``in_force_count`` is then what was approved.
+    asked_count: int | None = None
+    decision_comment: str | None = None
     #: Whether an approved plan for this month may still be revised -- the
     #: running month, up to the end of day 15, Tehran time.
     revision_open: bool = False

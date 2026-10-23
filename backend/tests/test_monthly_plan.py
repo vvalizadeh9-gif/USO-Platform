@@ -798,6 +798,8 @@ def test_adjusted_approval_keeps_what_was_asked(client, actors):
     # The number in force, everywhere it is read, is the adjusted one.
     ctx = _current(client, actors["a1"], year, month)
     assert ctx["planning"]["in_force_count"] == 18
+    assert ctx["planning"]["asked_count"] == 25
+    assert ctx["planning"]["decision_comment"] == "Too high for the sites held"
     assert ctx["plan"]["asked_count"] == 25
     assert ctx["plan"]["decision_comment"] == "Too high for the sites held"
 

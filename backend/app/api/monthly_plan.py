@@ -195,6 +195,8 @@ def my_plan(
             in_force_version=in_force.version if in_force is not None else None,
             revision_reason=plan.revision_reason if plan is not None else None,
             revision_comment=plan.revision_comment if plan is not None else None,
+            asked_count=in_force.asked_count if in_force is not None else None,
+            decision_comment=in_force.decision_comment if in_force is not None else None,
             revision_open=plans.revision_window_open(year, month),
         ),
         current_month=MonthStanding(
