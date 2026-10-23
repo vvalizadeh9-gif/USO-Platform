@@ -173,14 +173,8 @@ describe('after signing in', () => {
     expect(navigate).toHaveBeenCalledWith('/', { replace: true })
   })
 
-  it('returns to the page that sent them here', async () => {
+  it('always lands on the landing page, ignoring any next', async () => {
     const user = renderLogin('/login?next=%2Fmy-work%3Fvillage%3D12')
-    await signIn(user)
-    expect(navigate).toHaveBeenCalledWith('/my-work?village=12', { replace: true })
-  })
-
-  it('never follows a next that leaves the site', async () => {
-    const user = renderLogin('/login?next=https%3A%2F%2Fevil.example')
     await signIn(user)
     expect(navigate).toHaveBeenCalledWith('/', { replace: true })
   })
