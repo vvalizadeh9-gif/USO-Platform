@@ -10,7 +10,7 @@ import Icon from '../components/Icon'
 import { useAuth } from '../context/AuthContext'
 import { toLatinDigits } from '../lib/persianDigits'
 import { forgetUsername, readRememberedUsername, rememberUsername } from '../lib/rememberedUsername'
-import { returnPathFrom, sessionExpiredFrom } from '../lib/returnTo'
+import { sessionExpiredFrom } from '../lib/returnTo'
 import { SIGN_IN_MESSAGES, mapSignInError, validateCredentials } from '../lib/signInErrors'
 import { AUTH_LINKS, AuthFooter, AuthLogo } from './auth/AuthFrame'
 
@@ -159,8 +159,8 @@ function SignInForm() {
       await login(username.trim(), password, captchaShown ? captcha.token : undefined, answer)
       if (rememberMe) rememberUsername(username.trim())
       else forgetUsername()
-      // Back to the page that sent them here, if one did.
-      navigate(returnPathFrom(location.search) ?? '/', { replace: true })
+      // Every sign-in lands on the landing page ("/" resolves to the role's home).
+      navigate('/', { replace: true })
     } catch (err) {
       setPassword('')
       const refusal = mapSignInError(err, { captchaShown })

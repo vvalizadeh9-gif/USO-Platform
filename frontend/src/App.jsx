@@ -4,7 +4,7 @@ import AppShell from './shell/AppShell'
 import { HomeDataProvider } from './shell/HomeData'
 import { useAuth } from './context/AuthContext'
 import { Loading } from './components/ui'
-import { loginPathFor, returnPathFrom } from './lib/returnTo'
+import { loginPathFor } from './lib/returnTo'
 import { CATEGORY_OWNER_ROLES, HOME_ROLES, KPI_ROLES, MONTHLY_PLAN_ROLES, homeFor } from './lib/roles'
 import Login from './pages/Login'
 import AuthPlaceholder from './pages/auth/AuthPlaceholder'
@@ -108,8 +108,7 @@ function WorkItemRedirect() {
 
 function LoginRoute() {
   const { user } = useAuth()
-  const location = useLocation()
-  if (user) return <Navigate to={returnPathFrom(location.search) ?? '/'} replace />
+  if (user) return <Navigate to="/" replace />
   return <Login />
 }
 

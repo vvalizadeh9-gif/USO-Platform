@@ -94,13 +94,14 @@ test('the review flag forces reduced motion', async ({ page }) => {
   await expect(page.locator('html')).toHaveAttribute('data-uep-motion', 'reduce')
 })
 
-test('a protected page sends you to sign in and back again', async ({ page }) => {
+test('a protected page sends you to sign in, then always lands on the landing page', async ({ page }) => {
   await page.goto('/my-work?village=12')
   await expect(page).toHaveURL(/\/login\?next=%2Fmy-work%3Fvillage%3D12$/)
   await page.getByLabel('Username', { exact: true }).fill('sara')
   await page.getByLabel('Password', { exact: true }).fill('right')
   await page.getByRole('button', { name: 'Sign in', exact: true }).click()
-  await expect(page).toHaveURL(/\/my-work\?village=12$/)
+  await expect(page).not.toHaveURL(/\/my-work/)
+  await expect(page).not.toHaveURL(/\/login/)
 })
 
 test('an expired session shows the neutral notice', async ({ page }) => {
