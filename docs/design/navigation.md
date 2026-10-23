@@ -136,18 +136,17 @@ which counts through the same queue service.
 
 ### Monthly plan rail (UEP-08)
 
-The rail's pages are the staff page's four tabs, in tab order:
+The rail's pages are the staff page's three pages, in order (UEP-18; Approvals became Plans):
 
 | Rail item | Route | Roles | Count |
 |---|---|---|---|
-| Approvals | `/monthly-plan` (also `?tab=approvals`) | everyone with the app | `plans_approve`, `plan_submit` |
-| Plans | `/monthly-plan?tab=plans` | PM, Coordinator, RegionalManager, Viewer | — |
+| Plans | `/monthly-plan` (also `?tab=plans`, `?tab=approvals`) | everyone with the app | `plans_approve`, `plan_submit` |
 | History | `/monthly-plan?tab=history` | PM, Coordinator, RegionalManager, Viewer | — |
 | Internal PIP | `/monthly-plan?tab=internal` | PM, Coordinator, RegionalManager, Viewer | — |
 
-A contractor's Approvals item opens their own filing page, as the old
+A contractor's Plans item opens their own filing page, as the old
 *Contractor PIP* item did. Home's *Approve plans* links to
-`/monthly-plan?tab=approvals`. History reads `GET /pip/overview?period=year`,
+`/monthly-plan` (the old `?tab=approvals` still opens it). History reads `GET /pip/overview?period=year`,
 whose streams carry `months[]` (`plan`, `delivered`, `internal`, `is_running`,
 `is_future`, `contractors[]`); see ARCHITECTURE §5h.
 
@@ -191,7 +190,7 @@ board). Those pages appear once the screens exist.
 For every queue, the Home work-card row, the app-rail badge and the page
 header show the same number: the items waiting on the signed-in user, read
 from the queue's `count` in `GET /me/home`. Pages with a header count
-(`PageHeading`, Monthly plan Approvals) read that field through
+(`PageHeading`, Monthly plan Plans) read that field through
 `useHomeData().counts`; `/drive-test/pipeline/summary` counts through the same
 queue service and is only the fallback while `/me/home` loads. A page that
 lists more than the waiting items shows the wider list as a filter with its
@@ -210,7 +209,7 @@ own count, never under the same name (`pool_total` in an API).
 | `ict_*` / `cra_*` | Home, digest | My Work buckets, per authority |
 | `acceptance_filing` | Filing (rail and header only) | Villages in any of Filing's buckets, each once (`my_work_query.filing_predicate`); a rail-only queue (`types.RAIL_QUEUES`), sent as `rail_tickets` in `/me/home` and shown on no Home card |
 | `ict_to_validate` / `cra_to_validate` | ICT / CRA validation (PM, Coordinator) | Contractor filings waiting for that authority, SLA step `validate`; the page header and Home row read the same number |
-| `plans_approve` | Monthly plan › Approvals | Plans Submitted for the planning month (next month) + revision requests on the running month |
+| `plans_approve` | Monthly plan › Plans | Plans Submitted for the planning month (next month) + revision requests on the running month |
 | `cpm_changes` | Data › CPM changes | CPM change requests pending validation, in scope |
 | `plan_submit` | Monthly plan (contractor) | Streams the contractor has not filed, plus returned plans still answerable |
 
