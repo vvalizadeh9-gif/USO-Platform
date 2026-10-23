@@ -19,7 +19,7 @@ PyJWT==2.13.0
 bcrypt==4.2.1
 # 0.0.19 carried six advisories, in the parser every file upload goes through.
 python-multipart==0.0.32
-pandas==2.2.3
+pandas==3.0.5
 openpyxl==3.1.5
 jdatetime==5.0.0
 # Argon2id, the password hash the platform now stores. bcrypt above is kept
