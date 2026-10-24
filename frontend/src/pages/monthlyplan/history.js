@@ -27,6 +27,14 @@ export function contractorsOf(months) {
 // contractor across one Shamsi year, for both streams.
 // ---------------------------------------------------------------------------
 
+/**
+ * The History page's year read: GET /pip/overview for the two streams it
+ * shows, so the server computes neither ICT, CRA nor the attention list.
+ */
+export function historyParams(year) {
+  return { period: 'year', year, month: 1, streams: 'dt,acceptance' }
+}
+
 /** Below this share of PIP a contractor is "behind" and shown red. */
 export const BEHIND_PERCENT = 85
 

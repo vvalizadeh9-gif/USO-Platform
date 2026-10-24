@@ -6,6 +6,7 @@ never depends directly on the calendar library (easy to swap later).
 from __future__ import annotations
 
 from datetime import date, datetime
+from functools import lru_cache
 from zoneinfo import ZoneInfo
 
 import jdatetime
@@ -35,7 +36,15 @@ SHAMSI_MONTHS = [
 
 def to_shamsi(gregorian: date) -> tuple[int, int]:
     """Convert a Gregorian date to a (shamsi_year, shamsi_month) tuple."""
-    j = jdatetime.date.fromgregorian(date=gregorian)
+    day = gregorian.date() if isinstance(gregorian, datetime) else gregorian
+    return _shamsi_period_of(day)
+
+
+@lru_cache(maxsize=8192)
+def _shamsi_period_of(day: date) -> tuple[int, int]:
+    # Cached: the dashboards convert tens of thousands of dates per request,
+    # nearly all of them the same few hundred days, and jdatetime is slow.
+    j = jdatetime.date.fromgregorian(date=day)
     return j.year, j.month
 
 

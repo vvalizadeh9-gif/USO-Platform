@@ -154,9 +154,9 @@ export default function PlansTab({ board, planning, runningPeriod, canDecide, in
         {selected ? (
           <section className="mp2-card mp2-detail" aria-label={selected.name} key={selected.id}>
             <header className="mp2-detail-head">
-              <span className="mp2-avatar mp-fa" aria-hidden="true">{initials(selected.name)}</span>
+              <span className="mp2-avatar" aria-hidden="true">{initials(selected.name)}</span>
               <div className="mp2-detail-who">
-                <h2 className="mp-fa">{selected.name}</h2>
+                <h2>{selected.name}</h2>
                 <p>
                   Plan for <span className="mp-fa">{shamsiMonthName(planning?.month)}</span>
                   {filedOn(selected) && (

@@ -2429,10 +2429,12 @@ class PipOverviewOut(BaseModel):
     days_in_month: int
     revision_window_open: bool
     revisions_close_on: str | None = None
-    dt: OverviewStream
-    acceptance: OverviewStream
-    ict: OverviewStream
-    cra: OverviewStream
+    #: None only for a stream left out with ``?streams=``; every stream is
+    #: there when the parameter is not given.
+    dt: OverviewStream | None
+    acceptance: OverviewStream | None
+    ict: OverviewStream | None
+    cra: OverviewStream | None
     needs_attention: list[OverviewAttention]
 
 

@@ -4,7 +4,6 @@ import MeasureList from './MeasureList'
 import { Chip, TabState } from './parts'
 import { BAND_STREAMS, BAND_TITLE, monthLabel } from './planBoard'
 import Stepper from './Stepper'
-import { streamMeta } from './streams'
 
 /**
  * Internal PIP: MTN's own monthly target per stream, for the planning month or
@@ -18,14 +17,16 @@ import { streamMeta } from './streams'
  *
  * The target is one number per stream and month on the server, so each band
  * has one card, not one per coordinator.
+ *
+ * Coverage is summed from the queue the Plans page already holds (each
+ * contractor's approved plan in force), so this page reads nothing slow.
  */
-export default function InternalTab({ month, onMonth, targets, overviews, periods, canSetTarget }) {
-  const overview = overviews[month]
-  const ready = targets.state === 'ready' && overview.state === 'ready'
+export default function InternalTab({ month, onMonth, targets, board, periods, canSetTarget }) {
+  const ready = targets.state === 'ready' && board.state === 'ready'
 
   const rows = [
-    { key: 'planning', name: monthLabel(periods.planning), tag: 'Planning' },
-    { key: 'running', name: monthLabel(periods.running), tag: 'Running' },
+    { key: 'planning', name: monthLabel(periods.planning), fa: true, tag: 'Planning' },
+    { key: 'running', name: monthLabel(periods.running), fa: true, tag: 'Running' },
   ]
 
   return (
@@ -40,11 +41,11 @@ export default function InternalTab({ month, onMonth, targets, overviews, period
         {!ready ? (
           <section className="mp2-card mp2-detail">
             <TabState
-              state={targets.state !== 'ready' ? targets.state : overview.state}
+              state={targets.state !== 'ready' ? targets.state : board.state}
               what="Internal PIP"
               onRetry={() => {
                 targets.reload()
-                overview.reload()
+                board.reload()
               }}
             />
           </section>
@@ -66,7 +67,7 @@ export default function InternalTab({ month, onMonth, targets, overviews, period
                   stream={stream}
                   month={month}
                   targets={targets}
-                  covered={overview.data?.[streamMeta(stream).key]?.kpis?.contractor_pip ?? 0}
+                  covered={covered(board[month], stream)}
                   canSetTarget={canSetTarget}
                 />
               ))}
@@ -76,6 +77,11 @@ export default function InternalTab({ month, onMonth, targets, overviews, period
       </div>
     </div>
   )
+}
+
+/** The contractors' approved plans in force for one stream of one month. */
+function covered(queues, stream) {
+  return (queues?.[stream]?.rows ?? []).reduce((sum, r) => sum + (r.in_force_count ?? 0), 0)
 }
 
 function TargetBand({ stream, month, targets, covered, canSetTarget }) {

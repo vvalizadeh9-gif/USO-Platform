@@ -510,8 +510,15 @@ def overview(
     year: int | None = None,
     month: int | None = None,
     today: date | None = None,
+    only: tuple[str, ...] | None = None,
 ) -> dict:
-    """Everything the PM's Monthly Plan page reads, in one response."""
+    """Everything the PM's Monthly Plan page reads, in one response.
+
+    ``only`` names the stream keys to compute (``dt``, ``acceptance``,
+    ``ict``, ``cra``); the others come back as None and ``needs_attention``
+    as an empty list. A page that reads one or two streams then pays for
+    those alone. None computes everything, as before.
+    """
     today = today or jalali.tehran_today()
     ry, rm, day = jalali.to_shamsi_date(today)
     running = (ry, rm)
@@ -534,7 +541,12 @@ def overview(
 
     common = dict(view=period, months=months, status_month=status_month,
                   trend=trend, hit_months=hit_months, running=running, today=today)
-    streams = {key: _stream(db, user, stream, **common) for stream, key in STREAM_KEYS.items()}
+    if only is not None and not set(only) <= set(STREAM_KEYS.values()):
+        raise OverviewError(f"streams must be among: {', '.join(STREAM_KEYS.values())}")
+    streams = {
+        key: _stream(db, user, stream, **common) if only is None or key in only else None
+        for stream, key in STREAM_KEYS.items()
+    }
 
     from app.services.drive_test_analytics import DriveTestAnalytics
 
@@ -560,5 +572,7 @@ def overview(
             jalali.from_shamsi_date(sy, sm, plans.REVISION_CUTOFF_DAY)
         ),
         **streams,
-        "needs_attention": _needs_attention(db, user, running, today, dt_rows_running),
+        "needs_attention": (
+            _needs_attention(db, user, running, today, dt_rows_running) if only is None else []
+        ),
     }

@@ -11,10 +11,11 @@ import DecisionDrawer from './DecisionDrawer'
 import HistoryTab from './HistoryTab'
 import InternalTab from './InternalTab'
 import PlansTab from './PlansTab'
+import { historyParams } from './history'
 import { BAND_STREAMS, monthLabel } from './planBoard'
+import { prefetch } from './readCache'
 import { streamMeta } from './streams'
 import useInternalTargets from './useInternalTargets'
-import useOverview from './useOverview'
 import usePlanBoard from './usePlanBoard'
 import { downloadXlsx } from './xlsx'
 import '../../styles/monthly-plan.css'
@@ -74,23 +75,28 @@ export default function PmPlan({ canDecide, canSetTarget, canSeeInternal }) {
   }, [params, setParams])
 
   const board = usePlanBoard({ period: planning, running, enabled: true })
-  const planningOverview = useOverview({
-    params: { period: 'month', year: planning?.year, month: planning?.month },
-    enabled: canSeeInternal && (tab === 'plans' || tab === 'internal') && Boolean(planning),
-  })
-  const runningOverview = useOverview({ params: { period: 'month' }, enabled: canSeeInternal && tab === 'internal' })
-  const targets = useInternalTargets({ planning, running, enabled: canSeeInternal && tab === 'internal' })
+  // The Internal PIP is read by Plans (the KPI bar) and Internal PIP alike.
+  // Both pages are built from the queue above and these targets; neither
+  // reads GET /pip/overview, which is the slow read.
+  const targets = useInternalTargets({ planning, running, enabled: canSeeInternal && tab !== 'history' })
 
-  const internalPip =
-    canSeeInternal && planningOverview.state === 'ready'
-      ? { DT: planningOverview.data.dt.kpis.internal_pip ?? null, ACCEPTANCE: planningOverview.data.acceptance.kpis.internal_pip ?? null }
-      : canSeeInternal
-        ? { DT: null, ACCEPTANCE: null }
-        : undefined
+  const internalPip = !canSeeInternal
+    ? undefined
+    : targets.state === 'ready'
+      ? { DT: targets.current('planning', 'DT'), ACCEPTANCE: targets.current('planning', 'ACCEPTANCE') }
+      : { DT: null, ACCEPTANCE: null }
+
+  // Once the page in front is in, start the History reads in the background
+  // so the page is ready before it is opened.
+  const boardReady = board.state === 'ready'
+  useEffect(() => {
+    if (!boardReady || !historyYear || tab === 'history') return
+    prefetch('/pip/overview', historyParams(historyYear))
+    prefetch('/pip/scorecard', { year: historyYear })
+  }, [boardReady, historyYear, tab])
 
   function reloadAll() {
     board.reload()
-    planningOverview.reload()
   }
 
   const headerPeriod = tab === 'plans' ? planning : running
@@ -181,7 +187,7 @@ export default function PmPlan({ canDecide, canSetTarget, canSeeInternal }) {
             month={internalMonth}
             onMonth={setInternalMonth}
             targets={targets}
-            overviews={{ running: runningOverview, planning: planningOverview }}
+            board={board}
             periods={{ running, planning }}
             canSetTarget={canSetTarget}
           />
