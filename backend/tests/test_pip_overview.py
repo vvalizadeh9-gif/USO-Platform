@@ -542,3 +542,29 @@ def test_month_and_since_start_have_no_year_months(client, world, monkeypatch, p
         assert data[key]["months"] is None
     # The rest of the response is what it was.
     assert set(data["dt"]) == {"stream", "kpis", "all_contractors", "rows", "trend", "months"}
+
+
+# ---------------------------------------------------------------------------
+# ?streams=: compute only what the page shows
+# ---------------------------------------------------------------------------
+def test_streams_limits_the_work_and_leaves_the_rest_out(client, world, monkeypatch):
+    _on_day(monkeypatch, 10)
+    full = _get(client, world, "?period=year")
+    data = _get(client, world, "?period=year&streams=dt,acceptance")
+    assert data["ict"] is None and data["cra"] is None
+    assert data["needs_attention"] == []
+    # The streams that were asked for are exactly what the full read gives.
+    assert data["dt"] == full["dt"]
+    assert data["acceptance"] == full["acceptance"]
+
+
+def test_without_streams_everything_is_there(client, world, monkeypatch):
+    _on_day(monkeypatch, 10)
+    data = _get(client, world)
+    assert all(data[key] is not None for key in ("dt", "acceptance", "ict", "cra"))
+
+
+def test_an_unknown_stream_is_400(client, world, monkeypatch):
+    _on_day(monkeypatch, 10)
+    r = client.get(f"{URL}?streams=dt,ftth", headers=world["actors"]["pm"])
+    assert r.status_code == 400, r.text

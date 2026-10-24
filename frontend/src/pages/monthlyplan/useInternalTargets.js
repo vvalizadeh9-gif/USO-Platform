@@ -2,9 +2,12 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import api from '../../api/client'
 import { useToast } from '../../context/ToastContext'
 import { BAND_STREAMS } from './planBoard'
+import { peek, read } from './readCache'
 
 const MONTHS = ['planning', 'running']
 const keyOf = (month, stream) => `${month}:${stream}`
+const paramsOf = (period, stream) => ({ stream, year: period.year, month: period.month })
+const figures = (data) => ({ current: data.current?.target_count ?? null, previous: data.previous?.target_count ?? null })
 
 /**
  * The Internal PIP targets for the planning and the running month, both
@@ -17,8 +20,9 @@ const keyOf = (month, stream) => `${month}:${stream}`
  * drops them. A target nobody has set reads as 0 and is not "changed" until
  * it moves off 0.
  *
- * Returns `{ state, value, previous, setDraft, dirty, saving, saved, save,
- * discard }`. `state` is `loading`, `ready`, `failed` or `denied`.
+ * Returns `{ state, current, value, previous, setDraft, dirty, saving, saved,
+ * save, discard }`: `current` is the saved target (null when none is set),
+ * `value` the number on screen. `state` is `loading`, `ready`, `failed` or `denied`.
  */
 export default function useInternalTargets({ planning, running, enabled }) {
   const toast = useToast()
@@ -40,27 +44,37 @@ export default function useInternalTargets({ planning, running, enabled }) {
 
   useEffect(() => {
     if (!enabled || !planning || !running) return undefined
-    let current = true
+    let alive = true
     const reads = MONTHS.flatMap((month) =>
       BAND_STREAMS.map((stream) =>
-        api
-          .get('/pip/internal-target', { params: { stream, year: periods[month].year, month: periods[month].month } })
-          .then((r) => [keyOf(month, stream), { current: r.data.current?.target_count ?? null, previous: r.data.previous?.target_count ?? null }]),
+        read('/pip/internal-target', paramsOf(periods[month], stream)).then((data) => [keyOf(month, stream), figures(data)]),
       ),
     )
     Promise.all(reads)
-      .then((entries) => current && setResult({ state: 'ready', targets: Object.fromEntries(entries) }))
-      .catch((err) => current && setResult({ state: err.response?.status === 403 ? 'denied' : 'failed', targets: {} }))
+      .then((entries) => alive && setResult({ state: 'ready', targets: Object.fromEntries(entries) }))
+      .catch((err) => alive && setResult({ state: err.response?.status === 403 ? 'denied' : 'failed', targets: {} }))
     return () => {
-      current = false
+      alive = false
     }
     // The periods are read through their key: a new object for the same month is not a new month.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled, key, tick])
 
-  const baseline = (month, stream) => result.targets[keyOf(month, stream)]?.current ?? 0
+  // Months read before draw at once from the last answer while the new one comes.
+  let shown = result
+  if (shown.state === 'loading' && enabled && planning && running) {
+    const cached = MONTHS.flatMap((month) =>
+      BAND_STREAMS.map((stream) => [keyOf(month, stream), peek('/pip/internal-target', paramsOf(periods[month], stream))]),
+    )
+    if (cached.every(([, data]) => data !== undefined)) {
+      shown = { state: 'ready', targets: Object.fromEntries(cached.map(([k, data]) => [k, figures(data)])) }
+    }
+  }
+
+  const current = (month, stream) => shown.targets[keyOf(month, stream)]?.current ?? null
+  const baseline = (month, stream) => current(month, stream) ?? 0
   const value = (month, stream) => drafts[keyOf(month, stream)] ?? baseline(month, stream)
-  const previous = (month, stream) => result.targets[keyOf(month, stream)]?.previous ?? null
+  const previous = (month, stream) => shown.targets[keyOf(month, stream)]?.previous ?? null
   const dirty = MONTHS.flatMap((month) => BAND_STREAMS.map((stream) => [month, stream])).filter(
     ([month, stream]) => drafts[keyOf(month, stream)] != null && drafts[keyOf(month, stream)] !== baseline(month, stream),
   )
@@ -102,7 +116,8 @@ export default function useInternalTargets({ planning, running, enabled }) {
   }
 
   return {
-    state: result.state,
+    state: shown.state,
+    current,
     value,
     previous,
     setDraft,

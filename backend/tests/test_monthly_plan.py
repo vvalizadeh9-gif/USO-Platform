@@ -880,3 +880,21 @@ def test_plain_approval_leaves_the_new_fields_null(client, actors):
     assert body["asked_count"] is None and body["decision_comment"] is None
     ctx = _current(client, actors["a1"], year, month)
     assert ctx["plan"]["asked_count"] is None
+
+
+def test_queue_can_leave_out_the_running_month(client, actors):
+    """``standing=false``: the same rows, without the running month's figures."""
+    year, month = _future(40)
+    _save(client, actors["a1"], year, month, 21, True)
+    params = {"year": year, "month": month}
+    full = client.get(f"{PIP}/queue", headers=actors["pm"], params=params).json()
+    light = client.get(f"{PIP}/queue", headers=actors["pm"], params={**params, "standing": "false"})
+    assert light.status_code == 200, light.text
+    light = light.json()
+
+    plan_fields = ("contractor_id", "plan_id", "status", "committed_count", "in_force_count", "asked_count")
+    assert [{k: r[k] for k in plan_fields} for r in light["rows"]] == [
+        {k: r[k] for k in plan_fields} for r in full["rows"]
+    ]
+    assert all(r["assignment"] == 0 and r["pip"] is None and r["delivered"] == 0 for r in light["rows"])
+    assert light["current_month"]["assignment"] == 0

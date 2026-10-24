@@ -4,7 +4,8 @@ import Icon from '../../components/Icon'
 // rows, one selected at a time (solid accent, aria-pressed).
 //
 // A group is { key, title, icon, count?, columns?, rows }. A row is
-// { key, name, chips?, figures?, tag?, onSelect? }:
+// { key, name, fa?, chips?, figures?, tag?, onSelect? }:
+//   fa       the name is Persian text (a Shamsi month): set in Vazirmatn
 //   chips    [{ key, label, tone }] -- small words such as DT / Acc
 //   figures  [{ key, label, value, tone }] -- percentages, one per column
 //   tag      a small word after the name (Planning, Running)
@@ -39,7 +40,7 @@ export default function MeasureList({ label, groups, value, onChange, columns })
                 data-row={row.key}
                 onClick={() => (row.onSelect ? row.onSelect() : onChange(row.key))}
               >
-                <span className="mp2-row-name mp-fa">{row.name}</span>
+                <span className={row.fa ? 'mp2-row-name mp-fa' : 'mp2-row-name'}>{row.name}</span>
                 {row.tag && <span className="mp2-row-tag">{row.tag}</span>}
                 {row.chips && (
                   <span className="mp2-row-chips">

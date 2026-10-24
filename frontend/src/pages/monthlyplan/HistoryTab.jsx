@@ -1,14 +1,14 @@
 import { useEffect, useState } from 'react'
-import api from '../../api/client'
 import Icon from '../../components/Icon'
 import { SegmentedControl } from '../../components/ui'
 import { toPersianDigits } from '../../lib/persianDigits'
 import { shamsiMonthName } from '../../lib/shamsi'
 import { BandSkeleton } from './DecisionBand'
-import { BEHIND_PERCENT, contractorYear, shortMonthName, signedNumber, worstFirst } from './history'
+import { BEHIND_PERCENT, contractorYear, historyParams, shortMonthName, signedNumber, worstFirst } from './history'
 import MeasureList, { ListSkeleton } from './MeasureList'
 import { TabState } from './parts'
 import { BAND_STREAMS, BAND_TITLE, initials } from './planBoard'
+import { peek, read } from './readCache'
 import { PIP_STREAMS } from './streams'
 import StripRows from './StripRows'
 import TrendChart from './TrendChart'
@@ -30,24 +30,26 @@ function useAssigned(year, reloadKey) {
   const [state, setState] = useState({ year: null, byContractor: {} })
   useEffect(() => {
     let live = true
-    api
-      .get('/pip/scorecard', { params: { year } })
-      .then((r) => {
-        if (!live) return
-        const byContractor = {}
-        for (const m of r.data.months ?? []) {
-          for (const row of m.rows ?? []) {
-            ;(byContractor[row.contractor_id] ??= {})[m.shamsi_month] = row.available
-          }
-        }
-        setState({ year, byContractor })
-      })
+    read('/pip/scorecard', { year })
+      .then((data) => live && setState({ year, byContractor: assignedBy(data) }))
       .catch(() => live && setState({ year, byContractor: {} }))
     return () => {
       live = false
     }
   }, [year, reloadKey])
-  return state.year === year ? state.byContractor : {}
+  if (state.year === year) return state.byContractor
+  const cached = peek('/pip/scorecard', { year })
+  return cached ? assignedBy(cached) : {}
+}
+
+function assignedBy(scorecard) {
+  const byContractor = {}
+  for (const m of scorecard.months ?? []) {
+    for (const row of m.rows ?? []) {
+      ;(byContractor[row.contractor_id] ??= {})[m.shamsi_month] = row.available
+    }
+  }
+  return byContractor
 }
 
 /**
@@ -59,7 +61,7 @@ function useAssigned(year, reloadKey) {
  * contractor, worst first.
  */
 export default function HistoryTab({ year }) {
-  const overview = useOverview({ params: { period: 'year', year, month: 1 }, enabled: Boolean(year) })
+  const overview = useOverview({ params: historyParams(year), enabled: Boolean(year) })
   const assigned = useAssigned(year, overview.data)
   const [selectedId, setSelectedId] = useState(null)
   const [view, setView] = useState('trend')
@@ -117,9 +119,9 @@ export default function HistoryTab({ year }) {
         />
         <section className="mp2-card mp2-detail" aria-label={selected.name} key={selected.id}>
           <header className="mp2-detail-head">
-            <span className="mp2-avatar mp-fa" aria-hidden="true">{initials(selected.name)}</span>
+            <span className="mp2-avatar" aria-hidden="true">{initials(selected.name)}</span>
             <div className="mp2-detail-who">
-              <h2 className="mp-fa">{selected.name}</h2>
+              <h2>{selected.name}</h2>
               <p>Delivered of PIP</p>
             </div>
             <SegmentedControl options={VIEWS} value={view} onChange={setView} label="View" className="mp2-seg" />

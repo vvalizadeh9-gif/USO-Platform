@@ -358,6 +358,9 @@ def queue(
     year: int = Query(..., description="Shamsi year, e.g. 1405"),
     month: int = Query(..., ge=1, le=12, description="Shamsi month, 1-12"),
     stream: PlanStream = Query("DT", description="DT or ACCEPTANCE"),
+    standing: bool = Query(
+        True, description="false skips the running month's figures (current_month, and each row's assignment, pip and delivered)"
+    ),
     db: Session = Depends(get_db),
     user: User = Depends(require_queue_reader),
 ) -> MonthlyPlanQueueOut:
@@ -372,7 +375,17 @@ def queue(
     # The month now running, for every contractor this caller may see. Same
     # service the contractor's own screen reads, so a figure here and a figure
     # there cannot disagree about the same company and month.
-    running = plans.running_month(db, user)
+    # The running month is a full scorecard computation, and the Plans page
+    # does not read it: ``standing=false`` answers with zeros instead.
+    if standing:
+        running = plans.running_month(db, user)
+    else:
+        ry, rm = jalali.current_shamsi_period()
+        running = {
+            "shamsi_year": ry, "shamsi_month": rm, "shamsi_month_name": jalali.month_name(rm),
+            "label": plans.month_label(ry, rm), "assignment": 0, "carried_in": 0,
+            "newly_assigned": 0, "pip": None, "delivered": 0, "pace_pct": 0.0, "rows": {},
+        }
     standing = running["rows"]
 
     return MonthlyPlanQueueOut(
@@ -429,6 +442,9 @@ def overview(
     period: str = Query("month", description="month, year or since_start"),
     year: int | None = Query(None, description="Shamsi year; the running month if omitted"),
     month: int | None = Query(None, ge=1, le=12),
+    streams: str | None = Query(
+        None, description="Comma-separated stream keys to compute (dt,acceptance,ict,cra); all if omitted"
+    ),
     db: Session = Depends(get_db),
     user: User = Depends(require_overview_reader),
 ) -> PipOverviewOut:
@@ -439,7 +455,8 @@ def overview(
     ``services/pip_overview.py`` for how each figure is made.
     """
     try:
-        data = pip_overview.overview(db, user, period=period, year=year, month=month)
+        only = tuple(s.strip() for s in streams.split(",") if s.strip()) if streams else None
+        data = pip_overview.overview(db, user, period=period, year=year, month=month, only=only)
     except (pip_overview.OverviewError, plans.PlanError) as exc:
         raise HTTPException(400, str(exc)) from None
     return PipOverviewOut(**data)

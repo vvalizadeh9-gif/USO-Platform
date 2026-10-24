@@ -25,6 +25,7 @@ vi.mock('../../context/AuthContext', () => ({
 
 const persian = (n) => String(n).replace(/\d/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[d])
 const api = (await import('../../api/client')).default
+const { clearReadCache } = await import('./readCache')
 const MonthlyPlan = (await import('./MonthlyPlan')).default
 
 function signedInAs(roleName) {
@@ -200,6 +201,8 @@ const show = (path = '/monthly-plan') =>
 
 beforeEach(() => {
   vi.clearAllMocks()
+  // Each test starts with nothing remembered from the one before.
+  clearReadCache()
   api.post.mockResolvedValue({ data: {} })
   api.put.mockResolvedValue({ data: {} })
 })
@@ -942,7 +945,8 @@ describe('Plans', () => {
     const acc = within(summary('Acceptance'))
     expect(acc.getByText('Asked').previousSibling).toHaveTextContent('45')
     expect(acc.getByText('After your decisions').previousSibling).toHaveTextContent('38−7')
-    expect(acc.queryByText(/to cover/)).toBeNull()
+    // The Internal PIP comes from GET /pip/internal-target: 150 for each stream here.
+    expect(acc.getByText('112 to cover')).toBeInTheDocument()
   })
 
   it('recomputes the bar as a decision moves', async () => {
@@ -1150,7 +1154,7 @@ describe('History', () => {
     show('/monthly-plan?tab=history')
     await loaded()
 
-    expect(api.get).toHaveBeenCalledWith('/pip/overview', { params: { period: 'year', year: RUNNING.year, month: 1 } })
+    expect(api.get).toHaveBeenCalledWith('/pip/overview', { params: { period: 'year', year: RUNNING.year, month: 1, streams: 'dt,acceptance' } })
     expect(api.get).toHaveBeenCalledWith('/pip/scorecard', { params: { year: RUNNING.year } })
   })
 
@@ -1229,7 +1233,7 @@ describe('History', () => {
 
     await pickOption(screen.getByRole('combobox', { name: 'Year' }), String(RUNNING.year - 1))
     await waitFor(() =>
-      expect(api.get).toHaveBeenCalledWith('/pip/overview', { params: { period: 'year', year: RUNNING.year - 1, month: 1 } }),
+      expect(api.get).toHaveBeenCalledWith('/pip/overview', { params: { period: 'year', year: RUNNING.year - 1, month: 1, streams: 'dt,acceptance' } }),
     )
   })
 
@@ -1268,9 +1272,9 @@ describe('Internal PIP', () => {
     await waitFor(() => expect(value('DT delivery')).toHaveTextContent('150'))
     expect(within(band('DT delivery')).getByText('Last month 145')).toBeInTheDocument()
     expect(within(band('DT delivery')).getByText('+5')).toBeInTheDocument()
-    // Approved contractor plans cover 143 of 150.
-    expect(within(band('DT delivery')).getByText('143 in contractor plans')).toBeInTheDocument()
-    expect(within(band('DT delivery')).getByText('7 to cover')).toBeInTheDocument()
+    // Approved contractor plans in force for the planning month: Beta's 30.
+    expect(within(band('DT delivery')).getByText('30 in contractor plans')).toBeInTheDocument()
+    expect(within(band('DT delivery')).getByText('120 to cover')).toBeInTheDocument()
   })
 
   it('has one Save and one Discard for the page, disabled until something changes', async () => {
@@ -1368,5 +1372,37 @@ describe('the three pages have no axe violations', () => {
     const results = await axe.run(container, { rules: { 'color-contrast': { enabled: false } } })
     const serious = results.violations.filter((v) => ['serious', 'critical'].includes(v.impact))
     expect(serious.map((v) => `${v.id}: ${v.nodes[0].html}`)).toEqual([])
+  })
+})
+
+describe('the staff pages stay quick', () => {
+  it('builds Plans from the queue and the targets alone, and warms History', async () => {
+    signedInAs('PM')
+    serveOverview(overview(), { queues: PLAN_QUEUES })
+    show()
+    await planPage()
+
+    // Every queue read leaves out the running month's scorecard.
+    const queueCalls = api.get.mock.calls.filter(([url]) => url === '/pip/queue')
+    expect(queueCalls.length).toBeGreaterThan(0)
+    expect(queueCalls.every(([, c]) => c.params.standing === false)).toBe(true)
+    // No month overview: the only overview read is History's, in the background.
+    await waitFor(() =>
+      expect(api.get).toHaveBeenCalledWith('/pip/overview', { params: { period: 'year', year: RUNNING.year, month: 1, streams: 'dt,acceptance' } }),
+    )
+    expect(api.get.mock.calls.filter(([url, c]) => url === '/pip/overview' && c.params.period === 'month')).toHaveLength(0)
+  })
+
+  it('opens a page seen before at once, from the last answer', async () => {
+    signedInAs('PM')
+    serveOverview(overview(), { queues: PLAN_QUEUES })
+    const first = show()
+    await planPage()
+    first.unmount()
+
+    // The server is slow now; the page draws anyway.
+    api.get.mockImplementation(() => new Promise(() => {}))
+    show()
+    expect(screen.getByRole('group', { name: 'Needs your decision' })).toBeInTheDocument()
   })
 })
