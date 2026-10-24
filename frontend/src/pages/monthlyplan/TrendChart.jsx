@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { shamsiMonthName } from '../../lib/shamsi'
+import { shortMonthName } from './history'
 import { PAD, niceMax } from './chartLayout'
 
 const DEFAULT_SIZE = { w: 720, h: 190 }
@@ -83,7 +83,7 @@ export default function TrendChart({ rows, label }) {
             y={h - 8}
             textAnchor="middle"
           >
-            {shamsiMonthName(r.month)}
+            {shortMonthName(r.month)}
           </text>
         ))}
 

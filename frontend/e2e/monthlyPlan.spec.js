@@ -57,7 +57,7 @@ test.describe('Monthly Plan behaviour', () => {
 
   test('Plans lists every waiting contractor, and a changed number asks for a comment', async ({ page }) => {
     await open(page, TABS[0])
-    await expect(page.getByRole('group', { name: 'Needs your decision' }).getByRole('button')).toHaveCount(8)
+    await expect(page.getByRole('group', { name: 'Needs your decision' }).getByRole('button')).toHaveCount(7)
     await expect(page.getByLabel('Comment')).toHaveCount(0)
 
     const dt = page.getByRole('region', { name: 'DT delivery' }).last()

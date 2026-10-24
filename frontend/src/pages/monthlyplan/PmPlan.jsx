@@ -117,23 +117,27 @@ export default function PmPlan({ canDecide, canSetTarget, canSeeInternal }) {
       bar={
         <PageBar
           title={TITLES[tab]}
+          context={
+            tab === 'plans' ? (
+              <span className="mp-month-chip" data-testid="mp-period">
+                <span className="mp-fa">{monthLabel(planning)}</span>
+                <span className="mp-chip-tag">planning</span>
+              </span>
+            ) : tab === 'history' ? (
+              <Select
+                aria-label="Year"
+                className="mp-select mp-fa"
+                value={historyYear}
+                onChange={(e) => setHistoryYear(Number(e.target.value))}
+              >
+                {years.map((y) => (
+                  <option key={y} value={y}>{toPersianDigits(y)}</option>
+                ))}
+              </Select>
+            ) : null
+          }
           actions={
             <>
-              {tab === 'plans' && (
-                <span className="mp-month-chip mp-fa" data-testid="mp-period">{monthLabel(planning)}</span>
-              )}
-              {tab === 'history' && (
-                <Select
-                  aria-label="Year"
-                  className="mp-select mp-fa"
-                  value={historyYear}
-                  onChange={(e) => setHistoryYear(Number(e.target.value))}
-                >
-                  {years.map((y) => (
-                    <option key={y} value={y}>{toPersianDigits(y)}</option>
-                  ))}
-                </Select>
-              )}
               {tab === 'internal' && canSetTarget && (
                 <>
                   {targets.saved && !targets.dirty && (

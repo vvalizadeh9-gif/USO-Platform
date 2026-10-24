@@ -314,9 +314,12 @@ def test_contractor_never_gets_internal_and_always_gets_its_own_pip(client, worl
             for key in STREAMS:
                 assert month[key]["internal_plan"] is None
                 assert month[key]["internal_plan_cumulative"] is None
-        assert body["months"][-1]["village"]["contractor_plan"] == 3  # C1's own
+        # The month the plans were made for, not the last one on screen: this
+        # call runs on the real clock, and the window moves on with it.
+        mehr = next(m for m in body["months"] if (m["shamsi_year"], m["shamsi_month"]) == (1405, 7))
+        assert mehr["village"]["contractor_plan"] == 3  # C1's own
         # Its own villages only: V1 and V2 were ICT-approved; V6 is C2's.
-        assert body["months"][-1]["ict"]["approved_cumulative"] == 2
+        assert mehr["ict"]["approved_cumulative"] == 2
 
 
 def test_contractor_export_has_no_internal_pip_column(client, world):

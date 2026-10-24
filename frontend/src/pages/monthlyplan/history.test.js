@@ -2,7 +2,7 @@
 // the year, that a missing plan is a dash rather than a zero, and the order of
 // the list.
 import { describe, expect, it } from 'vitest'
-import { BEHIND_PERCENT, contractorYear, contractorsOf, percentOf, signedNumber, worstFirst } from './history'
+import { BEHIND_PERCENT, contractorYear, contractorsOf, percentOf, shortMonthName, signedNumber, worstFirst } from './history'
 
 const month = (m, over = {}) => ({
   shamsi_month: m, shamsi_month_name: String(m), plan: 100, delivered: 100, internal: 120,
@@ -23,8 +23,12 @@ describe('percentOf', () => {
 })
 
 describe('signedNumber', () => {
-  it('uses a real minus and an explicit plus', () => {
-    expect([signedNumber(5), signedNumber(-3), signedNumber(0)]).toEqual(['+5', '−3', '0'])
+  it('uses a real minus, an explicit plus and ±0', () => {
+    expect([signedNumber(5), signedNumber(-3), signedNumber(0)]).toEqual(['+5', '−3', '±0'])
+  })
+
+  it('names a month in three letters', () => {
+    expect([1, 2, 8, 10, 12].map(shortMonthName)).toEqual(['فرو', 'ارد', 'آبا', 'دی', 'اسف'])
   })
 })
 

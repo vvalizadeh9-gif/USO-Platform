@@ -832,11 +832,12 @@ def test_adjusted_approval_is_audited_with_both_numbers(client, actors):
 
 
 @pytest.mark.parametrize(
-    "count,comment",
-    [(25, "same number"), (-1, "negative"), (10, ""), (10, "   ")],
+    "offset,count,comment",
+    [(32, 25, "same number"), (37, -1, "negative"), (38, 10, ""), (39, 10, "   ")],
 )
-def test_adjusted_approval_rejects_bad_input(client, actors, count, comment):
-    year, month = _future(32)
+def test_adjusted_approval_rejects_bad_input(client, actors, offset, count, comment):
+    # One month per case: a plan is keyed by month, and each case submits one.
+    year, month = _future(offset)
     plan_id = _save(client, actors["a1"], year, month, 25, True).json()["id"]
     r = _adjust(client, actors["pm"], plan_id, count, comment)
     assert r.status_code == 422, r.text

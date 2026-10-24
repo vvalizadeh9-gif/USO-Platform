@@ -170,6 +170,17 @@ export function shamsiDayLabel(value) {
 }
 
 /**
+ * "۲۹ مهر": a moment's Shamsi day and month, Tehran time, Persian digits --
+ * or null if this browser cannot say. Built on shamsiDayLabel.
+ */
+export function shamsiDayMonthLabel(value) {
+  const label = shamsiDayLabel(value)
+  if (!label) return null
+  const [, month, day] = label.replace(/[۰-۹]/g, (d) => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d))).split('/')
+  return toPersianDigits(`${Number(day)} ${shamsiMonthName(Number(month))}`)
+}
+
+/**
  * "۱۷ مهر ۱۴۰۵" from the server's "1405-07-17": a label, not a conversion --
  * the server's calendar decided the day. Null for anything else.
  */
