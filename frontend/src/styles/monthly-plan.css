@@ -144,7 +144,8 @@
 }
 .mp2-mini[data-tone='approved'] { background: var(--uep-approved-tint); color: var(--uep-approved); }
 .mp2-mini[data-tone='danger'] { background: var(--uep-danger-tint); color: var(--uep-danger); }
-.mp2-row[aria-pressed='true'] .mp2-mini { background: rgba(255, 255, 255, 0.22); color: var(--uep-on-accent); }
+/* A darker cobalt, not translucent white: white on it keeps 4.5:1. */
+.mp2-row[aria-pressed='true'] .mp2-mini { background: var(--uep-accent-hover); color: var(--uep-on-accent); }
 .mp2-figure { min-width: 40px; text-align: right; font-size: var(--uep-fs-card-title); font-weight: var(--uep-weight-semibold); }
 .mp2-figure[data-tone='danger'] { color: var(--uep-danger); }
 .mp2-row[aria-pressed='true'] .mp2-figure[data-tone='danger'] { color: var(--uep-danger-on-accent); }

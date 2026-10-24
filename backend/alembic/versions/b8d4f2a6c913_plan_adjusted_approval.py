@@ -20,13 +20,21 @@ branch_labels = None
 depends_on = None
 
 
+def _columns(table: str) -> set[str]:
+    return {c["name"] for c in sa.inspect(op.get_bind()).get_columns(table)}
+
+
 def upgrade() -> None:
-    op.add_column(
-        "contractor_monthly_plans", sa.Column("asked_count", sa.Integer(), nullable=True)
-    )
-    op.add_column(
-        "contractor_monthly_plans", sa.Column("decision_comment", sa.Text(), nullable=True)
-    )
+    # Guarded: a database built by create_all already has the columns.
+    present = _columns("contractor_monthly_plans")
+    if "asked_count" not in present:
+        op.add_column(
+            "contractor_monthly_plans", sa.Column("asked_count", sa.Integer(), nullable=True)
+        )
+    if "decision_comment" not in present:
+        op.add_column(
+            "contractor_monthly_plans", sa.Column("decision_comment", sa.Text(), nullable=True)
+        )
 
 
 def downgrade() -> None:

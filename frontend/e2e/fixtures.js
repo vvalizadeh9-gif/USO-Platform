@@ -212,7 +212,7 @@ export const pipOverview = (url) => {
 }
 
 // GET /pip/queue, UEP-08: every contractor (plus one more, so the Plans list
-// holds eight rows and scrolls inside itself) has DT and Acceptance waiting
+// holds seven rows and scrolls inside itself) has DT and Acceptance waiting
 // for the planning month; one has a revision on the running month.
 const QUEUE_PEOPLE = [...CONTRACTORS, 'مخابرات نوین']
 export const pipQueue = (url) => {
