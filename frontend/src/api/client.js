@@ -7,6 +7,7 @@ import { isPasswordChangeRequired } from '../lib/apiError'
 import { csrfHeaders } from '../lib/csrf'
 import { DATA_CHANGED_EVENT } from '../lib/dataChanged'
 import { SESSION_EXPIRED, loginPathFor } from '../lib/returnTo'
+import { resetClientSession } from '../lib/session'
 
 const api = axios.create({ baseURL: '/api/v1' })
 
@@ -29,12 +30,12 @@ api.interceptors.response.use(
     return res
   },
   (err) => {
-    // A session that ran out mid-task. The page goes with them to sign-in, so
-    // they come back to where they were rather than to the home page, and the
-    // sign-in page says why they are there. Only when there was a session to
-    // lose: a failed sign-in is a 401 too.
+    // A session that ran out mid-task. Everything kept for it is cleared, and
+    // the sign-in page says why they are there; signing in again lands on the
+    // home page (UEP-19). Only when there was a session to lose: a failed
+    // sign-in is a 401 too.
     if (err.response?.status === 401 && localStorage.getItem('uep_user')) {
-      localStorage.removeItem('uep_user')
+      resetClientSession()
       window.location.href = loginPathFor(window.location, { reason: SESSION_EXPIRED })
     }
 
