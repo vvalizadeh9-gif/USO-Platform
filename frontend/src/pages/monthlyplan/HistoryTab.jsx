@@ -5,7 +5,7 @@ import { SegmentedControl } from '../../components/ui'
 import { toPersianDigits } from '../../lib/persianDigits'
 import { shamsiMonthName } from '../../lib/shamsi'
 import { BandSkeleton } from './DecisionBand'
-import { BEHIND_PERCENT, contractorYear, signedNumber, worstFirst } from './history'
+import { BEHIND_PERCENT, contractorYear, shortMonthName, signedNumber, worstFirst } from './history'
 import MeasureList, { ListSkeleton } from './MeasureList'
 import { TabState } from './parts'
 import { BAND_STREAMS, BAND_TITLE, initials } from './planBoard'
@@ -187,8 +187,8 @@ function MonthTable({ data, title, hasAssignment }) {
           <tr>
             <th scope="col" />
             {rows.map((r) => (
-              <th key={r.month} scope="col" className="mp-fa" data-running={r.running || undefined}>
-                {shamsiMonthName(r.month)}
+              <th key={r.month} scope="col" className="mp-fa" data-running={r.running || undefined} title={shamsiMonthName(r.month)}>
+                {shortMonthName(r.month)}
               </th>
             ))}
             <th scope="col" className="mp2-total-col">Total</th>

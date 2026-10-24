@@ -30,9 +30,17 @@ export function contractorsOf(months) {
 /** Below this share of PIP a contractor is "behind" and shown red. */
 export const BEHIND_PERCENT = 85
 
-/** "+5", "−3" or "0": a signed difference with a real minus sign. */
+/** "+5", "−3" or "±0": a signed difference with a real minus sign. */
 export function signedNumber(n) {
-  return n > 0 ? `+${n}` : n < 0 ? `−${Math.abs(n)}` : '0'
+  return n > 0 ? `+${n}` : n < 0 ? `−${Math.abs(n)}` : '±0'
+}
+
+/** The twelve Shamsi months in three letters, for the chart and table columns. */
+const SHORT_MONTHS = ['فرو', 'ارد', 'خرد', 'تیر', 'مرد', 'شهر', 'مهر', 'آبا', 'آذر', 'دی', 'بهم', 'اسف']
+
+/** "فرو" for 1: a Shamsi month short enough for twelve columns. */
+export function shortMonthName(month) {
+  return SHORT_MONTHS[Number(month) - 1] ?? String(month ?? '')
 }
 
 /**

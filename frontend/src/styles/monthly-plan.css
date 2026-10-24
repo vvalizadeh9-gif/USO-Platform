@@ -19,6 +19,7 @@
 .mp-panel > * { flex: 1 1 auto; min-height: 0; }
 
 /* ---- Header controls ---- */
+.mp-chip-tag { margin-inline-start: 6px; font-family: var(--uep-font-sans); font-size: var(--uep-fs-caption); font-weight: var(--uep-weight-medium); color: var(--uep-text-3); }
 .mp-month-chip {
   display: inline-flex; align-items: center; height: var(--uep-control-height);
   padding: 0 var(--uep-space-12); border: var(--uep-border-width) solid var(--uep-border);
@@ -236,7 +237,7 @@
 .mp2-chart svg { display: block; }
 .mp2-grid { stroke: var(--uep-divider); stroke-width: 1; }
 .mp2-axis { font-size: var(--uep-fs-caption); fill: var(--uep-text-3); }
-.mp2-month { font-size: var(--uep-fs-small); fill: var(--uep-text-2); }
+.mp2-month { font-size: var(--uep-fs-body); fill: var(--uep-text-2); }
 .mp2-month[data-running] { fill: var(--uep-accent); font-weight: var(--uep-weight-bold); }
 .mp2-future { fill: var(--uep-future); }
 .mp2-pip-line, .mp2-actual-line { fill: none; stroke-linejoin: round; stroke-linecap: round; stroke-dasharray: 1; stroke-dashoffset: 0; animation: mp2-draw 900ms var(--uep-ease-standard) both; }

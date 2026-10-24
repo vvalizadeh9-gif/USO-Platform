@@ -2,6 +2,7 @@ import { useState } from 'react'
 import api from '../../api/client'
 import Icon from '../../components/Icon'
 import { useToast } from '../../context/ToastContext'
+import { shamsiDayMonthLabel, shamsiMonthName } from '../../lib/shamsi'
 import { BandSkeleton, default as DecisionBand } from './DecisionBand'
 import { signedNumber } from './history'
 import MeasureList, { ListSkeleton } from './MeasureList'
@@ -13,12 +14,17 @@ import {
   decidedValue,
   initials,
   isChanged,
-  monthLabel,
   streamKpi,
 } from './planBoard'
 import { streamMeta } from './streams'
 
-const CHIP_WORD = { DT: 'DT', ACCEPTANCE: 'Acc', ICT: 'ICT', CRA: 'CRA' }
+/** When the contractor last handed a plan in for this month, as "۲۹ مهر", or null. */
+function filedOn(contractor) {
+  const last = BAND_STREAMS.map((s) => contractor.cells[s].submittedAt).filter(Boolean).sort().at(-1)
+  return shamsiDayMonthLabel(last)
+}
+
+const CHIP_WORD ={ DT: 'DT', ACCEPTANCE: 'Acc', ICT: 'ICT', CRA: 'CRA' }
 const CHIP_TONE = { waiting: 'neutral', approved: 'approved', notFiled: 'danger' }
 
 /**
@@ -152,7 +158,12 @@ export default function PlansTab({ board, planning, runningPeriod, canDecide, in
               <div className="mp2-detail-who">
                 <h2 className="mp-fa">{selected.name}</h2>
                 <p>
-                  Plans for <span className="mp-fa">{monthLabel(planning)}</span>
+                  Plan for <span className="mp-fa">{shamsiMonthName(planning?.month)}</span>
+                  {filedOn(selected) && (
+                    <>
+                      {' · '}Filed <span className="mp-fa">{filedOn(selected)}</span>
+                    </>
+                  )}
                 </p>
               </div>
               {canDecide && anyWaiting && !anyChanged && (

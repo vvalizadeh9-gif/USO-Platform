@@ -11,7 +11,7 @@ import axe from 'axe-core'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ToastProvider } from '../../context/ToastContext'
-import { currentShamsiPeriod, nextPeriod, shamsiMonthName } from '../../lib/shamsi'
+import { currentShamsiPeriod, nextPeriod, shamsiDayMonthLabel, shamsiMonthName } from '../../lib/shamsi'
 import { pickOption } from '../../test/pickOption'
 
 vi.mock('../../api/client', () => ({
@@ -747,6 +747,7 @@ const queuesBy = (table) => (params) => {
 }
 
 const { monthLabel } = await import('./planBoard')
+const { shortMonthName } = await import('./history')
 const PLANNING = nextPeriod(RUNNING.year, RUNNING.month)
 
 /** Shaped from app/schemas: OverviewYearMonth, for one stream of one year. */
@@ -843,7 +844,7 @@ describe('the staff page: the rail is the menu', () => {
     await planPage()
     expect(title()).toHaveTextContent('Plans')
     expect(screen.queryByRole('tablist')).toBeNull()
-    expect(screen.getByTestId('mp-period')).toHaveTextContent(monthLabel(PLANNING))
+    expect(screen.getByTestId('mp-period')).toHaveTextContent(`${monthLabel(PLANNING)}planning`)
   })
 
   it.each([
@@ -896,6 +897,10 @@ describe('Plans', () => {
     // The first row needing a decision is selected.
     expect(screen.getByRole('button', { name: /^Alpha Telecom/ })).toHaveAttribute('aria-pressed', 'true')
     expect(screen.getByRole('region', { name: 'Alpha Telecom' })).toBeInTheDocument()
+    // The plan's month, and the day the contractor last handed a plan in.
+    expect(within(screen.getByRole('region', { name: 'Alpha Telecom' })).getByText(/^Plan for/)).toHaveTextContent(
+      `Plan for ${shamsiMonthName(PLANNING.month)} · Filed ${shamsiDayMonthLabel('2026-08-20T09:00:00Z')}`,
+    )
   })
 
   it('marks each stream: grey while waiting, green when approved, red when not filed', async () => {
@@ -1200,7 +1205,7 @@ describe('History', () => {
     expect(cellsOf(dt, 'Assigned')[0]).toBe('7')
     expect(cellsOf(dt, 'PIP')[0]).toBe('10')
     expect(cellsOf(dt, 'Actual')[0]).toBe('10')
-    expect(cellsOf(dt, 'Gap')[0]).toBe('0')
+    expect(cellsOf(dt, 'Gap')[0]).toBe('±0')
     expect(cellsOf(dt, '%')[0]).toBe('100%')
     if (closed >= 2) {
       expect(cellsOf(dt, 'Gap')[1]).toBe('−5')
@@ -1210,7 +1215,7 @@ describe('History', () => {
     expect(cellsOf(dt, 'PIP')).toHaveLength(13)
     if (RUNNING.month < 12) expect(cellsOf(dt, 'Actual')[11]).toBe('')
     expect(cellsOf(dt, 'PIP').at(-1)).toBe(String(closed * 10))
-    expect(dt.getByRole('columnheader', { name: shamsiMonthName(RUNNING.month) })).toHaveAttribute('data-running', 'true')
+    expect(dt.getByRole('columnheader', { name: shortMonthName(RUNNING.month) })).toHaveAttribute('data-running', 'true')
   })
 
   it('picks another contractor and another year', async () => {
