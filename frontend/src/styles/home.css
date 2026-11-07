@@ -249,4 +249,4 @@ html[data-uep-motion='reduce'] :is(.uep-home, .hw-plan-bar i) { animation: none;
 .uep-no-access { display: grid; place-items: center; min-height: 60vh; padding: var(--uep-space-16); }
 .uep-no-access .hw-empty { max-width: 420px; text-align: center; }
 .uep-no-access-link { color: var(--uep-accent); font-weight: var(--uep-weight-semibold); }
-.uep-no-access-link:focus-visible { outline: var(--uep-focus-outline-width) solid var(--uep-accent); outline-offset: var(--uep-focus-outline-offset); border-radius: 4px; }
+.uep-no-access-link:focus-visible { outline: var(--uep-focus-outline-width) solid var(--uep-accent); outline-offset: var(--uep-focus-outline-offset); border-radius: var(--uep-radius-sm); }
