@@ -31,7 +31,8 @@ sites — is imported by an administrator. From that, UEP tracks each site throu
 
 Who can see and do what is tightly controlled: contractors see only their own
 work, most staff see only their assigned provinces, and the roles that fix
-problems see only the sites routed to them.
+problems work only the sites routed to them (they may read every site in
+Explorer, without acting on any). See [Roles and permissions](#roles-and-permissions).
 
 `ARCHITECTURE.md` explains the domain in full. Read it before changing anything —
 several rules that look arbitrary are deliberate.
@@ -312,6 +313,54 @@ reports under its full name. The API is
 `PUT /api/v1/admin/province-assignments` with
 `{"changes": [{"cra_region": "Central", "coordinator_user_id": 13, "expected_coordinator_user_id": 11}]}`.
 Regional managers and the province → region link are not edited there.
+
+---
+
+## Roles and permissions
+
+Which areas a role may open is decided in **one place**: the permission map,
+`backend/app/core/access_matrix.json`, with an identical copy at
+`frontend/src/lib/accessMatrix.json` (the two apps build separately;
+`backend/tests/test_role_access.py` fails if they differ). The
+launcher, Home's Apps panel, the app rails, the route guards and the API all
+read it — `core/access.py` (`require_access`, `allows`) on the server,
+`lib/access.js` (`canAccess`, `offeredRoles`, `landingFor`) in the browser.
+Which *rows* a role sees inside an area is a separate rule, in
+`services/visibility.py` and `services/kpi.py`.
+
+| Area | PM | Coordinator | Viewer | Contractor | Regional manager | NWG planning · Managed service · Huawei cleanup · CPG power · CPG rollout PM |
+|---|---|---|---|---|---|---|
+| Insights in launcher / Apps panel | Dashboards, Roles performance, Lifecycle gaps, Exports | Dashboards, Roles performance, Lifecycle gaps | as Coordinator | as Coordinator | **Roles performance and Lifecycle gaps only** | **hidden** |
+| Roles performance | ✅ | own scope | ✅ (read-only) | own scope | own provinces | ❌ |
+| — Lifecycle gaps "ICT vs CRA vs Mojri tracker" card | ✅ | ✅ | ✅ (read-only) | ❌ | ❌ | ❌ |
+| Lifecycle gaps | ✅ | own scope | ✅ (read-only) | own scope | own provinces | ❌ |
+| Drive test and Acceptance dashboards | ✅ | ✅ | ✅ | ✅ | ❌ | ❌ |
+| Acceptance (Filing) | ✅ | ✅ | read | ✅ | ❌ | ❌ |
+| Monthly plan | ✅ | read | read | own plan | ❌ | ❌ |
+| Drive test app | ✅ | ✅ | — | own work | ❌ | Fix queue only |
+| Explorer and header search | all sites | own provinces | all sites | own sites | own provinces | **all sites, read-only** |
+| Landing page | Home | Home | Drive test dashboard | Home | **Home — region variant** | **Home — work variant** |
+
+- ❌ means: not offered anywhere (launcher, Apps panel, rail, link or tile),
+  the URL shows the standard **no-access screen**, and the API answers **403**.
+  A site outside a person's scope opened by URL is also a 403 (an unknown site
+  is a 404).
+- The Mojri card's figures and exports are not sent to roles outside the card
+  at all; for them Lifecycle gaps shows the other two cards across the row.
+  The Mojri import itself stays PM-only, and Mojri never overrides UEP data.
+- Admin keeps the API access it had to the dashboards, Explorer and the plan
+  queue (`direct` in the map) but is offered none of them.
+- **Region variant:** the region today (On air, DT done, ICT approved, CRA
+  approved), read from Roles performance › My area (`GET /kpi/area`) — each
+  number opens that tab — and an Apps panel of Explorer, Roles performance and
+  Lifecycle gaps. No KPI strip and no work cards. **Work variant:** the
+  standard Home counting only the user's own items; with nothing waiting, the
+  KPI strip at zero and one line.
+- A Regional manager's provinces come from two places today: their province
+  grants (Explorer, search) and their name in `province_mapping` (Roles
+  performance, Lifecycle gaps, the region summary). Keep the two in step when
+  changing a regional manager — unlike coordinators, they are not yet written
+  together.
 
 ---
 

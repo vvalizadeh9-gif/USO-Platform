@@ -2036,6 +2036,22 @@ filing is unchanged: nobody may confirm a round they filed themselves.
 > probably wrong, not the permission. Several tests in this repository had that
 > exact defect for months.
 
+### Area access: the permission map
+
+Which *areas* a role may open — Roles Performance, Lifecycle Gaps and its
+Mojri card, the Insights dashboards, Explorer, Acceptance Filing, the monthly
+plan queue and Internal PIP — is one table, `app/core/access_matrix.json`
+(mirrored byte-for-byte at `frontend/src/lib/accessMatrix.json`). Endpoints
+use `core/access.require_access(Area.X)` or `access.check(user, Area.X)`; the
+frontend's registry, route guards and pages use `lib/access.js`. Each area
+lists `offered` roles (shown in navigation) and `direct` roles (may use it by
+URL and API but are never offered it — Admin, where it had API access before).
+The map's `landings` choose Home's variant: `region` for a Regional manager,
+`work` for the problem-category owners. The README's *Roles and permissions*
+has the matrix.
+
+The map decides *whether*; row-level visibility below decides *which rows*.
+
 ### Row-level visibility
 
 Beyond roles, every work-item query is filtered by who is asking. There are three
@@ -2049,6 +2065,11 @@ distinct models and they are never mixed:
    they have *ever* held, so their history does not silently empty out.
 3. **Staff roles** see sites in the provinces they have been granted, unless
    they are marked as seeing all provinces (typically Admin and PM).
+
+**One read-only exception:** Explorer and the header search use
+`explorer_work_item_ids`, which is this same scope except for the roles in the
+map's `explorer_all_sites` (the problem-category owners), who read every live
+site. It grants nothing else: every write route keeps its own role check.
 
 All of this lives in one function, `apply_work_item_scope` in
 `app/services/visibility.py`, and every list, dashboard and report goes through

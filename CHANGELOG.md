@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- **Role access and landing pages: one central permission map, Mojri internal, a Region and a Work landing.**
+  - One permission map (`backend/app/core/access_matrix.json`, mirrored at `frontend/src/lib/accessMatrix.json`; `tests/test_role_access.py` fails if they differ). The launcher, Apps panel, rails, route guards and API read it through `core/access.py` and `lib/access.js`. See README › Roles and permissions.
+  - The Lifecycle gaps "ICT vs CRA vs Mojri tracker" card is PM's, Coordinator's and Viewer's only. `/gaps/overview` no longer sends the two Mojri gaps, their bases or `last_mojri_import` to anyone else; the four Mojri export keys answer 403 and the Mojri column leaves their workbooks. The page closes the gap with two cards. (Roles performance never carried Mojri content.)
+  - Regional manager: Explorer, Roles performance and Lifecycle gaps only, inside their provinces. The Drive test and Acceptance dashboards, Acceptance Filing and the Monthly plan are gone from their navigation and 403 on the API. They land on Home's region variant: their region's On air, DT done, ICT approved and CRA approved (from `GET /kpi/area`), each opening Roles performance › My area, with "Your provinces: N" under the greeting.
+  - NWG planning, Managed service, Huawei cleanup, CPG power, CPG rollout PM: no Insights (403), Explorer and header search over every site, read-only. Home's work variant shows only their own items and, with nothing waiting, one quiet line.
+  - Refused pages show a standard no-access screen instead of redirecting to the start page; a live site outside a person's scope is a 403 on `GET /explorer/sites/{id}` (and its villages), shown as the same screen. An unknown site is still a 404. `/home` still takes Viewer and Admin to their own start page.
+  - "Open in My Work" on a site record is shown only to roles with Acceptance Filing.
+  - No migration, no new service, port or environment variable. Deploy: rebuild and restart the app containers, then sign in once with each role's test account.
+
 - **Monthly plan is three pages: Plans, History and Internal PIP, one family (UEP-18).**
   - Plans (default; `?tab=approvals` opens it) replaces Approvals and the old Plans list: a KPI bar per stream (contractors submitted, asked, total after your decisions, Internal PIP still to cover), contractors grouped as Revision requests / Needs your decision / Not filed / Decided / Other streams (ICT, CRA), and two stacked bands for the selected contractor. The PM confirms the number as asked, or moves it with − / + (hold to repeat) and writes a comment; `Confirm all as asked` approves every waiting stream at once. A returned plan no longer counts as submitted. Revision requests and ICT/CRA plans open the existing decision drawer. Viewers read plain numbers.
   - History: each contractor's PIP, actual delivery and assignment across one Shamsi year (dropdown), both streams stacked, as a Trend (PIP line, actual line, running-month capsule, Gap and % rows, red under 85%) or a Table (Assigned for DT only, pinned Total). The list is worst first.
