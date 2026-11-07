@@ -55,3 +55,24 @@ export function serveHome(page, summary) {
   const fulfill = (route) => route.fulfill({ status: 200, contentType: 'application/json', body })
   return Promise.all([page.route('**/api/v1/me/home', fulfill), page.route('**/api/v1/home/summary', fulfill)])
 }
+
+/** A problem-category owner's GET /me/home: their own fixes and nothing else. */
+export function problemOwnerHome(role, { fixes = 7, late = 2 } = {}) {
+  const tickets = fixes
+    ? [F.homeTicket('hc_fixes', 'Fixes', 'Open your fix queue', '/my-fix-queue', { on_time: fixes - late, late, age: 9 })]
+    : []
+  const groups = tickets.length ? [{ key: 'drive_test', label: 'Drive test', scope_label: null, tickets }] : []
+  return {
+    ...F.homeSummaryPm,
+    role,
+    scope_label: 'Your fixes',
+    groups,
+    rail_tickets: [],
+    totals: { ...F.homeSummaryPm.totals, pending: fixes, queues: tickets.length, overdue: tickets.length ? late : 0, due_soon: 0, done_today: 0 },
+    app_badges: tickets.length ? { '/my-fix-queue': { count: fixes, parts: [{ label: 'Fixes', count: fixes }] } } : {},
+  }
+}
+
+export const REGIONAL_MANAGER = user('rm', 'Reza Ahmadi', 'RegionalManager')
+export const PROBLEM_OWNERS = ['NwgPlanning', 'ManagedService', 'HuaweiCleanup', 'CpgPower', 'CpgRolloutPM']
+  .map((role) => [role, user(role.toLowerCase(), 'Nima Rahimi', role)])
