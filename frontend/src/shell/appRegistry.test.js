@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { appCount, appRoute, appsFor, locate, pageCount, queueCounts, queueLate } from './appRegistry'
+import { appCount, appGroupsFor, appRoute, appsFor, locate, pageCount, queueCounts, queueLate } from './appRegistry'
 
 const ids = (apps) => apps.map((a) => a.id)
 
@@ -120,15 +120,15 @@ describe('Drive test rail without Dashboard', () => {
     expect(locate(apps, '/reports/drive-test', '', 'drive-test').app.id).toBe('insights')
   })
 
-  it('makes Explorer its own app, first in Rollout, for the Drive test roles only', () => {
-    for (const role of ['PM', 'Coordinator', 'Contractor', 'RegionalManager', 'Viewer']) {
+  it('makes Explorer its own app, first in Rollout, for every role the permission map offers it to', () => {
+    for (const role of ['PM', 'Coordinator', 'Contractor', 'RegionalManager', 'Viewer', 'CpgPower']) {
       const apps = appsFor(role)
       const rollout = apps.filter((a) => a.group === 'rollout')
       expect(rollout[0]).toMatchObject({ id: 'explorer', name: 'Explorer', icon: 'search--locate' })
       expect(rollout[0].pages).toEqual([expect.objectContaining({ label: 'Explorer', route: '/explorer' })])
       expect((apps.find((a) => a.id === 'drive-test')?.pages ?? []).map((p) => p.id)).not.toContain('explorer')
     }
-    expect(ids(appsFor('CpgPower'))).not.toContain('explorer')
+    expect(ids(appsFor('Admin'))).not.toContain('explorer')
     expect(locate(appsFor('PM'), '/explorer/sites/7', '').app.id).toBe('explorer')
   })
 
@@ -148,8 +148,12 @@ describe('Acceptance rail', () => {
     expect(pagesOf(role)).toEqual(['filing', 'ict-validation', 'cra-validation'])
   })
 
-  it.each(['Contractor', 'RegionalManager', 'Viewer'])('gives %s Filing only', (role) => {
+  it.each(['Contractor', 'Viewer'])('gives %s Filing only', (role) => {
     expect(pagesOf(role)).toEqual(['filing'])
+  })
+
+  it('gives a Regional Manager no Acceptance app', () => {
+    expect(pagesOf('RegionalManager')).toBeUndefined()
   })
 
   it('opens on Filing and has no Dashboard or Letters', () => {
@@ -178,5 +182,33 @@ describe('Acceptance rail', () => {
     }
     expect(queueCounts(home)).toEqual({ ict_to_validate: 3, acceptance_filing: 8 })
     expect(queueLate(home)).toEqual({ ict_to_validate: 1, acceptance_filing: 2 })
+  })
+})
+
+// UEP role access: what the launcher, Apps panel and rails offer each role.
+describe('role access matrix in the registry', () => {
+  const FIVE = ['NwgPlanning', 'ManagedService', 'HuaweiCleanup', 'CpgPower', 'CpgRolloutPM']
+  const pagesBy = (role) => Object.fromEntries(appsFor(role).map((a) => [a.id, a.pages.map((p) => p.id)]))
+
+  it('offers a Regional Manager exactly Explorer, Roles performance and Lifecycle gaps', () => {
+    expect(pagesBy('RegionalManager')).toEqual({ explorer: ['explorer'], insights: ['roles', 'gaps'] })
+  })
+
+  it.each(FIVE)('offers %s no Insights, Explorer, and only the Drive test pages it had', (role) => {
+    expect(pagesBy(role)).toEqual({ explorer: ['explorer'], 'drive-test': ['fixes'] })
+    expect(appGroupsFor(role).map((g) => g.id)).not.toContain('insights')
+  })
+
+  it.each([
+    ['PM', ['dashboards', 'acceptance-dashboard', 'roles', 'gaps', 'exports']],
+    ['Coordinator', ['dashboards', 'acceptance-dashboard', 'roles', 'gaps']],
+    ['Viewer', ['dashboards', 'acceptance-dashboard', 'roles', 'gaps']],
+    ['Contractor', ['dashboards', 'acceptance-dashboard', 'roles', 'gaps']],
+  ])('keeps %s Insights as it was', (role, pages) => {
+    expect(pagesBy(role).insights).toEqual(pages)
+  })
+
+  it('keeps Admin without Insights', () => {
+    expect(pagesBy('Admin').insights).toBeUndefined()
   })
 })

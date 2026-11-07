@@ -8,7 +8,7 @@ import Icon from '../../components/Icon'
 import PageFrame from '../../components/PageFrame'
 import WaffleTile from '../../components/WaffleTile'
 import { useAuth } from '../../context/AuthContext'
-import { canCompare } from '../../lib/roles'
+import { canCompare, canSeeMojri } from '../../lib/roles'
 import { Banner, Card, EmptyState, PageBar } from '../../components/ui'
 import {
   ATTRIBUTION_NOTES,
@@ -151,6 +151,7 @@ export default function LifecycleGaps() {
             lens={lens}
             isPm={isPm}
             canImport={user?.role?.name === 'PM'}
+            showMojri={canSeeMojri(user)}
             selected={selected}
             onSelect={setSelected}
             onLens={setLens}
@@ -172,11 +173,15 @@ function readError(err, fallback) {
    The Gaps tab: three cards, six tiles, one legend line.
    --------------------------------------------------------------------------- */
 
-function GapsTab({ data, lens, isPm, canImport, selected, onSelect, onLens }) {
+function GapsTab({ data, lens, isPm, canImport, showMojri, selected, onSelect, onLens }) {
+  // The Mojri card is PM's, Coordinator's and Viewer's (the central
+  // permission map). For everyone else it is not drawn at all and the other
+  // two cards share the row: no gap, no placeholder.
+  const cards = showMojri ? CARDS : CARDS.filter((card) => card.key !== 'mojri')
   return (
     <div className="gap-tab">
-      <div className="gap-cards">
-        {CARDS.map((card) => (
+      <div className="gap-cards" style={{ '--gap-cards': cards.length }}>
+        {cards.map((card) => (
           <Card
             key={card.key}
             icon={CARD_ICONS[card.key]}

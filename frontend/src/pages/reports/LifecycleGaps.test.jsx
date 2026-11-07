@@ -433,3 +433,35 @@ describe('around the tiles', () => {
     expect(await screen.findByText('the map')).toBeInTheDocument()
   })
 })
+
+// UEP role access: the Mojri card is PM's, Coordinator's and Viewer's. For a
+// Contractor or a Regional Manager the server sends no Mojri figures, and the
+// page draws two cards that share the row -- no gap, no placeholder.
+describe('the Mojri card by role', () => {
+  const withoutMojri = () => {
+    const full = payload()
+    const { last_mojri_import: _last, ...rest } = full
+    const { ict_missing_in_mojri: _a, cra_missing_in_mojri: _b, ...gaps } = full.gaps
+    const { ict_missing_in_mojri: _c, cra_missing_in_mojri: _d, ...rows } = full.rows
+    return { ...rest, scoped: true, gaps, rows, totals: { eligible: 4812, ict_approved: 2770, cra_approved: 2555 } }
+  }
+
+  it.each(['Contractor', 'RegionalManager'])('draws no Mojri card for %s, and two cards fill the row', async (role) => {
+    authUser.current = { role: { name: role } }
+    mock({ lenses: { selectable: false, lens: 'rm', key: 'Allahyar', options: {} }, overview: withoutMojri() })
+    const { container } = draw()
+    expect(await tiles()).toHaveLength(4)
+    expect(screen.queryByRole('heading', { name: 'ICT vs CRA vs Mojri tracker' })).not.toBeInTheDocument()
+    expect(screen.queryByTestId('mojri-empty')).not.toBeInTheDocument()
+    expect(screen.queryByText(/Mojri/)).not.toBeInTheDocument()
+    expect(container.querySelector('.gap-cards').style.getPropertyValue('--gap-cards')).toBe('2')
+  })
+
+  it.each(['PM', 'Coordinator', 'Viewer'])('keeps the Mojri card for %s', async (role) => {
+    authUser.current = { role: { name: role } }
+    mock()
+    draw()
+    expect(await tiles()).toHaveLength(6)
+    expect(screen.getByRole('heading', { name: 'ICT vs CRA vs Mojri tracker' })).toBeInTheDocument()
+  })
+})

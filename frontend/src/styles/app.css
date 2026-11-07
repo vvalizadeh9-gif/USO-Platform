@@ -3134,7 +3134,7 @@ a.lifecycle-step:focus-visible { outline: 2px solid var(--uep-accent); outline-o
 .gap-tab { display: flex; flex-direction: column; gap: 12px; min-height: 0; flex: 1 1 auto; }
 /* Full height (UEP-13 §3.11): the three cards stretch to the bottom, the
    legend is the footer row of the cards area. */
-.gap-cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; flex: 1 1 auto; min-height: 0; }
+.gap-cards { display: grid; grid-template-columns: repeat(var(--gap-cards, 3), minmax(0, 1fr)); gap: 12px; flex: 1 1 auto; min-height: 0; }
 .gap-card.ui-card { padding: 16px; gap: 14px; min-width: 0; }
 .gap-card .ui-card-desc { font-size: var(--uep-fs-small); line-height: var(--uep-lh-meta); }
 /* Bottom-aligned, so a card whose description wraps keeps its tiles level

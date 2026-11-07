@@ -49,6 +49,9 @@
 }
 .h-work > .hw-section { flex: 1 1 auto; display: flex; flex-direction: column; }
 .h-work .hw-grid { flex: 1 1 auto; }
+/* The region landing has no KPI strip: its summary takes both rows. */
+.h-work.h-work-region { grid-row: 2 / 4; }
+.h-work-region > .hw-section { flex: 0 0 auto; }
 .ha-panel { grid-column: 2; grid-row: 2 / 4; align-self: stretch; }
 @media (max-width: 1100px) {
   .h-layout { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto; }
@@ -63,6 +66,7 @@
   letter-spacing: var(--uep-tracking-heading);
 }
 .h-date { margin: 0 0 var(--uep-space-4); font-size: var(--uep-fs-small); color: var(--uep-text-3); }
+.h-scope { margin: var(--uep-space-4) 0 0; color: var(--uep-text-2); }
 
 /* ---- KPI strip ----
    The strip itself (.hk-strip, .hk-tile, the sparkline) lives in
@@ -240,3 +244,9 @@ html[data-uep-motion='reduce'] :is(.uep-home, .hw-plan-bar i) { animation: none;
 .uep-home-page > .hf-footer { margin-top: auto; }
 /* Below 820px high the rows stay tight (the rule above), so 1366×768 and
    1280×720 still fit with no page scroll. */
+
+/* ---- No access (components/NoAccess.jsx): Home's empty card, centred ---- */
+.uep-no-access { display: grid; place-items: center; min-height: 60vh; padding: var(--uep-space-16); }
+.uep-no-access .hw-empty { max-width: 420px; text-align: center; }
+.uep-no-access-link { color: var(--uep-accent); font-weight: var(--uep-weight-semibold); }
+.uep-no-access-link:focus-visible { outline: var(--uep-focus-outline-width) solid var(--uep-accent); outline-offset: var(--uep-focus-outline-offset); border-radius: 4px; }

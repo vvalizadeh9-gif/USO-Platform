@@ -57,6 +57,10 @@ vi.mock('./pages/reports/AcceptanceDashboard', () => page('acceptance'))
 vi.mock('./pages/reports/rolesPerformance/RolesPerformance.jsx', () => page('kpi'))
 vi.mock('./pages/mojri/MojriImport', () => page('mojri'))
 vi.mock('./pages/Admin', () => page('admin'))
+vi.mock('./pages/reports/LifecycleGaps.jsx', () => page('gaps'))
+vi.mock('./pages/drivetest/SiteList', () => page('dt-sites'))
+// The standard no-access screen, which every refused route now shows.
+vi.mock('./components/NoAccess', () => page('no-access'))
 vi.mock('./pages/ChangePassword', () => page('change-password'))
 
 const mockAuth = vi.hoisted(() => ({ current: null }))
@@ -129,9 +133,9 @@ describe('where "/" lands', () => {
   )
 
   // Neither owns queues of their own.
-  it('sends a Regional Manager to Roles Performance (My area)', async () => {
+  it('sends a Regional Manager to Home (its region variant)', async () => {
     signedInAs('RegionalManager')
-    expect(await landOn('/')).toBe('kpi')
+    expect(await landOn('/')).toBe('home')
   })
 
   it('sends a Viewer to the Drive Test dashboard', async () => {
@@ -141,8 +145,7 @@ describe('where "/" lands', () => {
 })
 
 describe('the Home route', () => {
-  // A Regional Manager has a Home (the acceptance headline queues) but still
-  // lands on Roles Performance; Home is a link away.
+  // A Regional Manager lands on Home's region variant.
   it('opens Home for a Regional Manager who asks for it', async () => {
     signedInAs('RegionalManager')
     expect(await landOn('/home')).toBe('home')
@@ -171,8 +174,7 @@ describe('the removed Action Center', () => {
 describe('guarded routes', () => {
   it('keeps a non-owner out of the fix queue', async () => {
     signedInAs('Coordinator')
-    // Bounced to "/", which for a queue-working role is Home.
-    expect(await landOn('/my-fix-queue')).toBe('home')
+    expect(await landOn('/my-fix-queue')).toBe('no-access')
   })
 
   it('lets a category owner into the fix queue', async () => {
@@ -183,7 +185,7 @@ describe('guarded routes', () => {
   // The monthly plan is the one screen Admin is deliberately kept off. Not a
   // permission the interface invents -- deciding a contractor's monthly target
   // is an operational act, and Admin is a systems role (ARCHITECTURE.md).
-  it.each(['Contractor', 'PM', 'Coordinator', 'RegionalManager', 'Viewer'])(
+  it.each(['Contractor', 'PM', 'Coordinator', 'Viewer'])(
     'lets %s onto the monthly plan',
     async (role) => {
       signedInAs(role)
@@ -193,18 +195,17 @@ describe('guarded routes', () => {
 
   it('sends an admin away from the monthly plan', async () => {
     signedInAs('Admin')
-    // "/" for an admin is the console, which is where they belong.
-    expect(await landOn('/monthly-plan')).toBe('admin')
+    expect(await landOn('/monthly-plan')).toBe('no-access')
   })
 
   it('keeps a category owner off it too, as the server does', async () => {
     signedInAs('NwgPlanning')
-    expect(await landOn('/monthly-plan')).toBe('home')
+    expect(await landOn('/monthly-plan')).toBe('no-access')
   })
 
   it('keeps a contractor out of the admin console', async () => {
     signedInAs('Contractor')
-    expect(await landOn('/admin')).toBe('home')
+    expect(await landOn('/admin')).toBe('no-access')
   })
 
   it('lets a PM into the admin console, where the backend narrows what they see', async () => {
@@ -223,19 +224,66 @@ describe('guarded routes', () => {
 
   it('sends an admin away from the Mojri import', async () => {
     signedInAs('Admin')
-    expect(await landOn('/mojri-tracker')).toBe('admin')
+    expect(await landOn('/mojri-tracker')).toBe('no-access')
+  })
+
+  it.each(['Coordinator', 'Contractor', 'RegionalManager', 'Viewer'])(
+    'keeps %s off the Mojri import',
+    async (role) => {
+      signedInAs(role)
+      expect(await landOn('/mojri-tracker')).toBe('no-access')
+    },
+  )
+})
+
+// UEP role access: the matrix in the central permission map (lib/access.js).
+describe('role access matrix routes', () => {
+  const FIVE = ['NwgPlanning', 'ManagedService', 'HuaweiCleanup', 'CpgPower', 'CpgRolloutPM']
+
+  it.each([
+    ['/reports/kpi', 'kpi'],
+    ['/reports/gaps', 'gaps'],
+    ['/explorer', 'explorer'],
+    ['/explorer/sites/7', 'site-record'],
+  ])('lets a Regional Manager open %s', async (path, expected) => {
+    signedInAs('RegionalManager')
+    expect(await landOn(path)).toBe(expected)
   })
 
   it.each([
-    ['Coordinator', 'home'],
-    ['Contractor', 'home'],
-    ['RegionalManager', 'kpi'],
-    ['Viewer', 'dt-dashboard'],
-  ])(
-    'keeps %s off the Mojri import',
-    async (role, home) => {
+    '/reports/drive-test', '/reports/acceptance', '/drive-test/sites', '/my-work',
+    '/monthly-plan', '/drive-test', '/health-check', '/validation/ict', '/reports/kpi/mapping',
+  ])('shows a Regional Manager no access at %s', async (path) => {
+    signedInAs('RegionalManager')
+    expect(await landOn(path)).toBe('no-access')
+  })
+
+  it.each(FIVE)('sends %s to its work Home and opens Explorer', async (role) => {
+    signedInAs(role)
+    expect(await landOn('/')).toBe('home')
+    cleanup()
+    expect(await landOn('/explorer/sites/7')).toBe('site-record')
+  })
+
+  it.each(FIVE.flatMap((role) => [
+    [role, '/reports/kpi'], [role, '/reports/gaps'], [role, '/reports/drive-test'],
+    [role, '/reports/acceptance'], [role, '/my-work'],
+  ]))('shows %s no access at %s', async (role, path) => {
+    signedInAs(role)
+    expect(await landOn(path)).toBe('no-access')
+  })
+
+  it.each(['PM', 'Coordinator', 'Viewer', 'Contractor'])(
+    'keeps %s on the dashboards, Roles performance and Lifecycle gaps',
+    async (role) => {
       signedInAs(role)
-      expect(await landOn('/mojri-tracker')).toBe(home)
+      for (const [path, expected] of [
+        ['/reports/drive-test', 'dt-dashboard'], ['/reports/acceptance', 'acceptance'],
+        ['/reports/kpi', 'kpi'], ['/reports/gaps', 'gaps'], ['/explorer', 'explorer'],
+      ]) {
+        cleanup()
+        expect(await landOn(path)).toBe(expected)
+      }
     },
   )
 })

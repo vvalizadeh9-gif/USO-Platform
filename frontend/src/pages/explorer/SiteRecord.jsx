@@ -2,6 +2,8 @@ import { useRef, useState } from 'react'
 import { useParams, useSearchParams } from 'react-router-dom'
 import { useFillPage } from '../../components/pageMode'
 import { useAuth } from '../../context/AuthContext'
+import NoAccess from '../../components/NoAccess'
+import { AREA, canAccess } from '../../lib/access'
 import { canFileAcceptance } from '../../lib/roles'
 import { hasAnyAction, workflowActions } from './explorerModel'
 import GeneralInfoCard from './GeneralInfoCard'
@@ -35,6 +37,8 @@ export default function SiteRecord() {
   const actions = workflowActions(user, data?.workflow)
   const siteLabel = data?.site_code || `Site #${workItemId}`
 
+  if (status === 'forbidden') return <NoAccess />
+
   if (status === 'missing') {
     return (
       <div className="uep-home uw-page ex-page">
@@ -53,6 +57,7 @@ export default function SiteRecord() {
         siteLabel={siteLabel}
         headingRef={headingRef}
         canFile={canFileAcceptance(role)}
+        canOpenMyWork={canAccess(role, AREA.ACCEPTANCE_WORKSPACE)}
         isContractor={role === 'Contractor'}
         onTakeAction={hasAnyAction(actions) ? () => setDrawerOpen(true) : undefined}
       />

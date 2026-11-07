@@ -1,13 +1,17 @@
 import { Link } from 'react-router-dom'
 import Icon from '../components/Icon'
 import { useAuth } from '../context/AuthContext'
+import { landingFor } from '../lib/access'
 import { homeFor } from '../lib/roles'
 import AppFooter from '../shell/AppFooter'
 import { useHomeData } from '../shell/HomeData'
 import AppsPanel from './home/AppsPanel'
 import KpiStrip from './home/KpiStrip'
+import RegionSummary from './home/RegionSummary'
 import WorkCard from './home/WorkCard'
 import { englishDate, greeting } from './home/homeLogic'
+import { useRpData } from './reports/rolesPerformance/hooks'
+import { formatNumber } from '../lib/numbers'
 import '../styles/home.css'
 
 /**
@@ -16,6 +20,15 @@ import '../styles/home.css'
  * without page scrolling. The greeting spans the page; under it the Apps
  * panel shares the KPI strip's top edge and the work cards' bottom edge
  * (UEP-12). See docs/design/uep-home.md.
+ *
+ * Two role variants, chosen by the central permission map's `landings`
+ * (lib/access.js), built from the same parts:
+ *
+ * - **region** (Regional manager): no KPI strip and no work cards -- they own
+ *   no tasks -- but their region today, from Roles performance › My area, and
+ *   an Apps panel of exactly Roles performance, Lifecycle gaps and Explorer.
+ * - **work** (the five problem-category owners): the standard Home, counting
+ *   only their own items; with nothing waiting, one quiet line.
  */
 
 function Retry({ what, onRetry }) {
@@ -65,7 +78,7 @@ function CardsSkeleton() {
   )
 }
 
-function YourWork({ data }) {
+function YourWork({ data, quiet }) {
   // A card shows only when its role has at least one live queue in it.
   const cards = data.groups.filter((g) => g.tickets.some((t) => t.count > 0))
   return (
@@ -74,7 +87,9 @@ function YourWork({ data }) {
         <h2 id="home-work">Your work</h2>
         {data.sla_uniform_days && <span>SLA {data.sla_uniform_days} days</span>}
       </div>
-      {cards.length === 0 ? (
+      {cards.length === 0 && quiet ? (
+        <p className="h-note" data-testid="work-empty">Nothing is waiting on you.</p>
+      ) : cards.length === 0 ? (
         <div className="hw-empty">
           <Icon name="task" size={20} />
           <b>You're all caught up</b>
@@ -95,12 +110,61 @@ function YourWork({ data }) {
   )
 }
 
+/** The region landing's left side: loading, error, or the summary. */
+function Region({ region }) {
+  if (region.data) return <RegionSummary data={region.data} />
+  if (region.error) {
+    return (
+      <div className="h-error" role="alert">
+        <Icon name="warning--alt" size={16} />
+        <span>{region.error}</span>
+        <button type="button" onClick={region.retry}>Retry</button>
+      </div>
+    )
+  }
+  return <CardsSkeleton />
+}
+
+/** Home for a Regional manager (landing 'region'). */
+function RegionHome({ user, counts, data, error }) {
+  const region = useRpData('/kpi/area', {})
+  const provinces = region.data?.scope?.provinces
+  return (
+    <HomeFrame user={user} scope={provinces == null ? null : `Your provinces: ${formatNumber(provinces)}`}
+      footer={<AppFooter data={data} failed={Boolean(error) && !data} />}>
+      <div className="h-main" aria-busy={!region.data && !region.error}>
+        <div className="h-work h-work-region"><Region region={region} /></div>
+      </div>
+      <AppsPanel roleName={user?.role?.name} counts={counts} expand={['insights']} />
+    </HomeFrame>
+  )
+}
+
+/** The page around either variant: greeting, date, the grid and the footer. */
+function HomeFrame({ user, scope, footer, children }) {
+  const now = new Date()
+  const firstName = user?.first_name || (user?.full_name || '').split(' ')[0]
+  return (
+    <div className="uep-home uep-home-page">
+      <div className="h-layout">
+        <section className="h-greet">
+          <p className="h-date">{englishDate(now)}</p>
+          <h1>{greeting(now)}{firstName ? `, ${firstName}` : ''}</h1>
+          {scope && <p className="h-date h-scope" data-testid="home-scope">{scope}</p>}
+        </section>
+        {children}
+      </div>
+      {footer}
+    </div>
+  )
+}
+
 export default function Home() {
   const { user } = useAuth()
   const { data, error, counts, reload } = useHomeData()
   const roleName = user?.role?.name
-  const now = new Date()
-  const firstName = user?.first_name || (user?.full_name || '').split(' ')[0]
+  const landing = landingFor(roleName)
+  if (landing === 'region') return <RegionHome user={user} counts={counts} data={data} error={error} />
 
   let kpis
   let work
@@ -119,23 +183,16 @@ export default function Home() {
     work = <CardsSkeleton />
   } else {
     kpis = <KpiStrip totals={data.totals} trends={data.trends} />
-    work = <YourWork data={data} />
+    work = <YourWork data={data} quiet={landing === 'work'} />
   }
 
   return (
-    <div className="uep-home uep-home-page">
-      <div className="h-layout">
-        <section className="h-greet">
-          <p className="h-date">{englishDate(now)}</p>
-          <h1>{greeting(now)}{firstName ? `, ${firstName}` : ''}</h1>
-        </section>
-        <div className="h-main" aria-busy={!data && !error}>
-          {kpis && <div className="h-kpis">{kpis}</div>}
-          <div className="h-work">{work}</div>
-        </div>
-        <AppsPanel roleName={roleName} counts={counts} />
+    <HomeFrame user={user} footer={<AppFooter data={data} failed={Boolean(error) && !data} />}>
+      <div className="h-main" aria-busy={!data && !error}>
+        {kpis && <div className="h-kpis">{kpis}</div>}
+        <div className="h-work">{work}</div>
       </div>
-      <AppFooter data={data} failed={Boolean(error) && !data} />
-    </div>
+      <AppsPanel roleName={roleName} counts={counts} />
+    </HomeFrame>
   )
 }
