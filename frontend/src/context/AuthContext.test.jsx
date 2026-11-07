@@ -17,6 +17,7 @@ const get = vi.hoisted(() => vi.fn())
 vi.mock('../api/client', () => ({ default: { post, get } }))
 
 const { AuthProvider, useAuth } = await import('./AuthContext')
+const { logAction, useActionLog } = await import('../lib/actionLog')
 
 function Probe() {
   const { user, loading } = useAuth()
@@ -34,6 +35,7 @@ function renderApp() {
 
 beforeEach(() => {
   localStorage.clear()
+  sessionStorage.clear()
   vi.restoreAllMocks()
   post.mockReset().mockResolvedValue({ data: { status: 'ok' } })
   get.mockReset().mockResolvedValue({ data: { username: 'maryam' } })
@@ -101,12 +103,15 @@ describe('useAuth outside a provider', () => {
 // Signing out
 // ---------------------------------------------------------------------------
 function Controls() {
-  const { user, logout, refreshUser, mustChangePassword } = useAuth()
+  const { user, login, logout, refreshUser, mustChangePassword } = useAuth()
+  const actions = useActionLog()
   return (
     <div>
       <p data-testid="who">{user ? user.username : 'signed out'}</p>
       <p data-testid="forced">{String(mustChangePassword)}</p>
+      <p data-testid="actions">{actions.length}</p>
       <button onClick={logout}>sign out</button>
+      <button onClick={() => login('reza', 'pw')}>sign in as reza</button>
       <button onClick={refreshUser}>refresh</button>
     </div>
   )
@@ -148,6 +153,44 @@ describe('signing out', () => {
     await waitFor(() =>
       expect(screen.getByTestId('who')).toHaveTextContent('signed out'))
     expect(localStorage.getItem('uep_user')).toBeNull()
+  })
+})
+
+// UEP-19: the next sign-in, by anyone, starts clean on the landing page.
+describe('what one session leaves for the next', () => {
+  function leaveTraces() {
+    sessionStorage.setItem('uep.lastApp', 'explorer')
+    act(() => {
+      logAction({ label: 'Assigned', undoUrl: '/undo/1' })
+    })
+  }
+
+  it('is cleared on sign-out', async () => {
+    localStorage.setItem('uep_user', JSON.stringify({ username: 'maryam' }))
+    renderControls()
+    await waitFor(() => expect(screen.getByTestId('who')).toHaveTextContent('maryam'))
+    leaveTraces()
+    expect(screen.getByTestId('actions')).toHaveTextContent('1')
+
+    await act(async () => screen.getByText('sign out').click())
+
+    expect(sessionStorage.getItem('uep.lastApp')).toBeNull()
+    expect(sessionStorage.getItem('uep.work.actions')).toBeNull()
+    expect(screen.getByTestId('actions')).toHaveTextContent('0')
+  })
+
+  it('is cleared when another user signs in', async () => {
+    localStorage.setItem('uep_remembered_username', 'reza')
+    renderControls()
+    leaveTraces()
+    post.mockResolvedValue({ data: { user: { username: 'reza' } } })
+
+    await act(async () => screen.getByText('sign in as reza').click())
+
+    await waitFor(() => expect(screen.getByTestId('who')).toHaveTextContent('reza'))
+    expect(sessionStorage.getItem('uep.lastApp')).toBeNull()
+    expect(screen.getByTestId('actions')).toHaveTextContent('0')
+    expect(localStorage.getItem('uep_remembered_username')).toBe('reza')
   })
 })
 
