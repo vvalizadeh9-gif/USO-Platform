@@ -1,0 +1,52 @@
+{
+  "_comment": "UEP role access matrix: the single source of truth for who may open what. This file is duplicated byte-for-byte at frontend/src/lib/accessMatrix.json (the two apps build from separate Docker contexts); backend/tests/test_role_access.py fails when they differ. 'offered' roles see the area in menus, the launcher, the Apps panel and rails, and may use it. 'direct' roles may also use it by URL and API but are not offered it (Admin keeps the API access it had). See README, Roles and permissions.",
+  "areas": {
+    "roles_performance": {
+      "offered": ["PM", "Coordinator", "Viewer", "Contractor", "RegionalManager"],
+      "direct": []
+    },
+    "lifecycle_gaps": {
+      "offered": ["PM", "Coordinator", "Viewer", "Contractor", "RegionalManager"],
+      "direct": []
+    },
+    "mojri_section": {
+      "offered": ["PM", "Coordinator", "Viewer"],
+      "direct": []
+    },
+    "insights_dashboards": {
+      "offered": ["PM", "Coordinator", "Viewer", "Contractor"],
+      "direct": ["Admin"]
+    },
+    "explorer": {
+      "offered": [
+        "PM", "Coordinator", "Viewer", "Contractor", "RegionalManager",
+        "NwgPlanning", "ManagedService", "HuaweiCleanup", "CpgPower", "CpgRolloutPM"
+      ],
+      "direct": ["Admin"]
+    },
+    "explorer_all_sites": {
+      "offered": ["NwgPlanning", "ManagedService", "HuaweiCleanup", "CpgPower", "CpgRolloutPM"],
+      "direct": []
+    },
+    "acceptance_workspace": {
+      "offered": ["PM", "Coordinator", "Viewer", "Contractor"],
+      "direct": []
+    },
+    "monthly_plan_queue": {
+      "offered": ["PM", "Coordinator", "Viewer"],
+      "direct": ["Admin"]
+    },
+    "internal_pip": {
+      "offered": ["PM", "Coordinator", "Viewer"],
+      "direct": []
+    }
+  },
+  "landings": {
+    "RegionalManager": "region",
+    "NwgPlanning": "work",
+    "ManagedService": "work",
+    "HuaweiCleanup": "work",
+    "CpgPower": "work",
+    "CpgRolloutPM": "work"
+  }
+}

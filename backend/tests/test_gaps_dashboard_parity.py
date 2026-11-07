@@ -264,7 +264,9 @@ def _both(client, headers) -> tuple[dict, dict]:
 # ----- The two screens agree ----------------------------------------------
 
 
-@pytest.mark.parametrize("actor", ["pm", "rm", "coordinator"])
+# A Regional manager no longer opens the Acceptance dashboard (UEP role
+# access), so the two screens are compared for the accounts that see both.
+@pytest.mark.parametrize("actor", ["pm", "coordinator"])
 def test_gaps_and_the_dashboard_count_the_same(client, actors, actor):
     overview, kpis = _both(client, actors[actor])
     assert kpis["total_dt_done_villages"] > 0, "the scope should hold villages"
@@ -292,7 +294,8 @@ def test_the_figures_are_the_hand_worked_ones(client, actors):
 
 def test_scoped_accounts_see_only_their_provinces(client, actors):
     # Allahyar: S-TEH's 6. Amir: S-TEH's 6 + S-MAZ's 2.
-    assert _both(client, actors["rm"])[1]["total_dt_done_villages"] == 6
+    rm_gaps = _get(client, actors["rm"], "/api/v1/gaps/overview")
+    assert rm_gaps["totals"]["eligible"] == 6
     assert _both(client, actors["coordinator"])[1]["total_dt_done_villages"] == 8
 
 
@@ -371,3 +374,9 @@ def test_the_sql_universe_selects_what_the_python_rule_selects(client, actors):
         db.close()
     assert in_python == in_sql
     assert len(in_sql) == PM_EXPECTED["total_dt_done_villages"]
+
+
+def test_a_regional_manager_reads_gaps_but_not_the_dashboard(client, actors):
+    """UEP role access: Lifecycle gaps yes, Insights dashboards no."""
+    assert client.get("/api/v1/gaps/overview", headers=actors["rm"]).status_code == 200
+    assert client.get("/api/v1/acceptance/overview", headers=actors["rm"]).status_code == 403

@@ -106,8 +106,14 @@ describe('canReview', () => {
 describe('who the monthly plan is offered to', () => {
   it('is every role the server lets near it', () => {
     expect(MONTHLY_PLAN_ROLES).toEqual(
-      expect.arrayContaining(['Contractor', 'PM', 'Coordinator', 'RegionalManager', 'Viewer']),
+      expect.arrayContaining(['Contractor', 'PM', 'Coordinator', 'Viewer']),
     )
+  })
+
+  // UEP role access: a Regional Manager has Roles performance, Lifecycle gaps
+  // and Explorer only.
+  it('is not offered to a Regional Manager', () => {
+    expect(MONTHLY_PLAN_ROLES).not.toContain('RegionalManager')
   })
 
   // Deciding a contractor's monthly target is an operational act and Admin is

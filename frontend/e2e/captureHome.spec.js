@@ -17,7 +17,9 @@ test.describe('Home screenshots', () => {
       await signIn(page, who)
       await serveHome(page, summary)
       await page.goto('/home')
-      await expect(page.getByRole('heading', { name: 'Your work' })).toBeVisible()
+      // A Regional manager's Home is the region landing (no work cards); its
+      // own screenshot, with the region served, is in roleAccess.spec.js.
+      await expect(page.getByRole('heading', { name: name === 'regional-manager' ? 'Your region' : 'Your work' })).toBeVisible()
       await page.waitForTimeout(1500)
       const scrolls = await page.evaluate(() => document.scrollingElement.scrollHeight > window.innerHeight)
       expect(scrolls).toBe(false)

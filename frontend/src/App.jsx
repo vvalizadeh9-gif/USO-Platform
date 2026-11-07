@@ -5,7 +5,9 @@ import { HomeDataProvider } from './shell/HomeData'
 import { useAuth } from './context/AuthContext'
 import { Loading } from './components/ui'
 import { loginPathFor } from './lib/returnTo'
-import { CATEGORY_OWNER_ROLES, HOME_ROLES, KPI_ROLES, MONTHLY_PLAN_ROLES, homeFor } from './lib/roles'
+import { AREA, canAccess } from './lib/access'
+import { CATEGORY_OWNER_ROLES, HOME_ROLES, MONTHLY_PLAN_ROLES, REVIEW_AUTHORITY_ROLES, homeFor } from './lib/roles'
+import NoAccess from './components/NoAccess'
 import Login from './pages/Login'
 import AuthPlaceholder from './pages/auth/AuthPlaceholder'
 
@@ -66,7 +68,13 @@ function ValidationRoute() {
 // interface agreeing with the server rather than deciding anything itself.
 const CHANGE_PASSWORD_PATH = '/change-password'
 
-function Protected({ children, adminOnly, allowedRoles }) {
+const CONTRACTOR_ONLY = ['Contractor']
+
+// A role outside a route's guard sees the standard no-access screen rather
+// than being bounced to "/": a silent redirect reads as a broken link. `area`
+// names an area of the central permission map (lib/access.js); `allowedRoles`
+// remains for the routes the map does not cover.
+function Protected({ children, adminOnly, allowedRoles, area }) {
   const { user, loading, isAdmin, mustChangePassword } = useAuth()
   const location = useLocation()
 
@@ -86,8 +94,10 @@ function Protected({ children, adminOnly, allowedRoles }) {
     return <Navigate to={CHANGE_PASSWORD_PATH} replace />
   }
 
-  if (adminOnly && !isAdmin) return <Navigate to="/" replace />
-  if (allowedRoles && !allowedRoles.includes(user?.role?.name)) return <Navigate to="/" replace />
+  const roleName = user?.role?.name
+  if (adminOnly && !isAdmin) return <NoAccess />
+  if (allowedRoles && !allowedRoles.includes(roleName)) return <NoAccess />
+  if (area && !canAccess(roleName, area)) return <NoAccess />
   return children
 }
 
@@ -104,6 +114,16 @@ function WorkItemsRedirect() {
 function WorkItemRedirect() {
   const { id } = useParams()
   return <Navigate to={`/explorer/sites/${encodeURIComponent(id)}`} replace />
+}
+
+// Home is each role's own start page, not an area to refuse: the launcher
+// offers it to everyone, and a role without UEP Home (Viewer, Admin) is taken
+// to its own start page instead.
+function HomeRoute() {
+  const { user } = useAuth()
+  const roleName = user?.role?.name
+  if (!HOME_ROLES.includes(roleName)) return <Navigate to={homeFor(roleName)} replace />
+  return <Home />
 }
 
 function LoginRoute() {
@@ -133,19 +153,13 @@ export default function App() {
           }
         >
           {/* UEP Home: the landing page, inside the shell with no rail. The
-              board's roles and Regional Managers; the rest land elsewhere. */}
-          <Route
-            path="/home"
-            element={
-              <Protected allowedRoles={HOME_ROLES}>
-                <Home />
-              </Protected>
-            }
-          />
+              board's roles and Regional Managers (each on their own variant,
+              see pages/Home.jsx); the rest land elsewhere. */}
+          <Route path="/home" element={<HomeRoute />} />
           {/* Where each role lands: see homeFor in lib/roles.js. */}
           <Route path="/" element={<Navigate to={homeFor(user?.role?.name)} replace />} />
-          <Route path="/reports/drive-test" element={<DriveTestProject />} />
-          <Route path="/reports/acceptance" element={<AcceptanceDashboard />} />
+          <Route path="/reports/drive-test" element={<Protected area={AREA.INSIGHTS_DASHBOARDS}><DriveTestProject /></Protected>} />
+          <Route path="/reports/acceptance" element={<Protected area={AREA.INSIGHTS_DASHBOARDS}><AcceptanceDashboard /></Protected>} />
           {/* Roles Performance. Admin is refused every KPI endpoint, so the
               route is closed to it here as well -- otherwise the page loads
               and then fills with permission errors, which reads as a fault
@@ -155,7 +169,7 @@ export default function App() {
           <Route
             path="/reports/kpi"
             element={
-              <Protected allowedRoles={KPI_ROLES}>
+              <Protected area={AREA.ROLES_PERFORMANCE}>
                 <RolesPerformance />
               </Protected>
             }
@@ -163,7 +177,7 @@ export default function App() {
           <Route
             path="/reports/kpi/:tab"
             element={
-              <Protected allowedRoles={KPI_ROLES}>
+              <Protected area={AREA.ROLES_PERFORMANCE}>
                 <RolesPerformance />
               </Protected>
             }
@@ -175,7 +189,7 @@ export default function App() {
           <Route
             path="/reports/gaps"
             element={
-              <Protected allowedRoles={KPI_ROLES}>
+              <Protected area={AREA.LIFECYCLE_GAPS}>
                 <LifecycleGaps />
               </Protected>
             }
@@ -198,14 +212,14 @@ export default function App() {
               to the dashboard; it is now the drive test work screen, which is
               what a person typing it is looking for. The dashboard keeps its
               own path under Reports and its sidebar item. */}
-          <Route path="/drive-test" element={<DriveTest />} />
+          <Route path="/drive-test" element={<Protected allowedRoles={REVIEW_AUTHORITY_ROLES}><DriveTest /></Protected>} />
           {/* The dashboard's drill-through: the sites behind any figure on it.
               A deeper path than /drive-test, which is exact and does not
               swallow it. */}
-          <Route path="/drive-test/sites" element={<DriveTestSiteList />} />
-          <Route path="/health-check" element={<HealthCheck />} />
-          <Route path="/my-health-check" element={<MyHealthCheck />} />
-          <Route path="/my-drive-tests" element={<MyDriveTests />} />
+          <Route path="/drive-test/sites" element={<Protected area={AREA.INSIGHTS_DASHBOARDS}><DriveTestSiteList /></Protected>} />
+          <Route path="/health-check" element={<Protected allowedRoles={REVIEW_AUTHORITY_ROLES}><HealthCheck /></Protected>} />
+          <Route path="/my-health-check" element={<Protected allowedRoles={CONTRACTOR_ONLY}><MyHealthCheck /></Protected>} />
+          <Route path="/my-drive-tests" element={<Protected allowedRoles={CONTRACTOR_ONLY}><MyDriveTests /></Protected>} />
           <Route
             path="/my-fix-queue"
             element={
@@ -214,8 +228,8 @@ export default function App() {
               </Protected>
             }
           />
-          <Route path="/explorer" element={<ExplorerList />} />
-          <Route path="/explorer/sites/:workItemId" element={<SiteRecord />} />
+          <Route path="/explorer" element={<Protected area={AREA.EXPLORER}><ExplorerList /></Protected>} />
+          <Route path="/explorer/sites/:workItemId" element={<Protected area={AREA.EXPLORER}><SiteRecord /></Protected>} />
           <Route path="/work-items" element={<WorkItemsRedirect />} />
           <Route path="/work-items/:id" element={<WorkItemRedirect />} />
           {/* The Action Center was removed (UEP-05): Home shows each user's
@@ -231,7 +245,7 @@ export default function App() {
               React Router, so selecting a village unmounted the workspace and
               remounted it — silently resetting the chosen bucket and the
               search box on every click. */}
-          <Route path="/my-work/*" element={<MyWorkRoute />} />
+          <Route path="/my-work/*" element={<Protected area={AREA.ACCEPTANCE_WORKSPACE}><MyWorkRoute /></Protected>} />
           {/* ICT and CRA validation (UEP-16): the PM's and coordinators'. */}
           <Route
             path="/validation/:authority"
@@ -242,7 +256,7 @@ export default function App() {
             }
           />
           <Route path="/validation" element={<Navigate to="/validation/ict" replace />} />
-          {/* Admin is not in MONTHLY_PLAN_ROLES, so this bounces them home:
+          {/* Admin is not in MONTHLY_PLAN_ROLES, so this shows them no access:
               setting a contractor's monthly target is an operational act and
               Admin is a systems role. See lib/roles and ARCHITECTURE.md. */}
           <Route

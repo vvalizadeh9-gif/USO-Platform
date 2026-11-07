@@ -426,18 +426,10 @@ def test_a_contractors_ledger_holds_only_their_own_row(client, world):
     assert "Alfa Drive Tests" not in names
 
 
-def test_a_category_owner_gets_no_ledger_and_only_their_own_fixes(client, world):
-    wb = _workbook(client, world["owner"])
-
-    assert "Contractor ledger" not in wb.sheetnames
-    assert wb.sheetnames == ["Summary", "Sites", "Open fixes", "Provinces"]
-
-    # One of the two open fixes is routed to this role; the other is not
-    # theirs to see, and the scope is what keeps it out.
-    fixes = _rows(wb["Open fixes"])
-    assert len(fixes) == 1
-    owner_col = [c.value for c in wb["Open fixes"][1]].index("Owner role")
-    assert {r[owner_col] for r in fixes} == {world["ids"]["owner_role"]}
+def test_a_category_owner_is_refused_the_dashboard_workbook(client, world):
+    """UEP role access: the Drive test dashboard's export is not a
+    problem-category owner's -- they have no Insights at all."""
+    assert client.get(EXPORT, headers=world["owner"]).status_code == 403
 
 
 # ------------------------------------------------------- 3. scope and shape

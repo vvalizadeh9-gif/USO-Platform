@@ -598,12 +598,11 @@ def test_a_contractor_asking_for_another_company_gets_their_own_rows(client, wor
     assert {r["contractor"] for r in asked["rows"]} == {"Alfa Drive Tests"}
 
 
-def test_a_category_owner_sees_only_the_sites_routed_to_them(client, world):
-    """No new rule: ``apply_work_item_scope`` already routes by open fix."""
-    body = _sites(client, world["power_owner"], bucket="onair")
-
-    assert body["total"] == 1
-    assert body["rows"][0]["work_item_id"] == world["ids"]["in_app"]
+def test_a_category_owner_is_refused_the_dashboard_site_list(client, world):
+    """UEP role access: the Drive test dashboard (and its drill-through) is
+    not a problem-category owner's -- they have no Insights at all."""
+    r = client.get(SITES, headers=world["power_owner"], params={"bucket": "onair"})
+    assert r.status_code == 403
 
 
 def test_a_province_outside_the_callers_scope_returns_nothing(client, world):

@@ -23,7 +23,10 @@ import {
   Users,
   Wrench,
 } from '../components/carbon'
-import { CATEGORY_OWNER_ROLES, HOME_ROLES, KPI_ROLES, MONTHLY_PLAN_ROLES } from './roles'
+import { AREA, offeredRoles } from './access'
+import { CATEGORY_OWNER_ROLES, GAPS_ROLES, HOME_ROLES, KPI_ROLES, MONTHLY_PLAN_ROLES } from './roles'
+
+const DASHBOARD_ROLES = offeredRoles(AREA.INSIGHTS_DASHBOARDS)
 
 // The sidebar, grouped by project: each project's dashboard sits beside the
 // screens where that project's work is done, so a person finds the numbers
@@ -63,7 +66,7 @@ export const NAV_SECTIONS = [
     // screens that happen to be next to each other.
     label: 'Drive test',
     items: [
-      { to: '/reports/drive-test', label: 'Dashboard', icon: LayoutDashboard },
+      { to: '/reports/drive-test', label: 'Dashboard', icon: LayoutDashboard, roles: DASHBOARD_ROLES },
       // Two shapes behind Monthly Plan: the contractor's own form, and the
       // month's queue for everyone with an oversight interest in it. Admin is
       // absent from MONTHLY_PLAN_ROLES, which is what keeps it out of their
@@ -77,7 +80,7 @@ export const NAV_SECTIONS = [
       // One place for a contractor to work instead of knowing which sites to
       // open on Work Items -- the same reason My Health Check exists.
       { to: '/my-drive-tests', label: 'My Drive Tests', step: true, roles: ['Contractor'], key: 'mydt' },
-      { to: '/explorer', label: 'Explorer', icon: ListChecks, end: true, hideRoles: ['Admin'] },
+      { to: '/explorer', label: 'Explorer', icon: ListChecks, end: true, roles: offeredRoles(AREA.EXPLORER) },
     ],
   },
   {
@@ -85,8 +88,8 @@ export const NAV_SECTIONS = [
     // village (pages/mywork/MyWork.jsx) -- so it sits with its dashboard.
     label: 'Acceptance',
     items: [
-      { to: '/reports/acceptance', label: 'Dashboard', icon: ClipboardCheck },
-      { to: '/my-work', label: 'My Work', icon: Briefcase, hideRoles: ['Admin'], key: 'mywork' },
+      { to: '/reports/acceptance', label: 'Dashboard', icon: ClipboardCheck, roles: DASHBOARD_ROLES },
+      { to: '/my-work', label: 'My Work', icon: Briefcase, roles: offeredRoles(AREA.ACCEPTANCE_WORKSPACE), key: 'mywork' },
     ],
   },
   {
@@ -98,7 +101,7 @@ export const NAV_SECTIONS = [
       // Same roles, and for the same reason: it reads the same villages under
       // the same scope rule, and the server refuses Admin every endpoint
       // behind it.
-      { to: '/reports/gaps', label: 'Lifecycle Gaps', icon: Link2Off, roles: KPI_ROLES },
+      { to: '/reports/gaps', label: 'Lifecycle Gaps', icon: Link2Off, roles: GAPS_ROLES },
     ],
   },
   {

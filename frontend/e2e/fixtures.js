@@ -514,7 +514,7 @@ export const accProgress = {
 
 // UEP Home for the PM: a full Drive test card (with a queue past the
 // 30-item dot limit), acceptance all on time, and the month's plan.
-const homeTicket = (queue_key, short_label, label, url, { on_time = 0, due_soon = 0, late = 0, age = 5, owners = [], more = 0, unit = 'sites' } = {}) => ({
+export const homeTicket = (queue_key, short_label, label, url, { on_time = 0, due_soon = 0, late = 0, age = 5, owners = [], more = 0, unit = 'sites' } = {}) => ({
   queue_key, short_label, label, url, unit,
   count: on_time + due_soon + late, on_time, due_soon, late,
   oldest_started_at: new Date(Date.now() - age * 86400000).toISOString(),

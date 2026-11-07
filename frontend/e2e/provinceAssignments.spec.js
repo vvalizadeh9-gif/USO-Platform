@@ -191,6 +191,7 @@ test('the Viewer reads only', async ({ page }) => {
 test('a coordinator is turned away and has no rail item', async ({ page }) => {
   await signIn(page, COORDINATOR)
   await page.goto('/admin/provinces')
-  await expect(page).not.toHaveURL(/\/admin\/provinces/)
+  // The standard no-access screen (UEP role access), not a silent redirect.
+  await expect(page.getByText("You don't have access to this page")).toBeVisible()
   await expect(page.getByRole('link', { name: 'Province assignments' })).toHaveCount(0)
 })

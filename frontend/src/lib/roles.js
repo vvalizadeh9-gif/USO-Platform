@@ -1,3 +1,5 @@
+import { AREA, canAccess, offeredRoles } from './access'
+
 // Maps internal role names (as stored in the DB and used for authorization)
 // to human-friendly display labels. Keeping this in one place means the UI
 // can be relabelled without touching any permission logic.
@@ -63,32 +65,19 @@ export function canFileAcceptance(roleName) {
 }
 
 // The monthly plan (PIP) screen. Contractors fill one in; PM decides them;
-// Coordinator, Regional Manager and Viewer read the queue. Admin is absent on
-// purpose -- setting a contractor's monthly target is an operational act, and
-// Admin is a systems role (ARCHITECTURE.md, and api/monthly_plan.py, which
-// gives the decision to PM alone).
-//
-// Must agree with app/api/monthly_plan.py: the queue's readers plus the
-// contractor side. Backend-side Admin may read the queue; the interface does
-// not offer it, because there is nothing on that screen Admin acts on.
-export const MONTHLY_PLAN_ROLES = [
-  'Contractor',
-  'PM',
-  'Coordinator',
-  'RegionalManager',
-  'Viewer',
-]
+// the queue's readers (the central permission map's monthly_plan_queue, less
+// its URL-only Admin) read it. Must agree with app/api/monthly_plan.py, which
+// reads the same map.
+export const MONTHLY_PLAN_ROLES = ['Contractor', ...offeredRoles(AREA.MONTHLY_PLAN_QUEUE)]
 
 // Who decides a plan. PM alone, as on the server.
 export function canDecidePlans(user) {
   return user?.role?.name === 'PM'
 }
 
-// MTN's internal PIP. Every staff role the Monthly Plan page serves reads it
-// today -- GET /pip/overview carries it to PM, Coordinator, RegionalManager
-// and Viewer -- and no contractor does. Must agree with OVERVIEW_READERS in
-// app/api/monthly_plan.py.
-export const INTERNAL_PIP_ROLES = ['PM', 'Coordinator', 'RegionalManager', 'Viewer']
+// MTN's internal PIP: the central permission map's internal_pip, which
+// GET /pip/overview enforces from the same map. No contractor reads it.
+export const INTERNAL_PIP_ROLES = offeredRoles(AREA.INTERNAL_PIP)
 
 export function canSeeInternalPip(user) {
   return INTERNAL_PIP_ROLES.includes(user?.role?.name)
@@ -101,14 +90,21 @@ export function canSetAcceptancePlan(user) {
   return user?.role?.name === 'PM'
 }
 
-// Roles Performance (and Lifecycle Gaps). Five roles see it and Admin sees
-// none of it -- the product owner's rule, and the same list
-// app/services/kpi.py enforces. This only shapes what the interface offers;
-// every KPI endpoint re-checks the role and re-derives the scope itself.
-export const KPI_ROLES = ['PM', 'Viewer', 'RegionalManager', 'Coordinator', 'Contractor']
+// Roles Performance (and Lifecycle Gaps, which the map gives the same roles).
+// From the central permission map; every KPI endpoint re-checks the role
+// against the same map and re-derives the scope itself.
+export const KPI_ROLES = offeredRoles(AREA.ROLES_PERFORMANCE)
+export const GAPS_ROLES = offeredRoles(AREA.LIFECYCLE_GAPS)
 
 export function canSeeKpi(user) {
   return KPI_ROLES.includes(user?.role?.name)
+}
+
+// The Mojri card on Lifecycle Gaps ("ICT vs CRA vs Mojri tracker"): PM,
+// Coordinator and Viewer, from the central permission map. For everyone else
+// the server sends no Mojri figures at all.
+export function canSeeMojri(user) {
+  return canAccess(user?.role?.name, AREA.MOJRI_SECTION)
 }
 
 // PM and Viewer may choose any scope and see owners ranked side by side.
@@ -133,27 +129,23 @@ export function hasWorkQueues(roleName) {
   return WORK_ROLES.includes(roleName)
 }
 
-// UEP Home: the work roles, and Regional Managers (Home's headline
-// acceptance queues, inside their provinces). A Regional Manager still lands
-// on Roles Performance and opens Home from the navigation. Must agree with
-// home_role() in app/services/action_queues/context.py.
+// UEP Home: the work roles, and Regional Managers, who land on its region
+// variant (pages/home/RegionHome.jsx). Which variant a role sees is the
+// central permission map's `landings`; see landingFor in lib/access.js.
 export const HOME_ROLES = [...WORK_ROLES, 'RegionalManager']
 
 export function hasHome(roleName) {
   return HOME_ROLES.includes(roleName)
 }
 
-// Where "/" lands for each role. Everyone who works a queue lands on UEP Home
-// (what is waiting, what is late, what to do next -- each user's one view of
-// their pending work); Regional Manager on Roles Performance (My area), Viewer on
-// the Drive Test dashboard, Admin on the Admin Console. Home is served to
-// HOME_ROLES -- GET /home/summary refuses the rest.
+// Where "/" lands for each role -- every sign-in arrives here. Everyone who
+// works a queue, and Regional Managers, land on UEP Home (each on their own
+// variant); Viewer on the Drive Test dashboard, Admin on the Admin Console.
 const HOME_BY_ROLE = {
   Admin: '/admin',
-  RegionalManager: '/reports/kpi',
   Viewer: '/reports/drive-test',
 }
 
 export function homeFor(roleName) {
-  return HOME_BY_ROLE[roleName] || (hasWorkQueues(roleName) ? '/home' : '/reports/drive-test')
+  return HOME_BY_ROLE[roleName] || (hasHome(roleName) ? '/home' : '/reports/drive-test')
 }

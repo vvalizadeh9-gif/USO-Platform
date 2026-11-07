@@ -89,6 +89,7 @@ from app.models.mojri import (
 )
 from app.models.reference import Contractor, Province
 from app.models.workitem import Site, Village, WorkItem
+from app.core.access import Area, allows, check
 from app.services import acceptance_universe, kpi, mojri_tracker
 
 # ----- Lenses -------------------------------------------------------------
@@ -601,8 +602,13 @@ def overview(db: Session, user, lens: str | None) -> dict:
 
     Reads only. PM sees the country under any lens (province by default);
     every other role sees only their own villages, under their own lens.
+
+    The Mojri card's figures (its two gaps, their approved-in-UEP bases and
+    the last import date) are sent only to roles in ``Area.MOJRI_SECTION``;
+    for everyone else they are absent, not zero.
     """
-    kpi.require_kpi_access(user)
+    check(user, Area.LIFECYCLE_GAPS)
+    gaps_shown = visible_gaps(user)
 
     if lens is not None and lens not in LENSES:
         raise HTTPException(422, f"lens must be one of {', '.join(LENSES)}")
@@ -641,24 +647,22 @@ def overview(db: Session, user, lens: str | None) -> dict:
     managers = (
         _managers_by_coordinator(mapping) if lens == kpi.LENS_COORDINATOR else None
     )
-    return {
+    totals = {
+        "eligible": total.eligible,
+        "ict_approved": total.ict_approved,
+        "cra_approved": total.cra_approved,
+    }
+    payload = {
         "last_cpm_import": kpi.last_cpm_import(db),
-        "last_mojri_import": last_mojri_import(db),
         "scoped": not is_pm,
         "lens": lens,
         "key": None if is_pm else scope.key,
         "lenses": [{"key": key, "label": LENS_LABELS[key]} for key in LENSES]
         if is_pm
         else [{"key": lens, "label": LENS_LABELS[lens]}],
-        "totals": {
-            "eligible": total.eligible,
-            "ict_approved": total.ict_approved,
-            "cra_approved": total.cra_approved,
-            "ict_approved_all": total.ict_approved_all,
-            "cra_approved_all": total.cra_approved_all,
-        },
-        "gaps": {gap.key: _gap_figure(total, gap) for gap in GAPS},
-        "rows": {gap.key: _gap_rows(owners, gap, managers) for gap in GAPS},
+        "totals": totals,
+        "gaps": {gap.key: _gap_figure(total, gap) for gap in gaps_shown},
+        "rows": {gap.key: _gap_rows(owners, gap, managers) for gap in gaps_shown},
         "data_quality": {
             "villages_without_province": total.no_province,
             "unmapped_provinces": sorted(
@@ -666,6 +670,19 @@ def overview(db: Session, user, lens: str | None) -> dict:
             ),
         },
     }
+    if allows(user.role.name, Area.MOJRI_SECTION):
+        payload["last_mojri_import"] = last_mojri_import(db)
+        totals["ict_approved_all"] = total.ict_approved_all
+        totals["cra_approved_all"] = total.cra_approved_all
+    return payload
+
+
+def visible_gaps(user) -> tuple[Gap, ...]:
+    """The gaps this user may see: all of them, less the Mojri card's two for
+    a role outside ``Area.MOJRI_SECTION``."""
+    if allows(user.role.name, Area.MOJRI_SECTION):
+        return GAPS
+    return tuple(gap for gap in GAPS if gap.authority is None)
 
 
 # ----- Export: the villages behind a figure ------------------------------
@@ -703,6 +720,12 @@ EXPORT_TITLES = {
     "cra_approved_all": "CRA approved in UEP (vs Mojri)",
 }
 
+#: The exports that belong to the Mojri card: its two gaps and their bases.
+#: Refused (403) to a role outside ``Area.MOJRI_SECTION``.
+MOJRI_EXPORTS = frozenset(
+    {"ict_missing_in_mojri", "cra_missing_in_mojri", "ict_approved_all", "cra_approved_all"}
+)
+
 SCOPE_PROVINCE = "province"
 SCOPE_REGION = "region"
 
@@ -722,6 +745,8 @@ class VillageExport:
     #: The part of the filename after the gap: an ASCII slug of the filter.
     file_key: str
     rows: object  # Iterator[dict]
+    #: Row keys the workbook leaves out (the Mojri column, without access).
+    omit: frozenset[str] = frozenset()
 
 
 def export_villages(
@@ -745,10 +770,13 @@ def export_villages(
     Everything is validated before the first row is read, so a refusal is a
     clean HTTP error rather than a broken download.
     """
-    kpi.require_kpi_access(user)
+    check(user, Area.LIFECYCLE_GAPS)
     counter = EXPORTS.get(gap)
     if counter is None:
         raise HTTPException(422, f"gap must be one of {', '.join(EXPORTS)}")
+    mojri = allows(user.role.name, Area.MOJRI_SECTION)
+    if gap in MOJRI_EXPORTS and not mojri:
+        check(user, Area.MOJRI_SECTION)
     if lens is not None and lens not in LENSES:
         raise HTTPException(422, f"lens must be one of {', '.join(LENSES)}")
     if (lens is None) != (key is None or not key.strip()):
@@ -786,6 +814,7 @@ def export_villages(
         filter_text=" · ".join(labels) or "All villages",
         file_key=_file_key(lens, key, scope),
         rows=_village_rows(db, counter, tests, mapping),
+        omit=frozenset() if mojri else frozenset({"mojri"}),
     )
 
 

@@ -9,8 +9,10 @@
  * Roles shape what the interface offers. They decide nothing: every endpoint
  * re-checks the role server-side.
  */
+import { AREA, offeredRoles } from '../lib/access'
 import {
   CATEGORY_OWNER_ROLES,
+  GAPS_ROLES,
   INTERNAL_PIP_ROLES,
   KPI_ROLES,
   MONTHLY_PLAN_ROLES,
@@ -29,6 +31,7 @@ import {
  * @property {string[]} [also]  Other routes that make this page the active one,
  *                               matched on their path and exact `tab` (the
  *                               pipeline's steps and loops; see UEP-06 §1).
+ * @property {string} [description] One line, where a page is listed as an app (the region landing's Apps panel).
  * @property {string} [section] Rail group caption (UEP-14: Health check, Drive test, …).
  * @property {IconName} [icon]   The rail item's white Carbon icon.
  * @property {string} [tile]     CSS custom property for the rail item's colour tile.
@@ -49,11 +52,14 @@ import {
  */
 
 const STAFF = REVIEW_AUTHORITY_ROLES // PM, Coordinator
-const NOT_ADMIN = ['PM', 'Coordinator', 'RegionalManager', 'Contractor', 'Viewer', ...CATEGORY_OWNER_ROLES]
-const ACCEPTANCE_ROLES = ['PM', 'Coordinator', 'RegionalManager', 'Contractor', 'Viewer']
+// Who sees which area comes from the central permission map (lib/access.js);
+// these names only keep the entries below readable.
+const ACCEPTANCE_ROLES = offeredRoles(AREA.ACCEPTANCE_WORKSPACE)
+const EXPLORER_ROLES = offeredRoles(AREA.EXPLORER)
+const DASHBOARD_ROLES = offeredRoles(AREA.INSIGHTS_DASHBOARDS)
 // Drive test's own users. Category owners open the app for the Fix queue
 // only, so every other Drive test page names these roles explicitly.
-const DT_ROLES = ['PM', 'Coordinator', 'Contractor', 'RegionalManager', 'Viewer']
+const DT_ROLES = ['PM', 'Coordinator', 'Contractor', 'Viewer']
 
 /** @type {{ id: AppGroup, label: string }[]} */
 export const APP_GROUPS = [
@@ -84,7 +90,7 @@ export const APPS = Object.freeze([
     icon: 'search--locate',
     color: '--uep-app-explorer',
     group: 'rollout',
-    roles: DT_ROLES,
+    roles: EXPLORER_ROLES,
     pages: [{ id: 'explorer', label: 'Explorer', route: '/explorer' }],
   },
   {
@@ -183,12 +189,19 @@ export const APPS = Object.freeze([
     icon: 'chart--column',
     color: '--uep-app-insights',
     group: 'insights',
-    roles: NOT_ADMIN,
+    // No app-level list: each page names its roles, so a role with none of
+    // them (Admin, the problem-category owners) has no Insights at all.
     pages: [
-      { id: 'dashboards', label: 'Drive test dashboard', route: '/reports/drive-test' },
-      { id: 'acceptance-dashboard', label: 'Acceptance dashboard', route: '/reports/acceptance' },
-      { id: 'roles', label: 'Roles performance', route: '/reports/kpi', roles: KPI_ROLES },
-      { id: 'gaps', label: 'Lifecycle gaps', route: '/reports/gaps', roles: KPI_ROLES },
+      { id: 'dashboards', label: 'Drive test dashboard', route: '/reports/drive-test', roles: DASHBOARD_ROLES },
+      { id: 'acceptance-dashboard', label: 'Acceptance dashboard', route: '/reports/acceptance', roles: DASHBOARD_ROLES },
+      {
+        id: 'roles', label: 'Roles performance', route: '/reports/kpi', roles: KPI_ROLES,
+        description: 'Delivery and acceptance against national',
+      },
+      {
+        id: 'gaps', label: 'Lifecycle gaps', route: '/reports/gaps', roles: GAPS_ROLES,
+        description: 'Where approvals are still waiting',
+      },
       { id: 'exports', label: 'Exports', route: '/reports/kpi/mapping', roles: ['PM'] },
     ],
   },

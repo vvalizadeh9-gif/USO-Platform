@@ -7,10 +7,11 @@ import { openVillages, siteBadge } from './explorerModel'
 /**
  * The header row (UEP-11 §B3; the breadcrumb is the shell's, UEP-13 §3.12): the site ID with its one
  * status badge, and nothing under it. Actions on the right: Take action (only
- * with an action to take), Open in My Work, and File letter for the roles that
- * file, while the site has open villages.
+ * with an action to take), Open in My Work (for the roles with an acceptance
+ * workspace -- never a dead link), and File letter for the roles that file,
+ * while the site has open villages.
  */
-export default function RecordHeader({ record, siteLabel, headingRef, canFile, isContractor, onTakeAction }) {
+export default function RecordHeader({ record, siteLabel, headingRef, canFile, canOpenMyWork = true, isContractor, onTakeAction }) {
   const badge = record ? siteBadge(record.status) : null
   const site = record?.site_code
   const openCount = record ? openVillages(record.villages).length : 0
@@ -32,7 +33,7 @@ export default function RecordHeader({ record, siteLabel, headingRef, canFile, i
             <Icon name="tools" size={16} /> Take action
           </button>
         )}
-        {site && (
+        {site && canOpenMyWork && (
           <Link className="uw-btn" to={myWorkPath({ q: site })}>
             <Icon name="arrow--right" size={16} /> Open in My Work
           </Link>

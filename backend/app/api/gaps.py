@@ -86,6 +86,7 @@ def gap_villages_export(
             filter_text=export.filter_text,
             exported_by=f"{user.full_name} ({user.username})",
             exported_at=datetime.now(timezone.utc),
+            omit=export.omit,
         ),
     )
     headers = {

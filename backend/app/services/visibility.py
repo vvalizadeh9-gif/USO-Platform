@@ -7,6 +7,7 @@ its own filtering (DRY). Every list/dashboard/report query passes through
 from sqlalchemy import Select, or_, select
 from sqlalchemy.orm import Session
 
+from app.core.access import Area, allows
 from app.core.deps import CONTRACTOR
 from app.models.health_check import HcRemediation
 from app.models.reference import ProblemCategory, User
@@ -86,3 +87,16 @@ def visible_work_item_ids(user: User, db: Session) -> Select:
     """
     stmt = select(WorkItem.id).where(WorkItem.deleted_at.is_(None))
     return apply_work_item_scope(stmt, user, db)
+
+
+def explorer_work_item_ids(user: User, db: Session) -> Select:
+    """The work items Explorer and header search show this user.
+
+    The caller's usual row scope (:func:`visible_work_item_ids`), except for
+    the roles in ``Area.EXPLORER_ALL_SITES`` of the central permission map:
+    they read every live site. Reading is all it grants -- every write route
+    keeps its own role check, and none admits those roles.
+    """
+    if allows(user.role.name, Area.EXPLORER_ALL_SITES):
+        return select(WorkItem.id).where(WorkItem.deleted_at.is_(None))
+    return visible_work_item_ids(user, db)

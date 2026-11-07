@@ -4,8 +4,8 @@ import api from '../../api/client'
 /**
  * GET /explorer/sites/{id}: one request for the whole record page.
  *
- * `status` is 'loading' | 'ready' | 'error' | 'missing' (a 404: no such site,
- * or not one this person may see). `reload` refetches without dropping what
+ * `status` is 'loading' | 'ready' | 'error' | 'missing' (a 404: no such site)
+ * | 'forbidden' (a 403: a site outside this person's scope). `reload` refetches without dropping what
  * is on screen, after a Take action form has changed the site.
  */
 export default function useSiteRecord(workItemId) {
@@ -20,7 +20,9 @@ export default function useSiteRecord(workItemId) {
       .then((r) => live && setState({ status: 'ready', data: r.data }))
       .catch((err) => {
         if (!live) return
-        setState({ status: err.response?.status === 404 ? 'missing' : 'error', data: null })
+        const code = err.response?.status
+        const status = { 404: 'missing', 403: 'forbidden' }[code] || 'error'
+        setState({ status, data: null })
       })
     return () => {
       live = false

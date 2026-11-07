@@ -242,16 +242,18 @@ def test_response_shape(world):
     assert body["general"]["dt_date"] == "2026-09-30"
 
 
-def test_a_site_outside_the_province_grant_is_404(world):
+def test_a_site_outside_the_province_grant_is_403(world):
+    # UEP role access: a live site outside the caller's scope is refused (the
+    # no-access screen), not reported missing. An unknown id is still a 404.
     response = world["client"].get(URL.format(world["hidden"]), headers=world["coord"])
-    assert response.status_code == 404
+    assert response.status_code == 403
 
 
 def test_a_contractor_sees_only_its_own_sites(world):
     client = world["client"]
     assert client.get(URL.format(world["main"]), headers=world["sc"]).status_code == 200
-    assert client.get(URL.format(world["hidden"]), headers=world["sc"]).status_code == 404
-    assert client.get(URL.format(world["done"]), headers=world["sc"]).status_code == 404
+    assert client.get(URL.format(world["hidden"]), headers=world["sc"]).status_code == 403
+    assert client.get(URL.format(world["done"]), headers=world["sc"]).status_code == 403
 
 
 def test_unknown_site_is_404(world):
@@ -688,7 +690,7 @@ def test_site_villages(world):
     url = LIST + "/{}/villages"
     body = client.get(url.format(world["main"]), headers=world["coord"]).json()
     assert [v["code"] for v in body] == ["V10001", "V10002", "V10003"]
-    assert client.get(url.format(world["hidden"]), headers=world["coord"]).status_code == 404
+    assert client.get(url.format(world["hidden"]), headers=world["coord"]).status_code == 403
     assert client.get(url.format(999999), headers=world["coord"]).status_code == 404
 
 
