@@ -14,8 +14,9 @@ from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
+from app.core.access import Area, require_access
 from app.core.database import get_db
-from app.core.deps import ADMIN, get_current_user, require_roles
+from app.core.deps import require_roles
 from app.core.jalali import format_shamsi
 from app.models.reference import User
 from app.models.workitem import Site, Village, WorkItem
@@ -65,11 +66,10 @@ require_filer = require_roles(*S.FILING_ROLES)
 require_decider = require_roles(*S.DECIDING_ROLES)
 
 
-def require_worker(user: User = Depends(get_current_user)) -> User:
-    """Anyone but Admin: the systems role does no operational work."""
-    if user.role.name == ADMIN:
-        raise HTTPException(403, "You do not have permission to perform this action")
-    return user
+#: Acceptance > Filing: the roles in ``Area.ACCEPTANCE_WORKSPACE`` of the
+#: central permission map. Admin does no operational work; a Regional manager
+#: and the problem-category owners have no acceptance workspace.
+require_worker = require_access(Area.ACCEPTANCE_WORKSPACE)
 
 
 # --------------------------------------------------------------------------

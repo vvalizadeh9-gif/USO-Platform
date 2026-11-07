@@ -15,6 +15,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy.orm import Session
 
 from app.core import audit_actions, jalali
+from app.core.access import Area, require_access
 from app.core.database import get_db
 from app.core.deps import PM, get_current_user, require_roles
 from app.models.reference import Province, User
@@ -41,6 +42,10 @@ from app.services import (
 from app.services.acceptance_analytics import SITE_METRICS, AcceptanceAnalytics
 
 router = APIRouter(prefix="/acceptance", tags=["acceptance"])
+
+#: Insights dashboard reads: who may use them is the central permission map's
+#: (``Area.INSIGHTS_DASHBOARDS``), so a role outside it is a 403 here.
+DASHBOARD_READER = Depends(require_access(Area.INSIGHTS_DASHBOARDS))
 
 #: The target is a PM's to set, mirroring ``api/monthly_plan.py``'s own local
 #: alias of the same guard -- re-declared here rather than imported from that
@@ -82,7 +87,7 @@ def _resolve_province_filter(
     return province_ids
 
 
-@router.get("/overview", response_model=AcceptanceOverview)
+@router.get("/overview", response_model=AcceptanceOverview, dependencies=[DASHBOARD_READER])
 def acceptance_overview(
     coordinator_id: int | None = Query(default=None),
     regional_manager_id: int | None = Query(default=None),
@@ -149,7 +154,7 @@ def _site_rows(
         raise HTTPException(422, str(exc)) from exc
 
 
-@router.get("/sites", response_model=AcceptanceSiteList)
+@router.get("/sites", response_model=AcceptanceSiteList, dependencies=[DASHBOARD_READER])
 def acceptance_sites(
     metric: str = Query(
         description=f"Which figure to open. One of: {', '.join(SITE_METRICS)}"
@@ -191,7 +196,7 @@ def acceptance_sites(
     )
 
 
-@router.get("/sites/export")
+@router.get("/sites/export", dependencies=[DASHBOARD_READER])
 def export_acceptance_sites(
     metric: str = Query(
         description=f"Which figure to open. One of: {', '.join(SITE_METRICS)}"
@@ -258,7 +263,7 @@ def _plan_period(target, names: dict[int, str]) -> AcceptancePlanPeriod:
     )
 
 
-@router.get("/plan", response_model=AcceptancePlanResponse)
+@router.get("/plan", response_model=AcceptancePlanResponse, dependencies=[DASHBOARD_READER])
 def acceptance_plan_view(
     months: int = Query(12, ge=1, le=acceptance_plan.MAX_HISTORY_MONTHS),
     db: Session = Depends(get_db),
@@ -349,7 +354,7 @@ def set_acceptance_plan(
     return _plan_period(target, names)
 
 
-@router.get("/trends", response_model=AcceptanceTrendsResponse, deprecated=True)
+@router.get("/trends", response_model=AcceptanceTrendsResponse, deprecated=True, dependencies=[DASHBOARD_READER])
 def acceptance_trends(
     coordinator_id: int | None = Query(default=None),
     regional_manager_id: int | None = Query(default=None),
@@ -374,7 +379,7 @@ def acceptance_trends(
     )
 
 
-@router.get("/progress", response_model=AcceptanceProgress)
+@router.get("/progress", response_model=AcceptanceProgress, dependencies=[DASHBOARD_READER])
 def acceptance_progress_view(
     months: int = Query(
         acceptance_progress.DEFAULT_MONTHS, ge=1, le=acceptance_progress.MAX_MONTHS
@@ -407,7 +412,7 @@ def acceptance_progress_view(
     )
 
 
-@router.get("/progress/export")
+@router.get("/progress/export", dependencies=[DASHBOARD_READER])
 def export_acceptance_progress(
     months: int = Query(
         acceptance_progress.DEFAULT_MONTHS, ge=1, le=acceptance_progress.MAX_MONTHS

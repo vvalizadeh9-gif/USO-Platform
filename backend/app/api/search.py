@@ -3,8 +3,9 @@
 Each group is bounded and scoped exactly as the screen it links to would be,
 so a result is never something the person could not have opened anyway:
 
-* **Sites** and **villages** go through ``visible_work_item_ids`` -- the same
-  row-level scope as every list in the platform.
+* **Sites** and **villages** go through ``explorer_work_item_ids`` -- Explorer's
+  scope, since a site result opens Explorer: the row-level scope every list
+  uses, or every site for the roles the permission map reads all sites.
 * **Provinces** are the ones a staff member is granted; contractors and
   category owners are scoped by assignment, not geography, so get none.
 * **Contractors** are offered to staff who can open the All sites list.
@@ -20,7 +21,7 @@ from app.core.deps import ADMIN, CONTRACTOR, COORDINATOR, PM, REGIONAL, VIEWER, 
 from app.models.reference import Contractor, Province, Role, User
 from app.models.workitem import Site, Village, WorkItem
 from app.services.cpm_columns import CANONICAL_PROVINCE_BY_NORM, normalize_persian
-from app.services.visibility import visible_province_ids, visible_work_item_ids
+from app.services.visibility import explorer_work_item_ids, visible_province_ids
 
 router = APIRouter(prefix="/search", tags=["search"])
 
@@ -83,7 +84,7 @@ def search(
     if len(term) < 2:
         return SearchResults()
     like = _like(term)
-    visible = visible_work_item_ids(user, db)
+    visible = explorer_work_item_ids(user, db)
     role = user.role.name
 
     sites = db.execute(

@@ -121,33 +121,44 @@ def test_split_leaves_the_dt_done_universe_alone(client, provinces):
     assert kpis["total_dt_done_villages"] == 1
 
 
-def test_regional_manager_counts_only_their_provinces(client, provinces):
+def _scoped_account(client, role_name: str, username: str, province_ids: list[int]) -> dict:
     admin_h = _admin(client)
     roles = client.get("/api/v1/reference/roles", headers=admin_h).json()
-    role_id = next(r["id"] for r in roles if r["name"] == "RegionalManager")
+    role_id = next(r["id"] for r in roles if r["name"] == role_name)
     password = "Test-Role-Passw0rd"
     created = client.post(
         "/api/v1/admin/users",
         headers=admin_h,
         json={
-            "username": "rm_prov_b",
+            "username": username,
             "password": password,
-            "first_name": "Test", "family_name": "RM",
+            "first_name": "Test", "family_name": role_name,
             "role_id": role_id,
             "sees_all_provinces": False,
-            "province_ids": [provinces["b"]],
+            "province_ids": province_ids,
         },
     )
     assert created.status_code == 201, created.text
-    login = client.post(
-        "/api/v1/auth/login", data=login_form(client, "rm_prov_b", password)
-    )
+    login = client.post("/api/v1/auth/login", data=login_form(client, username, password))
     assert login.status_code == 200, login.text
-    rm_h = {"Authorization": f"Bearer {login.cookies['uep_session']}"}
+    return {"Authorization": f"Bearer {login.cookies['uep_session']}"}
 
-    kpis = _overview(client, rm_h)
+
+def test_a_province_scoped_account_counts_only_its_provinces(client, provinces):
+    # The dashboard's province scope, on a staff account with province grants.
+    # (Regional managers no longer open the Acceptance dashboard at all -- see
+    # test_a_regional_manager_is_refused_the_dashboard.)
+    viewer_h = _scoped_account(client, "Viewer", "viewer_prov_b", [provinces["b"]])
+
+    kpis = _overview(client, viewer_h)
     # ProvB only: V8 permanent, V9 temporary.
     assert kpis["total_onair_villages"] == 2
     assert kpis["total_onair_permanent"] == 1
     assert kpis["total_onair_temporary"] == 1
     assert kpis["total_dt_done_villages"] == 0
+
+
+def test_a_regional_manager_is_refused_the_dashboard(client, provinces):
+    """UEP role access: Insights dashboards are not a Regional manager's."""
+    rm_h = _scoped_account(client, "RegionalManager", "rm_prov_b", [provinces["b"]])
+    assert client.get("/api/v1/acceptance/overview", headers=rm_h).status_code == 403

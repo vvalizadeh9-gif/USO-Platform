@@ -30,14 +30,11 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy.orm import Session
 
 from app.core import audit_actions, jalali
+from app.core.access import Area, allowed_roles
 from app.core.database import get_db
 from app.core.deps import (
-    ADMIN,
     CONTRACTOR,
-    COORDINATOR,
     PM,
-    REGIONAL,
-    VIEWER,
     get_current_user,
     require_roles,
 )
@@ -80,8 +77,9 @@ router = APIRouter(prefix="/pip", tags=["pip"])
 
 #: Who may read the PM's queue. Everyone with an oversight interest in whether
 #: the month's targets are in -- and deliberately not a contractor, for whom
-#: this screen is a list of every competitor's commitments.
-QUEUE_READERS = (PM, COORDINATOR, REGIONAL, VIEWER, ADMIN)
+#: this screen is a list of every competitor's commitments. Read from the
+#: central permission map (``core/access_matrix.json``).
+QUEUE_READERS = allowed_roles(Area.MONTHLY_PLAN_QUEUE)
 
 #: Who may decide one. PM alone: the Coordinator may read the queue but the
 #: target is the PM's to set, and Admin does not perform operational acts.
@@ -432,8 +430,8 @@ def queue(
 #: Who may read the overview: the staff roles the Monthly Plan page is open to
 #: (``MONTHLY_PLAN_ROLES`` less Contractor). Not Admin, whom the page does not
 #: serve, and never a contractor: the response carries MTN's internal target
-#: and every company's numbers.
-OVERVIEW_READERS = (PM, COORDINATOR, REGIONAL, VIEWER)
+#: and every company's numbers. Read from the central permission map.
+OVERVIEW_READERS = allowed_roles(Area.INTERNAL_PIP)
 require_overview_reader = require_roles(*OVERVIEW_READERS)
 
 

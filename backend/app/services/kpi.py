@@ -49,7 +49,8 @@ from fastapi import HTTPException, status
 from sqlalchemy import Select, case, func, select
 from sqlalchemy.orm import Session
 
-from app.core.deps import ADMIN, COORDINATOR, CONTRACTOR, PM, REGIONAL, VIEWER
+from app.core.access import Area, allowed_roles, allows
+from app.core.deps import COORDINATOR, CONTRACTOR, PM, REGIONAL, VIEWER
 from app.core.province_directory import ENGLISH_BY_PERSIAN, UNKNOWN_PROVINCE_LABEL
 from app.models.acceptance import CpmImportBatch
 from app.models.kpi import ProvinceMapping
@@ -76,7 +77,9 @@ COUNTRY_KEY = "Whole country"
 #: The roles that may choose any scope and see other people's numbers side by
 #: side. Viewer is a read-only PM: every write route stays PM-only.
 COMPARERS = (PM, VIEWER)
-KPI_ROLES = (PM, VIEWER, REGIONAL, COORDINATOR, CONTRACTOR)
+#: Who may open Roles Performance: read from the central permission map
+#: (``core/access_matrix.json``), never re-listed here.
+KPI_ROLES = allowed_roles(Area.ROLES_PERFORMANCE)
 
 #: Which lens each role is confined to. PM and Viewer are absent because they
 #: may choose. Admin is absent because Admin has none — see
@@ -152,8 +155,7 @@ def require_kpi_access(user: User) -> None:
     an access rule — the same check runs on every endpoint in this module,
     including the exports.
     """
-    role = user.role.name
-    if role == ADMIN or role not in KPI_ROLES:
+    if not allows(user.role.name, Area.ROLES_PERFORMANCE):
         raise HTTPException(status.HTTP_403_FORBIDDEN, _FORBIDDEN)
 
 

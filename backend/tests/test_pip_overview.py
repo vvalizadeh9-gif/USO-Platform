@@ -12,8 +12,8 @@ The rules being checked:
   monthly percentages; Assignment over a period is not a sum of balances.
 * The All contractors row equals the sum of the rows.
 * No plan is null, never 0; the MTN internal target is read per stream.
-* Staff only: PM, Coordinator, RegionalManager, Viewer read it; Admin and a
-  contractor get 403.
+* Staff only: PM, Coordinator, Viewer read it; Admin, a Regional manager
+  (UEP role access) and a contractor get 403.
 
 The clock is ``jalali.tehran_today``, patched per test; the running month is
 1406/3 (خرداد), far from any real date.
@@ -187,13 +187,13 @@ def _row(stream, cid):
 # ---------------------------------------------------------------------------
 # Roles
 # ---------------------------------------------------------------------------
-@pytest.mark.parametrize("who", ["pm", "coordinator", "regional", "viewer"])
+@pytest.mark.parametrize("who", ["pm", "coordinator", "viewer"])
 def test_staff_can_read(client, world, monkeypatch, who):
     _on_day(monkeypatch, 10)
     _get(client, world, who=who)
 
 
-@pytest.mark.parametrize("who", ["admin", "contractor"])
+@pytest.mark.parametrize("who", ["admin", "contractor", "regional"])
 def test_admin_and_contractor_cannot(client, world, monkeypatch, who):
     _on_day(monkeypatch, 10)
     r = client.get(URL, headers=world["actors"][who])

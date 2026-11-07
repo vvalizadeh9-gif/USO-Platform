@@ -10,7 +10,7 @@ The query count is fixed whatever the page size: the هدف values, the page,
 the total, and (only when searching) which villages matched. The هدف count is
 one grouped subquery and the DT contractor one join -- no per-row reads.
 
-Nothing is redefined. Scope is ``visible_work_item_ids`` (the rule every list
+Nothing is redefined. Scope is ``explorer_work_item_ids`` (the rule every list
 uses); "هدف" is ``kpi.target_values``, the values ``cpm_columns.is_pure_target``
 accepts, so the list's count is the record page's count; Persian text is folded
 the way ``cpm_columns.normalize_persian`` folds it.
@@ -39,9 +39,9 @@ from app.models.reference import Contractor, Province, User
 from app.models.workitem import Site, Village, WorkItem
 from app.services import kpi
 from app.services.cpm_columns import normalize_persian
-from app.services.explorer import SiteNotFound
+from app.services.explorer import raise_missing
 from app.services.tech_parser import KNOWN_TECHNOLOGIES, parse_technologies
-from app.services.visibility import visible_work_item_ids
+from app.services.visibility import explorer_work_item_ids
 
 DEFAULT_LIMIT = 50
 MAX_LIMIT = 100
@@ -153,7 +153,7 @@ def _base(db: Session, user: User, hadaf: ColumnElement[bool]) -> tuple[Select, 
         .outerjoin(Contractor, WorkItem.dt_sc_contractor_id == Contractor.id)
         .outerjoin(counts, counts.c.work_item_id == WorkItem.id)
         .where(WorkItem.deleted_at.is_(None))
-        .where(WorkItem.id.in_(visible_work_item_ids(user, db)))
+        .where(WorkItem.id.in_(explorer_work_item_ids(user, db)))
     )
     return stmt, cols
 
@@ -308,14 +308,15 @@ def export_rows(db: Session, user: User, query: ListQuery, limit: int) -> list[d
 # One site's villages, and the filter menu
 # --------------------------------------------------------------------------
 def site_villages(db: Session, user: User, work_item_id: int) -> list[dict]:
-    """The site's هدف villages in code order. Raises :class:`SiteNotFound`."""
+    """The site's هدف villages in code order. Raises ``SiteNotFound`` or
+    ``SiteForbidden`` (see :func:`explorer.raise_missing`)."""
     visible = db.execute(
         select(WorkItem.id)
         .where(WorkItem.id == work_item_id)
-        .where(WorkItem.id.in_(visible_work_item_ids(user, db)))
+        .where(WorkItem.id.in_(explorer_work_item_ids(user, db)))
     ).first()
     if visible is None:
-        raise SiteNotFound(work_item_id)
+        raise_missing(db, work_item_id)
     return [
         {"code": code, "name": name}
         for code, name in db.execute(
@@ -337,7 +338,7 @@ def filter_options(db: Session, user: User) -> dict:
         select(WorkItem.id, WorkItem.site_id, WorkItem.site_type,
                WorkItem.requested_technology, WorkItem.dt_sc_contractor_id)
         .where(WorkItem.deleted_at.is_(None))
-        .where(WorkItem.id.in_(visible_work_item_ids(user, db)))
+        .where(WorkItem.id.in_(explorer_work_item_ids(user, db)))
         .subquery()
     )
     provinces = db.execute(

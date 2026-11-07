@@ -606,8 +606,14 @@ def test_a_non_pm_gets_only_their_own_figures(
     assert payload["lenses"] == [{"key": lens, "label": gaps.LENS_LABELS[lens]}]
     assert payload["totals"]["eligible"] == eligible
     assert payload["gaps"]["pending_ict"]["count"] == pending_ict
-    assert payload["gaps"]["cra_missing_in_mojri"]["count"] == cra_missing
-    for key in gaps.GAP_KEYS:
+    # The Mojri card is the Coordinator's (and PM's, Viewer's) only: a
+    # Regional manager or a Contractor gets no Mojri figure at all.
+    if actor == "coordinator":
+        assert payload["gaps"]["cra_missing_in_mojri"]["count"] == cra_missing
+    else:
+        assert not {"ict_missing_in_mojri", "cra_missing_in_mojri"} & set(payload["gaps"])
+        assert "last_mojri_import" not in payload
+    for key in payload["gaps"]:
         rows = payload["rows"][key]
         assert [row["name"] for row in rows] == [own], key
         assert rows[0]["count"] == payload["gaps"][key]["count"], key

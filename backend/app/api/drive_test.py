@@ -33,6 +33,7 @@ from sqlalchemy.orm import Session
 
 from app.api.work_items import MAX_EXPORT_ROWS
 from app.core import jalali
+from app.core.access import Area, require_access
 from app.core.database import get_db
 from app.core import audit_actions
 from app.core.deps import PM, get_current_user, require_review_authority, require_roles
@@ -90,6 +91,10 @@ from app.services.visibility import visible_province_ids, visible_work_item_ids
 
 router = APIRouter(prefix="/drive-test", tags=["drive-test"])
 
+#: Insights dashboard reads: who may use them is the central permission map's
+#: (``Area.INSIGHTS_DASHBOARDS``), so a role outside it is a 403 here.
+DASHBOARD_READER = Depends(require_access(Area.INSIGHTS_DASHBOARDS))
+
 _XLSX_MEDIA_TYPE = (
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 )
@@ -136,7 +141,7 @@ def _province_options(db: Session, user: User) -> list[ProvinceOption]:
     ]
 
 
-@router.get("/overview", response_model=DriveTestOverview)
+@router.get("/overview", response_model=DriveTestOverview, dependencies=[DASHBOARD_READER])
 def drive_test_overview(
     province_id: int | None = Query(
         None, description="Narrow every figure to one province inside your scope"
@@ -230,7 +235,7 @@ def drive_test_overview(
     )
 
 
-@router.get("/trend", response_model=DriveTestTrend)
+@router.get("/trend", response_model=DriveTestTrend, dependencies=[DASHBOARD_READER])
 def drive_test_trend(
     months: int = Query(
         dt_trends.DEFAULT_MONTHS, ge=2, le=36, description="How many Shamsi months"
@@ -270,7 +275,7 @@ def drive_test_trend(
     )
 
 
-@router.get("/flow", response_model=DriveTestFlow)
+@router.get("/flow", response_model=DriveTestFlow, dependencies=[DASHBOARD_READER])
 def drive_test_flow(
     province_id: int | None = Query(
         None, description="Narrow every figure to one province inside your scope"
@@ -307,7 +312,7 @@ def _trend_payload(series: list[dict]) -> list[dict]:
     return [{k: v for k, v in point.items() if k != "flows"} for point in series]
 
 
-@router.get("/plan-delivery", response_model=PlanAndDelivery)
+@router.get("/plan-delivery", response_model=PlanAndDelivery, dependencies=[DASHBOARD_READER])
 def plan_delivery(
     year: int | None = Query(None, description="Shamsi year; defaults to the current one"),
     month: int | None = Query(None, ge=1, le=12, description="Shamsi month 1-12"),
@@ -411,7 +416,7 @@ def _filters(db: Session, user: User, params: dict) -> dt_site_list.Filters:
         raise HTTPException(422, str(exc)) from None
 
 
-@router.get("/sites", response_model=DriveTestSiteList)
+@router.get("/sites", response_model=DriveTestSiteList, dependencies=[DASHBOARD_READER])
 def drive_test_sites(
     params: dict = Depends(_site_params),
     limit: int = Query(100, ge=1, le=500, description="Rows per page, at most 500"),
@@ -494,7 +499,7 @@ def _ongoing_stage_options() -> list[FilterOption]:
     ]
 
 
-@router.get("/sites/export")
+@router.get("/sites/export", dependencies=[DASHBOARD_READER])
 def export_drive_test_sites(
     params: dict = Depends(_site_params),
     db: Session = Depends(get_db),
@@ -527,7 +532,7 @@ def export_drive_test_sites(
     )
 
 
-@router.get("/export")
+@router.get("/export", dependencies=[DASHBOARD_READER])
 def export_delivery_workbook(
     province_id: int | None = Query(
         None, description="Narrow the whole file to one province inside your scope"

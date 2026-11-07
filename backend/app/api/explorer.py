@@ -2,8 +2,10 @@
 
 Deliberately not ``GET /work-items``: that list carries every stage tab's
 columns and keeps villages out on purpose (the assignment screens rely on it).
-Scope is the work-item scope every list uses, so a site the caller may not see
-is never listed and is a 404 when asked for by id, as everywhere else.
+Scope is ``visibility.explorer_work_item_ids``: the work-item scope every list
+uses (all sites for the roles the permission map names). A site the caller
+may not see is never listed, and asked for by id it is a 403 (a missing site
+is a 404).
 
 The fixed paths (``filters``, ``export``) are declared before
 ``/sites/{work_item_id}``: FastAPI matches routes in order and would otherwise
@@ -16,7 +18,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.core.deps import get_current_user
+from app.core.access import FORBIDDEN, Area, require_access
 from app.models.reference import User
 from app.schemas.explorer import (
     FilterOptionsOut,
@@ -25,10 +27,14 @@ from app.schemas.explorer import (
     VillageRefOut,
 )
 from app.services import explorer_list as L
-from app.services.explorer import SiteNotFound, site_record
+from app.services.explorer import SiteForbidden, SiteNotFound, site_record
 from app.services.work_item_export import build_sheet
 
 router = APIRouter(prefix="/explorer", tags=["explorer"])
+
+#: Who may open Explorer: the central permission map's ``Area.EXPLORER``.
+#: Which sites they see is ``visibility.explorer_work_item_ids``.
+EXPLORER_READER = require_access(Area.EXPLORER)
 
 _XLSX_MEDIA_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
@@ -68,7 +74,7 @@ def list_sites(
     cursor: str | None = Query(default=None, max_length=2000),
     limit: int = Query(default=L.DEFAULT_LIMIT, ge=1, le=L.MAX_LIMIT),
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(EXPLORER_READER),
 ) -> dict:
     """One page of the sites the caller may see, with the total and next cursor."""
     try:
@@ -80,7 +86,7 @@ def list_sites(
 @router.get("/sites/filters", response_model=FilterOptionsOut)
 def get_filter_options(
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(EXPLORER_READER),
 ) -> dict:
     """The values the caller can filter by: only what their own sites carry."""
     return L.filter_options(db, user)
@@ -91,7 +97,7 @@ def export_sites(
     query: L.ListQuery = Depends(list_query),
     ids: list[int] = Query(default=[]),
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(EXPLORER_READER),
 ) -> Response:
     """The list as a spreadsheet: the same rows, scope, search, filters and sort.
 
@@ -119,23 +125,27 @@ def export_sites(
 def get_site_villages(
     work_item_id: int,
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(EXPLORER_READER),
 ) -> list[dict]:
     """The site's هدف villages, for the list's inline strip."""
     try:
         return L.site_villages(db, user, work_item_id)
     except SiteNotFound:
         raise HTTPException(status_code=404, detail="Site not found") from None
+    except SiteForbidden:
+        raise HTTPException(status_code=403, detail=FORBIDDEN) from None
 
 
 @router.get("/sites/{work_item_id}", response_model=SiteRecordOut)
 def get_site_record(
     work_item_id: int,
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(EXPLORER_READER),
 ) -> dict:
     """One site's record: general information, journey and acceptance."""
     try:
         return site_record(db, user, work_item_id)
     except SiteNotFound:
         raise HTTPException(status_code=404, detail="Site not found") from None
+    except SiteForbidden:
+        raise HTTPException(status_code=403, detail=FORBIDDEN) from None

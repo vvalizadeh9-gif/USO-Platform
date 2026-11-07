@@ -31,14 +31,18 @@ from app.services import explorer_journey as J
 from app.services.drive_test_analytics import is_dt_done
 from app.services.performance.periods import tehran_day
 from app.services.tech_parser import parse_technologies
-from app.services.visibility import apply_work_item_scope
+from app.services.visibility import explorer_work_item_ids
 from app.services.work_item_rows import active_drive_test, relevant_assignment
 
 AUTHORITIES = ("ICT", "CRA")
 
 
 class SiteNotFound(LookupError):
-    """No such live work item, or not one this user may see."""
+    """No such live work item."""
+
+
+class SiteForbidden(PermissionError):
+    """A live work item outside this user's Explorer scope (answered 403)."""
 
 
 # --------------------------------------------------------------------------
@@ -46,9 +50,11 @@ class SiteNotFound(LookupError):
 # --------------------------------------------------------------------------
 def _work_item(db: Session, user: User, work_item_id: int) -> WorkItem:
     stmt = select(WorkItem).where(
-        WorkItem.id == work_item_id, WorkItem.deleted_at.is_(None)
+        WorkItem.id == work_item_id,
+        WorkItem.deleted_at.is_(None),
+        WorkItem.id.in_(explorer_work_item_ids(user, db)),
     )
-    stmt = apply_work_item_scope(stmt, user, db).options(
+    stmt = stmt.options(
         selectinload(WorkItem.site).selectinload(Site.province),
         selectinload(WorkItem.assignments),
         selectinload(WorkItem.drive_tests),
@@ -59,8 +65,22 @@ def _work_item(db: Session, user: User, work_item_id: int) -> WorkItem:
     )
     wi = db.execute(stmt).scalars().one_or_none()
     if wi is None:
-        raise SiteNotFound(work_item_id)
+        raise_missing(db, work_item_id)
     return wi
+
+
+def raise_missing(db: Session, work_item_id: int) -> None:
+    """Why a site could not be loaded: :class:`SiteForbidden` when it exists
+    but is outside the caller's scope (a 403, the no-access screen), else
+    :class:`SiteNotFound`."""
+    exists = db.execute(
+        select(WorkItem.id).where(
+            WorkItem.id == work_item_id, WorkItem.deleted_at.is_(None)
+        )
+    ).first()
+    if exists is not None:
+        raise SiteForbidden(work_item_id)
+    raise SiteNotFound(work_item_id)
 
 
 def _hadaf_villages(db: Session, wi: WorkItem) -> list[Village]:

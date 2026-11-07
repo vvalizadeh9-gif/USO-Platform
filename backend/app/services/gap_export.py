@@ -70,6 +70,9 @@ class ExportMeta:
     filter_text: str
     exported_by: str
     exported_at: datetime
+    #: Row keys whose columns are left out of the Villages sheet -- the Mojri
+    #: column, for a role outside ``Area.MOJRI_SECTION``.
+    omit: frozenset[str] = frozenset()
 
 
 @dataclass
@@ -94,7 +97,8 @@ class BuiltWorkbook:
 def build(rows: Iterable[dict], meta: ExportMeta) -> BuiltWorkbook:
     """Write the Villages and Summary sheets; return the rewound file."""
     wb = Workbook(write_only=True)
-    count = _write_villages(wb.create_sheet("Villages"), rows)
+    columns = [c for c in COLUMNS if c[1] not in meta.omit]
+    count = _write_villages(wb.create_sheet("Villages"), rows, columns)
     _write_summary(wb.create_sheet("Summary"), meta, count)
 
     target = tempfile.SpooledTemporaryFile(max_size=_SPOOL_BYTES)
@@ -103,22 +107,22 @@ def build(rows: Iterable[dict], meta: ExportMeta) -> BuiltWorkbook:
     return BuiltWorkbook(file=target, rows=count)
 
 
-def _write_villages(ws, rows: Iterable[dict]) -> int:
+def _write_villages(ws, rows: Iterable[dict], columns: list[tuple[str, str, int]]) -> int:
     # Set before the first row: write-only sheets emit their view and column
     # settings ahead of the data.
     ws.freeze_panes = "A2"
-    for index, (_, _, width) in enumerate(COLUMNS, start=1):
+    for index, (_, _, width) in enumerate(columns, start=1):
         ws.column_dimensions[get_column_letter(index)].width = width
 
-    ws.append([_header(ws, title) for title, _, _ in COLUMNS])
+    ws.append([_header(ws, title) for title, _, _ in columns])
     count = 0
     for row in rows:
-        ws.append([_cell(ws, key, row.get(key)) for _, key, _ in COLUMNS])
+        ws.append([_cell(ws, key, row.get(key)) for _, key, _ in columns])
         count += 1
 
     # The filter covers the header and every row: a reader with a thousand
     # villages reads this file by filtering it.
-    ws.auto_filter.ref = f"A1:{get_column_letter(len(COLUMNS))}{count + 1}"
+    ws.auto_filter.ref = f"A1:{get_column_letter(len(columns))}{count + 1}"
     return count
 
 
