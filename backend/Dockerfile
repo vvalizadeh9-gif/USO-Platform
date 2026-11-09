@@ -12,7 +12,7 @@
 # then paste the new digest here and rebuild. Python 3.12 reaches end of life
 # inside this platform's expected lifetime, so this line will need changing --
 # see RUNBOOK.md.
-FROM python@sha256:dd29372629eeba2dd003fd9e9d35a5b8236c44727875a0364254b5127af88e65
+FROM python@sha256:8c9a3bf2d6dea60d60a2ae2a07c2b2fb1e7d8daed64b146b6792c74ae0d62ac4
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
