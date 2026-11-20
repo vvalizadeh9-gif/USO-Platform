@@ -50,7 +50,8 @@ const located = async (name) => {
 vi.mock('./pages/explorer/ExplorerList', () => located('explorer'))
 vi.mock('./pages/explorer/SiteRecord', () => located('site-record'))
 vi.mock('./pages/Home', () => page('home'))
-vi.mock('./pages/mywork/MyWork', () => located('my-work'))
+vi.mock('./pages/filing/FilingPage', () => located('filing'))
+vi.mock('./pages/reports/AcceptanceBaskets', () => page('baskets'))
 vi.mock('./pages/validation/ValidationPage', () => located('validation'))
 vi.mock('./pages/monthlyplan/MonthlyPlan', () => page('monthly-plan'))
 vi.mock('./pages/reports/AcceptanceDashboard', () => page('acceptance'))
@@ -251,8 +252,8 @@ describe('role access matrix routes', () => {
   })
 
   it.each([
-    '/reports/drive-test', '/reports/acceptance', '/drive-test/sites', '/my-work',
-    '/monthly-plan', '/drive-test', '/health-check', '/validation/ict', '/reports/kpi/mapping',
+    '/reports/drive-test', '/reports/acceptance', '/drive-test/sites', '/my-work', '/filing',
+    '/insights/acceptance-baskets', '/monthly-plan', '/drive-test', '/health-check', '/validation/ict', '/reports/kpi/mapping',
   ])('shows a Regional Manager no access at %s', async (path) => {
     signedInAs('RegionalManager')
     expect(await landOn(path)).toBe('no-access')
@@ -267,10 +268,21 @@ describe('role access matrix routes', () => {
 
   it.each(FIVE.flatMap((role) => [
     [role, '/reports/kpi'], [role, '/reports/gaps'], [role, '/reports/drive-test'],
-    [role, '/reports/acceptance'], [role, '/my-work'],
+    [role, '/reports/acceptance'], [role, '/insights/acceptance-baskets'],
   ]))('shows %s no access at %s', async (role, path) => {
     signedInAs(role)
     expect(await landOn(path)).toBe('no-access')
+  })
+
+  // UEP-22: the team basket roles work Filing; Huawei cleanup has no basket.
+  it.each(FIVE)('gives %s Filing only when it holds an acceptance basket', async (role) => {
+    signedInAs(role)
+    expect(await landOn('/filing')).toBe(role === 'HuaweiCleanup' ? 'no-access' : 'filing')
+  })
+
+  it.each(['PM', 'Coordinator', 'Viewer'])('opens Acceptance baskets for %s', async (role) => {
+    signedInAs(role)
+    expect(await landOn('/insights/acceptance-baskets')).toBe('baskets')
   })
 
   it.each(['PM', 'Coordinator', 'Viewer', 'Contractor'])(
@@ -304,8 +316,8 @@ describe('the drive test paths', () => {
 
 describe('old paths people have bookmarked', () => {
   it.each([
-    ['/acceptance', 'my-work'],
-    ['/my-acceptance', 'my-work'],
+    ['/acceptance', 'filing'],
+    ['/my-acceptance', 'filing'],
   ])('%s still answers', async (path, expected) => {
     signedInAs('Coordinator')
     expect(await landOn(path)).toBe(expected)
@@ -326,9 +338,10 @@ describe('acceptance validation routes', () => {
 
   it.each([
     ['/my-work?tab=filled', '/validation/ict'],
-    ['/my-work?tab=all', '/my-work'],
-    ['/my-work?tab=all&q=W4318', '/my-work?q=W4318'],
-    ['/acceptance', '/my-work'],
+    // UEP-22: My Work's addresses land on Filing, keeping the authority.
+    ['/my-work?tab=all', '/filing'],
+    ['/my-work?authority=CRA&tab=not_filed', '/filing?authority=CRA'],
+    ['/acceptance', '/filing'],
     ['/validation', '/validation/ict'],
     ['/validation/xyz', '/validation/ict'],
     ['/validation/cra', '/validation/cra'],
@@ -348,9 +361,9 @@ describe('the My Work splat route', () => {
   // pointing at the same component are still two routes to React Router, so
   // selecting a village unmounted and remounted the workspace, silently
   // resetting the chosen bucket and the search box on every click.
-  it.each(['/my-work', '/my-work/v/42'])('%s renders the workspace', async (path) => {
+  it.each(['/my-work', '/my-work/v/42'])('%s lands on Filing (UEP-22)', async (path) => {
     signedInAs('Contractor')
-    expect(await landOn(path)).toBe('my-work')
+    expect(await landOn(path)).toBe('filing')
   })
 
   // React Router 7 changed how a relative `to` resolves inside a splat route

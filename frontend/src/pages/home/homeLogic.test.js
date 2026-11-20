@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { deltaText, deltaTone, metaText, submissionMeta, weekDelta } from './homeLogic'
+import { caseMeta, deltaText, deltaTone, metaText, submissionMeta, weekDelta } from './homeLogic'
 
 describe('KPI delta', () => {
   it('words the change', () => {
@@ -50,3 +50,11 @@ describe('Submissions rows on Home (UEP-21)', () => {
   })
 })
 
+
+describe('caseMeta (UEP-22)', () => {
+  it('says over SLA and no comment, and nothing for other rows', () => {
+    expect(caseMeta({ acceptance: { count: 9, over_sla: 3, no_comment: 2 } })).toEqual({ overSla: '3 over SLA', noComment: '2 no comment' })
+    expect(caseMeta({ acceptance: { count: 9, over_sla: 0, no_comment: 0 } })).toEqual({ overSla: null, noComment: null })
+    expect(caseMeta({ queue_key: 'hc_assign' })).toBeNull()
+  })
+})

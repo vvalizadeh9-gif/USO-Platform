@@ -8,6 +8,7 @@ import {
   SIDE_META,
   openVillages,
   orderVillages,
+  caseLine,
   sideChip,
   sideLine,
 } from './explorerModel'
@@ -107,6 +108,7 @@ export function StatusMark({ side, authority }) {
   const meta = SIDE_META[side.status]
   const line = sideLine(side, authority)
   const chip = sideChip(side)
+  const basket = caseLine(side)
   return (
     <span className={`ex-mark is-${side.status}`}>
       <span className="ex-mark-circle" aria-hidden="true"><Icon name={meta.icon} size={16} /></span>
@@ -117,6 +119,7 @@ export function StatusMark({ side, authority }) {
           {chip && <span className="ex-mark-chip">{chip}</span>}
         </span>
         {line && <span className="ex-mark-line">{line}</span>}
+        {basket && <span className={`ex-mark-line${side.case.over_sla || side.case.stale ? ' is-late' : ''}`}>{basket}</span>}
       </span>
     </span>
   )

@@ -9,6 +9,13 @@ const VIEWPORTS = [
   { width: 1280, height: 800 },
 ]
 
+// UEP-22: Filing (both authorities) and Insights › Acceptance baskets.
+const CASE_PAGES = [
+  { name: 'Filing ICT', path: '/filing', ready: 'ICT inbox', fits: true },
+  { name: 'Filing CRA', path: '/filing?authority=CRA', ready: 'CRA inbox', fits: true },
+  { name: 'Acceptance baskets', path: '/insights/acceptance-baskets', ready: 'Acceptance baskets', fits: true },
+]
+
 const PAGES = [
   { name: 'DT dashboard', path: '/reports/drive-test', ready: 'On air vs DT done', fits: true },
   // The Monthly Plan tabs: monthlyPlan.spec.js.
@@ -29,6 +36,8 @@ const PAGES = [
   { name: 'Submissions Batches', path: '/submissions?view=batches', ready: 'All batches', fits: true },
   { name: 'Submissions Follow up', path: '/submissions?view=follow-up', ready: 'Sent, not in Mojri after 30 days', fits: true },
   { name: 'Submissions batch', path: '/submissions/batches/40', ready: 'Batch #40', fits: true },
+  // UEP-22: Filing and Baskets (1366×768 too, below).
+  ...CASE_PAGES,
 ]
 
 async function pageScroll(page) {
@@ -125,3 +134,24 @@ for (const viewport of [
     })
   })
 }
+
+// UEP-22 §6: Filing and Baskets fit the second office resolution as well,
+// their lists scrolling inside their panels.
+test.describe('acceptance cases 1366×768', () => {
+  test.use({ viewport: { width: 1366, height: 768 } })
+
+  for (const p of CASE_PAGES) {
+    test(`${p.name} does not scroll the page`, async ({ page }) => {
+      await signIn(page)
+      await page.goto(p.path)
+      await expect(page.getByRole('heading', { name: p.ready }).first()).toBeVisible()
+      await page.waitForLoadState('networkidle')
+      await page.waitForTimeout(300)
+      const m = await pageScroll(page)
+      expect(m.scrollHeight).toBeLessThanOrEqual(m.innerHeight)
+      expect(m.scrollWidth).toBeLessThanOrEqual(m.innerWidth)
+      const body = await page.locator('.page-body').evaluate((el) => [el.scrollHeight, el.clientHeight])
+      expect(body[0]).toBeLessThanOrEqual(body[1])
+    })
+  }
+})

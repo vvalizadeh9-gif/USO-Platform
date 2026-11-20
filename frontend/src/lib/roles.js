@@ -17,6 +17,8 @@ const ROLE_LABELS = {
   ManagedService: 'Managed Service (MS)',
   NwgPlanning: 'NWG Planning',
   HuaweiCleanup: 'Huawei Cleanup',
+  // UEP-22: the CPG PSO acceptance basket (a team role, no HC category).
+  CpgPso: 'CPG PSO',
 }
 
 // The roles that own a health-check problem category. Used for route
@@ -123,7 +125,7 @@ export function isReadOnlyKpi(user) {
 // The roles that own pending work (queues). Regional Manager, Viewer and
 // Admin own none. Must agree with board_role() in
 // app/services/action_queues/context.py.
-export const WORK_ROLES = ['PM', 'Coordinator', 'Contractor', ...CATEGORY_OWNER_ROLES]
+export const WORK_ROLES = ['PM', 'Coordinator', 'Contractor', ...CATEGORY_OWNER_ROLES, 'CpgPso']
 
 export function hasWorkQueues(roleName) {
   return WORK_ROLES.includes(roleName)

@@ -6,7 +6,7 @@ a case reads the same answer, and the unit tests need no fixtures.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 
 from app.core import jalali
 from app.models.acceptance_case import (
@@ -55,10 +55,11 @@ def tehran_today(now: datetime | None = None) -> date:
 
 
 def local_date(moment: datetime | date | None) -> date | None:
-    """A timestamp's Tehran calendar day (dates pass through)."""
+    """A timestamp's Tehran calendar day (dates pass through). A naive
+    timestamp is UTC, as everywhere in UEP (``action_queues.sla.as_datetime``)."""
     if moment is None or not isinstance(moment, datetime):
         return moment
-    aware = moment if moment.tzinfo else moment.replace(tzinfo=jalali.TEHRAN)
+    aware = moment if moment.tzinfo else moment.replace(tzinfo=timezone.utc)
     return aware.astimezone(jalali.TEHRAN).date()
 
 

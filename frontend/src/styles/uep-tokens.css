@@ -453,4 +453,44 @@
   --uep-sb-tile-icon: 36px;          /* a card header's tile */
   --uep-sb-letter-dot: 18px;         /* one of a batch's three letter bars */
   --uep-sb-bar: 6px;                 /* segmented Mojri bar, cycle bar */
+
+  /* Acceptance cases (UEP-22): Filing and Insights › Acceptance baskets.
+     Yellow is waiting, red rejected / late / no comment, green approved only. */
+  --uep-filing-inbox: 360px;           /* Filing's inbox column */
+  --uep-filing-history: 330px;         /* Filing's history column */
+  --uep-baskets-detail: 400px;         /* Baskets' selected-cell card */
+  --uep-radius-panel: 14px;            /* Filing's Update card */
+  --uep-case-edge: 3px;                /* a status box's top edge */
+  --uep-case-tile: 56px;               /* a choice tile */
+  --uep-case-key: 24px;                /* a tile's key hint */
+  --uep-case-dot: 9px;                 /* a row's status dot */
+  --uep-case-step-dot: 12px;           /* a timeline status step */
+  --uep-case-name: 30px;               /* the selected village's name */
+  --uep-case-waiting: #CA8A04;         /* waiting dot, edge and tile border */
+  --uep-case-waiting-line: #FDE68A;    /* a waiting box's border */
+  --uep-case-rejected: #DC2626;
+  --uep-case-rejected-line: #FECACA;
+  --uep-case-rejected-ink: #991B1B;
+  --uep-case-approved: #16A34A;        /* Approved only */
+  --uep-case-approved-line: #BBF7D0;
+  --uep-case-comment-dot: #9CA3AF;     /* a comment in the timeline (decor) */
+  --uep-basket-cell: 32px;             /* one grid cell's height */
+  --uep-basket-name: 180px;            /* the grid's basket column */
+  --uep-basket-total: 60px;            /* the grid's Total column */
+  --uep-heat-blue-1: #F3F7FF;          /* Under 3 months, five steps by count */
+  --uep-heat-blue-2: #DBE6FE;
+  --uep-heat-blue-3: #B4CBFC;
+  --uep-heat-blue-4: #3F6FE8;
+  --uep-heat-blue-5: #1D4ED8;
+  --uep-heat-blue-ink: #1E3A8A;
+  --uep-heat-red-1: #FFF5F5;           /* Over 3 months */
+  --uep-heat-red-2: #FEE2E2;
+  --uep-heat-red-3: #FCA5A5;
+  --uep-heat-red-4: #DC2626;
+  --uep-heat-red-5: #B91C1C;
+  --uep-heat-red-ink: #991B1B;
+  --uep-heat-empty: #C0C5CE;           /* the "·" of a zero cell (decor) */
+  --uep-heat-legend-blue: #7EA4F7;
+  --uep-heat-legend-red: #F87171;
+  --uep-stripe-line: #FCA5A5;          /* No comment's border */
 }

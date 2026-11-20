@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+- **Acceptance › Filing is a focus inbox of acceptance cases; Insights › Acceptance baskets (UEP-22).**
+  - Every village in the acceptance universe (live, pure هدف, DT done, on air; one per site, site type and village code) has one ICT case and one CRA case, each **Waiting** (always the site contractor's basket), **Rejected** (in the basket its rejection category names) or **Approved**. A comment is required on every save, and a case with no comment in 7 days is flagged everywhere. History is written by every save: who, when, letter, file, comment.
+  - Filing (`/filing`, replacing My Work at `/my-work`, which now redirects): an ICT | CRA switch; the inbox (All · Waiting · Rejected · No comment; waiting with the contractors and rejected in the team baskets, oldest in basket first; search or paste codes; tick many villages to record one letter for all); the village with both authorities' status boxes (the other box opens that authority); the Update card (Waiting · add comment / Fixed · back to contractor, Approved, Rejected with a category; letter number, Shamsi date and file for a verdict); the case history with +days between status steps. Keys: J/K move, W/A/R choose, Ctrl Enter save.
+  - Aging no longer starts at CPM's old DT date (the "4,341 d"): a case ages from the village's send to ICT HQ (Submissions), else the drive test's approval in the app, else the first CPM import.
+  - Rejection categories (`acceptance_rejection_categories`, master data): Parked → PM, NWG R&D → NwgPlanning, Contractor → the site contractor, CPG PSO → CpgPso (new role), CPG PMO → CpgRolloutPM, CPG Power → CpgPower, MS → ManagedService. A team role sees only its basket and can comment and mark Fixed; only a PM or coordinator changes a basket (logged with the reason).
+  - A contractor's Approved/Rejected still goes to ICT/CRA validation; the case moves only when a coordinator confirms, and the coordinator confirms or changes the rejection category there. A PM's or coordinator's save lands directly.
+  - Insights › Acceptance baskets (`/insights/acceptance-baskets`; PM, coordinators in their regions, Viewer): baskets against time in basket (under 3 months · 3–6 · 6–12 · over 1 year), No comment and Total; a cell lists its villages and opens Filing filtered to it.
+  - Home: a contractor's Acceptance card is Waiting for ICT, Waiting for CRA and Rejected · Contractor; a team role's is Your basket; the PM's and coordinators' Pending ICT / Pending CRA, and the Filing rail badge, read the cases. Each row says over SLA and no comment. Explorer's acceptance details show each side's basket and days.
+  - SLA policies: `acceptance_basket` (14 days) and `comment_freshness` (7 days), under Acceptance.
+  - API `api/acceptance_cases.py`; services `services/acceptance_cases/`; permission-map areas `acceptance_cases` (Filing, with the team roles) and `acceptance_baskets`.
+  - **Deploy:**
+    1. Back up, then run migration `a3c7e9b1d522` (three tables, the seven categories, the `CpgPso` role; reversible).
+    2. Backfill once: `docker compose exec backend python -m app.scripts.backfill_acceptance_cases` (approved → Approved, rejected → Rejected with **Needs category**, everything else → Waiting). Filing, Baskets and Home also create cases for new villages by themselves.
+    3. Coordinators set a category on every backfilled rejection (Filing › Rejected, "Needs category" rows: change basket).
+    4. An Admin creates or confirms users for the team roles: NWG planning, CPG PSO (new), CPG rollout PM (CPG PMO), CPG power, Managed service.
+  - Letter files go through the existing evidence store, which still writes to the upload volume until UEP-20 moves it to PostgreSQL. A letter file is required for a verdict, as for every acceptance letter.
+
 - **Submissions moved to the Drive test app; Change owner is a list (UEP-21 follow-up).**
   - Submissions is now in the Drive test rail (section Drive test, after Tests), the step after the test. Home's "Submit to ICT" and "Follow up with ICT" rows move to the Drive test card, and SLA policies lists `submit_cycle` and `mojri_follow_up` under Drive test. The Acceptance rail is Filing and the two validation pages again.
   - Change owner shows every active coordinator as a radio row with the CRA regions they hold and "Current owner", instead of a dropdown that opened clipped inside the dialog. With no coordinator account it says an Admin adds one in Admin › Users & roles. `GET /submissions/owner/candidates` adds `regions` and `is_owner`.

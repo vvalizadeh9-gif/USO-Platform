@@ -135,6 +135,7 @@ def get_case(
             "id": head.village_id, "code": head.village_code, "name": head.village_name,
             "site_code": head.site_code, "work_item_id": head.work_item_id,
             "province": head.province, "tech": head.tech,
+            "contractor": head.contractor_name,
         },
         "boxes": [_box(r, latest.get(r.case_id), r.state_since if r.state == STATE_APPROVED else None)
                   for r in rows],

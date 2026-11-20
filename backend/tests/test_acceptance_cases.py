@@ -109,8 +109,11 @@ def _seed() -> None:
         village("rej", p1, ca, ict="Rejected")
         village("ok", p1, ca, ict="Approved")
         village("sent", p1, ca)
+        # A calendar date, so counted from Tehran's today like the case clock.
+        from app.services.acceptance_cases.rules import tehran_today
+
         db.add(SubmissionItem(village_id=V["sent"], reason="outside", source="mojri",
-                              sent_at=(now - timedelta(days=30)).date()))
+                              sent_at=tehran_today() - timedelta(days=30)))
         app_wi = village("app", p1, ca)
         db.add(DriveTest(work_item_id=app_wi.id, status="Approved", is_active=True,
                          coordinator_reviewed_at=now - timedelta(days=10)))
