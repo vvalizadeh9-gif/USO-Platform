@@ -94,7 +94,12 @@ test('follow up: mark raised, then send again', async ({ page }) => {
   await page.getByRole('button', { name: 'Mark raised with ICT' }).click()
   await page.getByRole('dialog').getByRole('button', { name: 'Mark raised' }).click()
   await expect.poll(() => calls).toContain('POST /follow-up/raise')
-  await page.getByRole('checkbox', { name: 'Select all' }).check()
+  // The list reloads after a write and clears the selection; select again
+  // only once that reload has landed, or it would clear the new selection.
+  await expect.poll(() => calls.filter((c) => c === 'GET /follow-up').length).toBeGreaterThan(1)
+  const selectAll = page.getByRole('checkbox', { name: 'Select all' })
+  await expect(selectAll).not.toBeChecked()
+  await selectAll.check()
   await page.getByRole('button', { name: 'Send again' }).click()
   await expect.poll(() => calls).toContain('POST /follow-up/resend')
 })
