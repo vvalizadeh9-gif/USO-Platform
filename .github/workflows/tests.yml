@@ -118,7 +118,10 @@ jobs:
 
   frontend:
     name: Frontend build
-    runs-on: ubuntu-latest
+    # Pinned: ubuntu-latest moved to 26.04, where Playwright 1.56 cannot
+    # install Chromium ("does not support chromium on ubuntu26.04-x64").
+    # Move this forward with the Playwright upgrade.
+    runs-on: ubuntu-24.04
 
     steps:
       - uses: actions/checkout@v4
