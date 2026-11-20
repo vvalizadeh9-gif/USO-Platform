@@ -131,6 +131,13 @@ export const APPS = Object.freeze([
         icon: 'data--check', tile: '--uep-app-drive-test',
         also: ['/drive-test?tab=in-progress', '/drive-test?tab=review', '/drive-test?tab=sent-back', '/drive-test?tab=done'],
       },
+      // UEP-21: DT-done villages go to ICT HQ from here, the step after the
+      // test. The count is Home's submit_to_ict queue, which only the PM and
+      // the owner coordinator have.
+      {
+        id: 'submissions', section: 'Drive test', label: 'Submissions', route: '/submissions', roles: SUBMISSIONS_ROLES, queues: ['submit_to_ict'],
+        icon: 'send', tile: '--uep-app-drive-test',
+      },
       {
         id: 'remediation', section: 'Exceptions', label: 'Remediation', route: '/health-check?tab=remediation', roles: STAFF, queues: ['hc_reroutes'],
         icon: 'tool-kit', tile: '--uep-app-monthly-plan',
@@ -156,14 +163,7 @@ export const APPS = Object.freeze([
     tint: '--uep-app-acceptance-tint',
     group: 'rollout',
     roles: ACCEPTANCE_ROLES,
-    // The app still opens on Filing (UEP-21): Submissions leads the rail but
-    // is only for PM, Coordinator and Viewer.
-    route: '/my-work',
     pages: [
-      // UEP-21: what goes to ICT HQ every two weeks. Its count is Home's
-      // submit_to_ict queue, which only the PM and the owner coordinator have,
-      // so nobody else sees a number here.
-      { id: 'submissions', label: 'Submissions', route: '/submissions', roles: SUBMISSIONS_ROLES, queues: ['submit_to_ict'], icon: 'send', tile: '--uep-accent' },
       // UEP-16: three pages. The dashboard lives under Insights only, and
       // Letters is gone. Filing's count is the rail-only acceptance_filing
       // queue -- the villages in Filing's own buckets, each once -- so it

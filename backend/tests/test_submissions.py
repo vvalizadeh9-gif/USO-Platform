@@ -213,7 +213,10 @@ def test_viewer_reads_but_cannot_act(client, who):
 
 def test_only_the_pm_changes_the_owner(client, who):
     assert client.put(f"{API}/owner", headers=who["owner"], json={"user_id": 1}).status_code == 403
-    assert client.get(f"{API}/owner/candidates", headers=who["pm"]).status_code == 200
+    rows = client.get(f"{API}/owner/candidates", headers=who["pm"]).json()["rows"]
+    amir = next(r for r in rows if r["name"].startswith("Amir"))
+    assert amir["is_owner"] is True and isinstance(amir["regions"], list)
+    assert all(r["name"] != "Pmuser PM" for r in rows), "only coordinators"
 
 
 # ----- Draft, lock, cancel, send ---------------------------------------------
@@ -500,7 +503,7 @@ def test_sla_steps_and_defaults():
 
     assert sla_policy.STEPS_BY_KEY["submit_cycle"].default == 14
     assert sla_policy.STEPS_BY_KEY["mojri_follow_up"].default == 30
-    assert sla_policy.STEPS_BY_KEY["mojri_follow_up"].area == "acceptance"
+    assert sla_policy.STEPS_BY_KEY["mojri_follow_up"].area == "drive_test"
 
 
 def test_letter_dates_are_read_as_iso_or_shamsi():

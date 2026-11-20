@@ -23,9 +23,9 @@ from app.core import audit_actions, user_status
 from app.core.database import get_db
 from app.core.deps import COORDINATOR, get_current_user
 from app.core.jalali import parse_day, tehran_today
-from app.models.reference import Role, User
+from app.models.reference import Province, Role, User
 from app.models.submission import SubmissionSettings
-from app.services import evidence_store
+from app.services import evidence_store, kpi
 from app.services.audit import record_audit
 from app.services.submissions import (
     batches,
@@ -331,14 +331,26 @@ def get_owner(db: Session = Depends(get_db), _: User = Depends(reader)) -> dict:
 
 @router.get("/owner/candidates")
 def owner_candidates(db: Session = Depends(get_db), user: User = Depends(reader)) -> dict:
-    """Active coordinators the PM may make the owner."""
+    """Active coordinators the PM may make the owner, each with the CRA
+    regions they hold (Admin > Province assignments) and whether they are the
+    owner now."""
     scope.require_pm(user)
-    rows = db.execute(
+    rows = list(db.execute(
         select(User).join(Role, User.role_id == Role.id)
         .where(Role.name == COORDINATOR, User.status == user_status.ACTIVE)
         .order_by(User.first_name, User.family_name)
-    ).scalars()
-    return {"rows": [_person(u) for u in rows]}
+    ).scalars())
+    held: dict[int, list[str]] = {}
+    for uid, name in db.execute(
+        select(Province.coordinator_user_id, Province.name)
+        .where(Province.coordinator_user_id.in_([u.id for u in rows] or [-1]))
+    ).all():
+        held.setdefault(uid, []).append(name)
+    current = scope.owner_id(db)
+    return {"rows": [
+        {**_person(u), "regions": kpi._regions_for(db, held.get(u.id, [])), "is_owner": u.id == current}
+        for u in rows
+    ]}
 
 
 @router.put("/owner")

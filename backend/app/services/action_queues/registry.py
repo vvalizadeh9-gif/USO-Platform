@@ -19,6 +19,7 @@ from app.services.action_queues.types import (
     COORDINATOR,
     PM,
     PROBLEM_OWNER,
+    HOME_ONLY,
     HOME_QUEUES,
     RAIL_QUEUES,
     REGIONAL_MANAGER,
@@ -103,13 +104,13 @@ QUEUES: tuple[QueueDefinition, ...] = (
     # not show it (types.RAIL_QUEUES).
     _q("acceptance_filing", Stage.ICT, "File acceptance letters", "Filing",
        "/my-work", _HOME_ACCEPTANCE, acceptance.filing, unit="villages", on_board=False),
-    # Submissions to ICT (UEP-21 §5.8): Home's Acceptance card, for the owner
+    # Submissions to ICT (UEP-21 §5.8): Home's Drive test card, for the owner
     # coordinator and the PM (everyone else's fetch is empty). Not on the
     # board, so the digest is unchanged. Keyed apart from ``ict_follow_up``,
     # which is the PM's follow-up of ICT's acceptance verdicts.
-    _q("submit_to_ict", Stage.ICT, "Submit to ICT", "Submit to ICT",
+    _q("submit_to_ict", Stage.DT, "Submit to ICT", "Submit to ICT",
        "/submissions", _STAFF, submissions.submit_to_ict, unit="villages", on_board=False),
-    _q("ict_mojri_follow_up", Stage.ICT, "Follow up with ICT", "Follow up with ICT",
+    _q("ict_mojri_follow_up", Stage.DT, "Follow up with ICT", "Follow up with ICT",
        "/submissions?view=follow-up", _STAFF, submissions.mojri_follow_up,
        unit="villages", on_board=False),
     # --- Plans & Data ----------------------------------------------------
@@ -150,7 +151,8 @@ def home_queues_for(role: str) -> list[QueueDefinition]:
     shown = []
     for queue in mine:
         keys = HOME_QUEUES[STAGE_GROUP[queue.stage]]
-        if (keys is None and queue.on_board) or (keys is not None and queue.key in keys):
+        board = queue.on_board or queue.key in HOME_ONLY
+        if (keys is None and board) or (keys is not None and queue.key in keys):
             shown.append(queue)
     order = {key: i for keys in HOME_QUEUES.values() if keys for i, key in enumerate(keys)}
     return sorted(shown, key=lambda q: order.get(q.key, -1))

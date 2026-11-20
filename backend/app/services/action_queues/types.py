@@ -62,12 +62,14 @@ HOME_GROUP_LABELS: dict[HomeGroup, str] = {
 #: worked in the Acceptance app and listed in the digest.
 HOME_QUEUES: dict[HomeGroup, tuple[str, ...] | None] = {
     HomeGroup.ROLLOUT: None,
-    HomeGroup.ACCEPTANCE: (
-        "submit_to_ict", "ict_mojri_follow_up",
-        "ict_pending", "cra_pending", "ict_to_validate", "cra_to_validate",
-    ),
+    HomeGroup.ACCEPTANCE: ("ict_pending", "cra_pending", "ict_to_validate", "cra_to_validate"),
     HomeGroup.PLANS: None,
 }
+
+#: Home-only queues (not on the board, so not in the digest) that a card
+#: showing "every queue of its stages" still shows: Submissions' two rows on
+#: the Drive test card (UEP-21), the step after the test.
+HOME_ONLY: tuple[str, ...] = ("submit_to_ict", "ict_mojri_follow_up")
 
 #: Queues Home counts for an app rail badge and a page header but shows on no
 #: card: the Filing page's own number (UEP-16), which overlaps the headline

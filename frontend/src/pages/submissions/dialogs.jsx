@@ -1,12 +1,12 @@
 // Submissions' small dialogs: change owner, add a letter, mark raised, import.
-import { useEffect, useId, useState } from 'react'
+import { useCallback, useEffect, useId, useState } from 'react'
 import { Modal } from '../../components/ui'
 import ShamsiDayInput from '../../components/ShamsiDayInput'
-import Select from '../../components/Select'
 import { detailMessage } from '../../lib/apiError'
 import { formatNumber } from '../../lib/numbers'
 import * as api from './api'
 import { shamsiInput } from './format'
+import { SkeletonRows } from './parts'
 
 function Footer({ busy, onCancel, label, disabled, onConfirm }) {
   return (
@@ -37,30 +37,65 @@ function useSubmit(onDone) {
   return { busy, error, run }
 }
 
+/** One coordinator per row, as a radio: name, initials, the CRA regions they
+ * hold, and "Current owner". A list rather than a dropdown, so nothing opens
+ * inside the dialog and nothing can be clipped by it. */
+function OwnerOption({ person, checked, onPick }) {
+  const initials = person.name.split(/\s+/).map((w) => w[0]).join('').slice(0, 2).toUpperCase()
+  return (
+    <label className={`sb-owner ${checked ? 'is-checked' : ''}`.trim()}>
+      <input type="radio" name="sb-owner" value={person.id} checked={checked} onChange={() => onPick(String(person.id))} />
+      <span className="sb-owner-avatar" aria-hidden="true">{initials}</span>
+      <span className="sb-owner-text">
+        <span className="sb-owner-name">{person.name}</span>
+        <span className="sb-owner-meta">{person.regions?.length ? person.regions.join(' · ') : 'No CRA region assigned'}</span>
+      </span>
+      {person.is_owner && <span className="sb-tag" data-tone="accent">Current owner</span>}
+    </label>
+  )
+}
+
 export function OwnerDialog({ open, current, onClose, onSaved }) {
-  const [rows, setRows] = useState([])
+  const [state, setState] = useState({ rows: null, error: '' })
   const [choice, setChoice] = useState('')
   const { busy, error, run } = useSubmit(() => { onSaved(); onClose() })
+  const load = useCallback(() => {
+    setState({ rows: null, error: '' })
+    api.fetchOwnerCandidates()
+      .then((d) => setState({ rows: d.rows, error: '' }))
+      .catch((err) => setState({ rows: [], error: detailMessage(err, 'The coordinators did not load.') }))
+  }, [])
   useEffect(() => {
     if (!open) return
     setChoice(current ? String(current.id) : '')
-    api.fetchOwnerCandidates().then((d) => setRows(d.rows)).catch(() => setRows([]))
-  }, [open, current])
+    load()
+  }, [open, current, load])
+  const unchanged = !choice || (current && String(current.id) === choice)
   return (
     <Modal
       open={open}
       onClose={onClose}
       size="sm"
       title="Change owner"
-      footer={<Footer busy={busy} onCancel={onClose} label="Save" disabled={!choice} onConfirm={() => run(() => api.setOwner(Number(choice)))} />}
+      footer={<Footer busy={busy} onCancel={onClose} label="Make owner" disabled={unchanged} onConfirm={() => run(() => api.setOwner(Number(choice)))} />}
     >
-      <label className="sb-field">
-        <span>Coordinator</span>
-        <Select className="input" value={choice} onChange={(e) => setChoice(e.target.value)}>
-          <option value="">Choose a coordinator</option>
-          {rows.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
-        </Select>
-      </label>
+      <p className="sb-owner-lead">The owner prepares and sends the batches to ICT HQ. The PM can always act too.</p>
+      <div className="sb-owner-list" role="radiogroup" aria-label="Coordinators">
+        {!state.rows && <SkeletonRows rows={3} />}
+        {state.error && (
+          <p className="sb-error" role="alert">
+            {state.error} <button type="button" className="sb-link" onClick={load}>Retry</button>
+          </p>
+        )}
+        {state.rows?.length === 0 && !state.error && (
+          <p className="sb-owner-empty">
+            No active coordinator accounts. An Admin adds one in <b>Admin › Users &amp; roles</b> with the role <b>Coordinator</b>.
+          </p>
+        )}
+        {state.rows?.map((p) => (
+          <OwnerOption key={p.id} person={p} checked={choice === String(p.id)} onPick={setChoice} />
+        ))}
+      </div>
       {error && <p className="sb-error" role="alert">{error}</p>}
     </Modal>
   )
