@@ -7,6 +7,13 @@ from typing import Literal
 from pydantic import BaseModel
 
 
+class SubmissionMetaOut(BaseModel):
+    next_number: int
+    due_in: int | None = None
+    sites: int = 0
+    oldest_days: int | None = None
+
+
 class HomeTicketOut(BaseModel):
     queue_key: str
     #: The action, verb first ("Review DT results").
@@ -33,6 +40,8 @@ class HomeTicketOut(BaseModel):
     owner_type: str | None = None
     #: Whole days the oldest item has waited.
     oldest_days: int | None = None
+    #: Submissions rows only (UEP-21): the next batch and its cycle.
+    submission: SubmissionMetaOut | None = None
 
 
 class HomeGroupOut(BaseModel):

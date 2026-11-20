@@ -39,6 +39,10 @@
     "internal_pip": {
       "offered": ["PM", "Coordinator", "Viewer"],
       "direct": []
+    },
+    "submissions": {
+      "offered": ["PM", "Coordinator", "Viewer"],
+      "direct": []
     }
   },
   "landings": {

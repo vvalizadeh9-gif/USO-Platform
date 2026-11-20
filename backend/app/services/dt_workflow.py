@@ -446,6 +446,34 @@ def open_next_round(db: Session, wi: WorkItem, user: User) -> Assignment | None:
     return nxt
 
 
+def reopen_for_new_villages(db: Session, wi: WorkItem) -> dict:
+    """A brand-new هدف village landed on a site whose drive test is done
+    (UEP-21 §5.6): the test did not cover it, so the site goes back to DT.
+
+    :func:`open_next_round` does not fit this case: it needs an active
+    assignment (a CPM-seeded DT-done site has none), it pre-selects the same
+    contractor, and it leaves the approved drive test active, so the site
+    would still read DT Done. Instead this closes whatever is active and
+    clears the drive-test outcome; the site then re-enters the normal health
+    check -> assign -> drive test flow with no contractor chosen, and the next
+    approval writes Done again. Returns the previous values, for the audit.
+    """
+    before = {
+        "dt_status": wi.dt_status,
+        "dt_date": wi.dt_date_gregorian.isoformat() if wi.dt_date_gregorian else None,
+    }
+    for assignment in wi.assignments:
+        assignment.is_active = False
+    for drive_test in wi.drive_tests:
+        drive_test.is_active = False
+    wi.dt_status = None
+    wi.dt_date_gregorian = None
+    wi.dt_problem_category = None
+    refresh_stage(wi)
+    db.flush()
+    return before
+
+
 # --------------------------------------------------------------------------
 # Reassign (PM only)
 # --------------------------------------------------------------------------

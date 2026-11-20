@@ -100,7 +100,7 @@ describe('General information', () => {
 })
 
 describe('Journey', () => {
-  it('renders the five steps in order, On air first, with their aging pills', async () => {
+  it('renders the six steps in order, On air first, with their aging pills', async () => {
     await draw()
     const steps = within(screen.getByRole('list', { name: 'Journey' })).getAllByRole('listitem')
     expect(steps[0].querySelector('[data-icon]')).toHaveAttribute('data-icon', 'cell-tower')
@@ -109,10 +109,11 @@ describe('Journey', () => {
       'Health check: done, 9 Sept 2026, 7 days after the previous step',
       'Assigned: done, 16 Sept 2026, 7 days after the previous step',
       'DT done: done, 30 Sept 2026, 14 days after the previous step',
-      'Acceptance: in progress, 14 days so far',
+      'Sent to ICT: in progress, 14 days so far',
+      'Acceptance: not yet reached',
     ])
     expect([...document.querySelectorAll('.ex-step-pill')].map((p) => p.textContent)).toEqual([
-      '+7 d', '+7 d', '+14 d', '+14 d so far',
+      '+7 d', '+7 d', '+14 d', '+14 d so far', '—',
     ])
     expect(document.querySelector('.ex-step.is-in_progress .ex-step-date')).toHaveTextContent('In progress')
   })
@@ -125,7 +126,7 @@ describe('Journey', () => {
     await draw()
     expect(screen.getAllByText('No date')).toHaveLength(4)
     const pills = [...document.querySelectorAll('.ex-step-pill')].map((p) => p.textContent)
-    expect(pills).toEqual(['—', '—', '—', '—'])
+    expect(pills).toEqual(['—', '—', '—', '—', '—'])
     expect(pills.join('')).not.toMatch(/-\d/)
     expect(document.querySelector('[data-tile="total"] .ex-aging-value')).toHaveTextContent('—')
   })

@@ -31,6 +31,8 @@ const AcceptanceDashboard = lazy(() => import('./pages/reports/AcceptanceDashboa
 const RolesPerformance = lazy(() => import('./pages/reports/rolesPerformance/RolesPerformance.jsx'))
 const LifecycleGaps = lazy(() => import('./pages/reports/LifecycleGaps.jsx'))
 const MojriImport = lazy(() => import('./pages/mojri/MojriImport'))
+const Submissions = lazy(() => import('./pages/submissions/Submissions'))
+const SubmissionBatch = lazy(() => import('./pages/submissions/BatchPage'))
 const KpiMapping = lazy(() => import('./pages/reports/KpiMapping'))
 const Admin = lazy(() => import('./pages/Admin'))
 const SlaPoliciesPage = lazy(() => import('./pages/admin/SlaPoliciesPage'))
@@ -278,6 +280,9 @@ export default function App() {
               </Protected>
             }
           />
+          {/* UEP-21: PM, Coordinator and Viewer; the server scopes and gates acting. */}
+          <Route path="/submissions" element={<Protected area={AREA.SUBMISSIONS}><Submissions /></Protected>} />
+          <Route path="/submissions/batches/:number" element={<Protected area={AREA.SUBMISSIONS}><SubmissionBatch /></Protected>} />
           <Route path="/acceptance" element={<Navigate to="/my-work" replace />} />
           <Route path="/my-acceptance" element={<Navigate to="/my-work" replace />} />
           <Route path="/admin" element={<Protected allowedRoles={['Admin', 'PM']}><Admin /></Protected>} />

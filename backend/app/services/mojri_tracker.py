@@ -108,10 +108,13 @@ from fastapi import HTTPException
 from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Font, PatternFill
 from openpyxl.utils import get_column_letter
+from datetime import date
+
 from sqlalchemy import ColumnElement, func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.core.jalali import current_shamsi_period
+from app.core.jalali import tehran_today as jalali_today
 from app.models.mojri import (
     IN_TRACKER,
     NEEDS_LOOK,
@@ -213,11 +216,28 @@ def comparison_scope(db: Session) -> tuple[ColumnElement[bool], ...]:
     return (*live_target_village(db), approved_by_either())
 
 
-def eligible_villages(db: Session) -> list[Village]:
-    """Villages worth tracking: the ones **we** have already approved, as
-    :func:`comparison_scope` defines them.
+def template_scope(db: Session) -> tuple[ColumnElement[bool], ...]:
+    """The villages the template lists (UEP-21): every live هدف village that
+    is ICT/CRA approved **or** drive-test done.
 
-    A village we have not accepted cannot be behind in somebody else's tracker
+    Wider than :func:`comparison_scope` on purpose. Submissions needs to know
+    whether ICT HQ has registered a village it was *sent* -- which happens once
+    the drive test is done, long before anyone approves it. The Lifecycle Gaps
+    card still counts only :func:`comparison_scope`, which is a subset of this,
+    so its figures do not move. A test holds the subset.
+
+    Expects ``Village`` joined to ``WorkItem``.
+    """
+    return (
+        *live_target_village(db),
+        or_(approved_by_either(), WorkItem.dt_status.in_(kpi.dt_done_values(db) or [""])),
+    )
+
+
+def eligible_villages(db: Session) -> list[Village]:
+    """Villages worth tracking, as :func:`template_scope` defines them.
+
+    A village neither approved nor drive tested cannot have reached ICT HQ
     yet, and putting it in the template would ask the team to fill in a row
     that means nothing.
     """
@@ -225,7 +245,7 @@ def eligible_villages(db: Session) -> list[Village]:
         select(Village)
         .join(WorkItem, Village.work_item_id == WorkItem.id)
         .join(Site, WorkItem.site_id == Site.id)
-        .where(*comparison_scope(db))
+        .where(*template_scope(db))
         .options(selectinload(Village.work_item).selectinload(WorkItem.site))
         .order_by(Village.id)
     )
@@ -324,7 +344,7 @@ def _village_key(village: Village) -> MatchKey | None:
     return match_key(site.site_code, work_item.site_type, village.village_code)
 
 
-def _live_villages_by_key(db: Session) -> dict[MatchKey, list[Village]]:
+def live_villages_by_key(db: Session) -> dict[MatchKey, list[Village]]:
     """Every live village, grouped by its key.
 
     Live means neither the village nor its work item soft-deleted: a deleted
@@ -345,6 +365,9 @@ def _live_villages_by_key(db: Session) -> dict[MatchKey, list[Village]]:
         if key is not None:
             index[key].append(village)
     return index
+
+
+_live_villages_by_key = live_villages_by_key
 
 
 # ----- Reading a filled template ------------------------------------------
@@ -604,6 +627,12 @@ def preview(db: Session, content: bytes, filename: str) -> dict:
     return _summarise(db, _parse(db, content), filename, digest_of(content))
 
 
+def _ict_in_tracker(villages: dict[int, dict[str, str]]) -> set[int]:
+    """The villages this file reads as registered on the ICT side: what
+    Submissions treats as "in Mojri" (needs_look is not a receipt)."""
+    return {vid for vid, statuses in villages.items() if statuses["ict"] == IN_TRACKER}
+
+
 def _authority_counts(
     villages: dict[int, dict[str, str]],
     existing: dict[int, MojriTrackerStatus],
@@ -693,13 +722,24 @@ def _summarise(db: Session, rows: list[ParsedRow], filename: str, digest: str) -
         },
         "disappeared": disappeared,
         "disappeared_count": len(disappeared),
+        # UEP-21: what confirming does to Submissions. Read-only here.
+        "submissions": _submission_effects(db, villages),
     }
+
+
+def _submission_effects(db: Session, villages: dict[int, dict[str, str]]) -> dict:
+    from app.services.submissions import mojri_link
+
+    return mojri_link.effects(db, _ict_in_tracker(villages))
 
 
 # ----- Commit -------------------------------------------------------------
 
 
-def commit(db: Session, user, content: bytes, filename: str, digest: str) -> dict:
+def commit(
+    db: Session, user, content: bytes, filename: str, digest: str,
+    file_date: date | None = None,
+) -> dict:
     """Apply a previewed file. The only function here that writes.
 
     Refuses a file whose digest does not match the one the preview returned.
@@ -741,6 +781,7 @@ def commit(db: Session, user, content: bytes, filename: str, digest: str) -> dic
         cra_in_tracker=result["authorities"]["cra"]["in_tracker"],
         cra_needs_look=result["authorities"]["cra"]["needs_look"],
         disappeared=result["disappeared_count"],
+        file_date=file_date or jalali_today(),
     )
     db.add(run)
     db.flush()
@@ -761,5 +802,12 @@ def commit(db: Session, user, content: bytes, filename: str, digest: str) -> dic
         status.updated_at = func.now()
 
     db.flush()
+    # UEP-21: confirmations and "sent outside UEP", after the statuses.
+    from app.services.submissions import mojri_link
+
+    result["submissions_applied"] = mojri_link.apply(
+        db, _ict_in_tracker(_statuses_to_write(rows)), run.file_date
+    )
     result["import_run_id"] = run.id
+    result["file_date"] = run.file_date
     return result

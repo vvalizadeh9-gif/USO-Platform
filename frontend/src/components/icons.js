@@ -196,6 +196,8 @@ import documentPdf16 from '@carbon/icons/es/document--pdf/16.js'
 import documentPdf20 from '@carbon/icons/es/document--pdf/20.js'
 import image16 from '@carbon/icons/es/image/16.js'
 import image20 from '@carbon/icons/es/image/20.js'
+import upgrade16 from '@carbon/icons/es/upgrade/16.js'
+import upgrade20 from '@carbon/icons/es/upgrade/20.js'
 import email16 from '@carbon/icons/es/email/16.js'
 import email20 from '@carbon/icons/es/email/20.js'
 
@@ -308,6 +310,7 @@ export const ICONS = Object.freeze({
   'document--pdf': { 16: documentPdf16, 20: documentPdf20 },
   'image': { 16: image16, 20: image20 },
   'email': { 16: email16, 20: email20 },
+  'upgrade': { 16: upgrade16, 20: upgrade20 },
 })
 
 /** @typedef {keyof typeof ICONS} IconName */

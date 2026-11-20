@@ -46,6 +46,12 @@ from app.models.health_check import (
 )
 from app.models.mojri import MojriImportRun, MojriTrackerStatus
 from app.models.performance import LifecycleStatusHistory
+from app.models.submission import (
+    CpmVillageSighting,
+    SubmissionBatch,
+    SubmissionItem,
+    SubmissionLetterFile,
+)
 from app.models.workitem import (
     Assignment,
     AssignmentVillage,
@@ -95,6 +101,13 @@ WIPE_ORDER: tuple[tuple[str, Table], ...] = (
     # surviving status would attach to whichever new village reused the id.
     ("mojri_tracker_status", MojriTrackerStatus.__table__),
     ("mojri_import_runs", MojriImportRun.__table__),
+    # Submissions to ICT (UEP-21). Items are keyed by village; a batch means
+    # nothing once its villages are gone, nor its letters' metadata. The
+    # sightings reference cpm_import_batches. The owner setting stays.
+    ("submission_items", SubmissionItem.__table__),
+    ("submission_batches", SubmissionBatch.__table__),
+    ("submission_letter_files", SubmissionLetterFile.__table__),
+    ("cpm_village_sightings", CpmVillageSighting.__table__),
     # Roles Performance's first-seen-on-air dates. Keyed by site and village
     # id with no foreign key, so a surviving row would date whichever new
     # entity reused the id; and it references cpm_import_batches.

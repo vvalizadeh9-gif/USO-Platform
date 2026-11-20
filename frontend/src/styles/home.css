@@ -119,6 +119,9 @@
 .hw-row-label { font-size: var(--uep-fs-body); font-weight: var(--uep-weight-medium); }
 .hw-row-meta { font-size: var(--uep-fs-caption); color: var(--uep-text-3); }
 .hw-late { color: var(--uep-danger); font-weight: var(--uep-weight-medium); }
+/* Submissions' cycle (UEP-21): pending ink at 3 days or fewer, red when overdue. */
+.hw-due[data-tone='pending'] { color: var(--uep-status-pending-ink); font-weight: var(--uep-weight-medium); }
+.hw-due[data-tone='danger'] { color: var(--uep-danger); font-weight: var(--uep-weight-medium); }
 .hw-row-count { font-size: var(--uep-fs-queue-count); font-weight: var(--uep-weight-semibold); }
 .hw-plan { padding: var(--uep-space-12) var(--uep-space-16) 14px; border-top: var(--uep-border-width) solid var(--uep-divider); }
 .hw-plan-head { display: flex; justify-content: space-between; font-size: var(--uep-fs-small); font-weight: var(--uep-weight-medium); }

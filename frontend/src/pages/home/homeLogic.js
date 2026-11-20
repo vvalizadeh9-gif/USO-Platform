@@ -50,6 +50,25 @@ export function metaText(ticket) {
   return joinMeta(oldestText(ticket), ownersText(ticket))
 }
 
+/** Submissions' two Home rows (UEP-21 §5.8) say their own meta line.
+ * Returns null for every other row. `tone` is 'pending' at 3 days or fewer,
+ * 'danger' once the cycle is overdue. */
+export function submissionMeta(ticket) {
+  const meta = ticket.submission
+  if (!meta) return null
+  if (ticket.queue_key === 'ict_mojri_follow_up') {
+    return { late: ticket.count, text: meta.oldest_days != null ? `Oldest ${plural(meta.oldest_days, 'day', 'days')}` : null }
+  }
+  const due = meta.due_in
+  let dueText = null
+  let tone = null
+  if (due != null) {
+    dueText = due < 0 ? `Batch #${meta.next_number} overdue ${plural(-due, 'day', 'days')}` : `Batch #${meta.next_number} due in ${plural(due, 'day', 'days')}`
+    tone = due < 0 ? 'danger' : due <= 3 ? 'pending' : null
+  }
+  return { due: dueText, tone, text: plural(meta.sites, 'site', 'sites') }
+}
+
 /** "Saturday, 10 October 2026", in the viewer's own time zone. */
 export function englishDate(date = new Date()) {
   return new Intl.DateTimeFormat('en-GB', {

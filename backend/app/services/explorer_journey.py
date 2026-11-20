@@ -27,8 +27,13 @@ STEP_ON_AIR = "on_air"
 STEP_HEALTH_CHECK = "health_check"
 STEP_ASSIGNED = "assigned"
 STEP_DT_DONE = "dt_done"
+#: UEP-21: the DT-done letter to ICT HQ (Submissions), before acceptance.
+STEP_SENT_TO_ICT = "sent_to_ict"
 STEP_ACCEPTANCE = "acceptance"
-STEP_ORDER = (STEP_ON_AIR, STEP_HEALTH_CHECK, STEP_ASSIGNED, STEP_DT_DONE, STEP_ACCEPTANCE)
+STEP_ORDER = (
+    STEP_ON_AIR, STEP_HEALTH_CHECK, STEP_ASSIGNED, STEP_DT_DONE, STEP_SENT_TO_ICT,
+    STEP_ACCEPTANCE,
+)
 
 STATE_DONE = "done"
 STATE_IN_PROGRESS = "in_progress"
@@ -102,9 +107,20 @@ def build_steps(facts: list[StepFact], today: date) -> list[dict]:
             "key": fact.key,
             "state": state,
             "date": when,
-            "gap_days": _gap(steps[-1] if steps else None, state, when, today),
+            "gap_days": _gap(_measured_from(steps), state, when, today),
         })
     return steps
+
+
+def _measured_from(steps: list[dict]) -> dict | None:
+    """The step a gap is measured from: the one before, unless that is a
+    "Sent to ICT" proven only by acceptance (no letter in UEP, so no date) --
+    then the step before it, so acceptance still ages from DT done."""
+    for step in reversed(steps):
+        if step["key"] == STEP_SENT_TO_ICT and step["state"] == STATE_DONE and step["date"] is None:
+            continue
+        return step
+    return None
 
 
 def _gap(previous: dict | None, state: str, when: date | None, today: date) -> int | None:

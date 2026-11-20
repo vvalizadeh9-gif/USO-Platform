@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react'
+import ShamsiDayInput from '../../components/ShamsiDayInput'
 import { AlertTriangle, CheckCircle2, FileSpreadsheet, UploadCloud } from '../../components/carbon'
 import api from '../../api/client'
 import { EmptyState, PageHead } from '../../components/ui'
@@ -41,6 +42,9 @@ export default function MojriImport() {
   const [done, setDone] = useState(null)
   const [busy, setBusy] = useState('')
   const [error, setError] = useState('')
+  // The day Mojri's file reflects (UEP-21): Submissions measures lateness
+  // against it, never against today. Blank means today.
+  const [fileDate, setFileDate] = useState('')
 
   function pick(chosen) {
     setError('')
@@ -96,7 +100,7 @@ export default function MojriImport() {
     setBusy('commit')
     setError('')
     try {
-      setDone(await send('commit', { digest: preview.digest }))
+      setDone(await send('commit', { digest: preview.digest, ...(fileDate ? { file_date: fileDate } : {}) }))
       setPreview(null)
     } catch (err) {
       setError(err.response?.data?.detail || 'The import could not be applied.')
@@ -170,7 +174,13 @@ export default function MojriImport() {
       </section>
 
       {preview && (
-        <Preview data={preview} onConfirm={confirm} busy={busy === 'commit'} />
+        <Preview
+          data={preview}
+          onConfirm={confirm}
+          busy={busy === 'commit'}
+          fileDate={fileDate}
+          onFileDate={setFileDate}
+        />
       )}
 
       {done && <Done data={done} />}
@@ -191,7 +201,7 @@ function unmatchedLabel(row) {
   return `row ${row.row} ${key} (${row.reason})`
 }
 
-function Preview({ data, onConfirm, busy }) {
+function Preview({ data, onConfirm, busy, fileDate, onFileDate }) {
   const matched = matchedRows(data)
   const share = data.total_rows > 0 ? matched / data.total_rows : 0
   const nothingMatched = matched === 0
@@ -286,7 +296,27 @@ function Preview({ data, onConfirm, busy }) {
         </div>
       )}
 
-      <div className="row" style={{ gap: 10, marginTop: 16 }}>
+      {data.submissions && (
+        <div className="kpi-banner" style={{ marginTop: 14 }} data-testid="mojri-submissions">
+          <span>
+            Follow-ups closed: {fmtCount(data.submissions.follow_ups_closed)}
+            {data.submissions.outside_uep > 0 && (
+              <>
+                {' · '}{fmtCount(data.submissions.outside_uep)} village
+                {data.submissions.outside_uep === 1 ? ' is' : 's are'} in Mojri but
+                {data.submissions.outside_uep === 1 ? ' was' : ' were'} never sent from
+                UEP. They will be recorded as sent outside UEP.
+              </>
+            )}
+          </span>
+        </div>
+      )}
+
+      <div className="row" style={{ gap: 10, marginTop: 16, alignItems: 'flex-end' }}>
+        <label>
+          <span className="kpi-sub" style={{ display: 'block', marginBottom: 4 }}>Mojri file date (blank = today)</span>
+          <ShamsiDayInput value={fileDate} onChange={onFileDate} disabled={busy} />
+        </label>
         <button
           type="button"
           className="btn btn-primary"

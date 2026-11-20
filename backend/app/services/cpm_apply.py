@@ -13,18 +13,25 @@ import json
 
 from sqlalchemy.orm import Session
 
+from app.core import audit_actions
 from app.models.acceptance import CpmChangeRequest
 from app.models.workitem import Village, WorkItem
+from app.services.audit import record_audit
+from app.services.cpm_columns import is_pure_target
+from app.services.drive_test_analytics import is_dt_done
+from app.services.dt_workflow import reopen_for_new_villages
+from app.services.mojri_tracker import match_key
+from app.services.submissions import sightings
 
 
-def apply_change_request(db: Session, cr: CpmChangeRequest) -> None:
+def apply_change_request(db: Session, cr: CpmChangeRequest, user_id: int | None = None) -> None:
     """Apply the change described by ``cr``. Caller sets status/commits."""
     if cr.change_type == "requested_tech":
         _apply_requested_tech(db, cr)
     elif cr.change_type == "site_type":
         _apply_site_type(db, cr)
     elif cr.change_type == "village_qty":
-        _apply_village_qty(db, cr)
+        _apply_village_qty(db, cr, user_id)
     else:
         # Legacy simple field change.
         if cr.work_item_id is not None:
@@ -61,7 +68,7 @@ def _apply_site_type(db: Session, cr: CpmChangeRequest) -> None:
     db.flush()
 
 
-def _apply_village_qty(db: Session, cr: CpmChangeRequest) -> None:
+def _apply_village_qty(db: Session, cr: CpmChangeRequest, user_id: int | None = None) -> None:
     if cr.work_item_id is None or not cr.payload_json:
         return
     wi = db.get(WorkItem, cr.work_item_id)
@@ -69,10 +76,12 @@ def _apply_village_qty(db: Session, cr: CpmChangeRequest) -> None:
         return
     payload = json.loads(cr.payload_json)
 
+    brand_new = False
     for v in payload.get("added", []):
         exists = any(x.village_code == v["village_code"] for x in wi.villages)
         if exists:
             continue
+        brand_new = brand_new or _is_brand_new_target(db, wi, v)
         db.add(
             Village(
                 work_item_id=wi.id,
@@ -82,6 +91,9 @@ def _apply_village_qty(db: Session, cr: CpmChangeRequest) -> None:
                 # village lands with a NULL classification and stays invisible
                 # to the Acceptance KPIs, which count only هدف.
                 target_classification=v.get("target_classification"),
+                county=v.get("county"),
+                district=v.get("district"),
+                rural_district=v.get("rural_district"),
                 households=v.get("households"),
                 population=v.get("population"),
                 latitude=v.get("latitude"),
@@ -98,3 +110,25 @@ def _apply_village_qty(db: Session, cr: CpmChangeRequest) -> None:
             db.delete(village)
 
     db.flush()
+    if brand_new and is_dt_done(wi):
+        _reopen_drive_test(db, wi, cr, user_id)
+
+
+def _is_brand_new_target(db: Session, wi: WorkItem, v: dict) -> bool:
+    """A pure هدف village whose key no CPM file ever listed as non-هدف
+    (UEP-21 §5.6). A village that was اقماری before is not new: the drive
+    test covered it, and Submissions lists it as "Became هدف"."""
+    if not is_pure_target(v.get("target_classification")):
+        return False
+    key = match_key(wi.site.site_code if wi.site else None, wi.site_type, v.get("village_code"))
+    return not sightings.was_sighted(db, key)
+
+
+def _reopen_drive_test(db: Session, wi: WorkItem, cr: CpmChangeRequest, user_id: int | None) -> None:
+    before = reopen_for_new_villages(db, wi)
+    record_audit(
+        db, user_id=user_id, action=audit_actions.UPDATED, module="DriveTest",
+        entity_type="WorkItem", entity_id=wi.id, old_value=before,
+        new_value={"dt_status": None, "cpm_change_request_id": cr.id},
+        reason="New هدف village on a drive-tested site: back to drive test (UEP-21)",
+    )

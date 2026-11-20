@@ -3,7 +3,7 @@ import Icon from '../../components/Icon'
 import AppTile from '../../shell/AppTile'
 import { APPS } from '../../shell/appRegistry'
 import MetaLine from '../../components/MetaLine'
-import { oldestText, ownersText } from './homeLogic'
+import { oldestText, ownersText, submissionMeta } from './homeLogic'
 import { formatNumber } from '../../lib/numbers'
 
 // Each card is its app's: tile colour, icon and header tint from the registry.
@@ -11,6 +11,21 @@ const CARD_APP = { drive_test: 'drive-test', acceptance: 'acceptance', plans: 'm
 const appById = (id) => APPS.find((a) => a.id === id)
 
 /** One queue. Every row looks the same: none is singled out as "next". */
+function metaParts(ticket) {
+  const sub = submissionMeta(ticket)
+  if (sub?.due !== undefined) {
+    return [sub.due && <span className="hw-due" data-tone={sub.tone || undefined}>{sub.due}</span>, sub.text]
+  }
+  if (sub) {
+    return [sub.late > 0 && <span className="hw-late">{formatNumber(sub.late)} late</span>, sub.text]
+  }
+  return [
+    ticket.late > 0 && <span className="hw-late">{formatNumber(ticket.late)} late</span>,
+    oldestText(ticket),
+    ownersText(ticket),
+  ]
+}
+
 function QueueRow({ ticket }) {
   const navigate = useNavigate()
   return (
@@ -18,13 +33,7 @@ function QueueRow({ ticket }) {
       <span className="hw-row-text">
         <span className="hw-row-label">{ticket.short_label}</span>
         <span className="hw-row-meta">
-          <MetaLine
-            parts={[
-              ticket.late > 0 && <span className="hw-late">{formatNumber(ticket.late)} late</span>,
-              oldestText(ticket),
-              ownersText(ticket),
-            ]}
-          />
+          <MetaLine parts={metaParts(ticket)} />
         </span>
       </span>
       <span className="hw-row-count">{formatNumber(ticket.count)}</span>

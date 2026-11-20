@@ -47,6 +47,7 @@ from app.services import acceptance_tokens as tokens
 from app.services import cpm_columns as C
 from app.services.audit import record_audit
 from app.services.performance import onair_history
+from app.services.submissions import sightings
 
 logger = logging.getLogger(__name__)
 
@@ -95,6 +96,9 @@ class CpmImportService:
 
         # Running counters.
         self._skipped = 0        # rows skipped for not being exactly هدف
+        # The keys of those skipped rows (UEP-21 sightings): what later tells
+        # a village that "became هدف" from a brand-new one.
+        self._sightings: list[tuple] = []
         self._new_villages = 0   # village rows created this import
         # Villages whose ICT/CRA status a workbook cell actually moved, so
         # the cached queue status can be rebuilt for them at the end.
@@ -166,6 +170,7 @@ class CpmImportService:
         # The fallback on-air dates for Roles Performance: the first import
         # that saw each site and village on air. Same transaction as the batch.
         onair_history.record_on_air(self._db, batch.id, _dt.now(timezone.utc))
+        sightings.record(self._db, self._sightings, _dt.now(timezone.utc), batch.id)
 
         record_audit(
             self._db,
@@ -244,6 +249,11 @@ class CpmImportService:
             # "(Verbally)" / "(Removed Verbally)" هدف sub-flags — is never
             # stored, just counted.
             self._skipped += 1
+            self._sightings.append((
+                site_code, site_type,
+                self._get(raw, C.COL["village_code"]),
+                C.clean(self._get(raw, C.COL["target_flag"])),
+            ))
             return
 
         site = self._get_or_create_site(raw, site_code)
@@ -344,6 +354,11 @@ class CpmImportService:
             # village-quantity change request for PM validation.
             village.target_classification = C.clean(
                 self._get(raw, C.COL["target_flag"])
+            )
+            # The village's own county / district / rural district (UEP-21):
+            # not tracked changes, so refreshed silently like any master field.
+            village.county, village.district, village.rural_district = (
+                self._place(raw)
             )
             # ICT/CRA approval columns are re-applied on every import (not just
             # first seed) so coordinators can update approvals via the CPM file.
@@ -553,8 +568,18 @@ class CpmImportService:
         if not C.is_status_word(name):
             wi.site_contractor = self._contractor(name, kind="site")
 
+    def _place(self, raw: list) -> tuple[str | None, str | None, str | None]:
+        return tuple(  # type: ignore[return-value]
+            C.clean(self._get(raw, C.COL[name]))
+            for name in ("county", "district", "rural_district")
+        )
+
     def _village_data(self, raw: list, code: str | None) -> dict:
+        county, district, rural_district = self._place(raw)
         return {
+            "county": county,
+            "district": district,
+            "rural_district": rural_district,
             "village_code": code,
             "village_name": C.clean(self._get(raw, C.COL["village_name"])),
             "target_classification": C.clean(self._get(raw, C.COL["target_flag"])),

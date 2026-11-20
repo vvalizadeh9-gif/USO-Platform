@@ -444,4 +444,13 @@
   --uep-accent-light: #B9CBF5;
   --uep-future: #F7F8FB;
   --uep-danger-on-accent: #FFD6D2;
+
+  /* Submissions (UEP-21) */
+  --uep-sb-panel: 264px;             /* Ready's reason panel */
+  --uep-sb-side: 300px;              /* a draft batch's right column */
+  --uep-sb-village-row: 36px;        /* a site's expanded village row */
+  --uep-sb-figure: 28px;             /* a view tile's figure */
+  --uep-sb-tile-icon: 36px;          /* a card header's tile */
+  --uep-sb-letter-dot: 18px;         /* one of a batch's three letter bars */
+  --uep-sb-bar: 6px;                 /* segmented Mojri bar, cycle bar */
 }

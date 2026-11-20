@@ -9,6 +9,7 @@ import { myWorkList, myWorkSuggestions, myWorkVillage } from './myWorkFixtures.j
 import { validationEmail, validationGroup, validationList } from './validationFixtures.js'
 import { rpArea, rpMonth } from './rolesFixtures.js'
 import { explorerSite, explorerSites } from './explorerFixtures.js'
+import * as SB from './submissionsFixtures.js'
 import { FILTER_OPTIONS, siteVillages } from '../src/pages/explorer/fixtures.js'
 
 const ROUTES = {
@@ -50,6 +51,11 @@ const ROUTES = {
   '/explorer/sites': explorerSites,
   '/explorer/sites/filters': FILTER_OPTIONS,
   '/search': F.searchResults,
+  '/submissions/summary': SB.summary(),
+  '/submissions/ready': SB.ready(),
+  '/submissions/batches': SB.batches(),
+  '/submissions/follow-up': SB.followUp(),
+  '/submissions/villages': SB.yourVillages(),
 }
 
 // Endpoints answered late, on purpose: the dashboard's side cards arriving
@@ -68,6 +74,7 @@ const PATTERNS = [
   [/^\/acceptance\/my-work\/evidence\/\d+\/email$/, validationEmail],
   [/^\/explorer\/sites\/\d+\/villages$/, () => siteVillages(3)],
   [/^\/explorer\/sites\/\d+$/, explorerSite],
+  [/^\/submissions\/batches\/\d+$/, (url) => SB.batch(Number(url.split('/').pop()))],
 ]
 
 const viewOf = (user) => (user.role.name === 'Contractor' ? 'contractor' : 'staff')

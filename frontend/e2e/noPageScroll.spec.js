@@ -24,6 +24,11 @@ const PAGES = [
     fits: true,
     before: (page) => page.getByRole('button', { name: 'Table' }).click(),
   },
+  // UEP-21 Submissions: all three views and a batch (1366×768 in submissions.spec.js).
+  { name: 'Submissions Ready', path: '/submissions', ready: 'Ready to submit', fits: true },
+  { name: 'Submissions Batches', path: '/submissions?view=batches', ready: 'All batches', fits: true },
+  { name: 'Submissions Follow up', path: '/submissions?view=follow-up', ready: 'Sent, not in Mojri after 30 days', fits: true },
+  { name: 'Submissions batch', path: '/submissions/batches/40', ready: 'Batch #40', fits: true },
 ]
 
 async function pageScroll(page) {

@@ -19,6 +19,8 @@ export const STEP_META = Object.freeze({
   health_check: { label: 'Health check', phrase: 'health check', icon: 'connection-signal', badge: true, waiting: 'Health check in progress' },
   assigned: { label: 'Assigned', phrase: 'assignment', icon: 'task--complete', waiting: 'Awaiting assignment' },
   dt_done: { label: 'DT done', phrase: 'DT done', icon: 'car', waiting: 'Drive test in progress' },
+  // UEP-21: the DT-done letter to ICT HQ (Acceptance › Submissions).
+  sent_to_ict: { label: 'Sent to ICT', phrase: 'sent to ICT', icon: 'send', waiting: 'Awaiting submission to ICT' },
   acceptance: { label: 'Acceptance', phrase: 'acceptance', icon: 'certificate--check', waiting: 'Acceptance in progress' },
 })
 

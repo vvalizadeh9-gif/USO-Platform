@@ -1978,6 +1978,80 @@ awaiting one. Every link to a site goes through `lib/explorerLinks.js`.
 One column: `work_items.site_contractor_id`, nullable, FK `contractors.id`,
 indexed (migration `a7c3e9d2f514`). See §3.
 
+## 5j. Submissions to ICT (UEP-21)
+
+Every two weeks the team sends ICT HQ an official MTN letter with an 18-column
+Excel list of the villages whose drive test is done. Acceptance > Submissions
+(`/submissions`, `services/submissions/`, `api/submissions.py`) prepares that
+list, records what went, and follows up what ICT HQ has not registered.
+
+**Our record is the source of truth.** `submission_batches` (one MTN letter,
+plus the two optional onward letters) and `submission_items` (one village in
+one batch) say what was sent. ICT HQ's Mojri tracker runs about a month late,
+so reading "not in Mojri" as "not sent" would send villages twice. Mojri is
+read only to *confirm*: it never makes a village unsent, and it never writes
+acceptance (section 5d still holds).
+
+Definitions (`services/submissions/`):
+
+* **Universe**: live, pure هدف villages whose work item is drive-test done:
+  `acceptance_universe.dt_done_universe`, the same condition Lifecycle Gaps and
+  the Acceptance dashboard count over. A site seeded Done by the first CPM
+  import and a site approved in the app both carry `dt_status = 'Done'`; a
+  Submitted, Returned or Rejected drive test does not.
+* **Active item**: not superseded. A partial unique index allows one per
+  village. A draft locks its villages; cancelling it supersedes its items,
+  which releases them. "Send again" supersedes a sent item.
+* **Ready**: in the universe, with no active item. One reason each, first match
+  wins: `resend` (a sent item superseded by Send again), `became_target` (its
+  key is in `cpm_village_sightings`), `new_dt` (the site's drive test was
+  approved in the app and none of its villages has an active item, so the whole
+  site goes), `missed` (everything else).
+* **Sent**: an active item in a sent batch, or with no batch at all ("sent
+  outside UEP": found in Mojri, never sent through UEP).
+* **In Mojri**: the village reads `in_tracker` on the ICT side, or a Mojri
+  import already stamped `mojri_confirmed_at`. `needs_look` does **not**
+  count: it covers a refusal ("no", "رد") as well as an unreadable cell.
+* **Late**: sent, not in Mojri, and `sent_at + mojri_follow_up` days is on or
+  before the **latest Mojri file's date** (`mojri_import_runs.file_date`),
+  never today. A Mojri file nobody refreshed pauses the count by itself.
+  **Stale**: today is more than `mojri_follow_up` days past that date.
+
+SLA policies carries the two clocks: `submit_cycle` (14 days, last batch sent
+to next batch sent) and `mojri_follow_up` (30 days, sent to in Mojri).
+
+**Hooks elsewhere** (the only places this module reaches out):
+
+* *CPM import* records every non-هدف row's key in `cpm_village_sightings`
+  (first sighting only), and refreshes `villages.county / district /
+  rural_district` (a site's villages can sit in different counties; the site's
+  columns hold the first row's). An accepted village-quantity change that adds
+  a pure هدف village whose key was never sighted to a DT-done work item sends
+  the site back to drive test: `dt_workflow.reopen_for_new_villages` closes the
+  active assignment and drive test and clears `dt_status`, with no contractor
+  chosen, and an audit entry. (`open_next_round` does not fit: it needs an
+  active assignment, which a CPM-seeded DT-done site never has, and it keeps
+  the same contractor.) A village that was اقماری before is Ready as "Became
+  هدف" instead. `app/scripts/seed_sightings.py` seeds the table once from the
+  CPM workbooks kept on the upload volume.
+* *Mojri import* takes the file's date, lists drive-tested villages in the
+  template too (`template_scope` is a superset of `comparison_scope`, so the
+  Lifecycle Gaps card does not move), and on commit stamps confirmations and
+  records "sent outside UEP" items (`services/submissions/mojri_link.py`).
+* *Home*: `submit_to_ict` and `ict_mojri_follow_up` on the Acceptance card, for
+  the PM and the owner only (`action_queues/sources/submissions.py`). The second
+  is keyed apart from `ict_follow_up`, the PM's follow-up of ICT's verdicts.
+* *Explorer*: a "Sent to ICT" step between DT done and Acceptance, with the
+  batch, its letters and the Mojri state.
+
+**Counts** come from `services/submissions/counts.py` alone: the view tiles,
+the side panel, the rail badge (Home's `submit_to_ict`) and Home's rows.
+
+**Roles**: area `submissions` in the permission map (PM, Coordinator, Viewer).
+Acting is the PM's and the owner coordinator's (`submission_settings`, set by
+the PM). Other coordinators read their own provinces only; Viewer reads all.
+Letter scans go through `evidence_store`, the one storage path.
+
 ## 6. Roles and permissions
 
 Ten roles. Six are staff and workflow roles; four exist solely to own health-check

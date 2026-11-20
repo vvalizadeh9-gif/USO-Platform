@@ -28,6 +28,7 @@ from app.models.workitem import Site, Village, WorkItem
 from app.services import acceptance_workflow as flow
 from app.services import cpm_columns as C
 from app.services import explorer_journey as J
+from app.services.submissions import journey as submission_journey
 from app.services.drive_test_analytics import is_dt_done
 from app.services.performance.periods import tehran_day
 from app.services.tech_parser import parse_technologies
@@ -175,7 +176,9 @@ def health_check_date(wi: WorkItem) -> date | None:
     return max(tehran_day(moment) for moment in passed) if passed else None
 
 
-def _step_facts(wi: WorkItem, villages: list[dict], accepting: bool) -> list[J.StepFact]:
+def _step_facts(
+    wi: WorkItem, villages: list[dict], accepting: bool, sent_on: date | None = None
+) -> list[J.StepFact]:
     assignment = relevant_assignment(wi)
     hc_date = health_check_date(wi)
     accepted = accepting and bool(villages) and all(J.is_fully_approved(v) for v in villages)
@@ -188,6 +191,7 @@ def _step_facts(wi: WorkItem, villages: list[dict], accepting: bool) -> list[J.S
             tehran_day(assignment.assigned_at) if assignment else None,
         ),
         J.StepFact(J.STEP_DT_DONE, is_dt_done(wi), wi.dt_date_gregorian),
+        J.StepFact(J.STEP_SENT_TO_ICT, sent_on is not None, sent_on),
         J.StepFact(
             J.STEP_ACCEPTANCE, accepted, J.acceptance_done_on(villages) if accepted else None
         ),
@@ -248,7 +252,10 @@ def site_record(
     villages = [_village(v, wi, rounds, requests, today) for v in hadaf]
 
     accepting = is_dt_done(wi)
-    steps = J.build_steps(_step_facts(wi, villages, accepting), today)
+    sends = submission_journey.site_sends(db, wi.id)
+    steps = J.build_steps(
+        _step_facts(wi, villages, accepting, submission_journey.first_sent(sends)), today
+    )
     return {
         "id": wi.id,
         "site_code": wi.site.site_code if wi.site else None,
@@ -257,6 +264,7 @@ def site_record(
         "journey": {
             "steps": steps,
             "aging": J.aging(steps, villages if accepting else [], today),
+            "sent_to_ict": sends,
         },
         "acceptance_started": accepting,
         "villages": villages,

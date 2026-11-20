@@ -10,7 +10,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-StepKey = Literal["on_air", "health_check", "assigned", "dt_done", "acceptance"]
+StepKey = Literal["on_air", "health_check", "assigned", "dt_done", "sent_to_ict", "acceptance"]
 StepState = Literal["done", "in_progress", "upcoming"]
 SideWord = Literal["approved", "pending", "rejected"]
 SidePhase = Literal[
@@ -60,9 +60,30 @@ class AgingOut(BaseModel):
     oldest_pending: OldestPendingOut | None
 
 
+class LetterOut(BaseModel):
+    no: str | None
+    date: date | None
+
+
+class SentToIctOut(BaseModel):
+    """One batch the site's villages went to ICT HQ in (UEP-21), or one
+    "sent outside UEP" entry for villages found only in Mojri."""
+
+    batch_number: int | None
+    outside_uep: bool
+    sent_at: date | None
+    villages: int
+    mtn: LetterOut | None
+    ict: LetterOut | None
+    cra: LetterOut | None
+    in_mojri_since: date | None
+    in_mojri: int
+
+
 class JourneyOut(BaseModel):
     steps: list[StepOut]
     aging: AgingOut
+    sent_to_ict: list[SentToIctOut] = []
 
 
 class SideOut(BaseModel):

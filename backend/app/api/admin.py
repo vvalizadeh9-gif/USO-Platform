@@ -236,7 +236,7 @@ def decide_change_request(
     if payload.decision == "Accepted":
         from app.services.cpm_apply import apply_change_request
 
-        apply_change_request(db, cr)
+        apply_change_request(db, cr, user_id=user.id)
 
     cr.status = payload.decision
     cr.decided_by = user.id

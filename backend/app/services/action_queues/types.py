@@ -62,7 +62,10 @@ HOME_GROUP_LABELS: dict[HomeGroup, str] = {
 #: worked in the Acceptance app and listed in the digest.
 HOME_QUEUES: dict[HomeGroup, tuple[str, ...] | None] = {
     HomeGroup.ROLLOUT: None,
-    HomeGroup.ACCEPTANCE: ("ict_pending", "cra_pending", "ict_to_validate", "cra_to_validate"),
+    HomeGroup.ACCEPTANCE: (
+        "submit_to_ict", "ict_mojri_follow_up",
+        "ict_pending", "cra_pending", "ict_to_validate", "cra_to_validate",
+    ),
     HomeGroup.PLANS: None,
 }
 
