@@ -14,6 +14,14 @@ class SubmissionMetaOut(BaseModel):
     oldest_days: int | None = None
 
 
+class CaseMetaOut(BaseModel):
+    """Acceptance case rows only (UEP-22): from the Filing inbox's counts."""
+
+    count: int
+    over_sla: int
+    no_comment: int
+
+
 class HomeTicketOut(BaseModel):
     queue_key: str
     #: The action, verb first ("Review DT results").
@@ -42,6 +50,8 @@ class HomeTicketOut(BaseModel):
     oldest_days: int | None = None
     #: Submissions rows only (UEP-21): the next batch and its cycle.
     submission: SubmissionMetaOut | None = None
+    #: Acceptance case rows only (UEP-22): over SLA and no fresh comment.
+    acceptance: CaseMetaOut | None = None
 
 
 class HomeGroupOut(BaseModel):

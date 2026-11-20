@@ -58,14 +58,17 @@ _YES = {
     Area.LIFECYCLE_GAPS: {*CORE, "RegionalManager"},
     Area.MOJRI_SECTION: {"PM", "Coordinator", "Viewer"},
     Area.INSIGHTS_DASHBOARDS: {*CORE, "Admin"},
-    Area.EXPLORER: {*CORE, "RegionalManager", *FIVE, "Admin"},
-    Area.EXPLORER_ALL_SITES: set(FIVE),
+    Area.EXPLORER: {*CORE, "RegionalManager", *FIVE, "CpgPso", "Admin"},
+    Area.EXPLORER_ALL_SITES: {*FIVE, "CpgPso"},
     Area.ACCEPTANCE_WORKSPACE: set(CORE),
+    # UEP-22: Filing (the cases inbox) adds the team basket roles.
+    Area.ACCEPTANCE_CASES: {*CORE, "NwgPlanning", "CpgRolloutPM", "CpgPower", "ManagedService", "CpgPso"},
+    Area.ACCEPTANCE_BASKETS: {"PM", "Coordinator", "Viewer"},
     Area.MONTHLY_PLAN_QUEUE: {"PM", "Coordinator", "Viewer", "Admin"},
     Area.INTERNAL_PIP: {"PM", "Coordinator", "Viewer"},
     Area.SUBMISSIONS: {"PM", "Coordinator", "Viewer"},
 }
-_ROLES = ("Admin", *CORE, "RegionalManager", *FIVE)
+_ROLES = ("Admin", *CORE, "RegionalManager", *FIVE, "CpgPso")
 
 
 @pytest.mark.parametrize(

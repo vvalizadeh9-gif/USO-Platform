@@ -84,7 +84,7 @@ describe('counts come from the one /me/home response', () => {
   })
 
   it('ignores a preferred app that does not hold the page', () => {
-    expect(locate(appsFor('PM'), '/my-work', '', 'insights').app.id).toBe('acceptance')
+    expect(locate(appsFor('PM'), '/filing', '', 'insights').app.id).toBe('acceptance')
   })
 })
 
@@ -135,7 +135,7 @@ describe('Drive test rail without Dashboard', () => {
   it('labels and orders the Insights rail', () => {
     const insights = appsFor('PM').find((a) => a.id === 'insights')
     expect(insights.pages.map((p) => p.label)).toEqual([
-      'Drive test dashboard', 'Acceptance dashboard', 'Roles performance', 'Lifecycle gaps', 'Exports',
+      'Drive test dashboard', 'Acceptance dashboard', 'Roles performance', 'Lifecycle gaps', 'Acceptance baskets', 'Exports',
     ])
   })
 })
@@ -167,7 +167,7 @@ describe('Acceptance rail', () => {
 
   it.each(['PM', 'Viewer', 'Contractor'])('opens on Filing for %s and has no Dashboard or Letters', (role) => {
     const app = appsFor(role).find((a) => a.id === 'acceptance')
-    expect(appRoute(app)).toBe('/my-work')
+    expect(appRoute(app)).toBe('/filing')
     expect(app.pages.map((p) => p.route)).not.toContain('/reports/acceptance')
     expect(app.pages.map((p) => p.id)).not.toContain('letters')
   })
@@ -204,14 +204,16 @@ describe('role access matrix in the registry', () => {
   })
 
   it.each(FIVE)('offers %s no Insights, Explorer, and only the Drive test pages it had', (role) => {
-    expect(pagesBy(role)).toEqual({ explorer: ['explorer'], 'drive-test': ['fixes'] })
+    // UEP-22: the team basket roles also work Filing (their basket).
+    const filing = role === 'HuaweiCleanup' ? {} : { acceptance: ['filing'] }
+    expect(pagesBy(role)).toEqual({ explorer: ['explorer'], 'drive-test': ['fixes'], ...filing })
     expect(appGroupsFor(role).map((g) => g.id)).not.toContain('insights')
   })
 
   it.each([
-    ['PM', ['dashboards', 'acceptance-dashboard', 'roles', 'gaps', 'exports']],
-    ['Coordinator', ['dashboards', 'acceptance-dashboard', 'roles', 'gaps']],
-    ['Viewer', ['dashboards', 'acceptance-dashboard', 'roles', 'gaps']],
+    ['PM', ['dashboards', 'acceptance-dashboard', 'roles', 'gaps', 'acceptance-baskets', 'exports']],
+    ['Coordinator', ['dashboards', 'acceptance-dashboard', 'roles', 'gaps', 'acceptance-baskets']],
+    ['Viewer', ['dashboards', 'acceptance-dashboard', 'roles', 'gaps', 'acceptance-baskets']],
     ['Contractor', ['dashboards', 'acceptance-dashboard', 'roles', 'gaps']],
   ])('keeps %s Insights as it was', (role, pages) => {
     expect(pagesBy(role).insights).toEqual(pages)

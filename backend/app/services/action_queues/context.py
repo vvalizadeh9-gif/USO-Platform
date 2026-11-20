@@ -24,6 +24,7 @@ from app.services.action_queues.types import (
     REGIONAL_MANAGER,
     OwnerRef,
 )
+from app.core.deps import TEAM_BASKET_ROLES
 from app.services.health_check import scoped_work_items
 
 
@@ -35,7 +36,9 @@ def board_role(user: User) -> str | None:
     A problem owner is recognised by ``Role.is_category_owner`` rather than by
     name, so a new category-owner role needs no change here.
     """
-    if user.role.is_category_owner:
+    if user.role.is_category_owner or user.role.name in TEAM_BASKET_ROLES:
+        # UEP-22: a team basket role (CPG PSO owns no category) works its
+        # acceptance basket from the same board.
         return PROBLEM_OWNER
     if user.role.name in (PM, COORDINATOR):
         return user.role.name

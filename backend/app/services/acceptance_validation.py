@@ -420,8 +420,10 @@ def _duplicate_use(db: Session, authority: str, number: str, mine: list[Filing])
     return {"villages": len(villages), "contractors": len(contractors)}
 
 
-def filing_out(f: Filing) -> dict:
+def filing_out(f: Filing, proposed: dict[int, str] | None = None) -> dict:
     return {
+        # UEP-22: the rejection category the contractor proposed (a code).
+        "proposed_category": (proposed or {}).get(f.submission_id),
         "submission_id": f.submission_id,
         "authority": f.authority,
         "version": f.version,
@@ -500,17 +502,20 @@ def group_detail(db: Session, user: User, authority: str, group: str, key: str) 
     if not mine and not theirs:
         raise ValidationError("Nothing is waiting here", "not_found", status=404)
     head = (mine or theirs)[0]
+    from app.services.acceptance_cases.validation_link import proposed_codes
+
+    proposed = proposed_codes(db, [filing_out(f) for f in mine + theirs])
     summary = Group(key=key, kind=group, label=head.letter_number if group == GROUP_LETTER else (head.site_code or key),
                     filings=mine or theirs, other_waiting=len(theirs)).summary()
     return {
         "authority": authority,
         "group": summary,
         "sla_days": sla_days(db, authority),
-        "filings": [filing_out(f) for f in _order(mine)],
+        "filings": [filing_out(f, proposed) for f in _order(mine)],
         "other": {
             "authority": other(authority),
             "sla_days": sla_days(db, other(authority)),
-            "filings": [filing_out(f) for f in _order(theirs)],
+            "filings": [filing_out(f, proposed) for f in _order(theirs)],
         } if group == GROUP_SITE else None,
         "letters": _letters(db, mine + theirs),
     }

@@ -9,7 +9,7 @@ const PAGES = [
   { name: 'Home', path: '/home' },
   { name: 'Health check', path: '/my-health-check' },
   { name: 'In progress', path: '/my-drive-tests' },
-  { name: 'Filing', path: '/my-work' },
+  { name: 'Filing', path: '/filing' },
   { name: 'Monthly plan', path: '/monthly-plan' },
 ]
 

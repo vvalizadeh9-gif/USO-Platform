@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from app.models.acceptance_workflow import AUTHORITIES
 from app.services import my_work_status as S
-from app.services.action_queues.sources import acceptance, lifecycle, plans, submissions
+from app.services.action_queues.sources import acceptance, cases, lifecycle, plans, submissions
 from app.services.action_queues.types import (
     CONTRACTOR,
     COORDINATOR,
@@ -34,6 +34,9 @@ _STAFF = frozenset({PM, COORDINATOR})
 
 #: Everyone with a Home sees the acceptance headline queues, in their scope.
 _HOME_ACCEPTANCE = frozenset({PM, COORDINATOR, CONTRACTOR, REGIONAL_MANAGER})
+#: UEP-22: staff read Pending ICT / Pending CRA; a contractor reads their own
+#: baskets (Waiting for ICT, Waiting for CRA, Rejected · Contractor).
+_HOME_PENDING = frozenset({PM, COORDINATOR, REGIONAL_MANAGER})
 
 
 def _q(key, stage, label, short_label, url, roles, fetch, *, sla=SlaKind.CONFIGURED,
@@ -50,9 +53,13 @@ def _acceptance_queues(authority: str) -> list[QueueDefinition]:
     prefix = authority.lower()
     url = acceptance.my_work_url
     return [
+        # UEP-22: read from the acceptance cases (open cases on this side).
         _q(f"{prefix}_pending", stage, f"Open {authority} acceptance", f"Pending {authority}",
-           url(authority), _HOME_ACCEPTANCE,
-           acceptance.not_approved(authority), unit="villages", on_board=False),
+           cases.filing_url(authority), _HOME_PENDING,
+           cases.queue(f"{prefix}_pending"), unit="villages", on_board=False),
+        _q(f"{prefix}_case_waiting", stage, f"Get {authority} approval", f"Waiting for {authority}",
+           cases.filing_url(authority, "waiting"), {CONTRACTOR},
+           cases.queue(f"{prefix}_case_waiting"), unit="villages", on_board=False),
         _q(f"{prefix}_follow_up", stage, f"Follow up with {authority}", f"{authority} follow-up",
            url(authority, S.TAB_WITH_AUTHORITY), {PM},
            acceptance.queue(authority, S.TAB_WITH_AUTHORITY, contractor_owns=False), unit="villages"),
@@ -102,8 +109,16 @@ QUEUES: tuple[QueueDefinition, ...] = (
     # The Filing page's rail badge (UEP-16 §2): villages in Filing's own
     # buckets, each once -- the number in the Filing header. Home's cards do
     # not show it (types.RAIL_QUEUES).
-    _q("acceptance_filing", Stage.ICT, "File acceptance letters", "Filing",
-       "/my-work", _HOME_ACCEPTANCE, acceptance.filing, unit="villages", on_board=False),
+    # UEP-22: the Filing badge is the viewer's whole inbox, both authorities.
+    _q("acceptance_filing", Stage.ICT, "Update acceptance cases", "Filing",
+       cases.FILING_URL, _HOME_ACCEPTANCE | {PROBLEM_OWNER}, cases.queue("acceptance_filing"),
+       unit="villages", on_board=False),
+    _q("case_rejected_contractor", Stage.ICT, "Fix rejected villages", "Rejected · Contractor",
+       cases.filing_url("ICT", "rejected"), {CONTRACTOR},
+       cases.queue("case_rejected_contractor"), unit="villages", on_board=False),
+    _q("case_team_basket", Stage.ICT, "Fix rejected villages", "Your basket",
+       cases.filing_url("ICT", "rejected"), {PROBLEM_OWNER},
+       cases.queue("case_team_basket"), unit="villages", on_board=False),
     # Submissions to ICT (UEP-21 §5.8): Home's Drive test card, for the owner
     # coordinator and the PM (everyone else's fetch is empty). Not on the
     # board, so the digest is unchanged. Keyed apart from ``ict_follow_up``,

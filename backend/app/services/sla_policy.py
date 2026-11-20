@@ -66,6 +66,10 @@ STEPS: tuple[Step, ...] = (
     Step("ict_reply", "acceptance", "ICT decision", "ICT (external, tracking) · filed → approved/rejected", 30),
     Step("cra_reply", "acceptance", "CRA decision", "CRA (external, tracking) · filed → approved/rejected", 30),
     Step("refile", "acceptance", "Re-file after rejection", "Contractor · rejected → re-filed", 7),
+    # UEP-22 acceptance cases: how long a basket may hold a case, and how
+    # old its latest comment may be.
+    Step("acceptance_basket", "acceptance", "Acceptance basket", "Owner · entered basket → next state", 14),
+    Step("comment_freshness", "acceptance", "Comment freshness", "Owner · last comment → next comment", 7),
     # UEP-21 Submissions: the two-week routine and Mojri's lag behind it.
     Step("submit_cycle", "drive_test", "Submit to ICT", "Owner · last batch sent → next batch sent", 14),
     Step("mojri_follow_up", "drive_test", "Mojri confirmation", "ICT HQ (external) · sent → in Mojri", 30),
@@ -89,7 +93,7 @@ QUEUE_STEP: dict[str, str] = {
     "plans_approve": "pip_approve",
     # Filing's own badge: the filing step's SLA. ICT and CRA filing share a
     # default (14 days); the rail reads the ICT one.
-    "acceptance_filing": "ict_file",
+    "acceptance_filing": "acceptance_basket",
     "ict_to_file": "ict_file",
     "cra_to_file": "cra_file",
     "ict_to_validate": "validate",
@@ -98,6 +102,13 @@ QUEUE_STEP: dict[str, str] = {
     "cra_follow_up": "cra_reply",
     "ict_refile": "refile",
     "cra_refile": "refile",
+    # UEP-22 acceptance cases: every case queue runs on the basket clock.
+    "ict_pending": "acceptance_basket",
+    "cra_pending": "acceptance_basket",
+    "ict_case_waiting": "acceptance_basket",
+    "cra_case_waiting": "acceptance_basket",
+    "case_rejected_contractor": "acceptance_basket",
+    "case_team_basket": "acceptance_basket",
     # UEP-21 Submissions (Home's Acceptance card, owner and PM only).
     "submit_to_ict": "submit_cycle",
     "ict_mojri_follow_up": "mojri_follow_up",

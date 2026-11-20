@@ -24,7 +24,8 @@ const MyFixQueue = lazy(() => import('./pages/MyFixQueue'))
 const ExplorerList = lazy(() => import('./pages/explorer/ExplorerList'))
 const SiteRecord = lazy(() => import('./pages/explorer/SiteRecord'))
 const Home = lazy(() => import('./pages/Home'))
-const MyWork = lazy(() => import('./pages/mywork/MyWork'))
+const FilingPage = lazy(() => import('./pages/filing/FilingPage'))
+const AcceptanceBaskets = lazy(() => import('./pages/reports/AcceptanceBaskets'))
 const ValidationPage = lazy(() => import('./pages/validation/ValidationPage'))
 const MonthlyPlan = lazy(() => import('./pages/monthlyplan/MonthlyPlan'))
 const AcceptanceDashboard = lazy(() => import('./pages/reports/AcceptanceDashboard'))
@@ -39,19 +40,15 @@ const SlaPoliciesPage = lazy(() => import('./pages/admin/SlaPoliciesPage'))
 const ProvinceAssignmentsPage = lazy(() => import('./pages/admin/ProvinceAssignmentsPage'))
 const ChangePassword = lazy(() => import('./pages/ChangePassword'))
 
-// UEP-16: Validation and Letters were My Work buckets. Their old addresses
-// land on the pages that replaced them; any other query (q=, village=) stays.
-function MyWorkRoute() {
+// UEP-22: Filing is the acceptance cases inbox at /filing. My Work's old
+// addresses land there, keeping the authority; a validation bookmark
+// (tab=filled) still lands on ICT validation.
+function MyWorkRedirect() {
   const { search } = useLocation()
   const params = new URLSearchParams(search)
-  const tab = params.get('tab')
-  if (tab === 'filled') return <Navigate to="/validation/ict" replace />
-  if (tab === 'all') {
-    params.delete('tab')
-    const rest = params.toString()
-    return <Navigate to={rest ? `/my-work?${rest}` : '/my-work'} replace />
-  }
-  return <MyWork />
+  if (params.get('tab') === 'filled') return <Navigate to="/validation/ict" replace />
+  const authority = (params.get('authority') || '').toUpperCase()
+  return <Navigate to={authority === 'CRA' ? '/filing?authority=CRA' : '/filing'} replace />
 }
 
 const VALIDATION_AUTHORITIES = { ict: 'ICT', cra: 'CRA' }
@@ -162,6 +159,7 @@ export default function App() {
           <Route path="/" element={<Navigate to={homeFor(user?.role?.name)} replace />} />
           <Route path="/reports/drive-test" element={<Protected area={AREA.INSIGHTS_DASHBOARDS}><DriveTestProject /></Protected>} />
           <Route path="/reports/acceptance" element={<Protected area={AREA.INSIGHTS_DASHBOARDS}><AcceptanceDashboard /></Protected>} />
+          <Route path="/insights/acceptance-baskets" element={<Protected area={AREA.ACCEPTANCE_BASKETS}><AcceptanceBaskets /></Protected>} />
           {/* Roles Performance. Admin is refused every KPI endpoint, so the
               route is closed to it here as well -- otherwise the page loads
               and then fills with permission errors, which reads as a fault
@@ -247,7 +245,8 @@ export default function App() {
               React Router, so selecting a village unmounted the workspace and
               remounted it — silently resetting the chosen bucket and the
               search box on every click. */}
-          <Route path="/my-work/*" element={<Protected area={AREA.ACCEPTANCE_WORKSPACE}><MyWorkRoute /></Protected>} />
+          <Route path="/filing" element={<Protected area={AREA.ACCEPTANCE_CASES}><FilingPage /></Protected>} />
+          <Route path="/my-work/*" element={<MyWorkRedirect />} />
           {/* ICT and CRA validation (UEP-16): the PM's and coordinators'. */}
           <Route
             path="/validation/:authority"
@@ -283,8 +282,8 @@ export default function App() {
           {/* UEP-21: PM, Coordinator and Viewer; the server scopes and gates acting. */}
           <Route path="/submissions" element={<Protected area={AREA.SUBMISSIONS}><Submissions /></Protected>} />
           <Route path="/submissions/batches/:number" element={<Protected area={AREA.SUBMISSIONS}><SubmissionBatch /></Protected>} />
-          <Route path="/acceptance" element={<Navigate to="/my-work" replace />} />
-          <Route path="/my-acceptance" element={<Navigate to="/my-work" replace />} />
+          <Route path="/acceptance" element={<Navigate to="/filing" replace />} />
+          <Route path="/my-acceptance" element={<Navigate to="/filing" replace />} />
           <Route path="/admin" element={<Protected allowedRoles={['Admin', 'PM']}><Admin /></Protected>} />
           <Route path="/admin/sla" element={<Protected allowedRoles={['Admin', 'PM', 'Viewer']}><SlaPoliciesPage /></Protected>} />
           <Route path="/admin/provinces" element={<Protected allowedRoles={['Admin', 'PM', 'Viewer']}><ProvinceAssignmentsPage /></Protected>} />

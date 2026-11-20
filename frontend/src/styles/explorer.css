@@ -795,3 +795,4 @@ html[data-uep-motion='reduce'] :is(.ex-page, .exl-page) * { animation: none !imp
 .ex-sent li { display: inline-flex; align-items: center; gap: 6px; }
 .ex-sent li > svg { color: var(--uep-text-3); }
 .ex-muted { color: var(--uep-text-3); }
+.ex-mark-line.is-late { color: var(--uep-danger); }

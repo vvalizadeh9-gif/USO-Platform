@@ -10,6 +10,11 @@ from app.models.acceptance import (
     SnapshotContractorCompletion,
     letter_villages,
 )
+from app.models.acceptance_case import (
+    AcceptanceCase,
+    AcceptanceCaseEvent,
+    AcceptanceRejectionCategory,
+)
 from app.models.acceptance_plan import AcceptanceMonthlyTarget
 from app.models.acceptance_workflow import (
     AcceptanceAuthorityRequest,
@@ -60,6 +65,9 @@ from app.models.workitem import (
 )
 
 __all__ = [
+    "AcceptanceCase",
+    "AcceptanceCaseEvent",
+    "AcceptanceRejectionCategory",
     "CpmVillageSighting",
     "SubmissionBatch",
     "SubmissionItem",

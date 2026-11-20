@@ -54,7 +54,8 @@ import {
 const STAFF = REVIEW_AUTHORITY_ROLES // PM, Coordinator
 // Who sees which area comes from the central permission map (lib/access.js);
 // these names only keep the entries below readable.
-const ACCEPTANCE_ROLES = offeredRoles(AREA.ACCEPTANCE_WORKSPACE)
+const ACCEPTANCE_ROLES = offeredRoles(AREA.ACCEPTANCE_CASES)
+const BASKETS_ROLES = offeredRoles(AREA.ACCEPTANCE_BASKETS)
 const EXPLORER_ROLES = offeredRoles(AREA.EXPLORER)
 const DASHBOARD_ROLES = offeredRoles(AREA.INSIGHTS_DASHBOARDS)
 const SUBMISSIONS_ROLES = offeredRoles(AREA.SUBMISSIONS)
@@ -164,11 +165,11 @@ export const APPS = Object.freeze([
     group: 'rollout',
     roles: ACCEPTANCE_ROLES,
     pages: [
-      // UEP-16: three pages. The dashboard lives under Insights only, and
-      // Letters is gone. Filing's count is the rail-only acceptance_filing
-      // queue -- the villages in Filing's own buckets, each once -- so it
-      // equals the Filing header. Each validation page counts one authority.
-      { id: 'filing', label: 'Filing', route: '/my-work', queues: ['acceptance_filing'], icon: 'edit', tile: '--uep-app-acceptance' },
+      // UEP-22: Filing is the acceptance cases inbox (team roles see their own
+      // basket). Its count is the rail-only acceptance_filing queue -- every
+      // open case in the viewer's inbox, ICT and CRA -- so it equals the two
+      // inbox headers. Each validation page counts one authority.
+      { id: 'filing', label: 'Filing', route: '/filing', also: ['/my-work'], queues: ['acceptance_filing'], icon: 'edit', tile: '--uep-app-acceptance' },
       { id: 'ict-validation', label: 'ICT validation', route: '/validation/ict', roles: STAFF, queues: ['ict_to_validate'], icon: 'task--approved', tile: '--uep-ict' },
       { id: 'cra-validation', label: 'CRA validation', route: '/validation/cra', roles: STAFF, queues: ['cra_to_validate'], icon: 'task--approved', tile: '--uep-cra' },
     ],
@@ -209,6 +210,12 @@ export const APPS = Object.freeze([
       {
         id: 'gaps', label: 'Lifecycle gaps', route: '/reports/gaps', roles: GAPS_ROLES,
         description: 'Where approvals are still waiting',
+      },
+      // UEP-22: every acceptance basket against time in basket.
+      {
+        id: 'acceptance-baskets', label: 'Acceptance baskets', route: '/insights/acceptance-baskets', roles: BASKETS_ROLES,
+        description: 'Who holds each acceptance case, and for how long',
+        icon: 'inventory-management', tile: '--uep-app-monthly-plan',
       },
       { id: 'exports', label: 'Exports', route: '/reports/kpi/mapping', roles: ['PM'] },
     ],

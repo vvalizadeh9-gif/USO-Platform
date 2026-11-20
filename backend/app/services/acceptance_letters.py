@@ -102,6 +102,8 @@ class ReviewItem:
     version: int | None = None
     #: This village's own return reason, over the shared one.
     reason: str | None = None
+    #: UEP-22: the rejection category the reviewer confirmed or chose.
+    category_id: int | None = None
 
 
 @dataclass(frozen=True)
@@ -287,8 +289,12 @@ def _failure_message(errors: list[ItemError], total: int) -> str:
     return f"{len(failed)} of {total} villages could not be filed, so none were"
 
 
-def file_letter(db: Session, user: User, filing: LetterFiling) -> LetterOutcome:
-    """File one letter for many villages. Caller commits, or rolls back on error."""
+def file_letter(db: Session, user: User, filing: LetterFiling, *, case_context=None) -> LetterOutcome:
+    """File one letter for many villages. Caller commits, or rolls back on error.
+
+    ``case_context`` (``acceptance_cases.validation_link.CaseContext``) is what
+    Filing adds -- the choice, category and comment -- for the cases (UEP-22).
+    """
     authority = _authority(filing.authority)
     if not 1 <= len(filing.items) <= MAX_VILLAGES:
         raise LetterError(
@@ -328,6 +334,8 @@ def file_letter(db: Session, user: User, filing: LetterFiling) -> LetterOutcome:
     db.flush()
     _attach_scans(db, scans, [s for _v, s in filed], user)
     decided = S.decides_directly(user.role.name)
+    db.flush()
+    _link_cases_filed(db, user, authority, filed, decided, letter_number, letter_date, case_context)
     _record_filing(db, user, authority, letter_number, filed, decided=decided)
     return LetterOutcome(
         authority=authority,
@@ -338,6 +346,14 @@ def file_letter(db: Session, user: User, filing: LetterFiling) -> LetterOutcome:
             for v, s in filed
         ],
     )
+
+
+def _link_cases_filed(db, user, authority, filed, decided, letter_number, letter_date, ctx) -> None:
+    """UEP-22: a decided letter moves the cases; a contractor's is noted on them."""
+    from app.services.acceptance_cases import validation_link
+
+    validation_link.on_filed(db, user, authority, filed, decided=decided,
+                             letter_number=letter_number, letter_date=letter_date, ctx=ctx)
 
 
 def _record_filing(db: Session, user: User, authority: str, letter_number: str, filed, *, decided: bool) -> None:
@@ -526,6 +542,8 @@ def review_letter(
     if errors:
         raise LetterError("Nothing was decided", errors)
 
+    _link_cases_reviewed(db, user, authority, decided, returning, own, shared,
+                         {i.submission_id: i.category_id for i in items})
     _record_review(
         db, user, authority, decision, decided, shared,
         own_reasons={k: v for k, v in own.items() if v} if returning else None,
@@ -537,6 +555,16 @@ def review_letter(
             VillageOutcome(s.village_id, s.id, s.round_no, _side_status(s.village, authority))
             for s in decided
         ],
+    )
+
+
+def _link_cases_reviewed(db, user, authority, decided, returning, own, shared, categories) -> None:
+    """UEP-22: a confirmed round moves its case; a returned one notes why."""
+    from app.services.acceptance_cases import validation_link
+
+    validation_link.on_reviewed(
+        db, user, authority, decided, returned=returning,
+        reasons={s.id: own.get(s.id) or shared for s in decided}, categories=categories,
     )
 
 

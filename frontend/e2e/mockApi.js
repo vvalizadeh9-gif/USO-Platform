@@ -10,6 +10,7 @@ import { validationEmail, validationGroup, validationList } from './validationFi
 import { rpArea, rpMonth } from './rolesFixtures.js'
 import { explorerSite, explorerSites } from './explorerFixtures.js'
 import * as SB from './submissionsFixtures.js'
+import { basketsCell, basketsGrid, casesCase, casesCategories, casesHistory, casesInbox } from './casesFixtures.js'
 import { FILTER_OPTIONS, siteVillages } from '../src/pages/explorer/fixtures.js'
 
 const ROUTES = {
@@ -56,6 +57,10 @@ const ROUTES = {
   '/submissions/batches': SB.batches(),
   '/submissions/follow-up': SB.followUp(),
   '/submissions/villages': SB.yourVillages(),
+  '/acceptance/inbox': casesInbox,
+  '/acceptance/categories': casesCategories,
+  '/insights/acceptance-baskets': basketsGrid(),
+  '/insights/acceptance-baskets/cell': basketsCell(),
 }
 
 // Endpoints answered late, on purpose: the dashboard's side cards arriving
@@ -68,6 +73,8 @@ const LATE = { '/drive-test/overview': 400, '/drive-test/plan-delivery': 250, '/
 const PATTERNS = [
   [/^\/acceptance\/villages\/\d+\/suggestions$/, myWorkSuggestions],
   [/^\/acceptance\/villages\/\d+$/, myWorkVillage],
+  [/^\/acceptance\/cases\/\d+\/history$/, casesHistory],
+  [/^\/acceptance\/cases\/\d+$/, casesCase],
   [/^\/acceptance\/my-work$/, myWorkList],
   [/^\/acceptance\/my-work\/validation$/, validationList],
   [/^\/acceptance\/my-work\/validation\/(letter|site)\/.+$/, validationGroup],

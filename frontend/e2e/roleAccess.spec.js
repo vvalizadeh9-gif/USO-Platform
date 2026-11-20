@@ -111,8 +111,10 @@ test.describe('problem-category owners', () => {
       await expect(page).toHaveURL(/\/home$/)
       await expect(page.getByRole('region', { name: 'Your numbers' })).toBeVisible()
       await expect(page.locator('.hw-card[data-card="drive_test"]')).toBeVisible()
-      expect(await appsPanelNames(page)).toEqual(['Explorer', 'Drive test'])
-      expect(await launcherNames(page)).toEqual(['Home', 'Explorer', 'Drive test'])
+      // UEP-22: a team basket role also works Acceptance › Filing.
+      const acceptance = role === 'HuaweiCleanup' ? [] : ['Acceptance']
+      expect(await appsPanelNames(page)).toEqual(['Explorer', 'Drive test', ...acceptance])
+      expect(await launcherNames(page)).toEqual(['Home', 'Explorer', 'Drive test', ...acceptance])
       for (const path of ['/reports/kpi', '/reports/gaps', '/reports/drive-test']) {
         await page.goto(path)
         await expect(page.getByText("You don't have access to this page")).toBeVisible()

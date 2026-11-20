@@ -10,13 +10,15 @@ const RM = 'RegionalManager'
 
 // role -> area -> offered (true) or not (false), straight from the matrix.
 const MATRIX = {
-  PM: { roles_performance: true, lifecycle_gaps: true, mojri_section: true, insights_dashboards: true, explorer: true, acceptance_workspace: true, monthly_plan_queue: true, internal_pip: true, explorer_all_sites: false, submissions: true },
-  Coordinator: { roles_performance: true, lifecycle_gaps: true, mojri_section: true, insights_dashboards: true, explorer: true, acceptance_workspace: true, monthly_plan_queue: true, internal_pip: true, explorer_all_sites: false, submissions: true },
-  Viewer: { roles_performance: true, lifecycle_gaps: true, mojri_section: true, insights_dashboards: true, explorer: true, acceptance_workspace: true, monthly_plan_queue: true, internal_pip: true, explorer_all_sites: false, submissions: true },
-  Contractor: { roles_performance: true, lifecycle_gaps: true, mojri_section: false, insights_dashboards: true, explorer: true, acceptance_workspace: true, monthly_plan_queue: false, internal_pip: false, explorer_all_sites: false, submissions: false },
-  RegionalManager: { roles_performance: true, lifecycle_gaps: true, mojri_section: false, insights_dashboards: false, explorer: true, acceptance_workspace: false, monthly_plan_queue: false, internal_pip: false, explorer_all_sites: false, submissions: false },
+  PM: { roles_performance: true, lifecycle_gaps: true, mojri_section: true, insights_dashboards: true, explorer: true, acceptance_workspace: true, monthly_plan_queue: true, internal_pip: true, explorer_all_sites: false, submissions: true, acceptance_cases: true, acceptance_baskets: true },
+  Coordinator: { roles_performance: true, lifecycle_gaps: true, mojri_section: true, insights_dashboards: true, explorer: true, acceptance_workspace: true, monthly_plan_queue: true, internal_pip: true, explorer_all_sites: false, submissions: true, acceptance_cases: true, acceptance_baskets: true },
+  Viewer: { roles_performance: true, lifecycle_gaps: true, mojri_section: true, insights_dashboards: true, explorer: true, acceptance_workspace: true, monthly_plan_queue: true, internal_pip: true, explorer_all_sites: false, submissions: true, acceptance_cases: true, acceptance_baskets: true },
+  Contractor: { roles_performance: true, lifecycle_gaps: true, mojri_section: false, insights_dashboards: true, explorer: true, acceptance_workspace: true, monthly_plan_queue: false, internal_pip: false, explorer_all_sites: false, submissions: false, acceptance_cases: true, acceptance_baskets: false },
+  RegionalManager: { roles_performance: true, lifecycle_gaps: true, mojri_section: false, insights_dashboards: false, explorer: true, acceptance_workspace: false, monthly_plan_queue: false, internal_pip: false, explorer_all_sites: false, submissions: false, acceptance_cases: false, acceptance_baskets: false },
   ...Object.fromEntries(FIVE.map((role) => [role, {
     roles_performance: false, lifecycle_gaps: false, mojri_section: false, insights_dashboards: false, explorer: true, acceptance_workspace: false, monthly_plan_queue: false, internal_pip: false, explorer_all_sites: true, submissions: false,
+    // UEP-22: the team basket roles work Filing; Huawei cleanup has no basket.
+    acceptance_cases: role !== 'HuaweiCleanup', acceptance_baskets: false,
   }])),
 }
 

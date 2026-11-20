@@ -69,6 +69,17 @@ export function submissionMeta(ticket) {
   return { due: dueText, tone, text: plural(meta.sites, 'site', 'sites') }
 }
 
+/** Acceptance case rows (UEP-22 §5.7): "{n} over SLA" and "{n} no comment",
+ * from the Filing inbox's own counts. Null for every other row. */
+export function caseMeta(ticket) {
+  const meta = ticket.acceptance
+  if (!meta) return null
+  return {
+    overSla: meta.over_sla > 0 ? `${meta.over_sla} over SLA` : null,
+    noComment: meta.no_comment > 0 ? `${meta.no_comment} no comment` : null,
+  }
+}
+
 /** "Saturday, 10 October 2026", in the viewer's own time zone. */
 export function englishDate(date = new Date()) {
   return new Intl.DateTimeFormat('en-GB', {

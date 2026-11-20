@@ -111,6 +111,15 @@ export function sideLine(side, authority) {
 }
 
 /** The small chip beside a pending word: a re-filed or returned side. */
+/** UEP-22: the side's acceptance case, as one line ("CPG Power basket · 12 d"),
+ * or null when the side has no case or it is approved. */
+export function caseLine(side) {
+  const c = side?.case
+  if (!c || c.state === 'approved') return null
+  const where = c.state === 'rejected' ? `${c.basket || 'Needs category'} basket` : `${c.basket} basket`
+  return `${where} · ${c.days_in_basket} d${c.stale ? ' · no comment' : ''}`
+}
+
 export function sideChip(side) {
   if (side.phase === 'returned') return 'Returned'
   if (side.refiled) return 'Re-filed'

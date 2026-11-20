@@ -39,6 +39,13 @@ CATEGORY_OWNER_ROLES = (
     HUAWEI_CLEANUP,
 )
 
+# UEP-22: the acceptance team baskets. A rejection category sends a case to
+# one of these roles (acceptance_rejection_categories.basket_role); the role
+# sees and fixes only the cases in its own basket. CPG PSO is a team role
+# only -- it owns no health-check problem category.
+CPG_PSO = "CpgPso"
+TEAM_BASKET_ROLES = (NWG_PLANNING, CPG_PSO, CPG_ROLLOUT_PM, CPG_POWER, MANAGED_SERVICE)
+
 
 def get_current_user_allowing_password_change(
     request: Request,

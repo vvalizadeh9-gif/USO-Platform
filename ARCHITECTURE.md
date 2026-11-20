@@ -2052,6 +2052,122 @@ Acting is the PM's and the owner coordinator's (`submission_settings`, set by
 the PM). Other coordinators read their own provinces only; Viewer reads all.
 Letter scans go through `evidence_store`, the one storage path.
 
+## 5k. Acceptance cases (UEP-22)
+
+The brief calls this "§5f Acceptance cases"; §5f was already UEP Home, so it
+is §5k here. Filing (`/filing`) used to be My Work's five-status tabs; nobody
+kept it current, every village showed CPM's old DT date as its age, and after
+a rejection nobody knew who had to act. It is now a focus inbox of **cases**
+(`services/acceptance_cases/`, `api/acceptance_cases.py`).
+
+### One ICT and one CRA case per village, three states
+
+```
+waiting  ──approved──▶ approved
+   │  ▲
+rejected │  fixed (back to the site contractor, clock restarts)
+   ▼  │
+rejected ──basket change (PM/coordinator, with a reason)──▶ rejected
+```
+
+* **Universe**: live, pure هدف, drive test Done, **on air**
+  (`acceptance_universe.dt_done_universe` and `my_work_scope.onair_clause`),
+  one village per site, site type and village code
+  (`action_queues.sources.acceptance.one_per_village`). Lifecycle Gaps counts
+  the same villages without the on-air rule; its figures do not change.
+* **Waiting** is always the village's **site contractor**'s basket
+  (`work_items.site_contractor_id`, else the CPM DT contractor until the next
+  import fills the master field). **Rejected** sits in the basket of its
+  category. **Approved** leaves every inbox.
+* `acceptance_cases` holds the state, `basket_role`, `category_id` and
+  `state_since`; `acceptance_case_events` is the append-only history
+  (created, approved, rejected, fixed, comment, basket_changed), written by
+  `transitions.py` -- the only code that changes a case. Submissions to ICT HQ
+  are read live from `submission_items` for the timeline rather than copied.
+* The verdict itself is still the submission rounds and `acceptances`
+  (§5): a case adds whose basket it is, since when, and the latest word.
+
+### Categories are data
+
+`acceptance_rejection_categories` (code, label, basket_role, sort, active),
+seeded by the migration: Parked → PM, NWG R&D → NwgPlanning, Contractor → the
+site contractor, CPG PSO → **CpgPso** (a team role created for this; it owns
+no health-check category), CPG PMO → CpgRolloutPM, CPG Power → CpgPower, MS →
+ManagedService. `core/deps.TEAM_BASKET_ROLES` names the team roles; a team
+role sees only rejections in its own basket, in every region, and can comment
+and mark Fixed. A backfilled rejection has no category ("Needs category",
+visible to PM and coordinators) until one is set by a basket change.
+
+### Clocks and the comment rule
+
+* **Days in basket** = today − `state_since` (Tehran calendar). A waiting
+  case starts at the village's Submissions `sent_at`, else the drive test's
+  approval in the app (`drive_tests.coordinator_reviewed_at`), else -- a
+  **legacy** case -- `villages.first_seen_at`, else the first
+  `cpm_import_batches` row. CPM's `dt_date_gregorian` is never a start.
+  A waiting case that has never moved follows a later send (`sync.refresh_waiting_starts`).
+* **Over SLA**: days in basket > `acceptance_basket` (SLA policies, 14).
+* **Stale**: an open case with no comment, or none within
+  `comment_freshness` (7) days. Any role's comment counts. Flagged in the row,
+  the status box, the No comment tab, Home and the Baskets grid.
+* **Age buckets** (Baskets): under 3 months (≤ 90 d), 3–6 (91–182),
+  6–12 (183–365), over 1 year.
+
+### Saving, and the validation link
+
+`update.save` takes one choice for 1–500 villages in one transaction; a
+comment is required (400), a rejection needs a category, a verdict needs a
+letter number, Shamsi date and file. A `request_id` already applied by the
+same user is answered as applied (idempotent retry). Waiting on a rejected
+case is "Fixed". A verdict goes through `acceptance_letters.file_letter`, the
+one path for every ICT/CRA letter, which calls `validation_link`:
+
+* a PM's or coordinator's letter is decided at once, so the case moves now;
+* a contractor's is a pending round: the case keeps its state, shows "In
+  validation", and gets a comment carrying the filing and the proposed
+  category. When a coordinator confirms the round in ICT/CRA validation
+  (`/acceptance/letters/review`, items may carry `category`), the case moves
+  and the coordinator's category wins -- a contractor cannot shift blame by
+  picking the wrong team. A returned round leaves a comment with the reason.
+
+Letter files go through `evidence_store` (§5, "Letters, evidence, and dates").
+
+### Creating cases
+
+`sync.ensure_cases` creates the cases a village is owed, mapping the cached
+side status: Approved → approved (with the letter of its latest validated
+round), Rejected → rejected without a category, anything else → waiting. It is
+idempotent, runs once at deploy (`python -m app.scripts.backfill_acceptance_cases`)
+and on every Filing, Baskets and Home read, so new universe villages get cases
+without a job.
+
+### One count
+
+`counts.py` is the only place a case number is made: the inbox tabs
+(all / waiting / rejected / no_comment), the Filing rail badge
+(`acceptance_filing`: both inboxes), Home's queues (`ict_pending` /
+`cra_pending` for PM, coordinators and regional managers; `ict_case_waiting`,
+`cra_case_waiting`, `case_rejected_contractor` for a contractor;
+`case_team_basket` for a team role, each with over-SLA and no-comment
+figures) and the Baskets grid all filter the same `scope.load_cases` rows.
+`tests/test_acceptance_cases.py` holds inbox = Home = Baskets.
+
+### Who sees what
+
+| Role | Filing | Can |
+|---|---|---|
+| PM | every region | everything; lands directly; change basket |
+| Coordinator | own regions (`visibility`) | record verdicts (lands directly), comment, fix, change basket; confirms contractor filings in validation |
+| Contractor | own sites: waiting, and Contractor-category rejections | comment, record verdicts (to validation), fix own Contractor rejections |
+| Team roles | their basket, every region | comment, mark Fixed |
+| Viewer | every region, read-only | -- |
+
+Baskets (`/insights/acceptance-baskets`): PM, coordinators (own regions),
+Viewer. Permission-map areas `acceptance_cases` and `acceptance_baskets`;
+the old `acceptance_workspace` area still guards the My Work API.
+
+Explorer's acceptance details show each side's case (state, basket, days).
+
 ## 6. Roles and permissions
 
 Ten roles. Six are staff and workflow roles; four exist solely to own health-check

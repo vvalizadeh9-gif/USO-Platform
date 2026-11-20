@@ -107,7 +107,8 @@ describe('the work landing (problem-category owners)', () => {
       expect(screen.getByTestId('work-empty')).toHaveTextContent('Nothing is waiting on you.')
       expect(screen.queryByText("You're all caught up")).not.toBeInTheDocument()
       expect(screen.queryByRole('region', { name: 'Insights' })).not.toBeInTheDocument()
-      expect(appNames()).toEqual(['Explorer', 'Drive test'])
+      // UEP-22: a team basket role also works Acceptance › Filing.
+      expect(appNames()).toEqual(role === 'HuaweiCleanup' ? ['Explorer', 'Drive test'] : ['Explorer', 'Drive test', 'Acceptance'])
     },
   )
 

@@ -222,6 +222,9 @@ class ReviewItemIn(BaseModel):
     version: int | None = None
     #: This village's own reason, over ``shared_reason`` (return only).
     reason: str | None = Field(None, max_length=2000)
+    #: UEP-22: on a rejection, the category the reviewer confirms or picks
+    #: (a rejection category code); absent keeps the contractor's.
+    category: str | None = Field(None, max_length=30)
 
 
 class LetterReviewIn(BaseModel):

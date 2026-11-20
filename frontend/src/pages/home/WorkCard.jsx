@@ -3,7 +3,7 @@ import Icon from '../../components/Icon'
 import AppTile from '../../shell/AppTile'
 import { APPS } from '../../shell/appRegistry'
 import MetaLine from '../../components/MetaLine'
-import { oldestText, ownersText, submissionMeta } from './homeLogic'
+import { caseMeta, oldestText, ownersText, submissionMeta } from './homeLogic'
 import { formatNumber } from '../../lib/numbers'
 
 // Each card is its app's: tile colour, icon and header tint from the registry.
@@ -12,6 +12,14 @@ const appById = (id) => APPS.find((a) => a.id === id)
 
 /** One queue. Every row looks the same: none is singled out as "next". */
 function metaParts(ticket) {
+  const cases = caseMeta(ticket)
+  if (cases) {
+    return [
+      cases.overSla && <span className="hw-late">{cases.overSla}</span>,
+      cases.noComment && <span className="hw-late">{cases.noComment}</span>,
+      oldestText(ticket),
+    ]
+  }
   const sub = submissionMeta(ticket)
   if (sub?.due !== undefined) {
     return [sub.due && <span className="hw-due" data-tone={sub.tone || undefined}>{sub.due}</span>, sub.text]

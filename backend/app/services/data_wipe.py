@@ -22,6 +22,7 @@ from __future__ import annotations
 from sqlalchemy import Table
 from sqlalchemy.orm import Session
 
+from app.models.acceptance_case import AcceptanceCase, AcceptanceCaseEvent
 from app.models.acceptance import (
     Acceptance,
     CpmChangeRequest,
@@ -72,6 +73,11 @@ REQUIRED_CONFIRMATION_PHRASE = "ERASE ALL CPM DATA"
 #: (label in the result, table). The labels are the API's ``deleted`` keys and
 #: are recorded in the audit log, so they never change once shipped.
 WIPE_ORDER: tuple[tuple[str, Table], ...] = (
+    # Acceptance cases (UEP-22): keyed by village; their events reference
+    # acceptance_evidence, so both go first. The categories are master data
+    # and stay.
+    ("acceptance_case_events", AcceptanceCaseEvent.__table__),
+    ("acceptance_cases", AcceptanceCase.__table__),
     # Letters and acceptance (the many-to-many join table first).
     ("letter_villages", letter_villages),
     ("letters", Letter.__table__),

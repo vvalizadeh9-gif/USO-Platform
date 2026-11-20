@@ -226,6 +226,16 @@ def _village(village: Village, wi: WorkItem, rounds, requests, today: date) -> d
     return out
 
 
+def _attach_cases(db: Session, user: User, villages: list[dict]) -> None:
+    """UEP-22: each side's acceptance case -- state, basket and days in it."""
+    from app.services.acceptance_cases.history import case_summaries
+
+    found = case_summaries(db, user, [v["id"] for v in villages])
+    for village in villages:
+        for authority in AUTHORITIES:
+            village[authority.lower()]["case"] = found.get((village["id"], authority))
+
+
 def _workflow(wi: WorkItem) -> dict:
     """What the Take action drawer needs: the same facts the old detail
     page gated its forms on."""
@@ -250,6 +260,7 @@ def site_record(
     ids = [v.id for v in hadaf]
     rounds, requests = _rounds(db, ids), _requests(db, ids)
     villages = [_village(v, wi, rounds, requests, today) for v in hadaf]
+    _attach_cases(db, user, villages)
 
     accepting = is_dt_done(wi)
     sends = submission_journey.site_sends(db, wi.id)

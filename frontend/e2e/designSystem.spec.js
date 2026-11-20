@@ -16,10 +16,11 @@ const PM_PAGES = [
   { name: 'roles-performance-area', path: '/reports/kpi/area' },
   { name: 'roles-performance-map', path: '/reports/kpi/map' },
   { name: 'lifecycle-gaps', path: '/reports/gaps' },
+  { name: 'acceptance-baskets', path: '/insights/acceptance-baskets' },
   { name: 'explorer', path: '/explorer' },
   { name: 'health-check', path: '/health-check' },
   { name: 'drive-test', path: '/drive-test' },
-  { name: 'filing', path: '/my-work' },
+  { name: 'filing', path: '/filing' },
   { name: 'monthly-plan', path: '/monthly-plan' },
   { name: 'mojri-tracker', path: '/mojri-tracker' },
   { name: 'cpm-changes', path: '/admin?tab=validate-cpm' },
@@ -29,7 +30,7 @@ const CONTRACTOR_PAGES = [
   { name: 'home', path: '/home' },
   { name: 'hc-check', path: '/my-health-check' },
   { name: 'in-progress', path: '/my-drive-tests' },
-  { name: 'filing', path: '/my-work' },
+  { name: 'filing', path: '/filing' },
   { name: 'monthly-plan', path: '/monthly-plan' },
 ]
 
