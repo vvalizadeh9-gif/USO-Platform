@@ -19,6 +19,7 @@ from app.api import (
     province_assignments,
     search,
     sla_policies,
+    submissions,
     validation,
     work_items,
     work_queues,
@@ -43,6 +44,7 @@ api_router.include_router(admin.router)
 api_router.include_router(misc.router)
 api_router.include_router(work_queues.router)
 api_router.include_router(sla_policies.router)
+api_router.include_router(submissions.router)
 api_router.include_router(province_assignments.router)
 api_router.include_router(home.router)
 api_router.include_router(search.router)

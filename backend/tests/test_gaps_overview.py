@@ -459,9 +459,10 @@ def test_the_mojri_card_counts_every_approved_village_on_air_or_not(client, acto
     assert totals["cra_approved_all"] > totals["cra_approved"]
 
 
-def test_the_template_lists_exactly_the_villages_the_mojri_card_compares():
-    """The Mojri template and the Mojri card share one definition
-    (``mojri_tracker.comparison_scope``); this holds them equal."""
+def test_the_mojri_card_compares_a_subset_of_the_template():
+    """UEP-21 widened the template to drive-tested villages too (Submissions
+    needs their receipt); the Mojri card still counts only approved ones
+    (``mojri_tracker.comparison_scope``). Card scope ⊆ template scope."""
     from sqlalchemy import or_, select
 
     from app.models.workitem import Village
@@ -480,8 +481,8 @@ def test_the_template_lists_exactly_the_villages_the_mojri_card_compares():
         )
     finally:
         db.close()
-    assert template == card
-    assert template, "the seed should give the template rows"
+    assert card <= template
+    assert card, "the seed should give the card villages"
 
 
 def test_cards_one_and_two_are_unchanged_by_the_wider_universe(client, actors):

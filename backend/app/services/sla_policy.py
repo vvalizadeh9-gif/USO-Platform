@@ -66,6 +66,9 @@ STEPS: tuple[Step, ...] = (
     Step("ict_reply", "acceptance", "ICT decision", "ICT (external, tracking) · filed → approved/rejected", 30),
     Step("cra_reply", "acceptance", "CRA decision", "CRA (external, tracking) · filed → approved/rejected", 30),
     Step("refile", "acceptance", "Re-file after rejection", "Contractor · rejected → re-filed", 7),
+    # UEP-21 Submissions: the two-week routine and Mojri's lag behind it.
+    Step("submit_cycle", "acceptance", "Submit to ICT", "Owner · last batch sent → next batch sent", 14),
+    Step("mojri_follow_up", "acceptance", "Mojri confirmation", "ICT HQ (external) · sent → in Mojri", 30),
 )
 STEPS_BY_KEY = {s.key: s for s in STEPS}
 
@@ -95,6 +98,9 @@ QUEUE_STEP: dict[str, str] = {
     "cra_follow_up": "cra_reply",
     "ict_refile": "refile",
     "cra_refile": "refile",
+    # UEP-21 Submissions (Home's Acceptance card, owner and PM only).
+    "submit_to_ict": "submit_cycle",
+    "ict_mojri_follow_up": "mojri_follow_up",
 }
 
 

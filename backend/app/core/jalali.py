@@ -144,3 +144,14 @@ def parse_shamsi(text: str | None) -> date | None:
         raise ValueError("Date must be in the form 1404/05/29") from None
     return from_shamsi_date(year, month, day)
 
+
+def parse_day(text: str | None) -> date | None:
+    """A day typed either as ISO Gregorian (``2026-11-19``) or as Shamsi
+    (``1405/08/28``, any digits). The year tells them apart: an ISO year is
+    four digits starting 19/20, a Shamsi one 13/14. Raises ``ValueError``."""
+    if text is None or not str(text).strip():
+        return None
+    cleaned = to_latin(str(text)).strip()
+    if cleaned[:2] in ("19", "20"):
+        return date.fromisoformat(cleaned)
+    return parse_shamsi(cleaned)

@@ -32,6 +32,13 @@ from app.models.performance import LifecycleStatusHistory
 from app.models.monthly_plan import ContractorMonthlyPlan
 from app.models.province_assignment import ProvinceAssignmentHistory
 from app.models.sla_policy import SlaPolicy, SlaPolicyHistory
+from app.models.submission import (
+    CpmVillageSighting,
+    SubmissionBatch,
+    SubmissionItem,
+    SubmissionLetterFile,
+    SubmissionSettings,
+)
 from app.models.reference import (
     Contractor,
     ProblemCategory,
@@ -53,6 +60,11 @@ from app.models.workitem import (
 )
 
 __all__ = [
+    "CpmVillageSighting",
+    "SubmissionBatch",
+    "SubmissionItem",
+    "SubmissionLetterFile",
+    "SubmissionSettings",
     "ProvinceAssignmentHistory",
     "SlaPolicy",
     "SlaPolicyHistory",

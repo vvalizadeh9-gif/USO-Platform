@@ -27,6 +27,8 @@ export const AREA = Object.freeze({
   ACCEPTANCE_WORKSPACE: 'acceptance_workspace',
   MONTHLY_PLAN_QUEUE: 'monthly_plan_queue',
   INTERNAL_PIP: 'internal_pip',
+  /** Acceptance › Submissions (UEP-21); acting is PM and the owner only. */
+  SUBMISSIONS: 'submissions',
 })
 
 function entry(area) {

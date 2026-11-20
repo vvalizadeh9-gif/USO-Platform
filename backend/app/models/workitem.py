@@ -142,6 +142,13 @@ class Village(Base):
     target_classification: Mapped[str | None] = mapped_column(String(60))
     households: Mapped[int | None] = mapped_column(Integer)
     population: Mapped[int | None] = mapped_column(Integer)
+    # The village's own شهرستان / بخش / دهستان (UEP-21). Sites carry the first
+    # row's values, but one site's villages can sit in different counties, and
+    # the ICT submission list names each village's own. Refreshed by every CPM
+    # import; NULL until then, and readers fall back to the site's.
+    county: Mapped[str | None] = mapped_column(String(120))
+    district: Mapped[str | None] = mapped_column(String(120))
+    rural_district: Mapped[str | None] = mapped_column(String(120))
     latitude: Mapped[float | None] = mapped_column(Float)
     longitude: Mapped[float | None] = mapped_column(Float)
 

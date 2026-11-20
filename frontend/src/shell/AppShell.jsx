@@ -33,7 +33,10 @@ export function crumbsFor(pathname, app, pageCrumb = null, listSearch = '') {
   // On a record page the app crumb goes back to the list with its filters.
   const to = pageCrumb && app.id === 'explorer' ? `${appRoute(app)}${listSearch}` : appRoute(app)
   const crumbs = [{ label: app.name, to, state: appState(app) }]
-  if (pageCrumb) crumbs.push({ label: pageCrumb })
+  // A page names one crumb (a site ID), or a trail of them (UEP-21:
+  // Submissions / Batch #40), each { label, to? }.
+  if (Array.isArray(pageCrumb)) crumbs.push(...pageCrumb)
+  else if (pageCrumb) crumbs.push({ label: pageCrumb })
   return crumbs
 }
 

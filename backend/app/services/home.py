@@ -250,6 +250,7 @@ def build(db: Session, user: User, now: datetime | None = None) -> dict:
         if group in by_group
     ]
     tickets = [t for g in groups for t in g["tickets"]]
+    _add_submission_meta(db, user, tickets, today)
     live = home_trends.DayFigures(
         pending=sum(t["count"] for t in tickets),
         overdue=sum(t["late"] for t in tickets),
@@ -295,6 +296,23 @@ def build(db: Session, user: User, now: datetime | None = None) -> dict:
         # its rail badge and header (types.RAIL_QUEUES; UEP-16 Filing).
         "rail_tickets": [_ticket(_rail_row(q, ctx, days[q.key], window)) for q in rail_queues],
     }
+
+
+#: Home rows whose meta line Submissions writes (UEP-21 §5.8).
+SUBMISSION_QUEUES = frozenset({"submit_to_ict", "ict_mojri_follow_up"})
+
+
+def _add_submission_meta(db: Session, user: User, tickets: list[dict], today: date) -> None:
+    """"Batch #41 due in 3 days · 12 sites" and "Oldest 41 days": read from the
+    same counts module as the Submissions page, only when a row is shown."""
+    shown = [t for t in tickets if t["queue_key"] in SUBMISSION_QUEUES]
+    if not shown:
+        return
+    from app.services.submissions import counts
+
+    meta = counts.home_meta(db, user, today)
+    for ticket in shown:
+        ticket["submission"] = meta
 
 
 def summary_for(db: Session, user: User) -> dict:

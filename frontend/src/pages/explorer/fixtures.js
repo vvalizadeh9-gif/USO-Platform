@@ -54,7 +54,8 @@ export function record({ villages = VILLAGES, ...over } = {}) {
         { key: 'health_check', state: 'done', date: '2026-09-09', gap_days: 7 },
         { key: 'assigned', state: 'done', date: '2026-09-16', gap_days: 7 },
         { key: 'dt_done', state: 'done', date: '2026-09-30', gap_days: 14 },
-        { key: 'acceptance', state: 'in_progress', date: null, gap_days: 14 },
+        { key: 'sent_to_ict', state: 'in_progress', date: null, gap_days: 14 },
+        { key: 'acceptance', state: 'upcoming', date: null, gap_days: null },
       ],
       aging: {
         total_days: 42,

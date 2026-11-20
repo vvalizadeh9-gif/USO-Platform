@@ -3907,3 +3907,18 @@ a.lifecycle-step:focus-visible { outline: 2px solid var(--uep-accent); outline-o
 /* Shamsi text (UEP-13 §3.7): Vazirmatn, isolated right-to-left. */
 .uep-shamsi { font-family: var(--uep-font-persian); unicode-bidi: isolate; }
 .datefield-both { font-size: var(--uep-fs-caption); }
+
+/* A Shamsi day typed in Persian digits (components/ShamsiDayInput). */
+.uep-shamsi-input {
+  height: var(--uep-control-height);
+  width: 100%;
+  max-width: 160px;
+  padding: 0 var(--uep-space-12);
+  border: var(--uep-border-width) solid var(--uep-border-strong);
+  border-radius: var(--uep-radius-control);
+  background: var(--uep-surface);
+  color: var(--uep-text);
+  font-family: var(--uep-font-persian);
+  font-size: var(--uep-fs-body);
+}
+.uep-shamsi-input:focus-visible { outline: var(--uep-focus-outline-width) solid var(--uep-accent); outline-offset: var(--uep-focus-outline-offset); }

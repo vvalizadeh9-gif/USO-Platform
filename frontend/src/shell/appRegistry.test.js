@@ -144,20 +144,30 @@ describe('Drive test rail without Dashboard', () => {
 describe('Acceptance rail', () => {
   const pagesOf = (role) => appsFor(role).find((a) => a.id === 'acceptance')?.pages.map((p) => p.id)
 
-  it.each(['PM', 'Coordinator'])('gives %s Filing and both validation pages', (role) => {
-    expect(pagesOf(role)).toEqual(['filing', 'ict-validation', 'cra-validation'])
+  it.each(['PM', 'Coordinator'])('gives %s Submissions first, then Filing and both validation pages', (role) => {
+    expect(pagesOf(role)).toEqual(['submissions', 'filing', 'ict-validation', 'cra-validation'])
   })
 
-  it.each(['Contractor', 'Viewer'])('gives %s Filing only', (role) => {
-    expect(pagesOf(role)).toEqual(['filing'])
+  it('gives a Viewer Submissions and Filing', () => {
+    expect(pagesOf('Viewer')).toEqual(['submissions', 'filing'])
+  })
+
+  it('gives a Contractor Filing only', () => {
+    expect(pagesOf('Contractor')).toEqual(['filing'])
+  })
+
+  it('counts Submissions from the submit_to_ict queue, with the send icon on accent (UEP-21)', () => {
+    const page = appsFor('PM').find((a) => a.id === 'acceptance').pages.find((p) => p.id === 'submissions')
+    expect(page).toMatchObject({ route: '/submissions', queues: ['submit_to_ict'], icon: 'send', tile: '--uep-accent' })
+    expect(locate(appsFor('PM'), '/submissions/batches/40', '').page.id).toBe('submissions')
   })
 
   it('gives a Regional Manager no Acceptance app', () => {
     expect(pagesOf('RegionalManager')).toBeUndefined()
   })
 
-  it('opens on Filing and has no Dashboard or Letters', () => {
-    const app = appsFor('PM').find((a) => a.id === 'acceptance')
+  it.each(['PM', 'Viewer', 'Contractor'])('opens on Filing for %s and has no Dashboard or Letters', (role) => {
+    const app = appsFor(role).find((a) => a.id === 'acceptance')
     expect(appRoute(app)).toBe('/my-work')
     expect(app.pages.map((p) => p.route)).not.toContain('/reports/acceptance')
     expect(app.pages.map((p) => p.id)).not.toContain('letters')
@@ -171,7 +181,7 @@ describe('Acceptance rail', () => {
     const counts = { ict_to_validate: 12, cra_to_validate: 5, acceptance_filing: 30, ict_pending: 99 }
     expect(pageCount(ict, counts)).toBe(12)
     expect(pageCount(cra, counts)).toBe(5)
-    expect(pageCount(app.pages[0], counts)).toBe(30)
+    expect(pageCount(app.pages.find((p) => p.id === 'filing'), counts)).toBe(30)
     expect(locate(appsFor('Coordinator'), '/validation/cra', '').page.id).toBe('cra-validation')
   })
 

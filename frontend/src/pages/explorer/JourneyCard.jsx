@@ -1,5 +1,6 @@
 import { StepError } from '../../components/work/parts'
 import AgingTiles from './AgingTiles'
+import SentToIct from './SentToIct'
 import StepPath from './StepPath'
 import VillageAcceptance from './VillageAcceptance'
 
@@ -18,6 +19,7 @@ export default function JourneyCard({ record, status, onRetry, highlight }) {
         <div className="ex-journey-body">
           <AgingTiles aging={record.journey.aging} steps={record.journey.steps} />
           <StepPath steps={record.journey.steps} />
+          <SentToIct sends={record.journey.sent_to_ict} />
           <VillageAcceptance
             villages={record.villages}
             counts={record.counts}

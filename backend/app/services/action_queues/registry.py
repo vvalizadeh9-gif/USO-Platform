@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from app.models.acceptance_workflow import AUTHORITIES
 from app.services import my_work_status as S
-from app.services.action_queues.sources import acceptance, lifecycle, plans
+from app.services.action_queues.sources import acceptance, lifecycle, plans, submissions
 from app.services.action_queues.types import (
     CONTRACTOR,
     COORDINATOR,
@@ -103,6 +103,15 @@ QUEUES: tuple[QueueDefinition, ...] = (
     # not show it (types.RAIL_QUEUES).
     _q("acceptance_filing", Stage.ICT, "File acceptance letters", "Filing",
        "/my-work", _HOME_ACCEPTANCE, acceptance.filing, unit="villages", on_board=False),
+    # Submissions to ICT (UEP-21 §5.8): Home's Acceptance card, for the owner
+    # coordinator and the PM (everyone else's fetch is empty). Not on the
+    # board, so the digest is unchanged. Keyed apart from ``ict_follow_up``,
+    # which is the PM's follow-up of ICT's acceptance verdicts.
+    _q("submit_to_ict", Stage.ICT, "Submit to ICT", "Submit to ICT",
+       "/submissions", _STAFF, submissions.submit_to_ict, unit="villages", on_board=False),
+    _q("ict_mojri_follow_up", Stage.ICT, "Follow up with ICT", "Follow up with ICT",
+       "/submissions?view=follow-up", _STAFF, submissions.mojri_follow_up,
+       unit="villages", on_board=False),
     # --- Plans & Data ----------------------------------------------------
     _q("plans_approve", Stage.PLANS, "Approve plans", "Plan approvals",
        "/monthly-plan?tab=approvals", {PM}, plans.plans_to_approve, unit="plans"),

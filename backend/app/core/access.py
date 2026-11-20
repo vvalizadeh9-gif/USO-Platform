@@ -48,6 +48,11 @@ class Area(StrEnum):
     MONTHLY_PLAN_QUEUE = "monthly_plan_queue"
     #: Monthly plan > Internal PIP and History.
     INTERNAL_PIP = "internal_pip"
+    #: Acceptance > Submissions (UEP-21). Who may *act* there is narrower --
+    #: the PM and the owner coordinator -- and decided by
+    #: ``services/submissions/scope.py``; other coordinators read their own
+    #: regions only.
+    SUBMISSIONS = "submissions"
 
 
 @cache

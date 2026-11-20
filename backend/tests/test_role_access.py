@@ -63,6 +63,7 @@ _YES = {
     Area.ACCEPTANCE_WORKSPACE: set(CORE),
     Area.MONTHLY_PLAN_QUEUE: {"PM", "Coordinator", "Viewer", "Admin"},
     Area.INTERNAL_PIP: {"PM", "Coordinator", "Viewer"},
+    Area.SUBMISSIONS: {"PM", "Coordinator", "Viewer"},
 }
 _ROLES = ("Admin", *CORE, "RegionalManager", *FIVE)
 

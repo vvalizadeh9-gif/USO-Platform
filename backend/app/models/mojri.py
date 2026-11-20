@@ -28,7 +28,9 @@ The three statuses, per authority, are the whole vocabulary:
 """
 from __future__ import annotations
 
-from sqlalchemy import CheckConstraint, ForeignKey, Integer, String
+from datetime import date
+
+from sqlalchemy import CheckConstraint, Date, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -74,6 +76,10 @@ class MojriImportRun(Base):
     #: Villages that were in the tracker last time and are absent from this
     #: file. Recorded, never acted on — see services/mojri_tracker.py.
     disappeared: Mapped[int] = mapped_column(Integer, default=0)
+    #: The day Mojri's file reflects (UEP-21), entered on upload; defaults to
+    #: the import day. Submissions measures "late in Mojri" against this date,
+    #: never against today, so a stale file pauses the count by itself.
+    file_date: Mapped[date | None] = mapped_column(Date)
 
 
 class MojriTrackerStatus(Base):

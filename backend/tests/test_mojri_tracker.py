@@ -30,7 +30,7 @@ os.environ["DATABASE_URL"] = "sqlite:////tmp/uep_mojri_pytest.db"
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import sqlalchemy.dialects.postgresql as _pg  # noqa: E402
-from sqlalchemy import JSON  # noqa: E402
+from sqlalchemy import JSON, func  # noqa: E402
 
 _pg.JSONB = JSON
 
@@ -73,7 +73,9 @@ def _seed() -> None:
     * ``two_tech``     3G/4G only, ICT approved -- its 2G column must be ignored
     * ``cra_only``     CRA approved, ICT not -- still eligible for the template
     * ``no_tech``      approved, but CPM recorded no requested technology
-    * ``not_eligible`` neither authority approved -- must not be in the template
+    * ``not_eligible`` neither authority approved, but drive test done -- in the
+                       template since UEP-21 (Submissions needs its receipt)
+    * ``untested``     neither approved nor drive tested -- not in the template
     * ``twin_a/_b``    one village listed twice on one work item, as CPM does:
                        one key, two villages
     * ``decoy``        its village_code is three_tech's primary key -- a row
@@ -89,7 +91,7 @@ def _seed() -> None:
     try:
         province = db.query(Province).filter(Province.name == TEHRAN).one()
 
-        def work_item(label, *, tech, site_type, deleted=False):
+        def work_item(label, *, tech, site_type, deleted=False, dt="Done"):
             site = Site(site_code=f"S-{label}", province_id=province.id)
             db.add(site)
             db.flush()
@@ -98,7 +100,7 @@ def _seed() -> None:
                 site_type=site_type,
                 requested_technology=tech,
                 last_stage="راه_اندازی_دائم",
-                dt_status="Done",
+                dt_status=dt,
                 current_stage="New",
                 deleted_at=datetime.now(timezone.utc) if deleted else None,
             )
@@ -121,8 +123,9 @@ def _seed() -> None:
             IDS[label] = row.id
             KEYS[label] = (site.site_code, item.site_type, code)
 
-        def single(label, code, *, tech, ict, cra, site_type, deleted=False, deleted_wi=False):
-            site, item = work_item(label, tech=tech, site_type=site_type, deleted=deleted_wi)
+        def single(label, code, *, tech, ict, cra, site_type, deleted=False, deleted_wi=False,
+                   dt="Done"):
+            site, item = work_item(label, tech=tech, site_type=site_type, deleted=deleted_wi, dt=dt)
             village(label, item, site, code, ict=ict, cra=cra, deleted=deleted)
 
         single("three_tech", "100001", tech="2G3G4G", ict="Approved", cra="NotFiled", site_type="A")
@@ -130,6 +133,8 @@ def _seed() -> None:
         single("cra_only", "100003", tech="2G", ict="NotFiled", cra="Approved", site_type="C")
         single("no_tech", "100004", tech=None, ict="Approved", cra="NotFiled", site_type="D")
         single("not_eligible", "100005", tech="2G", ict="NotFiled", cra="NotFiled", site_type="E")
+        single("untested", "100009", tech="2G", ict="NotFiled", cra="NotFiled", site_type="J",
+               dt=None)
 
         site, item = work_item("twin", tech="2G", site_type="F")
         village("twin_a", item, site, "229164", ict="Approved", cra="NotFiled")
@@ -252,18 +257,19 @@ def _template_rows(client, actors) -> tuple[list, list[dict]]:
     return header, rows
 
 
-def test_the_template_holds_the_villages_we_have_already_approved(client, actors):
+def test_the_template_holds_approved_and_drive_tested_villages(client, actors):
     header, rows = _template_rows(client, actors)
     assert header == list(mojri_tracker.TEMPLATE_COLUMNS)
 
     keys = sorted((row["site_code"], row["site_type"], row["village_code"]) for row in rows)
     assert keys == sorted(
         KEYS[label]
-        for label in ("three_tech", "two_tech", "cra_only", "no_tech", "twin_a", "twin_b", "decoy")
+        for label in ("three_tech", "two_tech", "cra_only", "no_tech", "twin_a", "twin_b",
+                      "decoy", "not_eligible")
     )
-    # A village neither authority has approved is not behind in anybody's
-    # tracker yet, so it is not asked about; a deleted one is not a village.
-    for label in ("not_eligible", "deleted", "deleted_wi"):
+    # A village neither approved nor drive tested cannot have reached ICT HQ
+    # yet, so it is not asked about; a deleted one is not a village.
+    for label in ("untested", "deleted", "deleted_wi"):
         assert KEYS[label] not in keys, label
 
 
@@ -863,7 +869,13 @@ def test_the_cleanup_migration_empties_statuses_and_keeps_the_runs(client):
     def counts():
         db = SessionLocal()
         try:
-            return db.query(MojriTrackerStatus).count(), db.query(MojriImportRun).count()
+            # Counted by id only: below head the run table lacks columns a
+            # later migration added (UEP-21 file_date), which a full ORM
+            # select would name.
+            return (
+                db.query(func.count(MojriTrackerStatus.id)).scalar(),
+                db.query(func.count(MojriImportRun.id)).scalar(),
+            )
         finally:
             db.close()
 

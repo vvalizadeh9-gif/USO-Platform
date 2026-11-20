@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { deltaText, deltaTone, metaText, weekDelta } from './homeLogic'
+import { deltaText, deltaTone, metaText, submissionMeta, weekDelta } from './homeLogic'
 
 describe('KPI delta', () => {
   it('words the change', () => {
@@ -33,3 +33,20 @@ describe('queue meta line', () => {
     expect(metaText({ oldest_days: 1, owners_total: 0, owner_type: null })).toBe('Oldest 1 day')
   })
 })
+
+describe('Submissions rows on Home (UEP-21)', () => {
+  const row = (due) => ({ queue_key: 'submit_to_ict', count: 64, submission: { next_number: 40, due_in: due, sites: 41, oldest_days: null } })
+  it('says the batch, its due date and the sites', () => {
+    expect(submissionMeta(row(5))).toEqual({ due: 'Batch #40 due in 5 days', tone: null, text: '41 sites' })
+    expect(submissionMeta(row(3)).tone).toBe('pending')
+    expect(submissionMeta(row(-1))).toMatchObject({ due: 'Batch #40 overdue 1 day', tone: 'danger' })
+  })
+  it('says late and oldest for the follow-up row', () => {
+    const t = { queue_key: 'ict_mojri_follow_up', count: 9, submission: { next_number: 40, due_in: 3, sites: 0, oldest_days: 41 } }
+    expect(submissionMeta(t)).toEqual({ late: 9, text: 'Oldest 41 days' })
+  })
+  it('leaves every other row alone', () => {
+    expect(submissionMeta({ queue_key: 'ict_pending', count: 3 })).toBeNull()
+  })
+})
+

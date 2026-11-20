@@ -359,9 +359,11 @@ def test_steps_in_process_order_with_gaps(world):
         ("health_check", "done", date(2026, 9, 9), 7),
         ("assigned", "done", date(2026, 9, 16), 7),
         ("dt_done", "done", date(2026, 9, 30), 14),
-        ("acceptance", "in_progress", None, 14),
+        # UEP-21: not yet sent to ICT HQ, so that is the step in progress.
+        ("sent_to_ict", "in_progress", None, 14),
+        ("acceptance", "upcoming", None, None),
     ]
-    assert record["status"] == {"step": "acceptance", "state": "in_progress"}
+    assert record["status"] == {"step": "sent_to_ict", "state": "in_progress"}
 
 
 def test_aging(world):
@@ -440,9 +442,10 @@ def test_a_later_step_proves_an_earlier_one():
         J.StepFact(J.STEP_HEALTH_CHECK, False, None),
         J.StepFact(J.STEP_ASSIGNED, False, None),
         J.StepFact(J.STEP_DT_DONE, True, date(2026, 9, 1)),
+        J.StepFact(J.STEP_SENT_TO_ICT, False, None),
         J.StepFact(J.STEP_ACCEPTANCE, False, None),
     ], TODAY)
-    assert [s["state"] for s in steps] == ["done"] * 4 + ["in_progress"]
+    assert [s["state"] for s in steps] == ["done"] * 4 + ["in_progress", "upcoming"]
 
 
 def _side(stored, *, rounds=(), requests=(), approved=None, rejected=None):
@@ -741,7 +744,8 @@ def test_a_drive_test_dated_before_on_air_has_no_negative_gap():
         J.StepFact(J.STEP_HEALTH_CHECK, True, date(2026, 9, 12)),
         J.StepFact(J.STEP_ASSIGNED, True, date(2026, 9, 13)),
         J.StepFact(J.STEP_DT_DONE, True, date(2026, 9, 1)),
+        J.StepFact(J.STEP_SENT_TO_ICT, False, None),
         J.StepFact(J.STEP_ACCEPTANCE, False, None),
     ], TODAY)
     assert [s["key"] for s in steps] == list(J.STEP_ORDER)
-    assert [s["gap_days"] for s in steps] == [None, 2, 1, None, 43]
+    assert [s["gap_days"] for s in steps] == [None, 2, 1, None, 43, None]

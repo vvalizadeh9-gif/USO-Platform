@@ -27,6 +27,7 @@ from sqlalchemy.orm import Session
 from app.core import audit_actions
 from app.core.database import get_db
 from app.core.deps import ADMIN, PM, require_roles
+from app.core.jalali import parse_day, tehran_today
 from app.models.reference import User
 from app.services import evidence_store, mojri_tracker
 from app.services.audit import record_audit
@@ -87,12 +88,23 @@ def preview_import(
 def commit_import(
     file: UploadFile = File(...),
     digest: str = Form(..., description="The digest the preview returned"),
+    file_date: str | None = Form(
+        None, description="The day Mojri's file reflects, ISO or Shamsi (default: today)"
+    ),
     db: Session = Depends(get_db),
     user: User = Depends(require_roles(PM)),
 ) -> dict:
     """Apply a previewed file. PM only, and only the file that was previewed."""
     content = _upload(file)
-    result = mojri_tracker.commit(db, user, content, file.filename or "", digest)
+    try:
+        day = parse_day(file_date)
+    except ValueError as exc:
+        raise HTTPException(400, f"The Mojri file date is not a valid date: {exc}") from None
+    if day is not None and day > tehran_today():
+        raise HTTPException(400, "The Mojri file date cannot be in the future")
+    result = mojri_tracker.commit(
+        db, user, content, file.filename or "", digest, file_date=day
+    )
     record_audit(
         db,
         user_id=user.id,
@@ -108,6 +120,8 @@ def commit_import(
             "disappeared": result["disappeared_count"],
             "ict": result["authorities"]["ict"],
             "cra": result["authorities"]["cra"],
+            "file_date": str(result["file_date"]),
+            "submissions": result["submissions_applied"],
         },
     )
     db.commit()

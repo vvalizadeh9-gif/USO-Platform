@@ -118,7 +118,8 @@
 .ex-skel-tile { height: 48px; }
 
 /* The step path: five steps on one line, a pill on the line between two. */
-.ex-steps { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); margin: 0; padding: 0; list-style: none; }
+/* One column per step, however many the server sends (six since UEP-21). */
+.ex-steps { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); margin: 0; padding: 0; list-style: none; }
 .ex-step {
   position: relative;
   display: flex;
@@ -788,3 +789,9 @@ html[data-uep-motion='reduce'] :is(.ex-page, .exl-page) * { animation: none !imp
   background: var(--uep-accent-tint);
   color: var(--uep-brand-deep);
 }
+
+/* "Sent to ICT" detail under the step path (UEP-21 §5.9). */
+.ex-sent { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px var(--uep-space-16); font-size: var(--uep-fs-small); color: var(--uep-text-2); }
+.ex-sent li { display: inline-flex; align-items: center; gap: 6px; }
+.ex-sent li > svg { color: var(--uep-text-3); }
+.ex-muted { color: var(--uep-text-3); }
