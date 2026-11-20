@@ -21,6 +21,7 @@ from datetime import date, datetime
 from sqlalchemy import (
     JSON,
     Boolean,
+    CheckConstraint,
     Date,
     DateTime,
     ForeignKey,
@@ -86,6 +87,8 @@ class AcceptanceCase(Base):
     __table_args__ = (
         UniqueConstraint("village_id", "authority", name="uq_acceptance_case_village_authority"),
         Index("ix_acceptance_cases_state_basket", "authority", "state", "basket_role"),
+        CheckConstraint("authority IN ('ICT', 'CRA')", name="ck_acceptance_case_authority"),
+        CheckConstraint("state IN ('waiting', 'rejected', 'approved')", name="ck_acceptance_case_state"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -118,6 +121,10 @@ class AcceptanceCaseEvent(Base):
     __table_args__ = (
         Index("ix_acceptance_case_events_case", "case_id", "created_at"),
         Index("ix_acceptance_case_events_request", "request_id"),
+        CheckConstraint(
+            "kind IN ('created', 'submitted', 'approved', 'rejected', 'fixed', 'comment', 'basket_changed')",
+            name="ck_acceptance_case_event_kind",
+        ),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
