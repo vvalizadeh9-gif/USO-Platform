@@ -267,7 +267,6 @@ def test_a_contractor_is_never_shown_as_the_owner_of_their_own_work(client):
         ("h_pm", "All project", 2, 3),
         ("h_coord", "Your regions", 2, 3),
         ("h_rm", "Your regions", 1, 2),   # their one province: no FAR-V1
-        ("h_sc", "Your sites", 1, 2),     # their own site only
     ],
 )
 def test_acceptance_is_pending_ict_and_cra_villages_in_scope(client, username, scope, ict, cra):
@@ -281,9 +280,22 @@ def test_acceptance_is_pending_ict_and_cra_villages_in_scope(client, username, s
     assert {t["unit"] for t in acceptance["tickets"]} == {"villages"}
 
 
-def test_a_problem_owner_gets_one_card_and_no_plan(client):
+def test_a_contractor_reads_their_own_acceptance_baskets(client):
+    """UEP-22 §5.7: Waiting for ICT / CRA (their own site only), each with
+    its no-comment figure, instead of Pending ICT / CRA."""
+    body = _home(client, "h_sc")
+    acceptance = next(g for g in body["groups"] if g["key"] == "acceptance")
+    tickets = {t["queue_key"]: t for t in acceptance["tickets"]}
+    assert not {"ict_pending", "cra_pending"} & set(tickets)
+    assert (tickets["ict_case_waiting"]["count"], tickets["cra_case_waiting"]["count"]) == (1, 2)
+    assert tickets["ict_case_waiting"]["acceptance"]["no_comment"] == 1
+    assert acceptance["scope_label"] == "Your sites"
+
+
+def test_a_problem_owner_gets_the_fix_and_basket_cards_and_no_plan(client):
     body = _home(client, "h_power")
-    assert [g["key"] for g in body["groups"]] == ["drive_test"]
+    # UEP-22: a team basket role works its acceptance basket from Home too.
+    assert [g["key"] for g in body["groups"]] == ["drive_test", "acceptance"]
     assert body["plan"] is None
 
 
@@ -429,7 +441,7 @@ def test_the_snapshot_job_records_due_soon_and_home_only_queues(client):
             return {r.queue_key for r in rows}
 
         assert keys("h_rm") == {"ict_pending", "cra_pending"}
-        assert {"ict_pending", "ict_to_file"} <= keys("h_sc")
+        assert {"ict_case_waiting", "ict_to_file"} <= keys("h_sc")
     finally:
         db.close()
 

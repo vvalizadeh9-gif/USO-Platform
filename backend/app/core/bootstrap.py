@@ -20,6 +20,7 @@ from app.core.config import get_settings
 from app.core.database import SessionLocal
 from app.core.deps import (
     CPG_POWER,
+    CPG_PSO,
     CPG_ROLLOUT_PM,
     HUAWEI_CLEANUP,
     MANAGED_SERVICE,
@@ -40,6 +41,8 @@ DEFAULT_ROLES = [
     "RegionalManager",
     "Contractor",
     "Viewer",
+    # UEP-22: the CPG PSO acceptance basket (a team role, no HC category).
+    CPG_PSO,
 ]
 
 # The roles that own a health-check problem category. Seeded with

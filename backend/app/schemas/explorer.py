@@ -86,6 +86,17 @@ class JourneyOut(BaseModel):
     sent_to_ict: list[SentToIctOut] = []
 
 
+class CaseOut(BaseModel):
+    """UEP-22: the side's acceptance case."""
+
+    state: Literal["waiting", "rejected", "approved"]
+    basket: str | None = None
+    category: str | None = None
+    days_in_basket: int | None = None
+    over_sla: bool = False
+    stale: bool = False
+
+
 class SideOut(BaseModel):
     status: SideWord
     phase: SidePhase
@@ -95,6 +106,7 @@ class SideOut(BaseModel):
     round: int | None
     filed: bool
     refiled: bool
+    case: CaseOut | None = None
 
 
 class VillageOut(BaseModel):

@@ -251,6 +251,7 @@ def build(db: Session, user: User, now: datetime | None = None) -> dict:
     ]
     tickets = [t for g in groups for t in g["tickets"]]
     _add_submission_meta(db, user, tickets, today)
+    _add_case_meta(ctx, tickets)
     live = home_trends.DayFigures(
         pending=sum(t["count"] for t in tickets),
         overdue=sum(t["late"] for t in tickets),
@@ -294,8 +295,24 @@ def build(db: Session, user: User, now: datetime | None = None) -> dict:
         "app_badges": _badges(tickets),
         # Counted like a card's rows, shown on none: a page's own number for
         # its rail badge and header (types.RAIL_QUEUES; UEP-16 Filing).
-        "rail_tickets": [_ticket(_rail_row(q, ctx, days[q.key], window)) for q in rail_queues],
+        "rail_tickets": _case_meta_on(ctx, [_ticket(_rail_row(q, ctx, days[q.key], window)) for q in rail_queues]),
     }
+
+
+def _add_case_meta(ctx: QueueContext, tickets: list[dict]) -> None:
+    """"{n} over SLA · {n} no comment" on the acceptance case rows (UEP-22
+    §5.7), from the same counts module as the Filing inbox."""
+    from app.services.acceptance_cases.counts import HOME_QUEUES
+    from app.services.action_queues.sources import cases
+
+    for ticket in tickets:
+        if ticket["queue_key"] in HOME_QUEUES:
+            ticket["acceptance"] = cases.meta(ctx, ticket["queue_key"])
+
+
+def _case_meta_on(ctx: QueueContext, tickets: list[dict]) -> list[dict]:
+    _add_case_meta(ctx, tickets)
+    return tickets
 
 
 #: Home rows whose meta line Submissions writes (UEP-21 §5.8).
@@ -318,5 +335,8 @@ def _add_submission_meta(db: Session, user: User, tickets: list[dict], today: da
 def summary_for(db: Session, user: User) -> dict:
     """This user's Home, shared by every read of it for a few seconds."""
     require_home_role(user)
+    from app.services.acceptance_cases.counts import ensure_synced
+
+    ensure_synced(db)
     key = ("home", user.id, user.role_id, user.contractor_id)
     return count_cache.get_or_compute(key, lambda: build(db, user))

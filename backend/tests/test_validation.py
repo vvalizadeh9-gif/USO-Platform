@@ -251,11 +251,13 @@ def test_counts_equal_the_home_queues_per_authority_and_role(client, scene):
 
 
 def test_the_filing_number_is_the_home_rail_ticket(client, scene):
+    """UEP-22: Filing is the cases inbox; its rail number is both inboxes."""
     for who in (scene["contractor"], _user(client, "PM", "val_pm")):
-        listing = client.get(f"{API}/my-work", headers=who, params={"limit": 0}).json()
-        assert listing["filing_total"] == _home_counts(client, who)["acceptance_filing"]["count"]
-        keys = [t["key"] for t in listing["tabs"]]
-        assert "filled" not in keys and "all" not in keys
+        inboxes = [
+            client.get(f"{API}/inbox", headers=who, params={"authority": a}).json()["counts"]["all"]
+            for a in ("ICT", "CRA")
+        ]
+        assert sum(inboxes) == _home_counts(client, who)["acceptance_filing"]["count"]
 
 
 # ---------------------------------------------------------------------------

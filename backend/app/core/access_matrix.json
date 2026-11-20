@@ -20,16 +20,27 @@
     "explorer": {
       "offered": [
         "PM", "Coordinator", "Viewer", "Contractor", "RegionalManager",
-        "NwgPlanning", "ManagedService", "HuaweiCleanup", "CpgPower", "CpgRolloutPM"
+        "NwgPlanning", "ManagedService", "HuaweiCleanup", "CpgPower", "CpgRolloutPM", "CpgPso"
       ],
       "direct": ["Admin"]
     },
     "explorer_all_sites": {
-      "offered": ["NwgPlanning", "ManagedService", "HuaweiCleanup", "CpgPower", "CpgRolloutPM"],
+      "offered": ["NwgPlanning", "ManagedService", "HuaweiCleanup", "CpgPower", "CpgRolloutPM", "CpgPso"],
       "direct": []
     },
     "acceptance_workspace": {
       "offered": ["PM", "Coordinator", "Viewer", "Contractor"],
+      "direct": []
+    },
+    "acceptance_cases": {
+      "offered": [
+        "PM", "Coordinator", "Viewer", "Contractor",
+        "NwgPlanning", "CpgPso", "CpgRolloutPM", "CpgPower", "ManagedService"
+      ],
+      "direct": []
+    },
+    "acceptance_baskets": {
+      "offered": ["PM", "Coordinator", "Viewer"],
       "direct": []
     },
     "monthly_plan_queue": {
@@ -51,6 +62,7 @@
     "ManagedService": "work",
     "HuaweiCleanup": "work",
     "CpgPower": "work",
-    "CpgRolloutPM": "work"
+    "CpgRolloutPM": "work",
+    "CpgPso": "work"
   }
 }

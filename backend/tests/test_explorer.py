@@ -238,6 +238,7 @@ def test_response_shape(world):
     assert set(body["journey"]["aging"]["longest_step"]) == {"from", "to", "days"}
     assert set(body["villages"][0]["ict"]) == {
         "status", "phase", "filed_date", "decided_date", "days", "round", "filed", "refiled",
+        "case",
     }
     assert body["general"]["dt_date"] == "2026-09-30"
 

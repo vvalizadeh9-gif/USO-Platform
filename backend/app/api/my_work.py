@@ -346,6 +346,20 @@ def file_letter(
     )
 
 
+def _category_id(db: Session, code: str | None) -> int | None:
+    """A rejection category code (UEP-22) as its id; an unknown code is a 400."""
+    if not code:
+        return None
+    from app.models.acceptance_case import AcceptanceRejectionCategory
+
+    found = db.scalar(select(AcceptanceRejectionCategory.id).where(
+        AcceptanceRejectionCategory.code == code, AcceptanceRejectionCategory.active.is_(True)))
+    if found is None:
+        raise _error(400, "invalid_category", "Unknown rejection category",
+                     [{"field": "category", "code": "invalid"}])
+    return found
+
+
 @router.post("/letters/review", response_model=LetterReviewed)
 def review_letter(
     payload: LetterReviewIn,
@@ -360,7 +374,8 @@ def review_letter(
             letter_number=payload.letter_number, submission_ids=payload.submission_ids,
             reason=payload.reason,
             items=[
-                letters.ReviewItem(i.submission_id, i.version, i.reason)
+                letters.ReviewItem(i.submission_id, i.version, i.reason,
+                                   _category_id(db, i.category))
                 for i in payload.items or ()
             ] or None,
             shared_reason=payload.shared_reason,

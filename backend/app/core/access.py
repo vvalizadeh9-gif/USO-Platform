@@ -42,8 +42,13 @@ class Area(StrEnum):
     #: Explorer and header search read every site rather than the caller's
     #: usual row scope. Read only: it grants no write anywhere.
     EXPLORER_ALL_SITES = "explorer_all_sites"
-    #: Acceptance > Filing (My Work).
+    #: The pre-UEP-22 acceptance workspace API (My Work, validation reads).
     ACCEPTANCE_WORKSPACE = "acceptance_workspace"
+    #: Acceptance > Filing (UEP-22): the acceptance cases inbox. The team
+    #: roles see their own basket only.
+    ACCEPTANCE_CASES = "acceptance_cases"
+    #: Insights > Acceptance baskets (UEP-22).
+    ACCEPTANCE_BASKETS = "acceptance_baskets"
     #: Monthly plan: the month's queue of contractor plans.
     MONTHLY_PLAN_QUEUE = "monthly_plan_queue"
     #: Monthly plan > Internal PIP and History.

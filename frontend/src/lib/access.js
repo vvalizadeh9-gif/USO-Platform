@@ -25,6 +25,10 @@ export const AREA = Object.freeze({
   EXPLORER_ALL_SITES: 'explorer_all_sites',
   /** Acceptance › Filing (My Work). */
   ACCEPTANCE_WORKSPACE: 'acceptance_workspace',
+  /** Acceptance › Filing (UEP-22): the cases inbox, team roles included. */
+  ACCEPTANCE_CASES: 'acceptance_cases',
+  /** Insights › Acceptance baskets (UEP-22). */
+  ACCEPTANCE_BASKETS: 'acceptance_baskets',
   MONTHLY_PLAN_QUEUE: 'monthly_plan_queue',
   INTERNAL_PIP: 'internal_pip',
   /** Acceptance › Submissions (UEP-21); acting is PM and the owner only. */

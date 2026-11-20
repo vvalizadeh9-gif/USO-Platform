@@ -10,10 +10,10 @@ For staff, an item belongs to the drive-test contractor on the site (the
 contractor My Work shows on the row); with none, to the province's
 coordinator. On a contractor's own board every item is theirs.
 
-Home's two headline queues, *Pending ICT* and *Pending CRA*
-(:func:`not_approved`), are the same population -- My Work's "remaining"
-scope: هدف, drive test Done, on air -- narrowed to villages whose side is not
-yet approved, and counted once per village (see :func:`one_per_village`).
+Home's two headline queues, *Pending ICT* and *Pending CRA*, and the Filing
+badge are read from the acceptance cases since UEP-22 (``sources/cases.py``);
+:func:`one_per_village` is still the rule for which village stands for a
+site, site type and village code.
 """
 from __future__ import annotations
 
@@ -92,28 +92,6 @@ def one_per_village(rows: list[tuple]) -> list[tuple]:
     return kept
 
 
-def not_approved(authority: str) -> Callable[[QueueContext], list[PendingItem]]:
-    """Villages in the acceptance universe whose ``authority`` side is not
-    approved, once per village, timed by that side's own waiting clock."""
-    side = query.side_columns(authority)[0]
-
-    def fetch(ctx: QueueContext) -> list[PendingItem]:
-        stmt = (
-            query.base_select(ctx.db, ctx.user, scope=SCOPE_REMAINING)
-            .where(side != S.stored_status(S.APPROVED))
-            .with_only_columns(
-                Village.id, Village.work_item_id, Village.village_code,
-                WorkItem.dt_sc_contractor_id, query.waiting_since(authority),
-            )
-        )
-        rows = [(vid, wid, cid, since) for vid, wid, _code, cid, since
-                in one_per_village(ctx.db.execute(stmt).all())]
-        return _owned(ctx, rows, contractor_owns=True)
-
-    fetch.__name__ = f"{authority.lower()}_not_approved"
-    return fetch
-
-
 def queue(authority: str, tab: str, *, contractor_owns: bool) -> Callable[[QueueContext], list[PendingItem]]:
     """The fetch for one authority's view of one My Work tab."""
     def fetch(ctx: QueueContext) -> list[PendingItem]:
@@ -126,18 +104,3 @@ def queue(authority: str, tab: str, *, contractor_owns: bool) -> Callable[[Queue
 
     fetch.__name__ = f"{authority.lower()}_{tab}"
     return fetch
-
-
-def filing(ctx: QueueContext) -> list[PendingItem]:
-    """Villages in any of Filing's buckets for this viewer, each once
-    (``my_work_query.filing_predicate``) -- the Filing header's number --
-    timed by the village's own waiting clock."""
-    view = S.view_for(ctx.user.role.name)
-    stmt = (
-        query.base_select(ctx.db, ctx.user, scope=SCOPE_REMAINING)
-        .where(query.filing_predicate(view))
-        .with_only_columns(
-            Village.id, Village.work_item_id, WorkItem.dt_sc_contractor_id, query.waiting_since(),
-        )
-    )
-    return _owned(ctx, ctx.db.execute(stmt).all(), contractor_owns=True)
