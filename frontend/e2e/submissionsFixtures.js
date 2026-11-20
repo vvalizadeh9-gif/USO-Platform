@@ -129,6 +129,11 @@ export async function mockSubmissions(page, { role = 'owner', calls = [] } = {})
     if (path === '/batches') return json(batches())
     if (path === '/follow-up') return json(followUp())
     if (path === '/villages') return json(yourVillages())
+    if (path === '/owner/candidates') return json({ rows: [
+      { id: 7, name: 'Amir Rahimi', regions: ['North', 'North West'], is_owner: true },
+      { id: 8, name: 'Zohreh Abouzari', regions: ['North East', 'South', 'South West'], is_owner: false },
+      { id: 9, name: 'Hossein Zanganeh', regions: [], is_owner: false },
+    ] })
     const m = /^\/batches\/(\d+)$/.exec(path)
     if (m) return json(batch(Number(m[1]), { draft: Number(m[1]) === 41 }))
     return json({ rows: [] })

@@ -144,22 +144,21 @@ describe('Drive test rail without Dashboard', () => {
 describe('Acceptance rail', () => {
   const pagesOf = (role) => appsFor(role).find((a) => a.id === 'acceptance')?.pages.map((p) => p.id)
 
-  it.each(['PM', 'Coordinator'])('gives %s Submissions first, then Filing and both validation pages', (role) => {
-    expect(pagesOf(role)).toEqual(['submissions', 'filing', 'ict-validation', 'cra-validation'])
+  it.each(['PM', 'Coordinator'])('gives %s Filing and both validation pages', (role) => {
+    expect(pagesOf(role)).toEqual(['filing', 'ict-validation', 'cra-validation'])
   })
 
-  it('gives a Viewer Submissions and Filing', () => {
-    expect(pagesOf('Viewer')).toEqual(['submissions', 'filing'])
+  it.each(['Contractor', 'Viewer'])('gives %s Filing only', (role) => {
+    expect(pagesOf(role)).toEqual(['filing'])
   })
 
-  it('gives a Contractor Filing only', () => {
-    expect(pagesOf('Contractor')).toEqual(['filing'])
-  })
-
-  it('counts Submissions from the submit_to_ict queue, with the send icon on accent (UEP-21)', () => {
-    const page = appsFor('PM').find((a) => a.id === 'acceptance').pages.find((p) => p.id === 'submissions')
-    expect(page).toMatchObject({ route: '/submissions', queues: ['submit_to_ict'], icon: 'send', tile: '--uep-accent' })
-    expect(locate(appsFor('PM'), '/submissions/batches/40', '').page.id).toBe('submissions')
+  it('puts Submissions in the Drive test app, after Tests, counted by submit_to_ict (UEP-21)', () => {
+    const dt = appsFor('PM').find((a) => a.id === 'drive-test')
+    const ids = dt.pages.map((p) => p.id)
+    expect(ids.indexOf('submissions')).toBe(ids.indexOf('dt-tests') + 1)
+    expect(dt.pages.find((p) => p.id === 'submissions')).toMatchObject({ section: 'Drive test', route: '/submissions', queues: ['submit_to_ict'], icon: 'send' })
+    expect(locate(appsFor('PM'), '/submissions/batches/40', '').app.id).toBe('drive-test')
+    expect(appsFor('Contractor').find((a) => a.id === 'drive-test').pages.map((p) => p.id)).not.toContain('submissions')
   })
 
   it('gives a Regional Manager no Acceptance app', () => {

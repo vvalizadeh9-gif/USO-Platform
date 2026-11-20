@@ -117,3 +117,33 @@ test('viewer: the owner layout, read-only', async ({ page }) => {
   await expect(page.getByRole('button', { name: /Create draft/ })).toHaveCount(0)
   await expect(page.getByRole('button', { name: 'Change owner' })).toHaveCount(0)
 })
+
+test('PM: Change owner lists every coordinator with their regions, nothing clipped', async ({ page }) => {
+  const calls = []
+  await signIn(page, PM)
+  await mockSubmissions(page, { role: 'pm', calls })
+  await page.goto('/submissions')
+  await page.getByRole('button', { name: 'Change owner' }).click()
+  const dialog = page.getByRole('dialog', { name: 'Change owner' })
+  const options = dialog.getByRole('radio')
+  await expect(options).toHaveCount(3)
+  for (const name of ['Amir Rahimi', 'Zohreh Abouzari', 'Hossein Zanganeh']) {
+    await expect(dialog.getByText(name)).toBeInViewport()
+  }
+  await expect(dialog.getByText('Current owner')).toBeVisible()
+  await expect(dialog.getByText('North East · South · South West')).toBeVisible()
+  await expect(dialog.getByRole('button', { name: 'Make owner' })).toBeDisabled()
+  await dialog.getByText('Zohreh Abouzari').click()
+  if (process.env.SCREENSHOTS) await page.screenshot({ path: `${process.env.SCREENSHOTS}/submissions-change-owner.png` })
+  await dialog.getByRole('button', { name: 'Make owner' }).click()
+  await expect.poll(() => calls).toContain('PUT /owner')
+})
+
+test('the Submissions rail item sits in the Drive test app', async ({ page }) => {
+  await signIn(page, PM)
+  await mockSubmissions(page, { role: 'pm' })
+  await page.goto('/submissions')
+  const rail = page.getByRole('complementary', { name: 'Drive test pages' })
+  await expect(rail.getByRole('link', { name: /Submissions/ })).toHaveAttribute('aria-current', 'page')
+  await expect(page.getByRole('navigation', { name: 'Breadcrumb' })).toContainText('Drive test')
+})

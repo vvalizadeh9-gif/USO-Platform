@@ -1,6 +1,6 @@
 # Submissions: the two-week routine (owner)
 
-Acceptance › Submissions sends the villages whose drive test is done to ICT HQ,
+Drive test › Submissions (Drive test app, under Tests) sends the villages whose drive test is done to ICT HQ,
 keeps UEP's own record of what went, and lists what ICT HQ has not registered.
 
 1. **Open Ready to submit.** It lists every drive-tested village not yet sent,
@@ -21,6 +21,9 @@ keeps UEP's own record of what went, and lists what ICT HQ has not registered.
    in it. Select them, *Export list for ICT*, then *Mark raised with ICT*; or
    *Send again* to put a village back in Ready for the next batch. A village
    leaves the list by itself when a newer Mojri file shows it.
+
+The PM picks the owner with **Change owner** on Ready to submit. The owner must
+be an active Coordinator account; an Admin creates one in Admin › Users & roles.
 
 If the page says *Mojri data is n days old*, ask the PM to upload the current
 Mojri file with its date: until then the follow-up count is paused on purpose.

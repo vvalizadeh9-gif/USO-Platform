@@ -86,7 +86,10 @@ describe('GlobalSearch', () => {
     renderSearch()
     fireEvent.change(screen.getByRole('combobox'), { target: { value: 'h' } })
 
-    expect(screen.getByRole('option', { name: /History/ })).toBeInTheDocument()
+    // Every Drive test page matches ("Health checks…" in its description);
+    // the list stops at six, so name one inside the first six.
+    expect(screen.getByRole('option', { name: /Tests/ })).toBeInTheDocument()
+    expect(screen.getAllByRole('option').length).toBeLessThanOrEqual(6)
     expect(api.get).not.toHaveBeenCalled()
   })
 

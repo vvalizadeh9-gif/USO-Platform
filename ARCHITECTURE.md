@@ -1981,7 +1981,7 @@ indexed (migration `a7c3e9d2f514`). See §3.
 ## 5j. Submissions to ICT (UEP-21)
 
 Every two weeks the team sends ICT HQ an official MTN letter with an 18-column
-Excel list of the villages whose drive test is done. Acceptance > Submissions
+Excel list of the villages whose drive test is done. Drive test > Submissions
 (`/submissions`, `services/submissions/`, `api/submissions.py`) prepares that
 list, records what went, and follows up what ICT HQ has not registered.
 
@@ -2038,8 +2038,8 @@ to next batch sent) and `mojri_follow_up` (30 days, sent to in Mojri).
   template too (`template_scope` is a superset of `comparison_scope`, so the
   Lifecycle Gaps card does not move), and on commit stamps confirmations and
   records "sent outside UEP" items (`services/submissions/mojri_link.py`).
-* *Home*: `submit_to_ict` and `ict_mojri_follow_up` on the Acceptance card, for
-  the PM and the owner only (`action_queues/sources/submissions.py`). The second
+* *Home*: `submit_to_ict` and `ict_mojri_follow_up` on the Drive test card (Home-
+  only queues, `types.HOME_ONLY`), for the PM and the owner only (`action_queues/sources/submissions.py`). The second
   is keyed apart from `ict_follow_up`, the PM's follow-up of ICT's verdicts.
 * *Explorer*: a "Sent to ICT" step between DT done and Acceptance, with the
   batch, its letters and the Mojri state.

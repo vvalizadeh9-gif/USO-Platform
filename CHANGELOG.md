@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- **Submissions moved to the Drive test app; Change owner is a list (UEP-21 follow-up).**
+  - Submissions is now in the Drive test rail (section Drive test, after Tests), the step after the test. Home's "Submit to ICT" and "Follow up with ICT" rows move to the Drive test card, and SLA policies lists `submit_cycle` and `mojri_follow_up` under Drive test. The Acceptance rail is Filing and the two validation pages again.
+  - Change owner shows every active coordinator as a radio row with the CRA regions they hold and "Current owner", instead of a dropdown that opened clipped inside the dialog. With no coordinator account it says an Admin adds one in Admin › Users & roles. `GET /submissions/owner/candidates` adds `regions` and `is_owner`.
+  - No migration.
+
 - **Acceptance > Submissions: DT-done villages sent to ICT HQ, batch by batch (UEP-21).**
   - New page `/submissions` (PM, Coordinator, Viewer; first in the Acceptance rail, the app still opens on Filing): three views as tiles, Ready, Batches, Follow up, and a batch page `/submissions/batches/:n`. Ready lists drive-tested villages not yet sent, by site, with one reason each (New DT site, Missed, Became هدف, Re-send), a "New since" filter and the two-week cycle bar. A draft locks its villages; the batch page downloads `MTN_Irancell_Drive_Test_{n}.xlsx` in the 18-column ICT format, records the MTN letter (scan through the evidence store) and, once sent, the two optional onward letters, which never age or warn. Follow up lists villages sent 30+ days before the latest Mojri file and still not in it: Mark raised (with a note), Send again, Export list for ICT. Coordinators other than the owner see their own regions, read-only.
   - UEP's own record is the source of truth for "sent". Mojri only confirms: the Mojri import takes a file date, stamps confirmations, records villages in Mojri that UEP never sent as "sent outside UEP", and shows both counts in its preview. Lateness is measured against the Mojri file's date, so a stale file pauses the count (banner). Only `in_tracker` confirms; `needs_look` does not.

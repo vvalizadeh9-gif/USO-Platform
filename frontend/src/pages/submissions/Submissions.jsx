@@ -1,4 +1,4 @@
-// Acceptance › Submissions (UEP-21): DT-done villages sent to ICT HQ.
+// Drive test › Submissions (UEP-21): DT-done villages sent to ICT HQ.
 // One page, three views chosen by ?view= (Ready · Batches · Follow up). A
 // coordinator who is not the owner gets the read-only layout for their own
 // regions; Viewer gets the owner layout with no actions.
