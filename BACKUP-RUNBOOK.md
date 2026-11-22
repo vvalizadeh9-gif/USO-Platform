@@ -26,10 +26,10 @@ system, in [Practising a restore](#practising-a-restore-do-this-every-six-months
 
 | | |
 |---|---|
-| `scripts/backup.sh` | Backs up the database and the uploaded files. Rotates old ones. |
-| `scripts/restore.sh` | Puts both back. Asks for confirmation first. |
-| `backups/daily/` | One pair per night, the last **14** kept. |
-| `backups/weekly/` | Every Sunday's pair, kept **3 months**. |
+| `scripts/backup.sh` | Backs up the database, which includes every uploaded file. Rotates old ones. |
+| `scripts/restore.sh` | Puts it back. Asks for confirmation first. |
+| `backups/daily/` | One dump per night, the last **14** kept. |
+| `backups/weekly/` | Every Sunday's dump, kept **3 months**. |
 | `backups/pre-restore/` | A safety copy taken automatically before any restore. |
 
 Two levels of retention because problems are found at two speeds. Someone
@@ -38,22 +38,21 @@ in March that acceptance figures went wrong in January needs the weekly set.
 
 ### What is backed up
 
-Two things, every night, both automatically:
+One thing, every night, automatically: **the database** — sites, villages, work
+items, health checks, drive tests, acceptances, users, audit log, and, since
+UEP-20, **every uploaded file** (ICT/CRA letters and evidence, drive-test
+evidence, MTN submission letters, CPM workbooks) in the `stored_files` table.
+Written as `uep-<date>.dump`.
 
-1. **The database** — sites, villages, work items, health checks, drive tests,
-   acceptances, users, audit log. Written as `uep-<date>.dump`.
-2. **The uploaded files** — letters and attachments, which live in a separate
-   Docker volume that `pg_dump` cannot see. Written as
-   `uep-uploads-<date>.tar.gz`, with the same timestamp as the dump beside it.
+There is no uploads volume any more, so a filing and its letter are always
+backed up and restored together. Older backups may still have an
+`uep-uploads-<date>.tar.gz` beside them; they are rotated out like the dumps.
+To bring one of those into a restored database, unpack it into a folder and run
+the one-time copy described in *Uploads archives from before UEP-20* below.
 
-They are deliberately kept as a matching pair. `restore.sh` restores the uploads
-archive whose timestamp matches the dump you chose, so a restore puts the
-database and its letters back to the *same* moment. Restoring one without the
-other leaves every letter link pointing at a file that is not on disk.
-
-If the uploads step fails, the script warns but still keeps the database backup
-— losing a good database backup because the uploads step failed after it would
-be worse than a missing letter.
+Expect the database to grow by about **10 GB a year** from files alone, and CPM
+workbooks are kept forever: size the disk and the backup storage (here, or on
+IT's PostgreSQL server) for a growing database kept for 1 month and 1 year.
 
 ---
 
@@ -242,9 +241,8 @@ The script:
 2. Takes a safety copy of the current database into `backups/pre-restore/`, so a
    restore you regret can itself be undone.
 3. Stops the application so nothing writes mid-restore.
-4. Restores the database, then the uploaded letters from the archive with the
-   matching timestamp. If that archive is missing it says so and restores the
-   database only, rather than putting back files from a different date.
+4. Restores the database. Uploaded files are part of it, so they come back to
+   the same moment as everything else.
 5. Starts everything again and waits for the backend to report healthy.
 
 Afterwards, check in the application: sign in, open Reports → Acceptance
@@ -255,41 +253,23 @@ If it was the wrong choice, restore the safety copy the same way.
 
 ---
 
-## The uploaded files, by hand
+## Uploads archives from before UEP-20
 
-The nightly backup already covers letters and attachments, and `restore.sh`
-puts them back automatically. You should not normally need this section.
-
-It is here for the case where you want a copy of just the files — to inspect
-them, or to move them to another machine — without touching the database.
-
-Find the volume's real name first. Compose prefixes it with the directory name,
-so it changes if the directory is renamed:
+Until UEP-20 uploaded files lived in a Docker volume and were backed up as
+`uep-uploads-<date>.tar.gz`. They now live in the database, so you only need
+this section to bring files from such an archive (or from an old server's
+uploads folder) into a database:
 
 ```bash
-docker volume ls | grep uploads
+mkdir -p /tmp/old-uploads && tar xzf backups/daily/uep-uploads-YYYY-MM-DD_HHMM.tar.gz -C /tmp/old-uploads
+docker compose run --rm -v /tmp/old-uploads:/old-uploads:ro backend   python -m app.scripts.migrate_uploads_to_db --upload-dir /old-uploads --dry-run
+docker compose run --rm -v /tmp/old-uploads:/old-uploads:ro backend   python -m app.scripts.migrate_uploads_to_db --upload-dir /old-uploads
 ```
 
-Copy the files out:
-
-```bash
-docker run --rm \
-  -v <the volume name>:/data:ro \
-  -v "$(pwd)/backups:/backup" \
-  alpine tar czf /backup/uploads-manual-$(date +%F).tar.gz -C /data .
-```
-
-Put them back:
-
-```bash
-docker run --rm \
-  -v <the volume name>:/data \
-  -v "$(pwd)/backups:/backup" \
-  alpine sh -c "cd /data && tar xzf /backup/uploads-manual-YYYY-MM-DD.tar.gz"
-```
-
-Restoring files this way does **not** touch the database. If you want both put
-back to the same moment, use `restore.sh` instead — that is what it is for.
+It checks every file's SHA-256 against its name, never deletes anything, is
+safe to run twice, and ends with a report: files copied, already present, hash
+mismatches, CPM workbooks linked to their import, and rows whose file is still
+missing, per table. It exits non-zero while any row points at a missing file.
 
 ---
 

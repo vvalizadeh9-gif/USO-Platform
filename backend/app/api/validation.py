@@ -138,19 +138,19 @@ def _file_headers(filename: str, *, inline: bool) -> dict[str, str]:
     return headers
 
 
-def _bytes(record) -> bytes:
-    path = evidence_store.absolute_path(record.stored_path)
-    if not path.exists():
-        raise _error(404, "missing_file", "The stored file is missing")
-    return path.read_bytes()
+def _bytes(db: Session, record) -> bytes:
+    try:
+        return evidence_store.read(db, record.stored_path)
+    except evidence_store.FileMissing:
+        raise _error(404, "missing_file", "The stored file is missing") from None
 
 
-def _serve(record, *, inline: bool) -> Response:
+def _serve(db: Session, record, *, inline: bool) -> Response:
     # The type comes from the extension the magic bytes were checked against,
     # never from what the uploader sent; nosniff keeps the browser to it.
     shown = inline and evidence_store.kind_for(record.stored_path) in evidence_store.INLINE_KINDS
     return Response(
-        content=_bytes(record),
+        content=_bytes(db, record),
         media_type=evidence_store.media_type_for(record.stored_path),
         headers=_file_headers(record.original_filename, inline=shown),
     )
@@ -162,7 +162,7 @@ def evidence_view(
 ) -> Response:
     """One file for the viewer: inline for a PDF or an image, else a download."""
     record, submission = _run(V.evidence_record, db, user, evidence_id)
-    response = _serve(record, inline=True)
+    response = _serve(db, record, inline=True)
     _audit(db, user, audit_actions.EVIDENCE_VIEWED, record, submission)
     return response
 
@@ -172,16 +172,16 @@ def evidence_download(
     evidence_id: int, db: Session = Depends(get_db), user: User = Depends(require_worker),
 ) -> Response:
     record, submission = _run(V.evidence_record, db, user, evidence_id)
-    response = _serve(record, inline=False)
+    response = _serve(db, record, inline=False)
     _audit(db, user, audit_actions.EVIDENCE_DOWNLOADED, record, submission)
     return response
 
 
-def _parsed(record) -> email_evidence.ParsedEmail:
+def _parsed(db: Session, record) -> email_evidence.ParsedEmail:
     if evidence_store.kind_for(record.stored_path) != evidence_store.KIND_EMAIL:
         raise _error(400, "not_email", "This file is not an email")
     try:
-        return email_evidence.parse(record.stored_path, _bytes(record))
+        return email_evidence.parse(record.stored_path, _bytes(db, record))
     except email_evidence.EmailError as exc:
         raise _error(422, "email_unreadable", str(exc)) from None
 
@@ -193,7 +193,7 @@ def evidence_email(
     """The email's headers, its plain-text body and its attachments. Never
     its HTML: an HTML-only body arrives converted to text."""
     record, submission = _run(V.evidence_record, db, user, evidence_id)
-    parsed = _parsed(record)
+    parsed = _parsed(db, record)
     _audit(db, user, audit_actions.EVIDENCE_VIEWED, record, submission)
     return {
         "from": parsed.sender, "to": parsed.to, "cc": parsed.cc,
@@ -215,7 +215,7 @@ def evidence_email_attachment(
     """One attachment. A PDF or an image whose bytes prove it may open inline;
     anything else is a download of opaque bytes."""
     record, submission = _run(V.evidence_record, db, user, evidence_id)
-    attachments = _parsed(record).attachments
+    attachments = _parsed(db, record).attachments
     if not 0 <= index < len(attachments):
         raise _error(404, "not_found", "Attachment not found")
     attachment = attachments[index]
@@ -259,7 +259,7 @@ def letter_evidence_zip(
                 n += 1
                 name = f"{stem}-{n}.{ext}" if dot else f"{name}-{n}"
             names.add(name)
-            archive.writestr(name, _bytes(record))
+            archive.writestr(name, _bytes(db, record))
     record_audit(
         db, user_id=user.id, action=audit_actions.EVIDENCE_DOWNLOADED, module="Acceptance",
         entity_type="AcceptanceEvidence", entity_id=None,

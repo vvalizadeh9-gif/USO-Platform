@@ -1,10 +1,12 @@
 """Alembic migration environment."""
+import sys
 from logging.config import fileConfig
 
 from alembic import context
 from sqlalchemy import engine_from_config, pool
 
 from app.core.config import get_settings
+from app.core.db_permissions import is_permission_error, permission_message
 from app.core.database import Base
 import app.models  # noqa: F401  (register all models on metadata)
 
@@ -66,8 +68,17 @@ def run_migrations_online() -> None:
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
     )
-    with connectable.connect() as connection:
-        _configure_and_run(connection)
+    try:
+        with connectable.connect() as connection:
+            _configure_and_run(connection)
+    except Exception as exc:
+        # A login without CREATE on the schema (UEP-20): one readable line
+        # instead of a stack trace, and a non-zero exit so entrypoint.sh stops
+        # before the application starts on a half-built schema.
+        if not is_permission_error(exc):
+            raise
+        print(permission_message(get_settings().database_url), file=sys.stderr, flush=True)
+        raise SystemExit(1) from None
 
 
 if context.is_offline_mode():

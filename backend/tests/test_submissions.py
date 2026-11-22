@@ -255,6 +255,39 @@ def test_next_number_skips_cancelled_and_send_records_the_letter(client, who):
     assert detail["letters"]["mtn"]["file_id"]
     assert detail["letters"]["ict"]["no"] is None
 
+    # The MTN letter is served from the database store (UEP-20), unchanged.
+    got = client.get(f"{API}/files/{detail['letters']['mtn']['file_id']}", headers=who["pm"])
+    assert got.status_code == 200
+    assert got.content == PDF
+    assert got.headers["content-type"].startswith("application/pdf")
+    assert got.headers["x-content-type-options"] == "nosniff"
+    assert got.headers["content-disposition"] == 'attachment; filename="letter.pdf"'
+
+
+def test_a_letter_whose_stored_file_is_gone_is_a_404(client, who):
+    from app.models.stored_file import StoredFile
+    from app.models.submission import SubmissionLetterFile
+
+    db = SessionLocal()
+    try:
+        row = db.query(SubmissionLetterFile).first()
+        file_id, sha = row.id, row.sha256
+        stored = db.get(StoredFile, sha)
+        kept = (stored.extension, stored.size_bytes, bytes(stored.content))
+        db.delete(stored)
+        db.commit()
+    finally:
+        db.close()
+    try:
+        got = client.get(f"{API}/files/{file_id}", headers=who["pm"])
+        assert got.status_code == 404
+        assert got.json()["detail"] == "The stored file is missing"
+    finally:
+        db = SessionLocal()
+        db.add(StoredFile(sha256=sha, extension=kept[0], size_bytes=kept[1], content=kept[2]))
+        db.commit()
+        db.close()
+
 
 def test_optional_letter_and_excel(client, who):
     r = client.post(f"{API}/batches/1/letters/ict", headers=who["owner"],

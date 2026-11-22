@@ -1,16 +1,15 @@
 """Admin module endpoints: CPM import, user management, CPM validation."""
+import io
 import logging
-import os
 from datetime import date as date_type, datetime, time, timedelta, timezone
 from pathlib import Path
 
 from alembic.script import ScriptDirectory
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile
 from sqlalchemy import case, func, or_, select, text
 from sqlalchemy.orm import Session
 
 from app.core import audit_actions, user_status
-from app.core.config import get_settings
 from app.core.database import get_db
 from app.core.deps import ADMIN, COORDINATOR, PM, REGIONAL, require_roles
 from app.core.passwords import PasswordError, validate_password
@@ -59,7 +58,6 @@ from app.services.data_wipe import REQUIRED_CONFIRMATION_PHRASE, wipe_cpm_data
 logger = logging.getLogger("uep.admin")
 
 router = APIRouter(prefix="/admin", tags=["admin"])
-settings = get_settings()
 
 _ALEMBIC_DIR = str(Path(__file__).resolve().parents[2] / "alembic")
 
@@ -75,9 +73,8 @@ def import_cpm(
     if not (file.filename or "").lower().endswith((".xlsx", ".xls")):
         raise HTTPException(400, "Only Excel files are accepted")
 
-    # Read with a ceiling before anything touches the disk. The workbook was
-    # previously streamed straight to a file with no size limit at all, so the
-    # only bound on it was nginx's.
+    # Read with a ceiling. The workbook was once streamed straight to a file
+    # with no size limit at all, so the only bound on it was nginx's.
     try:
         content = evidence_store.read_capped(file.file)
     except evidence_store.EvidenceError as exc:
@@ -85,22 +82,12 @@ def import_cpm(
     if not content:
         raise HTTPException(400, "The file is empty")
 
-    os.makedirs(settings.upload_dir, exist_ok=True)
-    # safe_filename, because file.filename is supplied by the caller and lands
-    # in a path. "../../app/x.xlsx" escaped the uploads directory, and /app is
-    # owned by the user this container runs as -- so this was a route from an
-    # admin account to overwriting application code.
-    dest = os.path.join(
-        settings.upload_dir,
-        f"cpm_{datetime.now(timezone.utc):%Y%m%d%H%M%S}_"
-        f"{evidence_store.safe_filename(file.filename or '')}",
-    )
-    with open(dest, "wb") as buffer:
-        buffer.write(content)
-
+    # Parsed from memory: nothing touches the disk, so the application keeps no
+    # state of its own (UEP-20). The original bytes are kept in stored_files,
+    # forever, in the import's own transaction.
     service = CpmImportService(db, user_id=user.id)
     try:
-        batch = service.import_file(dest, file.filename)
+        batch = service.import_file(io.BytesIO(content), file.filename, keep=content)
     except Exception as exc:
         # A file that is not the workbook it claims to be reached pandas and
         # came back as an unhandled 500 with a stack trace -- BadZipFile for
@@ -109,7 +96,6 @@ def import_cpm(
         # are "that file is not the one we need", and the person who picked it
         # is the one who can fix it.
         db.rollback()
-        os.unlink(dest) if os.path.exists(dest) else None
         # "filename" is a reserved LogRecord attribute; using it raises inside
         # the logger itself, turning a handled 400 back into an unhandled 500.
         logger.warning(
@@ -136,6 +122,33 @@ def cpm_import_history(
         .order_by(CpmImportBatch.created_at.desc())
         .limit(limit)
         .all()
+    )
+
+
+@router.get("/cpm/imports/{batch_id}/workbook")
+def cpm_import_workbook(
+    batch_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_roles(ADMIN)),
+) -> Response:
+    """The original workbook an import read, kept forever (UEP-20). API only."""
+    batch = db.get(CpmImportBatch, batch_id)
+    if batch is None or not batch.source_sha256:
+        raise HTTPException(404, "Workbook not found")
+    try:
+        content = evidence_store.read_digest(db, batch.source_sha256)
+    except evidence_store.FileMissing:
+        raise HTTPException(404, "The stored file is missing") from None
+    filename = evidence_store.safe_filename(batch.filename)
+    return Response(
+        content=content,
+        media_type=evidence_store.media_type_for(filename),
+        headers={
+            "Content-Disposition": 'attachment; filename="' + filename.replace('"', "'") + '"',
+            "X-Content-Type-Options": "nosniff",
+            "Content-Security-Policy": "default-src 'none'; sandbox",
+            "Cache-Control": "private, no-store",
+        },
     )
 
 

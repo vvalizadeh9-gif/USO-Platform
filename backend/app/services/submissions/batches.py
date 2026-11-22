@@ -173,7 +173,7 @@ def store_letter(db: Session, user: User, filename: str, content: bytes) -> int:
     ext = evidence_store.validate(filename, content)
     if ext not in LETTER_TYPES:
         raise evidence_store.EvidenceError("Attach the letter as a PDF or an image")
-    stored = evidence_store.store(filename, content)
+    stored = evidence_store.store(db, filename, content)
     row = SubmissionLetterFile(
         sha256=stored["sha256"], stored_path=stored["stored_path"],
         original_filename=evidence_store.safe_filename(filename),

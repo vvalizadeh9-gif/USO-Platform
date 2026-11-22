@@ -148,11 +148,12 @@ def batch_excel(number: int, db: Session = Depends(get_db), user: User = Depends
 @router.get("/files/{file_id}")
 def letter_file(file_id: int, db: Session = Depends(get_db), _: User = Depends(reader)) -> Response:
     record = batches.letter_file(db, file_id)
-    path = evidence_store.absolute_path(record.stored_path)
-    if not path.exists():
-        raise HTTPException(404, "The stored file is missing")
+    try:
+        content = evidence_store.read(db, record.stored_path)
+    except evidence_store.FileMissing:
+        raise HTTPException(404, "The stored file is missing") from None
     return Response(
-        content=path.read_bytes(),
+        content=content,
         media_type=evidence_store.media_type_for(record.stored_path),
         headers={
             "Content-Disposition":

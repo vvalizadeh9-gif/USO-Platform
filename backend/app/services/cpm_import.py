@@ -44,6 +44,7 @@ from app.services.acceptance_workflow import SOURCE_APP as _APP_SOURCE
 from app.models.reference import Contractor, Province, Region
 from app.models.workitem import Site, Village, WorkItem
 from app.services import acceptance_tokens as tokens
+from app.services import evidence_store
 from app.services import cpm_columns as C
 from app.services.audit import record_audit
 from app.services.performance import onair_history
@@ -105,8 +106,16 @@ class CpmImportService:
         self._acceptance_touched: set = set()
 
     # ---- public API ----
-    def import_file(self, path: str, filename: str) -> CpmImportBatch:
-        df = pd.read_excel(path, sheet_name=C.SHEET_NAME, header=C.HEADER_ROW)
+    def import_file(
+        self, source, filename: str, *, keep: bytes | None = None,
+    ) -> CpmImportBatch:
+        """Import one workbook. ``source`` is a path or a file-like object.
+
+        ``keep``: the workbook's original bytes, stored forever in
+        ``stored_files`` and linked as ``batch.source_sha256`` (UEP-20) -- in
+        the same transaction, so a rejected import keeps nothing.
+        """
+        df = pd.read_excel(source, sheet_name=C.SHEET_NAME, header=C.HEADER_ROW)
         rows = df.values.tolist()
 
         mismatches = C.find_header_mismatches(list(df.columns))
@@ -171,6 +180,10 @@ class CpmImportService:
         # that saw each site and village on air. Same transaction as the batch.
         onair_history.record_on_air(self._db, batch.id, _dt.now(timezone.utc))
         sightings.record(self._db, self._sightings, _dt.now(timezone.utc), batch.id)
+
+        if keep is not None:
+            ext = evidence_store.extension_of(filename) or "xlsx"
+            batch.source_sha256 = evidence_store.store_retained(self._db, ext, keep)
 
         record_audit(
             self._db,

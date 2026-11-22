@@ -91,6 +91,12 @@ figure.
 An administrator uploads the monthly CPM workbook. This is the only way domain
 data enters the system.
 
+The workbook is parsed from memory, never written to disk. In the import's own
+transaction its original bytes are kept forever in `stored_files`
+(`retain = true`) and linked as `cpm_import_batches.source_sha256`; a rejected
+file keeps nothing. An Admin can fetch it again with
+`GET /admin/cpm/imports/{batch_id}/workbook` (API only).
+
 ### How the file is read
 
 - Sheet name: **`CPM`**
@@ -603,15 +609,51 @@ letters filed at once cannot both take the same round number.
 The scan is uploaded once, before the letter, by `POST /acceptance/scans`,
 which stores the file and returns a signed `scan_id`
 (`services/scan_tokens.py`: HMAC over the stored file's facts, valid 24
-hours, usable only by its uploader). Nothing is written to the database until
-the letter is filed; an upload that is never used leaves one content-addressed
-blob behind.
+hours, usable only by its uploader). Only the file is written at upload; no
+evidence row exists until the letter is filed, and an upload that is never used
+leaves one content-addressed file behind, which `reclaim_uploads` removes after
+7 days.
 
 Evidence is **content-addressed**: a file is stored under the SHA-256 of its
 contents, so that one letter scanned once and attached to a hundred villages is
-one file on disk and a hundred rows. The corollary is that deleting an evidence
+one stored file and a hundred rows. The corollary is that deleting an evidence
 row must never delete the file. Uploads are type-checked by magic bytes, not by
 extension.
+
+**Uploaded files live in PostgreSQL (UEP-20).** `stored_files` holds one row
+per distinct file: `sha256` (primary key), `extension`, `size_bytes`, `content`
+(BYTEA, moved out of line by TOAST) and `retain` (true for CPM workbooks, kept
+forever). The application keeps no state of its own and mounts no volume; it
+runs with a read-only root filesystem, `/tmp` excepted for request-lifetime
+spooling. One database backup covers filings and their letters together.
+
+* A separate table, not a column on the evidence tables, so lists and
+  dashboards that read evidence rows never drag file bytes along.
+* No foreign key from the referencing rows: a scan is stored before anything
+  references it, and older rows predate the table.
+* BYTEA, not large objects: large objects need extra permissions, are not
+  removed with their row, and complicate backup and restore; at a 20 MB cap
+  BYTEA is the simpler choice.
+* The referencing rows keep `stored_path` (`acceptance/aa/bb/<sha256>.<ext>`)
+  for its extension, so old and new rows look identical and a rollback is
+  possible. `evidence_store.read(db, stored_path)` reads by the digest in it.
+* `evidence_store.store(db, ...)` writes inside the caller's transaction (a
+  rolled-back filing leaves no file) with one `INSERT ... ON CONFLICT`: a new
+  file is inserted, an existing one only has `updated_at` touched, which also
+  locks it against the cleanup job until the filing commits.
+* **`evidence_store.FILE_REFERENCES`** is the one list of columns that point
+  at a stored file: acceptance evidence, drive-test evidence, MTN submission
+  letters, CPM import batches. `reclaim_uploads`, `migrate_uploads_to_db` and
+  the reference checks read it; `tests/test_file_references_complete.py` fails
+  if a model gains a `stored_path` or `*sha256` column that is not in it.
+* `reclaim_uploads` (manual; RUNBOOK.md) deletes a file only when it is not
+  retained, referenced by no column in that list, and older than 7 days.
+* `migrate_uploads_to_db --upload-dir PATH` copies an old uploads folder in,
+  once, verifying each hash (BACKUP-RUNBOOK.md).
+* The database login must be able to create tables (owner of the database, or
+  CREATE on schema `public`), because migrations run at start-up. Without it
+  `alembic upgrade head` stops with one readable line saying so
+  (`core/db_permissions.py`).
 
 Letter dates are entered and displayed in Shamsi and stored Gregorian; the
 conversion lives only in `core/jalali.py`, never in the browser.
@@ -2033,7 +2075,7 @@ to next batch sent) and `mojri_follow_up` (30 days, sent to in Mojri).
   active assignment, which a CPM-seeded DT-done site never has, and it keeps
   the same contractor.) A village that was اقماری before is Ready as "Became
   هدف" instead. `app/scripts/seed_sightings.py` seeds the table once from the
-  CPM workbooks kept on the upload volume.
+  CPM workbooks kept in the database (`cpm_import_batches.source_sha256`).
 * *Mojri import* takes the file's date, lists drive-tested villages in the
   template too (`template_scope` is a superset of `comparison_scope`, so the
   Lifecycle Gaps card does not move), and on commit stamps confirmations and
@@ -2385,7 +2427,7 @@ Services worth knowing:
 | `acceptance_workflow.py` | Acceptance submission, review, the derived verdicts and the queue-status cache |
 | `kpi.py` | Who may see delivery numbers, and whose: `require_kpi_access`, `resolve_scope` |
 | `performance/` | Roles Performance: the one definitions module, Shamsi windows, owner-at-date, the tab payloads |
-| `evidence_store.py` | Content-addressed storage for scanned letters |
+| `evidence_store.py` | Content-addressed storage for every uploaded file, in `stored_files`; `FILE_REFERENCES` |
 | `workflow.py` | Work-item stage transitions |
 | `audit.py` | Audit entries and notifications |
 

@@ -26,18 +26,10 @@ os.environ.setdefault("APP_ENV", "development")
 # the cookie session itself use an https:// client. See test_session_cookies.py.
 os.environ.setdefault("SESSION_COOKIE_SECURE", "true")
 
-# Uploads go to a temporary directory, not to the production default of
-# /data/uploads.
-#
-# The CPM import calls os.makedirs(settings.upload_dir), and creating /data
-# needs root. Anyone running the suite as an ordinary user -- which includes
-# every CI runner -- got a PermissionError, and because the import is what seeds
-# the test data, seventeen tests failed from that one cause. It passed only for
-# a root user, which is exactly the kind of "works on my machine" the suite is
-# supposed to be free of.
-os.environ.setdefault(
-    "UPLOAD_DIR", str(Path(tempfile.gettempdir()) / "uep-test-uploads")
-)
+# Uploaded files are kept in the database (UEP-20). UPLOAD_DIR is pointed at a
+# folder that does not exist, so any code path that still touched the disk
+# would fail the suite rather than quietly write somewhere (statelessness).
+os.environ["UPLOAD_DIR"] = str(Path(tempfile.gettempdir()) / "uep-no-uploads-dir-must-not-be-used")
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent
 

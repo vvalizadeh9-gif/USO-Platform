@@ -466,6 +466,17 @@ def test_evidence_is_stored_once_however_many_villages_share_the_letter(client):
 
     assert len(hashes) == 1, "the same bytes must resolve to the same stored file"
 
+    # One row in the database store however many villages share it (UEP-20).
+    from app.models.stored_file import StoredFile
+
+    (sha, _path), = hashes
+    db = SessionLocal()
+    try:
+        assert db.query(StoredFile).filter(StoredFile.sha256 == sha).count() == 1
+        assert bytes(db.get(StoredFile, sha).content) == scan
+    finally:
+        db.close()
+
 
 def test_a_disguised_file_is_refused(client):
     """The extension is a claim; the magic number is a fact."""
@@ -498,9 +509,11 @@ def test_evidence_downloads_only_for_someone_who_may_see_the_village(client):
     )
     evidence_id = uploaded.json()["id"]
 
-    assert client.get(
-        f"/api/v1/acceptance/evidence/{evidence_id}/download", headers=_auth(pm)
-    ).status_code == 200
+    got = client.get(f"/api/v1/acceptance/evidence/{evidence_id}/download", headers=_auth(pm))
+    assert got.status_code == 200
+    assert got.content == b"%PDF-1.7 scoped"
+    assert got.headers["content-type"].startswith("application/pdf")
+    assert got.headers["content-disposition"] == 'attachment; filename="letter.pdf"'
     assert client.get(
         f"/api/v1/acceptance/evidence/{evidence_id}/download", headers=_auth(outsider)
     ).status_code == 404

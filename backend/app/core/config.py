@@ -77,8 +77,8 @@ class Settings(BaseSettings):
     # the login endpoint for why that costs nothing.
     login_captcha_after_failures: int = 2
 
-    # File uploads (letters, attachments)
-    upload_dir: str = "/data/uploads"
+    # File uploads (letters, attachments). The files themselves are kept in
+    # the database (stored_files, UEP-20); there is no uploads folder.
     max_upload_mb: int = 20
 
     # First admin bootstrapped on startup.
