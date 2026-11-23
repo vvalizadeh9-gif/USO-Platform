@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+- **Uploaded files are kept in PostgreSQL; the application is stateless (UEP-20).** No visible change.
+  - Every uploaded file -- ICT/CRA letters and evidence, drive-test evidence, MTN submission letters, My Work scans, CPM workbooks -- is stored in the new `stored_files` table (one row per distinct file, keyed by SHA-256, bytes in BYTEA) instead of the `upload_dir` folder. The same letter attached to a hundred villages is still stored once. Writes happen in the request's own transaction, so a rejected or rolled-back filing leaves no file behind.
+  - The backend mounts no volume and runs with a read-only root filesystem (`/tmp` excepted). The `uep_uploads` volume, the `UPLOAD_DIR` setting and the `/data/uploads` folder in the image are gone. `backup.sh` / `restore.sh` are database-only: the dump now contains the files.
+  - CPM import reads the workbook from memory and keeps it forever (`retain = true`, `cpm_import_batches.source_sha256`); a failed import keeps nothing. New `GET /admin/cpm/imports/{batch_id}/workbook` (Admin only; API, no button).
+  - **Fixed: the upload cleanup job would have deleted drive-test evidence and MTN submission letters.** All files shared one folder, but `reclaim_uploads` counted references from `acceptance_evidence` only. The rewritten job works on the database and counts references from every table in one registry (`evidence_store.FILE_REFERENCES`), kept complete by a test. It removes a file only when it is not retained, not referenced anywhere, and older than 7 days. It is a manual command (RUNBOOK.md); the monthly cron line is gone, and CPM workbooks are never removed.
+  - A database login without CREATE permission now stops the container at start-up with one readable line naming the user and database, instead of a stack trace.
+  - `seed_sightings` reads the CPM workbooks kept in the database.
+  - **Deploy:**
+    1. The login needs CREATE on schema `public` (or to own the database). Migration `c4e8a2f6b310` adds `stored_files` and `cpm_import_batches.source_sha256` (structure only; reversible, but a downgrade discards the stored files).
+    2. Only where an older installation has files in an uploads volume: `python -m app.scripts.migrate_uploads_to_db --upload-dir <folder> --dry-run`, then without `--dry-run`; check the report (it exits non-zero while any row points at a missing file), and only then retire the old folder. BACKUP-RUNBOOK.md has the commands. A new database needs nothing.
+    3. Expect the database to grow by about 10 GB a year from files; size disk and backup storage accordingly.
+  - Must be merged before UEP-23 (Kubernetes).
+
 - **Acceptance › Filing is a focus inbox of acceptance cases; Insights › Acceptance baskets (UEP-22).**
   - Every village in the acceptance universe (live, pure هدف, DT done, on air; one per site, site type and village code) has one ICT case and one CRA case, each **Waiting** (always the site contractor's basket), **Rejected** (in the basket its rejection category names) or **Approved**. A comment is required on every save, and a case with no comment in 7 days is flagged everywhere. History is written by every save: who, when, letter, file, comment.
   - Filing (`/filing`, replacing My Work at `/my-work`, which now redirects): an ICT | CRA switch; the inbox (All · Waiting · Rejected · No comment; waiting with the contractors and rejected in the team baskets, oldest in basket first; search or paste codes; tick many villages to record one letter for all); the village with both authorities' status boxes (the other box opens that authority); the Update card (Waiting · add comment / Fixed · back to contractor, Approved, Rejected with a category; letter number, Shamsi date and file for a verdict); the case history with +days between status steps. Keys: J/K move, W/A/R choose, Ctrl Enter save.

@@ -186,7 +186,7 @@ class AcceptanceSubmissionTech(Base):
 class AcceptanceEvidence(Base):
     """A scanned letter or supporting document attached to a submission.
 
-    Files are content-addressed: ``sha256`` names the file on disk, so the one
+    Files are content-addressed: ``sha256`` names the stored file, so the one
     letter covering a hundred villages is stored once however many submissions
     reference it. Deleting a row therefore must not delete the file — another
     submission may still point at the same hash.
@@ -202,8 +202,9 @@ class AcceptanceEvidence(Base):
         index=True,
     )
     sha256: Mapped[str] = mapped_column(String(64), nullable=False)
-    # Relative to settings.upload_dir, so moving the volume does not invalidate
-    # every row.
+    # "acceptance/<aa>/<bb>/<sha256>.<ext>": the bytes are in stored_files
+    # (UEP-20); the path is kept for its extension and so old and new rows
+    # look the same.
     stored_path: Mapped[str] = mapped_column(String(500), nullable=False)
     original_filename: Mapped[str] = mapped_column(String(255), nullable=False)
     content_type: Mapped[str | None] = mapped_column(String(100))

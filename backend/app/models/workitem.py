@@ -295,7 +295,7 @@ class DriveTestEvidence(Base):
     own is not something anyone can check. ``report_link`` -- a free-text URL
     nobody ever filled in -- was all a drive test carried before this.
 
-    Files live on disk; only their metadata is here. ``sha256`` is what makes a
+    The bytes live in ``stored_files``; only metadata is here. ``sha256`` makes a
     stored file checkable against what was received, and makes the same report
     uploaded twice recognisable as one thing.
     """

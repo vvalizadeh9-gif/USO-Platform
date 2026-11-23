@@ -295,9 +295,10 @@ def upload_scan(
     """Store one scanned letter and return the token a letter names it by."""
     try:
         content = evidence_store.read_capped(file.file)
-        scan_id, scan = scan_tokens.issue(file.filename or "", content, user_id=user.id)
+        scan_id, scan = scan_tokens.issue(db, file.filename or "", content, user_id=user.id)
     except evidence_store.EvidenceError as exc:
         raise _error(400, "scan_invalid", str(exc), [{"field": "file", "code": "scan_invalid"}]) from None
+    db.commit()
     return ScanUploaded(
         scan_id=scan_id, filename=scan.filename, content_type=scan.content_type,
         size_bytes=scan.size_bytes, expires_at=datetime.fromisoformat(scan.expires_at),

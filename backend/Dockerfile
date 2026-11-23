@@ -43,11 +43,11 @@ RUN chmod +x /app/entrypoint.sh
 # running something it should not -- through an uploaded file, say -- this is
 # what stops it from being able to rewrite the rest of the container.
 #
-# The uploads directory is created and handed over before the switch, because
-# afterwards there are no rights to create it.
-RUN useradd --create-home --uid 10001 uep \
-    && mkdir -p /data/uploads \
-    && chown -R uep:uep /data/uploads /app
+# Nothing is written to disk at run time (UEP-20): uploaded files are kept in
+# PostgreSQL, and the container runs with a read-only root filesystem except
+# /tmp. So /app stays owned by root -- the application can read its code but
+# not rewrite it.
+RUN useradd --create-home --uid 10001 uep
 
 USER uep
 

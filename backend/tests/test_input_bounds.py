@@ -117,13 +117,21 @@ def test_safe_filename_keeps_something_usable():
     assert evidence_store.safe_filename("...") == "_"
 
 
-def test_a_traversing_cpm_filename_does_not_write_outside_uploads(client, tmp_path):
-    """The whole path, not just the helper: nothing lands outside upload_dir."""
-    from app.core.config import get_settings
+def test_a_traversing_cpm_filename_writes_nothing_to_disk(client):
+    """The whole path, not just the helper: a hostile name reaches no file.
+
+    The workbook is parsed from memory since UEP-20, so there is no uploads
+    directory to escape; a rejected file is not stored in the database either.
+    """
+    from app.core.database import SessionLocal
+    from app.models.stored_file import StoredFile
 
     admin_h = _admin(client)
-    upload_dir = get_settings().upload_dir
-    before = set(os.listdir(upload_dir)) if os.path.isdir(upload_dir) else set()
+    db = SessionLocal()
+    try:
+        before = db.query(StoredFile).count()
+    finally:
+        db.close()
 
     client.post(
         "/api/v1/admin/cpm/import",
@@ -131,18 +139,18 @@ def test_a_traversing_cpm_filename_does_not_write_outside_uploads(client, tmp_pa
         files={
             "file": (
                 "../../../tmp/uep_escaped.xlsx",
-                b"PK\x03\x04not-a-real-workbook",
+                b"PKnot-a-real-workbook",
                 "application/vnd.ms-experimental",
             )
         },
     )
 
-    assert not os.path.exists("/tmp/uep_escaped.xlsx"), (
-        "the upload escaped the uploads directory"
-    )
-    after = set(os.listdir(upload_dir)) if os.path.isdir(upload_dir) else set()
-    for name in after - before:
-        assert "/" not in name and ".." not in name
+    assert not os.path.exists("/tmp/uep_escaped.xlsx"), "the upload reached the disk"
+    db = SessionLocal()
+    try:
+        assert db.query(StoredFile).count() == before, "a rejected workbook was stored"
+    finally:
+        db.close()
 
 
 # ---------------------------------------------------------------------------

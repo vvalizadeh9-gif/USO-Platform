@@ -71,10 +71,13 @@ services:
         # to exist. Without this the backend starts while PostgreSQL is still
         # initialising, the migrations fail to connect, and the container exits.
         condition: service_healthy
-    volumes:
-      # Uploaded letters and CPM workbooks. A named volume, so they survive a
-      # rebuild -- these files are not reproducible from anything else.
-      - uep_uploads:/data/uploads
+    # Stateless (UEP-20): uploaded files are kept in PostgreSQL, so the backend
+    # mounts no volume and its filesystem is read-only. /tmp is the one
+    # writable place, for request-lifetime spooling only (large uploads and
+    # exports); nothing there has to survive a restart.
+    read_only: true
+    tmpfs:
+      - /tmp:size=256m
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health').read()\""]
       interval: 30s
@@ -139,4 +142,3 @@ volumes:
   # NOT safe while PostgreSQL is running -- use the backup script, which uses
   # pg_dump. See BACKUP-RUNBOOK.md.
   uep_db_data:
-  uep_uploads:

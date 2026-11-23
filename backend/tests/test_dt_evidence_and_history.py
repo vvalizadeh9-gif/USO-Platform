@@ -225,6 +225,17 @@ def test_contractor_attaches_a_report_and_a_reviewer_can_read_it(client):
     assert got.headers["content-type"].startswith("image/png")
     assert got.headers["x-content-type-options"] == "nosniff"
 
+    # Kept in the database store, not on disk (UEP-20).
+    import hashlib
+
+    from app.models.stored_file import StoredFile
+
+    db = SessionLocal()
+    try:
+        assert db.get(StoredFile, hashlib.sha256(PNG).hexdigest()).extension == "png"
+    finally:
+        db.close()
+
 
 def test_evidence_is_refused_once_the_drive_test_has_been_decided(client):
     """Approval is terminal, so the record it was approved against is closed."""

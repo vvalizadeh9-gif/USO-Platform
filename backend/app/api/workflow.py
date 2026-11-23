@@ -512,7 +512,7 @@ def upload_drive_test_evidence(
 
     try:
         content = evidence_store.read_capped(file.file)
-        stored = evidence_store.store(file.filename or "", content)
+        stored = evidence_store.store(db, file.filename or "", content)
     except evidence_store.EvidenceError as exc:
         raise HTTPException(400, str(exc)) from None
 
@@ -555,12 +555,13 @@ def download_drive_test_evidence(
     ):
         raise HTTPException(404, "Evidence not found")
 
-    path = evidence_store.absolute_path(record.stored_path)
-    if not path.exists():
-        raise HTTPException(404, "The stored file is missing")
+    try:
+        content = evidence_store.read(db, record.stored_path)
+    except evidence_store.FileMissing:
+        raise HTTPException(404, "The stored file is missing") from None
 
     return Response(
-        content=path.read_bytes(),
+        content=content,
         # From the extension the magic bytes were checked against, never the
         # Content-Type the uploader sent -- echoing that back is how a
         # document becomes a script.

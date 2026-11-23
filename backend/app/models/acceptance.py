@@ -317,6 +317,9 @@ class CpmImportBatch(Base):
     changed_requested_tech: Mapped[int] = mapped_column(Integer, default=0)
     unchanged_count: Mapped[int] = mapped_column(Integer, default=0)
     skipped_satellite: Mapped[int] = mapped_column(Integer, default=0)
+    # The imported workbook itself, kept forever in stored_files (UEP-20).
+    # Null for imports made before the workbook was kept in the database.
+    source_sha256: Mapped[str | None] = mapped_column(String(64))
 
     change_requests: Mapped[list[CpmChangeRequest]] = relationship(
         back_populates="batch"

@@ -1221,7 +1221,7 @@ def create_bulk_submissions(
     if file is not None:
         try:
             stored = evidence_store.store(
-                file.filename or "", evidence_store.read_capped(file.file)
+                db, file.filename or "", evidence_store.read_capped(file.file)
             )
         except evidence_store.EvidenceError as exc:
             raise HTTPException(400, str(exc)) from None
@@ -1432,7 +1432,7 @@ def upload_evidence(
 
     try:
         content = evidence_store.read_capped(file.file)
-        stored = evidence_store.store(file.filename or "", content)
+        stored = evidence_store.store(db, file.filename or "", content)
     except evidence_store.EvidenceError as exc:
         raise HTTPException(400, str(exc)) from None
 
@@ -1466,12 +1466,13 @@ def download_evidence(
     if submission is None or not flow.may_see_village(db, user, submission.village_id):
         raise HTTPException(404, "Evidence not found")
 
-    path = evidence_store.absolute_path(record.stored_path)
-    if not path.exists():
-        raise HTTPException(404, "The stored file is missing")
+    try:
+        content = evidence_store.read(db, record.stored_path)
+    except evidence_store.FileMissing:
+        raise HTTPException(404, "The stored file is missing") from None
 
     return Response(
-        content=path.read_bytes(),
+        content=content,
         # Derived from the extension the magic bytes were checked against, not
         # from the Content-Type the uploader sent. The stored value is a claim
         # by whoever uploaded the file, and echoing a claim back as the type

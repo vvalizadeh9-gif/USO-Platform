@@ -1,10 +1,15 @@
-"""Content-addressed storage for acceptance evidence.
+"""Content-addressed storage for every uploaded file, kept in PostgreSQL.
 
 One ICT letter routinely covers a hundred villages, and each of those is a
 separate submission. Storing the upload under a per-submission name would put a
-hundred identical copies of the same scan on disk and in every backup. Naming
-the file by the SHA-256 of its contents instead means the second and subsequent
-uploads of the same document cost one database row and no bytes.
+hundred identical copies of the same scan in the database and in every backup.
+Keying the file by the SHA-256 of its contents instead means the second and
+subsequent uploads of the same document cost one metadata row and no bytes.
+
+Since UEP-20 the bytes live in the ``stored_files`` table, not on a disk
+volume: the application keeps no state of its own, and the one database backup
+covers filings and their letters together. Writes happen inside the caller's
+transaction, so a filing that rolls back leaves no orphan file behind.
 
 The corollary matters: **deleting an evidence row must not delete the file**,
 because other submissions may still reference the same hash.
@@ -19,9 +24,18 @@ import hashlib
 import os
 import re
 from email.parser import BytesHeaderParser
-from pathlib import Path
+from pathlib import Path, PurePosixPath
+
+from sqlalchemy import func, or_, select
+from sqlalchemy.dialects import postgresql, sqlite
+from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
+from app.models.acceptance import CpmImportBatch
+from app.models.acceptance_workflow import AcceptanceEvidence
+from app.models.stored_file import StoredFile
+from app.models.submission import SubmissionLetterFile
+from app.models.workitem import DriveTestEvidence
 
 # DOCX and XLSX are ZIP containers, so they share the ZIP signature. That means
 # a ZIP renamed to .docx passes this check; the point of the check is to stop a
@@ -54,12 +68,28 @@ ACCEPTED_EXTENSIONS = sorted(ALLOWED_TYPES)
 # Beyond this, a submission is being used as a filing cabinet.
 MAX_FILES_PER_SUBMISSION = 10
 
-# Everything lives under this subdirectory of the upload volume.
+# Every stored path starts with this. It named a folder on the old uploads
+# volume; it is kept so rows written before and after UEP-20 look the same.
 _SUBDIR = "acceptance"
+
+#: Every model column that points at a stored file by its SHA-256. The cleanup
+#: job, the one-time migration and the reference checks all read this list --
+#: nobody repeats it -- and tests/test_file_references_complete.py fails if a
+#: model gains a ``stored_path`` or ``*sha256`` column that is not in it.
+FILE_REFERENCES = (
+    AcceptanceEvidence.sha256,
+    DriveTestEvidence.sha256,
+    SubmissionLetterFile.sha256,
+    CpmImportBatch.source_sha256,
+)
 
 
 class EvidenceError(ValueError):
     """An upload that must be refused, with a message safe to show the user."""
+
+
+class FileMissing(LookupError):
+    """A row points at a file that is not in ``stored_files``."""
 
 
 # How much is read at a time when streaming an upload off the wire.
@@ -175,34 +205,94 @@ def _check_eml(content: bytes) -> None:
         raise EvidenceError("The file does not look like a real EML file")
 
 
-def store(filename: str, content: bytes) -> dict:
+def put(db: Session, digest: str, ext: str, content: bytes, *, retain: bool) -> None:
+    """Insert the bytes once. A file already present costs no bytes.
+
+    One ``INSERT ... ON CONFLICT`` rather than check-then-insert, so two
+    requests uploading the same letter at the same moment cannot both insert
+    it. On a conflict only ``updated_at`` (and ``retain``, which only ever
+    turns on) is touched, never ``content``. That touch matters: it locks the
+    row until the caller's transaction ends and restarts the cleanup job's
+    grace period, so ``reclaim_uploads`` can never delete an old unreferenced
+    file in the instant a new filing starts pointing at it.
+    """
+    dialect = db.get_bind().dialect.name
+    insert = postgresql.insert if dialect == "postgresql" else sqlite.insert
+    statement = insert(StoredFile).values(
+        sha256=digest, extension=ext, size_bytes=len(content),
+        content=content, retain=retain,
+    )
+    db.execute(
+        statement.on_conflict_do_update(
+            index_elements=["sha256"],
+            set_={
+                "updated_at": func.now(),
+                "retain": or_(StoredFile.retain, statement.excluded.retain),
+            },
+        )
+    )
+
+
+def stored_path_for(digest: str, ext: str) -> str:
+    """The path written to referencing rows: ``acceptance/aa/bb/<digest>.<ext>``.
+
+    Nothing on disk any more; the format is kept so old and new rows are
+    identical and a rollback stays possible.
+    """
+    return "/".join((_SUBDIR, digest[:2], digest[2:4], f"{digest}.{ext}"))
+
+
+def store(db: Session, filename: str, content: bytes) -> dict:
     """Validate and save one upload. Returns the row data for the database.
 
-    Writing is skipped when the blob is already on disk, which is what makes
-    the hundredth village on the same letter free.
+    Writes in the caller's transaction (``db``) and does not commit: the file
+    is kept only if the filing that references it is.
     """
     ext = validate(filename, content)
     digest = hashlib.sha256(content).hexdigest()
-
-    # Two levels of 256 buckets: no directory ever holds a large fraction of
-    # the files, which keeps listing and backing them up cheap.
-    relative = os.path.join(_SUBDIR, digest[:2], digest[2:4], f"{digest}.{ext}")
-    absolute = Path(get_settings().upload_dir) / relative
-
-    if not absolute.exists():
-        absolute.parent.mkdir(parents=True, exist_ok=True)
-        # Write beside the target and rename, so a crash mid-write cannot leave
-        # a truncated file sitting at a name that says it is complete.
-        temporary = absolute.with_suffix(absolute.suffix + ".part")
-        temporary.write_bytes(content)
-        temporary.replace(absolute)
-
+    put(db, digest, ext, content, retain=False)
     return {
         "sha256": digest,
-        "stored_path": relative,
+        "stored_path": stored_path_for(digest, ext),
         "size_bytes": len(content),
         "extension": ext,
     }
+
+
+def store_retained(db: Session, ext: str, content: bytes) -> str:
+    """Keep a file forever (CPM workbooks). Returns its digest.
+
+    The workbook is validated by the importer, not here: it is an .xlsx or an
+    .xls, and it has just been parsed successfully.
+    """
+    digest = hashlib.sha256(content).hexdigest()
+    put(db, digest, ext[:8], content, retain=True)
+    return digest
+
+
+_DIGEST = re.compile(r"^[0-9a-f]{64}$")
+
+
+def digest_of(stored_path: str) -> str:
+    """The SHA-256 a stored path names (its file-name stem)."""
+    digest = PurePosixPath((stored_path or "").replace("\\", "/")).stem.lower()
+    if not _DIGEST.match(digest):
+        raise FileMissing(stored_path)
+    return digest
+
+
+def read_digest(db: Session, digest: str) -> bytes:
+    content = db.execute(
+        select(StoredFile.content).where(StoredFile.sha256 == digest)
+    ).scalar_one_or_none()
+    if content is None:
+        raise FileMissing(digest)
+    return bytes(content)
+
+
+def read(db: Session, stored_path: str) -> bytes:
+    """The bytes of a stored file. Raises :class:`FileMissing` if absent."""
+    return read_digest(db, digest_of(stored_path))
 
 
 # The type each validated extension is served back as. Keyed by what the magic
@@ -252,18 +342,3 @@ def media_type_for(stored_path: str) -> str:
     supplied.
     """
     return _MEDIA_TYPES.get(_extension(stored_path), "application/octet-stream")
-
-
-def absolute_path(stored_path: str) -> Path:
-    """Resolve a stored relative path against the upload directory.
-
-    Refuses anything that escapes it. ``stored_path`` comes from our own
-    database rather than from a request, but a path-traversal guard on the
-    function that opens files is cheap and does not depend on every future
-    caller staying careful.
-    """
-    root = Path(get_settings().upload_dir).resolve()
-    candidate = (root / stored_path).resolve()
-    if not candidate.is_relative_to(root):
-        raise EvidenceError("Invalid evidence path")
-    return candidate

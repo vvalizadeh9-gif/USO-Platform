@@ -1,14 +1,16 @@
 """A scanned letter uploaded once, referenced by a signed token.
 
 My Work uploads the scan as soon as it is attached, before the letter is
-sent, and the letter then names it by ``scan_id``. Nothing is written to the
-database until the letter is filed: the file goes into the content-addressed
-store (``evidence_store``), and the token carries what an evidence row needs,
-signed so it cannot be forged or pointed at somebody else's file.
+sent, and the letter then names it by ``scan_id``. Only the file is written
+at upload, into the content-addressed store (``evidence_store``, table
+``stored_files``); no evidence row exists until the letter is filed. The token
+carries what that row needs, signed so it cannot be forged or pointed at
+somebody else's file.
 
 A token is valid for :data:`TTL` and only for the user it was issued to. An
 upload that is never sent leaves one blob behind -- content-addressed, so a
-re-attached copy costs nothing -- which a cleanup job can sweep later.
+re-attached copy costs nothing -- which ``reclaim_uploads`` sweeps once it is
+older than its grace period and nothing references it.
 """
 from __future__ import annotations
 
@@ -19,6 +21,8 @@ import hmac
 import json
 from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta, timezone
+
+from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.services import evidence_store
@@ -56,9 +60,14 @@ def _sign(body: str) -> str:
     return _b64(hmac.new(key, body.encode(), hashlib.sha256).digest())
 
 
-def issue(filename: str, content: bytes, *, user_id: int, now: datetime | None = None) -> tuple[str, Scan]:
-    """Store an upload and return ``(scan_id, scan)``. Raises EvidenceError."""
-    stored = evidence_store.store(filename, content)
+def issue(
+    db: Session, filename: str, content: bytes, *, user_id: int, now: datetime | None = None,
+) -> tuple[str, Scan]:
+    """Store an upload and return ``(scan_id, scan)``. Raises EvidenceError.
+
+    Writes the file in ``db``'s transaction; the caller commits it, since the
+    token is worthless if the bytes it names were never kept."""
+    stored = evidence_store.store(db, filename, content)
     now = now or datetime.now(timezone.utc)
     scan = Scan(
         sha256=stored["sha256"],

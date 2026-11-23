@@ -300,46 +300,45 @@ Then sign in.
 
 ---
 
-## Reclaiming disk space
+## Reclaiming database space from unused files
 
-Two things build up on the uploads volume and nothing removes them on its own:
-the CPM workbook from every import, and evidence files no submission points at
-any more (evidence is shared between submissions, so deleting a row correctly
-does not delete the file — but nothing ever counted the references either).
+Uploaded files are kept in the database (`stored_files`, UEP-20) and shared:
+the letter covering a hundred villages is stored once, so deleting an evidence
+or letter row correctly does not delete the file. `reclaim_uploads` removes a
+file once nothing points at it any more. It never removes:
 
-Neither grows fast. Both grow without limit, on a volume that is **not** part
-of the database backup, and the first symptom of a full disk is PostgreSQL
-failing to write.
+* a CPM workbook (stored with `retain = true`, kept forever);
+* anything referenced by acceptance evidence, drive-test evidence, an MTN
+  submission letter or a CPM import (the list is
+  `evidence_store.FILE_REFERENCES`);
+* anything stored or re-uploaded in the last 7 days (a scan is stored when it
+  is attached, before its letter is filed).
 
-Always look before you cut. `--dry-run` prints what would go and removes
-nothing:
+There is no scheduler, and the Kubernetes namespace allows **no Jobs and no
+CronJobs**, so this is a manual command, worth running every few months.
+Always look before you cut: `--dry-run` prints what would go and removes
+nothing.
+
+On a Docker Compose install:
 
 ```bash
 docker compose exec backend python -m app.scripts.reclaim_uploads --dry-run
-```
-
-If the list looks right:
-
-```bash
 docker compose exec backend python -m app.scripts.reclaim_uploads
 ```
 
-Workbooks are kept for 180 days by default. To keep them longer, pass
-`--keep-days 365`. The workbook is only a convenience copy — the import is
-recorded in the database and so is everything it loaded — so the question is
-how far back you want to be able to answer "what exactly was in the file we
-loaded that month".
+On Kubernetes, run it in a backend pod (`kubectl exec deploy/<backend> --
+python -m app.scripts.reclaim_uploads --dry-run`). `kubectl exec` may not work
+over the VPN (UEP-23), so run it from the Admin server or a laptop on the
+internal network.
 
-Worth running monthly. On the host, `crontab -e`:
+Freed space is reused by PostgreSQL for new rows; the database file itself
+does not shrink until a `VACUUM FULL`, which is the database team's call.
 
-```
-0 3 1 * * cd /path/to/USO-Platform && docker compose exec -T backend python -m app.scripts.reclaim_uploads
-```
+See how much the files take at any time:
 
-Check free space at any time with:
-
-```bash
-docker system df -v | grep uep_uploads
+```sql
+SELECT count(*), pg_size_pretty(sum(size_bytes)::bigint), count(*) FILTER (WHERE retain) AS kept_forever
+FROM stored_files;
 ```
 
 ---
@@ -505,7 +504,7 @@ docker image prune -a          # unused images. Safe: it does not touch volumes.
 ```
 
 > **Never run `docker system prune --volumes` or `docker compose down -v`.**
-> Both delete named volumes, which means the database and every uploaded file.
+> Both delete named volumes, which means the database -- and with it every uploaded file.
 
 Old backups are the other culprit. The rotation keeps 14 daily and 3 months of
 weekly copies; if `backups/` is very large, check whether the rotation is

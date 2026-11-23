@@ -1,137 +1,113 @@
-"""Reclaim upload storage: old CPM workbooks, and evidence nothing references.
+"""Reclaim database space taken by uploaded files nothing references any more.
 
-Two things accumulate on the uploads volume and nothing has ever removed either.
+Uploaded files live in ``stored_files`` (UEP-20), content-addressed and shared:
+one ICT letter covering a hundred villages is stored once. Deleting an
+evidence or letter row therefore deliberately never deletes the file -- other
+rows may point at the same digest. This job is the other half: it removes a
+file once nothing points at it.
 
-**CPM workbooks.** Every import writes its source file to ``upload_dir`` and
-leaves it there permanently. The import is already recorded in
-``cpm_import_batches``, and the resulting data is in the database, so the
-workbook itself is a convenience copy -- useful for a few months to answer
-"what exactly did we load in Mordad", not useful for ever.
+A file is removed only when **all** of these hold:
 
-**Evidence blobs.** These are content-addressed, and deleting an evidence row
-deliberately does not delete the file, because a hundred other submissions may
-reference the same scan. That decision is right and it is documented in
-``services/evidence_store.py``. What was missing is the other half: nothing
-ever counted the references and reclaimed a blob once the last one went. So a
-file uploaded, then removed from its only submission, stayed on disk forever.
+* ``retain`` is false. CPM workbooks are stored with ``retain = true`` and are
+  kept forever; nothing deletes them.
+* No column in ``evidence_store.FILE_REFERENCES`` names it -- acceptance
+  evidence, drive-test evidence, MTN submission letters and CPM import
+  batches. That list is the only place the referencing tables are named.
+* It was stored, and last re-uploaded, more than ``--grace-days`` ago (default
+  7). A scan is stored the moment it is attached in My Work, before the letter
+  that references it is filed.
 
-Neither leak is fast. Both are unbounded, on a volume that is outside the
-database backup (see BACKUP-RUNBOOK.md) and that nothing monitors, and the
-first symptom of a full disk is PostgreSQL failing to write.
+The previous, disk-based version of this script counted references from
+``acceptance_evidence`` only, while drive-test evidence and MTN submission
+letters shared the same folder: run as documented, it would have deleted them.
+Reading every reference from one registry, kept complete by a test
+(``tests/test_file_references_complete.py``), is what stops that recurring.
 
-Run it with ``--dry-run`` first. It prints what it would remove and touches
-nothing::
+There is no scheduler, and the Kubernetes namespace allows no Jobs or CronJobs,
+so this is a manual command (RUNBOOK.md). Run it with ``--dry-run`` first::
 
-    docker compose exec backend python -m app.scripts.reclaim_uploads --dry-run
-    docker compose exec backend python -m app.scripts.reclaim_uploads
-
-A monthly cron entry is the intended use; RUNBOOK.md has the line.
+    python -m app.scripts.reclaim_uploads --dry-run
+    python -m app.scripts.reclaim_uploads
 """
 from __future__ import annotations
 
 import argparse
-import os
-import re
-from datetime import datetime, timezone
-from pathlib import Path
+from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import select
+from sqlalchemy import delete, exists, select
+from sqlalchemy.orm import Session
 
-from app.core.config import get_settings
 from app.core.database import SessionLocal
-from app.models.acceptance_workflow import AcceptanceEvidence
+from app.models.stored_file import StoredFile
+from app.services.evidence_store import FILE_REFERENCES
 
-# How long an imported workbook is kept. Long enough to cover a full reporting
-# cycle plus an argument about it; short enough that the volume does not grow
-# without limit.
-DEFAULT_KEEP_DAYS = 180
-
-# What import_cpm writes: "cpm_<14 digits>_<safe name>".
-_CPM_FILE = re.compile(r"^cpm_\d{14}_")
+DEFAULT_GRACE_DAYS = 7
 
 
-def _age_days(path: Path, now: datetime) -> float:
-    modified = datetime.fromtimestamp(path.stat().st_mtime, tz=timezone.utc)
-    return (now - modified).total_seconds() / 86400
-
-
-def find_old_workbooks(upload_dir: Path, keep_days: int, now: datetime) -> list[Path]:
-    """CPM workbooks older than the retention window."""
-    if not upload_dir.is_dir():
-        return []
-    return sorted(
-        path
-        for path in upload_dir.iterdir()
-        if path.is_file()
-        and _CPM_FILE.match(path.name)
-        and _age_days(path, now) > keep_days
+def _reclaimable(cutoff: datetime):
+    """The WHERE clause: not retained, not referenced anywhere, old enough."""
+    return (
+        StoredFile.retain.is_(False),
+        StoredFile.created_at < cutoff,
+        StoredFile.updated_at < cutoff,
+        *(~exists().where(column == StoredFile.sha256) for column in FILE_REFERENCES),
     )
 
 
-def find_orphan_evidence(db, upload_dir: Path) -> list[Path]:
-    """Evidence blobs on disk that no ``acceptance_evidence`` row references.
+def find_reclaimable(db: Session, now: datetime, grace_days: int = DEFAULT_GRACE_DAYS) -> list[tuple[str, int]]:
+    """``(sha256, size_bytes)`` of every file the job would remove."""
+    cutoff = now - timedelta(days=grace_days)
+    return [
+        (sha, size)
+        for sha, size in db.execute(
+            select(StoredFile.sha256, StoredFile.size_bytes)
+            .where(*_reclaimable(cutoff))
+            .order_by(StoredFile.created_at)
+        )
+    ]
 
-    Reads the referenced set from the database first, then walks the disk, so a
-    blob written between the two is simply seen as referenced next time rather
-    than deleted while a request is still writing its row.
+
+def reclaim(db: Session, now: datetime, grace_days: int = DEFAULT_GRACE_DAYS, *, dry_run: bool) -> list[tuple[str, int]]:
+    """Remove (or, dry run, only list) unreferenced files. Returns what it found.
+
+    The delete repeats every condition rather than trusting the list it just
+    read, so a file that gained a reference in between is kept.
     """
-    referenced = {
-        row for row in db.execute(select(AcceptanceEvidence.stored_path)).scalars()
-    }
-    root = upload_dir / "acceptance"
-    if not root.is_dir():
-        return []
-
-    orphans = []
-    for path in root.rglob("*"):
-        if not path.is_file():
-            continue
-        # ".part" files are half-written uploads left by a crash mid-write;
-        # they are never referenced and always safe to remove.
-        relative = str(path.relative_to(upload_dir))
-        if relative not in referenced:
-            orphans.append(path)
-    return sorted(orphans)
+    found = find_reclaimable(db, now, grace_days)
+    if found and not dry_run:
+        cutoff = now - timedelta(days=grace_days)
+        db.execute(
+            delete(StoredFile)
+            .where(StoredFile.sha256.in_([sha for sha, _ in found]), *_reclaimable(cutoff))
+            .execution_options(synchronize_session=False)
+        )
+        db.commit()
+    return found
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--dry-run", action="store_true", help="List what would be removed without removing anything.")
     parser.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="List what would be removed without removing anything.",
-    )
-    parser.add_argument(
-        "--keep-days",
-        type=int,
-        default=DEFAULT_KEEP_DAYS,
-        help=f"How long to keep imported CPM workbooks (default {DEFAULT_KEEP_DAYS}).",
+        "--grace-days", type=int, default=DEFAULT_GRACE_DAYS,
+        help=f"Keep unreferenced files younger than this (default {DEFAULT_GRACE_DAYS}).",
     )
     args = parser.parse_args(argv)
-
-    upload_dir = Path(get_settings().upload_dir)
-    now = datetime.now(timezone.utc)
+    if args.grace_days < 1:
+        parser.error("--grace-days must be at least 1")
 
     db = SessionLocal()
     try:
-        workbooks = find_old_workbooks(upload_dir, args.keep_days, now)
-        orphans = find_orphan_evidence(db, upload_dir)
+        found = reclaim(db, datetime.now(timezone.utc), args.grace_days, dry_run=args.dry_run)
     finally:
         db.close()
 
-    reclaimed = 0
-    for path in workbooks + orphans:
-        size = path.stat().st_size
-        what = "would remove" if args.dry_run else "removed"
-        print(f"{what}: {path}  ({size / 1024:.0f} KB)")
-        if not args.dry_run:
-            os.unlink(path)
-        reclaimed += size
-
+    what = "would remove" if args.dry_run else "removed"
+    for sha, size in found:
+        print(f"{what}: {sha}  ({size / 1024:.0f} KB)")
+    total = sum(size for _, size in found)
     print(
-        f"\n{len(workbooks)} workbook(s) older than {args.keep_days} days, "
-        f"{len(orphans)} unreferenced evidence file(s), "
-        f"{reclaimed / (1024 * 1024):.1f} MB "
+        f"\n{len(found)} unreferenced file(s), {total / (1024 * 1024):.1f} MB "
         f"{'reclaimable' if args.dry_run else 'reclaimed'}."
     )
     if args.dry_run:
