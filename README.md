@@ -201,6 +201,18 @@ Failing loudly turns a silent compromise into an obvious deployment error.
 
 Set `APP_ENV=development` to allow the example values on a local machine.
 
+**The database** is given either as one `DATABASE_URL` (Docker Compose) or as
+parts — `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD` — in the
+shape IT hands them out (Kubernetes). `DATABASE_URL` wins if both are set; the
+backend stops at start-up, naming what is missing, if neither is complete.
+`python -m app.scripts.db_preflight` says in plain sentences whether UEP can
+use the database; every container start runs it first (UEP-23).
+
+`TRUSTED_PROXY_HOPS` is how many proxies we run in front of the backend: 1 for
+Compose (nginx), 2 on Kubernetes (Ingress + nginx). The client address used
+for the per-IP login limit is counted from the right of `X-Forwarded-For`, so
+a client cannot dodge the limit by sending its own header.
+
 Generate a real signing key with:
 
 ```bash
@@ -246,6 +258,15 @@ migration fails the backend stops rather than serving against a half-changed
 database, so the site goes down instead of going wrong.
 
 **Take a backup first, every time.** `RUNBOOK.md` has the full procedure.
+
+### On IT's Kubernetes cluster
+
+UEP also runs on IT's shared cluster (namespace `prd-uep`, Rancher) against
+IT's PostgreSQL. The manifests are in [`deploy/k8s/`](deploy/k8s/README.md);
+the four site values live in `deploy/k8s/site.env`. Images and a
+ready-to-import Kubernetes file are built by the **Build images** workflow on
+every push to `main`, so no Docker is needed on a laptop. Step by step, for
+someone who is not a programmer: [KUBERNETES-RUNBOOK.md](KUBERNETES-RUNBOOK.md).
 
 ### The Action Center digest
 

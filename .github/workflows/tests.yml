@@ -116,6 +116,214 @@ jobs:
           pip install pip-audit
           pip-audit --requirement requirements.lock --desc
 
+  # UEP-23. Renders deploy/k8s/, validates it for the cluster's Kubernetes
+  # version, and checks it against prd-uep's quota, LimitRange and forbidden
+  # kinds -- so a manifest the cluster would refuse is caught here.
+  kubernetes:
+    name: Kubernetes manifests
+    runs-on: ubuntu-24.04
+    env:
+      KUBECONFORM_VERSION: v0.6.7
+      KUBERNETES_VERSION: 1.30.4
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Render
+        run: kubectl kustomize deploy/k8s/ > rendered.yaml
+
+      - name: Validate for Kubernetes ${{ env.KUBERNETES_VERSION }}
+        run: |
+          curl -sSL "https://github.com/yannh/kubeconform/releases/download/${KUBECONFORM_VERSION}/kubeconform-linux-amd64.tar.gz" \
+            | tar -xz -C "$RUNNER_TEMP" kubeconform
+          "$RUNNER_TEMP/kubeconform" -strict -summary -kubernetes-version "$KUBERNETES_VERSION" rendered.yaml
+
+      - name: Check against prd-uep's rules
+        run: |
+          pip install --quiet pyyaml
+          python scripts/check_k8s_manifests.py rendered.yaml
+
+      - name: No secret value in the template
+        run: |
+          # Every value in the Secret template must be the placeholder.
+          if grep -E '^\s+[A-Z_]+:\s*"' deploy/k8s/secret.example.yaml | grep -v '"CHANGE_ME"'; then
+            echo "::error::deploy/k8s/secret.example.yaml must hold only CHANGE_ME values."
+            exit 1
+          fi
+
+  # UEP-23. Runs the real images the way the cluster will: read-only root
+  # filesystem, memory-only /tmp, non-root, no capabilities, database
+  # settings as parts with a password full of URL-special characters, and two
+  # backends starting at the same moment against an empty database.
+  containers:
+    name: Container smoke test
+    runs-on: ubuntu-24.04
+    env:
+      # Not a real secret: a throwaway database that lives for this job only.
+      # Deliberately full of characters that break a hand-written URL.
+      DB_PW: "Sm0ke@test:p/w%40#x"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build both images
+        run: |
+          docker build -t uep-backend:ci backend
+          docker build -t uep-frontend:ci frontend
+
+      - name: Start PostgreSQL
+        run: |
+          docker network create uep
+          docker run -d --name db --network uep \
+            -e POSTGRES_USER=uep_app_svc -e POSTGRES_PASSWORD="$DB_PW" -e POSTGRES_DB=uep_prd \
+            postgres:16-alpine
+          for i in $(seq 1 30); do
+            docker exec db pg_isready -U uep_app_svc -d uep_prd && break
+            sleep 2
+          done
+
+      - name: Start two backends at once (read-only, non-root)
+        run: |
+          for n in 1 2; do
+            alias=""; [ "$n" = 1 ] && alias="--network-alias backend"
+            docker run -d --name "backend$n" --network uep $alias \
+              --read-only --tmpfs /tmp:size=256m --user 10001:10001 \
+              --cap-drop ALL --security-opt no-new-privileges \
+              -e APP_ENV=production -e TRUSTED_PROXY_HOPS=2 \
+              -e DB_HOST=db -e DB_PORT=5432 -e DB_NAME=uep_prd \
+              -e DB_USER=uep_app_svc -e DB_PASSWORD="$DB_PW" \
+              -e JWT_SECRET_KEY="$(openssl rand -hex 32)" \
+              -e FIRST_ADMIN_USERNAME=admin -e FIRST_ADMIN_PASSWORD="Smoke-test-admin-passw0rd" \
+              -e CORS_ORIGINS=https://uep.example.test \
+              uep-backend:ci
+          done
+
+      - name: Both become ready
+        run: |
+          for n in 1 2; do
+            ok=""
+            for i in $(seq 1 60); do
+              if docker run --rm --network uep curlimages/curl:8.10.1 -fsS "http://backend$n:8000/api/health/ready" 2>/dev/null | grep -q '"ready"'; then
+                ok=1; break
+              fi
+              sleep 3
+            done
+            docker logs "backend$n" > "backend$n.log" 2>&1 || true
+            if [ -z "$ok" ]; then cat "backend$n.log"; echo "::error::backend$n never became ready"; exit 1; fi
+          done
+          echo "--- backend1 ---"; head -30 backend1.log
+          echo "--- backend2 ---"; head -30 backend2.log
+
+      - name: Pre-flight lines, one migration, no duplicate seed rows, no password in logs
+        run: |
+          for n in 1 2; do
+            grep -q '^\[preflight\] ✔ Settings present: uep_app_svc@db:5432/uep_prd' "backend$n.log"
+            grep -q '^\[preflight\]   Database check passed.' "backend$n.log"
+            grep -q 'Migrations applied' "backend$n.log"
+          done
+          if grep -F -- "$DB_PW" backend1.log backend2.log; then
+            echo "::error::the database password appeared in a backend log"; exit 1
+          fi
+          dupes=$(docker exec db psql -U uep_app_svc -d uep_prd -tAc \
+            "SELECT count(*) FROM (SELECT name FROM roles GROUP BY name HAVING count(*) > 1) d")
+          test "$dupes" = "0"
+          admins=$(docker exec db psql -U uep_app_svc -d uep_prd -tAc "SELECT count(*) FROM users WHERE username = 'admin'")
+          test "$admins" = "1"
+
+      - name: A wrong password stops the container with a readable line
+        run: |
+          set +e
+          docker run --rm --network uep --read-only --tmpfs /tmp \
+            -e APP_ENV=production -e DB_HOST=db -e DB_PORT=5432 -e DB_NAME=uep_prd \
+            -e DB_USER=uep_app_svc -e DB_PASSWORD=wrong-password \
+            -e JWT_SECRET_KEY="$(openssl rand -hex 32)" -e FIRST_ADMIN_PASSWORD=Whatever-passw0rd-1 \
+            -e CORS_ORIGINS=https://uep.example.test uep-backend:ci > wrong.log 2>&1
+          code=$?
+          set -e
+          cat wrong.log
+          test "$code" != "0"
+          grep -q '^\[preflight\] ✘ The database refused user "uep_app_svc"' wrong.log
+
+      - name: Frontend runs read-only and proxies to the backend
+        run: |
+          docker run -d --name frontend --network uep \
+            --read-only --tmpfs /tmp --tmpfs /etc/nginx/conf.d:mode=1777 --user 101:101 \
+            --cap-drop ALL --security-opt no-new-privileges \
+            -e UEP_ENABLE_TLS=false -e UEP_SERVER_NAME=_ uep-frontend:ci
+          for i in $(seq 1 20); do
+            docker run --rm --network uep curlimages/curl:8.10.1 -fsS http://frontend:8080/api/health/ready && break
+            sleep 2
+          done
+          docker logs frontend
+          docker run --rm --network uep curlimages/curl:8.10.1 -fsS http://frontend:8080/ | grep -qi '<html'
+
+      - name: nginx passes the Ingress's X-Forwarded-Proto through
+        run: |
+          # A stand-in "backend" that answers with the X-Forwarded-Proto it received.
+          docker network create echo
+          docker run -d --name echo --network echo --network-alias backend python:3.12-alpine \
+            python -c "
+          import http.server
+          class H(http.server.BaseHTTPRequestHandler):
+              def do_GET(self):
+                  body = (self.headers.get('X-Forwarded-Proto') or 'none').encode()
+                  self.send_response(200); self.send_header('Content-Length', str(len(body))); self.end_headers(); self.wfile.write(body)
+          http.server.HTTPServer(('0.0.0.0', 8000), H).serve_forever()
+          "
+          docker run -d --name frontend-echo --network echo \
+            --read-only --tmpfs /tmp --tmpfs /etc/nginx/conf.d:mode=1777 --user 101:101 \
+            -e UEP_ENABLE_TLS=false uep-frontend:ci
+          sleep 5
+          with=$(docker run --rm --network echo curlimages/curl:8.10.1 -fsS -H 'X-Forwarded-Proto: https' http://frontend-echo:8080/api/x)
+          without=$(docker run --rm --network echo curlimages/curl:8.10.1 -fsS http://frontend-echo:8080/api/x)
+          echo "with header: $with / without: $without"
+          test "$with" = "https"
+          test "$without" = "http"
+
+      - name: Logs on failure
+        if: failure()
+        run: |
+          for c in backend1 backend2 frontend db echo frontend-echo; do
+            echo "=== $c ==="; docker logs "$c" 2>&1 | tail -80 || true
+          done
+
+  # UEP-23. The runbook's kubectl steps on a throwaway kind cluster running the
+  # same Kubernetes version as mtn-local, with prd-uep's quota and LimitRange
+  # applied: deploy, check, Ingress last, pod deletion, restart, rollback, the
+  # task pod and emptying the database. deploy/k8s/local-test/smoke.sh.
+  kind:
+    name: Kubernetes smoke test (kind)
+    runs-on: ubuntu-24.04
+    env:
+      KIND_VERSION: v0.24.0
+      KIND_NODE_IMAGE: kindest/node:v1.30.4
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build both images
+        run: |
+          docker build -t local/uep-backend:ci backend
+          docker build -t local/uep-frontend:ci frontend
+
+      - name: Create the kind cluster
+        run: |
+          curl -sSLo "$RUNNER_TEMP/kind" "https://kind.sigs.k8s.io/dl/${KIND_VERSION}/kind-linux-amd64"
+          chmod +x "$RUNNER_TEMP/kind"
+          "$RUNNER_TEMP/kind" create cluster --image "$KIND_NODE_IMAGE" --wait 120s
+          "$RUNNER_TEMP/kind" load docker-image local/uep-backend:ci local/uep-frontend:ci
+          kubectl version
+
+      - name: Run the smoke test
+        run: |
+          pip install --quiet pyyaml
+          bash deploy/k8s/local-test/smoke.sh local/uep-backend:ci local/uep-frontend:ci
+
+      - name: Cluster state on failure
+        if: failure()
+        run: |
+          kubectl get all,events -n prd-uep || true
+          for p in $(kubectl get pods -n prd-uep -o name); do
+            echo "=== $p ==="; kubectl logs -n prd-uep "$p" --all-containers --tail=80 || true
+          done
+
   frontend:
     name: Frontend build
     # Pinned: ubuntu-latest moved to 26.04, where Playwright 1.56 cannot

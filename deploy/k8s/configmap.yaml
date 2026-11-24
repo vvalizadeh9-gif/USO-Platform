@@ -1,0 +1,54 @@
+# Non-secret settings for UEP (UEP-23). Safe to read and show: no password,
+# key or token belongs here -- those go in the uep-secrets Secret.
+#
+# A ConfigMap is a named list of settings that Kubernetes hands to the pods as
+# environment variables. Pods read it when they start: after changing a value,
+# restart the Deployment (Rancher: Deployment ⋮ → Redeploy).
+#
+# Values marked "from site.env" are filled in by kustomize; do not edit them
+# here -- edit deploy/k8s/site.env.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: uep-config
+data:
+  # --- Database (the login and password are in the Secret) ---------------
+  DB_HOST: "from-site-env"               # from site.env
+  DB_PORT: "5444"
+  DB_NAME: "uep_prd"
+  # "prefer" uses TLS when the database server offers it.
+  DB_SSLMODE: "prefer"
+  DB_CONNECT_TIMEOUT_SECONDS: "10"
+  # How long a starting pod waits for another to finish migrating.
+  MIGRATION_LOCK_TIMEOUT_SECONDS: "600"
+
+  # --- Web server -------------------------------------------------------
+  # Worker processes per backend pod. Each uses roughly 150-250 MB of the
+  # pod's 1Gi memory limit (sizing.yaml).
+  WEB_CONCURRENCY: "2"
+  # Proxies in front of the backend: the cluster's Ingress, then nginx.
+  # Used to find the real client address for the per-IP login limit.
+  TRUSTED_PROXY_HOPS: "2"
+  # The address the site is opened at. The host part is from site.env.
+  CORS_ORIGINS: "https://from-site-env"  # from site.env (host part)
+  APP_BASE_URL: "https://from-site-env"  # from site.env (host part)
+  MAX_UPLOAD_MB: "20"
+  LOG_LEVEL: "INFO"
+  LOG_FORMAT: "json"
+
+  # --- Sessions and login (today's defaults) ----------------------------
+  ACCESS_TOKEN_EXPIRE_MINUTES: "30"
+  SESSION_ABSOLUTE_TIMEOUT_MINUTES: "480"
+  LOGIN_MAX_ATTEMPTS_PER_USERNAME: "5"
+  LOGIN_MAX_ATTEMPTS_PER_IP: "20"
+  LOGIN_ATTEMPT_WINDOW_SECONDS: "900"
+  LOGIN_LOCKOUT_SECONDS: "900"
+  LOGIN_CAPTCHA_AFTER_FAILURES: "2"
+  # Unset: session cookies are marked Secure whenever the browser used HTTPS
+  # (the Ingress says so in X-Forwarded-Proto). Add SESSION_COOKIE_SECURE:
+  # "true" once the site is HTTPS-only.
+
+  # --- Frontend (nginx) -------------------------------------------------
+  # HTTPS ends at the cluster's Ingress; nginx inside the pod serves HTTP.
+  UEP_ENABLE_TLS: "false"
+  UEP_SERVER_NAME: "_"

@@ -1,0 +1,38 @@
+# The Ingress: the cluster's front door, which sends requests for UEP's web
+# address to the frontend Service (UEP-23). IT runs the Ingress controller and
+# adds the rule after a cluster modification request -- KUBERNETES-RUNBOOK.md
+# step 7 has the text to send. Host name and class come from site.env.
+#
+# Applied last; UEP can be deployed and checked without it.
+#
+# The annotations are for ingress-nginx. Another controller needs the same four
+# settings in its own form: a 25 MB request body, 600 s read/send timeouts (a
+# full CPM import), and no request buffering (uploads stream through).
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: uep
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: 25m
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "600"
+    nginx.ingress.kubernetes.io/proxy-request-buffering: "off"
+spec:
+  ingressClassName: from-site-env
+  # Uncomment when IT provides a certificate as Secret "uep-tls" in prd-uep,
+  # and put the same host name as in site.env under hosts.
+  # tls:
+  #   - secretName: uep-tls
+  #     hosts:
+  #       - <HOSTNAME from site.env>
+  rules:
+    - host: from-site-env
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: frontend
+                port:
+                  number: 8080

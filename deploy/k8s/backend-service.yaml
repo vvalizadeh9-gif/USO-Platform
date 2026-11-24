@@ -1,0 +1,18 @@
+# A Service gives a set of pods one stable name and address inside the cluster.
+# It must be called "backend" on port 8000: the frontend's nginx proxies /api
+# to backend:8000 (frontend/conf/proxy-api.conf), the same name Docker Compose
+# uses. ClusterIP: reachable only from inside the cluster.
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend
+  labels:
+    app.kubernetes.io/name: backend
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: backend
+  ports:
+    - name: http
+      port: 8000
+      targetPort: http

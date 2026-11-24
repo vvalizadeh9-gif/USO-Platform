@@ -2544,3 +2544,94 @@ above:
 
 The backend tests cover all of these. If a change breaks one, the test is
 probably right.
+
+---
+
+## 10. Where it runs: Docker Compose and Kubernetes (UEP-23)
+
+UEP runs in two shapes from the same two images. **Docker Compose** on one
+machine (`docker-compose.yml`), with its own PostgreSQL container. **IT's
+shared Kubernetes cluster** (`mtn-local`, namespace `prd-uep`), against IT's
+PostgreSQL server; the manifests are in `deploy/k8s/` and the operator's guide
+is `KUBERNETES-RUNBOOK.md`.
+
+```
+VPN user -> Ingress (IT) -> Service frontend:8080 -> nginx pods -> Service backend:8000 -> backend pods -> IT's PostgreSQL :5444
+```
+
+The frontend nginx stays in the path on Kubernetes, rather than the Ingress
+routing `/api` to the backend directly: the security headers, CSP, upload
+limit and timeouts live in nginx and are tested, so both shapes behave the
+same and IT needs only one Ingress rule.
+
+### What the namespace forces, and the answer to each
+
+| Constraint in `prd-uep` | Answer |
+|---|---|
+| No storage (PVC quota 0, ephemeral-storage quota 0) | Files live in PostgreSQL (UEP-20). Both containers run with a read-only root filesystem; their only writable paths are memory-backed `emptyDir` volumes. |
+| No Jobs | Each backend pod migrates on start, under a PostgreSQL advisory lock (`app/scripts/migrate_with_lock.py`): the first pod migrates and seeds, the second waits, then finds nothing to do. A pod never serves until this succeeds. |
+| No live connection over the VPN (exec, log-follow) | The database pre-flight (`app/scripts/db_preflight.py`) runs at every start and writes `[preflight]` lines to the log, readable in Rancher. Manual commands run as one-off task pods (`deploy/k8s/optional/task-pod.example.yaml`). |
+| Quota and LimitRange | Every container sets explicit requests and limits (`deploy/k8s/sizing.yaml`); `scripts/check_k8s_manifests.py` checks the sums, including one rolling-update surge pod per Deployment, in CI. |
+| No cluster-wide objects, no NodePort/LoadBalancer | Only namespaced objects; Services are ClusterIP; users arrive through IT's Ingress. |
+
+### Database settings
+
+`app/core/config.py` builds the connection URL in one place
+(`DatabaseSettings.sqlalchemy_url`), used by the application, Alembic and the
+scripts. It comes from `DATABASE_URL` (Compose; wins if set) or from
+`DB_HOST`/`DB_PORT`/`DB_NAME`/`DB_USER`/`DB_PASSWORD` (Kubernetes), assembled
+by SQLAlchemy so that any character in the password is escaped. Alembic's
+configparser treats `%` as interpolation, so `alembic/env.py` doubles it. The
+password and URL are excluded from the settings' `repr`, and logs only ever
+show `user@host:port/database`.
+
+### Start-up, in order (`backend/entrypoint.sh`)
+
+1. `python -m app.scripts.db_preflight --startup` -- settings present, host
+   resolves, port reachable, login, server version, database name, CREATE
+   permission (a table created and rolled back), what is already there. Stops
+   at the first failure with one plain sentence saying what to ask IT for.
+2. `python -m app.scripts.migrate_with_lock` -- `alembic upgrade head` and
+   `init_db()` under `pg_advisory_lock`. The lock is held on its own
+   autocommit connection (no idle transaction) and is released if the pod
+   dies. Gives up after `MIGRATION_LOCK_TIMEOUT_SECONDS`.
+3. uvicorn.
+
+### Health
+
+`GET /api/health` is **liveness** and never touches the database: Kubernetes
+restarts a pod whose liveness fails, and a database outage must not restart
+every pod in a loop. `GET /api/health/ready` is **readiness**: `SELECT 1` with
+a 2-second limit, 200 `{"status":"ready"}` or 503
+`{"status":"database unavailable"}` and nothing more. Failing it only takes
+the pod out of the Service until it passes again.
+
+### Behind proxies: the client's address and HTTPS
+
+**Client address.** Each proxy appends the address it received the connection
+from to `X-Forwarded-For`. Whatever the client sent in that header itself sits
+to the left, so only the right-most entries can be trusted. `client_ip()`
+(`app/core/rate_limit.py`) takes the entry `TRUSTED_PROXY_HOPS` places from
+the right: 1 on Compose (nginx), 2 on Kubernetes (Ingress, then nginx). A
+header shorter than that means the request did not pass through all our
+proxies, and the connection's own address is used. It used to take the
+left-most entry, which let a client put every login guess on a fresh per-IP
+counter by sending its own header. The per-IP login limit and the audit log's
+IP both use this.
+
+**HTTPS.** On Kubernetes, TLS ends at the Ingress and nginx receives plain
+HTTP, so nginx's `$scheme` is `http`. nginx now forwards the Ingress's
+`X-Forwarded-Proto` when present (`$uep_forwarded_proto`, a `map` in
+`http.conf` and `tls.conf`), and its own `$scheme` otherwise. Without this,
+session cookies would lose the `Secure` flag for users on HTTPS. On Compose
+nothing sits in front of nginx and the behaviour is unchanged.
+
+### Images
+
+Built by GitHub Actions (`.github/workflows/images.yml`) on every push to
+`main`, tagged with the short commit SHA (never `latest`), and pushed to
+GitHub's registry; a second push job targets IT's registry when configured.
+The run also renders `deploy/k8s/` with that tag into one importable file, and
+saves both images as a tarball for carrying into a registry by hand. The four
+site values (registry, host name, Ingress class, database host) live only in
+`deploy/k8s/site.env`; kustomize copies them where they are needed.

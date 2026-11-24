@@ -9,6 +9,9 @@ unless a step says otherwise.
 
 **In an emergency, jump to [When the backend will not start](#when-the-backend-will-not-start).**
 
+**Running on IT's Kubernetes cluster instead of Docker Compose?** That has its
+own guide, written for Rancher screens: [KUBERNETES-RUNBOOK.md](KUBERNETES-RUNBOOK.md).
+
 ---
 
 ## Quick reference
@@ -326,10 +329,9 @@ docker compose exec backend python -m app.scripts.reclaim_uploads --dry-run
 docker compose exec backend python -m app.scripts.reclaim_uploads
 ```
 
-On Kubernetes, run it in a backend pod (`kubectl exec deploy/<backend> --
-python -m app.scripts.reclaim_uploads --dry-run`). `kubectl exec` may not work
-over the VPN (UEP-23), so run it from the Admin server or a laptop on the
-internal network.
+On Kubernetes, `kubectl exec` does not work over the VPN, so run it in a
+one-off task pod from Rancher, or with `kubectl exec` from the Admin server:
+[KUBERNETES-RUNBOOK.md, section 11](KUBERNETES-RUNBOOK.md#11-clean-up-unused-uploaded-files-uep-20).
 
 Freed space is reused by PostgreSQL for new rows; the database file itself
 does not shrink until a `VACUUM FULL`, which is the database team's call.
@@ -415,7 +417,14 @@ Work through these in order.
 docker compose logs --tail 50 backend
 ```
 
-The reason is almost always in the last twenty lines.
+The reason is almost always in the last twenty lines. The first lines matter
+too: every start begins with `[preflight]` lines, one per database check, and
+a `✘` line says what is wrong with the database connection and what to ask
+for (UEP-23). The same check by hand:
+
+```bash
+docker compose run --rm --entrypoint python backend -m app.scripts.db_preflight
+```
 
 ### 2. "The application will not start with this configuration"
 

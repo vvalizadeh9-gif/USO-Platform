@@ -1,0 +1,126 @@
+# UEP on IT's shared Kubernetes cluster (UEP-23).
+#
+#   kubectl kustomize deploy/k8s/        # show what would be applied
+#   kubectl apply -k deploy/k8s/         # apply it
+#
+# The GitHub "Build images" workflow renders this into one ready-to-import file
+# (uep-k8s-<sha>.yaml) with the image tag filled in, for Rancher's Import YAML.
+#
+# Where things are set -- each in exactly one place:
+#   site.env        registry, host name, Ingress class, database host
+#   sizing.yaml     replicas, CPU and memory for both containers
+#   images: below   the image tag (the short git commit)
+#   configmap.yaml  every other non-secret setting
+#   the Secret      created by hand in Rancher from secret.example.yaml
+#
+# Never listed here: secret.example.yaml (a template), optional/* (opt-in).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: prd-uep
+
+labels:
+  - pairs:
+      app.kubernetes.io/part-of: uep
+      app.kubernetes.io/managed-by: kustomize
+    includeSelectors: false
+
+resources:
+  - configmap.yaml
+  - backend-deployment.yaml
+  - backend-service.yaml
+  - frontend-deployment.yaml
+  - frontend-service.yaml
+  # Last on purpose. The web address is a separate IT ticket; everything above
+  # can be applied and checked without it. KUBERNETES-RUNBOOK.md step 5 says
+  # how to apply all but this.
+  - ingress.yaml
+
+patches:
+  - path: sizing.yaml
+
+# The image tag: the short commit SHA the GitHub workflow built. The workflow
+# replaces both newTag values when it renders uep-k8s-<sha>.yaml; when applying
+# with kubectl from a checkout, put the tag of a green build here. Never
+# "latest". The registry part comes from site.env.
+images:
+  - name: uep-backend
+    newTag: set-by-ci
+  - name: uep-frontend
+    newTag: set-by-ci
+
+# site.env -> a small ConfigMap, used only as the source for the replacements
+# below. Fixed name (no hash suffix) so it stays one tidy object in Rancher.
+configMapGenerator:
+  - name: uep-site
+    envs:
+      - site.env
+    options:
+      disableNameSuffixHash: true
+
+replacements:
+  # Registry -> both image names: "uep-backend:tag" becomes
+  # "<REGISTRY>/uep-backend:tag".
+  - source:
+      kind: ConfigMap
+      name: uep-site
+      fieldPath: data.REGISTRY
+    targets:
+      - select:
+          kind: Deployment
+          name: backend
+        fieldPaths:
+          - spec.template.spec.containers.[name=backend].image
+        options:
+          delimiter: "/"
+          index: -1
+      - select:
+          kind: Deployment
+          name: frontend
+        fieldPaths:
+          - spec.template.spec.containers.[name=frontend].image
+        options:
+          delimiter: "/"
+          index: -1
+  # Database host -> the backend's settings.
+  - source:
+      kind: ConfigMap
+      name: uep-site
+      fieldPath: data.DB_HOST
+    targets:
+      - select:
+          kind: ConfigMap
+          name: uep-config
+        fieldPaths:
+          - data.DB_HOST
+  # Host name -> the Ingress rule, and the two settings that name the site.
+  - source:
+      kind: ConfigMap
+      name: uep-site
+      fieldPath: data.HOSTNAME
+    targets:
+      - select:
+          kind: Ingress
+          name: uep
+        fieldPaths:
+          - spec.rules.0.host
+      - select:
+          kind: ConfigMap
+          name: uep-config
+        fieldPaths:
+          - data.CORS_ORIGINS
+          - data.APP_BASE_URL
+        options:
+          delimiter: "//"
+          index: 1
+  # Ingress class -> the Ingress.
+  - source:
+      kind: ConfigMap
+      name: uep-site
+      fieldPath: data.INGRESS_CLASS
+    targets:
+      - select:
+          kind: Ingress
+          name: uep
+        fieldPaths:
+          - spec.ingressClassName

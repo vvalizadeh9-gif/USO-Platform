@@ -1,0 +1,75 @@
+# A one-off task pod (UEP-23): runs ONE command with UEP's own image and
+# settings, then stops. Its output is read on Rancher's log screen, so this
+# works over the VPN, where "Execute Shell" and kubectl exec do not.
+#
+# The namespace allows no Jobs, but a plain Pod with restartPolicy: Never is
+# allowed and does the same thing for a command run by hand.
+#
+# How to use it (KUBERNETES-RUNBOOK.md steps 11 and 12):
+#   1. Rancher → Workloads → Deployments → backend → copy the image shown
+#      (it looks like ghcr.io/.../uep-backend:1a2b3c4).
+#   2. Copy this file's text, replace PASTE_THE_BACKEND_IMAGE_HERE with it,
+#      and pick ONE "args" line below (delete or keep the others commented).
+#   3. Rancher → Import YAML (up-arrow icon, top right), namespace prd-uep,
+#      paste, Import.
+#   4. Workloads → Pods → uep-task → ⋮ → View Logs. Wait until the pod's state
+#      is "Succeeded" (worked) or "Failed" (read the log).
+#   5. Delete the pod afterwards (⋮ → Delete), so the name is free next time.
+#
+# Not listed in kustomization.yaml; never applied automatically.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: uep-task
+  namespace: prd-uep
+  labels:
+    app.kubernetes.io/name: uep-task
+    app.kubernetes.io/part-of: uep
+spec:
+  restartPolicy: Never
+  automountServiceAccountToken: false
+  enableServiceLinks: false
+  # Only if the registry needs a login:
+  # imagePullSecrets:
+  #   - name: uep-registry
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 10001
+    runAsGroup: 10001
+    seccompProfile:
+      type: RuntimeDefault
+  containers:
+    - name: task
+      image: PASTE_THE_BACKEND_IMAGE_HERE
+      command: ["python", "-m"]
+      # Pick ONE:
+      args: ["app.scripts.db_preflight"]                            # can UEP use the database?
+      # args: ["app.scripts.reclaim_uploads", "--dry-run"]          # step 11, look first
+      # args: ["app.scripts.reclaim_uploads"]                       # step 11, for real
+      # args: ["app.scripts.empty_database"]                        # step 12, look only
+      # args: ["app.scripts.empty_database", "--confirm", "uep_prd"]  # step 12, DESTRUCTIVE
+      envFrom:
+        - configMapRef:
+            name: uep-config
+        - secretRef:
+            name: uep-secrets
+      resources:
+        requests:
+          cpu: 100m
+          memory: 256Mi
+        limits:
+          cpu: 500m
+          memory: 512Mi
+      securityContext:
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: true
+        capabilities:
+          drop: ["ALL"]
+      volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+  volumes:
+    - name: tmp
+      emptyDir:
+        medium: Memory
+        sizeLimit: 64Mi

@@ -1,0 +1,43 @@
+# OPTIONAL -- not in the default kustomization (UEP-23).
+#
+# Use this only if IT says pods in prd-uep must declare ephemeral storage. The
+# sign that it is needed: Rancher or kubectl refuses the Deployment with
+#   "must specify limits.ephemeral-storage"  or  "exceeded quota ... ephemeral-storage"
+#
+# UEP writes nothing to the node's disk: the root filesystem is read-only and
+# every writable path is a memory-backed emptyDir. So the values can be small;
+# use the ones IT gives (the quota for ephemeral storage is currently 0, so IT
+# has to raise it as well).
+#
+# To use it: replace every CHANGE_ME below with IT's value (for example 64Mi),
+# then add this to the "patches:" list in deploy/k8s/kustomization.yaml:
+#   - path: optional/ephemeral-storage.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+spec:
+  template:
+    spec:
+      containers:
+        - name: backend
+          resources:
+            requests:
+              ephemeral-storage: CHANGE_ME
+            limits:
+              ephemeral-storage: CHANGE_ME
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+spec:
+  template:
+    spec:
+      containers:
+        - name: frontend
+          resources:
+            requests:
+              ephemeral-storage: CHANGE_ME
+            limits:
+              ephemeral-storage: CHANGE_ME

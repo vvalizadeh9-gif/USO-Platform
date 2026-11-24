@@ -12,8 +12,11 @@ from app.core.config import get_settings
 
 settings = get_settings()
 
+# A URL object built in app/core/config.py from DATABASE_URL or the DB_* parts
+# (UEP-23); passing the object rather than a string keeps the password out of
+# anything that renders it.
 engine = create_engine(
-    settings.database_url,
+    settings.sqlalchemy_url,
     pool_pre_ping=True,  # transparently recover dropped connections
     future=True,
 )

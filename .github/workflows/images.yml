@@ -1,0 +1,202 @@
+# Builds UEP's two container images and the ready-to-import Kubernetes file
+# (UEP-23), so nobody needs Docker on a laptop.
+#
+# Every push to main (and a manual run from the Actions tab) produces:
+#   * images uep-backend and uep-frontend, tagged with the short commit SHA
+#     (never "latest");
+#   * uep-k8s-<sha>.yaml -- deploy/k8s/ rendered with that tag, checked against
+#     prd-uep's quota and LimitRange, ready for Rancher's Import YAML;
+#   * uep-images-<sha>.tar.gz (+ .sha256) -- both images in one file, for
+#     carrying into a registry the cluster can reach.
+# All three are one downloadable artifact on the run's page, kept 30 days.
+#
+# Then it pushes the images:
+#   * to GitHub's registry, ghcr.io/<owner>/uep-backend and .../uep-frontend
+#     (the default, decided 23 Nov 2026). The cluster can pull them without a
+#     login only if the packages are public -- see KUBERNETES-RUNBOOK.md step 3;
+#   * to IT's registry as well, but only if the repository variable
+#     UEP_REGISTRY and the secrets UEP_REGISTRY_USER / UEP_REGISTRY_PASSWORD
+#     are set (Settings → Secrets and variables → Actions). Otherwise skipped.
+#
+# Nothing secret is used except GitHub's own token and, if configured, the
+# registry login. The kubeconfig and the database password never come here.
+
+name: Build images
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: images-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  KUBECONFORM_VERSION: v0.6.7
+  KUBERNETES_VERSION: 1.30.4
+
+jobs:
+  build:
+    name: Build images and Kubernetes file
+    runs-on: ubuntu-24.04
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Work out the image tag (short commit SHA)
+        id: tag
+        run: echo "tag=$(git rev-parse --short=7 HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Build the backend image
+        run: |
+          docker build \
+            --label org.opencontainers.image.source=https://github.com/${{ github.repository }} \
+            --label org.opencontainers.image.revision=${{ github.sha }} \
+            -t uep-backend:${{ steps.tag.outputs.tag }} backend
+
+      - name: Build the frontend image
+        run: |
+          docker build \
+            --label org.opencontainers.image.source=https://github.com/${{ github.repository }} \
+            --label org.opencontainers.image.revision=${{ github.sha }} \
+            -t uep-frontend:${{ steps.tag.outputs.tag }} frontend
+
+      - name: Render the Kubernetes file with this tag
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          mkdir -p out
+          cp -r deploy/k8s "$RUNNER_TEMP/k8s"
+          sed -i "s/newTag: set-by-ci/newTag: ${TAG}/" "$RUNNER_TEMP/k8s/kustomization.yaml"
+          kubectl kustomize "$RUNNER_TEMP/k8s" > "out/uep-k8s-${TAG}.yaml"
+          grep -q "uep-backend:${TAG}" "out/uep-k8s-${TAG}.yaml"
+          grep -q "uep-frontend:${TAG}" "out/uep-k8s-${TAG}.yaml"
+          # The same without the Ingress, for deploying before IT has added
+          # the web address (KUBERNETES-RUNBOOK.md step 5).
+          pip install --quiet pyyaml
+          python - "out/uep-k8s-${TAG}.yaml" "out/uep-k8s-${TAG}-no-ingress.yaml" <<'PY'
+          import sys, yaml
+          docs = [d for d in yaml.safe_load_all(open(sys.argv[1])) if d and d.get("kind") != "Ingress"]
+          yaml.safe_dump_all(docs, open(sys.argv[2], "w"), sort_keys=False)
+          PY
+
+      - name: Validate it for Kubernetes ${{ env.KUBERNETES_VERSION }}
+        run: |
+          curl -sSL "https://github.com/yannh/kubeconform/releases/download/${KUBECONFORM_VERSION}/kubeconform-linux-amd64.tar.gz" \
+            | tar -xz -C "$RUNNER_TEMP" kubeconform
+          "$RUNNER_TEMP/kubeconform" -strict -summary \
+            -kubernetes-version "$KUBERNETES_VERSION" out/uep-k8s-*.yaml
+
+      - name: Check it against prd-uep's quota and rules
+        run: |
+          pip install --quiet pyyaml
+          python scripts/check_k8s_manifests.py out/uep-k8s-${{ steps.tag.outputs.tag }}.yaml
+
+      - name: Save both images to one file
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          docker save "uep-backend:${TAG}" "uep-frontend:${TAG}" | gzip > "out/uep-images-${TAG}.tar.gz"
+          (cd out && sha256sum "uep-images-${TAG}.tar.gz" > "uep-images-${TAG}.tar.gz.sha256")
+          ls -l out
+
+      - name: Upload the artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: uep-${{ steps.tag.outputs.tag }}
+          path: out/
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: Write the run summary
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
+        run: |
+          placeholders=$(grep -o 'CHANGE_ME_[A-Z_]*' "out/uep-k8s-${TAG}.yaml" | sort -u | tr '\n' ' ' || true)
+          {
+            echo "## UEP images built"
+            echo ""
+            echo "- **Image tag:** \`${TAG}\`"
+            echo "- **Artifact to download:** \`uep-${TAG}\` (bottom of this page)"
+            echo "  - \`uep-k8s-${TAG}.yaml\` — paste into Rancher → Import YAML, namespace \`prd-uep\`"
+            echo "  - \`uep-k8s-${TAG}-no-ingress.yaml\` — the same without the Ingress, for before IT adds the web address"
+            echo "  - \`uep-images-${TAG}.tar.gz\` and its \`.sha256\` — both images, for IT's registry"
+            echo ""
+            if [ -n "$placeholders" ]; then
+              echo "> **Not ready to deploy yet:** the Kubernetes file still contains placeholders: ${placeholders}"
+              echo "> Fill them in \`deploy/k8s/site.env\`, commit, and use the file from the next build."
+            else
+              echo "All site values are filled in."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  push-ghcr:
+    name: Push to GitHub's registry
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: uep-${{ needs.build.outputs.tag }}
+
+      - name: Load, tag and push
+        env:
+          TAG: ${{ needs.build.outputs.tag }}
+          OWNER: ${{ github.repository_owner }}
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ACTOR: ${{ github.actor }}
+        run: |
+          sha256sum -c "uep-images-${TAG}.tar.gz.sha256"
+          docker load -i "uep-images-${TAG}.tar.gz"
+          echo "$TOKEN" | docker login ghcr.io -u "$ACTOR" --password-stdin
+          owner=$(echo "$OWNER" | tr '[:upper:]' '[:lower:]')
+          for image in uep-backend uep-frontend; do
+            docker tag "${image}:${TAG}" "ghcr.io/${owner}/${image}:${TAG}"
+            docker push "ghcr.io/${owner}/${image}:${TAG}"
+          done
+          docker logout ghcr.io
+          {
+            echo "## Pushed to GitHub's registry"
+            echo "- \`ghcr.io/${owner}/uep-backend:${TAG}\`"
+            echo "- \`ghcr.io/${owner}/uep-frontend:${TAG}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  push-internal:
+    name: Push to IT's registry (only if configured)
+    needs: build
+    # Skipped unless the repository variable UEP_REGISTRY is set.
+    if: ${{ vars.UEP_REGISTRY != '' }}
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: uep-${{ needs.build.outputs.tag }}
+
+      - name: Load, tag and push
+        env:
+          TAG: ${{ needs.build.outputs.tag }}
+          REGISTRY: ${{ vars.UEP_REGISTRY }}
+          REGISTRY_USER: ${{ secrets.UEP_REGISTRY_USER }}
+          REGISTRY_PASSWORD: ${{ secrets.UEP_REGISTRY_PASSWORD }}
+        run: |
+          if [ -z "$REGISTRY_USER" ] || [ -z "$REGISTRY_PASSWORD" ]; then
+            echo "::error::UEP_REGISTRY is set but UEP_REGISTRY_USER / UEP_REGISTRY_PASSWORD are not. Add both as repository secrets."
+            exit 1
+          fi
+          sha256sum -c "uep-images-${TAG}.tar.gz.sha256"
+          docker load -i "uep-images-${TAG}.tar.gz"
+          host="${REGISTRY%%/*}"
+          echo "$REGISTRY_PASSWORD" | docker login "$host" -u "$REGISTRY_USER" --password-stdin
+          for image in uep-backend uep-frontend; do
+            docker tag "${image}:${TAG}" "${REGISTRY}/${image}:${TAG}"
+            docker push "${REGISTRY}/${image}:${TAG}"
+          done
+          docker logout "$host"
