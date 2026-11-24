@@ -1,0 +1,48 @@
+# Replicas, CPU and memory for both Deployments -- the one place to change them
+# (UEP-23). Applied as a patch by kustomization.yaml.
+#
+# The namespace's LimitRange requires every container to stay within
+# min cpu 100m / memory 128Mi and max cpu 4 / memory 4Gi, and the quota counts
+# requests and limits for every pod, including the one extra pod Kubernetes
+# starts during a rolling update. README.md beside this file has the sums.
+# scripts/check_k8s_manifests.py (run in CI) fails if a change here breaks
+# either rule.
+#
+# Lowering replicas to 1 keeps UEP running on less, but a node restart or a
+# deploy then takes it offline for a minute or two.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+spec:
+  replicas: 2
+  template:
+    spec:
+      containers:
+        - name: backend
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: "1"
+              # Includes the 256Mi memory-backed /tmp (backend-deployment.yaml).
+              memory: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+spec:
+  replicas: 2
+  template:
+    spec:
+      containers:
+        - name: frontend
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi

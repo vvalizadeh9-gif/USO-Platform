@@ -11,7 +11,15 @@ from app.core.database import Base
 import app.models  # noqa: F401  (register all models on metadata)
 
 config = context.config
-config.set_main_option("sqlalchemy.url", get_settings().database_url)
+# The same URL builder the application uses (DATABASE_URL, or the DB_* parts --
+# UEP-23). Alembic stores the option in a configparser, which treats "%" as the
+# start of an interpolation; the rendered URL percent-encodes special
+# characters in the password ("@" becomes "%40"), so every "%" is doubled here
+# or a password with any of "@ : / % #" breaks migrations.
+_url = get_settings().sqlalchemy_url
+config.set_main_option(
+    "sqlalchemy.url", _url.render_as_string(hide_password=False).replace("%", "%%")
+)
 
 if config.config_file_name is not None:
     # disable_existing_loggers=False matters. The default is True, which
@@ -77,7 +85,7 @@ def run_migrations_online() -> None:
         # before the application starts on a half-built schema.
         if not is_permission_error(exc):
             raise
-        print(permission_message(get_settings().database_url), file=sys.stderr, flush=True)
+        print(permission_message(_url), file=sys.stderr, flush=True)
         raise SystemExit(1) from None
 
 

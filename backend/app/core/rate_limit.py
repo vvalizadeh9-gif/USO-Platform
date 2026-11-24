@@ -155,16 +155,28 @@ login_rate_limiter = LoginRateLimiter()
 
 
 def client_ip(request) -> str:
-    """Best-effort client address.
+    """The client's address, as seen by the first proxy we control.
 
-    nginx sits in front of the backend, so every connection appears to come from
-    the proxy. It sets X-Forwarded-For, and the left-most entry is the original
-    client. Trusting that header is only safe because nothing but our own nginx
-    can reach the backend port -- if the backend were ever exposed directly, a
-    caller could forge it and sidestep the per-IP limit. The per-username limit
-    does not depend on it.
+    Each proxy appends the address it received the connection from to
+    X-Forwarded-For. Anything the client sends in that header itself sits to
+    the LEFT of what our proxies appended, so the only trustworthy entries are
+    the right-most ones. With ``TRUSTED_PROXY_HOPS`` proxies of ours in front
+    of the backend (Compose: nginx = 1; Kubernetes: Ingress + nginx = 2), the
+    client is the entry that many places from the right.
+
+    This used to take the left-most entry, which the client controls: sending
+    ``X-Forwarded-For: <any address>`` with every guess put each login attempt
+    on a fresh per-IP counter. The per-username limit never depended on it.
+
+    A header shorter than expected (or none at all) means the request did not
+    come through all of our proxies, so the connection's own address is used.
     """
+    peer = request.client.host if request.client else "unknown"
+    hops = get_settings().trusted_proxy_hops
     forwarded = request.headers.get("x-forwarded-for")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
-    return request.client.host if request.client else "unknown"
+    if hops <= 0 or not forwarded:
+        return peer
+    entries = [entry.strip() for entry in forwarded.split(",") if entry.strip()]
+    if len(entries) < hops:
+        return peer
+    return entries[-hops]

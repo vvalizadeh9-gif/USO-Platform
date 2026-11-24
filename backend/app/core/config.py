@@ -2,8 +2,9 @@
 import hashlib
 from functools import lru_cache
 
-from pydantic import model_validator
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from sqlalchemy.engine import URL, make_url
 
 # The values the application shipped with. They are published in this repository
 # and in .env.example, so anyone can read them. Booting with either one still in
@@ -17,13 +18,34 @@ MIN_JWT_SECRET_LENGTH = 32
 
 DEVELOPMENT = "development"
 
+# What a development machine connects to when no database setting is given at
+# all: the Compose database. Production never falls back to it (see
+# DatabaseSettings.missing_database_settings).
+DEVELOPMENT_DATABASE_URL = "postgresql+psycopg://uep:uep_password@db:5432/uep"
 
-class Settings(BaseSettings):
-    """Central application settings.
+# The four settings that, together, replace DATABASE_URL (UEP-23).
+REQUIRED_DB_PARTS = ("DB_HOST", "DB_NAME", "DB_USER", "DB_PASSWORD")
 
-    All values are overridable via environment variables, which keeps
-    secrets out of source control and lets the same image run in any
-    environment (12-factor style).
+
+class DatabaseSettings(BaseSettings):
+    """Where the database is, and nothing else.
+
+    Two ways to say it:
+
+    * ``DATABASE_URL`` -- one connection string. Docker Compose uses this, and
+      if it is set it wins.
+    * ``DB_HOST`` / ``DB_PORT`` / ``DB_NAME`` / ``DB_USER`` / ``DB_PASSWORD``
+      -- the parts, in the shape IT hands them out. Kubernetes uses these. The
+      URL is built by SQLAlchemy, which escapes characters such as ``@ : / %
+      #`` in the password; pasting such a password into a URL by hand breaks
+      it.
+
+    Kept apart from :class:`Settings` so the database pre-flight check
+    (``app.scripts.db_preflight``) can read just these, without the
+    application's other start-up checks getting in the way.
+
+    The password and the URL are excluded from ``repr`` so they never reach a
+    log by way of printing the settings object.
     """
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
@@ -33,8 +55,112 @@ class Settings(BaseSettings):
     # treated as production and enforces the checks in _reject_insecure_config.
     app_env: str = "production"
 
-    # Database
-    database_url: str = "postgresql+psycopg://uep:uep_password@db:5432/uep"
+    database_url: str | None = Field(default=None, repr=False)
+    db_host: str | None = None
+    db_port: int = 5432
+    db_name: str | None = None
+    db_user: str | None = None
+    db_password: str | None = Field(default=None, repr=False)
+    # libpq's sslmode: "prefer" uses TLS when the server offers it.
+    db_sslmode: str = "prefer"
+    # How long to wait for the database server to answer a new connection.
+    db_connect_timeout_seconds: int = 10
+
+    @property
+    def is_development(self) -> bool:
+        return self.app_env.strip().lower() == DEVELOPMENT
+
+    def _parts(self) -> dict[str, str | None]:
+        return {
+            "DB_HOST": self.db_host,
+            "DB_NAME": self.db_name,
+            "DB_USER": self.db_user,
+            "DB_PASSWORD": self.db_password,
+        }
+
+    def missing_database_settings(self) -> list[str]:
+        """The database settings that still have to be set, in order.
+
+        Empty when ``DATABASE_URL`` is set, when all four parts are set, or on
+        a development machine where none of them is (it then uses the Compose
+        database, as it always did).
+        """
+        if self.database_url:
+            return []
+        parts = self._parts()
+        if self.is_development and not any(parts.values()):
+            return []
+        return [name for name, value in parts.items() if not value]
+
+    @property
+    def sqlalchemy_url(self) -> URL:
+        """The connection URL, built in one place for the app, Alembic and scripts.
+
+        A ``URL`` object, not a string: rendering it as a string is what
+        exposes the password, so callers that only connect never need to.
+        """
+        if self.database_url:
+            return make_url(self.database_url)
+        if self.missing_database_settings():
+            raise ValueError(database_settings_message(self.missing_database_settings()))
+        if not any(self._parts().values()):
+            return make_url(DEVELOPMENT_DATABASE_URL)
+        return URL.create(
+            "postgresql+psycopg",
+            username=self.db_user,
+            password=self.db_password,
+            host=self.db_host,
+            port=self.db_port,
+            database=self.db_name,
+            query={
+                "sslmode": self.db_sslmode,
+                "connect_timeout": str(self.db_connect_timeout_seconds),
+            },
+        )
+
+    def database_description(self) -> str:
+        """``user@host:port/database`` -- safe to log. Never the password."""
+        try:
+            url = self.sqlalchemy_url
+        except ValueError:
+            return "(database not configured)"
+        if url.drivername.startswith("sqlite"):
+            return f"sqlite:{url.database}"
+        return f"{url.username}@{url.host}:{url.port or 5432}/{url.database}"
+
+
+def database_settings_message(missing: list[str]) -> str:
+    names = ", ".join(missing)
+    return (
+        f"The database is not configured: {names} "
+        f"{'is' if len(missing) == 1 else 'are'} not set. Set DATABASE_URL, or "
+        "all of DB_HOST, DB_NAME, DB_USER and DB_PASSWORD (DB_PORT defaults to "
+        "5432). On Kubernetes they come from the uep-config ConfigMap and the "
+        "uep-secrets Secret -- see KUBERNETES-RUNBOOK.md."
+    )
+
+
+class Settings(DatabaseSettings):
+    """Central application settings.
+
+    All values are overridable via environment variables, which keeps
+    secrets out of source control and lets the same image run in any
+    environment (12-factor style). The database settings are inherited from
+    :class:`DatabaseSettings`.
+    """
+
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    # How many proxies we run in front of the backend, counted from the
+    # backend outwards. The client's address is that many entries from the
+    # RIGHT of X-Forwarded-For; everything further left was supplied by the
+    # client and cannot be trusted. Docker Compose: 1 (nginx). Kubernetes: 2
+    # (the cluster's Ingress, then nginx). 0 ignores the header entirely.
+    trusted_proxy_hops: int = 1
+
+    # How long a starting backend waits for another one to finish migrating
+    # before giving up (app/scripts/migrate_with_lock.py).
+    migration_lock_timeout_seconds: int = 600
 
     # Security / JWT
     jwt_secret_key: str = INSECURE_JWT_SECRET
@@ -127,10 +253,6 @@ class Settings(BaseSettings):
     home_due_soon_days: int = 3
 
     @property
-    def is_development(self) -> bool:
-        return self.app_env.strip().lower() == DEVELOPMENT
-
-    @property
     def cors_origin_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
 
@@ -173,10 +295,15 @@ class Settings(BaseSettings):
         could forge an admin token. Failing loudly at startup turns a silent
         compromise into an obvious deployment error.
         """
-        if self.is_development:
-            return self
+        # No database configured (UEP-23) stops start-up everywhere, naming the
+        # missing settings; on a server it is listed with the other problems.
+        missing = self.missing_database_settings()
+        problems: list[str] = [database_settings_message(missing)] if missing else []
 
-        problems: list[str] = []
+        if self.is_development:
+            if problems:
+                raise ValueError("\n\n" + problems[0] + "\n")
+            return self
 
         if self.jwt_secret_key == INSECURE_JWT_SECRET:
             problems.append(
@@ -221,7 +348,9 @@ class Settings(BaseSettings):
             "Fix these in the .env file on the server, then start it again. If "
             "the .env file looks correct, check that it is actually reaching the "
             "container -- a missing or unmounted .env is the usual cause, "
-            "because every setting then falls back to its published default.\n\n"
+            "because every setting then falls back to its published default. "
+            "On Kubernetes the settings come from the uep-config ConfigMap and "
+            "the uep-secrets Secret instead (KUBERNETES-RUNBOOK.md).\n\n"
             "RUNBOOK.md has step-by-step instructions, including how to generate "
             "a strong JWT_SECRET_KEY.\n\n"
             "On a local development machine, set APP_ENV=development to allow "

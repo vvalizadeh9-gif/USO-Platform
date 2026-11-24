@@ -143,11 +143,15 @@ def test_audit_entries_record_the_source_address(client):
 
 
 def test_a_forwarded_address_is_what_gets_recorded(client):
-    """nginx sits in front, so the real client is in X-Forwarded-For."""
+    """nginx sits in front, so the real client is in X-Forwarded-For.
+
+    nginx appends the address it saw; anything to the left of it came from the
+    client and is ignored (TRUSTED_PROXY_HOPS = 1, UEP-23).
+    """
     admin_h = _admin(client)
     client.post(
         "/api/v1/admin/users",
-        headers={**admin_h, "X-Forwarded-For": "203.0.113.42, 10.0.0.1"},
+        headers={**admin_h, "X-Forwarded-For": "10.0.0.1, 203.0.113.42"},
         json={
             "username": "ig_forwarded",
             "password": PASSWORD,
@@ -161,7 +165,7 @@ def test_a_forwarded_address_is_what_gets_recorded(client):
         "/api/v1/admin/audit-logs?limit=5", headers=admin_h
     ).json()["items"]
     assert any(e["ip_address"] == "203.0.113.42" for e in logs), (
-        "the left-most forwarded address is the original client"
+        "the address nginx appended (right-most) is the original client"
     )
 
 

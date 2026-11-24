@@ -1,0 +1,116 @@
+# The backend: the FastAPI application (UEP-23).
+#
+# A Deployment keeps a set number of identical pods running and replaces them
+# one at a time when the image or settings change. A pod is one running copy
+# of a container. Replicas and resources are in sizing.yaml.
+#
+# Start-up order inside each pod (backend/entrypoint.sh):
+#   1. [preflight] lines: can UEP use the database? Stops here if not.
+#   2. Migrations + seeding under a PostgreSQL advisory lock, so two pods
+#      starting together take turns.
+#   3. The API server.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+  labels:
+    app.kubernetes.io/name: backend
+spec:
+  replicas: 2
+  revisionHistoryLimit: 5
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: backend
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      # One new pod at a time, and never fewer than the full count serving:
+      # an update that fails its probes leaves the old pods in place.
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: backend
+    spec:
+      # Lets a CPM import in progress finish before the pod is stopped.
+      terminationGracePeriodSeconds: 60
+      automountServiceAccountToken: false
+      # Kubernetes would otherwise add BACKEND_PORT, FRONTEND_SERVICE_HOST and
+      # similar variables to the environment; UEP reads none of them.
+      enableServiceLinks: false
+      # Only if the registry needs a login (KUBERNETES-RUNBOOK.md step 4).
+      # imagePullSecrets:
+      #   - name: uep-registry
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      affinity:
+        podAntiAffinity:
+          # Prefer different nodes, so one node restarting leaves one pod up.
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                topologyKey: kubernetes.io/hostname
+                labelSelector:
+                  matchLabels:
+                    app.kubernetes.io/name: backend
+      containers:
+        - name: backend
+          # The registry and tag are filled in by kustomization.yaml.
+          image: uep-backend
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8000
+          envFrom:
+            - configMapRef:
+                name: uep-config
+            - secretRef:
+                name: uep-secrets
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          # Up to 5 minutes (30 x 10 s) for the pre-flight and migrations
+          # before the API answers. Kubernetes restarts the pod after that.
+          startupProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 30
+          # Asks the database. Failing it only stops traffic to this pod;
+          # nothing is restarted.
+          readinessProbe:
+            httpGet:
+              path: /api/health/ready
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          # Never asks the database: an outage must not restart every pod.
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        # The one writable place: spooling for large uploads and exports.
+        # Memory-backed, so nothing is written to the node's disk (the
+        # namespace's ephemeral-storage quota is 0). It counts toward the
+        # container's 1Gi memory limit.
+        - name: tmp
+          emptyDir:
+            medium: Memory
+            sizeLimit: 256Mi

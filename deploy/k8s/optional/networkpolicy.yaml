@@ -1,0 +1,74 @@
+# OPTIONAL -- not in the default kustomization (UEP-23). Shared clusters
+# sometimes restrict or manage NetworkPolicy centrally; ask IT before using it.
+#
+# A NetworkPolicy is a firewall rule between pods. These say:
+#   * frontend pods accept traffic only from the Ingress controller;
+#   * backend pods accept traffic only from frontend pods;
+#   * backend pods may only reach DNS and the database on port 5444.
+#
+# Two values below are needed from IT, and only matter if this file is used:
+#   CHANGE_ME_INGRESS_NAMESPACE  the namespace the Ingress controller runs in
+#   CHANGE_ME_DB_IP              the database server's IP address (a policy
+#                                cannot name a host, only an address)
+#
+# To use it: fill both in, then add "- optional/networkpolicy.yaml" to the
+# "resources:" list in deploy/k8s/kustomization.yaml.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: frontend-from-ingress
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: frontend
+  policyTypes: ["Ingress"]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: CHANGE_ME_INGRESS_NAMESPACE
+      ports:
+        - port: 8080
+          protocol: TCP
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: backend-from-frontend
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: backend
+  policyTypes: ["Ingress"]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: frontend
+      ports:
+        - port: 8000
+          protocol: TCP
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: backend-egress
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: backend
+  policyTypes: ["Egress"]
+  egress:
+    # DNS, wherever the cluster runs it.
+    - ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+    # The database.
+    - to:
+        - ipBlock:
+            cidr: CHANGE_ME_DB_IP/32
+      ports:
+        - port: 5444
+          protocol: TCP

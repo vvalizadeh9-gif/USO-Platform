@@ -1,14 +1,18 @@
 """FastAPI application entrypoint."""
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from sqlalchemy import text
 
 from app.services.system_status import APP_VERSION
 from app.api import api_router
 from app.core.bootstrap import init_db
 from app.core.config import get_settings
 from app.core.csrf import CsrfMiddleware
+from app.core.database import engine
 from app.core.logging_config import RequestLoggingMiddleware, configure_logging
 from app.core.session_renewal import SessionRenewalMiddleware
 
@@ -65,5 +69,42 @@ app.include_router(api_router)
 
 @app.get("/api/health", tags=["health"])
 def health() -> dict[str, str]:
-    """Simple liveness probe."""
+    """Liveness probe. Deliberately touches no database.
+
+    Kubernetes restarts a pod whose liveness probe fails. If this asked the
+    database, a database outage would make Kubernetes restart every backend
+    pod in a loop -- which fixes nothing and floods the log.
+    """
     return {"status": "healthy"}
+
+
+# The readiness check runs its query on these threads so it can give up after
+# READY_TIMEOUT_SECONDS even while a connection attempt is still hanging (an
+# unreachable database answers nothing until DB_CONNECT_TIMEOUT_SECONDS). Two
+# threads bound how many stuck attempts can pile up; a probe that finds both
+# busy waits its turn, times out and reports not-ready, which is the truth.
+READY_TIMEOUT_SECONDS = 2.0
+_ready_pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix="uep-ready")
+
+
+def _database_answers() -> None:
+    with engine.connect() as conn:
+        if conn.dialect.name == "postgresql":
+            conn.execute(text("SET LOCAL statement_timeout = 2000"))
+        conn.execute(text("SELECT 1"))
+
+
+@app.get("/api/health/ready", tags=["health"])
+def ready() -> JSONResponse:
+    """Readiness probe: may this pod receive traffic?
+
+    Kubernetes stops sending requests to a pod that is not ready, without
+    restarting it, and sends them again once it is. Nothing beyond the one
+    status line is returned -- the probe needs no authentication, so it must
+    say nothing about the database. The backend log has the details.
+    """
+    try:
+        _ready_pool.submit(_database_answers).result(timeout=READY_TIMEOUT_SECONDS)
+    except Exception:  # noqa: BLE001 -- any failure, including the timeout, is "not ready"
+        return JSONResponse({"status": "database unavailable"}, status_code=503)
+    return JSONResponse({"status": "ready"})

@@ -44,3 +44,10 @@ Thumbs.db
 # Screenshots taken for review, not part of the source
 .screenshots/
 backend/.venv/
+
+# Kubernetes (UEP-23): the real Secret, local overrides and kubeconfigs hold
+# passwords or personal tokens -- never commit them.
+deploy/k8s/secret.yaml
+deploy/k8s/*.local.yaml
+*.kubeconfig
+mtn-local.yaml

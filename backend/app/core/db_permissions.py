@@ -11,7 +11,7 @@ database name, both read from the configured URL.
 """
 from __future__ import annotations
 
-from sqlalchemy.engine import make_url
+from sqlalchemy.engine import URL, make_url
 
 #: PostgreSQL's SQLSTATE for "insufficient_privilege" -- both "permission
 #: denied for schema public" and "must be owner of table".
@@ -33,7 +33,7 @@ def is_permission_error(exc: BaseException) -> bool:
     return _sqlstate(exc) == INSUFFICIENT_PRIVILEGE
 
 
-def permission_message(database_url: str, schema: str = "public") -> str:
+def permission_message(database_url: str | URL, schema: str = "public") -> str:
     try:
         url = make_url(database_url)
         user, database = url.username or "?", url.database or "?"
