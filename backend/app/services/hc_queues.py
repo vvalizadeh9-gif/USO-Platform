@@ -616,24 +616,22 @@ def _counts(db: Session, user: User) -> dict[str, int]:
 
     # --- HC Pool: every on-air site whose drive test is not Done --------
     from app.services import cpm_columns as C
-    from app.services.health_check import work_item_ids_in_open_hc
+    from app.services.health_check import hc_block_reasons
 
-    busy = work_item_ids_in_open_hc(db)
-    pool = pool_assignable = 0
-    for wi_id, last_stage, dt_status in db.execute(
-        select(WorkItem.id, WorkItem.last_stage, WorkItem.dt_status).where(
-            WorkItem.id.in_(scoped)
+    pool_ids = [
+        wi_id
+        for wi_id, last_stage, dt_status in db.execute(
+            select(WorkItem.id, WorkItem.last_stage, WorkItem.dt_status).where(
+                WorkItem.id.in_(scoped)
+            )
         )
-    ):
-        if C.normalize_stage(last_stage) not in C.ONAIR_STAGES:
-            continue
-        if C.normalize_dt_status(dt_status) in C.DT_STATUS_EXCLUDED_FROM_HC:
-            continue
-        pool += 1
-        # Every pool state but "In health check" is assignable (see
-        # HC_ASSIGNABLE_STATES), and that state is exactly "in ``busy``".
-        if wi_id not in busy:
-            pool_assignable += 1
+        if C.normalize_stage(last_stage) in C.ONAIR_STAGES
+        and C.normalize_dt_status(dt_status) not in C.DT_STATUS_EXCLUDED_FROM_HC
+    ]
+    pool = len(pool_ids)
+    # UEP-24 F1: the assignable slice is New and Ready for re-check, never a
+    # site in drive test -- the rule the basket flag and the write both apply.
+    pool_assignable = pool - len(hc_block_reasons(db, pool_ids))
 
     # --- HC In Progress: pending sites of every assignment in scope -------
     # ``in_progress`` lists an assignment once any in-scope site of it is

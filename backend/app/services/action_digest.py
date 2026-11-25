@@ -276,7 +276,12 @@ def run(db: Session, mailer: Mailer, *, day: date | None = None,
             report.count("snapshot_failed")
             continue
         if send and board_role(user) is not None:
-            on_board = [s for s in summaries if s.queue.on_board]
+            # The Mojri tracker row (unit "days") is always on Home; the digest
+            # carries it only when it is late (UEP-24 F9).
+            on_board = [
+                s for s in summaries
+                if s.queue.on_board and not (s.queue.unit == "days" and not s.overdue)
+            ]
             try:
                 outcome = deliver(db, mailer, user, day, on_board)
             except Exception:  # noqa: BLE001 -- e.g. the log row could not be written

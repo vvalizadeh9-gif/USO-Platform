@@ -1,6 +1,5 @@
 import { Paperclip, Radio } from './carbon'
 import { useRef, useState } from 'react'
-import api from '../api/client'
 import { useToast } from '../context/ToastContext'
 import DateField from './DateField'
 import { daysBetween, todayIso } from '../lib/dates'
@@ -25,29 +24,18 @@ export default function DriveTestSubmitForm({ onSubmit, footer }) {
   const fileRef = useRef(null)
   const toast = useToast()
 
+  // The date and the report go in one request (UEP-24 F3): the caller sends
+  // them through lib/driveTestSubmit, and the server refuses a drive test
+  // with no report, so nothing reaches review empty.
   const submit = async () => {
     setBusy(true)
     try {
-      const created = await onSubmit({ execution_date: date })
-      const driveTestId = created?.drive_test_id
-      if (driveTestId && files.length) {
-        for (const file of files) {
-          const form = new FormData()
-          form.append('file', file)
-          await api.post(`/drive-tests/${driveTestId}/evidence`, form, {
-            headers: { 'Content-Type': 'multipart/form-data' },
-          })
-        }
-      }
+      const created = await onSubmit({ execution_date: date, files })
+      if (created) setFiles([])
     } catch (err) {
-      toast.error(
-        'Report not attached',
-        err.response?.data?.detail ||
-          'The drive test was submitted, but the file did not upload. Open the site again to retry.',
-      )
+      toast.error('Drive test not submitted', err.response?.data?.detail || 'Check the date and the report, then submit again.')
     } finally {
       setBusy(false)
-      setFiles([])
     }
   }
 
@@ -95,16 +83,13 @@ export default function DriveTestSubmitForm({ onSubmit, footer }) {
               {files.length > 0 ? files.map((f) => f.name).join(', ') : 'No files yet'}
             </span>
           </div>
-          <small className="dim" style={{ fontSize: 12 }}>
-            Optional, but the reviewer approves against this.
-          </small>
         </div>
       </div>
 
       <button
         className="btn btn-primary"
         style={{ padding: '11px 22px', marginTop: 4 }}
-        disabled={!date || busy}
+        disabled={!date || !files.length || busy}
         onClick={submit}
       >
         {busy ? 'Submitting…' : 'Submit for review'}

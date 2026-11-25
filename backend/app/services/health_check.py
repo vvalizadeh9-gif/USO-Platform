@@ -24,7 +24,7 @@ from app.models.health_check import (
     HcTaskTechnology,
 )
 from app.models.reference import ProblemCategory, User
-from app.models.workitem import Site, WorkItem
+from app.models.workitem import Assignment, DriveTest, Site, WorkItem
 from app.services import cpm_columns as C
 from app.services.tech_parser import parse_technologies
 from app.services.action_queues.sla import category_sla_days
@@ -52,6 +52,15 @@ class AlreadyInHealthCheck(ValueError):
     Separate from :class:`ScopeError` because it means something different to
     the person on the other end: not "you may not touch this", but "somebody
     already did". The screen answers it by refreshing.
+    """
+
+
+class NotAssignable(AlreadyInHealthCheck):
+    """One or more sites are past the point a health check can be raised for
+    them (UEP-24 F1): in a check, in drive test, or with fixes still open.
+
+    A subclass of :class:`AlreadyInHealthCheck` so every caller that answers
+    that one with a 409 answers this one the same way.
     """
 
 
@@ -394,30 +403,104 @@ HC_STATE_FIXING = "Fix in progress"
 HC_STATE_READY_FOR_RECHECK = "Ready for re-check"
 HC_STATE_PASSED = "Health check passed"
 
-#: The states a pool site can be assigned a fresh health check from.
-#:
-#: Only one state actually blocks the write: a site inside an open HC task
-#: already belongs to a subcontractor, and ``create_assignment`` refuses it
-#: (see ``AlreadyInHealthCheck``). Every other state is a judgement call the
-#: Coordinator is allowed to make -- re-checking a site whose fixes are still
-#: open, or one that passed a round ago, is unusual but not wrong -- so the
-#: screen shows the state and lets them decide rather than hiding the row.
-HC_ASSIGNABLE_STATES = frozenset(
-    {
-        HC_STATE_NEW,
-        HC_STATE_AWAITING_TRIAGE,
-        HC_STATE_FIXING,
-        HC_STATE_READY_FOR_RECHECK,
-        HC_STATE_PASSED,
-    }
-)
-
-
 #: The pool's "Ready to assign" filter: sites nobody has checked yet, and
-#: sites whose fixes are all closed and are due a re-check. The states above
-#: may be assigned as a judgement call; these are the ones waiting on it. The
-#: HC Pool tab's state filter (HcBasketTab.jsx, ``ready``) matches the same two.
+#: sites whose fixes are all closed and are due a re-check. The HC Pool tab's
+#: state filter (HcBasketTab.jsx, ``ready``) matches the same two.
 HC_READY_TO_ASSIGN_STATES = frozenset({HC_STATE_NEW, HC_STATE_READY_FOR_RECHECK})
+
+#: The states a pool site can be assigned a fresh health check from (UEP-24
+#: F1): the same two. A site that passed, is awaiting triage or has a fix
+#: still open is past the check, not before it -- and so is any site already
+#: in drive test, whatever its last check said (:func:`hc_block_reasons`).
+#: The basket flag, the ``pool_assignable`` count and ``create_assignment``
+#: all apply this one rule.
+HC_ASSIGNABLE_STATES = HC_READY_TO_ASSIGN_STATES
+
+#: Why a site cannot get a health check now, as the 409 names it.
+REASON_IN_CHECK = "already in an open health check"
+REASON_IN_DT = "in drive test"
+REASON_DT_DONE = "drive test done"
+_STATE_REASON = {
+    HC_STATE_IN_PROGRESS: REASON_IN_CHECK,
+    HC_STATE_AWAITING_TRIAGE: "awaiting triage",
+    HC_STATE_FIXING: "fix open",
+    HC_STATE_PASSED: "health check passed",
+}
+
+
+def work_item_ids_in_drive_test(db: Session, work_item_ids=None) -> set[int]:
+    """Sites with a drive test under way: an active DT assignment, or a drive
+    test handed in and waiting for review."""
+    assigned = select(Assignment.work_item_id).where(Assignment.is_active.is_(True))
+    submitted = select(DriveTest.work_item_id).where(
+        DriveTest.is_active.is_(True), DriveTest.status == "Submitted"
+    )
+    if work_item_ids is not None:
+        assigned = assigned.where(Assignment.work_item_id.in_(work_item_ids))
+        submitted = submitted.where(DriveTest.work_item_id.in_(work_item_ids))
+    return set(db.execute(assigned).scalars()) | set(db.execute(submitted).scalars())
+
+
+def _state_of(task: HcTask | None) -> str:
+    """:func:`_hc_state` for a site in no open check, without the round."""
+    if task is None:
+        return HC_STATE_NEW
+    if task.overall_result != "NotReady":
+        return HC_STATE_PASSED
+    if not task.remediations:
+        return HC_STATE_AWAITING_TRIAGE
+    if any(r.is_open for r in task.remediations):
+        return HC_STATE_FIXING
+    return HC_STATE_READY_FOR_RECHECK
+
+
+def hc_block_reasons(db: Session, work_item_ids) -> dict[int, str]:
+    """Each given site that cannot get a health check now, with the reason.
+
+    A site is assignable only when it is New or waiting for a re-check, and
+    not in drive test (UEP-24 F1). Sites missing from the answer are
+    assignable.
+    """
+    ids = list(dict.fromkeys(work_item_ids))
+    if not ids:
+        return {}
+    busy = set(
+        db.execute(
+            select(HcTask.work_item_id).where(
+                HcTask.work_item_id.in_(ids), HcTask.completed_at.is_(None)
+            )
+        ).scalars()
+    )
+    in_dt = work_item_ids_in_drive_test(db, ids)
+    done = {
+        wi_id
+        for wi_id, status in db.execute(
+            select(WorkItem.id, WorkItem.dt_status).where(WorkItem.id.in_(ids))
+        )
+        if C.normalize_dt_status(status) in C.DT_STATUS_EXCLUDED_FROM_HC
+    }
+    latest: dict[int, HcTask] = {}
+    for task in db.execute(
+        select(HcTask)
+        .where(HcTask.work_item_id.in_(ids), HcTask.completed_at.isnot(None))
+        .order_by(HcTask.completed_at.asc())
+        .options(selectinload(HcTask.remediations))
+    ).scalars():
+        latest[task.work_item_id] = task  # ascending: the last one wins
+
+    reasons: dict[int, str] = {}
+    for wi_id in ids:
+        if wi_id in busy:
+            reasons[wi_id] = REASON_IN_CHECK
+        elif wi_id in in_dt:
+            reasons[wi_id] = REASON_IN_DT
+        elif wi_id in done:
+            reasons[wi_id] = REASON_DT_DONE
+        else:
+            state = _state_of(latest.get(wi_id))
+            if state not in HC_ASSIGNABLE_STATES:
+                reasons[wi_id] = _STATE_REASON[state]
+    return reasons
 
 
 def _hc_state(wi: WorkItem, task: HcTask | None, busy: set[int]) -> tuple[str, int, str | None]:
@@ -464,14 +547,15 @@ def get_basket(db: Session, user, work_items: list[WorkItem] | None = None) -> l
     So every one of those sites is now in the list, and the state it is in
     travels on the row (``hc_state``) instead of deciding whether the row
     exists. ``assignable`` says whether a fresh check can be raised for it
-    right now; only an open check blocks that, which is the one case
-    ``create_assignment`` rejects.
+    right now: only a New site or one waiting for a re-check, never one in
+    drive test -- the rule ``create_assignment`` enforces (UEP-24 F1).
     """
     if work_items is None:
         work_items = scoped_work_items(db, user)
 
     busy = work_item_ids_in_open_hc(db)
     latest = latest_completed_tasks(db)
+    in_dt = work_item_ids_in_drive_test(db)
 
     basket = []
     for wi in work_items:
@@ -496,7 +580,7 @@ def get_basket(db: Session, user, work_items: list[WorkItem] | None = None) -> l
                 "round_no": round_no,
                 "returning_reason": returning,
                 "hc_state": state,
-                "assignable": state in HC_ASSIGNABLE_STATES,
+                "assignable": state in HC_ASSIGNABLE_STATES and wi.id not in in_dt,
                 "dt_status": C.normalize_dt_status(wi.dt_status),
                 "waiting_since": waiting_since,
                 "days_waiting": _days_since(waiting_since),
@@ -541,26 +625,24 @@ def create_assignment(
         # the response must not become a way to probe for site ids.
         raise ScopeError("One or more of those sites could not be found")
 
-    # A site already inside an open check must not be handed to a second
-    # subcontractor. The basket hides such a site, so this cannot happen by
-    # working the screen -- but two coordinators on two stale basket pages,
-    # or any retry of a request that already succeeded, would otherwise
-    # create a duplicate task, and both would be submittable. The basket
-    # query is the only thing that has ever enforced this, and a query
-    # cannot enforce anything about a write.
-    already_open = set(
-        db.execute(
-            select(HcTask.work_item_id).where(
-                HcTask.work_item_id.in_(work_item_ids),
-                HcTask.completed_at.is_(None),
-            )
-        ).scalars()
-    )
-    if already_open:
-        raise AlreadyInHealthCheck(
-            f"{len(already_open)} of those sites are already in an open "
-            "health check. Refresh the pool and try again."
+    # UEP-24 F1: only a New site, or one whose fixes are all closed and is
+    # waiting for a re-check, may be given a health check -- never one in a
+    # check already, in drive test, or with a fix open. Two coordinators on
+    # stale pool pages, or a retried request, land here too. The whole
+    # request is refused, naming every site, so nothing is half-assigned.
+    blocked = hc_block_reasons(db, work_item_ids)
+    if blocked:
+        codes = dict(
+            db.execute(
+                select(WorkItem.id, Site.site_code)
+                .join(Site, WorkItem.site_id == Site.id)
+                .where(WorkItem.id.in_(list(blocked)))
+            ).all()
         )
+        listed = ", ".join(
+            f"{codes.get(wi_id) or wi_id} ({reason})" for wi_id, reason in blocked.items()
+        )
+        raise NotAssignable(f"These sites can't get a health check now: {listed}.")
 
     assignment = HcAssignment(
         code=generate_assignment_code(db),
@@ -668,7 +750,12 @@ def submit_task_result(
             HcTaskTechnology(
                 technology=tech,
                 result=result,
-                reason_category=None,  # category is coordinator-owned now
+                # The contractor's suggested category (UEP-24 F13): kept so the
+                # reviewer starts from it. The decision stays the reviewer's.
+                reason_category=(
+                    (entry.get("reason_category") or "").strip()[:120] or None
+                    if result == "NotNormal" else None
+                ),
                 comment=comment if result == "NotNormal" else None,
             )
         )

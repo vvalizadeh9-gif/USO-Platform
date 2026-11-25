@@ -898,3 +898,15 @@ def test_queue_can_leave_out_the_running_month(client, actors):
     ]
     assert all(r["assignment"] == 0 and r["pip"] is None and r["delivered"] == 0 for r in light["rows"])
     assert light["current_month"]["assignment"] == 0
+
+
+@pytest.fixture(autouse=True, scope="module")
+def _any_filing_period():
+    """These tests file plans for fixed past and future months as set-up.
+    UEP-24 F6 limits real filing to this month and the next; that rule has
+    its own tests (test_lab_fixes.py), so here every period is open."""
+    from app.services import monthly_plan as _plans
+
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(_plans, "is_filing_period", lambda year, month: True)
+        yield

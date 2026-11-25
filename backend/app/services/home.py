@@ -252,6 +252,7 @@ def build(db: Session, user: User, now: datetime | None = None) -> dict:
     tickets = [t for g in groups for t in g["tickets"]]
     _add_submission_meta(db, user, tickets, today)
     _add_case_meta(ctx, tickets)
+    _add_mojri_meta(ctx, tickets)
     live = home_trends.DayFigures(
         pending=sum(t["count"] for t in tickets),
         overdue=sum(t["late"] for t in tickets),
@@ -308,6 +309,20 @@ def _add_case_meta(ctx: QueueContext, tickets: list[dict]) -> None:
     for ticket in tickets:
         if ticket["queue_key"] in HOME_QUEUES:
             ticket["acceptance"] = cases.meta(ctx, ticket["queue_key"])
+
+
+def _add_mojri_meta(ctx: QueueContext, tickets: list[dict]) -> None:
+    """The Mojri tracker row (UEP-24 F9): days since the last upload, and
+    whether that is past the follow-up days -- the row shows red when it is,
+    instead of the Submissions follow-up going quiet."""
+    shown = [t for t in tickets if t["queue_key"] == "mojri_tracker"]
+    if not shown:
+        return
+    from app.services.action_queues.sources import oversight
+
+    meta = oversight.mojri_meta(ctx)
+    for ticket in shown:
+        ticket["mojri"] = meta
 
 
 def _case_meta_on(ctx: QueueContext, tickets: list[dict]) -> list[dict]:

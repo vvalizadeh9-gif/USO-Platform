@@ -30,6 +30,7 @@ from app.models.reference import User
 from app.models.workitem import Village, WorkItem
 from app.services import acceptance_letters as letters
 from app.services import acceptance_workflow as flow
+from app.services import scan_tokens
 from app.services.audit import record_audit
 
 from . import counts, scope, transitions
@@ -252,6 +253,60 @@ def _audit(db: Session, user: User, req: UpdateRequest, authority: str,
         },
         reason=req.comment,
     )
+
+
+# --------------------------------------------------------------------------
+# A rejection owner on its own basket (UEP-24 F10)
+# --------------------------------------------------------------------------
+OWNER_COMMENT = "comment"
+OWNER_FIXED = "fixed"
+OWNER_ACTIONS = (OWNER_COMMENT, OWNER_FIXED)
+
+
+def owner_action(db: Session, user: User, case_id: int, action: str, comment: str | None,
+                 scan_ids: tuple[str, ...] = (), request_id: str | None = None) -> CaseRow:
+    """A team whose role owns a basket comments on, or marks fixed, a case in
+    that basket. Marking fixed sends it to the Contractor basket (the
+    contractor gets the approval). Never an ICT/CRA outcome, never another
+    team's basket: a case outside the caller's own basket is 404, the same
+    answer as for no case at all. Caller commits."""
+    if scope.viewer_kind(user) != scope.KIND_TEAM:
+        raise UpdateError("Only the team that owns a basket can do this", status=403)
+    if action not in OWNER_ACTIONS:
+        raise UpdateError("Choose comment or fixed", [{"field": "action", "code": "invalid"}])
+    text = (comment or "").strip()
+    if not text:
+        raise UpdateError("Add a comment, then save again", [{"field": "comment", "code": "missing"}])
+    c = counts.clock(db)
+    rows = [r for r in scope.load_cases(db, user, c, open_only=True, kind=scope.KIND_TEAM)
+            if r.case_id == case_id]
+    if not rows:
+        raise UpdateError("Case not found", status=404)
+    row = rows[0]
+    files = []
+    for scan_id in scan_ids:
+        try:
+            scan = scan_tokens.redeem(scan_id, user_id=user.id)
+        except scan_tokens.ScanError as exc:
+            raise UpdateError(str(exc), [{"field": "scan", "code": exc.code}]) from None
+        files.append({"sha256": scan.sha256, "filename": scan.filename,
+                      "stored_path": scan.stored_path})
+    case = transitions.lock(db, [case_id])[0]
+    if action == OWNER_FIXED:
+        transitions.fix(db, case, user, text, contractor=row.contractor_name,
+                        request_id=request_id, meta={"files": files} if files else None)
+    else:
+        transitions.comment(db, case, user, text, request_id=request_id,
+                            meta={"files": files} if files else None)
+    record_audit(
+        db, user_id=user.id, action=audit_actions.UPDATED, module=MODULE,
+        entity_type="AcceptanceCase", entity_id=case_id,
+        old_value={"state": row.state, "basket_role": row.basket_role},
+        new_value={"owner_action": action, "files": [f["filename"] for f in files],
+                   **({"state": "waiting", "basket_role": "Contractor"} if action == OWNER_FIXED else {})},
+        reason=text,
+    )
+    return row
 
 
 # --------------------------------------------------------------------------

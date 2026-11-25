@@ -10,6 +10,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from app.schemas.my_work import Authority
+
 StepKey = Literal["on_air", "health_check", "assigned", "dt_done", "sent_to_ict", "acceptance"]
 StepState = Literal["done", "in_progress", "upcoming"]
 SideWord = Literal["approved", "pending", "rejected"]
@@ -48,7 +50,7 @@ class LongestStepOut(BaseModel):
 
 
 class OldestPendingOut(BaseModel):
-    authority: Literal["ICT", "CRA"]
+    authority: Authority
     days: int
     villages: int
 

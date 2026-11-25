@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- **Fixes from the 3-month lab (UEP-24).**
+  - **What changed for users.** Rejection owners (CPG Power, CPG PSO, CPG PMO, MS, NWG) can now add a comment and **Mark fixed** on cases in their own basket in Filing, with an optional file; a fixed case goes to the contractor's basket. The PM's and coordinators' Home has four new rows: **DT with contractors** and **Fixes open** on the Drive test card, **In team baskets** and **Mojri tracker** (days since the last upload, red when stale) on the Acceptance card. Their late counts are in the digest. A Viewer now lands on Roles Performance. A new regional manager sees a calm note instead of an error until provinces are linked.
+  - Health check can only be assigned to a site that is New or waiting for a re-check; sites in drive test, in a check, awaiting triage or with a fix open are refused with 409, naming each site. The pool flag, the `pool_assignable` count and Home's HC assignment row follow the same rule.
+  - One drive test waiting for review per site (409 on a second). A submission needs an execution date that is not in the future and not before the site's on-air date, and a report file or link (422 otherwise). Files now go with the submission (`POST /work-items/{id}/drive-test/upload`). Old duplicates are marked **Superseded**: kept in history, counted nowhere.
+  - Acceptance letter dates must be between the village's DT date (its import date when undated) and today.
+  - Monthly plans can be sent for this month or next month only.
+  - Assigning a drive test in UEP sets the site's DT status to Ongoing (undo puts the old value back); a CPM import never overwrites an in-app Ongoing or Done. Sites CPM imports as DT Done get the stage DT Done.
+  - Admin: a Contractor account needs its company, a Coordinator a region or province, a Regional Manager its provinces (it is then linked to them in the province mapping). Suspending or deactivating the ICT-submission owner clears the owner ("No owner"; the PM can still act).
+  - HC review pre-selects the category the contractor gave, and many problematic results are sent to remediation in one action (`POST /hc/results/review-bulk`).
+  - `ict`/`cra` and `ICT`/`CRA` are accepted everywhere.
+  - **Deploy:** one image tag. Migration `d2a7f4c9e815` marks duplicate drive tests Superseded, adds the partial unique index `uq_drive_tests_one_submitted`, and moves CPM-done sites from New to DT Done; each step logs how many rows it changed and is safe to re-run.
+
 - **UEP runs on IT's shared Kubernetes cluster (UEP-23).** No visible change.
   - `deploy/k8s/`: kustomize manifests for namespace `prd-uep` (two Deployments, two ClusterIP Services, ConfigMap, Ingress applied last), shaped for its quota and LimitRange: explicit requests and limits on every container, read-only root filesystems, memory-backed `emptyDir` only, no storage, no Jobs, nothing cluster-wide. The four site values (registry, host name, Ingress class, database host) live only in `deploy/k8s/site.env`; replicas and resources only in `deploy/k8s/sizing.yaml`. The Secret is a template (`secret.example.yaml`, all `CHANGE_ME`), created by hand in Rancher.
   - Database settings from parts: `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`, `DB_SSLMODE`, `DB_CONNECT_TIMEOUT_SECONDS`. The URL is built by SQLAlchemy, so a password with `@ : / % #` works (and no longer breaks Alembic through configparser's `%`). `DATABASE_URL` still wins, so Compose is unchanged. Start-up stops, naming the missing settings, if neither is complete. The password and URL never reach a log.

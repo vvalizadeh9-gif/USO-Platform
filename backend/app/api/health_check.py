@@ -39,6 +39,7 @@ from app.schemas import (
     HcAssignmentListItem,
     ContractorLoadRow,
     HcAssignmentOut,
+    HcBulkReviewRequest,
     HcConfirmRequest,
     HcBasketItem,
     HcHistoryEvent,
@@ -578,6 +579,37 @@ def confirm_ready_results(
     db.flush()
     db.commit()
     return {"status": "ok", "confirmed": len(tasks), "batch_id": entry.id}
+
+
+@router.post("/results/review-bulk")
+def review_problematic_results(
+    payload: HcBulkReviewRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_roles(PM, COORDINATOR)),
+):
+    """Send several results to remediation at once, with the categories the
+    reviewer picked (UEP-24 F13). One transaction: all or none."""
+    if not payload.problem_categories:
+        raise HTTPException(400, "Pick at least one owning team.")
+    tasks = [_load_task(db, user, tid) for tid in dict.fromkeys(payload.task_ids)]
+    for task in tasks:
+        if task.completed_at is None:
+            raise HTTPException(400, "One of those sites has no result yet. Refresh and try again.")
+        if task.reviewed_at is not None:
+            raise HTTPException(409, "One of those results was already decided. Refresh and try again.")
+    try:
+        for task in tasks:
+            hc.review_task(db, task=task, problem_categories=payload.problem_categories, user=user)
+    except ValueError as exc:
+        db.rollback()
+        raise HTTPException(400, str(exc)) from None
+    record_audit(
+        db, user_id=user.id, action=audit_actions.REVIEWED,
+        module="HealthCheck", entity_type="HcTask", entity_id=None,
+        new_value={"task_ids": [t.id for t in tasks], "problem_categories": payload.problem_categories},
+    )
+    db.commit()
+    return {"status": "ok", "reviewed": len(tasks)}
 
 
 @router.post("/results/confirm/{batch_id}/undo")

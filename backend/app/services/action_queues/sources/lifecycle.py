@@ -29,11 +29,9 @@ def _coordinator_owned(ctx: QueueContext, rows: list[dict], id_key: str, since_k
 # Health Check
 # --------------------------------------------------------------------------
 def sites_to_assign(ctx: QueueContext) -> list[PendingItem]:
-    """The HC Pool's "Ready to assign" filter: never checked, or due a re-check."""
-    rows = [
-        b for b in hc.get_basket(ctx.db, ctx.user, ctx.work_items)
-        if b["hc_state"] in hc.HC_READY_TO_ASSIGN_STATES
-    ]
+    """The HC Pool's assignable sites: never checked, or due a re-check, and
+    not in drive test (UEP-24 F1)."""
+    rows = [b for b in hc.get_basket(ctx.db, ctx.user, ctx.work_items) if b["assignable"]]
     return _coordinator_owned(ctx, rows, "work_item_id", "waiting_since")
 
 

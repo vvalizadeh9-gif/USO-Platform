@@ -128,10 +128,17 @@ def seed_programme(db, rng, sites=160):
                 is_active=rng.random() < 0.8,
                 returned_at=T0 if rng.random() < 0.25 else None,
             ))
+        has_submitted = False
         for _ in range(rng.choice([0, 0, 1, 2])):
+            status = rng.choice(["Submitted", "Approved", "Rejected", "Returned"])
+            # One drive test waiting for review per site (UEP-24 F2): a second
+            # Submitted is a duplicate the index refuses, so it is seeded as
+            # the Superseded row the clean-up leaves.
+            if status == "Submitted":
+                status = "Superseded" if has_submitted else status
+                has_submitted = True
             db.add(DriveTest(
-                work_item_id=wi.id,
-                status=rng.choice(["Submitted", "Approved", "Rejected", "Returned"]),
+                work_item_id=wi.id, status=status,
                 submitted_at=T0, is_active=rng.random() < 0.8,
             ))
         db.flush()

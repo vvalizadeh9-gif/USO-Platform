@@ -261,6 +261,9 @@ class UserOut(ORMModel):
     email_digest_enabled: bool = True
     last_login_at: datetime | None = None
     provinces: list[ProvinceOut] = []
+    # Whether the account is linked to a name in the province mapping
+    # (UEP-24 F11): a Regional Manager's Home reads its area only when it is.
+    kpi_linked: bool = False
 
 
 class UserCreate(BaseModel):
@@ -853,6 +856,13 @@ class HcConfirmRequest(BaseModel):
     """Ready results to confirm in one go."""
 
     task_ids: list[int] = Field(min_length=1, max_length=MAX_BULK_IDS)
+
+
+class HcBulkReviewRequest(BaseModel):
+    """Results sent to remediation in one go, with the owning teams (UEP-24 F13)."""
+
+    task_ids: list[int] = Field(min_length=1, max_length=MAX_BULK_IDS)
+    problem_categories: list[str] = Field(default_factory=list, max_length=20)
 
 
 class ContractorProvinceShare(BaseModel):

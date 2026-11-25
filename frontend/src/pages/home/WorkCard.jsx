@@ -12,6 +12,10 @@ const appById = (id) => APPS.find((a) => a.id === id)
 
 /** One queue. Every row looks the same: none is singled out as "next". */
 function metaParts(ticket) {
+  // UEP-24 F9: the Mojri tracker row's number is days since the last upload.
+  if (ticket.mojri) {
+    return [ticket.mojri.stale && <span className="hw-late">Late</span>, 'Days since last upload']
+  }
   const cases = caseMeta(ticket)
   if (cases) {
     return [
@@ -44,7 +48,9 @@ function QueueRow({ ticket }) {
           <MetaLine parts={metaParts(ticket)} />
         </span>
       </span>
-      <span className="hw-row-count">{formatNumber(ticket.count)}</span>
+      <span className={`hw-row-count${ticket.mojri?.stale ? ' hw-late' : ''}`}>
+        {formatNumber(ticket.mojri ? ticket.mojri.age_days ?? 0 : ticket.count)}
+      </span>
       <Icon name="chevron--right" size={16} />
     </button>
   )

@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.core import audit_actions, user_status
 from app.core.database import get_db
-from app.core.deps import ADMIN, COORDINATOR, PM, REGIONAL, require_roles
+from app.core.deps import ADMIN, CONTRACTOR, COORDINATOR, PM, REGIONAL, require_roles
 from app.core.passwords import PasswordError, validate_password
 from app.core.security import generate_temporary_password, hash_password
 from app.models.acceptance import AuditLog, CpmChangeRequest, CpmImportBatch
@@ -52,7 +52,7 @@ from app.schemas import (
 from app.services.action_queues.sla import category_sla_days
 from app.services.audit import record_audit
 from app.services.cpm_import import CpmImportService
-from app.services import evidence_store, province_assignment
+from app.services import evidence_store, kpi_mapping, province_assignment
 from app.services.data_wipe import REQUIRED_CONFIRMATION_PHRASE, wipe_cpm_data
 
 logger = logging.getLogger("uep.admin")
@@ -413,6 +413,7 @@ def create_user(
     _set_provinces(db, user, payload.province_ids)
     db.add(user)
     db.flush()
+    _check_account(db, user)
     record_audit(
         db,
         user_id=admin.id,
@@ -482,6 +483,23 @@ def _guard_role_change(db: Session, user: User, new_role_id: int) -> None:
         )
 
 
+def _release_ict_submission_owner(db: Session, user: User, admin: User) -> None:
+    """UEP-24 F12: an account that can no longer sign in stops owning the ICT
+    submissions. The PM sees "No owner" and can still act, as today."""
+    from app.services.submissions import scope as submission_scope
+
+    row = submission_scope.settings(db)
+    if row is None or row.owner_user_id != user.id:
+        return
+    row.owner_user_id = None
+    record_audit(
+        db, user_id=admin.id, action=audit_actions.UPDATED, module="Submissions",
+        entity_type="SubmissionSettings", entity_id=row.id,
+        old_value={"owner_user_id": user.id}, new_value={"owner_user_id": None},
+        reason=f"Owner {user.username} no longer has access",
+    )
+
+
 def _apply_status(
     db: Session, user: User, admin: User, new_status: str, reason: str | None
 ) -> bool:
@@ -507,6 +525,7 @@ def _apply_status(
     else:
         user.status_changed_at = datetime.now(timezone.utc)
         user.status_changed_by = admin.id
+        _release_ict_submission_owner(db, user, admin)
         # Losing the right to sign in should end the sessions already open, not
         # take effect whenever the current token happens to expire. The
         # get_current_user check catches this too, on the next request; bumping
@@ -584,6 +603,9 @@ def update_user(
         user.sees_all_provinces = payload.sees_all_provinces
     if payload.province_ids is not None:
         _set_provinces(db, user, payload.province_ids)
+    if {"role_id", "contractor_id", "province_ids", "sees_all_provinces"} & payload.model_fields_set:
+        db.flush()
+        _check_account(db, user)
 
     # Applied last, and through the shared helper, so the guards that protect
     # the last administrator run whichever route the change came in by.
@@ -1394,6 +1416,23 @@ def list_audit_logs(
         )
 
     return _audit_page(db, query, limit=limit, offset=offset)
+
+
+def _check_account(db: Session, user: User) -> None:
+    """UEP-24 F11/F12: no account that cannot work. A contractor needs its
+    company; a coordinator needs a region or province; a regional manager
+    needs its provinces, and is then linked to them in the province mapping."""
+    role = db.get(Role, user.role_id)
+    name = role.name if role else None
+    if name == CONTRACTOR and user.contractor_id is None:
+        raise HTTPException(422, "Choose the contractor company for this account.")
+    if name == COORDINATOR and not (user.provinces or user.sees_all_provinces):
+        raise HTTPException(422, "Give this coordinator at least one CRA region or province.")
+    if name == REGIONAL:
+        if not (user.provinces or user.sees_all_provinces):
+            raise HTTPException(422, "Choose the provinces this regional manager covers.")
+        if user.provinces:
+            kpi_mapping.link_regional_manager(db, user, user.provinces)
 
 
 def _set_provinces(db: Session, user: User, province_ids: list[int]) -> None:

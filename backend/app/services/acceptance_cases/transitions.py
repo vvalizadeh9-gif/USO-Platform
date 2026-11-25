@@ -127,12 +127,13 @@ def reject(db: Session, case: AcceptanceCase, actor: User, *,
 
 
 def fix(db: Session, case: AcceptanceCase, actor: User, text: str, *,
-        contractor: str | None = None, request_id: str | None = None) -> None:
+        contractor: str | None = None, request_id: str | None = None,
+        meta: dict | None = None) -> None:
     """A rejection marked fixed goes back to the site contractor (§4.2)."""
     previous = case.category_id
     _enter(case, STATE_WAITING, BASKET_CONTRACTOR, None)
     _event(db, case, EVENT_FIXED, actor, comment=text, category_id=previous,
-           request_id=request_id, meta={"contractor": contractor})
+           request_id=request_id, meta={"contractor": contractor, **(meta or {})})
 
 
 def change_basket(db: Session, case: AcceptanceCase, actor: User,

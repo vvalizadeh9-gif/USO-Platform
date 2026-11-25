@@ -289,6 +289,12 @@ def batch_detail(db: Session, user: User, assignment: HcAssignment) -> dict:
                 "round": t.round_no,
                 "villages": [v for v in villages.get(t.work_item_id, []) if not mine or v["id"] in mine],
                 "result": t.overall_result,
+                # The categories the contractor gave on Not Normal results,
+                # pre-selected in review (UEP-24 F13).
+                "reason_categories": sorted({
+                    x.reason_category for x in t.technologies
+                    if x.result == "NotNormal" and x.reason_category
+                }),
                 "submitted_at": sla.as_datetime(t.completed_at),
                 "hours_taken": hours,
                 "late": hours is not None and hours > sla_hours,
@@ -466,6 +472,10 @@ def reopen_for_new_villages(db: Session, wi: WorkItem) -> dict:
         assignment.is_active = False
     for drive_test in wi.drive_tests:
         drive_test.is_active = False
+        if drive_test.status == "Submitted":
+            # Closed unreviewed: kept in history, and no longer the site's one
+            # open drive test (UEP-24 F2).
+            drive_test.status = "Superseded"
     wi.dt_status = None
     wi.dt_date_gregorian = None
     wi.dt_problem_category = None

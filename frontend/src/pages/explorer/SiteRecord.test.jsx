@@ -299,8 +299,11 @@ describe('Take action', () => {
     await draw()
     await user.click(screen.getByRole('button', { name: /Take action/ }))
     let drawer = screen.getByRole('dialog', { name: 'Take action' })
+    // UEP-24 F3: the report goes with the submission, so it needs a file.
+    expect(within(drawer).getByRole('button', { name: 'Submit for review' })).toBeDisabled()
+    await user.upload(drawer.querySelector('input[type="file"]'), new File(['%PDF-1.4'], 'report.pdf', { type: 'application/pdf' }))
     await user.click(within(drawer).getByRole('button', { name: 'Submit for review' }))
-    expect(api.post).toHaveBeenCalledWith('/work-items/7/drive-test', { execution_date: expect.any(String) })
+    expect(api.post).toHaveBeenCalledWith('/work-items/7/drive-test/upload', expect.any(FormData), expect.anything())
 
     await user.click(screen.getByRole('button', { name: /Take action/ }))
     drawer = screen.getByRole('dialog', { name: 'Take action' })

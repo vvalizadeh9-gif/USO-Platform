@@ -115,6 +115,15 @@ def _now() -> datetime:
 # ---------------------------------------------------------------------------
 # Validation
 # ---------------------------------------------------------------------------
+FILING_PERIOD_MESSAGE = "Plans can be sent for this month or next month only."
+
+
+def is_filing_period(year: int, month: int) -> bool:
+    """UEP-24 F6: a contractor files for the running Shamsi month or the next."""
+    current = jalali.current_shamsi_period()
+    return (year, month) in (current, jalali.next_period(*current))
+
+
 def validate_period(year: int, month: int) -> None:
     """Refuse a Shamsi period that cannot exist.
 

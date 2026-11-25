@@ -2,6 +2,7 @@ import { CheckCircle2, XCircle } from '../../components/carbon'
 import { useEffect, useState } from 'react'
 import api from '../../api/client'
 import DriveTestSubmitForm from '../../components/DriveTestSubmitForm'
+import { submitDriveTest } from '../../lib/driveTestSubmit'
 import ReturnToCoordinatorForm from '../../components/ReturnToCoordinatorForm'
 import { ConfirmDialog, Drawer } from '../../components/ui'
 import { useToast } from '../../context/ToastContext'
@@ -55,7 +56,7 @@ export default function TakeActionDrawer({ open, onClose, workItemId, workflow, 
         {actions.submitDt && (
           <DriveTestSubmitForm
             onSubmit={(payload) =>
-              act(() => api.post(`/work-items/${workItemId}/drive-test`, payload), 'Drive test submitted for review')
+              act(() => submitDriveTest(workItemId, payload), 'Drive test submitted for review')
             }
             footer={actions.returnToCoordinator && (
               <ReturnToCoordinatorForm onSubmit={(payload) =>

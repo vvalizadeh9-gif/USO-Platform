@@ -8,6 +8,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from app.schemas.my_work import Authority
+
 from app.services.action_queues.sla import MAX_SLA_DAYS, MIN_SLA_DAYS
 
 
@@ -36,7 +38,7 @@ class NotificationsIn(BaseModel):
 
 
 class AuthorityRequestIn(BaseModel):
-    authority: Literal["ICT", "CRA"]
+    authority: Authority
     village_ids: list[int] = Field(min_length=1, max_length=500)
     letter_number: str | None = Field(default=None, max_length=120)
     letter_date: date | None = None

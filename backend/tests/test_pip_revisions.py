@@ -719,3 +719,15 @@ def test_tehran_today_follows_the_tehran_clock(monkeypatch):
 
     monkeypatch.setattr(jalali, "datetime", FrozenUTC)
     assert jalali.tehran_today() == date(2026, 10, 8)
+
+
+@pytest.fixture(autouse=True, scope="module")
+def _any_filing_period():
+    """These tests file plans for fixed past and future months as set-up.
+    UEP-24 F6 limits real filing to this month and the next; that rule has
+    its own tests (test_lab_fixes.py), so here every period is open."""
+    from app.services import monthly_plan as _plans
+
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(_plans, "is_filing_period", lambda year, month: True)
+        yield

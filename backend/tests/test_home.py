@@ -277,7 +277,9 @@ def test_acceptance_is_pending_ict_and_cra_villages_in_scope(client, username, s
     assert acceptance["scope_label"] == scope
     assert body["scope_label"] == scope
     assert [t["count"] for t in pending] == [ict, cra]
-    assert {t["unit"] for t in acceptance["tickets"]} == {"villages"}
+    # Every acceptance row counts villages, but the Mojri tracker (UEP-24 F9),
+    # whose one item is worded by its age in days.
+    assert {t["unit"] for t in acceptance["tickets"] if t["queue_key"] != "mojri_tracker"} == {"villages"}
 
 
 def test_a_contractor_reads_their_own_acceptance_baskets(client):

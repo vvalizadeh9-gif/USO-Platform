@@ -102,6 +102,10 @@ def derive_stage(work_item: WorkItem) -> str:
             return STAGE_HEALTH_PROBLEM
         return STAGE_READY
 
+    # UEP-24 F8: a site CPM imported as drive-tested, with nothing in the app
+    # since, is DT Done -- the dashboard already counts it done.
+    if str(work_item.dt_status or "").strip().lower() == "done":
+        return STAGE_DT_DONE
     return STAGE_NEW
 
 

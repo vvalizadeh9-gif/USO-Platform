@@ -15,6 +15,7 @@ What is protected, in the order of spec §11:
 
 Run with:  cd backend && pytest tests/test_my_work.py -q
 """
+from datetime import date as _date
 import itertools
 import json
 import os
@@ -109,6 +110,8 @@ def _seed(tag, *, techs="2G,4G", villages=1, on_air=True, dt="Done", contractor_
     work_item = WorkItem(
         site_id=site.id, site_type="Target", requested_technology=techs,
         dt_status=dt, dt_sc_contractor_id=contractor_id, current_stage="DT Done",
+        # A DT date before every letter these tests file (UEP-24 F4).
+        dt_date_gregorian=_date(2025, 1, 1),
         last_stage=ONAIR if on_air else "نصب",
     )
     db.add(work_item)

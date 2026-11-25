@@ -264,6 +264,9 @@ def save_my_plan(
     colleague started; nothing on this router can produce a competing one.
     """
     contractor_id = _own_contractor(user)
+    # UEP-24 F6: a plan is for the running Shamsi month or the next one.
+    if not plans.is_filing_period(payload.shamsi_year, payload.shamsi_month):
+        raise HTTPException(422, plans.FILING_PERIOD_MESSAGE)
     existing = plans.current_plan(
         db, contractor_id, payload.shamsi_year, payload.shamsi_month, payload.stream
     )

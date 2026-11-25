@@ -177,7 +177,7 @@ def _assign_and_submit(client, wi_id, execution_date):
     )
     r = client.post(
         f"/api/v1/work-items/{wi_id}/drive-test", headers=_h(client, "sc"),
-        json={"execution_date": execution_date.isoformat()},
+        json={"execution_date": execution_date.isoformat(), "report_link": "https://reports.example/dt"},
     )
     assert r.status_code == 200, r.text
     return r.json()["drive_test_id"]

@@ -13,7 +13,14 @@ from __future__ import annotations
 
 from app.models.acceptance_workflow import AUTHORITIES
 from app.services import my_work_status as S
-from app.services.action_queues.sources import acceptance, cases, lifecycle, plans, submissions
+from app.services.action_queues.sources import (
+    acceptance,
+    cases,
+    lifecycle,
+    oversight,
+    plans,
+    submissions,
+)
 from app.services.action_queues.types import (
     CONTRACTOR,
     COORDINATOR,
@@ -104,6 +111,15 @@ QUEUES: tuple[QueueDefinition, ...] = (
     _q("dt_redo", Stage.DT, "Redo returned drive tests", "Returned drive tests",
        "/my-drive-tests?tab=todo&status=sent_back", {CONTRACTOR},
        lifecycle.returned_to_redo),
+    # UEP-24 F9: work stuck with others, on the PM's and coordinators' Home
+    # and in their digest. Late past the DT SLA (SLA policies) and past each
+    # fix's own due date.
+    _q("dt_with_contractors", Stage.DT, "Chase drive tests with contractors",
+       "DT with contractors", "/drive-test?tab=in-progress", _STAFF,
+       oversight.dt_with_contractors),
+    _q("fixes_open", Stage.DT, "Chase open fixes", "Fixes open",
+       "/health-check?tab=remediation", _STAFF, oversight.fixes_open,
+       sla=SlaKind.CATEGORY, unit="fixes"),
     # --- ICT, then CRA ---------------------------------------------------
     *(q for authority in AUTHORITIES for q in _acceptance_queues(authority)),
     # The Filing page's rail badge (UEP-16 §2): villages in Filing's own
@@ -119,6 +135,14 @@ QUEUES: tuple[QueueDefinition, ...] = (
     _q("case_team_basket", Stage.ICT, "Fix rejected villages", "Your basket",
        cases.filing_url("ICT", "rejected"), {PROBLEM_OWNER},
        cases.queue("case_team_basket"), unit="villages", on_board=False),
+    # UEP-24 F9: rejected villages waiting in any team's basket (late after
+    # 30 days), and the Mojri tracker's age (late past the follow-up days).
+    _q("acceptance_team_baskets", Stage.ICT, "Chase team baskets", "In team baskets",
+       "/insights/acceptance-baskets", _STAFF, oversight.team_baskets,
+       sla=SlaKind.DEADLINE, unit="villages"),
+    _q("mojri_tracker", Stage.ICT, "Refresh the Mojri tracker", "Mojri tracker",
+       "/submissions?view=follow-up", _STAFF, oversight.mojri_tracker,
+       sla=SlaKind.DEADLINE, unit="days"),
     # Submissions to ICT (UEP-21 §5.8): Home's Drive test card, for the owner
     # coordinator and the PM (everyone else's fetch is empty). Not on the
     # board, so the digest is unchanged. Keyed apart from ``ict_follow_up``,

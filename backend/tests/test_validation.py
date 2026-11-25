@@ -14,6 +14,7 @@ What is protected:
 
 Run with:  cd backend && pytest tests/test_validation.py -q
 """
+from datetime import date as _date
 import io
 import os
 import sys
@@ -123,6 +124,8 @@ def _seed(tag, *, techs="2G,4G", villages=1, contractor_id=None, province_id=Non
     work_item = WorkItem(
         site_id=site.id, site_type="Target", requested_technology=techs,
         dt_status="Done", dt_sc_contractor_id=contractor_id, current_stage="DT Done",
+        # A DT date before every letter these tests file (UEP-24 F4).
+        dt_date_gregorian=_date(2025, 1, 1),
         last_stage=ONAIR,
     )
     db.add(work_item)

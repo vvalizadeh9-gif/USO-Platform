@@ -32,7 +32,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.core import audit_actions
 from app.core.digits import to_latin
-from app.core.jalali import parse_shamsi
+from app.core.jalali import TEHRAN, format_shamsi, parse_shamsi, tehran_today
 from app.models.acceptance_workflow import (
     AUTHORITIES,
     CLAIM_APPROVED,
@@ -220,6 +220,34 @@ def _letter_field_errors(filing: LetterFiling, user: User) -> tuple[list[ItemErr
     return errors + scan_errors, letter_date, scans
 
 
+def _earliest_letter_day(village: Village) -> tuple[date | None, str]:
+    """The first day a letter for this village can carry: its DT date, or for
+    a village with no DT date the day the import first stored it."""
+    wi = village.work_item
+    if wi is not None and wi.dt_date_gregorian is not None:
+        return wi.dt_date_gregorian, "DT date"
+    seen = village.first_seen_at
+    if seen is not None:
+        if seen.tzinfo is None:
+            seen = seen.replace(tzinfo=timezone.utc)
+        return seen.astimezone(TEHRAN).date(), "import date"
+    return None, "DT date"
+
+
+def letter_date_error(village: Village, letter_date: date | None) -> str | None:
+    """UEP-24 F4: a letter dated later than today, or before the village's DT
+    date (its import date when undated), is refused with what to enter."""
+    if letter_date is None:
+        return None
+    today = tehran_today()
+    earliest, label = _earliest_letter_day(village)
+    if letter_date > today or (earliest is not None and letter_date < earliest):
+        if earliest is None or earliest > today:
+            return "Letter date can't be later than today."
+        return f"Letter date must be between the {label} ({format_shamsi(earliest)}) and today."
+    return None
+
+
 def _duplicate_errors(items: tuple[LetterItem, ...]) -> list[ItemError]:
     seen: set[int] = set()
     errors = []
@@ -317,6 +345,11 @@ def file_letter(db: Session, user: User, filing: LetterFiling, *, case_context=N
             # The same answer for "no such village" and "not yours", so ids
             # cannot be probed.
             errors.append(ItemError("not_found", village_id=item.village_id))
+            continue
+        date_error = letter_date_error(village, letter_date)
+        if date_error:
+            errors.append(ItemError("letter_date_out_of_range", date_error,
+                                    field="letter_date", village_id=village.id))
             continue
         try:
             submission = _file_one(

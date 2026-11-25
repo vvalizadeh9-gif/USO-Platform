@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.core.access import Area, require_access
 from app.core.database import get_db
-from app.core.deps import require_roles
+from app.core.deps import TEAM_BASKET_ROLES, require_roles
 from app.core.jalali import format_shamsi
 from app.models.reference import User
 from app.models.workitem import Site, Village, WorkItem
@@ -64,6 +64,9 @@ router = APIRouter(prefix="/acceptance", tags=["my-work"])
 
 require_filer = require_roles(*S.FILING_ROLES)
 require_decider = require_roles(*S.DECIDING_ROLES)
+#: The scan upload is also how a basket owner attaches a file to "Mark fixed"
+#: (UEP-24 F10); the token is only redeemable by whoever uploaded it.
+require_scan_uploader = require_roles(*S.FILING_ROLES, *TEAM_BASKET_ROLES)
 
 
 #: Acceptance > Filing: the roles in ``Area.ACCEPTANCE_WORKSPACE`` of the
@@ -290,7 +293,7 @@ def resolve_villages(
 def upload_scan(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
-    user: User = Depends(require_filer),
+    user: User = Depends(require_scan_uploader),
 ) -> ScanUploaded:
     """Store one scanned letter and return the token a letter names it by."""
     try:

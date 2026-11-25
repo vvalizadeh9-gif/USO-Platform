@@ -95,6 +95,17 @@ describe('the region landing (Regional Manager)', () => {
     draw()
     expect(await screen.findByRole('alert')).toHaveTextContent('not linked to a name')
   })
+
+  it('shows a calm empty state, and never asks for the area, when no provinces are linked', () => {
+    as('RegionalManager')
+    auth.current.user.kpi_linked = false
+    draw()
+    expect(screen.getByTestId('region-empty')).toHaveTextContent(
+      'No provinces are linked to your account yet. Your administrator can add them.',
+    )
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    expect(api.get).not.toHaveBeenCalledWith('/kpi/area', expect.anything())
+  })
 })
 
 describe('the work landing (problem-category owners)', () => {

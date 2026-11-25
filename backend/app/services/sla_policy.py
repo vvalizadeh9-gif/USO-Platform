@@ -112,6 +112,8 @@ QUEUE_STEP: dict[str, str] = {
     # UEP-21 Submissions (Home's Acceptance card, owner and PM only).
     "submit_to_ict": "submit_cycle",
     "ict_mojri_follow_up": "mojri_follow_up",
+    # UEP-24 F9: drive tests with contractors run on the DT test clock.
+    "dt_with_contractors": "dt_test",
 }
 
 

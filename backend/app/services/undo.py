@@ -115,6 +115,8 @@ def undo_dt_assignment(db: Session, user: User, batch_id: int, load_work_item) -
     entry = _batch(db, user, batch_id, DT_ASSIGN_BATCH, audit_actions.ASSIGNED)
     created: dict = (entry.new_value or {}).get("created") or {}
     replaced: dict = (entry.new_value or {}).get("replaced") or {}
+    # UEP-24 F7: the DT status each site had before the batch set Ongoing.
+    dt_before: dict = (entry.new_value or {}).get("dt_status_before") or {}
     if not created or not _within_window(entry.created_at, now):
         raise UndoRefused(TOO_LATE)
 
@@ -149,6 +151,8 @@ def undo_dt_assignment(db: Session, user: User, batch_id: int, load_work_item) -
         for prev in wi.assignments:
             if prev.id in previous:
                 prev.is_active = True
+        if str(wi_id) in dt_before:
+            wi.dt_status = dt_before[str(wi_id)]
         db.flush()
         refresh_stage(wi)
     _undone(db, user, module="Assignment", entity_type=DT_ASSIGN_BATCH,

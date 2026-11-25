@@ -110,7 +110,7 @@ def test_basket_excludes_done_and_ongoing(client):
 
 def _assign_first(client, h):
     basket = client.get("/api/v1/hc/basket", headers=h).json()
-    site = basket[0]
+    site = next(b for b in basket if b["assignable"])
     cid = _contractor_id()
     r = client.post(
         "/api/v1/hc/assignments",

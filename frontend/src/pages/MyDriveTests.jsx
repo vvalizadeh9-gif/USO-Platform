@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import api from '../api/client'
 import DriveTestSubmitForm from '../components/DriveTestSubmitForm'
+import { submitDriveTest } from '../lib/driveTestSubmit'
 import LifecycleStrip from '../components/LifecycleStrip'
 import ProvinceFilter from '../components/ProvinceFilter'
 import ReturnToCoordinatorForm from '../components/ReturnToCoordinatorForm'
@@ -210,7 +211,7 @@ export default function MyDriveTests() {
                   onClose={() => setOpenId(null)}
                   onSubmit={(payload) =>
                     action(
-                      () => api.post(`/work-items/${active.work_item_id}/drive-test`, payload),
+                      () => submitDriveTest(active.work_item_id, payload),
                       'Drive test submitted for review',
                     )
                   }
