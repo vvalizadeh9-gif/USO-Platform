@@ -55,7 +55,6 @@ export default function AccessTab() {
 
   function switchView(next) {
     if (next === view) return
-    // eslint-disable-next-line no-alert -- a plain "are you sure", as on leaving
     if (dirty && !window.confirm(LEAVE_MESSAGE)) return
     setDirty(false)
     setView(next)

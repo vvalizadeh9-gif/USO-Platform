@@ -6,15 +6,20 @@
 // a test, because "deliberate" wears off and the two drifting apart means a
 // user seeing a nav item that 403s, or not seeing one they can use.
 import { describe, expect, it } from 'vitest'
+import { userWithAccess } from '../test/seededAccess'
 import {
   CATEGORY_OWNER_ROLES,
-  MONTHLY_PLAN_ROLES,
-  REVIEW_AUTHORITY_ROLES,
   canDecidePlans,
+  canOpenMonthlyPlan,
   canReview,
+  homeFor,
   isCategoryOwner,
   roleLabel,
 } from './roles'
+
+// UEP-25: these helpers read user.access (GET /me/access). `as` gives a role
+// the access it has on day one, from the seed fixture.
+const as = (name) => userWithAccess({ role: { name } })
 
 // The role names seeded in app/core/bootstrap.py. Literal on purpose: if a
 // name changes on the server, this fails rather than quietly disagreeing.
@@ -71,27 +76,26 @@ describe('isCategoryOwner', () => {
 })
 
 describe('canReview', () => {
-  // Mirrors app/core/deps.py:require_review_authority. The interface may only
-  // narrow what the server allows, never widen it -- offering a control the
-  // server refuses is how an Admin came to be shown an assign bar that
-  // answered 403.
-  it('is exactly PM and Coordinator', () => {
-    expect(REVIEW_AUTHORITY_ROLES).toEqual(['PM', 'Coordinator'])
-  })
-
+  // The hc_work feature at Edit: PM and Coordinator on day one, as the
+  // server's require_access(hc_work, edit). The interface may only narrow
+  // what the server allows, never widen it.
   it('admits both roles that share the lifecycle', () => {
-    expect(canReview({ role: { name: 'PM' } })).toBe(true)
-    expect(canReview({ role: { name: 'Coordinator' } })).toBe(true)
+    expect(canReview(as('PM'))).toBe(true)
+    expect(canReview(as('Coordinator'))).toBe(true)
   })
 
-  it('excludes Admin, who the server refuses on workflow writes', () => {
-    expect(canReview({ role: { name: 'Admin' } })).toBe(false)
+  it('excludes Admin, who reads health checks but does no workflow writes', () => {
+    expect(canReview(as('Admin'))).toBe(false)
   })
 
   it('excludes contractors, viewers and category owners', () => {
     for (const name of ['Contractor', 'Viewer', 'RegionalManager', ...CATEGORY_OWNER_ROLES]) {
-      expect(canReview({ role: { name } }), name).toBe(false)
+      expect(canReview(as(name)), name).toBe(false)
     }
+  })
+
+  it('follows a grant made in Admin › Access', () => {
+    expect(canReview({ role: { name: 'Viewer' }, access: { features: { hc_work: 'edit' } } })).toBe(true)
   })
 
   it('says no rather than throwing when there is no user yet', () => {
@@ -101,39 +105,45 @@ describe('canReview', () => {
   })
 })
 
-// The monthly plan (PIP). Same deliberate duplication as above, of
-// app/api/monthly_plan.py: the contractor side plus the queue's readers.
 describe('who the monthly plan is offered to', () => {
-  it('is every role the server lets near it', () => {
-    expect(MONTHLY_PLAN_ROLES).toEqual(
-      expect.arrayContaining(['Contractor', 'PM', 'Coordinator', 'Viewer']),
-    )
-  })
-
-  // UEP role access: a Regional Manager has Roles performance, Lifecycle gaps
-  // and Explorer only.
-  it('is not offered to a Regional Manager', () => {
-    expect(MONTHLY_PLAN_ROLES).not.toContain('RegionalManager')
-  })
-
-  // Deciding a contractor's monthly target is an operational act and Admin is
-  // a systems role -- the separation ARCHITECTURE.md draws, and the one a test
-  // "fixing" a 403 tends to erase.
-  it('is not offered to Admin', () => {
-    expect(MONTHLY_PLAN_ROLES).not.toContain('Admin')
-  })
-
-  it('is not offered to a category owner, who the server would refuse', () => {
-    for (const role of CATEGORY_OWNER_ROLES) {
-      expect(MONTHLY_PLAN_ROLES, role).not.toContain(role)
+  it('is the contractor and the queue readers', () => {
+    for (const role of ['Contractor', 'PM', 'Coordinator', 'Viewer']) {
+      expect(canOpenMonthlyPlan(as(role)), role).toBe(true)
     }
+  })
+
+  it('is not offered to a Regional Manager', () => {
+    expect(canOpenMonthlyPlan(as('RegionalManager'))).toBe(false)
+  })
+
+  // Admin may read the queue's API by URL but is not offered the page:
+  // deciding a contractor's target is an operational act.
+  it('is not offered to Admin', () => {
+    expect(canOpenMonthlyPlan(as('Admin'))).toBe(false)
+  })
+
+  it('is not offered to a category owner', () => {
+    for (const role of CATEGORY_OWNER_ROLES) expect(canOpenMonthlyPlan(as(role)), role).toBe(false)
   })
 
   it('gives the decision to the PM alone', () => {
-    expect(canDecidePlans({ role: { name: 'PM' } })).toBe(true)
+    expect(canDecidePlans(as('PM'))).toBe(true)
     for (const role of ['Admin', 'Coordinator', 'RegionalManager', 'Viewer', 'Contractor']) {
-      expect(canDecidePlans({ role: { name: role } }), role).toBe(false)
+      expect(canDecidePlans(as(role)), role).toBe(false)
     }
     expect(canDecidePlans(undefined)).toBe(false)
+  })
+})
+
+describe('homeFor', () => {
+  it('keeps the built-in start pages', () => {
+    expect(homeFor(as('Admin'))).toBe('/admin')
+    expect(homeFor(as('Viewer'))).toBe('/reports/kpi')
+    expect(homeFor(as('PM'))).toBe('/home')
+  })
+
+  it('follows an app-route landing set in Admin › Access', () => {
+    const cpo = { role: { name: 'CPO' }, access: { ...as('Viewer').access, role: 'CPO', landing: '/explorer' } }
+    expect(homeFor(cpo)).toBe('/explorer')
   })
 })

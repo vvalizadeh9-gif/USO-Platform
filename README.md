@@ -339,15 +339,29 @@ Regional managers and the province → region link are not edited there.
 
 ## Roles and permissions
 
-Which areas a role may open is decided in **one place**: the permission map,
-`backend/app/core/access_matrix.json`, with an identical copy at
-`frontend/src/lib/accessMatrix.json` (the two apps build separately;
-`backend/tests/test_role_access.py` fails if they differ). The
-launcher, Home's Apps panel, the app rails, the route guards and the API all
-read it — `core/access.py` (`require_access`, `allows`) on the server,
-`lib/access.js` (`canAccess`, `offeredRoles`, `landingFor`) in the browser.
-Which *rows* a role sees inside an area is a separate rule, in
-`services/visibility.py` and `services/kpi.py`.
+Since UEP-25 who may use what is **managed in Admin › Access**, with no
+deploy. A **feature** is an app or a sensitive action (Explorer, Health check
+work, Export to Excel, CPM import, Users, …) with the levels it supports —
+None · View · Edit. A **role** is a ready-made set of features; an Admin can
+duplicate one to make a new role (CPO from Viewer, say), and can give one
+person an **exception** on top of their role, with a reason and an optional
+expiry. Every change is in Access › History (the audit log's `access.*`
+actions).
+
+The server checks each route with `core/access.require_access(feature, level)`;
+the browser reads `GET /me/access` (on load and every 5 minutes) and builds the
+launcher, Apps panel, rails, route guards and buttons from it (`lib/access.js`).
+Each backend pod caches the grants and re-reads them when `access_version`
+changes, at most 30 seconds later. `backend/app/core/access_matrix.json` (and
+its copy `frontend/src/lib/accessMatrix.json`) is now only the day-one seed and
+the test fixture: `tests/test_feature_access.py` proves the migrated tables
+reproduce it, so nobody's access changed on the day UEP-25 shipped.
+
+Which *rows* a person sees inside a feature is a separate rule, unchanged: the
+data area on the user form (provinces, CRA regions, contractor, team basket),
+decided in `services/visibility.py` and `services/kpi.py`. A grant never
+widens rows; "Explorer: every site" cannot be given to a contractor, province
+or region role. The table below is the day-one default.
 
 | Area | PM | Coordinator | Viewer | Contractor | Regional manager | NWG planning · Managed service · Huawei cleanup · CPG power · CPG rollout PM |
 |---|---|---|---|---|---|---|

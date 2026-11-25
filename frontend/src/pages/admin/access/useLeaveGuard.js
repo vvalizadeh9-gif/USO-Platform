@@ -19,7 +19,6 @@ export default function useLeaveGuard(dirty, rootRef) {
       const link = event.target.closest?.('a[href]')
       if (!link || rootRef?.current?.contains(link)) return
       if (link.target === '_blank' || event.metaKey || event.ctrlKey) return
-      // eslint-disable-next-line no-alert -- the brief asks for a plain "are you sure"
       if (!window.confirm(LEAVE_MESSAGE)) {
         event.preventDefault()
         event.stopPropagation()
