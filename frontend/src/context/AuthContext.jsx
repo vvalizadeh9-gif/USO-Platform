@@ -2,6 +2,7 @@
 // itself is an HttpOnly cookie that this code never sees.
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import api from '../api/client'
+import { resetClientSession } from '../lib/session'
 
 const AuthContext = createContext(null)
 
@@ -46,6 +47,8 @@ export function AuthProvider({ children }) {
   }
 
   async function login(username, password, captchaToken, captchaAnswer) {
+    // Nothing of an earlier session -- this person's or another's -- carries in.
+    resetClientSession()
     // OAuth2 password flow expects form-encoded fields.
     const form = new URLSearchParams()
     form.append('username', username)
@@ -77,11 +80,7 @@ export function AuthProvider({ children }) {
   }, [])
 
   function clearSession() {
-    try {
-      localStorage.removeItem('uep_user')
-    } catch {
-      // Nothing to clear.
-    }
+    resetClientSession()
     setUser(null)
   }
 

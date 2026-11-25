@@ -104,6 +104,50 @@ test('a protected page sends you to sign in, then always lands on the landing pa
   await expect(page).not.toHaveURL(/\/login/)
 })
 
+// UEP-19: neither an expired session nor a change of user reopens the last
+// page or anything kept for it.
+test('after expiry and after a change of user, sign-in lands on the landing page', async ({ page }) => {
+  const REZA = { ...USER, id: 2, username: 'reza' }
+  let expired = true
+  await page.route('**/api/v1/**', (route) => {
+    const request = route.request()
+    const path = new URL(request.url()).pathname.replace('/api/v1', '')
+    if (path === '/auth/login') {
+      expired = false
+      const body = new URLSearchParams(request.postData() || '')
+      return route.fulfill({ json: { user: body.get('username') === 'reza' ? REZA : USER } })
+    }
+    if (path === '/auth/logout') return route.fulfill({ json: { status: 'ok' } })
+    if (expired) return route.fulfill({ status: 401, json: { detail: 'Not authenticated' } })
+    return route.fulfill({ json: path === '/auth/me' ? USER : [] })
+  })
+  const signIn = async (username) => {
+    await page.getByLabel('Username', { exact: true }).fill(username)
+    await page.getByLabel('Password', { exact: true }).fill('right')
+    await page.getByRole('button', { name: 'Sign in', exact: true }).click()
+  }
+
+  // Signed in on a deep link with app context kept for the tab; the session
+  // has already run out on the server.
+  await page.goto('/login')
+  await page.evaluate((user) => {
+    localStorage.setItem('uep_user', JSON.stringify(user))
+    sessionStorage.setItem('uep.lastApp', 'explorer')
+  }, USER)
+  await page.goto('/my-work?village=12')
+  await expect(page).toHaveURL(/\/login\?.*reason=expired/)
+  expect(await page.evaluate(() => sessionStorage.getItem('uep.lastApp'))).toBeNull()
+
+  await signIn('sara')
+  await expect(page).toHaveURL(/\/home$/)
+
+  await page.getByRole('button', { name: 'Account menu' }).click()
+  await page.getByRole('button', { name: 'Sign out' }).click()
+  await expect(page).toHaveURL(/\/login/)
+  await signIn('reza')
+  await expect(page).toHaveURL(/\/home$/)
+})
+
 test('an expired session shows the neutral notice', async ({ page }) => {
   await page.goto('/login?next=%2Fmy-work&reason=expired')
   await expect(page.getByText('Your session expired. Sign in again.')).toBeVisible()
