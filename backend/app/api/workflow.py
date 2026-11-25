@@ -1,15 +1,17 @@
 """Workflow action endpoints: health check, assignment, DT, reviews, acceptance."""
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
 from fastapi import (
     APIRouter,
     Depends,
     File,
+    Form,
     HTTPException,
     Response,
     UploadFile,
 )
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core import audit_actions
@@ -190,6 +192,8 @@ def create_assignment(
         )
     )
     db.flush()
+    if payload.assignment_type == "official":
+        _mark_ongoing(wi)
     refresh_stage(wi)
     record_audit(
         db, user_id=user.id, action=audit_actions.ASSIGNED,
@@ -240,6 +244,19 @@ def return_to_coordinator(
     return {"status": "ok", "stage": wi.current_stage}
 
 
+def _mark_ongoing(wi: WorkItem, before: dict[str, str | None] | None = None) -> None:
+    """In-app DT assignment puts the site's drive test under way (decided
+    October 2026, UEP-24 F7): ``dt_status = 'Ongoing'``, which is what the DT
+    dashboard's Ongoing card reads. A site whose drive test is already Done
+    (assigned again only for villages CPM added later) keeps Done."""
+    from app.services import cpm_columns as C
+
+    if before is not None:
+        before[str(wi.id)] = wi.dt_status
+    if C.normalize_dt_status(wi.dt_status) != C.DT_STATUS_DONE:
+        wi.dt_status = C.DT_STATUS_ONGOING
+
+
 @router.post("/work-items/assign")
 def bulk_assign(
     payload: BulkAssignmentCreate,
@@ -260,6 +277,8 @@ def bulk_assign(
     # undo restores from (services/undo.py).
     created: dict[str, int] = {}
     replaced: dict[str, list[int]] = {}
+    # Each site's DT status before this batch, so an undo puts it back.
+    dt_status_before: dict[str, str | None] = {}
     ids = list(dict.fromkeys(payload.work_item_ids))  # de-dupe, preserve order
     # A site back in Assign only for villages CPM added later is assigned for
     # those villages alone, and keeps its DT done (UEP-14 §4).
@@ -287,6 +306,7 @@ def bulk_assign(
         db.flush()
         villages_recorded += dt_workflow.record_assignment_villages(db, new, only=new_villages.get(wid))
         created[str(wi.id)] = new.id
+        _mark_ongoing(wi, dt_status_before)
         refresh_stage(wi)
         assigned += 1
 
@@ -297,6 +317,7 @@ def bulk_assign(
         new_value={
             "contractor_id": payload.contractor_id, "count": assigned,
             "created": created, "replaced": replaced,
+            "dt_status_before": dt_status_before,
         },
     )
     db.flush()
@@ -336,9 +357,91 @@ def submit_drive_test(
     db: Session = Depends(get_db),
     user: User = Depends(require_roles(PM, CONTRACTOR)),
 ):
-    """Contractor submits a drive test. Previous active DT is archived."""
+    """Contractor submits a drive test with a report link. Previous active DT
+    is archived. A submission carrying files uses ``/drive-test/upload``."""
+    return _submit_drive_test(db, user, work_item_id, payload.execution_date,
+                              payload.report_link, [])
+
+
+@router.post("/work-items/{work_item_id}/drive-test/upload")
+def submit_drive_test_with_files(
+    work_item_id: int,
+    execution_date: date | None = Form(None),
+    report_link: str | None = Form(None, max_length=500),
+    files: list[UploadFile] = File(default=[]),
+    db: Session = Depends(get_db),
+    user: User = Depends(require_roles(PM, CONTRACTOR)),
+):
+    """The same submission with its report files in one request, so a drive
+    test never waits for review with nothing to review (UEP-24 F3)."""
+    return _submit_drive_test(db, user, work_item_id, execution_date, report_link, files)
+
+
+DT_ALREADY_WAITING = "A drive test for this site is already waiting for review."
+
+
+def _check_drive_test_submission(wi: WorkItem, execution_date, report_link: str | None,
+                                 files: int) -> None:
+    """UEP-24 F2/F3: one open drive test per site, and a complete, sensibly
+    dated submission. 409 for the duplicate, 422 for the rest. A drive test
+    that was Returned or Rejected may be submitted again."""
+    if any(d.status == "Submitted" for d in wi.drive_tests):
+        raise HTTPException(409, DT_ALREADY_WAITING)
+    if execution_date is None:
+        raise HTTPException(422, "Add the date the drive test was carried out.")
+    from app.core import jalali
+    from app.services.explorer import on_air_date
+
+    if execution_date > jalali.tehran_today():
+        raise HTTPException(
+            422, "The drive test date can't be in the future. Pick the day it was carried out."
+        )
+    on_air = on_air_date(wi)
+    if on_air is not None and execution_date < on_air:
+        raise HTTPException(
+            422,
+            "The drive test date must be on or after the site's on-air date "
+            f"({jalali.format_shamsi(on_air)}).",
+        )
+    if not (report_link or "").strip() and files == 0:
+        raise HTTPException(422, "Attach the report file or add a report link, then submit again.")
+
+
+def _store_evidence(db: Session, dt: DriveTest, file: UploadFile, user: User) -> DriveTestEvidence:
+    """Keep one uploaded file against a drive test, through the evidence store."""
+    try:
+        content = evidence_store.read_capped(file.file)
+        stored = evidence_store.store(db, file.filename or "", content)
+    except evidence_store.EvidenceError as exc:
+        raise HTTPException(400, str(exc)) from None
+    record = DriveTestEvidence(
+        drive_test_id=dt.id,
+        sha256=stored["sha256"],
+        stored_path=stored["stored_path"],
+        original_filename=(file.filename or "")[:255],
+        content_type=file.content_type,
+        size_bytes=stored["size_bytes"],
+        uploaded_by=user.id,
+        uploaded_at=_now(),
+    )
+    db.add(record)
+    record_audit(
+        db, user_id=user.id, action=audit_actions.SUBMITTED,
+        module="DriveTest", entity_type="DriveTestEvidence",
+        entity_id=dt.id, new_value={"filename": record.original_filename},
+    )
+    return record
+
+
+def _submit_drive_test(db: Session, user: User, work_item_id: int, execution_date,
+                       report_link: str | None, files: list[UploadFile]) -> dict:
     wi = _load_work_item(work_item_id, db, user)
     _require_active_assignment(wi, user)
+    if len(files) > evidence_store.MAX_FILES_PER_SUBMISSION:
+        raise HTTPException(
+            422, f"Attach at most {evidence_store.MAX_FILES_PER_SUBMISSION} files to one drive test.",
+        )
+    _check_drive_test_submission(wi, execution_date, report_link, len(files))
     for prev in wi.drive_tests:
         if prev.is_active:
             prev.is_active = False
@@ -347,14 +450,16 @@ def submit_drive_test(
     # collection stays consistent and refresh_stage below actually sees the
     # new drive test. With db.add() the stage silently stayed "Assigned".
     dt = DriveTest(
-        execution_date=payload.execution_date,
-        report_link=payload.report_link,
+        execution_date=execution_date,
+        report_link=(report_link or "").strip() or None,
         status="Submitted",
         submitted_at=_now(),
         is_active=True,
     )
     wi.drive_tests.append(dt)
     db.flush()
+    for file in files:
+        _store_evidence(db, dt, file, user)
     refresh_stage(wi)
     record_audit(
         db, user_id=user.id, action=audit_actions.SUBMITTED,
@@ -364,7 +469,13 @@ def submit_drive_test(
     notify_roles(db, role_names=[COORDINATOR], type="DTSubmitted",
                  message=f"Drive test submitted for work item {wi.id}",
                  entity_type="WorkItem", entity_id=wi.id)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        # Two submissions racing past the check: the partial unique index
+        # (one Submitted row per work item) refuses the second.
+        db.rollback()
+        raise HTTPException(409, DT_ALREADY_WAITING) from None
     return {"status": "ok", "drive_test_id": dt.id, "stage": wi.current_stage}
 
 
@@ -510,28 +621,7 @@ def upload_drive_test_evidence(
             "drive test",
         )
 
-    try:
-        content = evidence_store.read_capped(file.file)
-        stored = evidence_store.store(db, file.filename or "", content)
-    except evidence_store.EvidenceError as exc:
-        raise HTTPException(400, str(exc)) from None
-
-    record = DriveTestEvidence(
-        drive_test_id=dt.id,
-        sha256=stored["sha256"],
-        stored_path=stored["stored_path"],
-        original_filename=(file.filename or "")[:255],
-        content_type=file.content_type,
-        size_bytes=stored["size_bytes"],
-        uploaded_by=user.id,
-        uploaded_at=_now(),
-    )
-    db.add(record)
-    record_audit(
-        db, user_id=user.id, action=audit_actions.SUBMITTED,
-        module="DriveTest", entity_type="DriveTestEvidence",
-        entity_id=dt.id, new_value={"filename": record.original_filename},
-    )
+    record = _store_evidence(db, dt, file, user)
     db.commit()
     db.refresh(record)
     return EvidenceOut.model_validate(record)

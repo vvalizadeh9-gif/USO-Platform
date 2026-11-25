@@ -205,6 +205,51 @@ def set_person_name(db: Session, account: User, name: str | None) -> User:
     return account
 
 
+def link_regional_manager(db: Session, account: User, provinces) -> str:
+    """Make a Regional Manager account the regional manager of its provinces
+    in the mapping, and link the account to that name (UEP-24 F11).
+
+    Called when an administrator creates or edits the account with its
+    provinces, so a new manager's Home has an area on their first day. The
+    account's name is its linked name. An unlinked account whose provinces all
+    already name one regional manager, whom no other account reports as, is
+    that person: it is linked to the name and the mapping is left alone.
+    Otherwise it takes its full name and the open rows are corrected in
+    place, the way Province assignments writes coordinators. Returns the name.
+    """
+    from app.core.deps import REGIONAL
+    from app.models.reference import Role
+
+    names = {p.name for p in provinces}
+    rows = list(db.execute(
+        select(ProvinceMapping).where(
+            ProvinceMapping.effective_to.is_(None),
+            ProvinceMapping.province_fa.in_(names),
+        )
+    ).scalars()) if names else []
+    name = account.kpi_person_name
+    current = {r.regional_manager for r in rows if r.regional_manager}
+    if name is None and len(current) == 1:
+        (existing,) = current
+        taken = db.execute(
+            select(User.id).join(Role, User.role_id == Role.id).where(
+                Role.name == REGIONAL, User.id != account.id,
+                func.lower(User.kpi_person_name) == existing.lower(),
+            )
+        ).first()
+        if taken is None:
+            name = existing
+    name = name or account.full_name
+    if rows:
+        for row in rows:
+            if row.regional_manager != name:
+                correct(db, row, cra_region=row.cra_region,
+                        pso_coordinator=row.pso_coordinator, regional_manager=name)
+    account.kpi_person_name = name
+    db.flush()
+    return name
+
+
 def unmapped_cpm_provinces(db: Session) -> list[str]:
     """Province names in the platform that this mapping does not cover.
 

@@ -190,7 +190,8 @@ def _screen_count(db, user, key):  # noqa: C901 -- one branch per screen
     from app.core import jalali
 
     if key == "hc_assign":
-        return sum(1 for b in hc.get_basket(db, user) if b["hc_state"] in ("New", "Ready for re-check"))
+        # UEP-24 F1: New or due a re-check, and not in drive test.
+        return sum(1 for b in hc.get_basket(db, user) if b["assignable"])
     if key == "hc_review":
         return len(hc_results(reviewed=False, limit=500, offset=0, db=db, user=user))
     if key == "hc_reroutes":
@@ -218,6 +219,23 @@ def _screen_count(db, user, key):  # noqa: C901 -- one branch per screen
             "refile": "new_letter", "returned": "returned",
         }[key[4:]]
         return _my_work_count(db, user, key[:3].upper(), tab)
+    # UEP-24 F9: work stuck with others.
+    if key == "dt_with_contractors":
+        return len(hc_queues.dt_in_progress(db, user))
+    if key == "fixes_open":
+        return len(hc_queues.remediations(db, user))
+    if key == "acceptance_team_baskets":
+        from app.core.deps import TEAM_BASKET_ROLES
+        from app.services.acceptance_cases import counts as case_counts
+
+        return sum(
+            1 for r in case_counts.open_cases(db, user, case_counts.clock(db))
+            if r.state == "rejected" and r.basket_role in TEAM_BASKET_ROLES
+        )
+    if key == "mojri_tracker":
+        from app.services.submissions import follow_up
+
+        return 0 if follow_up.latest_file_date(db) is None else 1
     if key == "plans_approve":
         return len(plans.plans_awaiting_pm(db))
     if key == "cpm_changes":
@@ -268,14 +286,19 @@ def test_the_data_exercises_every_queue(db, username, must_be_live):
     assert not empty, empty
 
 
+#: UEP-24 F9: the PM's and coordinators' rows for work stuck with others.
+F9_QUEUES = {"dt_with_contractors", "fixes_open", "acceptance_team_baskets", "mojri_tracker"}
+
+
 def test_each_role_gets_exactly_its_queues(db):
     expected = {
         # UEP-16: the PM validates contractor filings too.
         "p_pm": {"hc_assign", "hc_review", "hc_reroutes", "dt_assign", "dt_review",
                  "ict_follow_up", "cra_follow_up", "ict_to_validate", "cra_to_validate",
-                 "plans_approve", "cpm_changes"},
+                 "plans_approve", "cpm_changes", *F9_QUEUES},
         "p_coord_home": {"hc_assign", "hc_review", "hc_reroutes", "dt_assign", "dt_review",
-                         "ict_to_file", "ict_to_validate", "cra_to_file", "cra_to_validate"},
+                         "ict_to_file", "ict_to_validate", "cra_to_file", "cra_to_validate",
+                         *F9_QUEUES},
         "p_sc0": {"hc_submit", "dt_todo", "dt_redo", "ict_to_file", "ict_refile",
                   "ict_returned", "cra_to_file", "cra_refile", "cra_returned", "plan_submit"},
         "p_power": {"hc_fixes"},

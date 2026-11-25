@@ -435,7 +435,7 @@ def test_dt_review_holds_a_submission_until_it_is_decided(client):
 
     r = client.post(
         f"/api/v1/work-items/{wi_id}/drive-test", headers=_h(client, "sc"),
-        json={"execution_date": date.today().isoformat()},
+        json={"execution_date": date.today().isoformat(), "report_link": "https://reports.example/dt"},
     )
     dt_id = r.json()["drive_test_id"]
 
@@ -480,7 +480,7 @@ def _assign_dt(client, wi_id):
 def _submit_dt(client, wi_id):
     r = client.post(
         f"/api/v1/work-items/{wi_id}/drive-test", headers=_h(client, "sc"),
-        json={"execution_date": date.today().isoformat()},
+        json={"execution_date": date.today().isoformat(), "report_link": "https://reports.example/dt"},
     )
     assert r.status_code == 200, r.text
     return r.json()["drive_test_id"]

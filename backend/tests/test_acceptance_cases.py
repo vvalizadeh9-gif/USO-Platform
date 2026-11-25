@@ -439,3 +439,75 @@ def test_explorer_side_carries_the_case(client, who):
     village = r.json()["villages"][0]
     assert village["ict"]["case"]["state"] == "waiting"
     assert village["ict"]["case"]["basket"] == "Contractor A"
+
+
+# ---------------------------------------------------------------------------
+# UEP-24 F5: ICT and CRA are separate tasks -- either may be approved first
+# ---------------------------------------------------------------------------
+def _box(client, h, village, authority, side):
+    boxes = client.get(f"{API}/cases/{village}", headers=h, params={"authority": authority}).json()["boxes"]
+    return next(b for b in boxes if b["authority"] == side)
+
+
+def test_f5_cra_may_be_approved_while_ict_is_still_waiting(client, who):
+    r = _save(client, who["pm"], [V["b1"]], "approved", authority="CRA",
+              comment="CRA letter received", **_letter(client, who["pm"]))
+    assert r.status_code == 200, r.text
+    # Filing's CRA side still says ICT is waiting.
+    assert _box(client, who["pm"], V["b1"], "CRA", "ICT")["label"] == "Waiting for ICT"
+    assert _box(client, who["pm"], V["b1"], "CRA", "CRA")["state"] == "approved"
+    r = _save(client, who["pm"], [V["b1"]], "approved", comment="ICT letter received",
+              **_letter(client, who["pm"]))
+    assert r.status_code == 200, r.text
+
+
+def test_f5_ict_first_then_cra_also_works(client, who):
+    r = _save(client, who["pm"], [V["sent"]], "approved", comment="ICT letter received",
+              **_letter(client, who["pm"]))
+    assert r.status_code == 200, r.text
+    r = _save(client, who["pm"], [V["sent"]], "approved", authority="cra",
+              comment="CRA letter received", **_letter(client, who["pm"]))
+    assert r.status_code == 200, r.text
+
+
+# ---------------------------------------------------------------------------
+# UEP-24 F10: a rejection owner comments on, and marks fixed, its own cases
+# ---------------------------------------------------------------------------
+def test_f10_cpg_power_comments_and_marks_fixed_its_own_case(client, who):
+    r = _save(client, who["pm"], [V["a1"]], "rejected", comment="No mains power",
+              category="cpg_power", **_letter(client, who["pm"]))
+    assert r.status_code == 200, r.text
+    case_id = _box(client, who["pm"], V["a1"], "ICT", "ICT")["case_id"]
+    assert _inbox(client, who["power"])["can"]["owner_fix"] is True
+
+    # Another team's case is not there for them; neither is a move or a verdict.
+    assert client.post(f"{API}/cases/{case_id}/owner", headers=who["pso"],
+                       json={"action": "fixed", "comment": "x"}).status_code == 404
+    assert client.post(f"{API}/cases/{case_id}/basket", headers=who["power"],
+                       json={"category_id": 1, "reason": "not ours"}).status_code == 403
+    assert client.post(f"{API}/cases/{case_id}/owner", headers=who["power"],
+                       json={"action": "fixed", "comment": "  "}).status_code == 400
+
+    r = client.post(f"{API}/cases/{case_id}/owner", headers=who["power"],
+                    json={"action": "comment", "comment": "Generator ordered"})
+    assert r.status_code == 200, r.text
+    assert V["a1"] in _rows(_inbox(client, who["power"]))
+
+    r = client.post(f"{API}/cases/{case_id}/owner", headers=who["power"], json={
+        "action": "fixed", "comment": "Grid connected", "scan_ids": [_scan(client, who["power"])]})
+    assert r.status_code == 200, r.text
+    assert V["a1"] not in _rows(_inbox(client, who["power"]))
+    assert _rows(_inbox(client, who["co_a"]))[V["a1"]]["state"] == "waiting"
+    steps = client.get(f"{API}/cases/{V['a1']}/history", headers=who["pm"],
+                       params={"authority": "ICT"}).json()["steps"]
+    assert [s["kind"] for s in steps][-4:] == ["rejected", "comment", "fixed", "now"]
+
+    from app.models.acceptance import AuditLog
+
+    db = SessionLocal()
+    try:
+        logged = db.query(AuditLog).filter(AuditLog.entity_type == "AcceptanceCase",
+                                           AuditLog.entity_id == case_id).all()
+        assert {(e.new_value or {}).get("owner_action") for e in logged} >= {"comment", "fixed"}
+    finally:
+        db.close()

@@ -10,10 +10,12 @@ from sqlalchemy import (
     DateTime,
     Float,
     ForeignKey,
+    Index,
     Integer,
     String,
     Text,
     UniqueConstraint,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -250,6 +252,16 @@ class AssignmentVillage(Base):
 
 class DriveTest(Base):
     __tablename__ = "drive_tests"
+    __table_args__ = (
+        # One drive test waiting for review per site (UEP-24 F2).
+        Index(
+            "uq_drive_tests_one_submitted",
+            "work_item_id",
+            unique=True,
+            postgresql_where=text("status = 'Submitted'"),
+            sqlite_where=text("status = 'Submitted'"),
+        ),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     work_item_id: Mapped[int] = mapped_column(
@@ -268,7 +280,10 @@ class DriveTest(Base):
     report_link: Mapped[str | None] = mapped_column(String(500))
     status: Mapped[str] = mapped_column(
         String(20), default="Submitted", nullable=False
-    )  # Submitted|Approved|Rejected|Returned
+    )  # Submitted|Approved|Rejected|Returned|Superseded
+    # Superseded (UEP-24 F2): a duplicate submission replaced by a later one.
+    # Counted nowhere, shown in history. At most one Submitted row per work
+    # item, held by the partial unique index ``uq_drive_tests_one_submitted``.
 
     coordinator_reviewed_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
     coordinator_reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

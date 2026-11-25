@@ -194,7 +194,7 @@ def _assign_dt(client, wi_id, contractor_id):
 def _submit_dt(client, wi_id, username, execution_date=None):
     r = client.post(
         f"/api/v1/work-items/{wi_id}/drive-test", headers=_login(client, username),
-        json={"execution_date": (execution_date or date.today()).isoformat()},
+        json={"execution_date": (execution_date or date.today()).isoformat(), "report_link": "https://reports.example/dt"},
     )
     assert r.status_code == 200, r.text
     return r.json()["drive_test_id"]
@@ -264,7 +264,7 @@ def test_submitting_or_uploading_against_another_companys_site_is_refused(client
 
     r = client.post(
         f"/api/v1/work-items/{theirs_id}/drive-test", headers=_login(client, "my_alpha"),
-        json={"execution_date": date.today().isoformat()},
+        json={"execution_date": date.today().isoformat(), "report_link": "https://reports.example/dt"},
     )
     assert r.status_code == 404, r.text
 

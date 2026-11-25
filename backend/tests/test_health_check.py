@@ -95,7 +95,7 @@ def test_all_normal_gives_ready(client):
     contractor_id = db.query(Contractor).first().id
     db.close()
 
-    site = basket[0]
+    site = next(b for b in basket if b["assignable"])
     r = client.post(
         "/api/v1/hc/assignments",
         headers=h,
@@ -126,7 +126,7 @@ def test_any_not_normal_gives_not_ready_with_category(client):
     contractor_id = db.query(Contractor).first().id
     db.close()
 
-    site = basket[0]
+    site = next(b for b in basket if b["assignable"])
     techs = site["requested_technologies"]
     r = client.post(
         "/api/v1/hc/assignments",
@@ -166,7 +166,7 @@ def test_not_normal_requires_reason_and_comment(client):
     contractor_id = db.query(Contractor).first().id
     db.close()
 
-    site = basket[0]
+    site = next(b for b in basket if b["assignable"])
     techs = site["requested_technologies"]
     r = client.post(
         "/api/v1/hc/assignments",

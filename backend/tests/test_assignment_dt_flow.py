@@ -135,7 +135,7 @@ def test_coordinator_approval_writes_dt_status_through(client):
     r = client.post(
         f"/api/v1/work-items/{wi_id}/drive-test",
         headers=_auth(pm_token),
-        json={"execution_date": exec_date},
+        json={"execution_date": exec_date, "report_link": "https://reports.example/dt"},
     )
     assert r.status_code == 200, r.text
     dt_id = r.json()["drive_test_id"]
@@ -187,7 +187,7 @@ def test_rejection_does_not_mark_done(client):
     r = client.post(
         f"/api/v1/work-items/{wi_id}/drive-test",
         headers=_auth(pm_token),
-        json={"execution_date": date.today().isoformat()},
+        json={"execution_date": date.today().isoformat(), "report_link": "https://reports.example/dt"},
     )
     dt_id = r.json()["drive_test_id"]
 

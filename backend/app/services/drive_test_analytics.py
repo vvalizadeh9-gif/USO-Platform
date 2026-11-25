@@ -255,8 +255,8 @@ def is_ongoing(wi: WorkItem) -> bool:
     This used to be "not Done and not Problematic", which is a different
     claim: it swept in every on-air site whose DT status was *blank*, and a
     blank column is a drive test nobody has started, not one in flight.
-    Nothing in the platform ever writes ``Ongoing`` -- it arrives only from
-    CPM column AW -- so the negation counted the whole untouched backlog as
+    ``Ongoing`` arrives from CPM column AW and, since UEP-24 F7, from an
+    in-app DT assignment -- so the negation counted the whole untouched backlog as
     work in progress, on the KPI card, in the contractor scorecard and in
     every ongoing breakdown under it.
 

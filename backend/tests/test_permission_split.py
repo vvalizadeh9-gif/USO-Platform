@@ -68,10 +68,28 @@ def _make_user(client, admin_h, username, role_name, password="Test-Fixture-Pass
             "role_id": role_id,
             "sees_all_provinces": True,
             "province_ids": [],
+            # A contractor account needs its company (UEP-24 F12).
+            "contractor_id": _contractor_id() if role_name == "Contractor" else None,
         },
     )
     assert r.status_code == 201, r.text
     return _login(client, username, password)
+
+
+def _contractor_id() -> int:
+    from app.core.database import SessionLocal
+    from app.models.reference import Contractor
+
+    db = SessionLocal()
+    try:
+        co = db.query(Contractor).filter(Contractor.name == "Split Co").first()
+        if co is None:
+            co = Contractor(name="Split Co", type="drive_test")
+            db.add(co)
+            db.commit()
+        return co.id
+    finally:
+        db.close()
 
 
 @pytest.fixture(scope="module")

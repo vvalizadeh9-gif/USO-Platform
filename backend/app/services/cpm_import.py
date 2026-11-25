@@ -47,6 +47,7 @@ from app.services import acceptance_tokens as tokens
 from app.services import evidence_store
 from app.services import cpm_columns as C
 from app.services.audit import record_audit
+from app.services.workflow import STAGE_DT_DONE, STAGE_NEW
 from app.services.performance import onair_history
 from app.services.submissions import sightings
 
@@ -558,8 +559,18 @@ class CpmImportService:
                 setattr(wi, attr, incoming.get(attr))
 
     def _apply_dt_seed(self, wi: WorkItem, raw: list) -> None:
-        """Populate app-owned Drive Test fields from CPM cols AV..AZ (once)."""
+        """Populate app-owned Drive Test fields from CPM cols AV..AZ (once).
+
+        CPM never overrides UEP data (UEP-24 F7): a status the app already
+        wrote -- Ongoing from an in-app assignment, Done from an approval --
+        is kept whatever an older CPM file says.
+        """
+        if C.normalize_dt_status(wi.dt_status) in (C.DT_STATUS_ONGOING, C.DT_STATUS_DONE):
+            return
         wi.dt_status = C.normalize_dt_status(self._get(raw, C.COL_HISTORY["dt_status"]))
+        if wi.dt_status == C.DT_STATUS_DONE and (wi.current_stage or STAGE_NEW) == STAGE_NEW:
+            # UEP-24 F8: a site CPM reports drive-tested is not "New".
+            wi.current_stage = STAGE_DT_DONE
         wi.dt_problem_category = C.clean(
             self._get(raw, C.COL_HISTORY["dt_problem_category"])
         )

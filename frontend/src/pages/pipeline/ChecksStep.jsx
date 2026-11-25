@@ -249,6 +249,17 @@ function BatchDetail({ id, step, panelProps, onBack }) {
   // A Not ready result can only go to remediation.
   const effective = hasNotReady ? 'problematic' : decision
 
+  // UEP-24 F13: start from the categories the contractor gave, until the
+  // reviewer picks for themselves.
+  const [touched, setTouched] = useState(false)
+  const suggested = useMemo(
+    () => [...new Set(chosen.flatMap((s) => s.reason_categories || []))].filter((c) => categories.includes(c)).sort().join('|'),
+    [chosen, categories],
+  )
+  useEffect(() => {
+    if (!touched) setPicked(new Set(suggested ? suggested.split('|') : []))
+  }, [suggested, touched])
+
   const toggle = (taskId) => {
     setSelected((prev) => {
       const next = new Set(prev)
@@ -265,12 +276,13 @@ function BatchDetail({ id, step, panelProps, onBack }) {
         const { data } = await api.post('/hc/results/confirm', { task_ids: chosen.map((s) => s.task_id) })
         confirmAction({ text: `✓ ${plural(chosen.length, 'site')} confirmed ready → Drive test.`, undoUrl: `/hc/results/confirm/${data.batch_id}/undo` })
       } else {
-        for (const s of chosen) {
-          await api.post(`/hc/tasks/${s.task_id}/review`, { problem_categories: [...picked] })
-        }
+        await api.post('/hc/results/review-bulk', {
+          task_ids: chosen.map((s) => s.task_id), problem_categories: [...picked],
+        })
         confirmAction({ text: `✓ ${plural(chosen.length, 'site')} sent to remediation (${[...picked].join(', ')}).` })
       }
       setPicked(new Set())
+      setTouched(false)
       setDecision('ready')
     } catch (err) {
       toast.error('Could not save', err.response?.data?.detail || 'Please try again.')
@@ -331,7 +343,7 @@ function BatchDetail({ id, step, panelProps, onBack }) {
                 {categories.map((c) => (
                   <button
                     key={c} type="button" className="uw-pick" aria-pressed={picked.has(c)}
-                    onClick={() => setPicked((p) => { const n = new Set(p); n.has(c) ? n.delete(c) : n.add(c); return n })}
+                    onClick={() => { setTouched(true); setPicked((p) => { const n = new Set(p); n.has(c) ? n.delete(c) : n.add(c); return n }) }}
                   >
                     {c}
                   </button>

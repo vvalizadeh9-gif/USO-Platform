@@ -457,9 +457,25 @@ def test_a_province_outside_the_scope_gives_an_empty_but_valid_file(client, worl
 
 def test_an_empty_scope_still_produces_every_sheet_and_header(client, world):
     """A file with no rows is still a file somebody can open and read."""
+    # A coordinator is created with an area (UEP-24 F12); an account from
+    # before that rule can still have none, so the grant is removed here.
+    from app.core.database import SessionLocal
+    from app.models.reference import Province, User
+
+    db = SessionLocal()
+    try:
+        some_province = db.query(Province.id).order_by(Province.id).first()[0]
+    finally:
+        db.close()
     empty = _make_user(
-        client, world["admin"], "wb_nowhere", "Coordinator", province_ids=[]
+        client, world["admin"], "wb_nowhere", "Coordinator", province_ids=[some_province]
     )
+    db = SessionLocal()
+    try:
+        db.query(User).filter(User.username == "wb_nowhere").one().provinces = []
+        db.commit()
+    finally:
+        db.close()
     wb = _workbook(client, empty)
 
     assert wb.sheetnames == [

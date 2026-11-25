@@ -13,7 +13,7 @@
 import os
 import sys
 from collections import Counter
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 
 import pytest
 
@@ -445,7 +445,7 @@ def test_dt_undo_restores_the_assignment_it_replaced(client, pm):
 def test_dt_undo_is_refused_once_a_drive_test_is_filed(client, pm):
     site, _ = _confirmed_site(client, pm)
     batch = _dt_assign(client, pm, site["work_item_id"])["batch_id"]
-    r = client.post(f"{API}/work-items/{site['work_item_id']}/drive-test", headers=pm, json={})
+    r = client.post(f"{API}/work-items/{site['work_item_id']}/drive-test", headers=pm, json={"execution_date": date.today().isoformat(), "report_link": "https://reports.example/dt"})
     assert r.status_code in (200, 201), r.text
     assert client.post(f"{API}/work-items/assign/{batch}/undo", headers=pm).status_code == 409
 

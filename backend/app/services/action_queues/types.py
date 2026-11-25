@@ -66,6 +66,8 @@ HOME_QUEUES: dict[HomeGroup, tuple[str, ...] | None] = {
         "ict_pending", "cra_pending", "ict_to_validate", "cra_to_validate",
         # UEP-22: a contractor's and a team's baskets.
         "ict_case_waiting", "cra_case_waiting", "case_rejected_contractor", "case_team_basket",
+        # UEP-24 F9: the PM's and coordinators' view of work stuck elsewhere.
+        "acceptance_team_baskets", "mojri_tracker",
     ),
     HomeGroup.PLANS: None,
 }
@@ -123,7 +125,8 @@ class SlaKind(str, Enum):
 DateKind = Literal["since", "due"]
 
 #: What one item of a queue is, as Home words its count ("9 sites").
-Unit = Literal["sites", "villages", "fixes", "plans", "changes"]
+#: ``days`` is the Mojri tracker row (UEP-24 F9): one item, worded by age.
+Unit = Literal["sites", "villages", "fixes", "plans", "changes", "days"]
 
 
 @dataclass(frozen=True)

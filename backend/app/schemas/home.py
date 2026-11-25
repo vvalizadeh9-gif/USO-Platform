@@ -1,7 +1,7 @@
 """The shape of ``GET /home/summary``. Dates go out as ISO 8601 UTC."""
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import Literal
 
 from pydantic import BaseModel
@@ -20,6 +20,15 @@ class CaseMetaOut(BaseModel):
     count: int
     over_sla: int
     no_comment: int
+
+
+class MojriMetaOut(BaseModel):
+    """The Mojri tracker row (UEP-24 F9): days since the last upload."""
+
+    age_days: int | None = None
+    stale: bool
+    follow_up_days: int
+    as_of: date | None = None
 
 
 class HomeTicketOut(BaseModel):
@@ -52,6 +61,8 @@ class HomeTicketOut(BaseModel):
     submission: SubmissionMetaOut | None = None
     #: Acceptance case rows only (UEP-22): over SLA and no fresh comment.
     acceptance: CaseMetaOut | None = None
+    #: The Mojri tracker row only (UEP-24 F9).
+    mojri: MojriMetaOut | None = None
 
 
 class HomeGroupOut(BaseModel):

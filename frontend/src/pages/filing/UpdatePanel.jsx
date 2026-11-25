@@ -224,6 +224,87 @@ export const UpdateCard = forwardRef(function UpdateCard(
   )
 })
 
+/** UEP-24 F10: the team that owns a basket marks its case fixed. One button
+ * and a comment box; a file is optional, through the same scan upload. */
+export function OwnerFix({ box, title, onFixed }) {
+  const input = useRef(null)
+  const [comment, setComment] = useState('')
+  const [file, setFile] = useState(null)
+  const [error, setError] = useState(null)
+  const [busy, setBusy] = useState(false)
+  const requestId = useRef(newRequestId())
+
+  const attach = async (picked) => {
+    setBusy(true)
+    try {
+      const scan = await uploadScan(picked)
+      setFile({ name: scan.filename, id: scan.scan_id })
+      setError(null)
+    } catch (err) {
+      setError(err?.response?.data?.detail?.message || 'The file could not be attached. Try again.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const submit = async (e) => {
+    e.preventDefault()
+    if (!comment.trim()) {
+      setError('Add a comment, then mark fixed.')
+      return
+    }
+    setBusy(true)
+    setError(null)
+    try {
+      await onFixed(box.case_id, {
+        action: 'fixed', comment: comment.trim(),
+        scan_ids: file ? [file.id] : [], request_id: requestId.current,
+      })
+    } catch (err) {
+      setError(err?.response?.data?.detail?.message || 'The save failed. Try again.')
+      setBusy(false)
+    }
+  }
+
+  return (
+    <form className="fl-card" onSubmit={submit} aria-label={title}>
+      <h2 className="fl-card-title">{title}</h2>
+      <label className="fl-field">
+        <span className="fl-label">Comment <span className="fl-req">*</span></span>
+        <textarea
+          rows={2}
+          className={`fl-textarea${error && !comment.trim() ? ' is-invalid' : ''}`}
+          value={comment}
+          placeholder="What was fixed?"
+          onChange={(e) => { setComment(e.target.value); setError(null) }}
+        />
+      </label>
+      {error && <p className="fl-field-error" role="alert">{error}</p>}
+      <div className="fl-card-foot">
+        <button type="button" className="fl-attach" onClick={() => input.current?.click()} disabled={busy}>
+          <Icon name={file ? 'document' : 'upload'} size={16} />
+          <span className="fl-attach-name">{file ? file.name : 'Attach'}</span>
+        </button>
+        <input
+          ref={input}
+          type="file"
+          hidden
+          accept=".pdf,.jpg,.jpeg,.png,.webp,.eml,.msg"
+          onChange={(e) => {
+            const picked = e.target.files?.[0]
+            e.target.value = ''
+            if (picked) attach(picked)
+          }}
+        />
+        <button type="submit" className="uw-btn uw-btn-primary fl-save" disabled={busy}>
+          {busy && <span className="spinner fl-spinner" aria-hidden="true" />}
+          Mark fixed
+        </button>
+      </div>
+    </form>
+  )
+}
+
 export function VillageBlock({ village }) {
   return (
     <div className="fl-village">

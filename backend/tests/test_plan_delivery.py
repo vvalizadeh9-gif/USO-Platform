@@ -544,3 +544,15 @@ def test_an_approved_commitment_of_zero_is_a_commitment(client, actors):
     assert body["committed_contractors"] == 1
     assert body["uncommitted_contractors"] == 0
     assert body["achievement_percent"] is None, "still nothing to divide by"
+
+
+@pytest.fixture(autouse=True, scope="module")
+def _any_filing_period():
+    """These tests file plans for fixed past and future months as set-up.
+    UEP-24 F6 limits real filing to this month and the next; that rule has
+    its own tests (test_lab_fixes.py), so here every period is open."""
+    from app.services import monthly_plan as _plans
+
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(_plans, "is_filing_period", lambda year, month: True)
+        yield

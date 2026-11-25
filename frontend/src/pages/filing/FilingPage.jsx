@@ -15,7 +15,7 @@ import { usePageCrumb } from '../../shell/crumbs'
 import * as api from './api'
 import HistoryPanel from './HistoryPanel'
 import Inbox from './Inbox'
-import { ChangeBasket, StatusBoxes, UpdateCard, VillageBlock } from './UpdatePanel'
+import { ChangeBasket, OwnerFix, StatusBoxes, UpdateCard, VillageBlock } from './UpdatePanel'
 import {
   AUTHORITIES,
   flatRows,
@@ -126,6 +126,17 @@ export default function FilingPage() {
     return out
   }, [caseState.data, toast, rows, selectedId, reloadInbox, reloadCase, reloadHistory, home, select])
 
+  // UEP-24 F10: a basket owner marks its own case fixed -> Contractor basket.
+  const onOwnerFix = useCallback(async (caseId, body) => {
+    await api.ownerAction(caseId, body)
+    toast.success('Marked fixed · back to contractor')
+    const following = nextVillage(rows, selectedId)
+    await reloadInbox()
+    home?.reload?.()
+    if (following && following !== selectedId) select(following)
+    else { reloadCase(); reloadHistory() }
+  }, [toast, rows, selectedId, reloadInbox, reloadCase, reloadHistory, home, select])
+
   const onBasket = useCallback(async (caseId, body) => {
     await api.changeBasket(caseId, body)
     toast.success('Basket changed')
@@ -213,7 +224,10 @@ export default function FilingPage() {
                 <ChangeBasket key={`${current.case_id}-${current.basket_key}`} box={current}
                   categories={catState.data || []} onChange={onBasket} />
               )}
-              {current && current.state !== 'approved' && can && (
+              {current?.state === 'rejected' && can?.owner_fix && (
+                <OwnerFix key={`${current.case_id}-${authority}`} box={current} title={`Update ${authority}`} onFixed={onOwnerFix} />
+              )}
+              {current && current.state !== 'approved' && can && !can.owner_fix && (
                 <UpdateCard
                   key={`${selectedId}-${authority}-${current.state}-${ticked.size > 0}`}
                   ref={card}

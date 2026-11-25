@@ -754,3 +754,15 @@ def test_admin_reads_the_queue_and_cannot_decide_a_row(client, actors):
     ).json()["id"]
     refused = client.post(f"{PIP}/{plan_id}/approve", headers=actors["admin"])
     assert refused.status_code == 403, refused.text
+
+
+@pytest.fixture(autouse=True, scope="module")
+def _any_filing_period():
+    """These tests file plans for fixed past and future months as set-up.
+    UEP-24 F6 limits real filing to this month and the next; that rule has
+    its own tests (test_lab_fixes.py), so here every period is open."""
+    from app.services import monthly_plan as _plans
+
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setattr(_plans, "is_filing_period", lambda year, month: True)
+        yield

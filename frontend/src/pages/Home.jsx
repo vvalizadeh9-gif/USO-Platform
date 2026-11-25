@@ -125,8 +125,28 @@ function Region({ region }) {
   return <CardsSkeleton />
 }
 
-/** Home for a Regional manager (landing 'region'). */
-function RegionHome({ user, counts, data, error }) {
+/** Home for a Regional manager (landing 'region'). An account not yet linked
+ * to provinces never asks for its area, which would only answer 403 (UEP-24
+ * F11): it gets a calm empty state instead. */
+function RegionHome(props) {
+  if (props.user && props.user.kpi_linked === false) return <UnlinkedRegionHome {...props} />
+  return <LinkedRegionHome {...props} />
+}
+
+function UnlinkedRegionHome({ user, counts, data, error }) {
+  return (
+    <HomeFrame user={user} footer={<AppFooter data={data} failed={Boolean(error) && !data} />}>
+      <div className="h-main">
+        <div className="h-work h-work-region">
+          <p className="h-note" data-testid="region-empty">No provinces are linked to your account yet. Your administrator can add them.</p>
+        </div>
+      </div>
+      <AppsPanel roleName={user?.role?.name} counts={counts} expand={['insights']} />
+    </HomeFrame>
+  )
+}
+
+function LinkedRegionHome({ user, counts, data, error }) {
   const region = useRpData('/kpi/area', {})
   const provinces = region.data?.scope?.provinces
   return (

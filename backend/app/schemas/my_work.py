@@ -6,11 +6,17 @@ the frontend's. Dates go out twice, ISO Gregorian and Shamsi.
 from __future__ import annotations
 
 from datetime import date, datetime
-from typing import Literal
+from typing import Annotated, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, BeforeValidator, Field
 
-Authority = Literal["ICT", "CRA"]
+
+def _authority_upper(value):
+    """``ict`` and ``ICT`` are one authority, everywhere (UEP-24 F14)."""
+    return value.strip().upper() if isinstance(value, str) else value
+
+
+Authority = Annotated[Literal["ICT", "CRA"], BeforeValidator(_authority_upper)]
 SideStatus = Literal["waiting", "filled", "returned", "rejected", "approved"]
 TabKey = Literal[
     "your_move", "new_letter", "returned", "not_filed", "filled", "with_authority", "all"

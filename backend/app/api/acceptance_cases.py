@@ -74,6 +74,8 @@ def _abilities(user: User) -> dict:
         "comment": deciding or kind == scope.KIND_CONTRACTOR,
         "fix": deciding or kind in (scope.KIND_CONTRACTOR, scope.KIND_TEAM),
         "change_basket": deciding,
+        # UEP-24 F10: a basket owner marks its own cases fixed (one button).
+        "owner_fix": kind == scope.KIND_TEAM,
         "lands_directly": deciding,
         "read_only": not (deciding or kind in (scope.KIND_CONTRACTOR, scope.KIND_TEAM)),
     }
@@ -209,6 +211,28 @@ def post_basket(case_id: int, payload: BasketIn, db: Session = Depends(get_db),
         raise _error(exc.status, "refused", exc.message, exc.errors) from None
     db.commit()
     return {"case_id": case_id, "category_id": payload.category_id}
+
+
+class OwnerActionIn(BaseModel):
+    action: str = Field(..., max_length=20)
+    comment: str | None = Field(None, max_length=4000)
+    scan_ids: list[str] = Field(default_factory=list, max_length=10)
+    request_id: str | None = Field(None, max_length=64)
+
+
+@router.post("/acceptance/cases/{case_id}/owner")
+def post_owner_action(case_id: int, payload: OwnerActionIn, db: Session = Depends(get_db),
+                      user: User = Depends(require_filing)) -> dict:
+    """UEP-24 F10: the team that owns a basket comments on, or marks fixed, a
+    case in it. Fixed moves the case to the Contractor basket."""
+    try:
+        update.owner_action(db, user, case_id, payload.action, payload.comment,
+                            tuple(payload.scan_ids), payload.request_id)
+    except update.UpdateError as exc:
+        db.rollback()
+        raise _error(exc.status, "invalid" if exc.status == 400 else "refused", exc.message, exc.errors) from None
+    db.commit()
+    return {"case_id": case_id, "action": payload.action}
 
 
 @router.get("/acceptance/categories")

@@ -202,6 +202,11 @@ class User(Base):
     # every user in the platform.
     token_version: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
+    @property
+    def kpi_linked(self) -> bool:
+        """Linked to a name in the province mapping (UEP-24 F11)."""
+        return bool(self.kpi_person_name)
+
     @hybrid_property
     def full_name(self) -> str:
         """The person's name as one string, for display and for letters.

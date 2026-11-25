@@ -326,12 +326,33 @@ def test_site_already_in_an_open_check_cannot_be_reassigned(client):
 def test_a_finished_site_can_be_checked_again(client):
     """The guard must not block the remediation loop's whole point.
 
-    Once a round is complete the site is no longer *in* an open check, so a
-    second round is allowed -- that is how a remediated site comes back.
+    Once a round is complete and its fixes are closed, a second round is
+    allowed -- that is how a remediated site comes back. While a fix is still
+    open the site is not ready for a re-check (UEP-24 F1).
     """
+    from datetime import datetime, timezone
+
+    from app.models.health_check import HcRemediation
+
     headers = _headers(client)
     wi_id, _ = _fresh_site()
     _run_health_check(client, headers, wi_id, results=_ONE_FAILED, review=[POWER])
+
+    early = client.post(
+        "/api/v1/hc/assignments",
+        headers=headers,
+        json={"contractor_id": _contractor_id(), "work_item_ids": [wi_id]},
+    )
+    assert early.status_code == 409, early.text
+    assert "(fix open)" in early.json()["detail"]
+
+    db = SessionLocal()
+    try:
+        for fix in db.query(HcRemediation).filter(HcRemediation.work_item_id == wi_id):
+            fix.closed_at = datetime.now(timezone.utc)
+        db.commit()
+    finally:
+        db.close()
 
     r = client.post(
         "/api/v1/hc/assignments",

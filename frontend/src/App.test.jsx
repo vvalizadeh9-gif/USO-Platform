@@ -139,9 +139,9 @@ describe('where "/" lands', () => {
     expect(await landOn('/')).toBe('home')
   })
 
-  it('sends a Viewer to the Drive Test dashboard', async () => {
+  it('sends a Viewer to Roles Performance', async () => {
     signedInAs('Viewer')
-    expect(await landOn('/')).toBe('dt-dashboard')
+    expect(await landOn('/')).toBe('kpi')
   })
 })
 
@@ -153,7 +153,7 @@ describe('the Home route', () => {
   })
 
   it.each([
-    ['Viewer', 'dt-dashboard'],
+    ['Viewer', 'kpi'],
     ['Admin', 'admin'],
   ])('sends %s to their own landing instead of a Home they do not have', async (role, home) => {
     signedInAs(role)

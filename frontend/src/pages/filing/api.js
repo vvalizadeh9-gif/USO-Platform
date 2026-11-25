@@ -9,6 +9,8 @@ export const fetchHistory = (villageId, authority) => get(`/acceptance/cases/${v
 export const fetchCategories = () => get('/acceptance/categories')
 export const saveUpdate = (body) => api.post('/acceptance/cases/update', body).then((r) => r.data)
 export const changeBasket = (caseId, body) => api.post(`/acceptance/cases/${caseId}/basket`, body).then((r) => r.data)
+/** UEP-24 F10: a basket owner comments on, or marks fixed, its own case. */
+export const ownerAction = (caseId, body) => api.post(`/acceptance/cases/${caseId}/owner`, body).then((r) => r.data)
 
 /** A letter file, through the evidence store (the one storage path). */
 export function uploadScan(file) {

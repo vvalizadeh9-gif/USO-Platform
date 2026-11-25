@@ -10,6 +10,7 @@ Run with:  cd backend && pytest tests/test_province_assignments.py -q
 """
 import os
 import sys
+from datetime import date
 
 import pytest
 
@@ -82,6 +83,18 @@ def _user(client, role, username, *, first="Test", family=None, contractor_id=No
         assert created.status_code == 201, created.text
         _USERS[username] = created.json()["id"]
     return _USERS[username], _login(client, username, "Test-Fixture-Passphrase")
+
+
+def _first_province() -> list[int]:
+    """A coordinator is created with an area (UEP-24 F12): one province, which
+    Province assignments then replaces with the region it gives."""
+    from app.models.reference import Province
+
+    db = SessionLocal()
+    try:
+        return [db.execute(select(Province.id).order_by(Province.id).limit(1)).scalar_one()]
+    finally:
+        db.close()
 
 
 def _province_ids(*names) -> list[int]:
@@ -266,8 +279,8 @@ def test_invalid_changes_are_422(client, people, case):
         assert "Unknown CRA region" in r.json()["detail"]
     elif case == "name_taken":
         # Two new accounts with the same full name cannot both report under it.
-        first, _ = _user(client, "Coordinator", "pa_twin_1", first="Reza", family="Karimi", province_ids=[])
-        twin, _ = _user(client, "Coordinator", "pa_twin_2", first="Reza", family="Karimi", province_ids=[])
+        first, _ = _user(client, "Coordinator", "pa_twin_1", first="Reza", family="Karimi", province_ids=_first_province())
+        twin, _ = _user(client, "Coordinator", "pa_twin_2", first="Reza", family="Karimi", province_ids=_first_province())
         assert _put(client, people["pm"], ("West", first, people["Hossein"])).status_code == 200
         r = _put(client, people["pm"], ("West", twin, first))
         assert "already reports as 'Reza Karimi'" in r.json()["detail"]
@@ -282,7 +295,7 @@ def test_invalid_changes_are_422(client, people, case):
 def test_a_new_coordinator_account_can_be_given_any_region_straight_away(client, people):
     """Create the account in Users & roles, open the page, click, Update: no
     other step. It reports under its full name."""
-    uid, _ = _user(client, "Coordinator", "pa_sara", first="Sara", family="Rahimi", province_ids=[])
+    uid, _ = _user(client, "Coordinator", "pa_sara", first="Sara", family="Rahimi", province_ids=_first_province())
     columns = {c["user_id"]: c for c in _overview(client, people["pm"])["coordinators"]}
     assert uid in columns
 
@@ -337,7 +350,7 @@ def _person_name(user_id) -> str | None:
 
 
 def test_a_new_coordinator_can_be_linked_before_owning_a_region(client, people):
-    uid, _ = _user(client, "Coordinator", "pa_new", first="Neda", province_ids=[])
+    uid, _ = _user(client, "Coordinator", "pa_new", first="Neda", province_ids=_first_province())
     r = client.put(f"/api/v1/kpi/mapping/links/{uid}", headers=people["pm"],
                    json={"kpi_person_name": "Neda"})
     assert r.status_code == 200, r.text
@@ -393,6 +406,8 @@ def _filed_central_village(client) -> str:
         site_id=site.id, site_type="Target", requested_technology="2G,4G",
         dt_status="Done", dt_sc_contractor_id=contractor.id, current_stage="DT Done",
         last_stage=ONAIR,
+        # Before the letter filed below (UEP-24 F4).
+        dt_date_gregorian=date(2025, 1, 1),
     )
     db.add(work_item)
     db.flush()

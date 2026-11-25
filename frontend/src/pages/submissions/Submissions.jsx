@@ -31,7 +31,7 @@ export function PageMeta({ summary, children }) {
           ? <span>{summary.regions.join(' · ') || 'Your regions'}</span>
           : (
             <span className="sb-meta-item">
-              <Icon name="user" size={16} />Owner <b>{summary?.owner?.name || 'not set'}</b>
+              <Icon name="user" size={16} />Owner <b>{summary?.owner?.name || 'No owner'}</b>
             </span>
           )}
         <span aria-hidden="true">·</span>

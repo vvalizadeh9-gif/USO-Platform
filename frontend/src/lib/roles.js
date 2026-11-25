@@ -142,10 +142,11 @@ export function hasHome(roleName) {
 
 // Where "/" lands for each role -- every sign-in arrives here. Everyone who
 // works a queue, and Regional Managers, land on UEP Home (each on their own
-// variant); Viewer on the Drive Test dashboard, Admin on the Admin Console.
+// variant); Viewer on Roles Performance (decided October 2026), Admin on the
+// Admin Console.
 const HOME_BY_ROLE = {
   Admin: '/admin',
-  Viewer: '/reports/drive-test',
+  Viewer: '/reports/kpi',
 }
 
 export function homeFor(roleName) {
