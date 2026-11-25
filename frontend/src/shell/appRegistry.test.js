@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { appCount, appGroupsFor, appRoute, appsFor, locate, pageCount, queueCounts, queueLate } from './appRegistry'
+import { appCount, appGroupsFor as appGroupsForUser, appRoute, appsFor as appsForUser, locate, pageCount, queueCounts, queueLate } from './appRegistry'
+
+import { userWithAccess } from '../test/seededAccess'
+
+// UEP-25: navigation reads user.access; these tests name a role, so each gets
+// the access that role has on day one (the seed fixture).
+const appsFor = (role) => appsForUser(userWithAccess({ role: { name: role } }))
+const appGroupsFor = (role) => appGroupsForUser(userWithAccess({ role: { name: role } }))
 
 const ids = (apps) => apps.map((a) => a.id)
 

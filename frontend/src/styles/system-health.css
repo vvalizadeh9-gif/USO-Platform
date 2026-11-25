@@ -1,0 +1,127 @@
+/* Admin > System health (UEP-25). Six white cards on one screen; at 1366x768
+   nothing scrolls -- not the page, not a card. Cobalt is the only accent:
+   bars, the area chart and the sparkline are cobalt. Amber and red mean a
+   threshold was crossed and always come with an icon and a word. No green. */
+.sh-page .page-body { overflow: hidden; padding: var(--uep-space-12) var(--uep-space-24) var(--uep-space-16); }
+.sh-page .uep-page-header-title { display: inline-flex; align-items: center; gap: var(--uep-space-12); font-size: 22px; }
+.sh-title-tile {
+  width: 40px; height: 40px; flex: 0 0 40px; display: inline-grid; place-items: center;
+  border-radius: var(--uep-radius-tile); background: var(--uep-app-admin); color: var(--uep-on-accent);
+}
+.sh-verdict { display: inline-flex; align-items: center; gap: 6px; font-size: var(--uep-fs-small); color: var(--uep-text-2); }
+.sh-verdict.is-red { color: var(--uep-danger); font-weight: var(--uep-weight-medium); }
+
+.sh-grid {
+  flex: 1 1 auto; min-height: 0; display: grid; gap: var(--uep-space-16);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-rows: repeat(2, minmax(0, 1fr));
+}
+.sh-card {
+  min-height: 0; display: flex; flex-direction: column; overflow: hidden;
+  background: var(--uep-surface); border: var(--uep-border-width) solid var(--uep-border);
+  border-radius: var(--uep-radius-card); animation: sh-fade var(--uep-dur-pop) var(--uep-ease-entrance);
+}
+.sh-skel { background: linear-gradient(var(--uep-surface), var(--uep-surface)) padding-box; }
+.sh-skel::after { content: ''; margin: 16px; height: 60%; border-radius: var(--uep-radius-sm); background: var(--uep-divider); animation: sh-pulse 1.2s ease-in-out infinite; }
+.sh-card-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 12px 16px 0; }
+.sh-card-head h2 { display: inline-flex; align-items: center; gap: 8px; margin: 0; font-size: var(--uep-fs-15); font-weight: var(--uep-weight-semibold); }
+.sh-card-head h2 svg { color: var(--uep-text-3); }
+.sh-card-end { display: inline-flex; align-items: center; gap: 8px; }
+.sh-card-body { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: 8px; padding: 10px 16px 14px; }
+
+.sh-tag {
+  display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: var(--uep-weight-medium);
+  border-radius: var(--uep-radius-pill); padding: 1px 8px 1px 6px;
+}
+.sh-tag.is-amber { background: var(--uep-status-pending-soft); color: var(--uep-status-pending-ink); }
+.sh-tag.is-red { background: var(--uep-danger-tint); color: var(--uep-danger); }
+.sh-tag.is-unknown { background: var(--uep-tag); color: var(--uep-text-3); }
+.sh-grey { color: var(--uep-text-3); font-size: var(--uep-fs-small); margin: 0; }
+.sh-big { font-size: var(--uep-fs-kpi); font-weight: var(--uep-weight-semibold); letter-spacing: var(--uep-tracking-heading); margin: 0; line-height: 1.1; }
+.sh-big.is-red, .is-red.tnum { color: var(--uep-danger); }
+.sh-sub { font-size: var(--uep-fs-small); color: var(--uep-text-2); margin: 0; }
+.sh-line { margin: 0; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.sh-pill {
+  font-size: 12px; color: var(--uep-text-2); background: var(--uep-tag);
+  border: var(--uep-border-width) solid var(--uep-border); border-radius: var(--uep-radius-pill); padding: 0 8px;
+}
+.sh-facts { display: flex; gap: var(--uep-space-24); margin: auto 0 0; }
+.sh-facts dt { font-size: 12px; color: var(--uep-text-3); }
+.sh-facts dd { margin: 2px 0 0; font-weight: var(--uep-weight-medium); }
+
+/* Pods. */
+.sh-pods { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px 14px; }
+.sh-pod { display: inline-flex; align-items: center; gap: 6px; font-size: var(--uep-fs-small); color: var(--uep-text-2); cursor: default; }
+.sh-pod-dot { width: 10px; height: 10px; border-radius: var(--uep-radius-pill); background: var(--uep-accent); }
+.sh-pod.is-red .sh-pod-dot { background: var(--uep-danger); }
+
+/* Gauges: a 2px-rounded track, a cobalt fill, ticks at 75 % and 90 %. */
+.sh-gauge { display: flex; flex-direction: column; gap: 6px; }
+.sh-gauge-top { display: flex; justify-content: space-between; gap: 8px; font-size: var(--uep-fs-small); color: var(--uep-text-2); }
+.sh-track { position: relative; height: 12px; border-radius: var(--uep-radius-sm); background: var(--uep-track); overflow: hidden; }
+.sh-fill { position: absolute; inset: 0 auto 0 0; border-radius: var(--uep-radius-sm); background: var(--uep-accent); transition: width var(--uep-dur-slow) var(--uep-ease-productive); }
+.sh-track.is-amber .sh-fill { background: var(--uep-status-pending-dot); }
+.sh-track.is-red .sh-fill { background: var(--uep-danger); }
+.sh-tick { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--uep-surface); }
+.sh-gauge .sh-tag { align-self: flex-start; }
+
+/* Area chart (90 days). */
+.sh-chart { position: relative; flex: 1 1 auto; min-height: 56px; }
+.sh-chart svg { width: 100%; height: 100%; display: block; cursor: crosshair; }
+.sh-axis { stroke: var(--uep-border); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.sh-area { fill: var(--uep-accent-tint); }
+.sh-line-path { fill: none; stroke: var(--uep-accent); stroke-width: 2; }
+.sh-cross { stroke: var(--uep-border-strong); stroke-width: 1; }
+.sh-dot { fill: var(--uep-accent); stroke: var(--uep-surface); stroke-width: 2; }
+.sh-tip {
+  position: absolute; top: -4px; transform: translate(-50%, -100%); pointer-events: none; white-space: nowrap;
+  display: flex; gap: 8px; font-size: 12px; background: var(--uep-surface); color: var(--uep-text);
+  border: var(--uep-border-width) solid var(--uep-border); border-radius: var(--uep-radius-sm);
+  box-shadow: var(--uep-shadow-popover); padding: 3px 8px;
+}
+
+/* Largest tables. */
+.sh-bars { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; }
+.sh-bars li { display: grid; grid-template-columns: minmax(0, 9em) 1fr auto; align-items: center; gap: 8px; font-size: 12px; }
+.sh-bar-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--uep-text-2); }
+.sh-bar-track { height: 8px; background: var(--uep-track); border-radius: var(--uep-radius-sm); overflow: hidden; }
+.sh-bar-fill { display: block; height: 100%; background: var(--uep-accent); border-radius: 0 var(--uep-radius-sm) var(--uep-radius-sm) 0; }
+.sh-bar-value { color: var(--uep-text-2); }
+
+/* Freshness rows. */
+.sh-fresh-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.sh-fresh { display: grid; grid-template-columns: 7.5em 1fr auto; align-items: center; gap: 8px; padding: 9px 0; border-bottom: var(--uep-border-width) solid var(--uep-divider); font-size: var(--uep-fs-small); }
+.sh-fresh:last-child { border-bottom: 0; }
+.sh-fresh-label { color: var(--uep-text-3); }
+.sh-fresh.is-red .sh-fresh-value { color: var(--uep-danger); }
+
+.sh-usage-top { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; }
+
+.sh-field { display: flex; flex-direction: column; gap: 4px; font-size: var(--uep-fs-small); color: var(--uep-text-2); margin-bottom: 10px; }
+.sh-field-error { color: var(--uep-danger); font-size: var(--uep-fs-small); }
+.sh-error {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 16px;
+  background: var(--uep-danger-tint); color: var(--uep-danger); border-radius: var(--uep-radius-control); font-size: var(--uep-fs-small);
+}
+
+/* Admin > Overview: the one-line summary that links here. */
+.sh-summary-line {
+  width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  margin-bottom: 12px; padding: 8px 12px; border: var(--uep-border-width) solid var(--uep-border);
+  border-radius: var(--uep-radius-control); background: var(--uep-surface); font: inherit;
+  font-size: var(--uep-fs-small); color: var(--uep-text); cursor: pointer; text-align: left;
+}
+.sh-summary-line.is-problem { border-color: var(--uep-danger-tint); background: var(--uep-danger-tint); color: var(--uep-danger); }
+.sh-summary-link { display: inline-flex; align-items: center; gap: 4px; color: var(--uep-accent); font-weight: var(--uep-weight-medium); white-space: nowrap; }
+
+@media (max-width: 1100px) {
+  .sh-page .page-body { overflow-y: auto; }
+  .sh-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: none; }
+  .sh-card { min-height: 240px; }
+}
+@keyframes sh-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes sh-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }
+@media (prefers-reduced-motion: reduce) {
+  .sh-card, .sh-skel::after { animation: none; }
+  .sh-fill { transition: none; }
+}

@@ -10,7 +10,7 @@ const api = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn() }))
 vi.mock('../api/client', () => ({ default: api }))
 
 const login = vi.hoisted(() => vi.fn())
-vi.mock('../context/AuthContext', () => ({ useAuth: () => ({ login }) }))
+vi.mock('../context/AuthContext', () => ({ useAuth: () => globalThis.withSeededAccess({ login }) }))
 
 const navigate = vi.hoisted(() => vi.fn())
 vi.mock('react-router-dom', async (orig) => ({ ...(await orig()), useNavigate: () => navigate }))

@@ -16,16 +16,13 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from app.core import audit_actions
+from app.core.access import Feature as F, require_access
 from app.core.database import get_db
 from app.core.deps import (
     ADMIN,
     COORDINATOR,
-    CONTRACTOR,
     PM,
     get_current_user,
-    require_category_owner,
-    require_review_authority,
-    require_roles,
 )
 from app.models.health_check import HcAssignment, HcRemediation, HcTask
 from app.models.reference import Contractor, User
@@ -76,6 +73,9 @@ _XLSX_MEDIA_TYPE = (
 
 router = APIRouter(prefix="/hc", tags=["health-check"])
 
+#: UEP-25: every export also needs the "Export to Excel" feature.
+EXPORTER = Depends(require_access(F.EXPORTS))
+
 
 # ---------------- Scoped loaders ----------------
 #
@@ -111,7 +111,7 @@ def _load_task(db: Session, user: User, task_id: int) -> HcTask:
 @router.get("/basket", response_model=list[HcBasketItem])
 def hc_basket(
     db: Session = Depends(get_db),
-    user: User = Depends(require_roles(ADMIN, PM, COORDINATOR)),
+    user: User = Depends(require_access(F.HC_WORK, "view")),
 ):
     """On-air sites still needing a health check, in the user's provinces."""
     return hc_queues.with_villages(db, hc.get_basket(db, user))
@@ -121,7 +121,7 @@ def hc_basket(
 def create_hc_assignment(
     payload: HcAssignmentCreate,
     db: Session = Depends(get_db),
-    user: User = Depends(require_roles(PM, COORDINATOR)),
+    user: User = Depends(require_access(F.HC_WORK, "edit")),
 ):
     """Assign one or many sites to a subcontractor for health check."""
     try:
@@ -152,7 +152,7 @@ def create_hc_assignment(
 def undo_hc_assignment(
     assignment_id: int,
     db: Session = Depends(get_db),
-    user: User = Depends(require_roles(PM, COORDINATOR)),
+    user: User = Depends(require_access(F.HC_WORK, "edit")),
 ):
     """Withdraw an assignment you made in the last two minutes, before any of
     its sites reported back. The sites return to the pool."""
@@ -171,7 +171,7 @@ def undo_hc_assignment(
 @router.get("/contractors/load", response_model=list[ContractorLoadRow])
 def hc_contractor_load(
     db: Session = Depends(get_db),
-    user: User = Depends(require_roles(PM, COORDINATOR)),
+    user: User = Depends(require_access(F.HC_WORK, "edit")),
 ):
     """Each contractor's health-check workload, for the assign panel."""
     return contractor_load.contractor_load(QueueContext(db, user), "hc")
@@ -180,7 +180,7 @@ def hc_contractor_load(
 @router.get("/assignments", response_model=list[HcAssignmentListItem])
 def list_hc_assignments(
     db: Session = Depends(get_db),
-    user: User = Depends(require_roles(ADMIN, PM, COORDINATOR)),
+    user: User = Depends(require_access(F.HC_WORK, "view")),
 ):
     # ``HcAssignment.tasks`` uses lazy="selectin", so reading a.tasks over the
     # 200 assignments issues a single extra IN-query for all their tasks (not
@@ -247,7 +247,7 @@ def hc_results(
     limit: int = Query(default=200, ge=1, le=MAX_RESULTS_PAGE),
     offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
-    user: User = Depends(require_roles(ADMIN, PM, COORDINATOR)),
+    user: User = Depends(require_access(F.HC_WORK, "view")),
 ):
     """Completed health check results (Ready / Not Ready) with site info.
 
@@ -305,10 +305,10 @@ def hc_results(
     ]
 
 
-@router.get("/results/export")
+@router.get("/results/export", dependencies=[EXPORTER])
 def hc_results_export(
     db: Session = Depends(get_db),
-    user: User = Depends(require_roles(ADMIN, PM, COORDINATOR)),
+    user: User = Depends(require_access(F.HC_WORK, "view")),
 ):
     """Download every completed health-check result as an Excel, all details."""
     stmt = (
@@ -372,7 +372,7 @@ def hc_results_export(
 @router.get("/queues/counts", response_model=HcQueueCounts, deprecated=True)
 def queue_counts(
     db: Session = Depends(get_db),
-    user: User = Depends(require_review_authority),
+    user: User = Depends(require_access(F.HC_WORK, "edit")),
 ):
     """How many items wait in each queue.
 
@@ -386,7 +386,7 @@ def queue_counts(
 @router.get("/queues/in-progress", response_model=list[HcInProgressRow])
 def queue_in_progress(
     db: Session = Depends(get_db),
-    user: User = Depends(require_review_authority),
+    user: User = Depends(require_access(F.HC_WORK, "edit")),
 ):
     """Health checks out with a subcontractor, longest outstanding first."""
     return hc_queues.in_progress(db, user)
@@ -395,7 +395,7 @@ def queue_in_progress(
 @router.get("/queues/remediations", response_model=list[HcRemediationRow])
 def queue_remediations(
     db: Session = Depends(get_db),
-    user: User = Depends(require_review_authority),
+    user: User = Depends(require_access(F.HC_WORK, "edit")),
 ):
     """Every open fix in scope — the board the people who routed them lacked."""
     return hc_queues.remediations(db, user)
@@ -404,7 +404,7 @@ def queue_remediations(
 @router.get("/queues/reroutes", response_model=list[HcRerouteRow])
 def queue_reroutes(
     db: Session = Depends(get_db),
-    user: User = Depends(require_review_authority),
+    user: User = Depends(require_access(F.HC_WORK, "edit")),
 ):
     """Fixes whose owner disputes the category, awaiting a decision."""
     return hc_queues.reroutes(db, user)
@@ -413,7 +413,7 @@ def queue_reroutes(
 @router.get("/queues/dt-assignment", response_model=list[DtAssignmentRow])
 def queue_dt_assignment(
     db: Session = Depends(get_db),
-    user: User = Depends(require_review_authority),
+    user: User = Depends(require_access(F.DT_ASSIGNMENT, "edit")),
 ):
     """Confirmed-Ready sites awaiting an official drive-test assignment."""
     return hc_queues.with_villages(db, hc_queues.dt_assignment(db, user))
@@ -422,7 +422,7 @@ def queue_dt_assignment(
 @router.get("/queues/dt-in-progress", response_model=list[DtInProgressRow])
 def queue_dt_in_progress(
     db: Session = Depends(get_db),
-    user: User = Depends(require_review_authority),
+    user: User = Depends(require_access(F.DT_ASSIGNMENT, "edit")),
 ):
     """Assigned sites the contractor still owes a drive test for.
 
@@ -435,7 +435,7 @@ def queue_dt_in_progress(
 @router.get("/queues/dt-review", response_model=list[DtReviewRow])
 def queue_dt_review(
     db: Session = Depends(get_db),
-    user: User = Depends(require_review_authority),
+    user: User = Depends(require_access(F.DT_REVIEW, "edit")),
 ):
     """Drive tests submitted and awaiting approval."""
     return hc_queues.dt_review(db, user)
@@ -470,7 +470,7 @@ def submit_hc_result(
     task_id: int,
     payload: HcTaskResultSubmit,
     db: Session = Depends(get_db),
-    user: User = Depends(require_roles(PM, CONTRACTOR)),
+    user: User = Depends(require_access(F.FIELD_RESULTS, "edit")),
 ):
     """Subcontractor submits per-technology results for one site (final)."""
     task = _load_task(db, user, task_id)
@@ -520,7 +520,7 @@ def review_hc_result(
     task_id: int,
     payload: HcReviewSubmit,
     db: Session = Depends(get_db),
-    user: User = Depends(require_roles(PM, COORDINATOR)),
+    user: User = Depends(require_access(F.HC_WORK, "edit")),
 ):
     """Coordinator/PM validates a completed result.
 
@@ -555,7 +555,7 @@ def review_hc_result(
 def confirm_ready_results(
     payload: HcConfirmRequest,
     db: Session = Depends(get_db),
-    user: User = Depends(require_roles(PM, COORDINATOR)),
+    user: User = Depends(require_access(F.HC_WORK, "edit")),
 ):
     """Confirm several Ready results at once (Confirm ready, Confirm all).
 
@@ -585,7 +585,7 @@ def confirm_ready_results(
 def review_problematic_results(
     payload: HcBulkReviewRequest,
     db: Session = Depends(get_db),
-    user: User = Depends(require_roles(PM, COORDINATOR)),
+    user: User = Depends(require_access(F.HC_WORK, "edit")),
 ):
     """Send several results to remediation at once, with the categories the
     reviewer picked (UEP-24 F13). One transaction: all or none."""
@@ -616,7 +616,7 @@ def review_problematic_results(
 def undo_confirm_ready(
     batch_id: int,
     db: Session = Depends(get_db),
-    user: User = Depends(require_roles(PM, COORDINATOR)),
+    user: User = Depends(require_access(F.HC_WORK, "edit")),
 ):
     """Put a confirmed batch back in HC Review: same user, within two
     minutes, and none of its sites sent for a drive test since."""
@@ -635,7 +635,7 @@ def undo_confirm_ready(
 @router.get("/my/fixes", response_model=list[HcRemediationOut])
 def my_fix_queue(
     db: Session = Depends(get_db),
-    user: User = Depends(require_category_owner),
+    user: User = Depends(require_access(F.FIX_QUEUE, "view")),
 ):
     """Every open fix routed to the signed-in owner's role."""
     return hc.owner_queue(db, user)
@@ -712,7 +712,7 @@ def decide_reroute(
     remediation_id: int,
     payload: HcRerouteDecision,
     db: Session = Depends(get_db),
-    user: User = Depends(require_review_authority),
+    user: User = Depends(require_access(F.HC_WORK, "edit")),
 ):
     """PM or Coordinator approves or rejects a proposed re-route.
 
@@ -801,7 +801,7 @@ def upload_template(
     assignment_id: int,
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
-    user: User = Depends(require_roles(PM, CONTRACTOR)),
+    user: User = Depends(require_access(F.FIELD_RESULTS, "edit")),
 ):
     """Apply a filled bulk template: computes every site's Ready/NotReady."""
     assignment = _load_assignment(db, user, assignment_id)
@@ -838,11 +838,11 @@ def upload_template(
     return {"status": "ok", "sites_applied": applied}
 
 
-@router.get("/assignments/{assignment_id}/export")
+@router.get("/assignments/{assignment_id}/export", dependencies=[EXPORTER])
 def export_assignment_feedback(
     assignment_id: int,
     db: Session = Depends(get_db),
-    user: User = Depends(require_roles(ADMIN, PM, COORDINATOR)),
+    user: User = Depends(require_access(F.HC_WORK, "view")),
 ):
     """Download one assignment's feedback (summary + per-site detail) as Excel.
 
@@ -873,7 +873,7 @@ def hc_batches(
     contractor_id: int | None = None,
     q: str | None = None,
     db: Session = Depends(get_db),
-    user: User = Depends(require_review_authority),
+    user: User = Depends(require_access(F.HC_WORK, "edit")),
 ):
     """Assignment batches with their result counts, and each filter's count."""
     if status and status not in dt_workflow.BATCH_STATUSES:
@@ -885,7 +885,7 @@ def hc_batches(
 def hc_batch_detail(
     assignment_id: int,
     db: Session = Depends(get_db),
-    user: User = Depends(require_review_authority),
+    user: User = Depends(require_access(F.HC_WORK, "edit")),
 ):
     """One batch's sites, villages, results and decisions."""
     return dt_workflow.batch_detail(db, user, _load_assignment(db, user, assignment_id))
@@ -896,7 +896,7 @@ def reassign_hc_task(
     task_id: int,
     payload: ReassignRequest,
     db: Session = Depends(get_db),
-    user: User = Depends(require_roles(PM)),
+    user: User = Depends(require_access(F.REASSIGN_WORK, "edit")),
 ):
     """Move a site still pending in its batch to another contractor."""
     task = _load_task(db, user, task_id)

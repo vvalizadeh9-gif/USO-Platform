@@ -10,6 +10,15 @@ from app.models.acceptance import (
     SnapshotContractorCompletion,
     letter_villages,
 )
+from app.models.access import (
+    AccessVersion,
+    BackupConfirmation,
+    ErrorEvent,
+    Feature,
+    RoleFeatureGrant,
+    SystemSnapshot,
+    UserFeatureOverride,
+)
 from app.models.acceptance_case import (
     AcceptanceCase,
     AcceptanceCaseEvent,
@@ -66,6 +75,13 @@ from app.models.workitem import (
 )
 
 __all__ = [
+    "AccessVersion",
+    "BackupConfirmation",
+    "ErrorEvent",
+    "Feature",
+    "RoleFeatureGrant",
+    "SystemSnapshot",
+    "UserFeatureOverride",
     "AcceptanceCase",
     "AcceptanceCaseEvent",
     "AcceptanceRejectionCategory",

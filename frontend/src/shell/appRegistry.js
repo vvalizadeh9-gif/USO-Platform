@@ -2,22 +2,18 @@
  * The UEP app registry: the one place an app or an app page is declared.
  *
  * The launcher, Home's Apps panel and every app rail are generated from this
- * list, filtered by the signed-in role. Adding an app or a page is an entry
- * here and a route in App.jsx; the shell itself never changes. See
- * docs/design/navigation.md.
+ * list, filtered by the signed-in user's features (GET /me/access, UEP-25).
+ * Adding an app or a page is an entry here and a route in App.jsx; the shell
+ * itself never changes. See docs/design/navigation.md.
  *
- * Roles shape what the interface offers. They decide nothing: every endpoint
- * re-checks the role server-side.
+ * `need` names the feature an app or page needs, as lib/access.js `meets`
+ * reads it: 'explorer', ['hc_work', 'edit'], or a function of the user.
+ * Navigation asks for the *offered* answer, so a feature granted URL-only
+ * (hidden in menus) is not listed. Features decide nothing here: every
+ * endpoint re-checks them server-side.
  */
-import { AREA, offeredRoles } from '../lib/access'
-import {
-  CATEGORY_OWNER_ROLES,
-  GAPS_ROLES,
-  INTERNAL_PIP_ROLES,
-  KPI_ROLES,
-  MONTHLY_PLAN_ROLES,
-  REVIEW_AUTHORITY_ROLES,
-} from '../lib/roles'
+import { FEATURE as F, meets } from '../lib/access'
+import { canOpenMonthlyPlan } from '../lib/roles'
 
 /**
  * @typedef {'rollout' | 'planning' | 'insights' | 'platform'} AppGroup
@@ -27,7 +23,8 @@ import {
  * @property {string} id
  * @property {string} label
  * @property {string} route      Path, optionally with the query that selects a tab.
- * @property {string[]} [roles]  Who sees it; absent means everyone who sees the app.
+ * @property {*} [need]         What it needs (lib/access.js meets); absent: everyone who sees the app.
+ * @property {boolean} [adminDuplicate] Also in the Admin app: listed here only when the Admin app is not.
  * @property {string[]} [also]  Other routes that make this page the active one,
  *                               matched on their path and exact `tab` (the
  *                               pipeline's steps and loops; see UEP-06 §1).
@@ -47,21 +44,9 @@ import {
  * @property {string} color        CSS custom property for the tile.
  * @property {string} [tint]       CSS custom property for a card header.
  * @property {AppGroup} group
- * @property {string[]} [roles]    Who sees the app; absent means everyone.
+ * @property {*} [need]           What the app needs; absent: shown when any page is.
  * @property {AppPage[]} pages
  */
-
-const STAFF = REVIEW_AUTHORITY_ROLES // PM, Coordinator
-// Who sees which area comes from the central permission map (lib/access.js);
-// these names only keep the entries below readable.
-const ACCEPTANCE_ROLES = offeredRoles(AREA.ACCEPTANCE_CASES)
-const BASKETS_ROLES = offeredRoles(AREA.ACCEPTANCE_BASKETS)
-const EXPLORER_ROLES = offeredRoles(AREA.EXPLORER)
-const DASHBOARD_ROLES = offeredRoles(AREA.INSIGHTS_DASHBOARDS)
-const SUBMISSIONS_ROLES = offeredRoles(AREA.SUBMISSIONS)
-// Drive test's own users. Category owners open the app for the Fix queue
-// only, so every other Drive test page names these roles explicitly.
-const DT_ROLES = ['PM', 'Coordinator', 'Contractor', 'Viewer']
 
 /** @type {{ id: AppGroup, label: string }[]} */
 export const APP_GROUPS = [
@@ -92,7 +77,7 @@ export const APPS = Object.freeze([
     icon: 'search--locate',
     color: '--uep-app-explorer',
     group: 'rollout',
-    roles: EXPLORER_ROLES,
+    need: F.EXPLORER,
     pages: [{ id: 'explorer', label: 'Explorer', route: '/explorer' }],
   },
   {
@@ -103,7 +88,6 @@ export const APPS = Object.freeze([
     color: '--uep-app-drive-test',
     tint: '--uep-app-drive-test-tint',
     group: 'rollout',
-    roles: [...DT_ROLES, ...CATEGORY_OWNER_ROLES],
     // No Dashboard here (UEP-11): the Drive Test dashboard lives under
     // Insights › Dashboards, so the app opens on its first queue.
     //
@@ -111,24 +95,24 @@ export const APPS = Object.freeze([
     // test (Assign, Tests), Exceptions (Remediation) and History. Each item
     // carries its stage's colour tile and a white Carbon icon.
     pages: [
-      { id: 'hc-check', label: 'Health check', route: '/my-health-check', roles: ['Contractor'], queues: ['hc_submit'], icon: 'task--approved', tile: '--uep-accent' },
+      { id: 'hc-check', label: 'Health check', route: '/my-health-check', need: F.CONTRACTOR_WORK, queues: ['hc_submit'], icon: 'task--approved', tile: '--uep-accent' },
       {
-        id: 'hc-assign', section: 'Health check', label: 'Assign', route: '/health-check?tab=assign', roles: STAFF, queues: ['hc_assign'],
+        id: 'hc-assign', section: 'Health check', label: 'Assign', route: '/health-check?tab=assign', need: [F.HC_WORK, 'edit'], queues: ['hc_assign'],
         icon: 'user--follow', tile: '--uep-accent',
         also: ['/health-check', '/health-check?tab=pool', '/health-check?tab=basket'],
       },
       {
-        id: 'hc-checks', section: 'Health check', label: 'Checks', route: '/health-check?tab=checks', roles: STAFF, queues: ['hc_review'],
+        id: 'hc-checks', section: 'Health check', label: 'Checks', route: '/health-check?tab=checks', need: [F.HC_WORK, 'edit'], queues: ['hc_review'],
         icon: 'task--approved', tile: '--uep-accent',
         also: ['/health-check?tab=running', '/health-check?tab=review', '/health-check?tab=results'],
       },
       {
-        id: 'dt-assign', section: 'Drive test', label: 'Assign', route: '/drive-test?tab=assign', roles: STAFF, queues: ['dt_assign'],
+        id: 'dt-assign', section: 'Drive test', label: 'Assign', route: '/drive-test?tab=assign', need: [F.DT_ASSIGNMENT, 'edit'], queues: ['dt_assign'],
         icon: 'user--follow', tile: '--uep-app-drive-test',
         also: ['/drive-test', '/drive-test?tab=assignment'],
       },
       {
-        id: 'dt-tests', section: 'Drive test', label: 'Tests', route: '/drive-test?tab=tests', roles: STAFF, queues: ['dt_review'],
+        id: 'dt-tests', section: 'Drive test', label: 'Tests', route: '/drive-test?tab=tests', need: [F.DT_REVIEW, 'edit'], queues: ['dt_review'],
         icon: 'data--check', tile: '--uep-app-drive-test',
         also: ['/drive-test?tab=in-progress', '/drive-test?tab=review', '/drive-test?tab=sent-back', '/drive-test?tab=done'],
       },
@@ -136,23 +120,23 @@ export const APPS = Object.freeze([
       // test. The count is Home's submit_to_ict queue, which only the PM and
       // the owner coordinator have.
       {
-        id: 'submissions', section: 'Drive test', label: 'Submissions', route: '/submissions', roles: SUBMISSIONS_ROLES, queues: ['submit_to_ict'],
+        id: 'submissions', section: 'Drive test', label: 'Submissions', route: '/submissions', need: F.SUBMISSIONS, queues: ['submit_to_ict'],
         icon: 'send', tile: '--uep-app-drive-test',
       },
       {
-        id: 'remediation', section: 'Exceptions', label: 'Remediation', route: '/health-check?tab=remediation', roles: STAFF, queues: ['hc_reroutes'],
+        id: 'remediation', section: 'Exceptions', label: 'Remediation', route: '/health-check?tab=remediation', need: [F.HC_WORK, 'edit'], queues: ['hc_reroutes'],
         icon: 'tool-kit', tile: '--uep-app-monthly-plan',
         also: ['/health-check?tab=reroutes'],
       },
       {
-        id: 'history', section: 'History', label: 'History', route: '/drive-test?tab=history', roles: STAFF,
+        id: 'history', section: 'History', label: 'History', route: '/drive-test?tab=history', need: [F.HC_WORK, 'edit'],
         icon: 'recently-viewed', tile: '--uep-app-data',
         also: ['/health-check?tab=history'],
       },
-      { id: 'in-progress', label: 'Drive tests', route: '/my-drive-tests', roles: ['Contractor'], queues: ['dt_todo', 'dt_redo'], icon: 'data--check', tile: '--uep-app-drive-test' },
+      { id: 'in-progress', label: 'Drive tests', route: '/my-drive-tests', need: F.CONTRACTOR_WORK, queues: ['dt_todo', 'dt_redo'], icon: 'data--check', tile: '--uep-app-drive-test' },
       // A fix is health-check remediation, so it lives here. A category owner
       // sees this page and no other in the rail.
-      { id: 'fixes', label: 'Fix queue', route: '/my-fix-queue', roles: CATEGORY_OWNER_ROLES, queues: ['hc_fixes'], icon: 'tool-kit', tile: '--uep-app-monthly-plan' },
+      { id: 'fixes', label: 'Fix queue', route: '/my-fix-queue', need: F.FIX_QUEUE, queues: ['hc_fixes'], icon: 'tool-kit', tile: '--uep-app-monthly-plan' },
     ],
   },
   {
@@ -163,15 +147,15 @@ export const APPS = Object.freeze([
     color: '--uep-app-acceptance',
     tint: '--uep-app-acceptance-tint',
     group: 'rollout',
-    roles: ACCEPTANCE_ROLES,
+    need: F.ACCEPTANCE_CASES,
     pages: [
       // UEP-22: Filing is the acceptance cases inbox (team roles see their own
       // basket). Its count is the rail-only acceptance_filing queue -- every
       // open case in the viewer's inbox, ICT and CRA -- so it equals the two
       // inbox headers. Each validation page counts one authority.
       { id: 'filing', label: 'Filing', route: '/filing', also: ['/my-work'], queues: ['acceptance_filing'], icon: 'edit', tile: '--uep-app-acceptance' },
-      { id: 'ict-validation', label: 'ICT validation', route: '/validation/ict', roles: STAFF, queues: ['ict_to_validate'], icon: 'task--approved', tile: '--uep-ict' },
-      { id: 'cra-validation', label: 'CRA validation', route: '/validation/cra', roles: STAFF, queues: ['cra_to_validate'], icon: 'task--approved', tile: '--uep-cra' },
+      { id: 'ict-validation', label: 'ICT validation', route: '/validation/ict', need: F.VALIDATION, queues: ['ict_to_validate'], icon: 'task--approved', tile: '--uep-ict' },
+      { id: 'cra-validation', label: 'CRA validation', route: '/validation/cra', need: F.VALIDATION, queues: ['cra_to_validate'], icon: 'task--approved', tile: '--uep-cra' },
     ],
   },
   {
@@ -182,13 +166,13 @@ export const APPS = Object.freeze([
     color: '--uep-app-monthly-plan',
     tint: '--uep-app-monthly-plan-tint',
     group: 'planning',
-    roles: MONTHLY_PLAN_ROLES,
+    need: canOpenMonthlyPlan,
     pages: [
       // Plans is the page's default (no ?tab=) and took over Approvals; a
       // contractor lands on their own filing page at the same address.
       { id: 'plans', label: 'Plans', route: '/monthly-plan', queues: ['plans_approve', 'plan_submit'], also: ['/monthly-plan?tab=plans', '/monthly-plan?tab=approvals'] },
-      { id: 'history', label: 'History', route: '/monthly-plan?tab=history', roles: INTERNAL_PIP_ROLES },
-      { id: 'internal', label: 'Internal PIP', route: '/monthly-plan?tab=internal', roles: INTERNAL_PIP_ROLES },
+      { id: 'history', label: 'History', route: '/monthly-plan?tab=history', need: F.INTERNAL_PIP },
+      { id: 'internal', label: 'Internal PIP', route: '/monthly-plan?tab=internal', need: F.INTERNAL_PIP },
     ],
   },
   {
@@ -201,23 +185,23 @@ export const APPS = Object.freeze([
     // No app-level list: each page names its roles, so a role with none of
     // them (Admin, the problem-category owners) has no Insights at all.
     pages: [
-      { id: 'dashboards', label: 'Drive test dashboard', route: '/reports/drive-test', roles: DASHBOARD_ROLES },
-      { id: 'acceptance-dashboard', label: 'Acceptance dashboard', route: '/reports/acceptance', roles: DASHBOARD_ROLES },
+      { id: 'dashboards', label: 'Drive test dashboard', route: '/reports/drive-test', need: F.INSIGHTS_DASHBOARDS },
+      { id: 'acceptance-dashboard', label: 'Acceptance dashboard', route: '/reports/acceptance', need: F.INSIGHTS_DASHBOARDS },
       {
-        id: 'roles', label: 'Roles performance', route: '/reports/kpi', roles: KPI_ROLES,
+        id: 'roles', label: 'Roles performance', route: '/reports/kpi', need: F.ROLES_PERFORMANCE,
         description: 'Delivery and acceptance against national',
       },
       {
-        id: 'gaps', label: 'Lifecycle gaps', route: '/reports/gaps', roles: GAPS_ROLES,
+        id: 'gaps', label: 'Lifecycle gaps', route: '/reports/gaps', need: F.LIFECYCLE_GAPS,
         description: 'Where approvals are still waiting',
       },
       // UEP-22: every acceptance basket against time in basket.
       {
-        id: 'acceptance-baskets', label: 'Acceptance baskets', route: '/insights/acceptance-baskets', roles: BASKETS_ROLES,
+        id: 'acceptance-baskets', label: 'Acceptance baskets', route: '/insights/acceptance-baskets', need: F.ACCEPTANCE_BASKETS,
         description: 'Who holds each acceptance case, and for how long',
         icon: 'inventory-management', tile: '--uep-app-monthly-plan',
       },
-      { id: 'exports', label: 'Exports', route: '/reports/kpi/mapping', roles: ['PM'] },
+      { id: 'exports', label: 'Exports', route: '/reports/kpi/mapping', need: F.KPI_MAPPING },
     ],
   },
   {
@@ -227,17 +211,16 @@ export const APPS = Object.freeze([
     icon: 'data--base',
     color: '--uep-app-data',
     group: 'platform',
-    roles: ['PM', 'Admin'],
     pages: [
-      { id: 'cpm', label: 'CPM import', route: '/admin?tab=import', roles: ['Admin'] },
-      { id: 'cpm-validate', label: 'CPM changes', route: '/admin?tab=validate', roles: ['PM'], queues: ['cpm_changes'] },
-      { id: 'mojri', label: 'Mojri tracker', route: '/mojri-tracker', roles: ['PM'] },
-      { id: 'history', label: 'Import history', route: '/admin?tab=history', roles: ['Admin'] },
+      { id: 'cpm', label: 'CPM import', route: '/admin?tab=import', need: [F.CPM_IMPORT, 'edit'] },
+      { id: 'cpm-validate', label: 'CPM changes', route: '/admin?tab=validate', need: [F.CPM_CHANGE_REQUESTS, 'edit'], queues: ['cpm_changes'] },
+      { id: 'mojri', label: 'Mojri tracker', route: '/mojri-tracker', need: [F.MOJRI_UPLOAD, 'edit'] },
+      { id: 'history', label: 'Import history', route: '/admin?tab=history', need: F.CPM_IMPORT },
       // PM's way in to Admin > SLA policies (UEP-15), without adding an app to
       // PM's Home. Viewer reads the same page at /admin/sla.
-      { id: 'sla-policies', label: 'SLA policies', route: '/admin/sla', roles: ['PM'] },
+      { id: 'sla-policies', label: 'SLA policies', route: '/admin/sla', need: [F.SLA_POLICIES, 'edit'], adminDuplicate: true },
       // PM's way in to Admin > Province assignments (UEP-17), the same way.
-      { id: 'province-assignments', label: 'Province assignments', route: '/admin/provinces', roles: ['PM'] },
+      { id: 'province-assignments', label: 'Province assignments', route: '/admin/provinces', need: [F.PROVINCE_ASSIGNMENTS, 'edit'], adminDuplicate: true },
     ],
   },
   {
@@ -247,54 +230,70 @@ export const APPS = Object.freeze([
     icon: 'settings',
     color: '--uep-app-admin',
     group: 'platform',
-    roles: ['Admin'],
     pages: [
-      { id: 'overview', label: 'Overview', route: '/admin?tab=overview', roles: ['Admin'] },
+      { id: 'overview', label: 'Overview', route: '/admin?tab=overview', need: F.ADMIN_OVERVIEW },
       {
-        id: 'users', section: 'People', label: 'Users & roles', route: '/admin?tab=users', roles: ['Admin'],
+        id: 'users', section: 'People', label: 'Users & roles', route: '/admin?tab=users', need: F.USERS,
         icon: 'user--multiple', tile: '--uep-app-admin',
       },
       {
-        id: 'provinces', section: 'People', label: 'Province assignments', route: '/admin/provinces', roles: ['Admin'],
+        id: 'access', section: 'People', label: 'Access', route: '/admin?tab=access', need: F.ACCESS,
+        icon: 'locked', tile: '--uep-app-admin',
+      },
+      {
+        id: 'provinces', section: 'People', label: 'Province assignments', route: '/admin/provinces', need: F.PROVINCE_ASSIGNMENTS,
         icon: 'location', tile: '--uep-app-admin',
       },
       {
-        id: 'sla', section: 'Workflow', label: 'SLA policies', route: '/admin/sla', roles: ['Admin'],
+        id: 'sla', section: 'Workflow', label: 'SLA policies', route: '/admin/sla', need: F.SLA_POLICIES,
         icon: 'timer', tile: '--uep-app-admin',
       },
       {
-        id: 'reference', section: 'Workflow', label: 'Problem categories', route: '/admin?tab=categories', roles: ['Admin'],
+        id: 'reference', section: 'Workflow', label: 'Problem categories', route: '/admin?tab=categories', need: F.PROBLEM_CATEGORIES,
         icon: 'list--checked', tile: '--uep-app-admin',
       },
       {
-        id: 'cpm-import', section: 'Data', label: 'CPM import', route: '/admin?tab=import', roles: ['Admin'],
+        id: 'cpm-import', section: 'Data', label: 'CPM import', route: '/admin?tab=import', need: [F.CPM_IMPORT, 'edit'],
         icon: 'data--base', tile: '--uep-app-admin',
       },
       {
-        id: 'mojri-template', section: 'Data', label: 'Mojri template', route: '/admin?tab=mojri', roles: ['Admin'],
+        id: 'mojri-template', section: 'Data', label: 'Mojri template', route: '/admin?tab=mojri', need: F.MOJRI_UPLOAD,
         icon: 'download', tile: '--uep-app-admin',
       },
       {
-        id: 'audit', section: 'Data', label: 'Audit log', route: '/admin?tab=audit', roles: ['Admin'],
+        id: 'system-health', section: 'Data', label: 'System health', route: '/admin?tab=health', need: F.SYSTEM_HEALTH,
+        icon: 'activity', tile: '--uep-app-admin',
+      },
+      {
+        id: 'audit', section: 'Data', label: 'Audit log', route: '/admin?tab=audit', need: F.AUDIT_LOG,
         icon: 'document', tile: '--uep-app-admin',
       },
     ],
   },
 ])
 
-const allowed = (roles, roleName) => !roles || roles.includes(roleName)
+const offered = (need, user) => meets(user, need, { offered: true })
 
-/** The apps this role may open, each with only the pages it may open. */
-export function appsFor(roleName) {
-  return APPS.filter((app) => allowed(app.roles, roleName))
-    .map((app) => ({ ...app, pages: app.pages.filter((p) => allowed(p.roles, roleName)) }))
+/** The apps this user may open, each with only the pages they may open. Pass
+ * the signed-in user (with `access` from GET /me/access). */
+export function appsFor(user) {
+  const apps = APPS.filter((app) => offered(app.need, user))
+    .map((app) => ({ ...app, pages: app.pages.filter((p) => offered(p.need, user)) }))
+    .filter((app) => app.pages.length > 0)
+  // A page that is also in the Admin app (SLA policies, Province assignments)
+  // is listed under Data only for someone who has no Admin app.
+  const adminRoutes = new Set((apps.find((x) => x.id === 'admin')?.pages || []).map((p) => p.route))
+  return apps
+    .map((app) => (app.id === 'admin' ? app : {
+      ...app, pages: app.pages.filter((p) => !(p.adminDuplicate && adminRoutes.has(p.route))),
+    }))
     .filter((app) => app.pages.length > 0)
 }
 
-/** The role's apps by group, empty groups left out. */
-export function appGroupsFor(roleName) {
-  const apps = appsFor(roleName)
-  return APP_GROUPS.map((g) => ({ ...g, apps: apps.filter((a) => a.group === g.id) })).filter(
+/** The user's apps by group, empty groups left out. */
+export function appGroupsFor(user) {
+  const apps = appsFor(user)
+  return APP_GROUPS.map((g) => ({ ...g, apps: apps.filter((x) => x.group === g.id) })).filter(
     (g) => g.apps.length > 0,
   )
 }

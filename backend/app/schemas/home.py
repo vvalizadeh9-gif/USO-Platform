@@ -144,8 +144,12 @@ class HomeSummaryOut(BaseModel):
 
 
 class SystemStatusOut(BaseModel):
-    #: "normal" when every dependency answered, otherwise "degraded".
-    status: Literal["normal", "degraded"]
+    #: UEP-25: the System health verdict, the same one Admin Overview shows.
+    #: "normal"; "attention" when System health has a red item; "degraded"
+    #: when the database does not answer.
+    status: Literal["normal", "attention", "degraded"]
+    #: "All systems normal" or the first problem.
+    headline: str = "All systems normal"
     checked_at: datetime
 
 

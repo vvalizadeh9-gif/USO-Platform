@@ -9,7 +9,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { conflictText, historyLine } from './provinceAssignments'
 
 const auth = vi.hoisted(() => ({ user: { id: 1, role: { name: 'PM' } }, isAdmin: false }))
-vi.mock('../../context/AuthContext', () => ({ useAuth: () => auth }))
+vi.mock('../../context/AuthContext', () => ({ useAuth: () => globalThis.withSeededAccess(auth) }))
 const api = vi.hoisted(() => ({ get: vi.fn(), put: vi.fn(), post: vi.fn() }))
 vi.mock('../../api/client', () => ({ default: api }))
 

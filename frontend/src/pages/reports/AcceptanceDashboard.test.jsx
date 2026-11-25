@@ -26,7 +26,7 @@ import { pickOption } from '../../test/pickOption'
 vi.mock('../../api/client', () => ({ default: { get: vi.fn() } }))
 
 const mockAuth = vi.hoisted(() => ({ current: null }))
-vi.mock('../../context/AuthContext', () => ({ useAuth: () => mockAuth.current }))
+vi.mock('../../context/AuthContext', () => ({ useAuth: () => globalThis.withSeededAccess(mockAuth.current) }))
 
 // The page defaults to the current Shamsi year; pin it.
 vi.mock('../../lib/shamsi', async (importOriginal) => ({

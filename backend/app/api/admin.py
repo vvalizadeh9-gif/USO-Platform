@@ -6,14 +6,18 @@ from pathlib import Path
 
 from alembic.script import ScriptDirectory
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile
+from pydantic import BaseModel, Field
 from sqlalchemy import case, func, or_, select, text
 from sqlalchemy.orm import Session
 
 from app.core import audit_actions, user_status
+from app.core import access
+from app.core.access import Feature as F, require_access
 from app.core.database import get_db
-from app.core.deps import ADMIN, CONTRACTOR, COORDINATOR, PM, REGIONAL, require_roles
+from app.core.deps import ADMIN, REGIONAL
 from app.core.passwords import PasswordError, validate_password
 from app.core.security import generate_temporary_password, hash_password
+from app.models.access import BackupConfirmation
 from app.models.acceptance import AuditLog, CpmChangeRequest, CpmImportBatch
 from app.models.auth import PasswordResetRequest
 from app.models.health_check import HcRemediation
@@ -52,7 +56,7 @@ from app.schemas import (
 from app.services.action_queues.sla import category_sla_days
 from app.services.audit import record_audit
 from app.services.cpm_import import CpmImportService
-from app.services import evidence_store, kpi_mapping, province_assignment
+from app.services import evidence_store, kpi_mapping, province_assignment, system_health
 from app.services.data_wipe import REQUIRED_CONFIRMATION_PHRASE, wipe_cpm_data
 
 logger = logging.getLogger("uep.admin")
@@ -67,7 +71,7 @@ _ALEMBIC_DIR = str(Path(__file__).resolve().parents[2] / "alembic")
 def import_cpm(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
-    user: User = Depends(require_roles(ADMIN)),
+    user: User = Depends(require_access(F.CPM_IMPORT, "edit")),
 ):
     """Upload and process a monthly CPM Excel file."""
     if not (file.filename or "").lower().endswith((".xlsx", ".xls")):
@@ -114,7 +118,7 @@ def import_cpm(
 def cpm_import_history(
     limit: int = Query(default=50, ge=1, le=200),
     db: Session = Depends(get_db),
-    _: User = Depends(require_roles(ADMIN)),
+    _: User = Depends(require_access(F.CPM_IMPORT, "view")),
 ):
     """List past CPM import batches, most recent first, for the history panel."""
     return (
@@ -129,7 +133,7 @@ def cpm_import_history(
 def cpm_import_workbook(
     batch_id: int,
     db: Session = Depends(get_db),
-    _: User = Depends(require_roles(ADMIN)),
+    _: User = Depends(require_access(F.CPM_IMPORT, "view")),
 ) -> Response:
     """The original workbook an import read, kept forever (UEP-20). API only."""
     batch = db.get(CpmImportBatch, batch_id)
@@ -156,7 +160,7 @@ def cpm_import_workbook(
 def wipe_cpm_import_data(
     payload: CpmWipeRequest,
     db: Session = Depends(get_db),
-    user: User = Depends(require_roles(ADMIN)),
+    user: User = Depends(require_access(F.CPM_IMPORT, "edit")),
 ):
     """Erase all CPM-imported data (sites, work items, villages, acceptances,
     letters, Mojri tracker statuses, import history, monthly snapshots).
@@ -194,7 +198,7 @@ def wipe_cpm_import_data(
 @router.get("/cpm/change-requests", response_model=list[CpmChangeRequestOut])
 def list_change_requests(
     db: Session = Depends(get_db),
-    _: User = Depends(require_roles(ADMIN, PM)),
+    _: User = Depends(require_access(F.CPM_CHANGE_REQUESTS, "edit")),
 ):
     """List pending CPM change requests awaiting a decision."""
     return (
@@ -208,7 +212,7 @@ def list_change_requests(
 @router.get("/cpm/change-requests/count")
 def pending_change_request_count(
     db: Session = Depends(get_db),
-    _: User = Depends(require_roles(ADMIN, PM, COORDINATOR)),
+    _: User = Depends(require_access(F.CPM_CHANGE_REQUESTS, "view")),
 ):
     """Count of pending CPM change requests, for the Validate CPM badge."""
     count = (
@@ -224,7 +228,7 @@ def decide_change_request(
     cr_id: int,
     payload: CpmDecisionRequest,
     db: Session = Depends(get_db),
-    user: User = Depends(require_roles(ADMIN, PM)),
+    user: User = Depends(require_access(F.CPM_CHANGE_REQUESTS, "edit")),
 ):
     """Accept / Ignore / Archive a CPM change request.
 
@@ -332,7 +336,7 @@ def list_users(
     limit: int = Query(default=200, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
-    _: User = Depends(require_roles(ADMIN)),
+    _: User = Depends(require_access(F.USERS, "view")),
 ):
     """List users, optionally searched and filtered.
 
@@ -376,7 +380,7 @@ def list_users(
 def get_user(
     user_id: int,
     db: Session = Depends(get_db),
-    _: User = Depends(require_roles(ADMIN)),
+    _: User = Depends(require_access(F.USERS, "view")),
 ):
     """One user, for the detail view."""
     user = db.get(User, user_id)
@@ -389,7 +393,7 @@ def get_user(
 def create_user(
     payload: UserCreate,
     db: Session = Depends(get_db),
-    admin: User = Depends(require_roles(ADMIN)),
+    admin: User = Depends(require_access(F.USERS, "edit")),
 ):
     if db.query(User).filter(User.username == payload.username).first():
         raise HTTPException(400, "Username already exists")
@@ -551,7 +555,7 @@ def update_user(
     user_id: int,
     payload: UserUpdate,
     db: Session = Depends(get_db),
-    admin: User = Depends(require_roles(ADMIN)),
+    admin: User = Depends(require_access(F.USERS, "edit")),
 ):
     """Edit a user's details, and optionally their status.
 
@@ -649,7 +653,7 @@ def change_user_status(
     user_id: int,
     payload: UserStatusChange,
     db: Session = Depends(get_db),
-    admin: User = Depends(require_roles(ADMIN)),
+    admin: User = Depends(require_access(F.USERS, "edit")),
 ):
     """Activate, deactivate or suspend an account.
 
@@ -673,7 +677,7 @@ def reset_user_password(
     user_id: int,
     payload: AdminPasswordReset,
     db: Session = Depends(get_db),
-    admin: User = Depends(require_roles(ADMIN)),
+    admin: User = Depends(require_access(F.USERS, "edit")),
 ):
     """Set a temporary password on someone else's account.
 
@@ -755,7 +759,7 @@ def user_audit_history(
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
-    _: User = Depends(require_roles(ADMIN)),
+    _: User = Depends(require_access(F.USERS, "view")),
 ):
     """Everything this person did, and everything done to their account.
 
@@ -781,7 +785,7 @@ def user_audit_history(
 def delete_user(
     user_id: int,
     db: Session = Depends(get_db),
-    admin: User = Depends(require_roles(ADMIN)),
+    admin: User = Depends(require_access(F.USERS, "edit")),
 ):
     """Deactivate a user. The row is kept.
 
@@ -821,7 +825,7 @@ def list_password_reset_requests(
     status_filter: str = Query(default="Pending", alias="status"),
     limit: int = Query(default=50, ge=1, le=200),
     db: Session = Depends(get_db),
-    _: User = Depends(require_roles(ADMIN)),
+    _: User = Depends(require_access(F.USERS, "view")),
 ):
     """People who said, from the sign-in page, that they cannot get in.
 
@@ -863,7 +867,7 @@ def dismiss_password_reset_request(
     request_id: int,
     payload: PasswordResetRequestDecision,
     db: Session = Depends(get_db),
-    admin: User = Depends(require_roles(ADMIN)),
+    admin: User = Depends(require_access(F.USERS, "edit")),
 ):
     """Close a request without resetting anything.
 
@@ -980,7 +984,7 @@ def _assert_owner_role(db: Session, role_id: int | None) -> None:
 @router.get("/problem-categories", response_model=list[ProblemCategoryAdminOut])
 def list_problem_categories(
     db: Session = Depends(get_db),
-    _: User = Depends(require_roles(ADMIN)),
+    _: User = Depends(require_access(F.PROBLEM_CATEGORIES, "view")),
 ):
     """Every category, active or not, with its routing and current load."""
     categories = (
@@ -996,7 +1000,7 @@ def list_problem_categories(
 def create_problem_category(
     payload: ProblemCategoryWrite,
     db: Session = Depends(get_db),
-    user: User = Depends(require_roles(ADMIN)),
+    user: User = Depends(require_access(F.PROBLEM_CATEGORIES, "edit")),
 ):
     """Add a category. Its owning role's Fix Queue appears with no release."""
     name = (payload.name or "").strip()
@@ -1037,7 +1041,7 @@ def update_problem_category(
     category_id: int,
     payload: ProblemCategoryWrite,
     db: Session = Depends(get_db),
-    user: User = Depends(require_roles(ADMIN)),
+    user: User = Depends(require_access(F.PROBLEM_CATEGORIES, "edit")),
 ):
     """Rename a category, re-point it at another role, or change its SLA.
 
@@ -1133,7 +1137,7 @@ def _province_assignment_row(province: Province) -> dict:
 @router.get("/provinces", response_model=list[ProvinceAssignmentOut])
 def list_province_assignments(
     db: Session = Depends(get_db),
-    _: User = Depends(require_roles(ADMIN)),
+    _: User = Depends(require_access(F.PROVINCES, "view")),
 ):
     """Every canonical province, with its current coordinator/RM assignment.
 
@@ -1158,7 +1162,7 @@ def set_province_assignment(
     province_id: int,
     payload: ProvinceAssignmentUpdate,
     db: Session = Depends(get_db),
-    user: User = Depends(require_roles(ADMIN)),
+    user: User = Depends(require_access(F.PROVINCES, "edit")),
 ):
     """Assign (or clear) this province's regional manager.
 
@@ -1212,7 +1216,7 @@ def set_province_assignment(
 @router.get("/stats", response_model=AdminStatsOut)
 def admin_stats(
     db: Session = Depends(get_db),
-    _: User = Depends(require_roles(ADMIN)),
+    _: User = Depends(require_access(F.ADMIN_OVERVIEW, "view")),
 ):
     """Headline user/contractor counts for the Admin console overview."""
     active_users_count = db.query(User).filter(User.active).count()
@@ -1259,11 +1263,12 @@ def admin_stats(
 
 
 @router.get("/system-health", response_model=SystemHealthOut)
-def system_health(
+def system_health_view(
     db: Session = Depends(get_db),
-    _: User = Depends(require_roles(ADMIN)),
+    viewer: User = Depends(require_access(F.SYSTEM_HEALTH, "view")),
 ):
-    """DB reachability, Alembic migration state, and CPM import freshness."""
+    """DB reachability, migration state and CPM import freshness (the Overview
+    widget), plus the System health page's blocks (UEP-25)."""
     try:
         db.execute(select(1))
         db_status = "ok"
@@ -1306,6 +1311,9 @@ def system_health(
         db.query(CpmChangeRequest).filter(CpmChangeRequest.status == "Pending").count()
     )
 
+    blocks = system_health.full(
+        db, include_usage=access.has(viewer, F.SYSTEM_HEALTH, "edit", db)
+    )
     return SystemHealthOut(
         db_status=db_status,
         alembic_current_revision=current_revision,
@@ -1313,7 +1321,53 @@ def system_health(
         alembic_mismatch=current_revision != head_revision,
         last_cpm_import=last_cpm_import,
         pending_change_requests_count=pending_change_requests_count,
+        **blocks,
     )
+
+
+@router.get("/system-health/history")
+def system_health_history(
+    days: int = Query(90, ge=1, le=730),
+    db: Session = Depends(get_db),
+    viewer: User = Depends(require_access(F.SYSTEM_HEALTH, "view")),
+) -> list[dict]:
+    """The daily snapshots behind the 90-day charts. Usage figures are
+    Admin-only, as on the page."""
+    rows = system_health.history(db, days)
+    if not access.has(viewer, F.SYSTEM_HEALTH, "edit", db):
+        for r in rows:
+            r.pop("active_users"), r.pop("failed_logins"), r.pop("errors")
+    return rows
+
+
+class BackupConfirmationIn(BaseModel):
+    date: date_type
+    note: str | None = Field(default=None, max_length=500)
+
+
+@router.put("/system-health/backup-confirmation")
+def confirm_backup(
+    body: BackupConfirmationIn,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_access(F.SYSTEM_HEALTH, "edit")),
+) -> dict:
+    """Admin records the last backup the database team confirmed. UEP cannot
+    see their backups, so a person says when one was confirmed."""
+    if body.date > datetime.now(timezone.utc).date():
+        raise HTTPException(422, "The backup date can't be in the future.")
+    row = BackupConfirmation(confirmed_on=body.date, note=(body.note or "").strip() or None,
+                             entered_by=admin.id)
+    db.add(row)
+    db.flush()
+    record_audit(
+        db, user_id=admin.id, action=audit_actions.BACKUP_CONFIRMED, module="Admin",
+        entity_type="BackupConfirmation", entity_id=row.id,
+        new_value={"confirmed_on": body.date.isoformat(), "note": row.note},
+        reason=f"Last backup confirmed {body.date.isoformat()}",
+    )
+    db.commit()
+    system_health.clear_cache()
+    return system_health.backups_block(db)
 
 
 def _audit_page(
@@ -1380,7 +1434,7 @@ def list_audit_logs(
     date_from: date_type | None = None,
     date_to: date_type | None = None,
     db: Session = Depends(get_db),
-    _: User = Depends(require_roles(ADMIN)),
+    _: User = Depends(require_access(F.AUDIT_LOG, "view")),
 ):
     """Paginated, filterable view of the append-only audit log.
 
@@ -1424,15 +1478,19 @@ def _check_account(db: Session, user: User) -> None:
     needs its provinces, and is then linked to them in the province mapping."""
     role = db.get(Role, user.role_id)
     name = role.name if role else None
-    if name == CONTRACTOR and user.contractor_id is None:
+    # UEP-25: the data-area field follows the role's data_scope_type, so a new
+    # role (CPO, say) asks for -- and requires -- the same field as the built-in
+    # role it was copied from.
+    scope = role.data_scope_type if role else "none"
+    if scope == "contractor" and user.contractor_id is None:
         raise HTTPException(422, "Choose the contractor company for this account.")
-    if name == COORDINATOR and not (user.provinces or user.sees_all_provinces):
-        raise HTTPException(422, "Give this coordinator at least one CRA region or province.")
-    if name == REGIONAL:
-        if not (user.provinces or user.sees_all_provinces):
-            raise HTTPException(422, "Choose the provinces this regional manager covers.")
-        if user.provinces:
-            kpi_mapping.link_regional_manager(db, user, user.provinces)
+    if scope == "cra_regions" and not (user.provinces or user.sees_all_provinces):
+        raise HTTPException(422, "Give this account at least one CRA region or province.")
+    if scope == "provinces" and not (user.provinces or user.sees_all_provinces):
+        who = "regional manager" if name == REGIONAL else "account"
+        raise HTTPException(422, f"Choose the provinces this {who} covers.")
+    if name == REGIONAL and user.provinces:
+        kpi_mapping.link_regional_manager(db, user, user.provinces)
 
 
 def _set_provinces(db: Session, user: User, province_ids: list[int]) -> None:

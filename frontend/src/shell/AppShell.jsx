@@ -67,8 +67,8 @@ export default function AppShell() {
   // While an administrator-issued password is outstanding every app answers
   // 403, so none is offered.
   const apps = useMemo(
-    () => (mustChangePassword ? [] : appsFor(user?.role?.name)),
-    [mustChangePassword, user?.role?.name],
+    () => (mustChangePassword ? [] : appsFor(user)),
+    [mustChangePassword, user],
   )
   const isHome = location.pathname === '/home'
   // A page shared by two apps (a dashboard in its own app and in Insights)

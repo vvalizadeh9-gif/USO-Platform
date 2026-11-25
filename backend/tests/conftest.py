@@ -20,6 +20,9 @@ import pytest
 # any test module, which is what makes setting it here early enough.
 os.environ.setdefault("APP_ENV", "development")
 
+# The hourly in-process jobs (UEP-25) stay off; tests call them directly.
+os.environ.setdefault("UEP_DAILY_JOBS", "off")
+
 # Session cookies are marked Secure, so the test client (on http://testserver)
 # keeps them in its jar but never sends them back. Tests authenticate with the
 # Bearer header built from the login response's cookie; the ones that exercise
@@ -69,6 +72,19 @@ def _fresh_count_cache():
     yield
 
 
+@pytest.fixture(autouse=True)
+def _fresh_access_cache():
+    """Start every test with no cached feature grants (UEP-25).
+
+    Each module rebuilds the schema and user ids repeat, so grants cached by
+    the previous test must not answer for this one. Production re-reads them
+    when ``access_version`` changes; a fresh schema can repeat a version."""
+    from app.core import access
+
+    access.invalidate()
+    yield
+
+
 def create_schema() -> None:
     """Drop everything and rebuild the schema by running the migrations.
 
@@ -82,7 +98,17 @@ def create_schema() -> None:
     from app.core.database import Base, engine
 
     # Start from nothing: previous modules in the same session share this engine.
-    Base.metadata.drop_all(bind=engine)
+    # Foreign-key enforcement is off for the wipe itself: a module that turned
+    # it on (test_data_wipe.py) would otherwise refuse to drop a parent table
+    # whose children SQLite still counts, and every later module would fail
+    # to start. Dropping everything needs no integrity check.
+    if engine.dialect.name == "sqlite":
+        with engine.connect() as conn:
+            conn.exec_driver_sql("PRAGMA foreign_keys=OFF")
+            Base.metadata.drop_all(bind=conn)
+            conn.commit()
+    else:
+        Base.metadata.drop_all(bind=engine)
     with engine.begin() as conn:
         conn.execute(text("DROP TABLE IF EXISTS alembic_version"))
 

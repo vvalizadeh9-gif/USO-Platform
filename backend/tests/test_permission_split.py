@@ -271,6 +271,8 @@ def test_new_admin_endpoints_ok_for_admin(client, tokens, url):
 )
 @pytest.mark.parametrize("role", ["PM", "Coordinator", "Contractor"])
 def test_new_admin_endpoints_forbidden_for_non_admin(client, tokens, url, role):
+    if role == "PM" and url.endswith("/system-health"):
+        pytest.skip("UEP-25: PM reads System health (the system_health feature, View)")
     r = client.get(url, headers=_auth(tokens[role]))
     assert r.status_code == 403, r.text
 

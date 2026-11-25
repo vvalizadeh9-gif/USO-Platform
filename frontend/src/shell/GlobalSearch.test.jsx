@@ -2,9 +2,15 @@ import { act, fireEvent, render, screen } from '@testing-library/react'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import api from '../api/client'
-import { appsFor } from './appRegistry'
+import { appsFor as appsForUser } from './appRegistry'
 import GlobalSearch, { matchPages, resultGroups } from './GlobalSearch'
 import { GROUP_LOOK } from './searchLook'
+
+import { userWithAccess } from '../test/seededAccess'
+
+// UEP-25: navigation reads user.access; these tests name a role, so each gets
+// the access that role has on day one (the seed fixture).
+const appsFor = (role) => appsForUser(userWithAccess({ role: { name: role } }))
 
 vi.mock('../api/client', () => ({ default: { get: vi.fn() } }))
 

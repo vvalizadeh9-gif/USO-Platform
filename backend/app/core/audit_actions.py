@@ -65,6 +65,15 @@ EVIDENCE_DOWNLOADED = "EVIDENCE_DOWNLOADED"
 UNDONE = "UNDONE"
 DATA_WIPED = "DATA_WIPED"
 
+# UEP-25: feature access (Admin > Access) and System health. Spelled as the
+# brief names them, so History filters on the 'access.' prefix.
+ACCESS_ROLE_GRANT_CHANGED = "access.role_grant_changed"
+ACCESS_USER_OVERRIDE_CHANGED = "access.user_override_changed"
+ACCESS_ROLE_CREATED = "access.role_created"
+ACCESS_ROLE_DELETED = "access.role_deleted"
+ACCESS_OVERRIDE_EXPIRED = "access.user_override_expired"
+BACKUP_CONFIRMED = "BACKUP_CONFIRMED"
+
 # ---------------------------------------------------------------------------
 # Result / status of the recorded attempt
 # ---------------------------------------------------------------------------

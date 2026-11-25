@@ -433,13 +433,21 @@ function UserForm({ mode, user, roles, provinces, contractors, categories, onDon
   function set(k, v) { setForm((f) => ({ ...f, [k]: v })) }
 
   const selectedRole = roles.find((r) => String(r.id) === form.role_id)
-  const isContractorRole = selectedRole?.name === CONTRACTOR_ROLE_NAME
+  // UEP-25: which data-area field the form asks for follows the role's
+  // data_scope_type (Admin › Access), so a new role asks for the same field
+  // as the role it was copied from. Required unless the type is all or none.
+  const scope = selectedRole?.data_scope_type || null
+  const isContractorRole = scope === 'contractor'
+  const asksProvinces = scope === 'provinces' || scope === 'cra_regions'
+  const areaMissing = (isContractorRole && !form.contractor_id)
+    || (asksProvinces && !form.sees_all_provinces && form.province_ids.length === 0)
   const ownedCategories = (categories || []).filter(
     (c) => c.owner_role_id === selectedRole?.id && c.active
   )
 
   async function submit() {
     setBusy(true)
+    const seesAll = asksProvinces || isEdit || scope !== 'all' ? form.sees_all_provinces : true
     try {
       const payload = {
         first_name: form.first_name.trim(),
@@ -449,8 +457,10 @@ function UserForm({ mode, user, roles, provinces, contractors, categories, onDon
         email: form.email.trim() || null,
         role_id: Number(form.role_id),
         contractor_id: isContractorRole && form.contractor_id ? Number(form.contractor_id) : null,
-        sees_all_provinces: form.sees_all_provinces,
-        province_ids: form.sees_all_provinces ? [] : form.province_ids,
+        // A role that sees all data, or none, keeps what the account had; a
+        // new account on an all-data role sees every province.
+        sees_all_provinces: seesAll,
+        province_ids: seesAll ? [] : form.province_ids,
       }
       if (isEdit) {
         await api.patch(`/admin/users/${user.id}`, payload)
@@ -570,21 +580,30 @@ function UserForm({ mode, user, roles, provinces, contractors, categories, onDon
         </div>
       )}
 
-      <label className="row" style={{ gap: 8, margin: '4px 0 14px', cursor: 'pointer' }}>
-        <input type="checkbox" checked={form.sees_all_provinces} onChange={(e) => set('sees_all_provinces', e.target.checked)} />
-        <span>Can see all provinces (Administrator / Project Manager)</span>
-      </label>
+      {asksProvinces && (
+        <>
+          <label className="row" style={{ gap: 8, margin: '4px 0 14px', cursor: 'pointer' }}>
+            <input type="checkbox" checked={form.sees_all_provinces} onChange={(e) => set('sees_all_provinces', e.target.checked)} />
+            <span>{scope === 'cra_regions' ? 'All CRA regions' : 'All provinces'}</span>
+          </label>
 
-      {!form.sees_all_provinces && (
-        <ProvincePicker
-          provinces={provinces}
-          selected={form.province_ids}
-          onChange={(ids) => set('province_ids', ids)}
-        />
+          {!form.sees_all_provinces && (
+            <ProvincePicker
+              provinces={provinces}
+              selected={form.province_ids}
+              onChange={(ids) => set('province_ids', ids)}
+            />
+          )}
+        </>
+      )}
+      {areaMissing && (
+        <p className="dim" role="status" style={{ fontSize: 12.5, margin: '0 0 10px' }}>
+          {isContractorRole ? 'Choose the contractor company to continue.' : 'Choose at least one province, or all, to continue.'}
+        </p>
       )}
 
       <div className="row mt-8" style={{ gap: 8 }}>
-        <button className="btn btn-primary" disabled={busy} onClick={submit}>
+        <button className="btn btn-primary" disabled={busy || !selectedRole || areaMissing} onClick={submit}>
           {busy ? <div className="spinner" /> : <><Plus size={15} /> {isEdit ? 'Save changes' : 'Create user'}</>}
         </button>
         <button className="btn btn-ghost" onClick={onDone}>Cancel</button>

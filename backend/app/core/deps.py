@@ -136,7 +136,12 @@ def get_current_user(
 
 
 def require_roles(*allowed_roles: str) -> Callable[[User], User]:
-    """Return a dependency that permits only the given role names."""
+    """Return a dependency that permits only the given role names.
+
+    UEP-25: not for feature checks -- those are ``core.access.require_access``,
+    managed in Admin > Access. Kept for rules that are not features; no route
+    uses it today (tests/test_feature_access.py lists every route).
+    """
 
     def guard(current_user: User = Depends(get_current_user)) -> User:
         if current_user.role.name not in allowed_roles:
@@ -147,36 +152,3 @@ def require_roles(*allowed_roles: str) -> Callable[[User], User]:
         return current_user
 
     return guard
-
-
-#: The two roles that carry the same authority over the health-check and
-#: drive-test lifecycle. PM and Coordinator are peers throughout: either may
-#: assign an initial health check, review its result, decide Ready or
-#: Problematic, route a problematic site, assign an official drive test,
-#: choose or change the drive-test contractor, and approve a drive test.
-#:
-#: It exists because that equality was previously spelled out at each call
-#: site and spelled differently at several of them -- drive-test assignment was
-#: PM-only, drive-test review was Coordinator-only (so a PM could not approve a
-#: drive test at all), and re-route decisions excluded the Coordinator. One
-#: name means the next endpoint cannot invent a sixth answer.
-#:
-#: Admin is deliberately absent. Admin administers the platform and does not
-#: perform workflow writes; that separation predates this and is unchanged.
-require_review_authority = require_roles(PM, COORDINATOR)
-
-
-def require_category_owner(
-    current_user: User = Depends(get_current_user),
-) -> User:
-    """Permit any role flagged as a health-check problem-category owner.
-
-    Checks the flag rather than a list of names so that adding a category (and
-    its owning role) stays a data change.
-    """
-    if not current_user.role.is_category_owner:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You do not have permission to perform this action",
-        )
-    return current_user

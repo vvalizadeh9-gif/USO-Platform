@@ -6,6 +6,7 @@ import PageHeader from '../../components/PageHeader'
 import { useAuth } from '../../context/AuthContext'
 import '../../styles/home.css'
 import '../../styles/sla-policies.css'
+import { FEATURE, can } from '../../lib/access'
 
 const MIN_DAYS = 1
 const MAX_DAYS = 365
@@ -48,7 +49,7 @@ const errorText = (err) => {
  */
 export default function SlaPoliciesPage() {
   const { user } = useAuth()
-  const canEdit = ['PM', 'Admin'].includes(user?.role?.name)
+  const canEdit = can(user, FEATURE.SLA_POLICIES, 'edit')
   const reduced = useReducedMotion()
   const titleRef = useRef(null)
 

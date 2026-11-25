@@ -25,8 +25,8 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Response, Upl
 from sqlalchemy.orm import Session
 
 from app.core import audit_actions
+from app.core.access import Feature as F, require_access
 from app.core.database import get_db
-from app.core.deps import ADMIN, PM, require_roles
 from app.core.jalali import parse_day, tehran_today
 from app.models.reference import User
 from app.services import evidence_store, mojri_tracker
@@ -54,7 +54,7 @@ def _upload(file: UploadFile) -> bytes:
 @router.get("/template.xlsx")
 def download_template(
     db: Session = Depends(get_db),
-    _: User = Depends(require_roles(ADMIN, PM)),
+    _: User = Depends(require_access(F.MOJRI_UPLOAD, "view")),
 ) -> Response:
     """The fill-in template: one row per village we have already approved.
 
@@ -77,7 +77,7 @@ def download_template(
 def preview_import(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
-    _: User = Depends(require_roles(PM)),
+    _: User = Depends(require_access(F.MOJRI_UPLOAD, "edit")),
 ) -> dict:
     """What confirming this file would do. Nothing is written."""
     content = _upload(file)
@@ -92,7 +92,7 @@ def commit_import(
         None, description="The day Mojri's file reflects, ISO or Shamsi (default: today)"
     ),
     db: Session = Depends(get_db),
-    user: User = Depends(require_roles(PM)),
+    user: User = Depends(require_access(F.MOJRI_UPLOAD, "edit")),
 ) -> dict:
     """Apply a previewed file. PM only, and only the file that was previewed."""
     content = _upload(file)

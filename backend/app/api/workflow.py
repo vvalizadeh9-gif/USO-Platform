@@ -15,14 +15,13 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core import audit_actions
+from app.core.access import Feature as F, require_access
 from app.core.database import get_db
 from app.core.deps import (
     COORDINATOR,
     CONTRACTOR,
     PM,
     get_current_user,
-    require_review_authority,
-    require_roles,
 )
 from app.models.reference import User
 from app.models.workitem import (
@@ -170,7 +169,7 @@ def create_assignment(
     work_item_id: int,
     payload: AssignmentCreate,
     db: Session = Depends(get_db),
-    user: User = Depends(require_review_authority),
+    user: User = Depends(require_access(F.DT_ASSIGNMENT, "edit")),
 ):
     """PM or Coordinator assigns the work item. Deactivates prior assignment."""
     wi = _load_work_item(work_item_id, db, user)
@@ -209,7 +208,7 @@ def return_to_coordinator(
     work_item_id: int,
     payload: ReturnToCoordinatorRequest,
     db: Session = Depends(get_db),
-    user: User = Depends(require_roles(CONTRACTOR)),
+    user: User = Depends(require_access(F.CONTRACTOR_WORK, "edit")),
 ):
     """Contractor hands the site back before a drive test can be attempted.
 
@@ -261,7 +260,7 @@ def _mark_ongoing(wi: WorkItem, before: dict[str, str | None] | None = None) -> 
 def bulk_assign(
     payload: BulkAssignmentCreate,
     db: Session = Depends(get_db),
-    user: User = Depends(require_review_authority),
+    user: User = Depends(require_access(F.DT_ASSIGNMENT, "edit")),
 ):
     """PM or Coordinator assigns many work items to one contractor at once.
 
@@ -333,7 +332,7 @@ def bulk_assign(
 def undo_bulk_assign(
     batch_id: int,
     db: Session = Depends(get_db),
-    user: User = Depends(require_review_authority),
+    user: User = Depends(require_access(F.DT_ASSIGNMENT, "edit")),
 ):
     """Take back a bulk assignment: same user, within two minutes, nothing
     filed since. Restores each site's previous assignment and stage."""
@@ -355,7 +354,7 @@ def submit_drive_test(
     work_item_id: int,
     payload: DriveTestCreate,
     db: Session = Depends(get_db),
-    user: User = Depends(require_roles(PM, CONTRACTOR)),
+    user: User = Depends(require_access(F.FIELD_RESULTS, "edit")),
 ):
     """Contractor submits a drive test with a report link. Previous active DT
     is archived. A submission carrying files uses ``/drive-test/upload``."""
@@ -370,7 +369,7 @@ def submit_drive_test_with_files(
     report_link: str | None = Form(None, max_length=500),
     files: list[UploadFile] = File(default=[]),
     db: Session = Depends(get_db),
-    user: User = Depends(require_roles(PM, CONTRACTOR)),
+    user: User = Depends(require_access(F.FIELD_RESULTS, "edit")),
 ):
     """The same submission with its report files in one request, so a drive
     test never waits for review with nothing to review (UEP-24 F3)."""
@@ -484,7 +483,7 @@ def review_drive_test(
     drive_test_id: int,
     payload: ReviewRequest,
     db: Session = Depends(get_db),
-    user: User = Depends(require_review_authority),
+    user: User = Depends(require_access(F.DT_REVIEW, "edit")),
 ):
     """PM or Coordinator validates a submitted drive test. Approval is terminal.
 
@@ -563,7 +562,7 @@ def review_drive_test(
 def my_dt_queue(
     tab: str,
     db: Session = Depends(get_db),
-    user: User = Depends(require_roles(CONTRACTOR)),
+    user: User = Depends(require_access(F.CONTRACTOR_WORK, "view")),
 ):
     """A contractor's own queue: sites still owed (``todo``) or already
     submitted and awaiting review (``submitted``)."""
@@ -577,7 +576,7 @@ def my_dt_queue(
 @router.get("/drive-tests/my/counts", response_model=MyDtCounts)
 def my_dt_counts(
     db: Session = Depends(get_db),
-    user: User = Depends(require_roles(CONTRACTOR)),
+    user: User = Depends(require_access(F.CONTRACTOR_WORK, "view")),
 ):
     """Tab badge counts, computed with the same functions as the lists."""
     return hc_queues.contractor_dt_counts(db, user)
@@ -603,7 +602,7 @@ def upload_drive_test_evidence(
     drive_test_id: int,
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
-    user: User = Depends(require_roles(PM, COORDINATOR, CONTRACTOR)),
+    user: User = Depends(require_access(F.DT_EVIDENCE, "edit")),
 ):
     """Attach a report or measurement file to a submitted drive test."""
     dt = _load_drive_test(drive_test_id, db, user)
@@ -672,7 +671,7 @@ def update_acceptance(
     technology: str,
     payload: AcceptanceUpdate,
     db: Session = Depends(get_db),
-    user: User = Depends(require_roles(PM, COORDINATOR)),
+    user: User = Depends(require_access(F.ACCEPTANCE_APPROVE, "edit")),
 ):
     """Coordinator updates ICT/CRA status for one technology of a village."""
     village = _load_village(village_id, db, user)

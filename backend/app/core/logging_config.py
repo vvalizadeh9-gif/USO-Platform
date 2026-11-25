@@ -178,6 +178,7 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
                     "duration_ms": round((time.perf_counter() - started) * 1000, 1),
                 },
             )
+            _count_server_error(request.url.path)
             # Re-raised so FastAPI still returns its 500. The point here is that
             # the failure is recorded with enough context to investigate, not to
             # change what the caller sees.
@@ -187,6 +188,8 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
         # Server errors are warnings-and-above so they surface at any log level;
         # ordinary traffic sits at INFO and can be turned off with LOG_LEVEL.
         level = logging.ERROR if response.status_code >= 500 else logging.INFO
+        if response.status_code >= 500:
+            _count_server_error(request.url.path)
         self._logger.log(
             level,
             "%s %s -> %s",
@@ -201,3 +204,13 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
         )
         response.headers["X-Request-ID"] = request_id
         return response
+
+
+def _count_server_error(path: str) -> None:
+    """System health counts server errors in 24 h (UEP-25): the moment and the
+    route only. Off the event loop, and never raises."""
+    import threading
+
+    from app.services.system_health import record_error
+
+    threading.Thread(target=record_error, args=("server", path), daemon=True).start()

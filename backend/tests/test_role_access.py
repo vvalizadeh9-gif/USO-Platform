@@ -71,24 +71,37 @@ _YES = {
 _ROLES = ("Admin", *CORE, "RegionalManager", *FIVE, "CpgPso")
 
 
+def _matrix() -> dict:
+    return json.loads(access.MATRIX_PATH.read_text(encoding="utf-8"))
+
+
+def _allows(role: str, area: Area) -> bool:
+    """The day-one answer, from the seed fixture. UEP-25 moved access into the
+    database; tests/test_feature_access.py proves the migrated tables equal
+    this file, and the endpoint tests below prove the API answers from them."""
+    entry = _matrix()["areas"][area.value]
+    return role in entry["offered"] or role in entry["direct"]
+
+
 @pytest.mark.parametrize(
-    "role, area", [(role, area) for area in Area for role in _ROLES]
+    "role, area", [(role, area) for area in _YES for role in _ROLES]
 )
 def test_the_map_answers_the_matrix(role, area):
-    assert access.allows(role, area) is (role in _YES[area])
+    assert _allows(role, area) is (role in _YES[area])
 
 
 def test_every_area_is_in_the_matrix_and_nothing_else():
-    assert set(_YES) == set(Area)
-    assert set(access._matrix()["areas"]) == {a.value for a in Area}
+    assert set(_matrix()["areas"]) == {a.value for a in _YES}
+    assert {a.value for a in _YES} <= {f.value for f in Area}
 
 
 def test_landings():
-    assert access.landing_for("RegionalManager") == "region"
+    landings = _matrix()["landings"]
+    assert landings.get("RegionalManager") == "region"
     for role in FIVE:
-        assert access.landing_for(role) == "work"
+        assert landings.get(role) == "work"
     for role in (*CORE, "Admin"):
-        assert access.landing_for(role) == "standard"
+        assert landings.get(role, "standard") == "standard"
 
 
 def test_the_frontend_reads_the_same_matrix():

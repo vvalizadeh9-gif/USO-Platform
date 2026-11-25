@@ -14,9 +14,8 @@ from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
-from app.core.access import Area, require_access
+from app.core.access import Area, Feature as F, require_access
 from app.core.database import get_db
-from app.core.deps import TEAM_BASKET_ROLES, require_roles
 from app.core.jalali import format_shamsi
 from app.models.reference import User
 from app.models.workitem import Site, Village, WorkItem
@@ -62,11 +61,11 @@ from app.services.my_work_scope import SCOPE_REMAINING, SCOPES
 
 router = APIRouter(prefix="/acceptance", tags=["my-work"])
 
-require_filer = require_roles(*S.FILING_ROLES)
-require_decider = require_roles(*S.DECIDING_ROLES)
+require_filer = require_access(F.ACCEPTANCE_FILING, "edit")
+require_decider = require_access(F.ACCEPTANCE_APPROVE, "edit")
 #: The scan upload is also how a basket owner attaches a file to "Mark fixed"
 #: (UEP-24 F10); the token is only redeemable by whoever uploaded it.
-require_scan_uploader = require_roles(*S.FILING_ROLES, *TEAM_BASKET_ROLES)
+require_scan_uploader = require_access(F.SCAN_UPLOAD, "edit")
 
 
 #: Acceptance > Filing: the roles in ``Area.ACCEPTANCE_WORKSPACE`` of the

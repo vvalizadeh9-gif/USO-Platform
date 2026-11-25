@@ -3,11 +3,52 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import api from '../api/client'
 
+// UEP-25: what this person may use, from GET /me/access. Re-read on page load
+// and every 5 minutes, so a change made in Admin › Access reaches an open tab
+// without signing out. Kept in localStorage too, so a reload draws the right
+// navigation at once and corrects itself when the fresh copy arrives.
+export const ACCESS_REFRESH_MS = 5 * 60 * 1000
+const ACCESS_KEY = 'uep_access'
+
+function readStoredAccess() {
+  try {
+    const raw = localStorage.getItem(ACCESS_KEY)
+    return raw ? JSON.parse(raw) : null
+  } catch {
+    return null
+  }
+}
+
+function storeAccess(value) {
+  try {
+    if (value) localStorage.setItem(ACCESS_KEY, JSON.stringify(value))
+    else localStorage.removeItem(ACCESS_KEY)
+  } catch {
+    // Storage unavailable: the copy in memory is enough for this tab.
+  }
+}
+
 const AuthContext = createContext(null)
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [access, setAccess] = useState(() => readStoredAccess())
+  const [accessReady, setAccessReady] = useState(false)
+
+  const refreshAccess = useCallback(async () => {
+    try {
+      const { data } = await api.get('/me/access')
+      setAccess(data)
+      storeAccess(data)
+      return data
+    } catch {
+      // Keep what we had: the server still refuses anything not allowed.
+      return null
+    } finally {
+      setAccessReady(true)
+    }
+  }, [])
 
   useEffect(() => {
     // Guarded, because this runs before anything renders. An unparseable
@@ -34,6 +75,15 @@ export function AuthProvider({ children }) {
       setLoading(false)
     }
   }, [])
+
+  // Signed in (or restored from storage): read access now and every 5 minutes.
+  const signedIn = Boolean(user) && !user?.must_change_password
+  useEffect(() => {
+    if (!signedIn) return undefined
+    refreshAccess()
+    const timer = setInterval(refreshAccess, ACCESS_REFRESH_MS)
+    return () => clearInterval(timer)
+  }, [signedIn, user?.id, refreshAccess])
 
   function store(nextUser) {
     setUser(nextUser)
@@ -82,6 +132,9 @@ export function AuthProvider({ children }) {
     } catch {
       // Nothing to clear.
     }
+    storeAccess(null)
+    setAccess(null)
+    setAccessReady(false)
     setUser(null)
   }
 
@@ -102,13 +155,24 @@ export function AuthProvider({ children }) {
     clearSession()
   }
 
+  // The user every screen reads carries their access: `user.access`. Until the
+  // first answer arrives (no stored copy, first sign-in on this browser) the
+  // app shows its loading state rather than guessing.
+  const withAccess = useMemo(
+    () => (user ? { ...user, access } : null),
+    [user, access],
+  )
+  const waitingForAccess = Boolean(user) && !user?.must_change_password && !access && !accessReady
+
   const value = useMemo(
     () => ({
-      user,
-      loading,
+      user: withAccess,
+      loading: loading || waitingForAccess,
       login,
       logout,
       refreshUser,
+      access,
+      refreshAccess,
       isAdmin: user?.role?.name === 'Admin',
       // True while the account is on a password an administrator issued. Every
       // endpoint but /auth/me, /auth/me/password and /auth/logout refuses, so
@@ -117,7 +181,7 @@ export function AuthProvider({ children }) {
       mustChangePassword: !!user?.must_change_password,
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [user, loading, refreshUser]
+    [withAccess, loading, waitingForAccess, access, refreshUser, refreshAccess]
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

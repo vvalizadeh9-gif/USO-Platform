@@ -12,7 +12,7 @@ const body = vi.hoisted(() => ({ current: null }))
 vi.mock('../../api/client', () => ({
   default: { get: vi.fn(() => Promise.resolve({ data: body.current })), post: vi.fn() },
 }))
-vi.mock('../../context/AuthContext', () => ({ useAuth: () => ({ user: { role: { name: 'PM' } } }) }))
+vi.mock('../../context/AuthContext', () => ({ useAuth: () => globalThis.withSeededAccess({ user: { role: { name: 'PM' } } }) }))
 
 const SiteRecord = (await import('./SiteRecord')).default
 const { ToastProvider } = await import('../../context/ToastContext')

@@ -91,6 +91,17 @@ class Role(Base):
     is_category_owner: Mapped[bool] = mapped_column(
         Boolean, default=False, nullable=False
     )
+    # UEP-25: roles are managed in Admin > Access. A role is a ready-made set
+    # of features (role_feature_grants); these say what it is for.
+    description: Mapped[str | None] = mapped_column(String(255))
+    #: 'standard' | 'region' | 'work', or an app route such as '/explorer'.
+    landing: Mapped[str] = mapped_column(String(80), default="standard", nullable=False)
+    #: Which data-area field the user form asks for: 'all', 'provinces',
+    #: 'cra_regions', 'contractor', 'team_basket' or 'none'. Row scope itself is
+    #: still decided by services/visibility.py; this never widens it.
+    data_scope_type: Mapped[str] = mapped_column(String(20), default="all", nullable=False)
+    #: The built-in roles. They cannot be deleted.
+    is_system: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     users: Mapped[list[User]] = relationship(back_populates="role")
 

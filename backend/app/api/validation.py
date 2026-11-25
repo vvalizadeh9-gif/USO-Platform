@@ -15,8 +15,9 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy.orm import Session
 
 from app.core import audit_actions
+from app.core.access import Feature as F, require_access
 from app.core.database import get_db
-from app.core.deps import COORDINATOR, PM, require_roles
+from app.core.deps import PM
 from app.models.reference import User
 from app.services import acceptance_validation as V
 from app.services import email_evidence, evidence_store
@@ -27,7 +28,7 @@ from .my_work import require_worker
 
 router = APIRouter(prefix="/acceptance", tags=["validation"])
 
-require_validator = require_roles(PM, COORDINATOR)
+require_validator = require_access(F.VALIDATION, "view")
 
 
 def _error(status: int, code: str, message: str) -> HTTPException:

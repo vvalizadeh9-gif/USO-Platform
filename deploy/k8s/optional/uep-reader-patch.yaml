@@ -1,0 +1,19 @@
+# OPTIONAL -- turn on only after DevOps has applied
+# deploy/k8s/uep-reader-serviceaccount.yaml (UEP-25).
+#
+# Runs the backend as the uep-reader ServiceAccount and mounts its token, so
+# Admin > System health can read UEP's own pods, quota and pod metrics. The
+# token is mounted only into the backend; the frontend keeps none.
+#
+# To use it: add
+#   - path: optional/uep-reader-patch.yaml
+# to "patches:" in deploy/k8s/kustomization.yaml.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+spec:
+  template:
+    spec:
+      serviceAccountName: uep-reader
+      automountServiceAccountToken: true

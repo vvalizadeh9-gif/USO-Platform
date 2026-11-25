@@ -17,7 +17,7 @@ const mockApi = vi.hoisted(() => ({
 vi.mock('../api/client', () => ({ default: mockApi }))
 
 vi.mock('../context/AuthContext', () => ({
-  useAuth: () => ({ user: { role: { name: 'Contractor' } } }),
+  useAuth: () => globalThis.withSeededAccess({ user: { role: { name: 'Contractor' } } }),
 }))
 
 vi.mock('../context/ToastContext', () => ({

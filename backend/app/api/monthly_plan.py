@@ -30,13 +30,11 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy.orm import Session
 
 from app.core import audit_actions, jalali
-from app.core.access import Area, allowed_roles
+from app.core.access import Area, Feature as F, allows, require_access
 from app.core.database import get_db
 from app.core.deps import (
     CONTRACTOR,
-    PM,
     get_current_user,
-    require_roles,
 )
 from app.models.monthly_plan import (
     PLAN_STREAMS,
@@ -75,16 +73,16 @@ from app.services.drive_test_analytics import DriveTestAnalytics
 
 router = APIRouter(prefix="/pip", tags=["pip"])
 
-#: Who may read the PM's queue. Everyone with an oversight interest in whether
-#: the month's targets are in -- and deliberately not a contractor, for whom
-#: this screen is a list of every competitor's commitments. Read from the
-#: central permission map (``core/access_matrix.json``).
-QUEUE_READERS = allowed_roles(Area.MONTHLY_PLAN_QUEUE)
+#: UEP-25: every export also needs the "Export to Excel" feature.
+EXPORTER = Depends(require_access(F.EXPORTS))
 
+#: Who may read the PM's queue: the ``monthly_plan_queue`` feature (Admin >
+#: Access). Deliberately not a contractor by default, for whom this screen is
+#: a list of every competitor's commitments.
 #: Who may decide one. PM alone: the Coordinator may read the queue but the
 #: target is the PM's to set, and Admin does not perform operational acts.
-require_pm = require_roles(PM)
-require_queue_reader = require_roles(*QUEUE_READERS)
+require_pm = require_access(F.PLAN_APPROVALS, "edit")
+require_queue_reader = require_access(F.MONTHLY_PLAN_QUEUE, "view")
 
 #: What a .xlsx is, on the wire. Same string the health-check and work-item
 #: downloads use.
@@ -129,7 +127,7 @@ def my_plan(
     month: int = Query(..., ge=1, le=12, description="Shamsi month, 1-12"),
     stream: PlanStream = Query("DT", description="DT or ACCEPTANCE"),
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_access(F.CONTRACTOR_PLAN, "edit")),
 ) -> MonthlyPlanContext:
     """This contractor's current plan for the month, plus the context to fill it in.
 
@@ -224,7 +222,7 @@ def my_history(
     months: int = Query(6, ge=1, le=plans.MAX_HISTORY_MONTHS),
     stream: PlanStream = Query("DT", description="DT or ACCEPTANCE"),
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_access(F.CONTRACTOR_PLAN, "edit")),
 ) -> list[MonthlyPlanHistoryRow]:
     """This contractor's own last N Shamsi months, newest first.
 
@@ -255,7 +253,7 @@ def my_history(
 def save_my_plan(
     payload: MonthlyPlanWrite,
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_access(F.CONTRACTOR_PLAN, "edit")),
 ) -> MonthlyPlanOut:
     """Save this month's plan as a draft, or hand it in.
 
@@ -306,7 +304,7 @@ def save_my_plan(
 def request_revision(
     payload: MonthlyPlanRevisionRequest,
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_access(F.CONTRACTOR_PLAN, "edit")),
 ) -> MonthlyPlanOut:
     """Ask the PM to change this month's approved number.
 
@@ -430,12 +428,10 @@ def queue(
     )
 
 
-#: Who may read the overview: the staff roles the Monthly Plan page is open to
-#: (``MONTHLY_PLAN_ROLES`` less Contractor). Not Admin, whom the page does not
-#: serve, and never a contractor: the response carries MTN's internal target
-#: and every company's numbers. Read from the central permission map.
-OVERVIEW_READERS = allowed_roles(Area.INTERNAL_PIP)
-require_overview_reader = require_roles(*OVERVIEW_READERS)
+#: Who may read the overview: the ``internal_pip`` feature. Not Admin by
+#: default, whom the page does not serve, and never a contractor: the response
+#: carries MTN's internal target and every company's numbers.
+require_overview_reader = require_access(F.INTERNAL_PIP, "view")
 
 
 @router.get("/overview", response_model=PipOverviewOut)
@@ -708,7 +704,7 @@ def _plan_export(db: Session, user: User, period: str, year: int | None, month: 
     )
 
 
-@router.get("/scorecard.xlsx")
+@router.get("/scorecard.xlsx", dependencies=[EXPORTER])
 def scorecard_export(
     months: int = Query(12, ge=1, le=36),
     year: int | None = Query(None),
@@ -776,7 +772,7 @@ def revisions(
     if user.role.name == CONTRACTOR:
         contractor_id = _own_contractor(user)
     else:
-        if user.role.name not in QUEUE_READERS:
+        if not allows(user, Area.MONTHLY_PLAN_QUEUE):
             raise HTTPException(403, "You do not have permission to read plans")
         if contractor_id is None:
             raise HTTPException(400, "contractor_id is required")

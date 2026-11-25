@@ -66,7 +66,7 @@ vi.mock('./pages/ChangePassword', () => page('change-password'))
 
 const mockAuth = vi.hoisted(() => ({ current: null }))
 vi.mock('./context/AuthContext', () => ({
-  useAuth: () => mockAuth.current,
+  useAuth: () => globalThis.withSeededAccess(mockAuth.current),
 }))
 
 const App = (await import('./App')).default

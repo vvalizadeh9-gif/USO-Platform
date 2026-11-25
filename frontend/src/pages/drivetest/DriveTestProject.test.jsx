@@ -22,7 +22,7 @@ vi.mock('../../api/client', () => ({
 
 const mockAuth = vi.hoisted(() => ({ current: null }))
 vi.mock('../../context/AuthContext', () => ({
-  useAuth: () => mockAuth.current,
+  useAuth: () => globalThis.withSeededAccess(mockAuth.current),
 }))
 
 const api = (await import('../../api/client')).default

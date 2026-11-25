@@ -15,8 +15,8 @@ import { useDeferredSend } from './useDeferredSend'
 import { useFilingForms } from './useFilingForms'
 import { useLetterActions } from './useLetterActions'
 import { useMyWork } from './useMyWork'
+import { FEATURE, can } from '../../lib/access'
 
-const DECIDING_ROLES = ['Coordinator', 'PM']
 /** The Home queue whose number the Filing header and rail badge both show. */
 const FILING_QUEUE = 'acceptance_filing'
 
@@ -35,7 +35,7 @@ const FILING_QUEUE = 'acceptance_filing'
 export default function MyWork() {
   const { user } = useAuth()
   const toast = useToast()
-  const decides = DECIDING_ROLES.includes(user?.role?.name)
+  const decides = can(user, FEATURE.ACCEPTANCE_APPROVE, 'edit')
   const mw = useMyWork()
   const [forms, formActions] = useFilingForms()
   const deferred = useDeferredSend()

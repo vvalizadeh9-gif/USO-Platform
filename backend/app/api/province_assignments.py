@@ -12,14 +12,14 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.core.deps import ADMIN, PM, VIEWER, require_roles
+from app.core.access import Feature as F, require_access
 from app.models.reference import User
 from app.services import province_assignment
 
 router = APIRouter(prefix="/admin/province-assignments", tags=["province-assignments"])
 
-can_read = require_roles(PM, ADMIN, VIEWER)
-can_edit = require_roles(PM, ADMIN)
+can_read = require_access(F.PROVINCE_ASSIGNMENTS, "view")
+can_edit = require_access(F.PROVINCE_ASSIGNMENTS, "edit")
 
 
 class RegionChangeIn(BaseModel):

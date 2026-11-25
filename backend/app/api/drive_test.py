@@ -32,11 +32,11 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.work_items import MAX_EXPORT_ROWS
+from app.core.access import Area, Feature as F, require_access
 from app.core import jalali
-from app.core.access import Area, require_access
 from app.core.database import get_db
 from app.core import audit_actions
-from app.core.deps import PM, get_current_user, require_review_authority, require_roles
+from app.core.deps import get_current_user
 from app.models.reference import Contractor, Province, User
 from app.models.workitem import Assignment
 from app.schemas import (
@@ -90,6 +90,9 @@ from app.services.audit import record_audit
 from app.services.visibility import visible_province_ids, visible_work_item_ids
 
 router = APIRouter(prefix="/drive-test", tags=["drive-test"])
+
+#: UEP-25: every export also needs the "Export to Excel" feature.
+EXPORTER = Depends(require_access(F.EXPORTS))
 
 #: Insights dashboard reads: who may use them is the central permission map's
 #: (``Area.INSIGHTS_DASHBOARDS``), so a role outside it is a 403 here.
@@ -499,7 +502,7 @@ def _ongoing_stage_options() -> list[FilterOption]:
     ]
 
 
-@router.get("/sites/export", dependencies=[DASHBOARD_READER])
+@router.get("/sites/export", dependencies=[DASHBOARD_READER, EXPORTER])
 def export_drive_test_sites(
     params: dict = Depends(_site_params),
     db: Session = Depends(get_db),
@@ -532,7 +535,7 @@ def export_drive_test_sites(
     )
 
 
-@router.get("/export", dependencies=[DASHBOARD_READER])
+@router.get("/export", dependencies=[DASHBOARD_READER, EXPORTER])
 def export_delivery_workbook(
     province_id: int | None = Query(
         None, description="Narrow the whole file to one province inside your scope"
@@ -667,7 +670,7 @@ def _points(rows: list[dict]) -> list[ChartPoint]:
 @router.get("/pipeline/summary", response_model=PipelineSummary)
 def pipeline_summary(
     db: Session = Depends(get_db),
-    user: User = Depends(require_review_authority),
+    user: User = Depends(require_access(F.DT_ASSIGNMENT, "edit")),
 ):
     """The Health check → Drive test strip: each step's count, late count,
     oldest wait and SLA. Counted by the queue service Home and the rail read,
@@ -678,7 +681,7 @@ def pipeline_summary(
 @router.get("/contractors/load", response_model=list[ContractorLoadRow])
 def dt_contractor_load(
     db: Session = Depends(get_db),
-    user: User = Depends(require_review_authority),
+    user: User = Depends(require_access(F.DT_ASSIGNMENT, "edit")),
 ):
     """Each contractor's drive-test workload, for the assign panel."""
     return contractor_load.contractor_load(QueueContext(db, user), "dt")
@@ -695,7 +698,7 @@ def dt_tests(
     sort: str = Query("aging"),
     dir: str = Query("desc"),
     db: Session = Depends(get_db),
-    user: User = Depends(require_review_authority),
+    user: User = Depends(require_access(F.DT_REVIEW, "edit")),
 ):
     """Sites to review, with contractors, or reviewed, one row per site."""
     if tab not in dt_workflow.TEST_TABS:
@@ -713,7 +716,7 @@ def reassign_dt_assignment(
     assignment_id: int,
     payload: ReassignRequest,
     db: Session = Depends(get_db),
-    user: User = Depends(require_roles(PM)),
+    user: User = Depends(require_access(F.REASSIGN_WORK, "edit")),
 ):
     """Hand an open drive test to another contractor (PM only, reason required)."""
     reason = payload.reason.strip()

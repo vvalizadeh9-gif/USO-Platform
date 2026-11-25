@@ -1,4 +1,5 @@
 """FastAPI application entrypoint."""
+import asyncio
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 
@@ -7,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
 
+from app.services import daily_jobs
 from app.services.system_status import APP_VERSION
 from app.api import api_router
 from app.core.bootstrap import init_db
@@ -32,7 +34,14 @@ async def lifespan(app: FastAPI):
     a failed migration stops the deploy instead of going live half-applied.
     """
     init_db()
+    # UEP-25: System health snapshot and expiring access exceptions, hourly,
+    # one pod at a time (services/daily_jobs.py).
+    task = None
+    if daily_jobs.enabled():
+        task = asyncio.create_task(daily_jobs.loop())
     yield
+    if task is not None:
+        task.cancel()
 
 
 app = FastAPI(

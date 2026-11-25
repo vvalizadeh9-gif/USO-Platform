@@ -13,6 +13,7 @@ from fastapi import APIRouter, Depends, Query
 from fastapi.responses import Response, StreamingResponse
 from sqlalchemy.orm import Session
 
+from app.core.access import Feature as F, require_access
 from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.models.reference import User
@@ -21,6 +22,9 @@ from app.services import gap_export, gaps
 _XLSX_MEDIA_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
 router = APIRouter(prefix="/gaps", tags=["gaps"])
+
+#: UEP-25: every export also needs the "Export to Excel" feature.
+EXPORTER = Depends(require_access(F.EXPORTS))
 
 
 @router.get("/overview")
@@ -50,7 +54,7 @@ def gap_map(
     return gaps.coverage_map(db, user)
 
 
-@router.get("/villages.xlsx")
+@router.get("/villages.xlsx", dependencies=[EXPORTER])
 def gap_villages_export(
     gap: str = Query(
         ...,

@@ -97,6 +97,6 @@ def explorer_work_item_ids(user: User, db: Session) -> Select:
     they read every live site. Reading is all it grants -- every write route
     keeps its own role check, and none admits those roles.
     """
-    if allows(user.role.name, Area.EXPLORER_ALL_SITES):
+    if allows(user, Area.EXPLORER_ALL_SITES):
         return select(WorkItem.id).where(WorkItem.deleted_at.is_(None))
     return visible_work_item_ids(user, db)

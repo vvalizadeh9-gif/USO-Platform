@@ -7,6 +7,7 @@ import api from '../../api/client'
 import { Loading, fadeUp, stagger } from '../../components/ui'
 import { actorLabel, describeAuditEntry, formatDateTime } from '../../lib/auditLog'
 import { formatNumber } from '../../lib/numbers'
+import '../../styles/system-health.css'
 
 export default function OverviewTab({ onNavigateTab }) {
   const [stats, setStats] = useState(null)
@@ -56,6 +57,19 @@ function SystemHealthWidget({ health, onNavigateTab }) {
         <Database size={16} style={{ color: 'var(--uep-text-2)' }} />
         <h3 style={{ fontSize: 15 }}>System health</h3>
       </div>
+
+      {/* UEP-25: the one-line verdict the footer and the System health page
+          also show, and the way in to the full page. */}
+      {health && health.summary && (
+        <button
+          type="button"
+          className={`sh-summary-line ${health.summary.status === 'normal' ? '' : 'is-problem'}`.trim()}
+          onClick={() => onNavigateTab('health')}
+        >
+          <span>{health.summary.headline}</span>
+          <span className="sh-summary-link">Open System health <ArrowRight size={13} /></span>
+        </button>
+      )}
 
       {health === false ? (
         <p className="muted" style={{ fontSize: 13 }}>Could not load system health.</p>

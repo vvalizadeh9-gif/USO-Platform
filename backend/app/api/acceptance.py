@@ -15,9 +15,9 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy.orm import Session
 
 from app.core import audit_actions, jalali
-from app.core.access import Area, require_access
+from app.core.access import Area, Feature as F, require_access
 from app.core.database import get_db
-from app.core.deps import PM, get_current_user, require_roles
+from app.core.deps import PM, get_current_user
 from app.models.reference import Province, User
 from app.schemas import (
     AcceptanceAnalysis,
@@ -43,6 +43,9 @@ from app.services.acceptance_analytics import SITE_METRICS, AcceptanceAnalytics
 
 router = APIRouter(prefix="/acceptance", tags=["acceptance"])
 
+#: UEP-25: every export also needs the "Export to Excel" feature.
+EXPORTER = Depends(require_access(F.EXPORTS))
+
 #: Insights dashboard reads: who may use them is the central permission map's
 #: (``Area.INSIGHTS_DASHBOARDS``), so a role outside it is a 403 here.
 DASHBOARD_READER = Depends(require_access(Area.INSIGHTS_DASHBOARDS))
@@ -51,7 +54,7 @@ DASHBOARD_READER = Depends(require_access(Area.INSIGHTS_DASHBOARDS))
 #: alias of the same guard -- re-declared here rather than imported from that
 #: sibling module, which is this codebase's existing convention for a
 #: one-line role alias.
-require_pm = require_roles(PM)
+require_pm = require_access(F.ACCEPTANCE_TARGET, "edit")
 
 
 def _resolve_province_filter(
@@ -196,7 +199,7 @@ def acceptance_sites(
     )
 
 
-@router.get("/sites/export", dependencies=[DASHBOARD_READER])
+@router.get("/sites/export", dependencies=[DASHBOARD_READER, EXPORTER])
 def export_acceptance_sites(
     metric: str = Query(
         description=f"Which figure to open. One of: {', '.join(SITE_METRICS)}"
@@ -412,7 +415,7 @@ def acceptance_progress_view(
     )
 
 
-@router.get("/progress/export", dependencies=[DASHBOARD_READER])
+@router.get("/progress/export", dependencies=[DASHBOARD_READER, EXPORTER])
 def export_acceptance_progress(
     months: int = Query(
         acceptance_progress.DEFAULT_MONTHS, ge=1, le=acceptance_progress.MAX_MONTHS
@@ -449,7 +452,7 @@ from fastapi import File, Form, UploadFile  # noqa: E402
 from sqlalchemy import and_, exists, func, or_, select  # noqa: E402
 from sqlalchemy.orm import selectinload  # noqa: E402
 
-from app.core.deps import CONTRACTOR, COORDINATOR, PM, require_roles  # noqa: E402
+from app.core.deps import CONTRACTOR, COORDINATOR  # noqa: E402
 from app.core.jalali import format_shamsi, parse_shamsi  # noqa: E402
 from app.models.acceptance_workflow import (  # noqa: E402
     AUTHORITIES,
@@ -1075,7 +1078,7 @@ def create_submission(
     village_id: int,
     payload: AcceptanceSubmissionCreate,
     db: Session = Depends(get_db),
-    user: User = Depends(require_roles(*_SUBMIT_ROLES)),
+    user: User = Depends(require_access(F.ACCEPTANCE_FILING, "edit")),
 ) -> AcceptanceSubmissionOut:
     """Record a claimed ICT or CRA verdict for one village."""
     village = _load_village(db, user, village_id)
@@ -1129,7 +1132,7 @@ def create_bulk_submissions(
     ),
     file: UploadFile | None = File(None),
     db: Session = Depends(get_db),
-    user: User = Depends(require_roles(*_SUBMIT_ROLES)),
+    user: User = Depends(require_access(F.ACCEPTANCE_FILING, "edit")),
 ) -> BulkSubmissionResult:
     """File one letter against many villages at once.
 
@@ -1294,7 +1297,7 @@ def update_submission(
     submission_id: int,
     payload: AcceptanceSubmissionUpdate,
     db: Session = Depends(get_db),
-    user: User = Depends(require_roles(*_SUBMIT_ROLES)),
+    user: User = Depends(require_access(F.ACCEPTANCE_FILING, "edit")),
 ) -> AcceptanceSubmissionOut:
     """Correct a submission that has not been reviewed yet."""
     submission = _editable(db, user, submission_id)
@@ -1330,7 +1333,7 @@ def update_submission(
 def withdraw_submission(
     submission_id: int,
     db: Session = Depends(get_db),
-    user: User = Depends(require_roles(*_SUBMIT_ROLES)),
+    user: User = Depends(require_access(F.ACCEPTANCE_FILING, "edit")),
 ) -> AcceptanceSubmissionOut:
     """Take back a submission before anyone has reviewed it."""
     submission = _editable(db, user, submission_id)
@@ -1355,7 +1358,7 @@ def review_submission(
     submission_id: int,
     payload: AcceptanceReviewRequest,
     db: Session = Depends(get_db),
-    user: User = Depends(require_roles(*_REVIEW_ROLES)),
+    user: User = Depends(require_access(F.ACCEPTANCE_APPROVE, "edit")),
 ) -> AcceptanceSubmissionOut:
     """Validate a submission into the record, or return it to the submitter.
 
@@ -1418,7 +1421,7 @@ def upload_evidence(
     submission_id: int,
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
-    user: User = Depends(require_roles(*_SUBMIT_ROLES)),
+    user: User = Depends(require_access(F.ACCEPTANCE_FILING, "edit")),
 ) -> EvidenceOut:
     """Attach a scanned letter or supporting document to a pending submission."""
     submission = _editable(db, user, submission_id)
@@ -1495,7 +1498,7 @@ def download_evidence(
 def delete_evidence(
     evidence_id: int,
     db: Session = Depends(get_db),
-    user: User = Depends(require_roles(*_SUBMIT_ROLES)),
+    user: User = Depends(require_access(F.ACCEPTANCE_FILING, "edit")),
 ) -> Response:
     """Remove an attachment from a submission that is still awaiting review.
 

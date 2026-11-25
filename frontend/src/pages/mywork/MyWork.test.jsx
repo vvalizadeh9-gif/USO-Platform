@@ -9,7 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { myWorkList, myWorkSuggestions, myWorkVillage } from '../../../e2e/myWorkFixtures.js'
 
 const role = vi.hoisted(() => ({ name: 'Contractor' }))
-vi.mock('../../context/AuthContext', () => ({ useAuth: () => ({ user: { id: 7, role } }) }))
+vi.mock('../../context/AuthContext', () => ({ useAuth: () => globalThis.withSeededAccess({ user: { id: 7, role } }) }))
 vi.mock('../../context/ToastContext', () => ({ useToast: () => ({ success: vi.fn(), error: vi.fn(), info: vi.fn() }) }))
 
 const api = vi.hoisted(() => ({
