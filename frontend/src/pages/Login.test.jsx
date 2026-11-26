@@ -2,7 +2,7 @@
 // password step, remembered usernames and "Not you?", the lockout countdown
 // from Retry-After, the help panel with the Admin contact, notices, and
 // always landing on the landing page.
-import { act, render, screen, waitFor, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -52,6 +52,17 @@ const signInButton = () => screen.getByRole('button', { name: /^(Sign in|Signing
 async function toPasswordStep(user, name = 'sara') {
   await user.type(usernameInput(), name)
   await user.click(continueButton())
+}
+
+/** Type on real timers, then submit on fake ones: from the click on, the
+ * clock moves only when the test moves it, however slow the machine. */
+async function signInOnFakeClock(user) {
+  await toPasswordStep(user)
+  await user.type(passwordInput(), 'pw')
+  vi.useFakeTimers()
+  fireEvent.click(signInButton())
+  // Let the mocked request settle.
+  await act(async () => {})
 }
 
 async function signIn(user, name = 'sara', password = 'pw') {
@@ -199,10 +210,9 @@ describe('step 2: password', () => {
 
 describe('lockout', () => {
   it('counts down from Retry-After, then unlocks', async () => {
-    vi.useFakeTimers({ shouldAdvanceTime: true })
     login.mockRejectedValue(refused(429, { headers: { 'retry-after': '90' } }))
-    const { user } = renderLogin('/login', { advanceTimers: vi.advanceTimersByTime })
-    await signIn(user)
+    const { user } = renderLogin()
+    await signInOnFakeClock(user)
 
     const box = screen.getByText('Too many attempts').closest('.uep-signin-lock')
     expect(box).toHaveTextContent('Try again in 1:30')
@@ -292,9 +302,8 @@ describe('notices', () => {
 
 describe('after signing in', () => {
   it('says "Signed in", drops the curtain, then lands on the landing page within 900 ms', async () => {
-    vi.useFakeTimers({ shouldAdvanceTime: true })
-    const { user, container } = renderLogin('/login', { advanceTimers: vi.advanceTimersByTime })
-    await signIn(user)
+    const { user, container } = renderLogin()
+    await signInOnFakeClock(user)
     expect(signInButton()).toHaveTextContent('Signed in')
     expect(container.querySelector('.uep-signin-curtain')).toHaveTextContent('Opening Home')
     expect(navigate).not.toHaveBeenCalled()

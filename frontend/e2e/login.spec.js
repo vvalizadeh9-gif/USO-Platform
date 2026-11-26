@@ -70,6 +70,17 @@ const password = (page) => page.getByLabel('Password', { exact: true })
 const continueButton = (page) => page.getByRole('button', { name: 'Continue' })
 const signInButton = (page) => page.locator('form .uep-signin-submit')
 
+/** One wrong-password attempt, waiting for the server's answer: the page
+ * ignores a click while a sign-in is in flight, so firing clicks back to back
+ * sends fewer requests than it looks like on a slow machine. */
+async function wrongAttempt(page) {
+  await password(page).fill('wrong')
+  await Promise.all([
+    page.waitForResponse((r) => r.url().endsWith('/auth/login')),
+    signInButton(page).click(),
+  ])
+}
+
 async function noPageScroll(page) {
   return page.evaluate(() => {
     const root = document.querySelector('.uep-signin')
@@ -99,12 +110,10 @@ for (const [width, height] of [[1440, 900], [1366, 768]]) {
     await fits('password')
 
     for (let i = 0; i < 5; i += 1) {
-      await password(page).fill('wrong')
-      await signInButton(page).click()
+      await wrongAttempt(page)
       await expect(page.locator('#login-password-error')).toHaveText(/incorrect/)
     }
-    await password(page).fill('wrong')
-    await signInButton(page).click()
+    await wrongAttempt(page)
     await expect(page.getByText('Too many attempts', { exact: true })).toBeVisible()
     await fits('lockout')
 
@@ -167,10 +176,7 @@ test('five wrong passwords show the lockout box with an m:ss countdown, in no re
   await page.goto('/login?motion=reduce')
   await username(page).fill('sara')
   await continueButton(page).click()
-  for (let i = 0; i < 6; i += 1) {
-    await password(page).fill('wrong')
-    await signInButton(page).click()
-  }
+  for (let i = 0; i < 6; i += 1) await wrongAttempt(page)
   const box = page.locator('.uep-signin-lock')
   await expect(box).toContainText(/Try again in 1:(30|29)/)
   await expect(signInButton(page)).toHaveText(/Try again in 1:\d\d/)
