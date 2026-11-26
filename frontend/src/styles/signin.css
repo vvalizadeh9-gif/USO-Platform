@@ -1,14 +1,19 @@
 /* ===================================================================
-   Sign-in, and the placeholder pages linked from it.
+   Sign-in and Change password (UEP-26): a deep cobalt band across the
+   top with slow waves, one centred card resting on its edge.
    Every value is a token from uep-tokens.css.
    =================================================================== */
 
 .uep-signin {
+  --uep-signin-pad-y: var(--uep-signin-card-pad);
+  --uep-signin-pad-x: var(--uep-signin-card-pad);
+
+  position: relative;
   display: flex;
-  /* The app shell never scrolls the document (see app.css), so this page
-     scrolls itself when the window is shorter than the form. */
+  flex-direction: column;
   height: 100%;
-  overflow: auto;
+  /* Every step fits 1366x768 and up: the page itself never scrolls there. */
+  overflow: hidden;
   font-family: var(--uep-font-sans);
   font-size: var(--uep-fs-body);
   line-height: var(--uep-lh-ui);
@@ -17,99 +22,186 @@
   background: var(--uep-surface);
 }
 
-/* ---------- Left half: the form ---------- */
+/* ---------- The band and its waves ---------- */
 
-.uep-signin-side {
-  position: relative;
-  flex: 1 1 var(--uep-signin-half-basis);
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  padding: var(--uep-space-32) var(--uep-space-48);
-  background: var(--uep-surface);
-}
-
-.uep-signin-skip {
+.uep-signin-band {
   position: absolute;
-  top: var(--uep-space-8);
-  left: var(--uep-space-8);
-  padding: var(--uep-space-8) var(--uep-space-12);
-  border-radius: var(--uep-radius-control);
-  background: var(--uep-accent);
-  color: var(--uep-on-accent);
-  font-weight: var(--uep-weight-medium);
-  text-decoration: none;
-  transform: translateY(calc(-100% - var(--uep-space-16)));
-}
-.uep-signin-skip:focus {
-  transform: none;
-  outline: var(--uep-focus-outline-width) solid var(--uep-accent);
-  outline-offset: var(--uep-focus-outline-offset);
+  top: 0;
+  right: 0;
+  left: 0;
+  height: var(--uep-signin-band-height);
+  overflow: hidden;
+  background: var(--uep-brand-deep);
+  animation: uep-signin-fade var(--uep-signin-band-fade) var(--uep-ease-entrance) both;
 }
 
-.uep-auth-logo {
+.uep-signin-waves { position: absolute; inset: 0; pointer-events: none; }
+
+.uep-signin-wave {
+  position: absolute;
+  right: calc(var(--uep-signin-wave-size) / -2);
+  bottom: calc(var(--uep-signin-wave-size) / -2);
+  width: var(--uep-signin-wave-size);
+  height: var(--uep-signin-wave-size);
+  border: var(--uep-signin-wave-border) solid var(--uep-brand-wave);
+  border-radius: var(--uep-radius-pill);
+  opacity: 0;
+  will-change: transform, opacity;
+  animation: uep-signin-wave var(--uep-signin-wave-cycle) var(--uep-signin-wave-ease) infinite;
+  /* Started part-way through, so a ring is already moving on arrival. */
+  animation-delay: calc(var(--uep-signin-wave-stagger) * var(--uep-wave, 0) - 2s);
+}
+.uep-signin-wave-b {
+  top: calc(var(--uep-signin-wave-b-size) / -2);
+  right: auto;
+  bottom: auto;
+  left: calc(var(--uep-signin-wave-b-size) / -2);
+  width: var(--uep-signin-wave-b-size);
+  height: var(--uep-signin-wave-b-size);
+  border-color: var(--uep-signin-wave-b);
+  animation-duration: var(--uep-signin-wave-b-cycle);
+  animation-delay: calc(var(--uep-signin-wave-b-stagger) * var(--uep-wave, 0) - 6s);
+}
+
+/* ---------- Top bar: the mark and "UEP" ---------- */
+
+.uep-signin-top {
+  position: relative;
+  z-index: 1;
+  flex: none;
   display: flex;
   align-items: center;
-  gap: var(--uep-space-8);
+  padding: 22px var(--uep-signin-gutter);
 }
-.uep-auth-logo-tile {
-  display: inline-flex;
+.uep-signin-brand {
+  display: flex;
   align-items: center;
-  justify-content: center;
-  width: var(--uep-signin-logo-size);
-  height: var(--uep-signin-logo-size);
-  border-radius: var(--uep-radius-logo);
-  background: var(--uep-accent);
-  color: var(--uep-on-accent);
-  font-size: var(--uep-fs-caption);
-  font-weight: var(--uep-weight-semibold);
+  gap: 10px;
+  color: var(--uep-on-brand);
 }
-.uep-auth-wordmark {
-  font-size: var(--uep-fs-card-title);
+.uep-signin-mark { flex: none; width: var(--uep-signin-logo-size); height: var(--uep-signin-logo-size); }
+.uep-signin-wordmark {
+  font-size: var(--uep-fs-signin-wordmark);
   font-weight: var(--uep-weight-semibold);
+  letter-spacing: -0.01em;
+}
+.uep-signin .uep-mark-arc {
+  stroke-dasharray: 40;
+  animation: uep-signin-arc var(--uep-signin-arc-draw) var(--uep-ease-expressive) both;
+  animation-delay: calc(var(--uep-signin-arc-delay) + var(--uep-signin-arc-step) * var(--uep-arc, 0));
 }
 
-.uep-signin-center {
+/* ---------- The title and the card ---------- */
+
+.uep-signin-main {
+  position: relative;
+  z-index: 1;
   flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
-  justify-content: center;
-  padding: var(--uep-space-32) 0;
+  align-items: center;
+  padding: 0 var(--uep-space-16) var(--uep-space-24);
 }
 
-.uep-signin-column {
-  width: 100%;
-  max-width: var(--uep-signin-form-width);
-  margin: 0 auto;
+.uep-signin-hero {
+  margin: var(--uep-signin-title-above) 0 var(--uep-signin-title-below);
+  color: var(--uep-on-brand);
+  text-align: center;
 }
-
 .uep-signin-title {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  column-gap: 0.26em;
   margin: 0;
-  font-size: var(--uep-fs-signin-title);
+  font-size: var(--uep-fs-signin-display);
   font-weight: var(--uep-weight-semibold);
-  letter-spacing: var(--uep-tracking-heading);
-  line-height: var(--uep-lh-ui);
+  line-height: var(--uep-lh-signin-title);
+  letter-spacing: var(--uep-tracking-signin-title);
 }
-.uep-signin-subtitle {
-  margin: var(--uep-space-4) 0 var(--uep-space-32);
+.uep-signin-word-mask { display: inline-block; overflow: hidden; padding-bottom: 0.08em; }
+.uep-signin-word {
+  display: inline-block;
+  animation: uep-signin-word var(--uep-dur-slow) var(--uep-ease-expressive) both;
+  animation-delay: calc(var(--uep-signin-word-delay) + var(--uep-signin-word-step) * var(--uep-word, 0));
+}
+.uep-signin-rule {
+  display: block;
+  width: var(--uep-signin-rule-width);
+  height: var(--uep-signin-rule-height);
+  margin: var(--uep-space-16) auto 0;
+  border-radius: var(--uep-signin-rule-radius);
+  background: var(--uep-on-brand);
+  animation: uep-signin-draw var(--uep-signin-rule-draw) var(--uep-ease-expressive) var(--uep-signin-rule-delay) both;
+}
+
+.uep-signin-card {
+  width: 100%;
+  max-width: var(--uep-signin-card-width);
+  padding: var(--uep-signin-pad-y) var(--uep-signin-pad-x);
+  border: var(--uep-border-width) solid var(--uep-border);
+  border-radius: var(--uep-radius-card);
+  background: var(--uep-surface);
+  box-shadow: var(--uep-signin-card-shadow);
+  animation: uep-signin-rise var(--uep-signin-band-fade) var(--uep-ease-expressive) var(--uep-signin-card-delay) both;
+}
+
+/* ---------- Footer ---------- */
+
+.uep-signin-footer {
+  position: relative;
+  z-index: 1;
+  flex: none;
+  display: flex;
+  justify-content: space-between;
+  gap: var(--uep-space-16);
+  padding: var(--uep-space-16) var(--uep-signin-gutter);
   color: var(--uep-text-3);
+  font-size: var(--uep-fs-caption);
+  animation: uep-signin-fade 500ms var(--uep-ease-entrance) var(--uep-signin-footer-delay) both;
 }
+
+/* ---------- Steps: the entering view slides in; nothing exits ---------- */
+
+.uep-signin-step.is-fwd { animation: uep-signin-in-right var(--uep-signin-step-duration) var(--uep-ease-expressive) both; }
+.uep-signin-step.is-bwd { animation: uep-signin-in-left var(--uep-signin-step-duration) var(--uep-ease-expressive) both; }
+/* On load the fields arrive in order, after the card. */
+.uep-signin-step.is-first .uep-signin-stg {
+  animation: uep-signin-rise-sm var(--uep-signin-field-rise) var(--uep-ease-entrance) both;
+  animation-delay: calc(var(--uep-signin-field-delay) + var(--uep-signin-field-step) * var(--k, 0));
+}
+
+.uep-signin-heading {
+  margin: 0 0 var(--uep-space-24);
+  font-size: var(--uep-fs-signin-heading);
+  font-weight: var(--uep-weight-semibold);
+  line-height: 1.2;
+  letter-spacing: -0.015em;
+}
+.uep-signin-lead { margin: calc(-1 * var(--uep-space-16)) 0 var(--uep-space-16); color: var(--uep-text-2); }
 
 .uep-signin-notice {
-  margin: calc(-1 * var(--uep-space-16)) 0 var(--uep-space-24);
-  padding: var(--uep-space-12) var(--uep-space-16);
-  border: var(--uep-border-width) solid var(--uep-border);
+  display: flex;
+  align-items: flex-start;
+  gap: var(--uep-space-8);
+  margin: calc(-1 * var(--uep-space-8)) 0 18px;
+  padding: 10px var(--uep-space-12);
   border-radius: var(--uep-radius-control);
   background: var(--uep-page);
   color: var(--uep-text-2);
   font-size: var(--uep-fs-small);
 }
+.uep-signin-notice + .uep-signin-notice { margin-top: calc(-1 * var(--uep-space-8)); }
+.uep-signin-notice-icon { flex: none; margin-top: 1px; color: var(--uep-accent); }
 
-.uep-signin-field { margin-bottom: var(--uep-space-20); }
+/* ---------- Fields ---------- */
+
+.uep-signin-field { margin-bottom: var(--uep-space-16); }
 
 .uep-signin-label {
   display: block;
-  margin-bottom: var(--uep-space-8);
+  margin-bottom: 6px;
   font-weight: var(--uep-weight-medium);
 }
 .uep-signin-label-row {
@@ -119,31 +211,15 @@
   gap: var(--uep-space-12);
 }
 
-.uep-signin-link {
-  color: var(--uep-accent);
-  font-weight: var(--uep-weight-medium);
-  text-decoration: none;
-  border-radius: var(--uep-space-4);
-  transition: color var(--uep-dur-fast) var(--uep-ease-productive);
-}
-.uep-signin-link:hover { color: var(--uep-accent-hover); text-decoration: underline; }
-.uep-signin-link:focus-visible,
-.uep-auth-legal a:focus-visible,
-.uep-auth-back:focus-visible {
-  outline: var(--uep-focus-outline-width) solid var(--uep-accent);
-  outline-offset: var(--uep-focus-outline-offset);
-}
-.uep-signin-forgot { font-size: var(--uep-fs-small); margin-bottom: var(--uep-space-8); }
-
 .uep-signin-input-wrap { position: relative; }
+.uep-signin-input-wrap.is-shaking { animation: uep-signin-shake var(--uep-signin-shake) var(--uep-ease-productive); }
 
 .uep-signin-input-icon {
   position: absolute;
   top: 50%;
   left: var(--uep-space-12);
+  color: var(--uep-text-3);
   transform: translateY(-50%);
-  color: var(--uep-text);
-  opacity: var(--uep-icon-muted-opacity);
   pointer-events: none;
 }
 
@@ -152,32 +228,36 @@
   width: 100%;
   height: var(--uep-signin-input-height);
   padding: 0 var(--uep-space-12) 0 var(--uep-signin-input-icon-inset);
-  border: var(--uep-border-width) solid var(--uep-border-strong);
+  border: var(--uep-border-width) solid var(--uep-signin-input-edge);
   border-radius: var(--uep-radius-control);
   background: var(--uep-surface);
   color: var(--uep-text);
   font: inherit;
+  font-size: var(--uep-fs-15);
   transition:
     border-color var(--uep-dur-fast) var(--uep-ease-productive),
     box-shadow var(--uep-dur-fast) var(--uep-ease-productive);
 }
 .uep-signin-input::placeholder { color: var(--uep-text-3); opacity: 1; }
+.uep-signin-input:hover { border-color: var(--uep-signin-input-edge-hover); }
 .uep-signin-input:focus {
   outline: none;
   border-color: var(--uep-accent);
-  box-shadow: var(--uep-focus-ring);
+  box-shadow: var(--uep-signin-focus-ring);
 }
 .uep-signin-input[aria-invalid='true'] { border-color: var(--uep-danger); }
 .uep-signin-input[aria-invalid='true']:focus { box-shadow: var(--uep-danger-ring); }
-.uep-signin-input:disabled { background: var(--uep-page); }
-.uep-signin-input-reveal { padding-right: var(--uep-signin-input-icon-inset); }
-.uep-signin-input-plain { padding-left: var(--uep-space-12); }
+.uep-signin-input:disabled { background: var(--uep-page); color: var(--uep-text-3); cursor: not-allowed; }
+.uep-signin-input-reveal { padding-right: var(--uep-space-48); }
 
-.uep-signin-reveal,
-.uep-signin-icon-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+.uep-signin-reveal {
+  position: absolute;
+  top: var(--uep-space-4);
+  right: var(--uep-space-4);
+  bottom: var(--uep-space-4);
+  width: 34px;
+  display: grid;
+  place-items: center;
   border: 0;
   border-radius: var(--uep-radius-control);
   background: transparent;
@@ -187,27 +267,13 @@
     background-color var(--uep-dur-fast) var(--uep-ease-productive),
     color var(--uep-dur-fast) var(--uep-ease-productive);
 }
-.uep-signin-reveal {
-  position: absolute;
-  top: var(--uep-space-4);
-  right: var(--uep-space-4);
-  bottom: var(--uep-space-4);
-  width: calc(var(--uep-signin-input-height) - 2 * var(--uep-space-4));
-}
-.uep-signin-reveal:hover,
-.uep-signin-icon-btn:hover { background: var(--uep-accent-tint); color: var(--uep-accent); }
-.uep-signin-reveal:focus-visible,
-.uep-signin-icon-btn:focus-visible,
-.uep-signin-submit:focus-visible {
-  outline: var(--uep-focus-outline-width) solid var(--uep-accent);
-  outline-offset: var(--uep-focus-outline-offset);
-}
+.uep-signin-reveal:hover { background: var(--uep-accent-tint); color: var(--uep-accent); }
 
 .uep-signin-error,
 .uep-signin-hint {
   display: flex;
   align-items: center;
-  gap: var(--uep-space-4);
+  gap: 6px;
   margin: var(--uep-space-8) 0 0;
   font-size: var(--uep-fs-small);
 }
@@ -216,29 +282,12 @@
 .uep-signin-error:empty,
 .uep-signin-hint:empty { display: none; }
 
-.uep-signin-captcha-row { display: flex; align-items: center; gap: var(--uep-space-8); }
-.uep-signin-captcha-row .uep-signin-input { flex: 1; min-width: 0; }
-.uep-signin-captcha-sum {
-  padding: 0 var(--uep-space-12);
-  height: var(--uep-signin-input-height);
-  display: inline-flex;
-  align-items: center;
-  border-radius: var(--uep-radius-control);
-  background: var(--uep-page);
-  font-weight: var(--uep-weight-semibold);
-  white-space: nowrap;
-}
-.uep-signin-icon-btn {
-  width: var(--uep-signin-input-height);
-  height: var(--uep-signin-input-height);
-}
-.uep-signin-icon-btn:disabled { cursor: not-allowed; opacity: var(--uep-icon-muted-opacity); }
-
 .uep-signin-check {
   display: flex;
   align-items: center;
   gap: var(--uep-space-8);
-  margin-bottom: var(--uep-space-20);
+  width: max-content;
+  margin: 2px 0 var(--uep-space-20);
   color: var(--uep-text-2);
   cursor: pointer;
 }
@@ -249,7 +298,32 @@
   accent-color: var(--uep-accent);
   cursor: pointer;
 }
-.uep-signin-check input:focus-visible {
+
+/* ---------- Links and buttons ---------- */
+
+.uep-signin-link,
+.uep-signin-back {
+  padding: 0;
+  border: 0;
+  border-radius: var(--uep-radius-sm);
+  background: none;
+  color: var(--uep-accent);
+  font: inherit;
+  font-weight: var(--uep-weight-medium);
+  cursor: pointer;
+  transition: color var(--uep-dur-fast) var(--uep-ease-productive);
+}
+.uep-signin-link { font-size: var(--uep-fs-small); }
+.uep-signin-link:hover { color: var(--uep-accent-hover); text-decoration: underline; }
+.uep-signin-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: var(--uep-space-16);
+}
+.uep-signin-back:hover { color: var(--uep-accent-hover); }
+
+.uep-signin :is(button, input[type='checkbox']):focus-visible {
   outline: var(--uep-focus-outline-width) solid var(--uep-accent);
   outline-offset: var(--uep-focus-outline-offset);
 }
@@ -274,12 +348,18 @@
     transform var(--uep-dur-fast) var(--uep-ease-productive);
 }
 .uep-signin-submit:hover { background: var(--uep-accent-hover); }
-.uep-signin-submit:active { transform: scale(var(--uep-press-scale)); }
-.uep-signin-submit[aria-disabled='true'] { cursor: progress; }
-.uep-signin-submit-icon {
-  transition: transform var(--uep-signin-icon-nudge-duration) var(--uep-ease-productive);
-}
+.uep-signin-submit:active { transform: scale(var(--uep-signin-press-scale)); }
+.uep-signin-submit-icon { transition: transform var(--uep-signin-icon-nudge-duration) var(--uep-ease-productive); }
 .uep-signin-submit:hover .uep-signin-submit-icon { transform: translateX(var(--uep-signin-icon-nudge)); }
+.uep-signin-submit[aria-busy='true'] { cursor: progress; }
+/* Locked out: the button waits with the field. Grey, not red. */
+.uep-signin-submit.is-locked {
+  background: var(--uep-border);
+  color: var(--uep-text-3);
+  cursor: not-allowed;
+  transform: none;
+}
+.uep-signin-submit.is-locked .uep-signin-submit-icon { transform: none; }
 
 .uep-signin-spinner {
   width: var(--uep-icon-md);
@@ -287,150 +367,268 @@
   border: var(--uep-focus-outline-width) solid currentColor;
   border-right-color: transparent;
   border-radius: var(--uep-radius-pill);
-  animation: uep-spin var(--uep-signin-spinner-turn) linear infinite;
+  animation: uep-signin-spin var(--uep-signin-spinner-turn) linear infinite;
 }
 
+.uep-signin-divider {
+  height: var(--uep-border-width);
+  margin: 22px calc(-1 * var(--uep-signin-pad-x)) var(--uep-space-16);
+  background: var(--uep-border);
+}
 .uep-signin-access {
-  margin: var(--uep-space-24) 0 0;
-  font-size: var(--uep-fs-small);
+  margin: 0;
   color: var(--uep-text-2);
+  font-size: var(--uep-fs-small);
+  text-align: center;
 }
 
-.uep-auth-footer {
+/* ---------- Step 2: account chip and lockout ---------- */
+
+.uep-signin-account {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: var(--uep-space-16);
-  font-size: var(--uep-fs-caption);
-  color: var(--uep-text-3);
+  gap: 10px;
+  width: 100%;
+  margin: 0 0 18px;
+  padding: var(--uep-space-8) 10px;
+  border: var(--uep-border-width) solid var(--uep-border);
+  border-radius: var(--uep-radius-pill);
+  background: var(--uep-surface);
+  color: var(--uep-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color var(--uep-dur-fast) var(--uep-ease-productive);
 }
-.uep-auth-legal { display: flex; flex-wrap: wrap; align-items: center; gap: var(--uep-space-8); }
-.uep-auth-legal a { color: var(--uep-text-3); text-decoration: none; border-radius: var(--uep-space-4); }
-.uep-auth-legal a:hover { color: var(--uep-text-2); text-decoration: underline; }
-
-.uep-auth-back {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--uep-space-8);
-  margin-bottom: var(--uep-space-24);
-  color: var(--uep-accent);
-  font-weight: var(--uep-weight-medium);
-  text-decoration: none;
-  border-radius: var(--uep-space-4);
-}
-.uep-auth-back:hover { color: var(--uep-accent-hover); }
-
-/* ---------- Right half: the brand ---------- */
-
-.uep-signin-brand {
-  position: relative;
-  flex: 1 1 var(--uep-signin-half-basis);
+.uep-signin-account:hover { border-color: var(--uep-signin-input-edge); }
+.uep-signin-account b {
+  flex: 1;
   min-width: 0;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  padding: var(--uep-space-56) var(--uep-space-64);
   overflow: hidden;
+  font-weight: var(--uep-weight-medium);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.uep-signin-avatar {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: var(--uep-signin-avatar);
+  height: var(--uep-signin-avatar);
+  border-radius: var(--uep-radius-pill);
+  background: var(--uep-accent-tint);
+  color: var(--uep-accent-hover);
+  font-size: var(--uep-fs-caption);
+  font-weight: var(--uep-weight-semibold);
+}
+.uep-signin-account-switch {
+  color: var(--uep-accent);
+  font-size: var(--uep-fs-small);
+  font-weight: var(--uep-weight-medium);
+  white-space: nowrap;
+}
+
+.uep-signin-lock {
+  display: flex;
+  align-items: center;
+  gap: var(--uep-space-12);
+  margin: 0 0 var(--uep-space-16);
+  padding: var(--uep-space-12);
+  border: var(--uep-border-width) solid var(--uep-border);
+  border-radius: var(--uep-radius-control);
+  background: var(--uep-page);
+}
+.uep-signin-lock b { display: block; font-weight: var(--uep-weight-semibold); }
+.uep-signin-lock-text { color: var(--uep-text-2); font-size: var(--uep-fs-small); }
+.uep-signin-tabular { font-variant-numeric: tabular-nums; }
+
+.uep-signin-ring {
+  position: relative;
+  flex: none;
+  width: var(--uep-signin-ring);
+  height: var(--uep-signin-ring);
+  color: var(--uep-text);
+}
+.uep-signin-ring svg:first-child {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+.uep-signin-ring circle { fill: none; stroke-width: 2.5; }
+.uep-signin-ring-track { stroke: var(--uep-border-strong); }
+.uep-signin-ring-fill {
+  stroke: var(--uep-text);
+  stroke-linecap: round;
+  transition: stroke-dashoffset 1s linear;
+}
+.uep-signin-ring-icon {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 14px;
+  height: 14px;
+  transform: translate(-50%, -50%);
+}
+
+/* ---------- Help panel ---------- */
+
+.uep-signin-contact {
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  border: var(--uep-border-width) solid var(--uep-border);
+  border-radius: var(--uep-radius-card);
+  list-style: none;
+}
+.uep-signin-contact-row {
+  display: flex;
+  align-items: center;
+  gap: var(--uep-space-12);
+  padding: var(--uep-space-12) 14px;
+}
+.uep-signin-contact-row + .uep-signin-contact-row { border-top: var(--uep-border-width) solid var(--uep-border); }
+.uep-signin-contact-row b { display: block; font-weight: var(--uep-weight-medium); overflow-wrap: anywhere; }
+.uep-signin-contact-row span span { display: block; color: var(--uep-text-2); font-size: var(--uep-fs-small); }
+.uep-signin-contact-icon { flex: none; color: var(--uep-accent); }
+.uep-signin-empty { margin: 0; color: var(--uep-text-2); }
+
+/* ---------- Change password: the live checklist ---------- */
+
+.uep-signin-rules {
+  display: grid;
+  gap: 6px;
+  margin: 0 0 18px;
+  padding: 0;
+  color: var(--uep-text-2);
+  font-size: var(--uep-fs-small);
+  list-style: none;
+}
+.uep-signin-rules li { display: flex; align-items: center; gap: var(--uep-space-8); }
+.uep-signin-rule-dot {
+  display: grid;
+  place-items: center;
+  width: var(--uep-signin-check-dot);
+  height: var(--uep-signin-check-dot);
+  border: 1.5px solid var(--uep-signin-input-edge);
+  border-radius: var(--uep-radius-pill);
+  color: var(--uep-on-accent);
+  transition:
+    background-color 200ms var(--uep-ease-productive),
+    border-color 200ms var(--uep-ease-productive);
+}
+.uep-signin-rule-dot svg { width: 11px; height: 11px; opacity: 0; transition: opacity 200ms; }
+.uep-signin-rules li.is-met { color: var(--uep-text); }
+.uep-signin-rules li.is-met .uep-signin-rule-dot { border-color: var(--uep-accent); background: var(--uep-accent); }
+.uep-signin-rules li.is-met .uep-signin-rule-dot svg { opacity: 1; }
+.uep-signin-rules + .uep-signin-error { margin: calc(-1 * var(--uep-space-8)) 0 var(--uep-space-12); }
+
+/* ---------- Signed in: the cobalt curtain ---------- */
+
+.uep-signin-curtain {
+  position: absolute;
+  inset: 0;
+  z-index: 8;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 14px;
   background: var(--uep-brand-deep);
   color: var(--uep-on-brand);
-  animation: uep-fade-in var(--uep-signin-panel-fade) var(--uep-ease-entrance) both;
+  pointer-events: none;
+  animation: uep-signin-curtain var(--uep-signin-curtain) var(--uep-ease-expressive) both;
 }
-
-.uep-signin-statement {
-  position: relative;
-  z-index: 1;
+.uep-signin-curtain-mark {
+  width: var(--uep-signin-curtain-mark);
+  height: var(--uep-signin-curtain-mark);
+  animation: uep-signin-pop 500ms var(--uep-ease-expressive) 350ms both;
+}
+.uep-signin-curtain p {
   margin: 0;
-  font-size: var(--uep-fs-brand);
-  font-weight: var(--uep-weight-semibold);
-  line-height: var(--uep-lh-brand);
-  letter-spacing: var(--uep-tracking-brand);
-}
-.uep-signin-word-mask { display: block; overflow: hidden; }
-.uep-signin-word {
-  display: block;
-  animation: uep-word-rise var(--uep-dur-slow) var(--uep-ease-expressive) both;
-  animation-delay: calc(var(--uep-signin-word-delay) + var(--uep-signin-word-step) * var(--uep-word, 0));
+  font-size: var(--uep-fs-15);
+  animation: uep-signin-fade 400ms var(--uep-ease-entrance) 550ms both;
 }
 
-.uep-signin-rule {
-  position: relative;
-  z-index: 1;
-  display: block;
-  width: var(--uep-signin-brand-rule-width);
-  height: var(--uep-signin-brand-rule-height);
-  margin-top: var(--uep-signin-brand-rule-gap);
-  background: var(--uep-on-brand);
-  transform-origin: left center;
-  animation: uep-rule-draw var(--uep-dur-slow) var(--uep-ease-expressive) var(--uep-signin-rule-delay) both;
-}
+/* ---------- Keyframes: transform and opacity only ---------- */
 
-/* Signal waves, centred on the panel's bottom-right corner. */
-.uep-signin-waves { position: absolute; inset: 0; pointer-events: none; }
-.uep-signin-wave {
-  position: absolute;
-  right: calc(var(--uep-signin-wave-size) / -2);
-  bottom: calc(var(--uep-signin-wave-size) / -2);
-  width: var(--uep-signin-wave-size);
-  height: var(--uep-signin-wave-size);
-  border: var(--uep-signin-wave-border) solid var(--uep-brand-wave);
-  border-radius: var(--uep-radius-pill);
-  opacity: 0;
-  will-change: transform, opacity;
-  animation: uep-wave var(--uep-signin-wave-cycle) var(--uep-signin-wave-ease) infinite;
-  animation-delay: calc(var(--uep-signin-wave-stagger) * var(--uep-wave, 0));
-}
-
-/* ---------- Entrance (left side) ---------- */
-
-.uep-enter {
-  animation: uep-rise var(--uep-signin-enter-duration) var(--uep-ease-entrance) both;
-  animation-delay: calc(var(--uep-signin-stagger-step) * var(--uep-i, 0));
-}
-
-@keyframes uep-rise {
-  from { opacity: 0; transform: translateY(var(--uep-signin-enter-distance)); }
-  to { opacity: 1; transform: none; }
-}
-@keyframes uep-fade-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-@keyframes uep-word-rise {
-  from { transform: translateY(105%); }
-  to { transform: none; }
-}
-@keyframes uep-rule-draw {
-  from { transform: scaleX(0); }
-  to { transform: scaleX(1); }
-}
-@keyframes uep-wave {
+@keyframes uep-signin-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes uep-signin-rise { from { opacity: 0; transform: translateY(var(--uep-signin-card-rise)); } to { opacity: 1; transform: none; } }
+@keyframes uep-signin-rise-sm { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes uep-signin-in-right { from { opacity: 0; transform: translateX(var(--uep-signin-step-shift)); } to { opacity: 1; transform: none; } }
+@keyframes uep-signin-in-left { from { opacity: 0; transform: translateX(calc(-1 * var(--uep-signin-step-shift))); } to { opacity: 1; transform: none; } }
+@keyframes uep-signin-word { from { transform: translateY(108%); } to { transform: none; } }
+@keyframes uep-signin-draw { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@keyframes uep-signin-arc { from { stroke-dashoffset: 40; } to { stroke-dashoffset: 0; } }
+@keyframes uep-signin-wave {
   0% { transform: scale(var(--uep-signin-wave-start-scale)); opacity: 0; }
   12% { opacity: var(--uep-signin-wave-peak-opacity); }
   100% { transform: scale(1); opacity: 0; }
 }
-@keyframes uep-spin {
-  to { transform: rotate(360deg); }
+@keyframes uep-signin-shake {
+  20% { transform: translateX(-5px); }
+  40% { transform: translateX(5px); }
+  60% { transform: translateX(-3px); }
+  80% { transform: translateX(2px); }
 }
+@keyframes uep-signin-curtain { from { transform: translateY(-100%); } to { transform: none; } }
+@keyframes uep-signin-pop {
+  0% { transform: scale(0.6); opacity: 0; }
+  60% { transform: scale(1.08); opacity: 1; }
+  100% { transform: scale(1); }
+}
+@keyframes uep-signin-spin { to { transform: rotate(360deg); } }
 
-/* ---------- Reduced motion (see lib/motionPreference.js) ---------- */
+/* ---------- Reduced motion (see lib/motionPreference.js) ----------
+   Nothing moves; everything is in its final state; the waves are hidden. */
 
+[data-uep-motion='reduce'] .uep-signin,
 [data-uep-motion='reduce'] .uep-signin *,
-[data-uep-motion='reduce'] .uep-signin {
+[data-uep-motion='reduce'] .uep-signin *::before,
+[data-uep-motion='reduce'] .uep-signin *::after,
+[data-uep-motion='reduce'] .uep-signin .uep-signin-step .uep-signin-stg {
   animation: none;
   transition: none;
 }
 [data-uep-motion='reduce'] .uep-signin-waves { display: none; }
 /* A spinner that stops dead reads as frozen, so it only slows. */
 [data-uep-motion='reduce'] .uep-signin .uep-signin-spinner {
-  animation: uep-spin calc(var(--uep-signin-spinner-turn) * 3) linear infinite;
+  animation: uep-signin-spin calc(var(--uep-signin-spinner-turn) * 3) linear infinite;
 }
 
-/* ---------- Narrow windows: the form stands alone ---------- */
+/* ---------- Short screens: every step still fits 1366x768 ---------- */
 
-@media (max-width: 959.98px) {
-  .uep-signin-brand { display: none; }
+@media (max-height: 780px) {
+  .uep-signin { --uep-signin-pad-y: 26px; --uep-signin-pad-x: 30px; }
+  .uep-signin-hero { margin: 2vh 0 18px; }
+  .uep-signin-title { font-size: var(--uep-fs-signin-display-short); }
+  .uep-signin-rule { margin-top: var(--uep-space-12); }
+  .uep-signin-field { margin-bottom: var(--uep-space-12); }
+  .uep-signin-heading { margin-bottom: 18px; }
+  .uep-signin-lead { margin: -10px 0 14px; }
+  .uep-signin-rules { margin-bottom: var(--uep-space-12); }
 }
+
+/* Windows shorter than any supported desktop: let the page scroll rather
+   than cut the card off. */
+@media (max-height: 620px) {
+  .uep-signin { overflow: auto; }
+  .uep-signin-band { position: absolute; }
+}
+
+/* ---------- Phones: the card goes full width; the page may scroll ---------- */
+
 @media (max-width: 599.98px) {
-  .uep-signin-side { padding: var(--uep-space-24) var(--uep-space-16); }
-  .uep-auth-footer { flex-direction: column; align-items: flex-start; }
+  .uep-signin {
+    --uep-signin-pad-y: 24px;
+    --uep-signin-pad-x: 20px;
+
+    overflow: auto;
+  }
+  .uep-signin-main { padding: 0 var(--uep-space-16) var(--uep-space-24); }
+  .uep-signin-footer {
+    flex-wrap: wrap;
+    justify-content: center;
+    text-align: center;
+  }
 }

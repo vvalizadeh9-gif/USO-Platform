@@ -251,6 +251,7 @@ def test_normal_repeated_logins_are_never_throttled(client):
         assert _attempt(client, "Admin@12345").status_code == 200
 
 
+@pytest.mark.usefixtures("captcha_on")
 def test_a_wrong_captcha_does_not_count_towards_the_lockout(client):
     """A mistyped sum is a human slip, not an attack."""
     from app.core.config import get_settings
@@ -317,6 +318,7 @@ def test_the_lockout_is_held_in_the_database_not_in_process_memory(client):
     )
 
 
+@pytest.mark.usefixtures("captcha_on")
 def test_a_spent_captcha_is_recorded_in_the_database(client):
     """Same reasoning for the replay guard next door."""
     from app.core.database import SessionLocal
@@ -359,6 +361,7 @@ def test_a_first_sign_in_needs_no_captcha(client):
     assert _bare_attempt(client, "Admin@12345").status_code == 200
 
 
+@pytest.mark.usefixtures("captcha_on")
 def test_the_captcha_is_demanded_after_repeated_failures(client):
     from app.core.config import get_settings
 
@@ -374,6 +377,7 @@ def test_the_captcha_is_demanded_after_repeated_failures(client):
     assert _bare_attempt(client, "Admin@12345").status_code == 200
 
 
+@pytest.mark.usefixtures("captcha_on")
 def test_the_demand_is_the_same_for_a_username_that_does_not_exist(client):
     """Otherwise the 400 would be a way to tell real accounts from made-up ones."""
     from app.core.config import get_settings
@@ -383,6 +387,7 @@ def test_the_demand_is_the_same_for_a_username_that_does_not_exist(client):
     assert _bare_attempt(client, "wrong", "nobody-here").status_code == 400
 
 
+@pytest.mark.usefixtures("captcha_on")
 def test_a_captcha_that_is_sent_is_checked_even_when_not_required(client):
     challenge = client.get("/api/v1/auth/captcha").json()
     response = client.post(

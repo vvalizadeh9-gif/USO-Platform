@@ -1,23 +1,26 @@
 import { describe, expect, it } from 'vitest'
-import { SIGN_IN_MESSAGES, lockoutMessage, mapSignInError, validateCredentials } from './signInErrors'
+import {
+  DEFAULT_LOCKOUT_SECONDS,
+  SIGN_IN_MESSAGES,
+  formatCountdown,
+  lockoutMessage,
+  mapSignInError,
+  validatePassword,
+  validateUsername,
+} from './signInErrors'
 
 const failed = (status, { detail, headers } = {}) => ({ response: { status, data: { detail }, headers: headers ?? {} } })
 
-describe('validateCredentials', () => {
-  it('passes when both fields are filled', () => {
-    expect(validateCredentials({ username: 'sara', password: 'x' })).toBeNull()
+describe('validateUsername / validatePassword', () => {
+  it('asks for a username when it is empty or blank', () => {
+    expect(validateUsername('')).toBe('Enter your username.')
+    expect(validateUsername('   ')).toBe('Enter your username.')
+    expect(validateUsername('sara')).toBeNull()
   })
 
-  it.each([
-    [{ username: '', password: '' }, { username: true, password: true }],
-    [{ username: '  ', password: 'x' }, { username: true, password: false }],
-    [{ username: 'sara', password: '' }, { username: false, password: true }],
-  ])('asks for both, and marks the empty ones (%o)', (fields, missing) => {
-    expect(validateCredentials(fields)).toEqual({ message: 'Enter your username and password.', missing })
-  })
-
-  it('does not trim the password: spaces can be part of one', () => {
-    expect(validateCredentials({ username: 'sara', password: '   ' })).toBeNull()
+  it('asks for a password, and does not trim it: spaces can be part of one', () => {
+    expect(validatePassword('')).toBe('Enter your password.')
+    expect(validatePassword('   ')).toBeNull()
   })
 })
 
@@ -31,40 +34,45 @@ describe('lockoutMessage', () => {
   })
 })
 
-describe('mapSignInError', () => {
-  const ctx = { captchaShown: false }
+describe('formatCountdown', () => {
+  it.each([[90, '1:30'], [900, '15:00'], [5, '0:05'], [0, '0:00'], [-3, '0:00'], [59.2, '1:00']])(
+    '%s → %s',
+    (seconds, text) => {
+      expect(formatCountdown(seconds)).toBe(text)
+    },
+  )
+})
 
+describe('mapSignInError', () => {
   it('gives one generic sentence for wrong credentials, and counts it', () => {
-    expect(mapSignInError(failed(401), ctx)).toEqual({
+    expect(mapSignInError(failed(401))).toEqual({
       kind: 'form', message: 'Username or password is incorrect.', countsAsFailure: true,
     })
   })
 
   it('reads the lockout length from Retry-After', () => {
-    const result = mapSignInError(failed(429, { headers: { 'retry-after': '840' } }), ctx)
-    expect(result.message).toBe('Too many attempts. Try again in 14 minutes.')
-    expect(result.countsAsFailure).toBe(false)
-  })
-
-  it('falls back to the server sentence when there is no Retry-After', () => {
-    const result = mapSignInError(failed(429, { detail: 'Too many attempts. Try again in 3 minutes.' }), ctx)
-    expect(result.message).toBe('Too many attempts. Try again in 3 minutes.')
-  })
-
-  it('shows the server sentence for a suspended account', () => {
-    const result = mapSignInError(failed(403, { detail: 'This account is suspended.' }), ctx)
-    expect(result.message).toBe('This account is suspended.')
-  })
-
-  it('asks for the security check, then says a wrong answer is wrong', () => {
-    expect(mapSignInError(failed(400), ctx)).toEqual({ kind: 'captcha', message: SIGN_IN_MESSAGES.captchaRequired })
-    expect(mapSignInError(failed(400), { captchaShown: true })).toEqual({
-      kind: 'captcha', message: SIGN_IN_MESSAGES.captchaWrong,
+    expect(mapSignInError(failed(429, { headers: { 'retry-after': '840' } }))).toEqual({
+      kind: 'lockout', retryAfter: 840, message: 'Too many attempts. Try again in 14 minutes.',
     })
   })
 
+  it('falls back to 15 minutes and the server sentence when there is no Retry-After', () => {
+    const result = mapSignInError(failed(429, { detail: 'Too many attempts. Try again in 3 minutes.' }))
+    expect(result).toEqual({
+      kind: 'lockout', retryAfter: DEFAULT_LOCKOUT_SECONDS, message: 'Too many attempts. Try again in 3 minutes.',
+    })
+  })
+
+  it('shows the server sentence for a suspended account', () => {
+    expect(mapSignInError(failed(403, { detail: 'This account is suspended.' })).message).toBe('This account is suspended.')
+  })
+
+  it('says plainly when the server wants a security check the page does not show', () => {
+    expect(mapSignInError(failed(400)).message).toBe(SIGN_IN_MESSAGES.captchaBlocked)
+  })
+
   it('says the platform could not be reached when there is no answer', () => {
-    expect(mapSignInError({ message: 'Network Error' }, ctx).message).toBe(SIGN_IN_MESSAGES.unreachable)
-    expect(mapSignInError(failed(502), ctx).message).toBe(SIGN_IN_MESSAGES.unreachable)
+    expect(mapSignInError({ message: 'Network Error' }).message).toBe(SIGN_IN_MESSAGES.unreachable)
+    expect(mapSignInError(failed(502)).message).toBe(SIGN_IN_MESSAGES.unreachable)
   })
 })

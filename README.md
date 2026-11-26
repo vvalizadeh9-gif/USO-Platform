@@ -227,9 +227,10 @@ openssl rand -hex 32
 | `SESSION_ABSOLUTE_TIMEOUT_MINUTES` | `480` (8 hours) | The absolute timeout: a sign-in ends this long after it began, however busy. |
 | `LOGIN_MAX_ATTEMPTS_PER_USERNAME` | `5` | Failed attempts for one username, inside the window, that lock it. |
 | `LOGIN_ATTEMPT_WINDOW_SECONDS` | `900` (15 min) | The window those failures are counted in. |
-| `LOGIN_LOCKOUT_SECONDS` | `900` (15 min) | How long the lock lasts. The page says "Too many attempts. Try again in N minutes." |
+| `LOGIN_LOCKOUT_SECONDS` | `900` (15 min) | How long the lock lasts. The sign-in page shows "Too many attempts" with an m:ss countdown from `Retry-After`. |
 | `LOGIN_MAX_ATTEMPTS_PER_IP` | `20` | The same limit per source address, against one password tried across many usernames. |
-| `LOGIN_CAPTCHA_AFTER_FAILURES` | `2` | Failures after which the security check is asked for. |
+| `LOGIN_CAPTCHA_ENABLED` | `false` | Whether the login maths question is used at all (UEP-26). Off: never required, and one that is sent is ignored. `true` restores the server behaviour from before UEP-26; the new sign-in page does not show the question, so leave it off unless an older client needs it. |
+| `LOGIN_CAPTCHA_AFTER_FAILURES` | `2` | With `LOGIN_CAPTCHA_ENABLED=true`: failures after which the security check is asked for. |
 | `SESSION_COOKIE_SECURE` | unset (follow the request) | Mark the session cookies Secure. Set `true` once TLS is in place. |
 
 Only failures count, and a successful sign-in clears them. Every success and

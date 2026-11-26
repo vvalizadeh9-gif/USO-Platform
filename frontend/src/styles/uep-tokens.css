@@ -96,13 +96,10 @@
   --uep-fs-section: 18px;
   --uep-fs-page-title: 24px;
   --uep-fs-greeting: 26px;
-  --uep-fs-signin-title: 28px;
+  --uep-fs-signin-title: 28px;  /* the old sign-in title; reused by page heads and KPI figures */
   --uep-fs-kpi: 32px;
-  --uep-fs-brand: 64px;
   --uep-lh-ui: 1.45;
-  --uep-lh-brand: 1.05;
   --uep-tracking-heading: -0.02em;
-  --uep-tracking-brand: -0.03em;
 
   /* ---- Shape ---- */
   --uep-radius-sm: 4px;       /* chips, bar ends, small marks */
@@ -158,7 +155,7 @@
   /* ---- Component: app shell (UEP-02) ---- */
   --uep-header-height: 56px;
   --uep-header-control: 36px;
-  --uep-logo-tile: 24px;
+  --uep-logo-tile: 26px;   /* the header's UEP mark (UEP-26) */
   --uep-search-height: 34px;      /* the launcher's filter field */
   --uep-badge-size: 16px;
   --uep-avatar-size: 32px;
@@ -318,34 +315,71 @@
   --uep-dur-explorer-bulk: 220ms;          /* the bulk bar sliding up */
   --uep-explorer-pop-distance: 4px;        /* popovers and chips slide in this far */
 
-  /* ---- Component: sign-in ---- */
-  --uep-signin-half-basis: 520px;
-  --uep-signin-breakpoint: 960px;  /* documentation only: media queries cannot read it */
-  --uep-signin-form-width: 380px;
+  /* ---- Component: sign-in (UEP-26) ----
+     A deep cobalt band across the top, one centred card resting on its edge.
+     Also used by Change password. */
+  --uep-signin-band-height: clamp(300px, 53vh, 490px);
+  --uep-signin-gutter: clamp(16px, 4vw, 40px);
+  --uep-signin-card-width: 400px;
+  --uep-signin-card-pad: 32px;
+  --uep-signin-card-pad-short: 26px 30px;
+  --uep-signin-card-pad-phone: 24px 20px;
+  --uep-signin-card-shadow: 0 1px 2px rgba(15, 31, 75, 0.06), 0 12px 28px rgba(15, 31, 75, 0.1);
+  --uep-signin-input-edge: #868F9F;        /* 3:1 against white */
+  --uep-signin-input-edge-hover: #5F6878;
+  --uep-signin-focus-ring: 0 0 0 3px rgba(29, 78, 216, 0.18);
+  --uep-signin-wave-b: #5B7FE0;
   --uep-signin-input-height: 42px;
   --uep-signin-input-icon-inset: 40px;
   --uep-signin-button-height: 44px;
-  --uep-signin-logo-size: 28px;
-  --uep-signin-brand-rule-width: 72px;
-  --uep-signin-brand-rule-height: 3px;
-  --uep-signin-brand-rule-gap: 28px;
-  --uep-signin-wave-size: 1600px;
+  --uep-signin-logo-size: 30px;
+  --uep-signin-avatar: 28px;
+  --uep-signin-ring: 30px;
+  --uep-signin-check-dot: 16px;
+  --uep-fs-signin-wordmark: 17px;
+  --uep-fs-signin-heading: 24px;
+  --uep-fs-signin-display: clamp(32px, 3.7vw, 54px);
+  --uep-fs-signin-display-short: clamp(30px, 3.2vw, 44px);
+  --uep-lh-signin-title: 1.08;
+  --uep-tracking-signin-title: -0.025em;
+  --uep-signin-title-above: clamp(4px, 6vh, 64px);
+  --uep-signin-title-below: clamp(20px, 4.5vh, 44px);
+  --uep-signin-rule-width: 56px;
+  --uep-signin-rule-height: 3px;
+  --uep-signin-rule-radius: 2px;
+  --uep-signin-wave-size: 1520px;
+  --uep-signin-wave-b-size: 1800px;
   --uep-signin-wave-border: 1.5px;
   --uep-signin-wave-peak-opacity: 0.5;
-  --uep-signin-wave-start-scale: 0.2;
+  --uep-signin-wave-start-scale: 0.16;
   --uep-signin-wave-cycle: 16s;
   --uep-signin-wave-stagger: 4s;
+  --uep-signin-wave-b-cycle: 24s;
+  --uep-signin-wave-b-stagger: 8s;
   --uep-signin-wave-ease: cubic-bezier(0.25, 0.1, 0.25, 1);
-  --uep-signin-enter-distance: 10px;
-  --uep-signin-enter-duration: 480ms;
-  --uep-signin-stagger-step: 80ms;
-  --uep-signin-panel-fade: 600ms;
-  --uep-signin-word-delay: 200ms;
+  --uep-signin-band-fade: 600ms;
+  --uep-signin-arc-draw: 1s;
+  --uep-signin-arc-delay: 200ms;
+  --uep-signin-arc-step: 140ms;
+  --uep-signin-word-delay: 150ms;
   --uep-signin-word-step: 120ms;
-  --uep-signin-rule-delay: 800ms;
+  --uep-signin-rule-delay: 620ms;
+  --uep-signin-rule-draw: 800ms;
+  --uep-signin-card-delay: 500ms;
+  --uep-signin-card-rise: 14px;
+  --uep-signin-field-delay: 700ms;
+  --uep-signin-field-step: 60ms;
+  --uep-signin-field-rise: 420ms;
+  --uep-signin-footer-delay: 400ms;
+  --uep-signin-step-shift: 16px;
+  --uep-signin-step-duration: 260ms;
+  --uep-signin-shake: 340ms;
+  --uep-signin-press-scale: 0.985;
   --uep-signin-icon-nudge: 3px;
   --uep-signin-icon-nudge-duration: 200ms;
   --uep-signin-spinner-turn: 700ms;
+  --uep-signin-curtain: 600ms;
+  --uep-signin-curtain-mark: 48px;
 
   /* ---- Migrated from the retired Cobalt block in app.css (UEP-13) ----
      Tokens the UEP set had no equivalent for; values kept, old blues

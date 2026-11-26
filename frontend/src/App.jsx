@@ -1,4 +1,4 @@
-import { lazy, Suspense } from 'react'
+import { lazy, Suspense, useState } from 'react'
 import { Navigate, Route, Routes, useLocation, useParams } from 'react-router-dom'
 import AppShell from './shell/AppShell'
 import { HomeDataProvider } from './shell/HomeData'
@@ -9,7 +9,6 @@ import { AREA, FEATURE as F, meets } from './lib/access'
 import { HOME_ROLES, canOpenMonthlyPlan, homeFor } from './lib/roles'
 import NoAccess from './components/NoAccess'
 import Login from './pages/Login'
-import AuthPlaceholder from './pages/auth/AuthPlaceholder'
 
 // Route pages are code-split so the initial load only ships the shell +
 // current page. Each page's JS (and its heavy deps like charts) is fetched on
@@ -38,6 +37,7 @@ const KpiMapping = lazy(() => import('./pages/reports/KpiMapping'))
 const Admin = lazy(() => import('./pages/Admin'))
 const SlaPoliciesPage = lazy(() => import('./pages/admin/SlaPoliciesPage'))
 const ProvinceAssignmentsPage = lazy(() => import('./pages/admin/ProvinceAssignmentsPage'))
+const SignInSettingsPage = lazy(() => import('./pages/admin/SignInSettingsPage'))
 const ChangePassword = lazy(() => import('./pages/ChangePassword'))
 
 // UEP-22: Filing is the acceptance cases inbox at /filing. My Work's old
@@ -128,11 +128,20 @@ function HomeRoute() {
   return <Home />
 }
 
+// After a successful sign-in the page shows its "Opening Home" curtain and
+// navigates itself (at most 900 ms later); until then this route must not
+// redirect on the user appearing, or the curtain would never be seen.
 function LoginRoute() {
   const { user } = useAuth()
-  if (user) return <Navigate to="/" replace />
-  return <Login />
+  const [arriving, setArriving] = useState(false)
+  if (user && !arriving) return <Navigate to="/" replace />
+  return <Login onArriving={setArriving} />
 }
+
+// Old sign-in links (UEP-26): help now lives in a panel inside the card, and
+// the legal pages are gone until their texts exist.
+const HELP_REDIRECTS = ['/forgot-password', '/request-access']
+const SIGN_IN_REDIRECTS = ['/privacy', '/terms', '/help']
 
 export default function App() {
   const { user } = useAuth()
@@ -141,10 +150,16 @@ export default function App() {
     <Suspense fallback={<Loading />}>
       <Routes>
         <Route path="/login" element={<LoginRoute />} />
-        {/* Linked from the sign-in page; designed later. Open to everyone. */}
-        {['forgot-password', 'request-access', 'privacy', 'terms', 'help'].map((page) => (
-          <Route key={page} path={`/${page}`} element={<AuthPlaceholder page={page} />} />
+        {HELP_REDIRECTS.map((path) => (
+          <Route key={path} path={path} element={<Navigate to="/login?help=1" replace />} />
         ))}
+        {SIGN_IN_REDIRECTS.map((path) => (
+          <Route key={path} path={path} element={<Navigate to="/login" replace />} />
+        ))}
+        {/* Reachable by anyone signed in, including an account that can reach
+            nothing else -- see Protected above and app/core/deps.py. In the
+            sign-in frame, outside the app shell (UEP-26). */}
+        <Route path={CHANGE_PASSWORD_PATH} element={<Protected><ChangePassword /></Protected>} />
         <Route
           element={
             <Protected>
@@ -290,9 +305,7 @@ export default function App() {
           <Route path="/admin" element={<Protected need={ADMIN_PAGE}><Admin /></Protected>} />
           <Route path="/admin/sla" element={<Protected need={F.SLA_POLICIES}><SlaPoliciesPage /></Protected>} />
           <Route path="/admin/provinces" element={<Protected need={F.PROVINCE_ASSIGNMENTS}><ProvinceAssignmentsPage /></Protected>} />
-          {/* Reachable by anyone, including an account that can reach nothing
-              else — see Protected above and app/core/deps.py. */}
-          <Route path={CHANGE_PASSWORD_PATH} element={<ChangePassword />} />
+          <Route path="/admin/sign-in-page" element={<Protected need={F.SIGNIN_SETTINGS}><SignInSettingsPage /></Protected>} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

@@ -56,7 +56,13 @@ from app.schemas import (
 from app.services.action_queues.sla import category_sla_days
 from app.services.audit import record_audit
 from app.services.cpm_import import CpmImportService
-from app.services import evidence_store, kpi_mapping, province_assignment, system_health
+from app.services import (
+    evidence_store,
+    kpi_mapping,
+    province_assignment,
+    signin_settings,
+    system_health,
+)
 from app.services.data_wipe import REQUIRED_CONFIRMATION_PHRASE, wipe_cpm_data
 
 logger = logging.getLogger("uep.admin")
@@ -1501,3 +1507,59 @@ def _set_provinces(db: Session, user: User, province_ids: list[int]) -> None:
         else []
     )
     user.provinces = provinces
+
+
+# ---------------- Sign-in page (UEP-26) ----------------
+class SignInSettingsIn(BaseModel):
+    """What Admin > Sign-in page saves. Lengths, the email, the notice text and
+    its window are checked in services/signin_settings with the page's own
+    sentences; the caps here only bound the request."""
+
+    support_name: str | None = Field(None, max_length=1000)
+    support_hours: str | None = Field(None, max_length=1000)
+    support_email: str | None = Field(None, max_length=1000)
+    support_phone: str | None = Field(None, max_length=1000)
+    notice_enabled: bool = False
+    notice_text: str | None = Field(None, max_length=1000)
+    notice_from: datetime | None = None
+    notice_to: datetime | None = None
+
+
+@router.get("/signin-settings")
+def get_signin_settings_admin(
+    db: Session = Depends(get_db),
+    _: User = Depends(require_access(F.SIGNIN_SETTINGS, "view")),
+) -> dict:
+    """The full sign-in settings row, with who saved it last."""
+    row = signin_settings.get_row(db)
+    db.commit()
+    return signin_settings.admin_view(row)
+
+
+@router.put("/signin-settings")
+def put_signin_settings(
+    body: SignInSettingsIn,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_access(F.SIGNIN_SETTINGS, "edit")),
+) -> dict:
+    """Save the support contact and the notice; audited before -> after."""
+    try:
+        row, before, after = signin_settings.save(
+            db, signin_settings.SettingsInput(**body.model_dump()), admin.id
+        )
+    except signin_settings.InvalidSettings as exc:
+        db.rollback()
+        raise HTTPException(422, str(exc)) from exc
+    record_audit(
+        db,
+        user_id=admin.id,
+        action=audit_actions.SIGNIN_SETTINGS_CHANGED,
+        module="Admin",
+        entity_type="SignInSettings",
+        entity_id=row.id,
+        old_value=before,
+        new_value=after,
+    )
+    db.commit()
+    db.refresh(row)
+    return signin_settings.admin_view(row)

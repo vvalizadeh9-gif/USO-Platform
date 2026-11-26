@@ -63,6 +63,7 @@ vi.mock('./pages/drivetest/SiteList', () => page('dt-sites'))
 // The standard no-access screen, which every refused route now shows.
 vi.mock('./components/NoAccess', () => page('no-access'))
 vi.mock('./pages/ChangePassword', () => page('change-password'))
+vi.mock('./pages/admin/SignInSettingsPage', () => page('signin-settings'))
 
 const mockAuth = vi.hoisted(() => ({ current: null }))
 vi.mock('./context/AuthContext', () => ({
@@ -444,5 +445,27 @@ describe('Explorer', () => {
 
   it('still opens the Drive Test dashboard at its own address', async () => {
     expect(await landOn('/reports/drive-test')).toBe('dt-dashboard')
+  })
+})
+
+describe('the sign-in page (UEP-26)', () => {
+  it.each(['/forgot-password', '/request-access'])('%s opens the help panel on the sign-in page', async (path) => {
+    expect(await landOn(path)).toBe('login')
+    expect(screen.getByTestId('page')).toHaveAttribute('data-search', '?help=1')
+  })
+
+  it.each(['/privacy', '/terms', '/help'])('%s goes to sign in', async (path) => {
+    expect(await landOn(path)).toBe('login')
+    expect(screen.getByTestId('page')).toHaveAttribute('data-search', '')
+  })
+
+  it('opens Admin › Sign-in page for an Admin', async () => {
+    signedInAs('Admin')
+    expect(await landOn('/admin/sign-in-page')).toBe('signin-settings')
+  })
+
+  it.each(['PM', 'Viewer', 'Coordinator', 'Contractor'])('shows %s the no-access screen there', async (role) => {
+    signedInAs(role)
+    expect(await landOn('/admin/sign-in-page')).toBe('no-access')
   })
 })

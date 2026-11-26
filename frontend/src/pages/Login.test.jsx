@@ -1,10 +1,11 @@
-// The sign-in page: validation, the password toggle, what each refusal says,
-// the security check after repeated failures, the session-expired notice,
-// returning to the page that sent you, and remembering the username.
-import { render, screen, waitFor } from '@testing-library/react'
+// The sign-in page (UEP-26): username first with no server call, the
+// password step, remembered usernames and "Not you?", the lockout countdown
+// from Retry-After, the help panel with the Admin contact, notices, and
+// always landing on the landing page.
+import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const api = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn() }))
 vi.mock('../api/client', () => ({ default: api }))
@@ -17,185 +18,322 @@ vi.mock('react-router-dom', async (orig) => ({ ...(await orig()), useNavigate: (
 
 const Login = (await import('./Login')).default
 
+const SUPPORT = {
+  name: 'UEP support desk',
+  hours: 'Saturday to Wednesday, 8:00 to 16:00',
+  email: 'support@uep.example',
+  phone: 'Extension 2140',
+}
+
+function settingsAre(data) {
+  api.get.mockImplementation((url) =>
+    url === '/auth/signin-settings' ? Promise.resolve({ data }) : Promise.reject(new Error(`unexpected ${url}`)),
+  )
+}
+
 const refused = (status, { detail, headers = {} } = {}) =>
   Object.assign(new Error('refused'), { response: { status, data: { detail }, headers } })
 
-function renderLogin(url = '/login') {
-  const user = userEvent.setup()
-  render(
+function renderLogin(url = '/login', userOptions) {
+  const user = userEvent.setup(userOptions)
+  const view = render(
     <MemoryRouter initialEntries={[url]}>
       <Login />
     </MemoryRouter>,
   )
-  return user
+  return { user, ...view }
 }
 
 const usernameInput = () => screen.getByLabelText('Username')
 const passwordInput = () => screen.getByLabelText('Password')
-const submit = () => screen.getByRole('button', { name: 'Sign in' })
-const alertText = () => screen.getByRole('alert').textContent
+const continueButton = () => screen.getByRole('button', { name: /^Continue/ })
+const signInButton = () => screen.getByRole('button', { name: /^(Sign in|Signing in…|Signed in|Try again in)/ })
+
+async function toPasswordStep(user, name = 'sara') {
+  await user.type(usernameInput(), name)
+  await user.click(continueButton())
+}
 
 async function signIn(user, name = 'sara', password = 'pw') {
-  await user.type(usernameInput(), name)
+  await toPasswordStep(user, name)
   await user.type(passwordInput(), password)
-  await user.click(submit())
+  await user.click(signInButton())
 }
 
 beforeEach(() => {
   localStorage.clear()
+  delete document.documentElement.dataset.uepMotion
   login.mockReset().mockResolvedValue({ username: 'sara' })
   navigate.mockReset()
-  api.get.mockReset().mockResolvedValue({ data: { token: 'tok', num1: 4, num2: 7 } })
+  api.post.mockReset()
+  api.get.mockReset()
+  settingsAre({ support: SUPPORT, notice: null })
+})
+
+afterEach(() => {
+  vi.useRealTimers()
 })
 
 describe('the page', () => {
-  it('has the approved content and nothing about SSO', () => {
+  it('has the approved content: one heading, the big title, no maths question, no legal links', async () => {
     renderLogin()
     expect(screen.getByRole('heading', { level: 1, name: 'Sign in' })).toBeInTheDocument()
-    expect(screen.getByText('Enter your UEP username and password.')).toBeInTheDocument()
-    expect(usernameInput()).toHaveAttribute('placeholder', 'v.valizadeh')
+    expect(screen.getByText('USO Enterprise Platform')).toBeInTheDocument()
+    expect(usernameInput()).toHaveAttribute('placeholder', 'name.surname')
     expect(usernameInput()).toHaveAttribute('autocomplete', 'username')
-    expect(passwordInput()).toHaveAttribute('autocomplete', 'current-password')
-    expect(screen.getByRole('link', { name: 'Forgot password?' })).toHaveAttribute('href', '/forgot-password')
-    expect(screen.getByRole('link', { name: 'Contact your UEP administrator' })).toHaveAttribute('href', '/request-access')
-    for (const word of ['USO', 'Enterprise', 'Platform']) expect(screen.getByText(word)).toBeInTheDocument()
-    expect(screen.queryByText(/organization/i)).not.toBeInTheDocument()
+    expect(usernameInput()).toHaveAttribute('autocapitalize', 'none')
+    expect(usernameInput()).toHaveAttribute('dir', 'ltr')
+    expect(usernameInput()).toHaveFocus()
+    expect(screen.queryByLabelText('Security check')).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: /privacy|terms|help/i })).not.toBeInTheDocument()
+    expect(screen.getByText('Authorised use only. Sign-ins are recorded.')).toBeInTheDocument()
+    expect(screen.getByText(`© ${new Date().getFullYear()} USO`)).toBeInTheDocument()
   })
 
-  it('hides the waves from assistive technology', () => {
-    const { container } = render(
-      <MemoryRouter>
-        <Login />
-      </MemoryRouter>,
-    )
-    expect(container.querySelector('.uep-signin-waves')).toHaveAttribute('aria-hidden', 'true')
-    expect(container.querySelectorAll('.uep-signin-wave')).toHaveLength(4)
+  it('hides both sets of waves from assistive technology', () => {
+    const { container } = renderLogin()
+    expect(container.querySelector('.uep-signin-waves').closest('[aria-hidden="true"]')).not.toBeNull()
+    expect(container.querySelectorAll('.uep-signin-wave')).toHaveLength(7)
   })
 })
 
-describe('validation', () => {
-  it('asks for both fields on an empty submit, without calling the server', async () => {
-    const user = renderLogin()
-    await user.click(submit())
-    expect(alertText()).toBe('Enter your username and password.')
+describe('step 1: username', () => {
+  it('goes to the password step without any network call', async () => {
+    const { user } = renderLogin()
+    await toPasswordStep(user)
+    expect(passwordInput()).toHaveFocus()
+    expect(screen.getByText('sara')).toBeInTheDocument()
+    expect(api.post).not.toHaveBeenCalled()
+    expect(login).not.toHaveBeenCalled()
+    // The only read is the public settings, made on load.
+    expect(api.get.mock.calls.map(([url]) => url)).toEqual(['/auth/signin-settings'])
+  })
+
+  it('asks for a username on an empty Continue, and stays on step 1', async () => {
+    const { user } = renderLogin()
+    await user.click(continueButton())
+    expect(screen.getByRole('alert')).toHaveTextContent('Enter your username.')
     expect(usernameInput()).toHaveAttribute('aria-invalid', 'true')
     expect(usernameInput()).toHaveFocus()
-    expect(login).not.toHaveBeenCalled()
+    expect(screen.queryByLabelText('Password')).not.toBeInTheDocument()
   })
 
-  it('clears the message as soon as either field changes', async () => {
-    const user = renderLogin()
-    await user.click(submit())
-    await user.type(passwordInput(), 'x')
-    expect(alertText()).toBe('')
-  })
-
-  it('submits with the Enter key', async () => {
-    const user = renderLogin()
-    await user.type(usernameInput(), 'sara')
-    await user.type(passwordInput(), 'pw{Enter}')
-    expect(login).toHaveBeenCalledWith('sara', 'pw', undefined, '')
+  it('clears the message as soon as the field changes', async () => {
+    const { user } = renderLogin()
+    await user.click(continueButton())
+    await user.type(usernameInput(), 's')
+    expect(screen.getByRole('alert')).toHaveTextContent('')
   })
 })
 
-describe('the password toggle', () => {
+describe('remembered username', () => {
+  it('opens on the password step with the name shown', () => {
+    localStorage.setItem('uep_remembered_username', 'name.surname')
+    renderLogin()
+    expect(passwordInput()).toHaveFocus()
+    expect(screen.getByText('name.surname')).toBeInTheDocument()
+    expect(screen.getByText('NS')).toBeInTheDocument()
+  })
+
+  it('"Not you?" goes back to step 1 with the username selected', async () => {
+    localStorage.setItem('uep_remembered_username', 'name.surname')
+    const { user } = renderLogin()
+    await user.click(screen.getByRole('button', { name: /Not you\?/ }))
+    const input = usernameInput()
+    expect(input).toHaveFocus()
+    expect(input).toHaveValue('name.surname')
+    expect([input.selectionStart, input.selectionEnd]).toEqual([0, 'name.surname'.length])
+  })
+})
+
+describe('step 2: password', () => {
   it('shows and hides the password, and says which it will do', async () => {
-    const user = renderLogin()
+    const { user } = renderLogin()
+    await toPasswordStep(user)
     await user.type(passwordInput(), 'secret')
     expect(passwordInput()).toHaveAttribute('type', 'password')
-
     await user.click(screen.getByRole('button', { name: 'Show password' }))
     expect(passwordInput()).toHaveAttribute('type', 'text')
-
     await user.click(screen.getByRole('button', { name: 'Hide password' }))
     expect(passwordInput()).toHaveAttribute('type', 'password')
   })
-})
 
-describe('refusals', () => {
+  it('asks for a password on an empty submit, without calling the server', async () => {
+    const { user } = renderLogin()
+    await toPasswordStep(user)
+    await user.click(signInButton())
+    expect(screen.getByRole('alert')).toHaveTextContent('Enter your password.')
+    expect(login).not.toHaveBeenCalled()
+  })
+
+  it('sends the username and password, with no captcha', async () => {
+    const { user } = renderLogin()
+    await toPasswordStep(user, '  sara  ')
+    await user.type(passwordInput(), 'pw{Enter}')
+    expect(login).toHaveBeenCalledWith('sara', 'pw')
+  })
+
   it('gives one generic message for wrong credentials and clears the password', async () => {
     login.mockRejectedValue(refused(401))
-    const user = renderLogin()
+    const { user } = renderLogin()
     await signIn(user)
-    expect(alertText()).toBe('Username or password is incorrect.')
+    expect(screen.getByRole('alert')).toHaveTextContent('Username or password is incorrect.')
     expect(passwordInput()).toHaveValue('')
     expect(passwordInput()).toHaveFocus()
   })
 
-  it('says how long a lockout lasts', async () => {
-    login.mockRejectedValue(refused(429, { headers: { 'retry-after': '900' } }))
-    const user = renderLogin()
+  it('shows a spinner and "Signing in…", and ignores a second submit', async () => {
+    let finish
+    login.mockReturnValue(new Promise((resolve) => { finish = resolve }))
+    const { user } = renderLogin()
     await signIn(user)
-    expect(alertText()).toBe('Too many attempts. Try again in 15 minutes.')
-  })
-
-  it('shows the security check after two wrong passwords', async () => {
-    login.mockRejectedValue(refused(401))
-    const user = renderLogin()
-    await signIn(user)
-    expect(screen.queryByLabelText('Security check')).not.toBeInTheDocument()
-    await user.type(passwordInput(), 'again')
-    await user.click(submit())
-    expect(await screen.findByText('4 + 7 =')).toBeInTheDocument()
-  })
-
-  it('shows the security check when the server asks for it', async () => {
-    login.mockRejectedValue(refused(400))
-    const user = renderLogin()
-    await signIn(user)
-    expect(await screen.findByText('Answer the security check to sign in.')).toBeInTheDocument()
-    expect(screen.getByLabelText('Security check')).toBeInTheDocument()
+    const button = signInButton()
+    expect(button).toHaveTextContent('Signing in…')
+    expect(button).toHaveAttribute('aria-disabled', 'true')
+    expect(button.querySelector('.uep-signin-spinner')).not.toBeNull()
+    await user.click(button)
+    expect(login).toHaveBeenCalledTimes(1)
+    await act(async () => finish({ username: 'sara' }))
   })
 })
 
-describe('while signing in', () => {
-  it('shows a spinner in place of the icon, keeps the label, and ignores a second submit', async () => {
-    let finish
-    login.mockReturnValue(new Promise((resolve) => { finish = resolve }))
-    const user = renderLogin()
+describe('lockout', () => {
+  it('counts down from Retry-After, then unlocks', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    login.mockRejectedValue(refused(429, { headers: { 'retry-after': '90' } }))
+    const { user } = renderLogin('/login', { advanceTimers: vi.advanceTimersByTime })
     await signIn(user)
 
-    expect(submit()).toHaveAttribute('aria-disabled', 'true')
-    expect(submit().querySelector('.uep-signin-spinner')).not.toBeNull()
-    expect(submit().querySelector('[data-icon="login"]')).toBeNull()
+    const box = screen.getByText('Too many attempts').closest('.uep-signin-lock')
+    expect(box).toHaveTextContent('Try again in 1:30')
+    expect(signInButton()).toHaveTextContent('Try again in 1:30')
+    expect(signInButton()).toHaveAttribute('aria-disabled', 'true')
+    expect(passwordInput()).toBeDisabled()
+    expect(screen.queryByText(/Too many attempts\. Try again in/)).not.toBeInTheDocument()
 
-    await user.click(submit())
+    await act(async () => { vi.advanceTimersByTime(1000) })
+    expect(box).toHaveTextContent('Try again in 1:29')
+
+    await act(async () => { vi.advanceTimersByTime(89_000) })
+    expect(screen.queryByText('Too many attempts')).not.toBeInTheDocument()
+    expect(passwordInput()).toBeEnabled()
+    expect(signInButton()).toHaveTextContent('Sign in')
+  })
+
+  it('does not submit while locked', async () => {
+    login.mockRejectedValueOnce(refused(429, { headers: { 'retry-after': '60' } }))
+    const { user } = renderLogin()
+    await signIn(user)
+    await user.click(signInButton())
     expect(login).toHaveBeenCalledTimes(1)
-    finish({ username: 'sara' })
-    await waitFor(() => expect(navigate).toHaveBeenCalled())
+  })
+})
+
+describe('help panel', () => {
+  it('"Need access?" opens the Admin contact, and Back returns to step 1', async () => {
+    const { user } = renderLogin()
+    await screen.findByText('Need access?', { exact: false })
+    await user.click(screen.getByRole('button', { name: 'Ask your UEP administrator' }))
+    expect(screen.getByRole('heading', { level: 1, name: 'Ask your UEP administrator' })).toBeInTheDocument()
+    for (const value of Object.values(SUPPORT)) expect(await screen.findByText(value)).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Back' }))
+    expect(usernameInput()).toBeInTheDocument()
+  })
+
+  it('"Forgot password?" opens it from step 2, and Back returns to step 2', async () => {
+    const { user } = renderLogin()
+    await toPasswordStep(user)
+    await user.click(screen.getByRole('button', { name: 'Forgot password?' }))
+    expect(screen.getByRole('heading', { name: 'Ask your UEP administrator' })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Back' }))
+    expect(passwordInput()).toBeInTheDocument()
+  })
+
+  it('hides empty rows and renders values as text, never HTML', async () => {
+    settingsAre({ support: { name: '<b>Desk</b>', hours: null, email: '', phone: null }, notice: null })
+    const { container } = renderLogin('/login?help=1')
+    const list = await screen.findByRole('list')
+    expect(within(list).getAllByRole('listitem')).toHaveLength(1)
+    expect(within(list).getByText('<b>Desk</b>')).toBeInTheDocument()
+    expect(container.querySelector('.uep-signin-contact b b')).toBeNull()
+  })
+
+  it('says so when no contact has been set', async () => {
+    settingsAre({ support: { name: null, hours: null, email: null, phone: null }, notice: null })
+    renderLogin('/login?help=1')
+    expect(await screen.findByText('Contact details have not been set yet.')).toBeInTheDocument()
+  })
+})
+
+describe('notices', () => {
+  it('shows the planned update from Admin', async () => {
+    settingsAre({ support: SUPPORT, notice: { text: 'UEP is offline on Friday 22:00 to 23:00.' } })
+    renderLogin()
+    expect(await screen.findByText('UEP is offline on Friday 22:00 to 23:00.')).toBeInTheDocument()
+  })
+
+  it('shows "session expired" neutrally when the session ran out, and not otherwise', () => {
+    const { unmount } = renderLogin('/login?next=%2Fmy-work&reason=expired')
+    expect(screen.getByText('Your session expired. Sign in again.')).toBeInTheDocument()
+    expect(screen.getByRole('alert')).toHaveTextContent('')
+    unmount()
+    renderLogin('/login?next=%2Fmy-work')
+    expect(screen.queryByText('Your session expired. Sign in again.')).not.toBeInTheDocument()
+  })
+
+  it('still signs in when the settings cannot be read', async () => {
+    api.get.mockRejectedValue(new Error('offline'))
+    document.documentElement.dataset.uepMotion = 'reduce'
+    const { user } = renderLogin()
+    await signIn(user)
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith('/', { replace: true }))
   })
 })
 
 describe('after signing in', () => {
-  it('goes to Home', async () => {
-    const user = renderLogin()
+  it('says "Signed in", drops the curtain, then lands on the landing page within 900 ms', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    const { user, container } = renderLogin('/login', { advanceTimers: vi.advanceTimersByTime })
     await signIn(user)
+    expect(signInButton()).toHaveTextContent('Signed in')
+    expect(container.querySelector('.uep-signin-curtain')).toHaveTextContent('Opening Home')
+    expect(navigate).not.toHaveBeenCalled()
+    await act(async () => { vi.advanceTimersByTime(900) })
     expect(navigate).toHaveBeenCalledWith('/', { replace: true })
+  })
+
+  it('goes straight there under reduced motion, with no curtain', async () => {
+    document.documentElement.dataset.uepMotion = 'reduce'
+    const { user, container } = renderLogin()
+    await signIn(user)
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith('/', { replace: true }))
+    expect(container.querySelector('.uep-signin-curtain')).toBeNull()
   })
 
   it('always lands on the landing page, ignoring any next', async () => {
-    const user = renderLogin('/login?next=%2Fmy-work%3Fvillage%3D12')
+    document.documentElement.dataset.uepMotion = 'reduce'
+    const { user } = renderLogin('/login?next=%2Fmy-work%3Fvillage%3D12')
     await signIn(user)
-    expect(navigate).toHaveBeenCalledWith('/', { replace: true })
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith('/', { replace: true }))
   })
 
   it('remembers the username only when asked to', async () => {
-    const user = renderLogin()
+    document.documentElement.dataset.uepMotion = 'reduce'
+    const { user } = renderLogin()
     await user.click(screen.getByLabelText('Remember my username'))
     await signIn(user)
     expect(localStorage.getItem('uep_remembered_username')).toBe('sara')
   })
-})
 
-describe('the session-expired notice', () => {
-  it('is shown, neutrally, when the session ran out', () => {
-    renderLogin('/login?next=%2Fmy-work&reason=expired')
-    expect(screen.getByText('Your session expired. Sign in again.')).toBeInTheDocument()
-    expect(alertText()).toBe('')
-  })
-
-  it('is not shown otherwise', () => {
-    renderLogin('/login?next=%2Fmy-work')
-    expect(screen.queryByText('Your session expired. Sign in again.')).not.toBeInTheDocument()
+  it('forgets a remembered username when the box is unticked', async () => {
+    document.documentElement.dataset.uepMotion = 'reduce'
+    localStorage.setItem('uep_remembered_username', 'sara')
+    const { user } = renderLogin()
+    await user.click(screen.getByRole('button', { name: /Not you\?/ }))
+    await user.click(screen.getByLabelText('Remember my username'))
+    await user.click(continueButton())
+    await user.type(passwordInput(), 'pw')
+    await user.click(signInButton())
+    expect(localStorage.getItem('uep_remembered_username')).toBeNull()
   })
 })

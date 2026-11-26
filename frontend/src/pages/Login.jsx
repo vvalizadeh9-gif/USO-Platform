@@ -1,356 +1,229 @@
-// The UEP sign-in page. Design: docs/design-system.md and the UEP-01 spec.
+// The UEP sign-in page (UEP-26). Layout and motion: src/styles/signin.css.
 //
-// Left half: the form. Right half: the brand statement on deep cobalt, with
-// signal waves spreading from the bottom-right corner. Below 960px the brand
-// half is hidden and the form stands alone.
+// One centred card on a deep cobalt band. Username first (Continue, which
+// never calls the server), then the password. "Forgot password?" and "Need
+// access?" open a help panel inside the card with the contact set by Admin.
+// A lockout (429) shows a countdown from Retry-After instead of an error.
+// Every sign-in lands on the landing page.
 import { useEffect, useRef, useState } from 'react'
-import { Link, useLocation, useNavigate } from 'react-router-dom'
-import api from '../api/client'
-import Icon from '../components/Icon'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { toLatinDigits } from '../lib/persianDigits'
+import { reducedMotion } from '../lib/motionPreference'
 import { forgetUsername, readRememberedUsername, rememberUsername } from '../lib/rememberedUsername'
 import { sessionExpiredFrom } from '../lib/returnTo'
-import { SIGN_IN_MESSAGES, mapSignInError, validateCredentials } from '../lib/signInErrors'
-import { AUTH_LINKS, AuthFooter, AuthLogo } from './auth/AuthFrame'
+import { SIGN_IN_MESSAGES, mapSignInError, validatePassword, validateUsername } from '../lib/signInErrors'
+import AuthFrame, { SignedInCurtain } from './auth/AuthFrame'
+import HelpPanel from './auth/HelpPanel'
+import PasswordStep from './auth/PasswordStep'
+import SignInNotice from './auth/SignInNotice'
+import { shake } from './auth/signInModel'
+import UsernameStep from './auth/UsernameStep'
+import { useLockout } from './auth/useLockout'
+import { useSignInSettings } from './auth/useSignInSettings'
 
-// Failed sign-ins in this tab after which the security check is shown. The
-// server decides for itself when it is required (and says so with a 400), so
-// this only saves the person a round trip; it is not the control.
-const CAPTCHA_AFTER_FAILURES = 2
+/** How long the "Opening Home" curtain shows before navigating (at most 900 ms). */
+const ARRIVAL_MS = 900
 
-const BRAND_WORDS = ['USO', 'Enterprise', 'Platform']
+const STEP = Object.freeze({ USERNAME: 'username', PASSWORD: 'password', HELP: 'help' })
 
-/** The entrance stagger: each step is one --uep-signin-stagger-step later. */
-const step = (i) => ({ '--uep-i': i })
-
-export default function Login() {
-  return (
-    <div className="uep-signin">
-      <div className="uep-signin-side">
-        <a className="uep-signin-skip" href="#login-username">
-          Skip to sign-in form
-        </a>
-        <AuthLogo className="uep-enter" style={step(0)} />
-        <main className="uep-signin-center">
-          <SignInForm />
-        </main>
-        <AuthFooter className="uep-enter" style={step(5)} />
-      </div>
-      <BrandPanel />
-    </div>
-  )
+function initialStep(remembered, search) {
+  if (new URLSearchParams(search).get('help') === '1') return STEP.HELP
+  return remembered ? STEP.PASSWORD : STEP.USERNAME
 }
 
-function BrandPanel() {
-  return (
-    <aside className="uep-signin-brand" aria-label="USO Enterprise Platform">
-      <div className="uep-signin-waves" aria-hidden="true">
-        {[0, 1, 2, 3].map((i) => (
-          <span key={i} className="uep-signin-wave" style={{ '--uep-wave': i }} />
-        ))}
-      </div>
-      <p className="uep-signin-statement">
-        {BRAND_WORDS.map((word, i) => (
-          <span key={word} className="uep-signin-word-mask">
-            <span className="uep-signin-word" style={{ '--uep-word': i }}>
-              {word}
-            </span>
-          </span>
-        ))}
-      </p>
-      <span className="uep-signin-rule" aria-hidden="true" />
-    </aside>
-  )
-}
-
-function SignInForm() {
+/**
+ * @param {{ onArriving?: (arriving: boolean) => void }} props
+ *   onArriving: told when a sign-in succeeded and the curtain is showing, so
+ *   the route can hold off its own redirect until the page navigates.
+ */
+export default function Login({ onArriving = () => {} }) {
   const { login } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
+  const settings = useSignInSettings()
   const sessionExpired = sessionExpiredFrom(location.search)
 
   // Read once: the box starts ticked exactly when a name was remembered.
   const [remembered] = useState(readRememberedUsername)
+  const [step, setStep] = useState(() => initialStep(remembered, location.search))
+  // Where the help panel's Back returns to.
+  const [helpFrom, setHelpFrom] = useState(remembered ? STEP.PASSWORD : STEP.USERNAME)
+  // 'first' on load (the staggered entrance), then the slide direction.
+  const [entry, setEntry] = useState('first')
   const [username, setUsername] = useState(remembered)
   const [rememberMe, setRememberMe] = useState(Boolean(remembered))
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [capsLockOn, setCapsLockOn] = useState(false)
-  const [failures, setFailures] = useState(0)
-  const [captchaShown, setCaptchaShown] = useState(false)
-  const [captcha, setCaptcha] = useState(null)
-  const [captchaAnswer, setCaptchaAnswer] = useState('')
+  const [usernameError, setUsernameError] = useState('')
+  const [passwordError, setPasswordError] = useState('')
   const [busy, setBusy] = useState(false)
-  // The one message under the password field: empty fields, wrong
-  // credentials, a lockout.
-  const [formError, setFormError] = useState('')
-  const [captchaError, setCaptchaError] = useState('')
-  const [invalid, setInvalid] = useState({ username: false, password: false })
-  // Bumped on every refusal (with a fresh object), so focus moves each time.
-  const [focusTarget, setFocusTarget] = useState(null)
+  const [arrived, setArrived] = useState(false)
+  const lockout = useLockout()
 
   const usernameRef = useRef(null)
+  const usernameWrapRef = useRef(null)
   const passwordRef = useRef(null)
-  const captchaRef = useRef(null)
+  const passwordWrapRef = useRef(null)
+  const helpBackRef = useRef(null)
+  // Set when going back to step 1, so the name is selected for retyping.
+  const selectUsername = useRef(false)
 
+  // Focus follows the step. On load too: the first thing to type is focused.
   useEffect(() => {
-    const refs = { username: usernameRef, password: passwordRef, captcha: captchaRef }
-    if (focusTarget) refs[focusTarget.field]?.current?.focus()
-  }, [focusTarget])
-
-  async function refreshCaptcha() {
-    setCaptcha(null)
-    setCaptchaAnswer('')
-    try {
-      const { data } = await api.get('/auth/captcha')
-      setCaptcha(data)
-    } catch {
-      // Left on "Loading"; the next submit asks again.
+    if (step === STEP.USERNAME) {
+      usernameRef.current?.focus()
+      if (selectUsername.current) usernameRef.current?.select()
+      selectUsername.current = false
+    } else if (step === STEP.PASSWORD) {
+      passwordRef.current?.focus()
+    } else {
+      helpBackRef.current?.focus()
     }
+  }, [step])
+
+  // When a lockout ends, the field is usable again: put the caret back in it.
+  useEffect(() => {
+    if (!lockout.locked && step === STEP.PASSWORD && !busy) passwordRef.current?.focus()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lockout.locked])
+
+  function go(next, direction) {
+    setEntry(direction)
+    setStep(next)
   }
 
-  function showCaptcha() {
-    setCaptchaShown(true)
-    refreshCaptcha()
+  function openHelp() {
+    setHelpFrom(step === STEP.HELP ? helpFrom : step)
+    go(STEP.HELP, 'fwd')
   }
 
-  // Any change to a field clears what was said about the last attempt.
-  function clearMessages() {
-    setFormError('')
-    setInvalid({ username: false, password: false })
+  function onContinue(e) {
+    e.preventDefault()
+    const problem = validateUsername(username)
+    if (problem) {
+      setUsernameError(problem)
+      shake(usernameWrapRef.current)
+      usernameRef.current?.focus()
+      return
+    }
+    setUsername(username.trim())
+    go(STEP.PASSWORD, 'fwd')
+  }
+
+  function onNotYou() {
+    setPassword('')
+    setPasswordError('')
+    selectUsername.current = true
+    go(STEP.USERNAME, 'bwd')
   }
 
   function handleCapsLock(e) {
     if (typeof e.getModifierState === 'function') setCapsLockOn(e.getModifierState('CapsLock'))
   }
 
-  function refuse(message, field) {
-    setFormError(message)
-    setFocusTarget({ field })
+  function refusePassword(message) {
+    setPasswordError(message)
+    shake(passwordWrapRef.current)
+    passwordRef.current?.focus()
   }
 
-  async function onSubmit(e) {
+  function arrive() {
+    setArrived(true)
+    const delay = reducedMotion() ? 0 : ARRIVAL_MS
+    // Every sign-in lands on the landing page ("/" resolves to the role's home).
+    setTimeout(() => navigate('/', { replace: true }), delay)
+  }
+
+  async function onSignIn(e) {
     e.preventDefault()
-    if (busy) return
-
-    const problem = validateCredentials({ username, password })
+    if (busy || arrived || lockout.locked) return
+    const problem = validatePassword(password)
     if (problem) {
-      setInvalid(problem.missing)
-      refuse(problem.message, problem.missing.username ? 'username' : 'password')
+      refusePassword(problem)
       return
     }
-    // Persian and Arabic-Indic keyboards type their own digits; the server
-    // parses the answer as an integer.
-    const answer = toLatinDigits(captchaAnswer).trim()
-    if (captchaShown && !/^-?\d+$/.test(answer)) {
-      setCaptchaError(SIGN_IN_MESSAGES.captchaNotANumber)
-      setFocusTarget({ field: 'captcha' })
-      return
-    }
-    if (captchaShown && !captcha) {
-      refreshCaptcha()
-      return
-    }
-
     setBusy(true)
-    setCaptchaError('')
+    // Told before the request, so the route never redirects on the user
+    // appearing before the curtain has had its moment.
+    onArriving(true)
     try {
-      await login(username.trim(), password, captchaShown ? captcha.token : undefined, answer)
-      if (rememberMe) rememberUsername(username.trim())
+      await login(username, password)
+      if (rememberMe) rememberUsername(username)
       else forgetUsername()
-      // Every sign-in lands on the landing page ("/" resolves to the role's home).
-      navigate('/', { replace: true })
+      setBusy(false)
+      arrive()
     } catch (err) {
+      onArriving(false)
+      setBusy(false)
       setPassword('')
-      const refusal = mapSignInError(err, { captchaShown })
-      if (refusal.kind === 'captcha') {
-        showCaptcha()
-        setCaptchaError(refusal.message)
-        setFocusTarget({ field: 'captcha' })
+      const refusal = mapSignInError(err)
+      if (refusal.kind === 'lockout') {
+        setPasswordError('')
+        lockout.start(refusal.retryAfter)
         return
       }
-      if (captchaShown) refreshCaptcha()
-      if (refusal.countsAsFailure) {
-        const next = failures + 1
-        setFailures(next)
-        if (!captchaShown && next >= CAPTCHA_AFTER_FAILURES) showCaptcha()
-        setInvalid({ username: false, password: true })
-      }
-      refuse(refusal.message, 'password')
-    } finally {
-      setBusy(false)
+      refusePassword(refusal.message)
     }
   }
 
-  const describedBy = (...ids) => ids.filter(Boolean).join(' ') || undefined
+  const notices = step !== STEP.HELP && (settings.notice || sessionExpired) && (
+    <>
+      {settings.notice && <SignInNotice>{settings.notice.text}</SignInNotice>}
+      {sessionExpired && <SignInNotice>{SIGN_IN_MESSAGES.sessionExpired}</SignInNotice>}
+    </>
+  )
 
   return (
-    <div className="uep-signin-column">
-      <div className="uep-enter" style={step(1)}>
-        <h1 className="uep-signin-title">Sign in</h1>
-        <p className="uep-signin-subtitle">Enter your UEP username and password.</p>
-      </div>
-
-      {sessionExpired && (
-        <p className="uep-signin-notice" role="status">
-          {SIGN_IN_MESSAGES.sessionExpired}
-        </p>
-      )}
-
-      <form onSubmit={onSubmit} noValidate aria-busy={busy}>
-        <div className="uep-signin-field uep-enter" style={step(2)}>
-          <label htmlFor="login-username" className="uep-signin-label">
-            Username
-          </label>
-          <div className="uep-signin-input-wrap">
-            <Icon name="user" size={18} className="uep-signin-input-icon" />
-            <input
-              id="login-username"
-              ref={usernameRef}
-              className="uep-signin-input"
-              value={username}
-              onChange={(e) => {
-                setUsername(e.target.value)
-                clearMessages()
-              }}
-              placeholder="v.valizadeh"
-              // Always left to right: a Farsi keyboard must not flip a Latin
-              // username around the caret.
-              dir="ltr"
-              autoComplete="username"
-              autoCapitalize="none"
-              spellCheck={false}
-              // With a remembered name the next thing to type is the password.
-              autoFocus={!remembered}
-              aria-invalid={invalid.username || undefined}
-              aria-describedby={describedBy(formError && 'login-form-error')}
-            />
-          </div>
-        </div>
-
-        <div className="uep-signin-field uep-enter" style={step(3)}>
-          <div className="uep-signin-label-row">
-            <label htmlFor="login-password" className="uep-signin-label">
-              Password
-            </label>
-            <Link to={AUTH_LINKS.forgotPassword} className="uep-signin-link uep-signin-forgot">
-              Forgot password?
-            </Link>
-          </div>
-          <div className="uep-signin-input-wrap">
-            <Icon name="password" size={18} className="uep-signin-input-icon" />
-            <input
-              id="login-password"
-              ref={passwordRef}
-              className="uep-signin-input uep-signin-input-reveal"
-              type={showPassword ? 'text' : 'password'}
-              value={password}
-              onChange={(e) => {
-                setPassword(e.target.value)
-                clearMessages()
-              }}
-              onKeyDown={handleCapsLock}
-              onKeyUp={handleCapsLock}
-              dir="ltr"
-              autoComplete="current-password"
-              autoFocus={Boolean(remembered)}
-              aria-invalid={invalid.password || undefined}
-              aria-describedby={describedBy(formError && 'login-form-error', capsLockOn && 'login-capslock')}
-            />
-            <button
-              type="button"
-              className="uep-signin-reveal"
-              onClick={() => setShowPassword((v) => !v)}
-              aria-label={showPassword ? 'Hide password' : 'Show password'}
-              aria-controls="login-password"
-            >
-              <Icon name={showPassword ? 'view--off' : 'view'} size={18} />
-            </button>
-          </div>
-          {/* Always in the document, so it exists before it has anything to
-              say -- a region inserted with its message is often not read. */}
-          <p id="login-form-error" role="alert" className="uep-signin-error">
-            {formError}
-          </p>
-          <p id="login-capslock" role="status" className="uep-signin-hint">
-            {capsLockOn && (
-              <>
-                <Icon name="warning--alt" size={16} />
-                Caps Lock is on
-              </>
-            )}
-          </p>
-        </div>
-
-        {captchaShown && (
-          <div className="uep-signin-field">
-            <label htmlFor="login-captcha" className="uep-signin-label">
-              Security check
-            </label>
-            <div className="uep-signin-captcha-row">
-              <span className="uep-signin-captcha-sum" id="login-captcha-question" dir="ltr">
-                {captcha ? `${captcha.num1} + ${captcha.num2} =` : 'Loading…'}
-              </span>
-              <input
-                id="login-captcha"
-                ref={captchaRef}
-                className="uep-signin-input uep-signin-input-plain"
-                inputMode="numeric"
-                autoComplete="off"
-                dir="ltr"
-                value={captchaAnswer}
-                onChange={(e) => {
-                  setCaptchaAnswer(e.target.value)
-                  setCaptchaError('')
+    <AuthFrame overlay={arrived && !reducedMotion() ? <SignedInCurtain /> : null}>
+      <div key={step} className={`uep-signin-step is-${entry}`}>
+        {step === STEP.HELP ? (
+          <HelpPanel ref={helpBackRef} support={settings.support} onBack={() => go(helpFrom, 'bwd')} />
+        ) : (
+          <>
+            <h1 className="uep-signin-heading uep-signin-stg" style={{ '--k': -1 }}>Sign in</h1>
+            {notices}
+            {step === STEP.USERNAME ? (
+              <UsernameStep
+                username={username}
+                onUsernameChange={(v) => {
+                  setUsername(v)
+                  setUsernameError('')
                 }}
-                disabled={!captcha}
-                aria-invalid={captchaError ? true : undefined}
-                aria-describedby={describedBy('login-captcha-question', captchaError && 'login-captcha-error')}
+                error={usernameError}
+                rememberMe={rememberMe}
+                onRememberChange={setRememberMe}
+                onContinue={onContinue}
+                onNeedAccess={openHelp}
+                inputRef={usernameRef}
+                wrapRef={usernameWrapRef}
               />
-              <button
-                type="button"
-                className="uep-signin-icon-btn"
-                onClick={refreshCaptcha}
-                disabled={busy}
-                aria-label="New question"
-              >
-                <Icon name="renew" size={18} />
-              </button>
-            </div>
-            {captchaError && (
-              <p id="login-captcha-error" className="uep-signin-error">
-                {captchaError}
-              </p>
-            )}
-          </div>
-        )}
-
-        <div className="uep-enter" style={step(4)}>
-          <label className="uep-signin-check">
-            <input type="checkbox" checked={rememberMe} onChange={(e) => setRememberMe(e.target.checked)} />
-            Remember my username
-          </label>
-          <button type="submit" className="uep-signin-submit" aria-disabled={busy || undefined}>
-            Sign in
-            {busy ? (
-              <span className="uep-signin-spinner" aria-hidden="true" />
             ) : (
-              <Icon name="login" size={18} className="uep-signin-submit-icon" />
+              <PasswordStep
+                username={username}
+                onNotYou={onNotYou}
+                password={password}
+                onPasswordChange={(v) => {
+                  setPassword(v)
+                  setPasswordError('')
+                }}
+                showPassword={showPassword}
+                onToggleShow={() => setShowPassword((v) => !v)}
+                capsLockOn={capsLockOn}
+                onCapsKey={handleCapsLock}
+                error={passwordError}
+                lockout={lockout}
+                busy={busy}
+                arrived={arrived}
+                onSubmit={onSignIn}
+                onForgot={openHelp}
+                inputRef={passwordRef}
+                wrapRef={passwordWrapRef}
+              />
             )}
-          </button>
-          <p className="sr-only" aria-live="polite">
-            {busy ? 'Signing in…' : ''}
-          </p>
-        </div>
-      </form>
-
-      <p className="uep-signin-access uep-enter" style={step(5)}>
-        Need access?{' '}
-        <Link to={AUTH_LINKS.requestAccess} className="uep-signin-link">
-          Contact your UEP administrator
-        </Link>
-      </p>
-    </div>
+          </>
+        )}
+      </div>
+    </AuthFrame>
   )
 }

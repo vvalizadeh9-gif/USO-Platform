@@ -85,6 +85,18 @@ def _fresh_access_cache():
     yield
 
 
+@pytest.fixture
+def captcha_on(monkeypatch):
+    """Switch the login captcha back on for one test (UEP-26 turned it off).
+
+    The captcha tests describe the behaviour that ``LOGIN_CAPTCHA_ENABLED=true``
+    restores, so they run with it set."""
+    from app.core.config import get_settings
+
+    monkeypatch.setattr(get_settings(), "login_captcha_enabled", True)
+    yield
+
+
 def create_schema() -> None:
     """Drop everything and rebuild the schema by running the migrations.
 

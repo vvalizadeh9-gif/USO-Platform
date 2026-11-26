@@ -3,12 +3,12 @@ import { useEffect } from 'react'
 export const LEAVE_MESSAGE = 'You have unsaved access changes. Leave without saving?'
 
 /**
- * While `dirty`, leaving asks first: closing or reloading the tab (the
+ * While `dirty`, leaving asks first (with `message`): closing or reloading the tab (the
  * browser's own prompt), and following any in-app link outside `rootRef`
  * (the rail, the launcher, the header). The app uses a plain BrowserRouter,
  * which has no navigation blocker, so links are intercepted on the way out.
  */
-export default function useLeaveGuard(dirty, rootRef) {
+export default function useLeaveGuard(dirty, rootRef, message = LEAVE_MESSAGE) {
   useEffect(() => {
     if (!dirty) return undefined
     const onBeforeUnload = (event) => {
@@ -19,7 +19,7 @@ export default function useLeaveGuard(dirty, rootRef) {
       const link = event.target.closest?.('a[href]')
       if (!link || rootRef?.current?.contains(link)) return
       if (link.target === '_blank' || event.metaKey || event.ctrlKey) return
-      if (!window.confirm(LEAVE_MESSAGE)) {
+      if (!window.confirm(message)) {
         event.preventDefault()
         event.stopPropagation()
       }
@@ -30,5 +30,5 @@ export default function useLeaveGuard(dirty, rootRef) {
       window.removeEventListener('beforeunload', onBeforeUnload)
       document.removeEventListener('click', onClick, true)
     }
-  }, [dirty, rootRef])
+  }, [dirty, rootRef, message])
 }

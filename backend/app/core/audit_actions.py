@@ -74,6 +74,9 @@ ACCESS_ROLE_DELETED = "access.role_deleted"
 ACCESS_OVERRIDE_EXPIRED = "access.user_override_expired"
 BACKUP_CONFIRMED = "BACKUP_CONFIRMED"
 
+# UEP-26: Admin > Sign-in page saved (support contact, planned-update notice).
+SIGNIN_SETTINGS_CHANGED = "signin_settings.changed"
+
 # ---------------------------------------------------------------------------
 # Result / status of the recorded attempt
 # ---------------------------------------------------------------------------
