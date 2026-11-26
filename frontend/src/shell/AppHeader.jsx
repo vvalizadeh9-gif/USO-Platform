@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
+import markUrl from '../assets/uep-mark.svg'
 import Icon from '../components/Icon'
 import { initialsOf } from '../lib/initials'
 import AccountPopover from './AccountPopover'
@@ -29,7 +30,7 @@ export default function AppHeader({ user, apps, crumbs, onSignOut }) {
         <Icon name="switcher" size={20} />
       </button>
       <Link to="/home" className="uep-logo" aria-label="UEP Home">
-        <span className="uep-logo-tile" aria-hidden="true">U</span>
+        <img src={markUrl} className="uep-logo-mark" width={26} height={26} alt="" />
         <span className="uep-logo-word">UEP</span>
       </Link>
       {crumbs.length > 0 && (

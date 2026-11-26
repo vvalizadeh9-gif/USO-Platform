@@ -45,6 +45,7 @@ from app.models.mojri import MojriImportRun, MojriTrackerStatus
 from app.models.performance import LifecycleStatusHistory
 from app.models.monthly_plan import ContractorMonthlyPlan
 from app.models.province_assignment import ProvinceAssignmentHistory
+from app.models.signin_settings import SignInSettings
 from app.models.sla_policy import SlaPolicy, SlaPolicyHistory
 from app.models.stored_file import StoredFile
 from app.models.submission import (
@@ -91,6 +92,7 @@ __all__ = [
     "SubmissionLetterFile",
     "SubmissionSettings",
     "ProvinceAssignmentHistory",
+    "SignInSettings",
     "SlaPolicy",
     "SlaPolicyHistory",
     "StoredFile",

@@ -206,6 +206,7 @@ def test_deactivation_still_ends_the_session(client):
 # ---------------------------------------------------------------------------
 # M12 — a captcha challenge is good for one attempt
 # ---------------------------------------------------------------------------
+@pytest.mark.usefixtures("captcha_on")
 def test_a_captcha_challenge_cannot_be_reused(client):
     admin_h = _admin(client)
     _make_user(client, admin_h, "si_captcha")
@@ -224,6 +225,7 @@ def test_a_captcha_challenge_cannot_be_reused(client):
     assert "aptcha" in second.json()["detail"]
 
 
+@pytest.mark.usefixtures("captcha_on")
 def test_a_wrong_captcha_answer_does_not_spend_the_challenge(client):
     """A mistyped sum should not force a page reload to get a new challenge."""
     challenge = client.get("/api/v1/auth/captcha").json()

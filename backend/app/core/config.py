@@ -202,6 +202,11 @@ class Settings(DatabaseSettings):
     # which the captcha is demanded. Below it the login form shows none -- see
     # the login endpoint for why that costs nothing.
     login_captcha_after_failures: int = 2
+    # Whether the login form's maths question is used at all (UEP-26). Off by
+    # default: the per-username lockout above is the defence against guessing,
+    # and the sign-in page no longer shows the question. Set to true to restore
+    # the pre-UEP-26 behaviour; /auth/captcha keeps working either way.
+    login_captcha_enabled: bool = False
 
     # File uploads (letters, attachments). The files themselves are kept in
     # the database (stored_files, UEP-20); there is no uploads folder.

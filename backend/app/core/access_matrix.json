@@ -291,6 +291,13 @@
       ],
       "hidden": []
     },
+    "signin_settings": {
+      "view": [],
+      "edit": [
+        "Admin"
+      ],
+      "hidden": []
+    },
     "province_assignments": {
       "view": [
         "Viewer"

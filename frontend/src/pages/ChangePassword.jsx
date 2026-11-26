@@ -1,32 +1,69 @@
-import { motion } from 'framer-motion'
-import { Eye, EyeOff, KeyRound, ShieldCheck } from '../components/carbon'
-import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import api from '../api/client'
-import { useAuth } from '../context/AuthContext'
-import { useToast } from '../context/ToastContext'
-import { PageHead } from '../components/ui'
-import { detailMessage } from '../lib/apiError'
-
-const MIN_LENGTH = 12
-
-// Changing your own password.
+// Changing your own password, in the sign-in frame (UEP-26).
 //
 // One screen serving two situations. Normally it is something a person chose
-// to do, reached from the sidebar. But after an administrator resets an
-// account it is the *only* screen that account can use, and it is reached by
-// being sent here — so it has to explain why, and it must not offer a way
-// back to a platform that will only refuse.
+// to do, from the account menu. But after an administrator resets an account
+// it is the *only* screen that account can use -- so it says why, and offers
+// no way back to a platform that would only refuse.
 //
 // The current password is required in both cases, including the forced one.
 // Somebody working off a temporary password was given it, so they can type it;
 // requiring it is what stops an unattended browser being turned into a
 // permanent account by whoever walks past next.
+import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import api from '../api/client'
+import Icon from '../components/Icon'
+import { useAuth } from '../context/AuthContext'
+import { useToast } from '../context/ToastContext'
+import { detailMessage } from '../lib/apiError'
+import AuthFrame from './auth/AuthFrame'
+import FieldMessage from './auth/FieldMessage'
+import {
+  CHANGE_PASSWORD_MESSAGES,
+  MIN_PASSWORD_LENGTH as MIN_LENGTH,
+  passwordProblem,
+} from './auth/signInModel'
+
+function Rule({ met, children }) {
+  return (
+    <li className={met ? 'is-met' : undefined}>
+      <span className="uep-signin-rule-dot" aria-hidden="true">
+        <Icon name="checkmark" size={16} />
+      </span>
+      {children}
+      <span className="sr-only">{met ? ' (done)' : ' (not yet)'}</span>
+    </li>
+  )
+}
+
+function PasswordField({ id, label, value, onChange, type, autoComplete, autoFocus, reveal }) {
+  return (
+    <div className="uep-signin-field">
+      <label htmlFor={id} className="uep-signin-label">{label}</label>
+      <div className="uep-signin-input-wrap">
+        <Icon name="password" size={18} className="uep-signin-input-icon" />
+        <input
+          id={id}
+          className={`uep-signin-input${reveal ? ' uep-signin-input-reveal' : ''}`}
+          type={type}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          autoComplete={autoComplete}
+          autoFocus={autoFocus}
+          dir="ltr"
+          aria-describedby="change-password-error"
+        />
+        {reveal}
+      </div>
+    </div>
+  )
+}
+
 export default function ChangePassword() {
   const { user, refreshUser } = useAuth()
   const toast = useToast()
   const navigate = useNavigate()
-  const forced = !!user?.must_change_password
+  const forced = Boolean(user?.must_change_password)
 
   const [current, setCurrent] = useState('')
   const [next, setNext] = useState('')
@@ -35,145 +72,103 @@ export default function ChangePassword() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
 
-  const mismatch = confirm.length > 0 && next !== confirm
-  const tooShort = next.length > 0 && next.length < MIN_LENGTH
-  const canSubmit = current && next.length >= MIN_LENGTH && next === confirm && !busy
+  const longEnough = next.length >= MIN_LENGTH
+  const matches = next.length > 0 && next === confirm
+  const edit = (setter) => (value) => {
+    setter(value)
+    setError('')
+  }
 
   async function submit(e) {
     e.preventDefault()
-    setError('')
+    if (busy) return
+    const problem = passwordProblem({ current, next, confirm, forced })
+    if (problem) {
+      setError(problem)
+      return
+    }
     setBusy(true)
     try {
       // Changing a password ends every session the account has, this one
       // included, so the server sets a fresh session cookie in its answer
       // rather than signing someone out for succeeding.
-      await api.post('/auth/me/password', {
-        current_password: current,
-        new_password: next,
-      })
+      await api.post('/auth/me/password', { current_password: current, new_password: next })
       await refreshUser()
-      toast.success(
-        'Password changed',
-        'Any other device signed in to this account has been signed out.',
-      )
-      navigate('/')
+      toast.success('Password changed', 'Any other device signed in to this account has been signed out.')
+      navigate('/', { replace: true })
     } catch (err) {
-      setError(detailMessage(err, 'Could not change the password. Please try again.'))
+      setError(detailMessage(err, CHANGE_PASSWORD_MESSAGES.failed))
     } finally {
       setBusy(false)
     }
   }
 
+  const revealButton = (
+    <button
+      type="button"
+      className="uep-signin-reveal"
+      onClick={() => setShow((v) => !v)}
+      aria-label={show ? 'Hide password' : 'Show password'}
+      aria-pressed={show}
+      aria-controls="new-password confirm-password"
+    >
+      <Icon name={show ? 'view--off' : 'view'} size={18} />
+    </button>
+  )
+
   return (
-    <>
-      <PageHead title={forced ? 'Choose a new password' : 'Change password'} />
-      {/* The one sentence that says why they are here and cannot go elsewhere. */}
-      {forced && <p className="cp-forced-note">Your password was reset by an administrator. Choose your own before continuing.</p>}
-
-      <motion.div
-        className="card card-pad"
-        style={{ maxWidth: 520 }}
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-      >
-        {forced && (
-          <div className="form-banner form-banner-error" role="alert" style={{ marginBottom: 16 }}>
-            The password you signed in with is one an administrator also knows.
-            Until you replace it, this is the only screen your account can use.
-          </div>
+    <AuthFrame>
+      <div className="uep-signin-step is-first">
+        {!forced && (
+          <button type="button" className="uep-signin-back" onClick={() => navigate('/')}>
+            <Icon name="arrow--left" size={16} />
+            Back
+          </button>
         )}
-
-        {error && (
-          <div className="form-banner form-banner-error" role="alert" style={{ marginBottom: 16 }}>
-            {error}
-          </div>
-        )}
-
-        <form onSubmit={submit} noValidate>
-          <div className="field">
-            <label htmlFor="current-password">
-              {forced ? 'The password you were given' : 'Current password'}
-            </label>
-            <input
-              id="current-password"
-              className="input"
-              type="password"
-              value={current}
-              onChange={(e) => setCurrent(e.target.value)}
-              autoComplete="current-password"
-              autoFocus
-              required
-            />
-          </div>
-
-          <div className="field">
-            <label htmlFor="new-password">New password</label>
-            <div className="input-with-action">
-              <input
-                id="new-password"
-                className={`input${tooShort ? ' input-error' : ''}`}
-                type={show ? 'text' : 'password'}
-                value={next}
-                onChange={(e) => setNext(e.target.value)}
-                autoComplete="new-password"
-                aria-describedby="new-password-help"
-                required
-              />
-              <button
-                type="button"
-                className="input-action-btn"
-                onClick={() => setShow((v) => !v)}
-                aria-label={show ? 'Hide password' : 'Show password'}
-                aria-pressed={show}
-                tabIndex={-1}
-              >
-                {show ? <EyeOff size={16} /> : <Eye size={16} />}
-              </button>
-            </div>
-            <span id="new-password-help" className="dim" style={{ fontSize: 12.5, marginTop: 6, display: 'block' }}>
-              At least {MIN_LENGTH} characters. A phrase you will remember beats
-              a short word with symbols in it — length is what makes a password
-              hard to guess.
-            </span>
-            {tooShort && (
-              <div className="field-error" role="alert">
-                That is {next.length} character{next.length === 1 ? '' : 's'};
-                {' '}{MIN_LENGTH} is the minimum.
-              </div>
+        <h1 className="uep-signin-heading">Choose a new password</h1>
+        {forced && <p className="uep-signin-lead">Your password was reset by an administrator.</p>}
+        <form onSubmit={submit} noValidate aria-busy={busy}>
+          <PasswordField
+            id="current-password"
+            label={forced ? 'Password you were given' : 'Current password'}
+            value={current}
+            onChange={edit(setCurrent)}
+            type="password"
+            autoComplete="current-password"
+            autoFocus
+          />
+          <PasswordField
+            id="new-password"
+            label="New password"
+            value={next}
+            onChange={edit(setNext)}
+            type={show ? 'text' : 'password'}
+            autoComplete="new-password"
+            reveal={revealButton}
+          />
+          <PasswordField
+            id="confirm-password"
+            label="Repeat new password"
+            value={confirm}
+            onChange={edit(setConfirm)}
+            type={show ? 'text' : 'password'}
+            autoComplete="new-password"
+          />
+          <ul className="uep-signin-rules" aria-label="Password rules">
+            <Rule met={longEnough}>At least {MIN_LENGTH} characters</Rule>
+            <Rule met={matches}>Both new passwords match</Rule>
+          </ul>
+          <FieldMessage id="change-password-error" message={error} />
+          <button type="submit" className="uep-signin-submit" aria-disabled={busy || undefined} aria-busy={busy || undefined}>
+            {busy ? 'Saving…' : 'Save and continue'}
+            {busy ? (
+              <span className="uep-signin-spinner" aria-hidden="true" />
+            ) : (
+              <Icon name="arrow--right" size={18} className="uep-signin-submit-icon" />
             )}
-          </div>
-
-          <div className="field">
-            <label htmlFor="confirm-password">Repeat the new password</label>
-            <input
-              id="confirm-password"
-              className={`input${mismatch ? ' input-error' : ''}`}
-              type={show ? 'text' : 'password'}
-              value={confirm}
-              onChange={(e) => setConfirm(e.target.value)}
-              autoComplete="new-password"
-              aria-invalid={mismatch}
-              required
-            />
-            {mismatch && (
-              <div className="field-error" role="alert">
-                The two passwords do not match.
-              </div>
-            )}
-          </div>
-
-          <div className="row" style={{ gap: 7, margin: '4px 0 16px', color: 'var(--uep-text-2)', fontSize: 12.5 }}>
-            <ShieldCheck size={14} />
-            <span>
-              Every other device signed in to this account will be signed out.
-            </span>
-          </div>
-
-          <button className="btn btn-primary" disabled={!canSubmit}>
-            {busy ? <div className="spinner" /> : <><KeyRound size={15} /> Change password</>}
           </button>
         </form>
-      </motion.div>
-    </>
+      </div>
+    </AuthFrame>
   )
 }

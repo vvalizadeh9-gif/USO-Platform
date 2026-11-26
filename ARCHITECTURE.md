@@ -2355,6 +2355,22 @@ account may call `/auth/me`, `/auth/me/password` and `/auth/logout`, and
 nothing else. The 403 carries a machine-readable `code` so the frontend routes
 to the change-password screen instead of showing a permission error.
 
+**The sign-in page's settings (UEP-26).** One row in `signin_settings`, seeded
+empty by migration `f9d3b7a2c614`, holds the support contact and an optional
+planned-update notice. Admin edits it in Admin › Sign-in page (feature
+`signin_settings`, Admin = Edit).
+
+| Route | Who | Returns / does |
+|---|---|---|
+| `GET /auth/signin-settings` | anyone, signed out | `{support: {name, hours, email, phone}, notice: {text} \| null}` only; the notice only while switched on and inside its window (either end may be empty). `Cache-Control: public, max-age=60` |
+| `GET /admin/signin-settings` | `signin_settings` View | the full row plus `updated_by_name` |
+| `PUT /admin/signin-settings` | `signin_settings` Edit | validates lengths (80 / 80 / 254 / 40 / 140), the email, the notice text when switched on, and from < to; 422 with the sentence to show. Audited as `signin_settings.changed`, before → after |
+
+The username step of the sign-in page calls nothing, so the page never says
+whether a username exists. The maths captcha is off unless
+`LOGIN_CAPTCHA_ENABLED` is set; `/auth/captcha` and `verify_captcha` remain.
+The lockout and its `429` + `Retry-After` are unchanged.
+
 **There is no outbound mail**, which is why "I forgot my password" is a request
 an administrator actions rather than a link. Building the usual flow would mean
 an SMTP server, a token table and an unauthenticated endpoint that mints

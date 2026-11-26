@@ -37,6 +37,7 @@ from app.schemas import (
     SessionResponse,
     UserOut,
 )
+from app.services import signin_settings
 from app.services.audit import record_audit, record_audit_now
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -64,6 +65,25 @@ def _refuse_locked_out(retry_after: int) -> HTTPException:
         detail=lockout_message(retry_after),
         headers={"Retry-After": str(retry_after)},
     )
+
+
+#: How long a browser (or proxy) may reuse the public sign-in settings.
+SIGNIN_SETTINGS_MAX_AGE = 60
+
+
+@router.get("/signin-settings")
+def get_signin_settings(response: Response, db: Session = Depends(get_db)) -> dict:
+    """The sign-in page's support contact and planned-update notice (UEP-26).
+
+    Public: read before anyone signs in. Returns only
+    ``{support: {name, hours, email, phone}, notice: {text} | null}``; the
+    notice only while it is switched on and inside its window. Never a user's
+    name or any other field of the row. Cached for 60 seconds.
+    """
+    row = signin_settings.get_row(db)
+    db.commit()
+    response.headers["Cache-Control"] = f"public, max-age={SIGNIN_SETTINGS_MAX_AGE}"
+    return signin_settings.public_view(row)
 
 
 @router.get("/captcha", response_model=CaptchaChallenge)
@@ -103,6 +123,38 @@ def _record_failed_login(
     )
 
 
+def _check_captcha(
+    db: Session,
+    username: str,
+    ip: str,
+    captcha_token: str | None,
+    captcha_answer: int | None,
+) -> None:
+    """Demand and verify the captcha, when ``login_captcha_enabled`` is on.
+
+    Demanded only once that username or address has
+    ``login_captcha_after_failures`` recent failures; a captcha that is sent is
+    always checked, required or not. Raises a 400 with ``X-Captcha-Required``.
+    """
+    captcha_sent = captcha_token is not None and captcha_answer is not None
+    captcha_required = (
+        login_rate_limiter.recent_failures(db, username, ip)
+        >= settings.login_captcha_after_failures
+    )
+    if captcha_required and not captcha_sent:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Answer the security check to sign in",
+            headers={"X-Captcha-Required": "true"},
+        )
+    if captcha_sent and not verify_captcha(db, captcha_token, captcha_answer):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Captcha answer is incorrect or has expired",
+            headers={"X-Captcha-Required": "true"},
+        )
+
+
 @router.post("/login", response_model=SessionResponse)
 def login(
     request: Request,
@@ -123,7 +175,8 @@ def login(
     only failures, and clearing on success, keeps this invisible to people who
     know their password.
 
-    The captcha is demanded only once that username or address has
+    Since UEP-26 the captcha is off unless ``login_captcha_enabled`` is set.
+    When it is on, it is demanded only once that username or address has
     ``login_captcha_after_failures`` recent failures. It was never the defence
     against guessing (see ``core/rate_limit.py``) -- a script reads the sum out
     of the challenge -- so asking everyone for it on every sign-in was a cost to
@@ -146,23 +199,11 @@ def login(
         )
         raise _refuse_locked_out(retry_after)
 
-    captcha_sent = captcha_token is not None and captcha_answer is not None
-    captcha_required = (
-        login_rate_limiter.recent_failures(db, form.username, ip)
-        >= settings.login_captcha_after_failures
-    )
-    if captcha_required and not captcha_sent:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Answer the security check to sign in",
-            headers={"X-Captcha-Required": "true"},
-        )
-    if captcha_sent and not verify_captcha(db, captcha_token, captcha_answer):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Captcha answer is incorrect or has expired",
-            headers={"X-Captcha-Required": "true"},
-        )
+    if settings.login_captcha_enabled:
+        _check_captcha(db, form.username, ip, captcha_token, captcha_answer)
+    # With the captcha switched off (UEP-26, the default) it is never required
+    # and a captcha that is still sent is ignored, so an old browser tab keeps
+    # working. The lockout above is unchanged either way.
     user = db.query(User).filter(User.username == form.username).one_or_none()
     if not verify_password_or_dummy(
         form.password, user.password_hash if user else None

@@ -65,16 +65,11 @@
   color: var(--uep-text);
   text-decoration: none;
 }
-.uep-logo-tile {
+/* The UEP mark (UEP-26), the light version. */
+.uep-logo-mark {
+  display: block;
   width: var(--uep-logo-tile);
   height: var(--uep-logo-tile);
-  display: grid;
-  place-items: center;
-  border-radius: var(--uep-radius-control);
-  background: var(--uep-accent);
-  color: var(--uep-on-accent);
-  font-size: var(--uep-fs-small);
-  font-weight: var(--uep-weight-semibold);
 }
 .uep-logo-word { font-size: var(--uep-fs-15); font-weight: var(--uep-weight-semibold); }
 

@@ -255,6 +255,11 @@ export const APPS = Object.freeze([
         id: 'sla', section: 'Workflow', label: 'SLA policies', route: '/admin/sla', need: F.SLA_POLICIES,
         icon: 'timer', tile: '--uep-app-admin',
       },
+      // UEP-26: the sign-in page's support contact and planned-update notice.
+      {
+        id: 'sign-in-page', section: 'Workflow', label: 'Sign-in page', route: '/admin/sign-in-page', need: F.SIGNIN_SETTINGS,
+        icon: 'login', tile: '--uep-app-admin',
+      },
       {
         id: 'reference', section: 'Workflow', label: 'Problem categories', route: '/admin?tab=categories', need: F.PROBLEM_CATEGORIES,
         icon: 'list--checked', tile: '--uep-app-admin',

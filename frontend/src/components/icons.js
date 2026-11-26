@@ -118,6 +118,10 @@ import enterprise16 from '@carbon/icons/es/enterprise/16.js'
 import enterprise20 from '@carbon/icons/es/enterprise/20.js'
 import return16 from '@carbon/icons/es/return/16.js'
 import return20 from '@carbon/icons/es/return/20.js'
+import phone16 from '@carbon/icons/es/phone/16.js'
+import phone20 from '@carbon/icons/es/phone/20.js'
+import save16 from '@carbon/icons/es/save/16.js'
+import save20 from '@carbon/icons/es/save/20.js'
 import warning16 from '@carbon/icons/es/warning/16.js'
 import warning20 from '@carbon/icons/es/warning/20.js'
 import activity16 from '@carbon/icons/es/activity/16.js'
@@ -315,6 +319,9 @@ export const ICONS = Object.freeze({
   'upgrade': { 16: upgrade16, 20: upgrade20 },
   // UEP-22 Insights › Acceptance baskets.
   'inventory-management': { 16: inventoryManagement16, 20: inventoryManagement20 },
+  // UEP-26 sign-in help panel and Admin › Sign-in page.
+  'phone': { 16: phone16, 20: phone20 },
+  'save': { 16: save16, 20: save20 },
 })
 
 /** @typedef {keyof typeof ICONS} IconName */

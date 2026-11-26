@@ -111,6 +111,8 @@ class Feature(StrEnum):
     ACCESS = "access"
     PROVINCE_ASSIGNMENTS = "province_assignments"
     SLA_POLICIES = "sla_policies"
+    #: Admin > Sign-in page (UEP-26): support contact and planned-update notice.
+    SIGNIN_SETTINGS = "signin_settings"
     PROBLEM_CATEGORIES = "problem_categories"
     PROVINCES = "provinces"
     ACTION_SLA = "action_sla"

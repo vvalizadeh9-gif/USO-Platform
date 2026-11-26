@@ -273,6 +273,8 @@ ALLOW_LIST = {
     "/api/v1/auth/captcha", "/api/v1/auth/login", "/api/v1/auth/logout", "/api/v1/auth/me",
     "/api/v1/auth/me/password", "/api/v1/auth/refresh", "/api/v1/auth/session",
     "/api/v1/auth/forgot-password", "/api/v1/auth/password-reset-request",
+    # The sign-in page's public contact and notice (UEP-26): read before sign-in.
+    "/api/v1/auth/signin-settings",
     # What the signed-in user may use; their Home; their notifications.
     "/api/v1/me/access", "/api/v1/me/home", "/api/v1/home/summary",
     "/api/v1/me/notifications", "/api/v1/notifications/{notification_id}/read",

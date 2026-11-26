@@ -84,10 +84,10 @@ App identity (tiles: white icon on the colour; tint for card headers):
   digits) and village names (`--uep-font-persian`). Already self-hosted in
   `styles/fonts.css`.
 - Scale (`--uep-fs-*`): 12 caption · 13 small · **14 body** · 15 · 16 card
-  title · 18 section · 24 page title · 26 greeting · 28 sign-in title · 32 KPI
-  · 64 brand statement.
+  title · 18 section · 24 page title · 26 greeting · 28 (`--uep-fs-signin-title`, kept for page heads and figures) · 32 KPI. The sign-in
+  title is fluid (`--uep-fs-signin-display`, 32–54px).
 - Line height `--uep-lh-ui` 1.45. Headings of 22px and up track tighter:
-  `--uep-tracking-heading` −0.02em, `--uep-tracking-brand` −0.03em.
+  `--uep-tracking-heading` −0.02em, the sign-in title −0.025em.
 
 ## 4. Shape, spacing, elevation, focus
 
@@ -208,25 +208,43 @@ same blue), not a new colour.
 flag:** add `?motion=reduce` (or `?motion=full`) to any URL to force a mode;
 it is remembered in that browser until `?motion=system`.
 
-## 7. Sign-in
+## 7. Sign-in (UEP-26)
 
-Two equal halves (`flex: 1 1 520px`). The form is on white, with the logo at the
-top, a 380px column centred vertically, and the legal footer with `UEP
-{version}`. The brand half is deep cobalt and holds only *USO / Enterprise /
-Platform* (64px) and a 72×3 white rule. Four 1600px wave rings, centred on its
-bottom-right corner, cycle every 16s, 4s apart. Below 960px the brand half is
-hidden. Component tokens are `--uep-signin-*`.
+One centred card on a white page, resting on the edge of a deep cobalt band
+(`clamp(300px, 53vh, 490px)` high). The band carries the UEP mark and "UEP"
+top-left and the decorative title *USO Enterprise Platform*
+(`clamp(32px, 3.7vw, 54px)`) with a 56×3 white rule; the card's `<h1>` is the
+page heading. Two sets of wave rings, clipped to the band: four 1520px
+`--uep-brand-wave` rings from its bottom-right corner (16s, 4s apart) and three
+1800px `--uep-signin-wave-b` rings from its top-left (24s, 8s apart). The
+footer reads "© {year} USO" · "Authorised use only. Sign-ins are recorded." ·
+"UEP {version}". Component tokens are `--uep-signin-*`; the stylesheet is
+`styles/signin.css`, shared by Change password.
 
-The page keeps four things the approved design leaves out, by decision on
-2026-10-11: the security check after two failures, "Remember my username",
-the Caps Lock warning, and a skip link (visible only on keyboard focus).
-"Forgot password?", "Contact your UEP administrator", Privacy, Terms and
-Help go to placeholder pages for now.
+Steps (`pages/Login.jsx`, views in `pages/auth/`): **username** (Continue, no
+server call) → **password** (account chip with "Not you?", Caps Lock hint,
+show/hide). A remembered username opens on the password step. A 429 shows the
+neutral lockout box — a 30px ring that empties once a second and an m:ss
+countdown from `Retry-After` — and disables the field and button. "Forgot
+password?" and "Need access?" open the **help panel** inside the card, with the
+contact set in Admin › Sign-in page, rendered as text. `/login?help=1` opens
+it; `/forgot-password` and `/request-access` redirect there. Notices (planned
+update, session expired) use the neutral `--uep-page` box.
 
-> **Contrast note.** `--uep-border-strong` (#C9CFD9) is about 1.5:1 on white,
-> below the 3:1 that WCAG 1.4.11 asks of an input's boundary. The inputs are
-> still identifiable by their labels and icons, but if an audit flags it, the
-> fix is a darker input border token.
+Fits 1366×768 and up with no page scroll (`max-height: 780px` tightens the
+title and card); below 600px the card goes full width and the page may scroll.
+
+Motion, all transform/opacity and all off under reduced motion (waves hidden):
+band fade 600ms; the mark's three arcs draw in (1s, 140ms apart); the title's
+words rise from a mask (900ms, 120ms apart); the rule draws from its centre;
+the card rises 14px at 500ms and its fields arrive 60ms apart; a step slides in
+16px (260ms); an error shakes the field (340ms); a successful sign-in drops a
+cobalt curtain with "Opening Home" and navigates within 900ms.
+
+**The UEP mark** is a corner with three signal arcs: `assets/uep-mark.svg` (light
+backgrounds: the header at 26px, the favicon) and `assets/uep-mark-on-dark.svg`;
+`components/UepMark.jsx` draws it inline where the arcs animate. Inputs use
+`--uep-signin-input-edge` (#868F9F, 3:1 on white).
 
 ## 8. App shell and Home (UEP-02)
 
