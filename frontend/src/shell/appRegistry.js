@@ -221,6 +221,10 @@ export const APPS = Object.freeze([
       { id: 'sla-policies', label: 'SLA policies', route: '/admin/sla', need: [F.SLA_POLICIES, 'edit'], adminDuplicate: true },
       // PM's way in to Admin > Province assignments (UEP-17), the same way.
       { id: 'province-assignments', label: 'Province assignments', route: '/admin/provinces', need: [F.PROVINCE_ASSIGNMENTS, 'edit'], adminDuplicate: true },
+      // UEP-25: PM and Viewer read Access and System health from here; anyone
+      // with the Admin app finds them there instead.
+      { id: 'access', label: 'Access', route: '/admin?tab=access', need: F.ACCESS, adminDuplicate: true },
+      { id: 'system-health', label: 'System health', route: '/admin?tab=health', need: F.SYSTEM_HEALTH, adminDuplicate: true },
     ],
   },
   {
@@ -230,6 +234,9 @@ export const APPS = Object.freeze([
     icon: 'settings',
     color: '--uep-app-admin',
     group: 'platform',
+    // The Admin app is for whoever administers something; read-only Access
+    // and System health alone (PM, Viewer) are listed under Data.
+    need: { any: [F.ADMIN_OVERVIEW, F.USERS, [F.CPM_IMPORT, 'edit'], F.PROBLEM_CATEGORIES, F.AUDIT_LOG] },
     pages: [
       { id: 'overview', label: 'Overview', route: '/admin?tab=overview', need: F.ADMIN_OVERVIEW },
       {

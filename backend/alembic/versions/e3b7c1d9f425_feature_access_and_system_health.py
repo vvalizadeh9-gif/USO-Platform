@@ -244,83 +244,108 @@ def _stamps() -> list[sa.Column]:
     ]
 
 
-def upgrade() -> None:
-    with op.batch_alter_table("roles") as batch:
-        batch.add_column(sa.Column("description", sa.String(255), nullable=True))
-        batch.add_column(sa.Column("landing", sa.String(80), nullable=False, server_default="standard"))
-        batch.add_column(sa.Column("data_scope_type", sa.String(20), nullable=False, server_default="all"))
-        batch.add_column(sa.Column("is_system", sa.Boolean(), nullable=False, server_default=sa.false()))
+def _tables() -> set[str]:
+    return set(sa.inspect(op.get_bind()).get_table_names())
 
-    op.create_table(
-        "features",
-        sa.Column("key", sa.String(60), primary_key=True),
-        sa.Column("app", sa.String(40), nullable=False),
-        sa.Column("label", sa.String(120), nullable=False),
-        sa.Column("description", sa.String(255), nullable=False, server_default=""),
-        sa.Column("levels", sa.String(20), nullable=False, server_default="view,edit"),
-        sa.Column("sort_order", sa.Integer(), nullable=False, server_default="0"),
-        *_stamps(),
-    )
-    op.create_table(
-        "role_feature_grants",
-        sa.Column("id", sa.Integer(), primary_key=True),
-        sa.Column("role_id", sa.Integer(), sa.ForeignKey("roles.id", ondelete="CASCADE"), nullable=False),
-        sa.Column("feature_key", sa.String(60), sa.ForeignKey("features.key", ondelete="CASCADE"), nullable=False),
-        sa.Column("level", sa.String(10), nullable=False),
-        sa.Column("hidden_in_menus", sa.Boolean(), nullable=False, server_default=sa.false()),
-        sa.UniqueConstraint("role_id", "feature_key", name="uq_role_feature_grant"),
-        *_stamps(),
-    )
-    op.create_index("ix_role_feature_grants_role_id", "role_feature_grants", ["role_id"])
-    op.create_table(
-        "user_feature_overrides",
-        sa.Column("id", sa.Integer(), primary_key=True),
-        sa.Column("user_id", sa.Integer(), sa.ForeignKey("users.id", ondelete="CASCADE"), nullable=False),
-        sa.Column("feature_key", sa.String(60), sa.ForeignKey("features.key", ondelete="CASCADE"), nullable=False),
-        sa.Column("level", sa.String(10), nullable=False),
-        sa.Column("reason", sa.String(500), nullable=False),
-        sa.Column("granted_by", sa.Integer(), sa.ForeignKey("users.id"), nullable=True),
-        sa.Column("granted_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
-        sa.Column("expires_at", sa.DateTime(timezone=True), nullable=True),
-        sa.UniqueConstraint("user_id", "feature_key", name="uq_user_feature_override"),
-        *_stamps(),
-    )
-    op.create_index("ix_user_feature_overrides_user_id", "user_feature_overrides", ["user_id"])
-    op.create_table(
-        "access_version",
-        sa.Column("id", sa.Integer(), primary_key=True),
-        sa.Column("version", sa.BigInteger(), nullable=False, server_default="1"),
-        *_stamps(),
-    )
-    op.create_table(
-        "system_snapshots",
-        sa.Column("id", sa.Integer(), primary_key=True),
-        sa.Column("taken_on", sa.Date(), nullable=False, unique=True),
-        sa.Column("db_bytes", sa.BigInteger(), nullable=False, server_default="0"),
-        sa.Column("files_bytes", sa.BigInteger(), nullable=False, server_default="0"),
-        sa.Column("active_users", sa.Integer(), nullable=False, server_default="0"),
-        sa.Column("failed_logins", sa.Integer(), nullable=False, server_default="0"),
-        sa.Column("errors", sa.Integer(), nullable=False, server_default="0"),
-        *_stamps(),
-    )
-    op.create_table(
-        "backup_confirmations",
-        sa.Column("id", sa.Integer(), primary_key=True),
-        sa.Column("confirmed_on", sa.Date(), nullable=False),
-        sa.Column("note", sa.String(500), nullable=True),
-        sa.Column("entered_by", sa.Integer(), sa.ForeignKey("users.id"), nullable=True),
-        sa.Column("entered_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
-        *_stamps(),
-    )
-    op.create_table(
-        "error_events",
-        sa.Column("id", sa.Integer(), primary_key=True),
-        sa.Column("occurred_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
-        sa.Column("source", sa.String(10), nullable=False),
-        sa.Column("route", sa.String(255), nullable=True),
-        *_stamps(),
-    )
-    op.create_index("ix_error_events_occurred_at", "error_events", ["occurred_at"])
+
+def _columns(table: str) -> set[str]:
+    return {c["name"] for c in sa.inspect(op.get_bind()).get_columns(table)}
+
+
+def upgrade() -> None:
+    # Each step is skipped when its column, table or index already exists: a
+    # legacy database built by create_all (tests/test_migrations.py) has them.
+    new_columns = [
+        sa.Column("description", sa.String(255), nullable=True),
+        sa.Column("landing", sa.String(80), nullable=False, server_default="standard"),
+        sa.Column("data_scope_type", sa.String(20), nullable=False, server_default="all"),
+        sa.Column("is_system", sa.Boolean(), nullable=False, server_default=sa.false()),
+    ]
+    have = _columns("roles")
+    missing = [c for c in new_columns if c.name not in have]
+    if missing:
+        with op.batch_alter_table("roles") as batch:
+            for column in missing:
+                batch.add_column(column)
+    existing = _tables()
+
+    if "features" not in existing:
+        op.create_table(
+            "features",
+            sa.Column("key", sa.String(60), primary_key=True),
+            sa.Column("app", sa.String(40), nullable=False),
+            sa.Column("label", sa.String(120), nullable=False),
+            sa.Column("description", sa.String(255), nullable=False, server_default=""),
+            sa.Column("levels", sa.String(20), nullable=False, server_default="view,edit"),
+            sa.Column("sort_order", sa.Integer(), nullable=False, server_default="0"),
+            *_stamps(),
+        )
+    if "role_feature_grants" not in existing:
+        op.create_table(
+            "role_feature_grants",
+            sa.Column("id", sa.Integer(), primary_key=True),
+            sa.Column("role_id", sa.Integer(), sa.ForeignKey("roles.id", ondelete="CASCADE"), nullable=False),
+            sa.Column("feature_key", sa.String(60), sa.ForeignKey("features.key", ondelete="CASCADE"), nullable=False),
+            sa.Column("level", sa.String(10), nullable=False),
+            sa.Column("hidden_in_menus", sa.Boolean(), nullable=False, server_default=sa.false()),
+            sa.UniqueConstraint("role_id", "feature_key", name="uq_role_feature_grant"),
+            *_stamps(),
+        )
+        op.create_index("ix_role_feature_grants_role_id", "role_feature_grants", ["role_id"])
+    if "user_feature_overrides" not in existing:
+        op.create_table(
+            "user_feature_overrides",
+            sa.Column("id", sa.Integer(), primary_key=True),
+            sa.Column("user_id", sa.Integer(), sa.ForeignKey("users.id", ondelete="CASCADE"), nullable=False),
+            sa.Column("feature_key", sa.String(60), sa.ForeignKey("features.key", ondelete="CASCADE"), nullable=False),
+            sa.Column("level", sa.String(10), nullable=False),
+            sa.Column("reason", sa.String(500), nullable=False),
+            sa.Column("granted_by", sa.Integer(), sa.ForeignKey("users.id"), nullable=True),
+            sa.Column("granted_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+            sa.Column("expires_at", sa.DateTime(timezone=True), nullable=True),
+            sa.UniqueConstraint("user_id", "feature_key", name="uq_user_feature_override"),
+            *_stamps(),
+        )
+        op.create_index("ix_user_feature_overrides_user_id", "user_feature_overrides", ["user_id"])
+    if "access_version" not in existing:
+        op.create_table(
+            "access_version",
+            sa.Column("id", sa.Integer(), primary_key=True),
+            sa.Column("version", sa.BigInteger(), nullable=False, server_default="1"),
+            *_stamps(),
+        )
+    if "system_snapshots" not in existing:
+        op.create_table(
+            "system_snapshots",
+            sa.Column("id", sa.Integer(), primary_key=True),
+            sa.Column("taken_on", sa.Date(), nullable=False, unique=True),
+            sa.Column("db_bytes", sa.BigInteger(), nullable=False, server_default="0"),
+            sa.Column("files_bytes", sa.BigInteger(), nullable=False, server_default="0"),
+            sa.Column("active_users", sa.Integer(), nullable=False, server_default="0"),
+            sa.Column("failed_logins", sa.Integer(), nullable=False, server_default="0"),
+            sa.Column("errors", sa.Integer(), nullable=False, server_default="0"),
+            *_stamps(),
+        )
+    if "backup_confirmations" not in existing:
+        op.create_table(
+            "backup_confirmations",
+            sa.Column("id", sa.Integer(), primary_key=True),
+            sa.Column("confirmed_on", sa.Date(), nullable=False),
+            sa.Column("note", sa.String(500), nullable=True),
+            sa.Column("entered_by", sa.Integer(), sa.ForeignKey("users.id"), nullable=True),
+            sa.Column("entered_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+            *_stamps(),
+        )
+    if "error_events" not in existing:
+        op.create_table(
+            "error_events",
+            sa.Column("id", sa.Integer(), primary_key=True),
+            sa.Column("occurred_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
+            sa.Column("source", sa.String(10), nullable=False),
+            sa.Column("route", sa.String(255), nullable=True),
+            *_stamps(),
+        )
+        op.create_index("ix_error_events_occurred_at", "error_events", ["occurred_at"])
 
     seed(op.get_bind())
 

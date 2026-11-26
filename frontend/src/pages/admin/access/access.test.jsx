@@ -131,11 +131,18 @@ describe('navigation is built from /me/access', () => {
     expect(apps.find((a) => a.id === 'insights').pages.map((p) => p.id)).toEqual(['roles'])
   })
 
-  it('shows the Admin app with Access and System health, read only, to PM and Viewer', () => {
+  it('lists Access and System health under Data for PM and Viewer, who have no Admin app', () => {
     for (const role of ['PM', 'Viewer']) {
-      const admin = appsFor(userWithAccess({ role: { name: role } })).find((a) => a.id === 'admin')
-      expect(admin.pages.map((p) => p.id)).toEqual(expect.arrayContaining(['access', 'system-health']))
-      expect(admin.pages.map((p) => p.id)).not.toContain('users')
+      const apps = appsFor(userWithAccess({ role: { name: role } }))
+      expect(apps.map((a) => a.id)).not.toContain('admin')
+      const data = apps.find((a) => a.id === 'data')
+      expect(data.pages.map((p) => p.id)).toEqual(expect.arrayContaining(['access', 'system-health']))
     }
+  })
+
+  it('keeps Access and System health in the Admin app for an Admin', () => {
+    const apps = appsFor(userWithAccess({ role: { name: 'Admin' } }))
+    expect(apps.find((a) => a.id === 'admin').pages.map((p) => p.id)).toEqual(expect.arrayContaining(['access', 'system-health']))
+    expect(apps.find((a) => a.id === 'data').pages.map((p) => p.id)).not.toContain('access')
   })
 })

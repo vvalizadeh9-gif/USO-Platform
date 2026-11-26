@@ -415,6 +415,9 @@ def test_query_count_does_not_grow_with_villages(world):
             event.remove(engine, "before_cursor_execute", count)
         return len(seen), record
 
+    # Warm the per-pod feature-access cache (UEP-25): its one-off load is not
+    # part of what the record costs per village.
+    _record(world, "one")
     small, one = statements("one")
     large, twenty = statements("twenty")
     assert len(one["villages"]) == 1 and len(twenty["villages"]) == 20
@@ -685,6 +688,9 @@ def test_list_query_count_is_constant(world):
             event.remove(engine, "before_cursor_execute", count)
         return len(seen)
 
+    # Warm the per-pod feature-access cache (UEP-25) first: its one-off load
+    # is not part of what a page of the list costs.
+    _list(world, "all", limit=1)
     assert statements(limit=1) == statements(limit=100)
     assert statements(limit=1, q="V") == statements(limit=100, q="V")
 
