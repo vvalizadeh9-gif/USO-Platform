@@ -670,7 +670,7 @@ def overview(db: Session, user, lens: str | None) -> dict:
             ),
         },
     }
-    if allows(user.role.name, Area.MOJRI_SECTION):
+    if allows(user, Area.MOJRI_SECTION):
         payload["last_mojri_import"] = last_mojri_import(db)
         totals["ict_approved_all"] = total.ict_approved_all
         totals["cra_approved_all"] = total.cra_approved_all
@@ -680,7 +680,7 @@ def overview(db: Session, user, lens: str | None) -> dict:
 def visible_gaps(user) -> tuple[Gap, ...]:
     """The gaps this user may see: all of them, less the Mojri card's two for
     a role outside ``Area.MOJRI_SECTION``."""
-    if allows(user.role.name, Area.MOJRI_SECTION):
+    if allows(user, Area.MOJRI_SECTION):
         return GAPS
     return tuple(gap for gap in GAPS if gap.authority is None)
 
@@ -774,7 +774,7 @@ def export_villages(
     counter = EXPORTS.get(gap)
     if counter is None:
         raise HTTPException(422, f"gap must be one of {', '.join(EXPORTS)}")
-    mojri = allows(user.role.name, Area.MOJRI_SECTION)
+    mojri = allows(user, Area.MOJRI_SECTION)
     if gap in MOJRI_EXPORTS and not mojri:
         check(user, Area.MOJRI_SECTION)
     if lens is not None and lens not in LENSES:

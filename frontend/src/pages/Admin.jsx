@@ -13,33 +13,38 @@ import ValidateCpmTab from './admin/ValidateCpmTab'
 import AuditLogTab from './admin/AuditLogTab'
 import ProblemCategoriesTab from './admin/ProblemCategoriesTab'
 import MojriTemplateTab from './admin/MojriTemplateTab'
+import AccessTab from './admin/access/AccessTab'
+import SystemHealthTab from './admin/health/SystemHealthTab'
+import { FEATURE as F, meets } from '../lib/access'
 
-// Every view besides CPM changes hits Admin-only endpoints (see backend
-// app/api/admin.py); PM sees only CPM changes, which the backend allows for
-// the PM role. The app rail (Admin app, or Data for PM) lists these views,
-// so the page draws no tab bar of its own and its title is the rail label
-// word for word (UEP-13 §3.6).
+// Each view is its own feature (UEP-25, Admin › Access), read from
+// GET /me/access: the page shows the views this person has, and the server
+// re-checks each endpoint. The app rail lists these views, so the page draws
+// no tab bar of its own and its title is the rail label word for word
+// (UEP-13 §3.6).
 const TABS = [
-  { key: 'overview', label: 'Overview', adminOnly: true },
-  { key: 'import', label: 'CPM import', adminOnly: true },
-  { key: 'history', label: 'Import history', adminOnly: true },
-  { key: 'validate', label: 'CPM changes' },
-  { key: 'users', label: 'Users & roles', adminOnly: true },
-  { key: 'categories', label: 'Problem categories', adminOnly: true },
+  { key: 'overview', label: 'Overview', need: F.ADMIN_OVERVIEW },
+  { key: 'import', label: 'CPM import', need: [F.CPM_IMPORT, 'edit'] },
+  { key: 'history', label: 'Import history', need: F.CPM_IMPORT },
+  { key: 'validate', label: 'CPM changes', need: [F.CPM_CHANGE_REQUESTS, 'edit'] },
+  { key: 'users', label: 'Users & roles', need: F.USERS },
+  { key: 'access', label: 'Access', need: F.ACCESS, fill: true },
+  { key: 'categories', label: 'Problem categories', need: F.PROBLEM_CATEGORIES },
   // A download, and only a download: it reads villages we have already
-  // approved and writes nothing, which is the only reason it may be Admin's.
-  // The import that brings the filled file back is PM's alone.
-  { key: 'mojri', label: 'Mojri template', adminOnly: true },
-  { key: 'audit', label: 'Audit log', adminOnly: true },
+  // approved and writes nothing. The import that brings the filled file back
+  // is the Mojri upload feature at Edit.
+  { key: 'mojri', label: 'Mojri template', need: F.MOJRI_UPLOAD },
+  { key: 'health', label: 'System health', need: F.SYSTEM_HEALTH, fill: true },
+  { key: 'audit', label: 'Audit log', need: F.AUDIT_LOG },
 ]
 
 export default function Admin() {
-  const { isAdmin } = useAuth()
-  const visibleTabs = isAdmin ? TABS : TABS.filter((t) => !t.adminOnly)
+  const { user } = useAuth()
+  const visibleTabs = TABS.filter((t) => meets(user, t.need))
 
   // Deep-linked from Action Center: ?tab=validate&highlight=<change-request-id>
   const [searchParams] = useSearchParams()
-  const [tab, setTab] = useState(searchParams.get('tab') || (isAdmin ? 'overview' : 'validate'))
+  const [tab, setTab] = useState(searchParams.get('tab') || visibleTabs[0]?.key)
   const highlightId = searchParams.get('highlight')
   // A link to another tab while already here (the rail, the header search).
   const linkedTab = searchParams.get('tab')
@@ -54,19 +59,27 @@ export default function Admin() {
       .then((r) => setPendingCount(r.data.pending || 0))
       .catch(() => {})
   }
+  const canSeeChanges = meets(user, [F.CPM_CHANGE_REQUESTS, 'edit'])
   useEffect(() => {
-    refreshPending()
-  }, [tab])
+    if (canSeeChanges) refreshPending()
+  }, [tab, canSeeChanges])
 
   // The Action SLA tab became Admin > SLA policies (UEP-15).
   if (linkedTab === 'action-sla') return <Navigate to="/admin/sla" replace />
   // The Province Assignments tab became Admin > Province assignments (UEP-17).
   if (linkedTab === 'provinces') return <Navigate to="/admin/provinces" replace />
 
+  const shows = (key) => tab === key && current?.key === key
+
+  // Access and System health are one-screen pages (the page never scrolls;
+  // their lists scroll inside their panels): each draws its own PageFrame.
+  if (shows('access')) return <AccessTab />
+  if (shows('health')) return <SystemHealthTab />
+
   return (
     <>
       <PageHead
-        title={current.label}
+        title={current?.label || 'Admin'}
         count={tab === 'validate' && pendingCount > 0 ? <HeaderCount waiting={pendingCount} /> : null}
       />
 
@@ -78,14 +91,14 @@ export default function Admin() {
           exit={{ opacity: 0, y: -8 }}
           transition={{ duration: 0.2 }}
         >
-          {tab === 'overview' && isAdmin && <OverviewTab onNavigateTab={setTab} />}
-          {tab === 'import' && isAdmin && <CpmImportTab />}
-          {tab === 'history' && isAdmin && <ImportHistoryTab />}
-          {tab === 'validate' && <ValidateCpmTab onDecided={refreshPending} highlightId={highlightId} />}
-          {tab === 'users' && isAdmin && <UsersTab />}
-          {tab === 'categories' && isAdmin && <ProblemCategoriesTab />}
-          {tab === 'mojri' && isAdmin && <MojriTemplateTab />}
-          {tab === 'audit' && isAdmin && <AuditLogTab />}
+          {shows('overview') && <OverviewTab onNavigateTab={setTab} />}
+          {shows('import') && <CpmImportTab />}
+          {shows('history') && <ImportHistoryTab />}
+          {shows('validate') && <ValidateCpmTab onDecided={refreshPending} highlightId={highlightId} />}
+          {shows('users') && <UsersTab />}
+          {shows('categories') && <ProblemCategoriesTab />}
+          {shows('mojri') && <MojriTemplateTab />}
+          {shows('audit') && <AuditLogTab />}
         </motion.div>
       </AnimatePresence>
     </>

@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, String, Table, Column, Integer, func, true
+from sqlalchemy import Boolean, DateTime, ForeignKey, String, Table, Column, Integer, false, func, true
 from sqlalchemy.ext.hybrid import hybrid_property
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -90,6 +90,23 @@ class Role(Base):
     # of role names, so adding a fifth category-owner role stays a data change.
     is_category_owner: Mapped[bool] = mapped_column(
         Boolean, default=False, nullable=False
+    )
+    # UEP-25: roles are managed in Admin > Access. A role is a ready-made set
+    # of features (role_feature_grants); these say what it is for.
+    description: Mapped[str | None] = mapped_column(String(255))
+    #: 'standard' | 'region' | 'work', or an app route such as '/explorer'.
+    landing: Mapped[str] = mapped_column(
+        String(80), default="standard", server_default="standard", nullable=False
+    )
+    #: Which data-area field the user form asks for: 'all', 'provinces',
+    #: 'cra_regions', 'contractor', 'team_basket' or 'none'. Row scope itself is
+    #: still decided by services/visibility.py; this never widens it.
+    data_scope_type: Mapped[str] = mapped_column(
+        String(20), default="all", server_default="all", nullable=False
+    )
+    #: The built-in roles. They cannot be deleted.
+    is_system: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default=false(), nullable=False
     )
 
     users: Mapped[list[User]] = relationship(back_populates="role")

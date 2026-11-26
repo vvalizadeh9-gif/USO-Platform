@@ -19,7 +19,7 @@ const LOAD = [
 const SUMMARY = { dt4: { count: 3, late: 2, oldest_days: 30, sla_days: 14 } }
 
 vi.mock('../api/client', () => ({ default: { get: vi.fn(), post: vi.fn() } }))
-vi.mock('../context/AuthContext', () => ({ useAuth: () => ({ user: { role: { name: 'PM' } } }) }))
+vi.mock('../context/AuthContext', () => ({ useAuth: () => globalThis.withSeededAccess({ user: { role: { name: 'PM' } } }) }))
 vi.mock('../shell/HomeData', () => ({ useHomeData: () => ({ data: null, error: null }) }))
 
 const api = (await import('../api/client')).default

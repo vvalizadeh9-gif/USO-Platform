@@ -222,6 +222,12 @@ class RoleOut(ORMModel):
     # a screen can say what picking this role actually signs someone up for,
     # instead of the frontend keeping its own copy of the list.
     is_category_owner: bool = False
+    # UEP-25: which data-area field the user form asks for, and where the
+    # role lands. Roles are managed in Admin > Access.
+    description: str | None = None
+    landing: str = "standard"
+    data_scope_type: str = "all"
+    is_system: bool = False
 
 
 # ---------- Users ----------
@@ -1941,6 +1947,19 @@ class SystemHealthOut(BaseModel):
     alembic_mismatch: bool
     last_cpm_import: LastCpmImportOut | None = None
     pending_change_requests_count: int
+
+    # UEP-25: the full System health page. Fields are only added, so the
+    # Overview widget built on the ones above keeps working.
+    summary: dict | None = None
+    kubernetes_connected: bool = False
+    kubernetes_message: str | None = None
+    app: dict | None = None
+    resources: dict | None = None
+    database: dict | None = None
+    backups: dict | None = None
+    freshness: dict | None = None
+    #: Admin only. PM and Viewer read System health without it.
+    usage: dict | None = None
 
 
 class AuditLogOut(BaseModel):

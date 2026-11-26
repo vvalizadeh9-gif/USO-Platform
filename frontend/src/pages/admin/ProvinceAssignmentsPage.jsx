@@ -12,6 +12,7 @@ import {
 } from './provinceAssignments'
 import '../../styles/home.css'
 import '../../styles/province-assignments.css'
+import { FEATURE, can } from '../../lib/access'
 
 const API = '/admin/province-assignments'
 const SLIDE = { duration: 0.3, ease: [0.2, 0.8, 0.2, 1] }
@@ -25,7 +26,7 @@ const SAVED_MS = 2000
  */
 export default function ProvinceAssignmentsPage() {
   const { user, isAdmin } = useAuth()
-  const canEdit = ['PM', 'Admin'].includes(user?.role?.name)
+  const canEdit = can(user, FEATURE.PROVINCE_ASSIGNMENTS, 'edit')
   const reduced = useReducedMotion()
   const titleRef = useRef(null)
   const historyRef = useRef(null)

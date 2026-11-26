@@ -1,59 +1,395 @@
 {
-  "_comment": "UEP role access matrix: the single source of truth for who may open what. This file is duplicated byte-for-byte at frontend/src/lib/accessMatrix.json (the two apps build from separate Docker contexts); backend/tests/test_role_access.py fails when they differ. 'offered' roles see the area in menus, the launcher, the Apps panel and rails, and may use it. 'direct' roles may also use it by URL and API but are not offered it (Admin keeps the API access it had). See README, Roles and permissions.",
+  "_comment": "UEP role access matrix. Since UEP-25 access lives in the database (features, role_feature_grants) and is managed in Admin > Access; this file is only the day-one SEED and the TEST FIXTURE: backend/tests/test_feature_access.py asserts the migrated tables reproduce it exactly, so nobody's access changed. 'areas' are the pre-UEP-25 areas (offered = shown in menus, direct = URL/API only, seeded as hidden_in_menus). 'features' are the other feature checks, one per former require_roles group, with the roles that get view, edit, and which of those grants are hidden in menus. The frontend copy (frontend/src/lib/accessMatrix.json) is used by tests only.",
   "areas": {
     "roles_performance": {
-      "offered": ["PM", "Coordinator", "Viewer", "Contractor", "RegionalManager"],
+      "offered": [
+        "PM",
+        "Coordinator",
+        "Viewer",
+        "Contractor",
+        "RegionalManager"
+      ],
       "direct": []
     },
     "lifecycle_gaps": {
-      "offered": ["PM", "Coordinator", "Viewer", "Contractor", "RegionalManager"],
+      "offered": [
+        "PM",
+        "Coordinator",
+        "Viewer",
+        "Contractor",
+        "RegionalManager"
+      ],
       "direct": []
     },
     "mojri_section": {
-      "offered": ["PM", "Coordinator", "Viewer"],
+      "offered": [
+        "PM",
+        "Coordinator",
+        "Viewer"
+      ],
       "direct": []
     },
     "insights_dashboards": {
-      "offered": ["PM", "Coordinator", "Viewer", "Contractor"],
-      "direct": ["Admin"]
+      "offered": [
+        "PM",
+        "Coordinator",
+        "Viewer",
+        "Contractor"
+      ],
+      "direct": [
+        "Admin"
+      ]
     },
     "explorer": {
       "offered": [
-        "PM", "Coordinator", "Viewer", "Contractor", "RegionalManager",
-        "NwgPlanning", "ManagedService", "HuaweiCleanup", "CpgPower", "CpgRolloutPM", "CpgPso"
+        "PM",
+        "Coordinator",
+        "Viewer",
+        "Contractor",
+        "RegionalManager",
+        "NwgPlanning",
+        "ManagedService",
+        "HuaweiCleanup",
+        "CpgPower",
+        "CpgRolloutPM",
+        "CpgPso"
       ],
-      "direct": ["Admin"]
+      "direct": [
+        "Admin"
+      ]
     },
     "explorer_all_sites": {
-      "offered": ["NwgPlanning", "ManagedService", "HuaweiCleanup", "CpgPower", "CpgRolloutPM", "CpgPso"],
+      "offered": [
+        "NwgPlanning",
+        "ManagedService",
+        "HuaweiCleanup",
+        "CpgPower",
+        "CpgRolloutPM",
+        "CpgPso"
+      ],
       "direct": []
     },
     "acceptance_workspace": {
-      "offered": ["PM", "Coordinator", "Viewer", "Contractor"],
+      "offered": [
+        "PM",
+        "Coordinator",
+        "Viewer",
+        "Contractor"
+      ],
       "direct": []
     },
     "acceptance_cases": {
       "offered": [
-        "PM", "Coordinator", "Viewer", "Contractor",
-        "NwgPlanning", "CpgPso", "CpgRolloutPM", "CpgPower", "ManagedService"
+        "PM",
+        "Coordinator",
+        "Viewer",
+        "Contractor",
+        "NwgPlanning",
+        "CpgPso",
+        "CpgRolloutPM",
+        "CpgPower",
+        "ManagedService"
       ],
       "direct": []
     },
     "acceptance_baskets": {
-      "offered": ["PM", "Coordinator", "Viewer"],
+      "offered": [
+        "PM",
+        "Coordinator",
+        "Viewer"
+      ],
       "direct": []
     },
     "monthly_plan_queue": {
-      "offered": ["PM", "Coordinator", "Viewer"],
-      "direct": ["Admin"]
+      "offered": [
+        "PM",
+        "Coordinator",
+        "Viewer"
+      ],
+      "direct": [
+        "Admin"
+      ]
     },
     "internal_pip": {
-      "offered": ["PM", "Coordinator", "Viewer"],
+      "offered": [
+        "PM",
+        "Coordinator",
+        "Viewer"
+      ],
       "direct": []
     },
     "submissions": {
-      "offered": ["PM", "Coordinator", "Viewer"],
+      "offered": [
+        "PM",
+        "Coordinator",
+        "Viewer"
+      ],
       "direct": []
+    }
+  },
+  "features": {
+    "hc_work": {
+      "view": [
+        "Admin"
+      ],
+      "edit": [
+        "PM",
+        "Coordinator"
+      ],
+      "hidden": []
+    },
+    "dt_assignment": {
+      "view": [],
+      "edit": [
+        "PM",
+        "Coordinator"
+      ],
+      "hidden": []
+    },
+    "dt_review": {
+      "view": [],
+      "edit": [
+        "PM",
+        "Coordinator"
+      ],
+      "hidden": []
+    },
+    "dt_evidence": {
+      "view": [],
+      "edit": [
+        "PM",
+        "Coordinator",
+        "Contractor"
+      ],
+      "hidden": []
+    },
+    "fix_queue": {
+      "view": [],
+      "edit": [
+        "NwgPlanning",
+        "ManagedService",
+        "HuaweiCleanup",
+        "CpgPower",
+        "CpgRolloutPM"
+      ],
+      "hidden": []
+    },
+    "field_results": {
+      "view": [],
+      "edit": [
+        "PM",
+        "Contractor"
+      ],
+      "hidden": []
+    },
+    "contractor_work": {
+      "view": [],
+      "edit": [
+        "Contractor"
+      ],
+      "hidden": []
+    },
+    "reassign_work": {
+      "view": [],
+      "edit": [
+        "PM"
+      ],
+      "hidden": []
+    },
+    "validation": {
+      "view": [
+        "PM",
+        "Coordinator"
+      ],
+      "edit": [],
+      "hidden": []
+    },
+    "acceptance_filing": {
+      "view": [],
+      "edit": [
+        "PM",
+        "Coordinator",
+        "Contractor"
+      ],
+      "hidden": []
+    },
+    "acceptance_approve": {
+      "view": [],
+      "edit": [
+        "PM",
+        "Coordinator"
+      ],
+      "hidden": []
+    },
+    "scan_upload": {
+      "view": [],
+      "edit": [
+        "PM",
+        "Coordinator",
+        "Contractor",
+        "NwgPlanning",
+        "CpgPso",
+        "CpgRolloutPM",
+        "CpgPower",
+        "ManagedService"
+      ],
+      "hidden": []
+    },
+    "acceptance_target": {
+      "view": [],
+      "edit": [
+        "PM"
+      ],
+      "hidden": []
+    },
+    "contractor_plan": {
+      "view": [],
+      "edit": [
+        "Contractor"
+      ],
+      "hidden": []
+    },
+    "plan_approvals": {
+      "view": [],
+      "edit": [
+        "PM"
+      ],
+      "hidden": []
+    },
+    "kpi_mapping": {
+      "view": [],
+      "edit": [
+        "PM"
+      ],
+      "hidden": []
+    },
+    "exports": {
+      "view": [
+        "Admin",
+        "PM",
+        "Coordinator",
+        "RegionalManager",
+        "Contractor",
+        "Viewer",
+        "CpgPso",
+        "NwgPlanning",
+        "ManagedService",
+        "HuaweiCleanup",
+        "CpgPower",
+        "CpgRolloutPM"
+      ],
+      "edit": [],
+      "hidden": []
+    },
+    "sla_policies": {
+      "view": [
+        "Viewer"
+      ],
+      "edit": [
+        "PM",
+        "Admin"
+      ],
+      "hidden": []
+    },
+    "province_assignments": {
+      "view": [
+        "Viewer"
+      ],
+      "edit": [
+        "PM",
+        "Admin"
+      ],
+      "hidden": []
+    },
+    "cpm_import": {
+      "view": [],
+      "edit": [
+        "Admin"
+      ],
+      "hidden": []
+    },
+    "cpm_change_requests": {
+      "view": [
+        "Coordinator"
+      ],
+      "edit": [
+        "PM",
+        "Admin"
+      ],
+      "hidden": [
+        "Admin"
+      ]
+    },
+    "mojri_upload": {
+      "view": [
+        "Admin"
+      ],
+      "edit": [
+        "PM"
+      ],
+      "hidden": []
+    },
+    "users": {
+      "view": [],
+      "edit": [
+        "Admin"
+      ],
+      "hidden": []
+    },
+    "access": {
+      "view": [
+        "PM",
+        "Viewer"
+      ],
+      "edit": [
+        "Admin"
+      ],
+      "hidden": []
+    },
+    "problem_categories": {
+      "view": [],
+      "edit": [
+        "Admin"
+      ],
+      "hidden": []
+    },
+    "provinces": {
+      "view": [],
+      "edit": [
+        "Admin"
+      ],
+      "hidden": []
+    },
+    "admin_overview": {
+      "view": [
+        "Admin"
+      ],
+      "edit": [],
+      "hidden": []
+    },
+    "system_health": {
+      "view": [
+        "PM",
+        "Viewer"
+      ],
+      "edit": [
+        "Admin"
+      ],
+      "hidden": []
+    },
+    "audit_log": {
+      "view": [
+        "Admin"
+      ],
+      "edit": [],
+      "hidden": []
+    },
+    "action_sla": {
+      "view": [],
+      "edit": [
+        "Admin"
+      ],
+      "hidden": []
     }
   },
   "landings": {
@@ -64,5 +400,19 @@
     "CpgPower": "work",
     "CpgRolloutPM": "work",
     "CpgPso": "work"
+  },
+  "data_scope": {
+    "Admin": "all",
+    "PM": "all",
+    "Viewer": "all",
+    "Coordinator": "cra_regions",
+    "RegionalManager": "provinces",
+    "Contractor": "contractor",
+    "NwgPlanning": "team_basket",
+    "CpgPso": "team_basket",
+    "CpgRolloutPM": "team_basket",
+    "CpgPower": "team_basket",
+    "ManagedService": "team_basket",
+    "HuaweiCleanup": "none"
   }
 }

@@ -13,7 +13,7 @@ vi.mock('../CoverageMap.jsx', () => ({ default: () => <div>coverage map</div> })
 
 const authUser = vi.hoisted(() => ({ current: { role: { name: 'PM' }, full_name: 'Pat PM' } }))
 vi.mock('../../../context/AuthContext', () => ({
-  useAuth: () => ({ user: authUser.current }),
+  useAuth: () => globalThis.withSeededAccess({ user: authUser.current }),
 }))
 
 const api = (await import('../../../api/client')).default

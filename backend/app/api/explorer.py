@@ -18,7 +18,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.core.access import FORBIDDEN, Area, require_access
+from app.core.access import FORBIDDEN, Area, Feature as F, require_access
 from app.models.reference import User
 from app.schemas.explorer import (
     FilterOptionsOut,
@@ -31,6 +31,9 @@ from app.services.explorer import SiteForbidden, SiteNotFound, site_record
 from app.services.work_item_export import build_sheet
 
 router = APIRouter(prefix="/explorer", tags=["explorer"])
+
+#: UEP-25: every export also needs the "Export to Excel" feature.
+EXPORTER = Depends(require_access(F.EXPORTS))
 
 #: Who may open Explorer: the central permission map's ``Area.EXPLORER``.
 #: Which sites they see is ``visibility.explorer_work_item_ids``.
@@ -92,7 +95,7 @@ def get_filter_options(
     return L.filter_options(db, user)
 
 
-@router.get("/sites/export")
+@router.get("/sites/export", dependencies=[EXPORTER])
 def export_sites(
     query: L.ListQuery = Depends(list_query),
     ids: list[int] = Query(default=[]),

@@ -11,8 +11,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.core import audit_actions
+from app.core.access import Feature as F, require_access
 from app.core.database import get_db
-from app.core.deps import ADMIN, get_current_user, require_roles
+from app.core.deps import get_current_user
 from app.models.action_center import ActionQueueSla
 from app.models.reference import User
 from app.schemas.action_center import (
@@ -47,7 +48,7 @@ def _sla_rows(db: Session) -> list[QueueSlaOut]:
 # Deprecated (UEP-15): a thin alias over SLA policies, kept for one release.
 @router.get("/admin/action-sla", response_model=list[QueueSlaOut], deprecated=True)
 def get_action_sla(
-    db: Session = Depends(get_db), _: User = Depends(require_roles(ADMIN))
+    db: Session = Depends(get_db), _: User = Depends(require_access(F.ACTION_SLA, "view"))
 ) -> list[QueueSlaOut]:
     return _sla_rows(db)
 
@@ -56,7 +57,7 @@ def get_action_sla(
 def put_action_sla(
     body: list[QueueSlaIn],
     db: Session = Depends(get_db),
-    admin: User = Depends(require_roles(ADMIN)),
+    admin: User = Depends(require_access(F.ACTION_SLA, "edit")),
 ) -> list[QueueSlaOut]:
     """Deprecated: use PUT /admin/sla-policies. A queue mapped to a step there
     must be changed there; only unmapped queues still write here."""

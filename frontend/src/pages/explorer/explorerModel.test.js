@@ -11,8 +11,9 @@ import {
   workflowActions,
 } from './explorerModel'
 import { VILLAGES, side, village } from './fixtures'
+import { userWithAccess } from '../../test/seededAccess'
 
-const as = (role) => ({ role: { name: role } })
+const as = (role) => userWithAccess({ role: { name: role } })
 
 describe('orderVillages', () => {
   it('puts rejections first, then more pending sides, then the longest wait, approved last', () => {

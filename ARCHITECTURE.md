@@ -2268,19 +2268,32 @@ filing is unchanged: nobody may confirm a round they filed themselves.
 > probably wrong, not the permission. Several tests in this repository had that
 > exact defect for months.
 
-### Area access: the permission map
+### Feature access (UEP-25)
 
-Which *areas* a role may open — Roles Performance, Lifecycle Gaps and its
-Mojri card, the Insights dashboards, Explorer, Acceptance Filing, the monthly
-plan queue and Internal PIP — is one table, `app/core/access_matrix.json`
-(mirrored byte-for-byte at `frontend/src/lib/accessMatrix.json`). Endpoints
-use `core/access.require_access(Area.X)` or `access.check(user, Area.X)`; the
-frontend's registry, route guards and pages use `lib/access.js`. Each area
-lists `offered` roles (shown in navigation) and `direct` roles (may use it by
-URL and API but are never offered it — Admin, where it had API access before).
-The map's `landings` choose Home's variant: `region` for a Regional manager,
-`work` for the problem-category owners. The README's *Roles and permissions*
-has the matrix.
+Who may use what is data: `features` (the catalogue: app, label, levels
+`view` / `edit` / `view,edit`), `role_feature_grants` (a role's level per
+feature, with `hidden_in_menus` for URL-only access), and
+`user_feature_overrides` (one person's exception, with a reason and an
+optional expiry). `effective_level(user, feature)` is the live override,
+otherwise the role's grant, otherwise none. Endpoints use
+`core/access.require_access(Feature.X, "view" | "edit")`; writes need edit.
+`tests/test_feature_access.py` lists every route and fails if one has neither
+a feature check nor an allow-list entry with its reason.
+
+Each pod caches the grants in memory and re-reads them when the one-row
+`access_version` counter changes, checking at most every 30 seconds; the pod
+that made a change applies it at once. The browser reads `GET /me/access`.
+
+Safety rules no tick can break are in `services/access_admin.py`: Users and
+Access stay at Edit on the Admin role and on the last active Admin; Edit on
+acceptance outcome filing and approval only for data scopes all, provinces,
+CRA regions or contractor; "Explorer: every site" never for a scoped role;
+nothing is granted implicitly (Admin gets no workflow edit). Roles carry
+`landing` and `data_scope_type`; the latter decides which data-area field the
+user form asks for and requires.
+
+`app/core/access_matrix.json` (mirrored at `frontend/src/lib/accessMatrix.json`)
+is the day-one seed and the test fixture only.
 
 The map decides *whether*; row-level visibility below decides *which rows*.
 

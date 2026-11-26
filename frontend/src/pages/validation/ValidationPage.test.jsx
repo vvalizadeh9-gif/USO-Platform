@@ -9,7 +9,7 @@ import { allState } from './FilingTable'
 import { missingReasons } from './ReturnPanel'
 import { readView } from './useValidation'
 
-vi.mock('../../context/AuthContext', () => ({ useAuth: () => ({ user: { id: 7, role: { name: 'Coordinator' } } }) }))
+vi.mock('../../context/AuthContext', () => ({ useAuth: () => globalThis.withSeededAccess({ user: { id: 7, role: { name: 'Coordinator' } } }) }))
 const toast = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn(), info: vi.fn() }))
 vi.mock('../../context/ToastContext', () => ({ useToast: () => toast }))
 vi.mock('../../shell/HomeData', () => ({ useHomeData: () => ({ data: null }) }))

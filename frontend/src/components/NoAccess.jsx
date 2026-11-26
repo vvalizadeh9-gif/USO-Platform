@@ -18,7 +18,7 @@ export default function NoAccess() {
         <Icon name="locked" size={20} />
         <b id="no-access-title">You don't have access to this page</b>
         <span>It isn't part of your role in UEP.</span>
-        <Link className="uep-no-access-link" to={homeFor(user?.role?.name)}>Go to your start page</Link>
+        <Link className="uep-no-access-link" to={homeFor(user)}>Go to your start page</Link>
       </section>
     </div>
   )

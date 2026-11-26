@@ -8,7 +8,7 @@ import { pickOption } from '../../test/pickOption'
 
 const auth = vi.hoisted(() => ({ role: 'Coordinator' }))
 vi.mock('../../api/client', () => ({ default: { get: vi.fn(), post: vi.fn() } }))
-vi.mock('../../context/AuthContext', () => ({ useAuth: () => ({ user: { role: { name: auth.role } } }) }))
+vi.mock('../../context/AuthContext', () => ({ useAuth: () => globalThis.withSeededAccess({ user: { role: { name: auth.role } } }) }))
 
 const api = (await import('../../api/client')).default
 const SiteRecord = (await import('./SiteRecord')).default

@@ -27,7 +27,7 @@ vi.mock('../api/client', () => ({
     post: vi.fn(),
   },
 }))
-vi.mock('../context/AuthContext', () => ({ useAuth: () => ({ user: { role: { name: 'Coordinator' } } }) }))
+vi.mock('../context/AuthContext', () => ({ useAuth: () => globalThis.withSeededAccess({ user: { role: { name: 'Coordinator' } } }) }))
 vi.mock('../shell/HomeData', () => ({ useHomeData: () => ({ data: null, error: null }) }))
 // The History view's archive fetches its own assignments.
 vi.mock('./healthcheck/HcHistoryTab', () => ({ default: () => <p>archive</p> }))

@@ -39,3 +39,10 @@ if (!window.matchMedia) {
 // context and fall back to an estimate when there is none, so answer null
 // quietly -- the same answer, without the noise in every run.
 HTMLCanvasElement.prototype.getContext = () => null
+
+// UEP-25: the app reads what a person may use from user.access (GET /me/access).
+// Tests mock the signed-in user by role name; each mocked useAuth passes its
+// value through this, which adds the access that role has on day one.
+import { withSeededAccess } from './seededAccess'
+
+globalThis.withSeededAccess = withSeededAccess

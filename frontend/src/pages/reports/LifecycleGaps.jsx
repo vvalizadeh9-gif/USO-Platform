@@ -29,6 +29,7 @@ import {
   wholePct,
 } from './lifecycleGaps'
 import { formatNumber } from '../../lib/numbers'
+import { FEATURE, can } from '../../lib/access'
 
 /**
  * Performance → Lifecycle Gaps.
@@ -150,7 +151,7 @@ export default function LifecycleGaps() {
             data={data}
             lens={lens}
             isPm={isPm}
-            canImport={user?.role?.name === 'PM'}
+            canImport={can(user, FEATURE.MOJRI_UPLOAD, 'edit')}
             showMojri={canSeeMojri(user)}
             selected={selected}
             onSelect={setSelected}

@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import { crumbsFor } from './AppShell'
-import { appsFor } from './appRegistry'
+import { appsFor as appsForUser } from './appRegistry'
+
+import { userWithAccess } from '../test/seededAccess'
+
+// UEP-25: navigation reads user.access; these tests name a role, so each gets
+// the access that role has on day one (the seed fixture).
+const appsFor = (role) => appsForUser(userWithAccess({ role: { name: role } }))
 
 describe('header breadcrumb (UEP-13 §3.12)', () => {
   const explorer = appsFor('PM').find((a) => a.id === 'explorer')

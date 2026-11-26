@@ -2,6 +2,7 @@
 from fastapi import APIRouter
 
 from app.api import (
+    access,
     acceptance_cases,
     acceptance,
     admin,
@@ -29,6 +30,7 @@ from app.api import (
 
 api_router = APIRouter(prefix="/api/v1")
 api_router.include_router(auth.router)
+api_router.include_router(access.router)
 api_router.include_router(work_items.router)
 api_router.include_router(explorer.router)
 api_router.include_router(workflow.router)

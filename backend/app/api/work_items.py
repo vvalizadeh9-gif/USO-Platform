@@ -3,6 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
+from app.core.access import Feature as F, require_access
 from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.models.reference import Province, User
@@ -20,6 +21,9 @@ from app.services.work_item_rows import (
 )
 
 router = APIRouter(prefix="/work-items", tags=["work-items"])
+
+#: UEP-25: every export also needs the "Export to Excel" feature.
+EXPORTER = Depends(require_access(F.EXPORTS))
 
 _XLSX_MEDIA_TYPE = (
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -172,7 +176,7 @@ def list_work_items(
     return _rows_for(db, user, work_items)
 
 
-@router.get("/export")
+@router.get("/export", dependencies=[EXPORTER])
 def export_work_items(
     stage: str | None = Query(default=None),
     province_id: int | None = Query(default=None),

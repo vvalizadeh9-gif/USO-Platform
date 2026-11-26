@@ -1,4 +1,4 @@
-import { AREA, canAccess, offeredRoles } from './access'
+import { FEATURE, can, isOffered, landingFor } from './access'
 
 // Maps internal role names (as stored in the DB and used for authorization)
 // to human-friendly display labels. Keeping this in one place means the UI
@@ -40,73 +40,53 @@ export function roleLabel(name) {
   return ROLE_LABELS[name] || name
 }
 
-// The two roles that carry equal authority over the health check and drive
-// test lifecycle: assign an initial health check, review its result, decide
-// Ready or Problematic, route a problematic site, assign an official drive
-// test, pick or change the drive test contractor, and approve a drive test.
-//
-// One helper because the interface previously spelled this out five times and
-// spelled it differently each time -- HC Results offered an assign bar to
-// ['Admin','PM'] while the server allowed PM alone, so an Admin was shown a
-// control that answered 403 and a Coordinator was shown none at all.
-//
-// The server decides permissions; this only shapes what the UI offers, and it
-// must agree with app/core/deps.py:require_review_authority.
-export const REVIEW_AUTHORITY_ROLES = ['PM', 'Coordinator']
+// UEP-25: what a person may do comes from GET /me/access (lib/access.js),
+// managed in Admin › Access. Each helper below names the feature it reads, so
+// a tick in Admin changes the interface without a deploy. The server checks
+// the same feature on every request; this only shapes what is offered.
 
+// Assign, review and confirm health checks; route a problematic site; assign
+// and approve drive tests. PM and Coordinator on day one.
 export function canReview(user) {
-  return REVIEW_AUTHORITY_ROLES.includes(user?.role?.name)
+  return can(user, FEATURE.HC_WORK, 'edit')
 }
 
-// Who files ICT and CRA letters: the same three roles as
-// app/services/my_work_status.FILING_ROLES. Everyone else reads My Work only.
-export const ACCEPTANCE_FILING_ROLES = ['PM', 'Coordinator', 'Contractor']
-
-export function canFileAcceptance(roleName) {
-  return ACCEPTANCE_FILING_ROLES.includes(roleName)
+// Who files ICT and CRA letters (acceptance outcome filing).
+export function canFileAcceptance(user) {
+  return can(user, FEATURE.ACCEPTANCE_FILING, 'edit')
 }
 
-// The monthly plan (PIP) screen. Contractors fill one in; PM decides them;
-// the queue's readers (the central permission map's monthly_plan_queue, less
-// its URL-only Admin) read it. Must agree with app/api/monthly_plan.py, which
-// reads the same map.
-export const MONTHLY_PLAN_ROLES = ['Contractor', ...offeredRoles(AREA.MONTHLY_PLAN_QUEUE)]
+// The monthly plan screen: the contractor's own form, or the month's queue
+// (offered in menus; Admin keeps URL-only access to the queue's API and is
+// not offered the page).
+export function canOpenMonthlyPlan(user) {
+  return can(user, FEATURE.CONTRACTOR_PLAN, 'edit') || isOffered(user, FEATURE.MONTHLY_PLAN_QUEUE)
+}
 
-// Who decides a plan. PM alone, as on the server.
+// Who decides a plan.
 export function canDecidePlans(user) {
-  return user?.role?.name === 'PM'
+  return can(user, FEATURE.PLAN_APPROVALS, 'edit')
 }
 
-// MTN's internal PIP: the central permission map's internal_pip, which
-// GET /pip/overview enforces from the same map. No contractor reads it.
-export const INTERNAL_PIP_ROLES = offeredRoles(AREA.INTERNAL_PIP)
-
+// MTN's internal PIP and plan history.
 export function canSeeInternalPip(user) {
-  return INTERNAL_PIP_ROLES.includes(user?.role?.name)
+  return can(user, FEATURE.INTERNAL_PIP)
 }
 
-// The Acceptance Dashboard's monthly target. Same decider as the PIP —
-// PM alone — and must agree with app/api/acceptance.py's own `require_pm`
-// alias over PUT /acceptance/plan.
+// The Acceptance Dashboard's monthly target.
 export function canSetAcceptancePlan(user) {
-  return user?.role?.name === 'PM'
+  return can(user, FEATURE.ACCEPTANCE_TARGET, 'edit')
 }
 
-// Roles Performance (and Lifecycle Gaps, which the map gives the same roles).
-// From the central permission map; every KPI endpoint re-checks the role
-// against the same map and re-derives the scope itself.
-export const KPI_ROLES = offeredRoles(AREA.ROLES_PERFORMANCE)
-export const GAPS_ROLES = offeredRoles(AREA.LIFECYCLE_GAPS)
-
+// Roles Performance.
 export function canSeeKpi(user) {
-  return KPI_ROLES.includes(user?.role?.name)
+  return can(user, FEATURE.ROLES_PERFORMANCE)
 }
 
-// The Mojri card on Lifecycle Gaps ("ICT vs CRA vs Mojri tracker"): PM,
-// Coordinator and Viewer, from the central permission map. For everyone else
-// the server sends no Mojri figures at all.
+// The Mojri card on Lifecycle Gaps ("ICT vs CRA vs Mojri tracker"). For
+// everyone else the server sends no Mojri figures at all.
 export function canSeeMojri(user) {
-  return canAccess(user?.role?.name, AREA.MOJRI_SECTION)
+  return can(user, FEATURE.MOJRI_SECTION)
 }
 
 // PM and Viewer may choose any scope and see owners ranked side by side.
@@ -149,6 +129,15 @@ const HOME_BY_ROLE = {
   Viewer: '/reports/kpi',
 }
 
-export function homeFor(roleName) {
-  return HOME_BY_ROLE[roleName] || (hasHome(roleName) ? '/home' : '/reports/drive-test')
+// UEP-25: a role whose landing is an app route (a new role made in Admin ›
+// Access, say "CPO" landing on /explorer) starts there. Pass the user; a bare
+// role name still works for the built-in roles.
+export function homeFor(subject) {
+  const roleName = typeof subject === 'string' ? subject : subject?.role?.name
+  const landing = typeof subject === 'string' ? null : landingFor(subject)
+  if (landing && landing.startsWith('/')) return landing
+  if (HOME_BY_ROLE[roleName]) return HOME_BY_ROLE[roleName]
+  if (hasHome(roleName)) return '/home'
+  if (!can(subject, FEATURE.INSIGHTS_DASHBOARDS) && can(subject, FEATURE.EXPLORER)) return '/explorer'
+  return '/reports/drive-test'
 }

@@ -18,14 +18,13 @@ import { NAV_BY_PATH, navItemVisible } from '../lib/nav'
  */
 export default function ProcessStepper({ current }) {
   const { user } = useAuth()
-  const roleName = user?.role?.name
 
   return (
     <nav className="stepper" aria-label="Drive test process">
       <ol>
         {STAFF_STEPS.map((step, i) => {
           const isCurrent = step.key === current
-          const reachable = navItemVisible(NAV_BY_PATH[step.to], roleName)
+          const reachable = navItemVisible(NAV_BY_PATH[step.to], user)
           const body = (
             <>
               <span className="stepper-num" aria-hidden="true">{i + 1}</span>

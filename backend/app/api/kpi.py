@@ -22,8 +22,9 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core import audit_actions
+from app.core.access import Feature as F, require_access
 from app.core.database import get_db
-from app.core.deps import COORDINATOR, PM, REGIONAL, get_current_user, require_roles
+from app.core.deps import COORDINATOR, REGIONAL, get_current_user
 from app.models.reference import User
 from app.schemas import (
     KpiLinkableUser,
@@ -40,6 +41,9 @@ from app.services.performance import month as perf_month
 from app.services.audit import record_audit
 
 router = APIRouter(prefix="/kpi", tags=["kpi"])
+
+#: UEP-25: every export also needs the "Export to Excel" feature.
+EXPORTER = Depends(require_access(F.EXPORTS))
 
 _XLSX_MEDIA_TYPE = (
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -104,7 +108,7 @@ def _xlsx(built, filename: str) -> Response:
         built.file.close()
 
 
-@router.get("/month.xlsx")
+@router.get("/month.xlsx", dependencies=[EXPORTER])
 def roles_month_xlsx(
     month: str | None = Query(None),
     by: str = Query("all"),
@@ -116,7 +120,7 @@ def roles_month_xlsx(
     return _xlsx(perf_export.month(payload), perf_export.filename("month", label))
 
 
-@router.get("/area.xlsx")
+@router.get("/area.xlsx", dependencies=[EXPORTER])
 def roles_area_xlsx(
     lens_key: tuple[str | None, str | None] = Depends(_lens_key),
     breakdown: str | None = Query(None),
@@ -193,7 +197,7 @@ def kpi_contractors(
     return kpi.contractors(db, user, key, mode)
 
 
-@router.get("/export.xlsx", deprecated=True)
+@router.get("/export.xlsx", deprecated=True, dependencies=[EXPORTER])
 def kpi_export_xlsx(
     lens_key: tuple[str | None, str | None] = Depends(_lens_key),
     mode: str = Query("ict", description="Which mode the contractors sheet uses"),
@@ -217,7 +221,7 @@ def kpi_export_xlsx(
     )
 
 
-@router.get("/export.pdf", deprecated=True)
+@router.get("/export.pdf", deprecated=True, dependencies=[EXPORTER])
 def kpi_export_pdf(
     lens_key: tuple[str | None, str | None] = Depends(_lens_key),
     mode: str = Query("ict", description="Which mode the contractors table uses"),
@@ -261,7 +265,7 @@ def _contractor_block(db: Session, user: User, payload: dict, mode: str) -> dict
 def get_mapping(
     include_history: bool = Query(False),
     db: Session = Depends(get_db),
-    _: User = Depends(require_roles(PM)),
+    _: User = Depends(require_access(F.KPI_MAPPING, "view")),
 ) -> dict:
     """The 31 provinces and who currently owns each, plus the side panel.
 
@@ -303,7 +307,7 @@ def correct_mapping(
     mapping_id: int,
     payload: ProvinceMappingWrite,
     db: Session = Depends(get_db),
-    user: User = Depends(require_roles(PM)),
+    user: User = Depends(require_access(F.KPI_MAPPING, "edit")),
 ) -> ProvinceMappingOut:
     """Correct the current row in place, writing no history.
 
@@ -342,7 +346,7 @@ def reassign_mapping(
     mapping_id: int,
     payload: ProvinceMappingReassign,
     db: Session = Depends(get_db),
-    user: User = Depends(require_roles(PM)),
+    user: User = Depends(require_access(F.KPI_MAPPING, "edit")),
 ) -> ProvinceMappingOut:
     """Hand a province over: close the current row, open a new one."""
     row = kpi_mapping.get_open_row(db, mapping_id)
@@ -375,7 +379,7 @@ def reassign_mapping(
 @router.get("/mapping/links", response_model=list[KpiLinkableUser])
 def list_links(
     db: Session = Depends(get_db),
-    _: User = Depends(require_roles(PM)),
+    _: User = Depends(require_access(F.KPI_MAPPING, "view")),
 ) -> list[KpiLinkableUser]:
     """Every Regional Manager and Coordinator account, and who it is linked to.
 
@@ -404,7 +408,7 @@ def set_link(
     user_id: int,
     payload: KpiPersonLink,
     db: Session = Depends(get_db),
-    user: User = Depends(require_roles(PM)),
+    user: User = Depends(require_access(F.KPI_MAPPING, "edit")),
 ) -> KpiLinkableUser:
     """Point a user account at a name in the mapping, or clear it."""
     account = db.get(User, user_id)
@@ -437,7 +441,7 @@ def set_link(
 @router.get("/mapping/names")
 def mapping_names(
     db: Session = Depends(get_db),
-    _: User = Depends(require_roles(PM)),
+    _: User = Depends(require_access(F.KPI_MAPPING, "view")),
 ) -> dict:
     """The distinct names currently in use, to offer in the link picker."""
     return {

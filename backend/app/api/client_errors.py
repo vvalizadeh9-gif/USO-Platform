@@ -2,7 +2,8 @@
 
 The interface's error screens show an Error ID; this is where that ID reaches
 the server log, so a person reading it out over the phone can be matched to a
-stack trace. Nothing is stored: one structured log line per report, at
+stack trace. One structured log line per report (since UEP-25 also a bare
+count row -- time and route -- for System health), at
 ``level=error`` with ``source=client``, carrying who was signed in.
 
 Rate-limited per user in memory (30 a minute). A page stuck in a render loop
@@ -77,4 +78,9 @@ def report_client_error(body: ClientErrorIn, user: User = Depends(get_current_us
             "role": user.role.name if user.role else None,
         },
     )
+    # Counted on Admin > System health (UEP-25). The message and stack stay in
+    # the log line above; only the moment and the route are stored.
+    from app.services.system_health import record_error
+
+    record_error("client", body.route)
     return Response(status_code=204)

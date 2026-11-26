@@ -26,14 +26,13 @@ import { NAV_BY_PATH, navItemVisible } from '../lib/nav'
 
 export default function LifecycleStrip({ current, variant = 'staff' }) {
   const { user } = useAuth()
-  const roleName = user?.role?.name
   const STEPS = variant === 'contractor' ? CONTRACTOR_STEPS : STAFF_STEPS
 
   return (
     <nav className="lifecycle" aria-label="Where this page sits in the project">
       {STEPS.map((step, i) => {
         const isCurrent = step.key === current
-        const reachable = navItemVisible(NAV_BY_PATH[step.to], roleName)
+        const reachable = navItemVisible(NAV_BY_PATH[step.to], user)
 
         const body = (
           <>

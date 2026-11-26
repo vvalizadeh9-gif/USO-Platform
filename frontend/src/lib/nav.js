@@ -9,8 +9,9 @@
  * drift apart, and a strip that disagrees with the sidebar is worse than one
  * that offers nothing.
  *
- * These lists shape what the interface offers. They decide nothing: every
- * endpoint re-checks the role server-side.
+ * Each item's `need` is a feature (lib/access.js, from GET /me/access): it
+ * shapes what the interface offers and decides nothing -- every endpoint
+ * re-checks the feature server-side.
  */
 import {
   Briefcase,
@@ -23,20 +24,16 @@ import {
   Users,
   Wrench,
 } from '../components/carbon'
-import { AREA, offeredRoles } from './access'
-import { CATEGORY_OWNER_ROLES, GAPS_ROLES, HOME_ROLES, KPI_ROLES, MONTHLY_PLAN_ROLES } from './roles'
-
-const DASHBOARD_ROLES = offeredRoles(AREA.INSIGHTS_DASHBOARDS)
+import { FEATURE as F, meets } from './access'
+import { canOpenMonthlyPlan, hasHome } from './roles'
 
 // The sidebar, grouped by project: each project's dashboard sits beside the
 // screens where that project's work is done, so a person finds the numbers
 // and the work in one place. The dashboards are still read-only -- only their
 // place in the sidebar moved; nothing they show changes a record.
 //
-// hideRoles hides an item for the given roles, on top of any `roles`
-// inclusion list -- used here to keep Work Items and My Work out of Admin's
-// sidebar (Admin manages the platform from the Admin Console, not the
-// day-to-day work queues) while everyone else keeps seeing them.
+// `need` is what the item needs, read as menus read it (a feature granted
+// URL-only is not offered).
 //
 // `key` names the badge count Layout computes for an item: 'hc' / 'dt' / 'mydt' from /hc/queues/counts and
 // /drive-tests/my/counts -- see D2-D4 -- and 'mywork' from My Work's own
@@ -53,10 +50,10 @@ export const NAV_SECTIONS = [
     // process.
     label: 'Today',
     items: [
-      { to: '/my-fix-queue', label: 'My Fix Queue', icon: Wrench, roles: CATEGORY_OWNER_ROLES },
+      { to: '/my-fix-queue', label: 'My Fix Queue', icon: Wrench, need: F.FIX_QUEUE },
       // UEP Home, the landing page. It is its own full-width shell, so this
       // is the way back to it from every other page.
-      { to: '/home', label: 'Home', icon: House, roles: HOME_ROLES },
+      { to: '/home', label: 'Home', icon: House, need: (user) => hasHome(user?.role?.name) },
     ],
   },
   {
@@ -66,21 +63,21 @@ export const NAV_SECTIONS = [
     // screens that happen to be next to each other.
     label: 'Drive test',
     items: [
-      { to: '/reports/drive-test', label: 'Dashboard', icon: LayoutDashboard, roles: DASHBOARD_ROLES },
+      { to: '/reports/drive-test', label: 'Dashboard', icon: LayoutDashboard, need: F.INSIGHTS_DASHBOARDS },
       // Two shapes behind Monthly Plan: the contractor's own form, and the
       // month's queue for everyone with an oversight interest in it. Admin is
-      // absent from MONTHLY_PLAN_ROLES, which is what keeps it out of their
+      // not offered the queue (URL-only), which is what keeps it out of their
       // sidebar.
-      { to: '/monthly-plan', label: 'Monthly Plan', step: true, roles: MONTHLY_PLAN_ROLES },
-      { to: '/health-check', label: 'Health check', step: true, roles: ['PM', 'Coordinator'], key: 'hc' },
-      { to: '/my-health-check', label: 'My Health Check', step: true, roles: ['Contractor'] },
+      { to: '/monthly-plan', label: 'Monthly Plan', step: true, need: canOpenMonthlyPlan },
+      { to: '/health-check', label: 'Health check', step: true, need: [F.HC_WORK, 'edit'], key: 'hc' },
+      { to: '/my-health-check', label: 'My Health Check', step: true, need: F.CONTRACTOR_WORK },
       // Same two roles as Health Check: assigning a drive test and approving
       // one are the same authority as reviewing a health check.
-      { to: '/drive-test', label: 'Drive test', step: true, roles: ['PM', 'Coordinator'], key: 'dt' },
+      { to: '/drive-test', label: 'Drive test', step: true, need: [F.DT_ASSIGNMENT, 'edit'], key: 'dt' },
       // One place for a contractor to work instead of knowing which sites to
       // open on Work Items -- the same reason My Health Check exists.
-      { to: '/my-drive-tests', label: 'My Drive Tests', step: true, roles: ['Contractor'], key: 'mydt' },
-      { to: '/explorer', label: 'Explorer', icon: ListChecks, end: true, roles: offeredRoles(AREA.EXPLORER) },
+      { to: '/my-drive-tests', label: 'My Drive Tests', step: true, need: F.CONTRACTOR_WORK, key: 'mydt' },
+      { to: '/explorer', label: 'Explorer', icon: ListChecks, end: true, need: F.EXPLORER },
     ],
   },
   {
@@ -88,20 +85,20 @@ export const NAV_SECTIONS = [
     // village (pages/mywork/MyWork.jsx) -- so it sits with its dashboard.
     label: 'Acceptance',
     items: [
-      { to: '/reports/acceptance', label: 'Dashboard', icon: ClipboardCheck, roles: DASHBOARD_ROLES },
-      { to: '/my-work', label: 'My Work', icon: Briefcase, roles: offeredRoles(AREA.ACCEPTANCE_WORKSPACE), key: 'mywork' },
+      { to: '/reports/acceptance', label: 'Dashboard', icon: ClipboardCheck, need: F.INSIGHTS_DASHBOARDS },
+      { to: '/my-work', label: 'My Work', icon: Briefcase, need: F.ACCEPTANCE_WORKSPACE, key: 'mywork' },
     ],
   },
   {
     label: 'Performance',
     items: [
-      // Admin is absent from KPI_ROLES, which keeps this out of their sidebar
+      // Admin has no roles_performance grant, which keeps this out of their sidebar
       // -- and the server refuses them every endpoint behind it.
-      { to: '/reports/kpi', label: 'Roles Performance', icon: Users, roles: KPI_ROLES },
+      { to: '/reports/kpi', label: 'Roles Performance', icon: Users, need: F.ROLES_PERFORMANCE },
       // Same roles, and for the same reason: it reads the same villages under
       // the same scope rule, and the server refuses Admin every endpoint
       // behind it.
-      { to: '/reports/gaps', label: 'Lifecycle Gaps', icon: Link2Off, roles: GAPS_ROLES },
+      { to: '/reports/gaps', label: 'Lifecycle Gaps', icon: Link2Off, need: F.LIFECYCLE_GAPS },
     ],
   },
   {
@@ -110,16 +107,15 @@ export const NAV_SECTIONS = [
       // The monthly Mojri reconciliation. Unlike the dashboards, this one
       // writes. PM only, as the server has it -- Admin takes the template
       // from the Admin Console.
-      { to: '/mojri-tracker', label: 'Mojri Tracker', icon: FileSpreadsheet, roles: ['PM'] },
+      { to: '/mojri-tracker', label: 'Mojri Tracker', icon: FileSpreadsheet, need: [F.MOJRI_UPLOAD, 'edit'] },
     ],
   },
 ]
 
-/** Whether this user may see a nav item, from the item's own role lists. */
-export function navItemVisible(item, roleName) {
-  if (item.roles && !item.roles.includes(roleName)) return false
-  if (item.hideRoles && item.hideRoles.includes(roleName)) return false
-  return true
+/** Whether this user (with `access` from GET /me/access) may see a nav item. */
+export function navItemVisible(item, user) {
+  if (!item) return false
+  return meets(user, item.need, { offered: true })
 }
 
 /** The nav items, by path, so another component can ask about one by name. */

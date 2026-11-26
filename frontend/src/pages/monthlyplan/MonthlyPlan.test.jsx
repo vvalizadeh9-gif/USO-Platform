@@ -20,7 +20,7 @@ vi.mock('../../api/client', () => ({
 
 const mockAuth = vi.hoisted(() => ({ current: null }))
 vi.mock('../../context/AuthContext', () => ({
-  useAuth: () => mockAuth.current,
+  useAuth: () => globalThis.withSeededAccess(mockAuth.current),
 }))
 
 const persian = (n) => String(n).replace(/\d/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[d])

@@ -12,16 +12,16 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.core import audit_actions
+from app.core.access import Feature as F, require_access
 from app.core.database import get_db
-from app.core.deps import ADMIN, PM, VIEWER, require_roles
 from app.models.reference import User
 from app.services import sla_policy
 from app.services.audit import record_audit
 
 router = APIRouter(prefix="/admin/sla-policies", tags=["sla-policies"])
 
-can_read = require_roles(PM, ADMIN, VIEWER)
-can_edit = require_roles(PM, ADMIN)
+can_read = require_access(F.SLA_POLICIES, "view")
+can_edit = require_access(F.SLA_POLICIES, "edit")
 
 
 class SlaChangeIn(BaseModel):

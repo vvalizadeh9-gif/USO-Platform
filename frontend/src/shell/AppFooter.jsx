@@ -4,13 +4,19 @@ import { clock } from '../pages/home/homeLogic'
 /** System status from GET /me/home's health check, data time and version.
  * Home's footer, shared by every page built on Home's frame. */
 export default function AppFooter({ data, failed }) {
-  const degraded = failed || data?.system?.status === 'degraded'
+  // UEP-25: the System health verdict -- the same one Admin › Overview and
+  // the System health page show: "All systems normal" or the first problem.
+  const status = failed ? 'degraded' : data?.system?.status || 'normal'
+  const problem = status !== 'normal'
+  const text = failed
+    ? 'Some services are degraded'
+    : data?.system?.headline || (problem ? 'Some services are degraded' : 'All systems normal')
   return (
     <footer className="hf-footer">
-      <span className={`hf-status ${degraded ? 'is-down' : ''}`.trim()} role="status">
+      <span className={`hf-status ${problem ? 'is-down' : ''}`.trim()} role="status">
         {/* A real health check (UEP-13 §3.14f): a Carbon mark, no dot. */}
-        <Icon name={degraded ? 'warning--alt' : 'checkmark--outline'} size={14} />
-        {degraded ? 'Some services are degraded' : 'All systems normal'}
+        <Icon name={problem ? 'warning--alt' : 'checkmark--outline'} size={14} />
+        {text}
       </span>
       {data?.generated_at && <span>Data as of {clock(new Date(data.generated_at))}</span>}
       <span className="hf-spacer" />

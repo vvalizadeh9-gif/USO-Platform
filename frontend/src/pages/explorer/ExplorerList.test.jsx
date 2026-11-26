@@ -9,7 +9,7 @@ import { readFileSync } from 'node:fs'
 import { FILTER_OPTIONS, siteVillages, sitesPage } from './fixtures'
 
 vi.mock('../../api/client', () => ({ default: { get: vi.fn(), post: vi.fn() } }))
-vi.mock('../../context/AuthContext', () => ({ useAuth: () => ({ user: { role: { name: 'PM' } } }) }))
+vi.mock('../../context/AuthContext', () => ({ useAuth: () => globalThis.withSeededAccess({ user: { role: { name: 'PM' } } }) }))
 vi.mock('../../shell/HomeData', () => ({ useHomeData: () => ({ data: null, error: null }) }))
 
 const api = (await import('../../api/client')).default

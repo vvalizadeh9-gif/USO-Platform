@@ -56,8 +56,8 @@ export default function SiteRecord() {
         record={data}
         siteLabel={siteLabel}
         headingRef={headingRef}
-        canFile={canFileAcceptance(role)}
-        canOpenMyWork={canAccess(role, AREA.ACCEPTANCE_WORKSPACE)}
+        canFile={canFileAcceptance(user)}
+        canOpenMyWork={canAccess(user, AREA.ACCEPTANCE_WORKSPACE)}
         isContractor={role === 'Contractor'}
         onTakeAction={hasAnyAction(actions) ? () => setDrawerOpen(true) : undefined}
       />

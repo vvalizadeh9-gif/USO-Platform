@@ -12,6 +12,32 @@ import { explorerSite, explorerSites } from './explorerFixtures.js'
 import * as SB from './submissionsFixtures.js'
 import { basketsCell, basketsGrid, casesCase, casesCategories, casesHistory, casesInbox } from './casesFixtures.js'
 import { FILTER_OPTIONS, siteVillages } from '../src/pages/explorer/fixtures.js'
+import { readFileSync } from 'node:fs'
+
+// UEP-25: what the signed-in user may use, as GET /me/access answers it --
+// the role's day-one grants from the seed fixture, unless the test user
+// carries its own `access` (a role made in Admin › Access, an exception).
+const MATRIX = JSON.parse(readFileSync(new URL('../src/lib/accessMatrix.json', import.meta.url), 'utf8'))
+
+export function seededAccess(roleName) {
+  const features = {}
+  const hidden = []
+  for (const [key, area] of Object.entries(MATRIX.areas)) {
+    if (area.offered.includes(roleName)) features[key] = 'view'
+    else if (area.direct.includes(roleName)) { features[key] = 'view'; hidden.push(key) }
+  }
+  for (const [key, f] of Object.entries(MATRIX.features)) {
+    if (f.edit.includes(roleName)) features[key] = 'edit'
+    else if (f.view.includes(roleName)) features[key] = 'view'
+    else continue
+    if (f.hidden.includes(roleName)) hidden.push(key)
+  }
+  return {
+    features, hidden_in_menus: hidden, exceptions: [],
+    landing: MATRIX.landings[roleName] || 'standard', role: roleName,
+    data_scope_type: MATRIX.data_scope[roleName] || 'none',
+  }
+}
 
 const ROUTES = {
   '/auth/me': F.PM,
@@ -105,6 +131,9 @@ export async function signIn(page, user = F.PM) {
     const pattern = PATTERNS.find(([re]) => re.test(path))
     if (pattern) {
       return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(pattern[1](url, viewOf(user))) })
+    }
+    if (path === '/me/access') {
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(user.access || seededAccess(user.role.name)) })
     }
     if (path === '/auth/me') {
       return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(user) })

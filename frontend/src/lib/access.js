@@ -1,20 +1,26 @@
 /**
- * The central permission map: who may open which area of UEP.
+ * Who may use which feature of UEP (UEP-25).
  *
- * `accessMatrix.json` is the same file the backend reads
- * (backend/app/core/access_matrix.json; a backend test fails when the two
- * differ). The launcher, Home's Apps panel, the rails, the route guards and
- * the pages ask this module, never a role list of their own. The server
- * re-checks every area on every request; this only shapes what is offered.
+ * Access is managed in Admin › Access and read from GET /me/access, which
+ * AuthContext loads on page load and every 5 minutes and attaches to the
+ * signed-in user as `user.access`:
  *
- * `offered` roles see an area in navigation; `direct` roles may still open it
- * by URL (Admin keeps the access it had) but are never offered it.
+ *   { features: { explorer: 'view', hc_work: 'edit', … },
+ *     hidden_in_menus: ['insights_dashboards', …],
+ *     exceptions: [...], landing: 'standard', role: 'PM', data_scope_type: 'all' }
+ *
+ * The launcher, Home's Apps panel, the rails, the route guards and the pages
+ * ask this module, never a role list of their own. The server re-checks every
+ * feature on every request; this only shapes what is offered.
+ *
+ * A feature in `hidden_in_menus` may be opened by URL but is not offered in
+ * navigation (the old "direct" entries: Admin keeps the API access it had).
+ *
+ * accessMatrix.json is no longer read here: it is the day-one seed, used by
+ * tests only.
  */
-import matrix from './accessMatrix.json'
 
-/** @typedef {keyof typeof matrix.areas} AreaName */
-
-export const AREA = Object.freeze({
+export const FEATURE = Object.freeze({
   ROLES_PERFORMANCE: 'roles_performance',
   LIFECYCLE_GAPS: 'lifecycle_gaps',
   /** The "ICT vs CRA vs Mojri tracker" card on Lifecycle Gaps. */
@@ -23,46 +29,103 @@ export const AREA = Object.freeze({
   INSIGHTS_DASHBOARDS: 'insights_dashboards',
   EXPLORER: 'explorer',
   EXPLORER_ALL_SITES: 'explorer_all_sites',
-  /** Acceptance › Filing (My Work). */
   ACCEPTANCE_WORKSPACE: 'acceptance_workspace',
   /** Acceptance › Filing (UEP-22): the cases inbox, team roles included. */
   ACCEPTANCE_CASES: 'acceptance_cases',
-  /** Insights › Acceptance baskets (UEP-22). */
   ACCEPTANCE_BASKETS: 'acceptance_baskets',
   MONTHLY_PLAN_QUEUE: 'monthly_plan_queue',
   INTERNAL_PIP: 'internal_pip',
   /** Acceptance › Submissions (UEP-21); acting is PM and the owner only. */
   SUBMISSIONS: 'submissions',
+  HC_WORK: 'hc_work',
+  DT_ASSIGNMENT: 'dt_assignment',
+  DT_REVIEW: 'dt_review',
+  DT_EVIDENCE: 'dt_evidence',
+  FIELD_RESULTS: 'field_results',
+  CONTRACTOR_WORK: 'contractor_work',
+  FIX_QUEUE: 'fix_queue',
+  REASSIGN_WORK: 'reassign_work',
+  ACCEPTANCE_FILING: 'acceptance_filing',
+  ACCEPTANCE_APPROVE: 'acceptance_approve',
+  VALIDATION: 'validation',
+  SCAN_UPLOAD: 'scan_upload',
+  CONTRACTOR_PLAN: 'contractor_plan',
+  PLAN_APPROVALS: 'plan_approvals',
+  ACCEPTANCE_TARGET: 'acceptance_target',
+  KPI_MAPPING: 'kpi_mapping',
+  EXPORTS: 'exports',
+  USERS: 'users',
+  ACCESS: 'access',
+  PROVINCE_ASSIGNMENTS: 'province_assignments',
+  SLA_POLICIES: 'sla_policies',
+  PROBLEM_CATEGORIES: 'problem_categories',
+  PROVINCES: 'provinces',
+  ACTION_SLA: 'action_sla',
+  CPM_IMPORT: 'cpm_import',
+  CPM_CHANGE_REQUESTS: 'cpm_change_requests',
+  MOJRI_UPLOAD: 'mojri_upload',
+  ADMIN_OVERVIEW: 'admin_overview',
+  SYSTEM_HEALTH: 'system_health',
+  AUDIT_LOG: 'audit_log',
 })
 
-function entry(area) {
-  const found = matrix.areas[area]
-  if (!found) throw new Error(`Unknown access area: ${area}`)
-  return found
+/** The pre-UEP-25 name, kept so area checks read as they did. */
+export const AREA = FEATURE
+
+const RANK = { none: 0, view: 1, edit: 2 }
+
+/** The access object, from a user (`user.access`) or an access object itself. */
+export function accessOf(subject) {
+  if (!subject) return null
+  if (subject.features) return subject
+  return subject.access || null
 }
 
-/** The roles navigation offers this area to. */
-export function offeredRoles(area) {
-  return [...entry(area).offered]
+/** 'none' | 'view' | 'edit'. */
+export function levelOf(subject, feature) {
+  return accessOf(subject)?.features?.[feature] || 'none'
 }
 
-/** The roles that may open this area: offered, plus direct-only. */
-export function allowedRoles(area) {
-  const { offered, direct } = entry(area)
-  return [...offered, ...direct]
+/** Whether the user holds at least `level` on `feature` (by link or by URL). */
+export function can(subject, feature, level = 'view') {
+  return RANK[levelOf(subject, feature)] >= RANK[level]
 }
 
-/** Whether navigation offers `area` to this role. */
-export function isOffered(roleName, area) {
-  return entry(area).offered.includes(roleName)
+/** Whether navigation offers `feature`: allowed, and not hidden in menus. */
+export function isOffered(subject, feature, level = 'view') {
+  if (!can(subject, feature, level)) return false
+  return !(accessOf(subject)?.hidden_in_menus || []).includes(feature)
 }
 
-/** Whether this role may open `area` (by link or by URL). */
-export function canAccess(roleName, area) {
-  return allowedRoles(area).includes(roleName)
+/** Whether the user may open `area` (the pre-UEP-25 name for `can`). */
+export function canAccess(subject, area) {
+  return can(subject, area)
 }
 
-/** 'region' | 'work' | 'standard': which Home variant this role lands on. */
-export function landingFor(roleName) {
-  return matrix.landings[roleName] || 'standard'
+/** 'standard' | 'region' | 'work' | an app route such as '/explorer'. */
+export function landingFor(subject) {
+  return accessOf(subject)?.landing || 'standard'
+}
+
+/** Whether an access object came with a personal exception on `feature`. */
+export function isException(subject, feature) {
+  return (accessOf(subject)?.exceptions || []).includes(feature)
+}
+
+/**
+ * A navigation requirement, as written in the app registry and route guards:
+ * `'explorer'`, `['hc_work', 'edit']`, `{ any: [...] }`, or a function of the user.
+ * `offered` asks for the menu answer (hidden features left out).
+ */
+export function meets(user, need, { offered = false } = {}) {
+  if (!need) return true
+  if (typeof need === 'function') return Boolean(need(user))
+  if (typeof need === 'string') return offered ? isOffered(user, need) : can(user, need)
+  if (Array.isArray(need)) {
+    const [feature, level = 'view'] = need
+    return offered ? isOffered(user, feature, level) : can(user, feature, level)
+  }
+  if (need.any) return need.any.some((n) => meets(user, n, { offered }))
+  if (need.all) return need.all.every((n) => meets(user, n, { offered }))
+  return false
 }

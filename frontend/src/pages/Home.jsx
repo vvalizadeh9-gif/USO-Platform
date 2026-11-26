@@ -141,7 +141,7 @@ function UnlinkedRegionHome({ user, counts, data, error }) {
           <p className="h-note" data-testid="region-empty">No provinces are linked to your account yet. Your administrator can add them.</p>
         </div>
       </div>
-      <AppsPanel roleName={user?.role?.name} counts={counts} expand={['insights']} />
+      <AppsPanel user={user} counts={counts} expand={['insights']} />
     </HomeFrame>
   )
 }
@@ -155,7 +155,7 @@ function LinkedRegionHome({ user, counts, data, error }) {
       <div className="h-main" aria-busy={!region.data && !region.error}>
         <div className="h-work h-work-region"><Region region={region} /></div>
       </div>
-      <AppsPanel roleName={user?.role?.name} counts={counts} expand={['insights']} />
+      <AppsPanel user={user} counts={counts} expand={['insights']} />
     </HomeFrame>
   )
 }
@@ -182,8 +182,7 @@ function HomeFrame({ user, scope, footer, children }) {
 export default function Home() {
   const { user } = useAuth()
   const { data, error, counts, reload } = useHomeData()
-  const roleName = user?.role?.name
-  const landing = landingFor(roleName)
+  const landing = landingFor(user)
   if (landing === 'region') return <RegionHome user={user} counts={counts} data={data} error={error} />
 
   let kpis
@@ -192,7 +191,7 @@ export default function Home() {
     kpis = null
     work = (
       <p className="h-note">
-        Home isn't available for your role. <Link to={homeFor(roleName)}>Go to your start page</Link>
+        Home isn't available for your role. <Link to={homeFor(user)}>Go to your start page</Link>
       </p>
     )
   } else if (!data && error) {
@@ -212,7 +211,7 @@ export default function Home() {
         {kpis && <div className="h-kpis">{kpis}</div>}
         <div className="h-work">{work}</div>
       </div>
-      <AppsPanel roleName={roleName} counts={counts} />
+      <AppsPanel user={user} counts={counts} />
     </HomeFrame>
   )
 }

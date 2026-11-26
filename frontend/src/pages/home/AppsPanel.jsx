@@ -24,13 +24,13 @@ export function panelEntries(apps, expand = []) {
   })
 }
 
-/** Every app this role may open, by group, with its pending count. Apps only:
+/** Every app this user may open, by group, with its pending count. Apps only:
  * dashboards and trackers are pages inside apps. */
-export default function AppsPanel({ roleName, counts, expand }) {
+export default function AppsPanel({ user, counts, expand }) {
   return (
     <aside className="ha-panel" aria-labelledby="home-apps">
       <h2 id="home-apps">Apps</h2>
-      {appGroupsFor(roleName).map((group) => (
+      {appGroupsFor(user).map((group) => (
         <section key={group.id} className="ha-group" aria-label={group.label}>
           <h3>{group.label}</h3>
           {panelEntries(group.apps, expand).map((entry) => {

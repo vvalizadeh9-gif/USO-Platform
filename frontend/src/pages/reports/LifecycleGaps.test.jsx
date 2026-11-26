@@ -22,7 +22,7 @@ vi.mock('../../lib/download', async (importOriginal) => ({
 
 const authUser = vi.hoisted(() => ({ current: { role: { name: 'PM' } } }))
 vi.mock('../../context/AuthContext', () => ({
-  useAuth: () => ({ user: authUser.current }),
+  useAuth: () => globalThis.withSeededAccess({ user: authUser.current }),
 }))
 
 const api = (await import('../../api/client')).default

@@ -6,7 +6,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 const mockAuth = vi.hoisted(() => ({ current: null }))
 vi.mock('../context/AuthContext', () => ({
-  useAuth: () => mockAuth.current,
+  useAuth: () => globalThis.withSeededAccess(mockAuth.current),
 }))
 
 const ProcessStepper = (await import('./ProcessStepper')).default

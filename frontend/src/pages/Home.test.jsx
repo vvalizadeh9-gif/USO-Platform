@@ -8,7 +8,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 vi.mock('../api/client', () => ({ default: { get: vi.fn() } }))
 
 const auth = vi.hoisted(() => ({ current: null }))
-vi.mock('../context/AuthContext', () => ({ useAuth: () => auth.current }))
+vi.mock('../context/AuthContext', () => ({ useAuth: () => globalThis.withSeededAccess(auth.current) }))
 
 const home = vi.hoisted(() => ({ current: null }))
 vi.mock('../shell/HomeData', () => ({ useHomeData: () => home.current }))

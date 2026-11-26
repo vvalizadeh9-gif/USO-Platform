@@ -36,7 +36,7 @@ vi.mock('../../api/client', () => ({
     post: vi.fn(),
   },
 }))
-vi.mock('../../context/AuthContext', () => ({ useAuth: () => ({ user: { role: { name: 'PM' } } }) }))
+vi.mock('../../context/AuthContext', () => ({ useAuth: () => globalThis.withSeededAccess({ user: { role: { name: 'PM' } } }) }))
 vi.mock('../../shell/HomeData', () => ({ useHomeData: () => ({ data: null, error: null }) }))
 vi.mock('../healthcheck/HcHistoryTab', () => ({ default: () => <p>archive</p> }))
 
