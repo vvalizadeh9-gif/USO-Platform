@@ -1665,9 +1665,14 @@ is unchanged; a test pins its shape.
 
 - **`sla.item_status`** makes every item exactly one of late, due soon or
   on time. Late *is* `is_overdue`. Due soon is turning late within
-  `HOME_DUE_SOON_DAYS` (3, in `Settings`): for an SLA queue, `effective_start
-  + sla_days`; for fixes and the monthly plan, their own `due_at`. An item
-  with no due date is never due soon.
+  `HOME_DUE_SOON_DAYS` (7 since UEP-27, in `Settings`): for an SLA queue,
+  `effective_start + sla_days`; for fixes and the monthly plan, their own
+  `due_at`. An item with no due date is never due soon.
+- **`sla.home_status`** (UEP-27) is Home's four-way status: **no date** (no
+  start and no due date) before anything else, then `item_status`. Home's
+  late never counts an undated item; the board and digest keep `is_overdue`.
+  Each queue's `holder` (`self` / `others` / `reminder`) splits Home into To
+  do and Waiting on others; see `docs/design/uep-home.md` §00.
 - **`board.up_next`**: the most late items, then the oldest clock, then the
   most items, then registry order, so a tie never flips between reads. It is
   the one definition; the digest does not name a "next" today, and would

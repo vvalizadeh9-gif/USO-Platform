@@ -122,12 +122,12 @@ test.describe('problem-category owners', () => {
     })
   }
 
-  test('with nothing waiting: the KPI strip at zero and one quiet line', async ({ page }) => {
+  test('with nothing waiting: To do at zero and one quiet line', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 })
     await signInAsOwner(page, PROBLEM_OWNERS[0][1], 0)
     await page.goto('/home')
     await expect(page.getByTestId('work-empty')).toHaveText('Nothing is waiting on you.')
-    await expect(page.locator('.hk-value').first()).toHaveText('0')
+    await expect(page.getByTestId('todo-number')).toHaveText('0')
     await expect(page.getByText("You're all caught up")).toHaveCount(0)
   })
 

@@ -1,5 +1,5 @@
 import Icon from '../components/Icon'
-import { clock } from '../pages/home/homeLogic'
+import { clock, shortDate } from '../pages/home/homeLogic'
 
 /** System status from GET /me/home's health check, data time and version.
  * Home's footer, shared by every page built on Home's frame. */
@@ -18,7 +18,9 @@ export default function AppFooter({ data, failed }) {
         <Icon name={problem ? 'warning--alt' : 'checkmark--outline'} size={14} />
         {text}
       </span>
-      {data?.generated_at && <span>Data as of {clock(new Date(data.generated_at))}</span>}
+      {/* UEP-27: how old the rollout list is, and when these figures were read. */}
+      {data?.cpm_imported_at && <span data-testid="footer-cpm">CPM data from {shortDate(data.cpm_imported_at)}</span>}
+      {data?.generated_at && <span>Updated {clock(new Date(data.generated_at))}</span>}
       <span className="hf-spacer" />
       {data?.version && <span>UEP {data.version}</span>}
     </footer>

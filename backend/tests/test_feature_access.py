@@ -277,6 +277,10 @@ ALLOW_LIST = {
     "/api/v1/auth/signin-settings",
     # What the signed-in user may use; their Home; their notifications.
     "/api/v1/me/access", "/api/v1/me/home", "/api/v1/home/summary",
+    # UEP-27: the lists behind Home's numbers, each confined to the user's own
+    # Home queues and row scope (the exports carry EXPORTER). The PIP list
+    # checks its two roles inside.
+    "/api/v1/me/queues/{queue_key}/items", "/api/v1/me/done", "/api/v1/me/pip/by-contractor",
     "/api/v1/me/notifications", "/api/v1/notifications/{notification_id}/read",
     # Reference lists every form reads.
     "/api/v1/reference/provinces", "/api/v1/reference/roles", "/api/v1/reference/contractors",

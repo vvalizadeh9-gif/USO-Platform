@@ -1,30 +1,40 @@
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import Icon from '../components/Icon'
 import { useAuth } from '../context/AuthContext'
-import { landingFor } from '../lib/access'
+import { FEATURE, can, landingFor } from '../lib/access'
 import { homeFor } from '../lib/roles'
 import AppFooter from '../shell/AppFooter'
+import { APPS, locate } from '../shell/appRegistry'
 import { useHomeData } from '../shell/HomeData'
 import AppsPanel from './home/AppsPanel'
-import KpiStrip from './home/KpiStrip'
+import DrillPanel from './home/DrillPanel'
+import HomeOverview, { OverviewSkeleton } from './home/HomeOverview'
 import RegionSummary from './home/RegionSummary'
 import WorkCard from './home/WorkCard'
-import { englishDate, greeting } from './home/homeLogic'
+import { WAITING, allTickets, englishDate, greeting, statusClass, statusLabel, summaryLines } from './home/homeLogic'
 import { useRpData } from './reports/rolesPerformance/hooks'
 import { formatNumber } from '../lib/numbers'
 import '../styles/home.css'
 
 /**
- * UEP Home (UEP-02 §3): greeting, four KPIs, "Your work" cards and the Apps
- * panel, from one GET /me/home that the whole shell shares. Fits 1440×900
- * without page scrolling. The greeting spans the page; under it the Apps
- * panel shares the KPI strip's top edge and the work cards' bottom edge
- * (UEP-12). See docs/design/uep-home.md.
+ * UEP Home (UEP-27): greeting; the overview card (To do with its status bar,
+ * Waiting on others, Done this week); "Your work" cards, each row with a
+ * status strip; and the Apps panel as a tile grid -- from one GET /me/home
+ * that the whole shell shares. Fits 1366×768 and up without page scrolling.
+ * See docs/design/uep-home.md.
+ *
+ * Two interactions, kept apart on purpose:
+ *
+ * - a part of the To do bar, a legend item or Waiting on others **filters the
+ *   cards** (`filter`, a toggle; Esc or the "Showing … ×" chip clears it);
+ * - every other number **opens the list behind it** in the right-side panel
+ *   (`views`, a stack, so Back returns to the previous panel).
  *
  * Two role variants, chosen by the central permission map's `landings`
  * (lib/access.js), built from the same parts:
  *
- * - **region** (Regional manager): no KPI strip and no work cards -- they own
+ * - **region** (Regional manager): no overview and no work cards -- they own
  *   no tasks -- but their region today, from Roles performance › My area, and
  *   an Apps panel of exactly Roles performance, Lifecycle gaps and Explorer.
  * - **work** (the five problem-category owners): the standard Home, counting
@@ -41,36 +51,19 @@ function Retry({ what, onRetry }) {
   )
 }
 
-function KpiSkeleton() {
-  return (
-    <div className="hk-wrap" aria-hidden="true">
-      <div className="hk-strip">
-        {[0, 1, 2, 3].map((i) => (
-          <div key={i} className={`hk-tile is-skel ${i === 0 ? 'is-hero' : ''}`.trim()}>
-            <span className="h-skel" style={{ width: '60%', height: 14 }} />
-            <span className="h-skel" style={{ width: 56, height: 40 }} />
-            <span className="h-skel" style={{ width: '50%', height: 14 }} />
-            <span className="h-skel" style={{ width: '100%', height: 28 }} />
-          </div>
-        ))}
-      </div>
-      <p className="hk-caption">&nbsp;</p>
-    </div>
-  )
-}
-
 function CardsSkeleton() {
   return (
     <div className="hw-grid" aria-hidden="true">
       {[0, 1, 2].map((i) => (
         <div key={i} className="hw-card">
           <div className="hw-head">
-            <span className="h-skel" style={{ width: 36, height: 36 }} />
-            <span className="h-skel" style={{ width: '40%', height: 18 }} />
+            <span className="h-skel" style={{ width: 28, height: 28 }} />
+            <span className="h-skel" style={{ width: '40%', height: 16 }} />
           </div>
           <div className="hw-rows" style={{ padding: 16, gap: 16, display: 'grid' }}>
             <span className="h-skel" style={{ width: '90%', height: 14 }} />
             <span className="h-skel" style={{ width: '70%', height: 14 }} />
+            <span className="h-skel" style={{ width: '80%', height: 14 }} />
           </div>
         </div>
       ))}
@@ -78,32 +71,52 @@ function CardsSkeleton() {
   )
 }
 
-function YourWork({ data, quiet }) {
+function FilterChip({ filter, onClear }) {
+  return (
+    <button type="button" className="hw-clear" onClick={onClear} data-testid="filter-chip">
+      <i className={`ho-swatch ${statusClass(filter)}`} aria-hidden="true" />
+      Showing {statusLabel(filter).toLowerCase()}
+      <Icon name="close" size={16} label="Clear the filter" />
+    </button>
+  )
+}
+
+function YourWork({ data, quiet, filter, onClearFilter, onOpenQueue, onOpenPip }) {
   // A card shows only when its role has at least one live queue in it.
   const cards = data.groups.filter((g) => g.tickets.some((t) => t.count > 0))
+  let rowStart = 0
   return (
     <section className="hw-section" aria-labelledby="home-work">
       <div className="hw-title">
         <h2 id="home-work">Your work</h2>
-        {data.sla_uniform_days && <span>SLA {data.sla_uniform_days} days</span>}
+        {filter && <FilterChip filter={filter} onClear={onClearFilter} />}
       </div>
       {cards.length === 0 && quiet ? (
         <p className="h-note" data-testid="work-empty">Nothing is waiting on you.</p>
       ) : cards.length === 0 ? (
         <div className="hw-empty">
-          <Icon name="task" size={20} />
+          <Icon name="checkmark--outline" size={20} />
           <b>You're all caught up</b>
           <span>New work will appear here.</span>
         </div>
       ) : (
         <div className="hw-grid">
-          {cards.map((g) => (
-            <WorkCard
-              key={g.key}
-              group={{ ...g, tickets: g.tickets.filter((t) => t.count > 0) }}
-              plan={g.key === 'plans' ? data.plan : null}
-            />
-          ))}
+          {cards.map((g, i) => {
+            const start = rowStart
+            rowStart += g.tickets.length
+            return (
+              <WorkCard
+                key={g.key}
+                group={g}
+                index={i}
+                rowStart={start}
+                filter={filter}
+                plan={g.key === 'plans' ? data.plan : null}
+                onOpenQueue={onOpenQueue}
+                onOpenPip={onOpenPip}
+              />
+            )
+          })}
         </div>
       )}
     </section>
@@ -179,39 +192,117 @@ function HomeFrame({ user, scope, footer, children }) {
   )
 }
 
+/** The app a ticket's page belongs to, for the panel's crumb and colours. */
+function appOf(ticket) {
+  const [path, search = ''] = ticket.url.split('?')
+  return locate(APPS, path, search ? `?${search}` : '').app
+}
+
+function lineFor(ticket) {
+  const app = appOf(ticket)
+  return { ...summaryLines([ticket])[0], appName: app?.name, color: app ? `var(${app.color})` : undefined }
+}
+
+/** The filter and the panel stack, and the openers every number calls. */
+function useHomeInteractions(data) {
+  const [filter, setFilter] = useState(null)
+  const [views, setViews] = useState([])
+  const tickets = useMemo(() => allTickets(data), [data])
+
+  const toggleFilter = useCallback((key) => setFilter((f) => (f === key ? null : key)), [])
+  const clearFilter = useCallback(() => setFilter(null), [])
+  const open = useCallback((view) => setViews([view]), [])
+  const push = useCallback((view) => setViews((v) => [...v, view]), [])
+  const back = useCallback(() => setViews((v) => v.slice(0, -1)), [])
+  const close = useCallback(() => setViews([]), [])
+
+  // Esc clears the filter -- unless the panel is open: its own Esc closes it first.
+  useEffect(() => {
+    if (!filter || views.length) return undefined
+    const onKey = (e) => { if (e.key === 'Escape') setFilter(null) }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [filter, views.length])
+
+  const mine = tickets.filter((t) => t.holder === 'self' && t.count > 0)
+  const openers = {
+    overview: (which) => (which === 'done'
+      ? open({ kind: 'done' })
+      : open({
+        kind: 'summary', title: 'To do', exportTitle: 'To do',
+        crumb: `${formatNumber(data.totals.todo)} items where you act next`,
+        lines: mine.map(lineFor),
+      })),
+    queue: (ticket) => {
+      const status = filter && filter !== WAITING ? filter : 'all'
+      open({ kind: 'list', ticket, crumb: appOf(ticket)?.name || 'UEP', appName: appOf(ticket)?.name, status })
+    },
+    pip: () => open({ kind: 'pip' }),
+    badge: (app) => {
+      const ofApp = tickets.filter((t) => t.count > 0 && appOf(t)?.id === app.id)
+      const todo = ofApp.filter((t) => t.holder === 'self')
+      const lines = (todo.length ? todo : ofApp.filter((t) => t.holder !== 'reminder')).map(lineFor)
+      open({
+        kind: 'summary', title: app.name, exportTitle: `${app.name} to do`,
+        crumb: `${formatNumber(lines.reduce((s, l) => s + l.count, 0))} to do`, lines,
+      })
+    },
+  }
+  return { filter, toggleFilter, clearFilter, views, push, back, close, openers }
+}
+
 export default function Home() {
   const { user } = useAuth()
   const { data, error, counts, reload } = useHomeData()
   const landing = landingFor(user)
+  const ui = useHomeInteractions(data)
   if (landing === 'region') return <RegionHome user={user} counts={counts} data={data} error={error} />
 
-  let kpis
+  let overview
   let work
   if (error === 'forbidden') {
-    kpis = null
+    overview = null
     work = (
       <p className="h-note">
         Home isn't available for your role. <Link to={homeFor(user)}>Go to your start page</Link>
       </p>
     )
   } else if (!data && error) {
-    kpis = <Retry what="Your numbers" onRetry={reload} />
+    overview = <Retry what="Your numbers" onRetry={reload} />
     work = <Retry what="Your work" onRetry={reload} />
   } else if (!data) {
-    kpis = <KpiSkeleton />
+    overview = <OverviewSkeleton />
     work = <CardsSkeleton />
   } else {
-    kpis = <KpiStrip totals={data.totals} trends={data.trends} />
-    work = <YourWork data={data} quiet={landing === 'work'} />
+    overview = (
+      <HomeOverview totals={data.totals} filter={ui.filter} onFilter={ui.toggleFilter} onOpen={ui.openers.overview} />
+    )
+    work = (
+      <YourWork
+        data={data}
+        quiet={landing === 'work'}
+        filter={ui.filter}
+        onClearFilter={ui.clearFilter}
+        onOpenQueue={ui.openers.queue}
+        onOpenPip={user?.role?.name === 'PM' ? ui.openers.pip : null}
+      />
+    )
   }
 
   return (
     <HomeFrame user={user} footer={<AppFooter data={data} failed={Boolean(error) && !data} />}>
       <div className="h-main" aria-busy={!data && !error}>
-        {kpis && <div className="h-kpis">{kpis}</div>}
+        {overview && <div className="h-kpis">{overview}</div>}
         <div className="h-work">{work}</div>
       </div>
-      <AppsPanel user={user} counts={counts} />
+      <AppsPanel user={user} counts={counts} onOpenBadge={data ? ui.openers.badge : null} />
+      <DrillPanel
+        views={ui.views}
+        canExport={can(user, FEATURE.EXPORTS)}
+        onPush={ui.push}
+        onBack={ui.back}
+        onClose={ui.close}
+      />
     </HomeFrame>
   )
 }

@@ -31,7 +31,8 @@ function scoped(role, scope, keep, { done = true } = {}) {
     totals: {
       ...base.totals,
       pending: sum('count'), queues: tickets.length, overdue: sum('late'), due_soon: sum('due_soon'),
-      ...(done ? {} : { done_today: null, done_yesterday: null }),
+      ...F.workTotals(tickets),
+      ...(done ? {} : { done_today: null, done_yesterday: null, done_this_week: null, done_last_week: null }),
     },
     trends: { ...base.trends, done: done ? base.trends.done : null },
     app_badges: badges,
@@ -68,7 +69,7 @@ export function problemOwnerHome(role, { fixes = 7, late = 2 } = {}) {
     scope_label: 'Your fixes',
     groups,
     rail_tickets: [],
-    totals: { ...F.homeSummaryPm.totals, pending: fixes, queues: tickets.length, overdue: tickets.length ? late : 0, due_soon: 0, done_today: 0 },
+    totals: { ...F.homeSummaryPm.totals, pending: fixes, queues: tickets.length, overdue: tickets.length ? late : 0, due_soon: 0, done_today: 0, ...F.workTotals(tickets) },
     app_badges: tickets.length ? { '/my-fix-queue': { count: fixes, parts: [{ label: 'Fixes', count: fixes }] } } : {},
   }
 }
