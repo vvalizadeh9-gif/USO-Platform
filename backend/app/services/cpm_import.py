@@ -47,6 +47,8 @@ from app.services import acceptance_tokens as tokens
 from app.services import evidence_store
 from app.services import cpm_columns as C
 from app.services.audit import record_audit
+from app.services.explorer_village_history import removed_code
+from app.services import lifecycle_stage  # noqa: F401 -- keeps the UEP-28 stage current
 from app.services.workflow import STAGE_DT_DONE, STAGE_NEW
 from app.services.performance import onair_history
 from app.services.submissions import sightings
@@ -426,7 +428,7 @@ class CpmImportService:
         }
 
     def _accumulate_village_change(
-        self, wi_key: tuple[str, str], *, added: dict | None, removed: str | None
+        self, wi_key: tuple[str, str], *, added: dict | None, removed: dict | None
     ) -> None:
         bucket = self._village_changes.setdefault(
             wi_key, {"added": [], "removed": []}
@@ -445,10 +447,13 @@ class CpmImportService:
             if wi_key not in self._seen_village_codes:
                 continue  # work item not touched this import — leave alone
             seen = self._seen_village_codes[wi_key]
-            for code, _village in existing.items():
+            for code, village in existing.items():
                 if code not in seen:
+                    # Code and name (UEP-28): applying the removal deletes the
+                    # village, and Explorer's village history still names it.
                     self._accumulate_village_change(
-                        wi_key, added=None, removed=code
+                        wi_key, added=None,
+                        removed={"village_code": code, "village_name": village.village_name},
                     )
 
     def _finalize_change_requests(self, batch: CpmImportBatch) -> None:
@@ -501,7 +506,9 @@ class CpmImportService:
                     "villages added: " + ", ".join(v["village_code"] or "?" for v in added)
                 )
             if removed:
-                parts.append("villages removed: " + ", ".join(c or "?" for c in removed))
+                parts.append(
+                    "villages removed: " + ", ".join(removed_code(c) or "?" for c in removed)
+                )
             detail = "Village quantity change — " + "; ".join(parts)
             batch.change_requests.append(
                 CpmChangeRequest(

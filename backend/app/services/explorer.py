@@ -1,4 +1,4 @@
-"""Explorer: one site's record -- general information, journey, acceptance.
+"""Explorer: one site's record -- passport, journey, acceptance, village history.
 
 Read-only. Loads one work item under the caller's scope and answers in a
 fixed number of queries however many villages the site has: the work item
@@ -28,6 +28,8 @@ from app.models.workitem import Site, Village, WorkItem
 from app.services import acceptance_workflow as flow
 from app.services import cpm_columns as C
 from app.services import explorer_journey as J
+from app.services import my_work_status as S
+from app.services.explorer_village_history import village_history
 from app.services.submissions import journey as submission_journey
 from app.services.drive_test_analytics import is_dt_done
 from app.services.performance.periods import tehran_day
@@ -151,6 +153,7 @@ def _general(wi: WorkItem, hadaf_count: int) -> dict:
         "dt_contractor": wi.dt_sc_contractor.name if wi.dt_sc_contractor else None,
         "requested_technology": parse_technologies(wi.requested_technology),
         "province": site.province.name if site is not None and site.province else None,
+        "site_type": wi.site_type,
         "hadaf_villages": hadaf_count,
     }
 
@@ -174,6 +177,34 @@ def health_check_date(wi: WorkItem) -> date | None:
             if h.status == "Ready" and h.checked_at is not None
         ]
     return max(tehran_day(moment) for moment in passed) if passed else None
+
+
+def approval_sides(village) -> dict:
+    """A village as the step facts read it: whether each side is approved.
+
+    ``explorer_journey.side_status`` calls a side approved exactly when My
+    Work's cached column does, so this is the same answer without the rounds
+    and letters the record's full side needs (``services.lifecycle_stage``).
+    ``village`` is a Village or any row with its ``ict_status``/``cra_status``.
+    """
+    return {
+        authority.lower(): {
+            "status": (
+                J.SIDE_APPROVED
+                if S.display_status(getattr(village, f"{authority.lower()}_status")) == S.APPROVED
+                else J.SIDE_PENDING
+            ),
+            "decided_date": None,
+        }
+        for authority in AUTHORITIES
+    }
+
+
+def journey_steps(
+    wi: WorkItem, villages: list[dict], sent_on: date | None, today: date
+) -> list[dict]:
+    """The step path: one rule for the record page and the list's stage."""
+    return J.build_steps(_step_facts(wi, villages, is_dt_done(wi), sent_on), today)
 
 
 def _step_facts(
@@ -264,9 +295,7 @@ def site_record(
 
     accepting = is_dt_done(wi)
     sends = submission_journey.site_sends(db, wi.id)
-    steps = J.build_steps(
-        _step_facts(wi, villages, accepting, submission_journey.first_sent(sends)), today
-    )
+    steps = journey_steps(wi, villages, submission_journey.first_sent(sends), today)
     return {
         "id": wi.id,
         "site_code": wi.site.site_code if wi.site else None,
@@ -275,10 +304,12 @@ def site_record(
         "journey": {
             "steps": steps,
             "aging": J.aging(steps, villages if accepting else [], today),
+            "lanes": J.lanes(villages),
             "sent_to_ict": sends,
         },
         "acceptance_started": accepting,
         "villages": villages,
         "counts": J.counts(villages),
+        "village_history": village_history(db, wi.id, {v.village_code: v.village_name for v in hadaf}),
         "workflow": _workflow(wi),
     }

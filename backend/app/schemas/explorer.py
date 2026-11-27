@@ -8,7 +8,7 @@ from __future__ import annotations
 from datetime import date
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 from app.schemas.my_work import Authority
 
@@ -32,6 +32,7 @@ class GeneralOut(BaseModel):
     dt_contractor: str | None
     requested_technology: list[str]
     province: str | None
+    site_type: str | None = None
     hadaf_villages: int
 
 
@@ -42,13 +43,6 @@ class StepOut(BaseModel):
     gap_days: int | None
 
 
-class LongestStepOut(BaseModel):
-    # "from" is a Python keyword; the wire name is kept by the alias.
-    from_: StepKey = Field(alias="from")
-    to: StepKey
-    days: int
-
-
 class OldestPendingOut(BaseModel):
     authority: Authority
     days: int
@@ -56,9 +50,8 @@ class OldestPendingOut(BaseModel):
 
 
 class AgingOut(BaseModel):
+    # UEP-28: from the health check done date (to acceptance done when done).
     total_days: int | None
-    current_step_days: int | None
-    longest_step: LongestStepOut | None
     oldest_pending: OldestPendingOut | None
 
 
@@ -82,9 +75,23 @@ class SentToIctOut(BaseModel):
     in_mojri: int
 
 
+class LaneOut(BaseModel):
+    """One authority's lane on the ribbon (UEP-28)."""
+
+    approved: int
+    total: int
+    done_on: date | None
+
+
+class LanesOut(BaseModel):
+    ict: LaneOut
+    cra: LaneOut
+
+
 class JourneyOut(BaseModel):
     steps: list[StepOut]
     aging: AgingOut
+    lanes: LanesOut
     sent_to_ict: list[SentToIctOut] = []
 
 
@@ -130,6 +137,22 @@ class CountsOut(BaseModel):
     cra: CountOut
 
 
+class HistoryVillageOut(BaseModel):
+    code: str | None
+    name: str | None
+
+
+class VillageEventOut(BaseModel):
+    """One village change a CPM import raised (UEP-28)."""
+
+    date: date | None
+    kind: Literal["added", "removed"]
+    villages: list[HistoryVillageOut]
+    status: str  # applied | ignored | pending | archived
+    decided_by: str | None
+    decided_at: date | None
+
+
 class WorkflowOut(BaseModel):
     current_stage: str
     active_drive_test_id: int | None
@@ -145,6 +168,7 @@ class SiteRecordOut(BaseModel):
     acceptance_started: bool
     villages: list[VillageOut]
     counts: CountsOut
+    village_history: list[VillageEventOut] = []
     workflow: WorkflowOut
 
 
@@ -161,6 +185,16 @@ class VillageRefOut(BaseModel):
     name: str | None
 
 
+class VillageMatchOut(VillageRefOut):
+    #: How many more of the site's villages the search matched.
+    more: int = 0
+
+
+StageKey = Literal[
+    "on_air", "health_check", "assigned", "dt_done", "sent_to_ict", "acceptance", "done"
+]
+
+
 class SiteRowOut(BaseModel):
     id: int
     site_code: str | None
@@ -169,7 +203,11 @@ class SiteRowOut(BaseModel):
     requested_technology: list[str]
     hadaf_villages: int
     dt_contractor: NamedOut | None
-    village_match: VillageRefOut | None
+    village_match: VillageMatchOut | None
+    # UEP-28: the open journey step, whole days in it, and over its SLA.
+    stage: StageKey | None = None
+    stage_days: int | None = None
+    stage_late: bool = False
 
 
 class SiteListOut(BaseModel):

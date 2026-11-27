@@ -6,7 +6,7 @@ current, how many days sit between two steps, what a village's ICT or CRA side
 reads as -- is testable without a session.
 
 The step order is the process's, not a guess at it: a site goes on air (the
-first step: the journey and its total aging start there), the
+first step; total aging starts at the health check, UEP-28), the
 health check pool takes every on-air site whose drive test is not Done
 (``health_check.get_basket``), the drive test is assigned and done, and only
 then can its villages be accepted (``acceptance_universe.in_dt_done_universe``).
@@ -18,7 +18,6 @@ needs it is ``None``.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from itertools import pairwise
 from datetime import date
 
 from app.services import my_work_status as S
@@ -141,35 +140,39 @@ def site_status(steps: list[dict]) -> dict:
     return {"step": current["key"], "state": STATE_IN_PROGRESS}
 
 
+#: The list's stage: the open step, or acceptance done. Its index is what
+#: ``work_items.lifecycle_stage`` stores (UEP-28).
+STAGE_DONE = "done"
+STAGES = (*STEP_ORDER, STAGE_DONE)
+
+
+def open_step(steps: list[dict]) -> tuple[str, date | None]:
+    """The open step and the day its clock started (the date its gap is
+    measured from), or (``done``, None) once acceptance is done.
+
+    The same rule as ``gap_days`` on the in-progress step, so the list's days
+    in step and the record's "so far" pill are one number.
+    """
+    for i, step in enumerate(steps):
+        if step["state"] == STATE_IN_PROGRESS:
+            previous = _measured_from(steps[:i])
+            done = previous is not None and previous["state"] == STATE_DONE
+            return step["key"], previous["date"] if done else None
+    return STAGE_DONE, None
+
+
 # --------------------------------------------------------------------------
 # Aging
 # --------------------------------------------------------------------------
 def total_days(steps: list[dict], today: date) -> int | None:
-    """From the on-air date to today, or to acceptance when it is done.
-
-    On air is where the journey starts; a site without an on-air date has no
-    total, rather than one measured from some later step.
-    """
-    on_air = next((s["date"] for s in steps if s["key"] == STEP_ON_AIR), None)
+    """From the health check done date to today, or to acceptance when it is
+    done (UEP-28). A site whose health check has no date has no total, rather
+    than one measured from some other step."""
+    checked = next((s["date"] for s in steps if s["key"] == STEP_HEALTH_CHECK), None)
     last = steps[-1]
     if last["state"] == STATE_DONE:
-        return days_between(on_air, last["date"])
-    return days_between(on_air, today)
-
-
-def current_step_days(steps: list[dict]) -> int | None:
-    current = next((s for s in steps if s["state"] == STATE_IN_PROGRESS), None)
-    return current["gap_days"] if current is not None else None
-
-
-def longest_step(steps: list[dict]) -> dict | None:
-    """The largest gap between two consecutive dated, finished steps."""
-    best: dict | None = None
-    for previous, step in pairwise(steps):
-        days = step["gap_days"] if step["state"] == STATE_DONE else None
-        if days is not None and (best is None or days > best["days"]):
-            best = {"from": previous["key"], "to": step["key"], "days": days}
-    return best
+        return days_between(checked, last["date"])
+    return days_between(checked, today)
 
 
 def oldest_pending(villages: list[dict]) -> dict | None:
@@ -194,8 +197,6 @@ def oldest_pending(villages: list[dict]) -> dict | None:
 def aging(steps: list[dict], villages: list[dict], today: date) -> dict:
     return {
         "total_days": total_days(steps, today),
-        "current_step_days": current_step_days(steps),
-        "longest_step": longest_step(steps),
         "oldest_pending": oldest_pending(villages),
     }
 
@@ -347,13 +348,33 @@ def counts(villages: list[dict]) -> dict:
     return out
 
 
-def acceptance_done_on(villages: list[dict]) -> date | None:
-    """When the last village became fully approved; None if any date is missing."""
+def authority_done_on(villages: list[dict], authority: str) -> date | None:
+    """When the last village was approved by ``authority`` (``ict`` | ``cra``);
+    None while any village is not approved or any date is missing."""
     dates = []
     for village in villages:
-        for authority in ("ict", "cra"):
-            decided = village[authority]["decided_date"]
-            if decided is None:
-                return None
-            dates.append(decided)
+        side = village[authority]
+        if side["status"] != SIDE_APPROVED or side["decided_date"] is None:
+            return None
+        dates.append(side["decided_date"])
     return max(dates) if dates else None
+
+
+def acceptance_done_on(villages: list[dict]) -> date | None:
+    """When the last village became fully approved; None if any date is missing."""
+    dates = [authority_done_on(villages, a) for a in ("ict", "cra")]
+    return None if None in dates else max(dates, default=None)
+
+
+def lanes(villages: list[dict]) -> dict:
+    """The ribbon's ICT and CRA lanes: approved villages of all, and the day
+    the lane completed (UEP-28)."""
+    tally = counts(villages)
+    return {
+        authority: {
+            "approved": tally[authority][SIDE_APPROVED],
+            "total": len(villages),
+            "done_on": authority_done_on(villages, authority),
+        }
+        for authority in ("ict", "cra")
+    }

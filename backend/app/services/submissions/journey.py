@@ -52,3 +52,16 @@ def site_sends(db: Session, work_item_id: int) -> list[dict]:
 
 def first_sent(sends: list[dict]) -> date | None:
     return sends[0]["sent_at"] if sends else None
+
+
+def first_sent_by_work_item(db: Session, work_item_ids: list[int]) -> dict[int, date]:
+    """:func:`first_sent` for many sites in one query: the earliest day any of
+    each site's villages left MTN (UEP-28, the list's stage)."""
+    if not work_item_ids:
+        return {}
+    stmt = (
+        follow_up.item_select(Village.work_item_id, func.min(SubmissionItem.sent_at))
+        .where(Village.work_item_id.in_(work_item_ids), follow_up.is_sent())
+        .group_by(Village.work_item_id)
+    )
+    return {wi_id: sent for wi_id, sent in db.execute(stmt).all() if sent is not None}

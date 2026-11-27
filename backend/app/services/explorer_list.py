@@ -1,7 +1,10 @@
 """Explorer's list of all sites (GET /explorer/sites) and what hangs off it.
 
 One row per live work item in the caller's scope: site, province, type,
-requested technology, how many هدف villages it has, and its DT contractor.
+requested technology, how many هدف villages it has, its DT contractor, and
+its stage -- the open journey step, read from the columns
+``services.lifecycle_stage`` keeps from the record page's own step facts
+(UEP-28), so list and record always agree.
 Search, filters and sort run in the database, and the list pages with a
 keyset cursor rather than an offset, so a page costs the same at row 4,000 as
 at row 1 and a site added mid-scroll never shifts a page.
@@ -21,6 +24,7 @@ import base64
 import json
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
+from datetime import date
 
 from sqlalchemy import (
     ColumnElement,
@@ -34,10 +38,13 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Session
 
+from app.core import jalali
 from app.core.digits import to_latin
 from app.models.reference import Contractor, Province, User
 from app.models.workitem import Site, Village, WorkItem
 from app.services import kpi
+from app.services import lifecycle_stage as LS
+from app.services.explorer_journey import STAGE_DONE, days_between
 from app.services.cpm_columns import normalize_persian
 from app.services.explorer import raise_missing
 from app.services.tech_parser import KNOWN_TECHNOLOGIES, parse_technologies
@@ -47,7 +54,10 @@ DEFAULT_LIMIT = 50
 MAX_LIMIT = 100
 
 SORT_SITE = "site"
-SORT_KEYS = (SORT_SITE, "province", "type", "tech", "villages", "dt_contractor")
+SORT_STAGE = "stage"
+SORT_KEYS = (SORT_SITE, "province", "type", "tech", "villages", "dt_contractor", SORT_STAGE)
+#: An unknown "since" sorts after every real day.
+_NO_DATE = date(9999, 12, 31)
 DIRECTIONS = ("asc", "desc")
 
 # Arabic letter forms and zero-width marks, as ``normalize_persian`` folds them.
@@ -146,6 +156,8 @@ def _base(db: Session, user: User, hadaf: ColumnElement[bool]) -> tuple[Select, 
             cols.hadaf_count.label("hadaf_villages"),
             Contractor.id.label("dt_contractor_id"),
             Contractor.name.label("dt_contractor_name"),
+            WorkItem.lifecycle_stage,
+            WorkItem.lifecycle_stage_since,
         )
         .select_from(WorkItem)
         .join(Site, WorkItem.site_id == Site.id)
@@ -193,10 +205,25 @@ class _Key:
     descending: bool
 
 
+def _stage_keys(desc: bool) -> list[_Key]:
+    """Lifecycle order (in the chosen direction), then the longest in its
+    step first, then site code and id. Rows not yet staged sort last."""
+    stage, since = WorkItem.lifecycle_stage, WorkItem.lifecycle_stage_since
+    return [
+        _Key(case((stage.is_(None), 1), else_=0), False),
+        _Key(func.coalesce(stage, -1), desc),
+        _Key(func.coalesce(since, literal(_NO_DATE)), False),
+        _Key(Site.site_code, False),
+        _Key(WorkItem.id, False),
+    ]
+
+
 def _keys(cols: _Columns, query: ListQuery) -> list[_Key]:
     """The full ordering: the chosen column (empty values last in either
     direction), then site code and id ascending, so ties are stable."""
     desc = query.direction == "desc"
+    if query.sort == SORT_STAGE:
+        return _stage_keys(desc)
     keys: list[_Key] = []
     if query.sort != SORT_SITE:
         value = cols.sort_value(query.sort)
@@ -219,15 +246,26 @@ def _after(keys: Sequence[_Key], values: Sequence) -> ColumnElement[bool]:
     return or_(*clauses)
 
 
+def _dump(value):
+    """A cursor value as JSON: a date travels tagged, to come back a date."""
+    return {"$d": value.isoformat()} if isinstance(value, date) else value
+
+
+def _load(value):
+    if isinstance(value, dict) and set(value) == {"$d"}:
+        return date.fromisoformat(value["$d"])
+    return value
+
+
 def encode_cursor(query: ListQuery, values: Sequence) -> str:
-    raw = json.dumps({"s": query.sort, "d": query.direction, "v": list(values)})
+    raw = json.dumps({"s": query.sort, "d": query.direction, "v": [_dump(v) for v in values]})
     return base64.urlsafe_b64encode(raw.encode()).decode()
 
 
 def decode_cursor(query: ListQuery, cursor: str, n: int) -> list:
     try:
         data = json.loads(base64.urlsafe_b64decode(cursor.encode()))
-        values = data["v"]
+        values = [_load(v) for v in data["v"]]
         same = data["s"] == query.sort and data["d"] == query.direction
     except (ValueError, KeyError, TypeError):
         raise BadCursor(cursor) from None
@@ -239,7 +277,14 @@ def decode_cursor(query: ListQuery, cursor: str, n: int) -> list:
 # --------------------------------------------------------------------------
 # Rows
 # --------------------------------------------------------------------------
-def _row(r) -> dict:
+def _stage(r, today: date, limits: dict[str, int | None]) -> dict:
+    """The row's stage, days in it and lateness, from the cached columns."""
+    stage = LS.stage_key(r.lifecycle_stage)
+    days = days_between(r.lifecycle_stage_since, today) if stage != STAGE_DONE else None
+    return {"stage": stage, "stage_days": days, "stage_late": LS.is_late(limits, stage, days)}
+
+
+def _row(r, today: date, limits: dict[str, int | None]) -> dict:
     return {
         "id": r.id,
         "site_code": r.site_code,
@@ -252,12 +297,14 @@ def _row(r) -> dict:
             if r.dt_contractor_id is not None else None
         ),
         "village_match": None,
+        **_stage(r, today, limits),
     }
 
 
 def _village_hits(db: Session, ids: list[int], term: str,
                   hadaf: ColumnElement[bool]) -> dict[int, dict]:
-    """For each listed site, the first of its هدف villages the search matched."""
+    """For each listed site, the first of its هدف villages the search matched,
+    and how many more matched."""
     if not term or not ids:
         return {}
     hits: dict[int, dict] = {}
@@ -266,13 +313,18 @@ def _village_hits(db: Session, ids: list[int], term: str,
         .where(Village.work_item_id.in_(ids), hadaf, _village_matches(term))
         .order_by(Village.village_code, Village.id)
     ):
-        hits.setdefault(wi_id, {"code": code, "name": name})
+        if wi_id in hits:
+            hits[wi_id]["more"] += 1
+        else:
+            hits[wi_id] = {"code": code, "name": name, "more": 0}
     return hits
 
 
 def list_sites(db: Session, user: User, query: ListQuery, *,
-               cursor: str | None = None, limit: int = DEFAULT_LIMIT) -> dict:
+               cursor: str | None = None, limit: int = DEFAULT_LIMIT,
+               today: date | None = None) -> dict:
     """One page of the list, its total, and the cursor for the next page."""
+    today = today or jalali.tehran_today()
     hadaf = _hadaf(db)
     stmt, cols = _base(db, user, hadaf)
     stmt = _narrow(stmt, query, hadaf)
@@ -287,7 +339,8 @@ def list_sites(db: Session, user: User, query: ListQuery, *,
 
     more = len(rows) > limit
     rows = rows[:limit]
-    items = [_row(r) for r in rows]
+    limits = LS.stage_limits(db)
+    items = [_row(r, today, limits) for r in rows]
     hits = _village_hits(db, [i["id"] for i in items], query.term, hadaf)
     for item in items:
         item["village_match"] = hits.get(item["id"])

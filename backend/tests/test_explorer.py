@@ -5,6 +5,7 @@ Run with:  cd backend && pytest tests/test_explorer.py -q
 import os
 import sys
 from datetime import date, datetime, timezone
+from itertools import pairwise
 
 import pytest
 
@@ -18,6 +19,7 @@ _pg.JSONB = JSON
 
 from fastapi.testclient import TestClient  # noqa: E402
 
+from app.core import jalali  # noqa: E402
 from app.services import explorer_journey as J  # noqa: E402
 from tests.conftest import create_schema, sample_cpm_path  # noqa: E402
 
@@ -223,19 +225,18 @@ def test_response_shape(world):
 
     assert set(body) == {
         "id", "site_code", "status", "general", "journey", "acceptance_started",
-        "villages", "counts", "workflow",
+        "villages", "counts", "village_history", "workflow",
     }
     assert body["site_code"] == "W4318"
     assert set(body["general"]) == {
         "on_air_date", "dt_date", "site_contractor", "dt_contractor",
-        "requested_technology", "province", "hadaf_villages",
+        "requested_technology", "province", "site_type", "hadaf_villages",
     }
     assert [s["key"] for s in body["journey"]["steps"]] == list(J.STEP_ORDER)
-    assert set(body["journey"]["aging"]) == {
-        "total_days", "current_step_days", "longest_step", "oldest_pending",
-    }
-    # "from" travels under its own name, not the Python-safe one.
-    assert set(body["journey"]["aging"]["longest_step"]) == {"from", "to", "days"}
+    # UEP-28: Longest step and In current step are gone.
+    assert set(body["journey"]["aging"]) == {"total_days", "oldest_pending"}
+    assert set(body["journey"]["lanes"]) == {"ict", "cra"}
+    assert body["general"]["site_type"] == "Greenfield"
     assert set(body["villages"][0]["ict"]) == {
         "status", "phase", "filed_date", "decided_date", "days", "round", "filed", "refiled",
         "case",
@@ -369,9 +370,7 @@ def test_steps_in_process_order_with_gaps(world):
 
 def test_aging(world):
     aging = _record(world, "main")["journey"]["aging"]
-    assert aging["total_days"] == 42
-    assert aging["current_step_days"] == 14
-    assert aging["longest_step"] == {"from": "assigned", "to": "dt_done", "days": 14}
+    assert aging["total_days"] == 35           # health check 9 Sep -> 14 Oct
     assert aging["oldest_pending"] == {"authority": "CRA", "days": 14, "villages": 2}
 
 
@@ -380,10 +379,7 @@ def test_no_dates_means_no_numbers(world):
     steps = record["journey"]["steps"]
     assert [s["state"] for s in steps[:4]] == ["done"] * 4
     assert all(s["date"] is None and s["gap_days"] is None for s in steps)
-    assert record["journey"]["aging"] == {
-        "total_days": None, "current_step_days": None,
-        "longest_step": None, "oldest_pending": None,
-    }
+    assert record["journey"]["aging"] == {"total_days": None, "oldest_pending": None}
     assert record["villages"] == [] and record["general"]["hadaf_villages"] == 0
 
 
@@ -392,7 +388,8 @@ def test_acceptance_done_dates_the_last_approval(world):
     assert record["status"] == {"step": "acceptance", "state": "done"}
     last = record["journey"]["steps"][-1]
     assert (last["state"], last["date"], last["gap_days"]) == ("done", date(2026, 9, 12), 23)
-    assert record["journey"]["aging"]["total_days"] == 42     # 1 Aug -> 12 Sep
+    # UEP-28: no health check date, so no total (it no longer starts at on air).
+    assert record["journey"]["aging"]["total_days"] is None
     assert record["journey"]["aging"]["oldest_pending"] is None
 
 
@@ -596,6 +593,10 @@ def test_list_shape_and_default_order(world):
         "id": world["main"], "site_code": "W4318", "province": world["home_name"],
         "type": "Greenfield", "requested_technology": ["3G", "4G"], "hadaf_villages": 3,
         "dt_contractor": {"id": world["dt_co"], "name": "Drive Co"}, "village_match": None,
+        # UEP-28: waiting to go to ICT since DT done (30 Sep), over its 14 days.
+        "stage": "sent_to_ict",
+        "stage_days": (jalali.tehran_today() - date(2026, 9, 30)).days,
+        "stage_late": True,
     }
 
 
@@ -617,9 +618,9 @@ def test_list_filters(world):
 
 @pytest.mark.parametrize("term, match", [
     ("W43", None),
-    ("v10002", {"code": "V10002", "name": "Village V10002"}),
-    ("Village V10003", {"code": "V10003", "name": "Village V10003"}),
-    (ALI_ABAD_PERSIAN, {"code": "V50001", "name": ALI_ABAD_ARABIC}),
+    ("v10002", {"code": "V10002", "name": "Village V10002", "more": 0}),
+    ("Village V10003", {"code": "V10003", "name": "Village V10003", "more": 0}),
+    (ALI_ABAD_PERSIAN, {"code": "V50001", "name": ALI_ABAD_ARABIC, "more": 0}),
 ])
 def test_list_search(world, term, match):
     body = _list(world, q=term)
@@ -633,7 +634,9 @@ def test_list_search_by_province_and_skips_non_hadaf_villages(world):
     assert _list(world, q="V10005")["items"] == []   # removed
 
 
-@pytest.mark.parametrize("sort", ["site", "province", "type", "tech", "villages", "dt_contractor"])
+@pytest.mark.parametrize(
+    "sort", ["site", "province", "type", "tech", "villages", "dt_contractor", "stage"]
+)
 @pytest.mark.parametrize("direction", ["asc", "desc"])
 def test_every_sort_pages_without_gaps_or_duplicates(world, sort, direction):
     whole = _list(world, "all", sort=sort, dir=direction, limit=100)["items"]
@@ -734,7 +737,8 @@ def test_export_holds_the_listed_rows(world):
 # --------------------------------------------------------------------------
 # Journey order (UEP-11a Part C)
 # --------------------------------------------------------------------------
-def test_total_aging_starts_at_on_air_only():
+def test_total_aging_starts_at_the_health_check():
+    # UEP-28: on air without a date does not matter; the health check does.
     steps = J.build_steps([
         J.StepFact(J.STEP_ON_AIR, True, None),
         J.StepFact(J.STEP_HEALTH_CHECK, True, date(2026, 9, 1)),
@@ -742,7 +746,12 @@ def test_total_aging_starts_at_on_air_only():
         J.StepFact(J.STEP_DT_DONE, False, None),
         J.StepFact(J.STEP_ACCEPTANCE, False, None),
     ], TODAY)
-    assert J.total_days(steps, TODAY) is None
+    assert J.total_days(steps, TODAY) == 43
+    undated = J.build_steps([
+        J.StepFact(J.STEP_ON_AIR, True, date(2026, 8, 1)),
+        J.StepFact(J.STEP_HEALTH_CHECK, False, None),
+    ], TODAY)
+    assert J.total_days(undated, TODAY) is None
 
 
 def test_a_drive_test_dated_before_on_air_has_no_negative_gap():
@@ -756,3 +765,314 @@ def test_a_drive_test_dated_before_on_air_has_no_negative_gap():
     ], TODAY)
     assert [s["key"] for s in steps] == list(J.STEP_ORDER)
     assert [s["gap_days"] for s in steps] == [None, 2, 1, None, 43, None]
+
+
+# --------------------------------------------------------------------------
+# UEP-28: the list's stage, its sync, and the record's new fields
+# --------------------------------------------------------------------------
+def _all_records_by_id(world):
+    from app.core.database import SessionLocal
+    from app.models.reference import User
+    from app.services.explorer import site_record
+
+    db = SessionLocal()
+    try:
+        user = db.get(User, world["all_id"])
+        rows = _list(world, "all", limit=100)["items"]
+        return rows, {r["id"]: site_record(db, user, r["id"], today=TODAY) for r in rows}
+    finally:
+        db.close()
+
+
+def test_list_stage_is_the_records_open_step(world):
+    rows, records = _all_records_by_id(world)
+    assert len(rows) > 7
+    for row in rows:
+        steps = records[row["id"]]["journey"]["steps"]
+        key, since = J.open_step(steps)
+        assert row["stage"] == key, row["site_code"]
+        expected = J.days_between(since, jalali.tehran_today()) if key != "done" else None
+        assert row["stage_days"] == expected, row["site_code"]
+
+
+def test_the_badge_is_the_open_step(world):
+    _rows, records = _all_records_by_id(world)
+    for record in records.values():
+        key, _since = J.open_step(record["journey"]["steps"])
+        status = record["status"]
+        assert (status["step"], status["state"]) == (
+            ("acceptance", "done") if key == "done" else (key, "in_progress")
+        )
+
+
+def test_stage_for_done_and_undated_sites(world):
+    rows = {r["site_code"]: r for r in _list(world)["items"]}
+    assert (rows["W0002"]["stage"], rows["W0002"]["stage_days"]) == ("done", None)
+    assert rows["W0002"]["stage_late"] is False
+    # Every step done but undated: open at Sent to ICT, with no start date.
+    assert (rows["W0001"]["stage"], rows["W0001"]["stage_days"]) == ("sent_to_ict", None)
+    assert rows["W0001"]["stage_late"] is False
+
+
+def test_open_step_rules():
+    done = J.build_steps([J.StepFact(k, True, date(2026, 9, 1)) for k in J.STEP_ORDER], TODAY)
+    assert J.open_step(done) == ("done", None)
+    waiting = J.build_steps([
+        J.StepFact(J.STEP_ON_AIR, True, date(2026, 9, 1)),
+        J.StepFact(J.STEP_HEALTH_CHECK, False, None),
+    ], TODAY)
+    assert J.open_step(waiting) == ("health_check", date(2026, 9, 1))
+    not_on_air = J.build_steps([J.StepFact(J.STEP_ON_AIR, False, None)], TODAY)
+    assert J.open_step(not_on_air) == ("on_air", None)
+
+
+def test_stage_sla_mapping_and_lateness(world):
+    from app.core.database import SessionLocal
+    from app.services import lifecycle_stage as LS
+
+    db = SessionLocal()
+    try:
+        limits = LS.stage_limits(db)
+    finally:
+        db.close()
+    # Defaults: 14 + 2 + 1; 14; 14 + 1; submit cycle 14; max(14,14) + 2 + max(30,30).
+    assert limits == {
+        "on_air": None, "health_check": 17, "assigned": 14, "dt_done": 15,
+        "sent_to_ict": 14, "acceptance": 46, "done": None,
+    }
+    assert LS.is_late(limits, "assigned", 15) is True
+    assert LS.is_late(limits, "assigned", 14) is False
+    assert LS.is_late(limits, "assigned", None) is False
+    assert LS.is_late(limits, "on_air", 400) is False
+
+
+def test_stage_sort_is_lifecycle_order_then_oldest(world):
+    rows = _list(world, "all", sort="stage", limit=100)["items"]
+    order = [J.STAGES.index(r["stage"]) for r in rows]
+    assert order == sorted(order)
+    for a, b in pairwise(rows):
+        if a["stage"] == b["stage"] and a["stage_days"] is not None and b["stage_days"] is not None:
+            assert a["stage_days"] >= b["stage_days"]
+    backwards = [J.STAGES.index(r["stage"]) for r in _list(world, "all", sort="stage", dir="desc", limit=100)["items"]]
+    assert backwards == sorted(backwards, reverse=True)
+
+
+def test_the_stage_follows_every_fact_on_commit(world):
+    """The session listener: a new fact moves the cached stage in the same
+    commit, with no call from the writer."""
+    from app.core.database import SessionLocal
+    from app.models.health_check import HcAssignment, HcTask
+    from app.models.reference import Contractor
+    from app.models.workitem import Site, WorkItem
+
+    db = SessionLocal()
+    try:
+        site = Site(site_code="WSYNC", province_id=world["home"])
+        db.add(site)
+        db.flush()
+        wi = WorkItem(site_id=site.id, site_type="Greenfield", last_stage=ON_AIR,
+                      launch_date_gregorian=date(2026, 9, 1))
+        db.add(wi)
+        db.commit()
+        assert (wi.lifecycle_stage, wi.lifecycle_stage_since) == (1, date(2026, 9, 1))
+
+        hca = HcAssignment(code="HC-SYNC", contractor_id=db.query(Contractor).first().id,
+                           assigned_at=_at(date(2026, 9, 3)))
+        db.add(hca)
+        db.flush()
+        db.add(HcTask(hc_assignment_id=hca.id, work_item_id=wi.id, overall_result="Ready",
+                      completed_at=_at(date(2026, 9, 5))))
+        db.commit()
+        db.refresh(wi)
+        assert (wi.lifecycle_stage, wi.lifecycle_stage_since) == (2, date(2026, 9, 5))
+
+        wi.dt_status, wi.dt_date_gregorian = "Done", date(2026, 9, 20)
+        db.commit()
+        db.refresh(wi)
+        assert (wi.lifecycle_stage, wi.lifecycle_stage_since) == (4, date(2026, 9, 20))
+    finally:
+        wi.deleted_at = _at(TODAY)   # out of every other test's list
+        db.commit()
+        db.close()
+
+
+def test_refresh_missing_fills_rows_written_around_the_orm(world):
+    from sqlalchemy import update
+
+    from app.core.database import SessionLocal
+    from app.models.workitem import WorkItem
+    from app.services import lifecycle_stage as LS
+
+    db = SessionLocal()
+    try:
+        db.execute(update(WorkItem).where(WorkItem.id == world["done"])
+                   .values(lifecycle_stage=None, lifecycle_stage_since=None))
+        db.commit()
+        assert LS.refresh_missing(db) >= 1
+        db.commit()
+        assert db.get(WorkItem, world["done"]).lifecycle_stage == J.STAGES.index("done")
+    finally:
+        db.close()
+
+
+def test_lanes(world):
+    main = _record(world, "main")["journey"]["lanes"]
+    assert main == {"ict": {"approved": 1, "total": 3, "done_on": None},
+                    "cra": {"approved": 1, "total": 3, "done_on": None}}
+    done = _record(world, "done")["journey"]["lanes"]
+    assert done == {"ict": {"approved": 1, "total": 1, "done_on": date(2026, 9, 1)},
+                    "cra": {"approved": 1, "total": 1, "done_on": date(2026, 9, 12)}}
+    assert _record(world, "undated")["journey"]["lanes"]["ict"] == {
+        "approved": 0, "total": 0, "done_on": None,
+    }
+
+
+@pytest.fixture(scope="module")
+def history(world):
+    """Three CPM village changes on W4318: an old code-only removal the PM
+    ignored, a newer removal (with its name) applied, and an addition pending."""
+    import json
+    from datetime import timedelta
+
+    from app.core.database import SessionLocal
+    from app.models.acceptance import CpmChangeRequest, CpmImportBatch
+
+    db = SessionLocal()
+    rows = []
+    for i, (payload, status, decided) in enumerate((
+        ({"added": [], "removed": ["V10002"]}, "Ignored", True),
+        ({"added": [], "removed": [{"village_code": "V10009", "village_name": "Gone Abad"}]},
+         "Accepted", True),
+        ({"added": [{"village_code": "V10010", "village_name": "New Abad"}], "removed": []},
+         "Pending", False),
+    )):
+        batch = CpmImportBatch(filename=f"cpm-{i}.xlsx", created_at=_at(date(2026, 10, 1) + timedelta(days=i)))
+        db.add(batch)
+        db.flush()
+        cr = CpmChangeRequest(
+            import_batch_id=batch.id, work_item_id=world["main"], site_code="W4318",
+            change_type="village_qty", field_name="villages", payload_json=json.dumps(payload),
+            status=status, decided_by=world["coord_id"] if decided else None,
+            decided_at=_at(date(2026, 10, 5 + i)) if decided else None,
+        )
+        db.add(cr)
+        rows.append(cr)
+    db.commit()
+    yield
+    for cr in rows:
+        db.delete(cr)
+    db.commit()
+    db.close()
+
+
+def test_village_history_newest_first_with_both_shapes(world, history):
+    events = _record(world, "main")["village_history"]
+    assert [(e["kind"], e["status"]) for e in events] == [
+        ("added", "pending"), ("removed", "applied"), ("removed", "ignored"),
+    ]
+    added, applied, ignored = events
+    assert added["villages"] == [{"code": "V10010", "name": "New Abad"}]
+    assert added["date"] == date(2026, 10, 3) and added["decided_by"] is None
+    assert applied["villages"] == [{"code": "V10009", "name": "Gone Abad"}]
+    assert applied["decided_by"] == "x_coord T" and applied["decided_at"] == date(2026, 10, 6)
+    # Old shape: the code alone, named because the village is still on the site.
+    assert ignored["villages"] == [{"code": "V10002", "name": "Village V10002"}]
+
+
+def test_village_history_query_count_is_fixed(world, history):
+    from app.core.database import SessionLocal, engine
+    from app.services.explorer_village_history import village_history
+
+    seen = []
+
+    def count(*_args, **_kw):
+        seen.append(1)
+
+    db = SessionLocal()
+    event.listen(engine, "before_cursor_execute", count)
+    try:
+        events = village_history(db, world["main"])
+    finally:
+        event.remove(engine, "before_cursor_execute", count)
+        db.close()
+    assert len(events) == 3 and len(seen) == 2      # the requests, then the names
+
+
+def test_village_history_export(world, history):
+    import io
+
+    from openpyxl import load_workbook
+
+    from app.core.database import SessionLocal
+    from app.models.acceptance import AuditLog
+
+    client = world["client"]
+    url = LIST + "/{}/villages/export"
+    response = client.get(url.format(world["main"]), headers=world["coord"])
+    assert response.status_code == 200, response.text
+    wb = load_workbook(io.BytesIO(response.content))
+    assert wb.sheetnames == ["Current villages", "History"]
+    assert wb["Current villages"].max_row == 4         # header + 3 هدف villages
+    assert wb["History"].max_row == 4                  # header + 3 events of one village
+    assert client.get(url.format(world["hidden"]), headers=world["coord"]).status_code == 403
+    assert client.get(url.format(999999), headers=world["coord"]).status_code == 404
+    db = SessionLocal()
+    try:
+        assert db.query(AuditLog).filter(AuditLog.action == "EXPORTED",
+                                         AuditLog.entity_id == world["main"]).count() == 1
+    finally:
+        db.close()
+
+
+def test_spreadsheet_text_is_never_a_formula():
+    from app.services.work_item_export import _cell
+
+    assert _cell("=HYPERLINK(\"x\")") == "'=HYPERLINK(\"x\")"
+    assert _cell("@SUM(A1)") == "'@SUM(A1)"
+    assert _cell("کرمان") == "کرمان"
+
+
+def test_removed_villages_now_carry_their_names():
+    from types import SimpleNamespace
+
+    from app.services.cpm_import import CpmImportService
+
+    svc = CpmImportService.__new__(CpmImportService)
+    key = ("W1", "Greenfield")
+    svc._villages = {key: {"V1": SimpleNamespace(village_name="یک"), "V2": SimpleNamespace(village_name="دو")}}
+    svc._created_wi_keys, svc._seen_village_codes = set(), {key: {"V1"}}
+    svc._village_changes, svc._changed_wi_keys = {}, set()
+    svc._detect_removed_villages()
+    assert svc._village_changes[key]["removed"] == [{"village_code": "V2", "village_name": "دو"}]
+
+
+def test_applying_a_removal_reads_both_payload_shapes(world):
+    import json
+
+    from app.core.database import SessionLocal
+    from app.models.acceptance import CpmChangeRequest
+    from app.models.workitem import Site, Village, WorkItem
+    from app.services.cpm_apply import apply_change_request
+
+    db = SessionLocal()
+    site = Site(site_code="WAPPLY", province_id=world["home"])
+    db.add(site)
+    db.flush()
+    wi = WorkItem(site_id=site.id, site_type="Greenfield")
+    db.add(wi)
+    db.flush()
+    for code in ("A1", "A2", "A3"):
+        db.add(Village(work_item_id=wi.id, village_code=code, target_classification=HADAF))
+    db.flush()
+    db.refresh(wi)
+    cr = CpmChangeRequest(import_batch_id=0, work_item_id=wi.id, site_code="WAPPLY",
+                          change_type="village_qty", field_name="villages",
+                          payload_json=json.dumps({"added": [], "removed": [
+                              "A1", {"village_code": "A2", "village_name": "x"}]}))
+    try:
+        apply_change_request(db, cr)
+        left = [v.village_code for v in db.query(Village).filter(Village.work_item_id == wi.id)]
+        assert left == ["A3"]
+    finally:
+        db.rollback()
+        db.close()

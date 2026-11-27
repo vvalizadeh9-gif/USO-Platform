@@ -74,6 +74,9 @@ ACCESS_ROLE_DELETED = "access.role_deleted"
 ACCESS_OVERRIDE_EXPIRED = "access.user_override_expired"
 BACKUP_CONFIRMED = "BACKUP_CONFIRMED"
 
+# UEP-28: a spreadsheet downloaded (Explorer's village history).
+EXPORTED = "EXPORTED"
+
 # UEP-26: Admin > Sign-in page saved (support contact, planned-update notice).
 SIGNIN_SETTINGS_CHANGED = "signin_settings.changed"
 

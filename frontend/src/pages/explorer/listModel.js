@@ -1,5 +1,5 @@
 /**
- * Explorer's list (UEP-11a §B): its words, its URL and its memory, kept apart
+ * Explorer's list (UEP-11a §B, redesigned in UEP-28 Part A): its words, its URL and its memory, kept apart
  * from the components so they can be tested on their own.
  *
  * The URL is the list's state: search, filters and sort live in it, so a view
@@ -9,14 +9,14 @@
 
 export const PAGE_SIZE = 50
 
-/** The columns that sort, in display order: key, header label, cell class. */
+/** The columns that sort, in display order (UEP-28 §A3). */
 export const COLUMNS = Object.freeze([
   { key: 'site', label: 'Site' },
   { key: 'province', label: 'Province' },
-  { key: 'type', label: 'Type' },
-  { key: 'tech', label: 'Technology' },
   { key: 'villages', label: 'Villages' },
+  { key: 'tech', label: 'Technology' },
   { key: 'dt_contractor', label: 'DT contractor' },
+  { key: 'stage', label: 'Stage' },
 ])
 const SORT_KEYS = new Set(COLUMNS.map((c) => c.key))
 
@@ -27,7 +27,7 @@ const SORT_KEYS = new Set(COLUMNS.map((c) => c.key))
 export const FILTER_FIELDS = Object.freeze([
   { key: 'province', label: 'Province', optionsKey: 'provinces', byId: true, persian: true },
   { key: 'type', label: 'Site type', optionsKey: 'types' },
-  { key: 'tech', label: 'Requested tech', optionsKey: 'technologies' },
+  { key: 'tech', label: 'Technology', optionsKey: 'technologies' },
   { key: 'dt_contractor', label: 'DT contractor', optionsKey: 'dt_contractors', byId: true, persian: true },
 ])
 
@@ -75,7 +75,12 @@ export function typeLabel(type) {
   const lower = type.toLowerCase()
   return lower.charAt(0).toUpperCase() + lower.slice(1)
 }
-export const isNewSite = (type) => (type || '').toLowerCase() === 'new site'
+
+/** The list's small type tag beside a site code: "New" or "Add tech". */
+export function typeTag(type) {
+  const label = typeLabel(type)
+  return label === 'New site' ? 'New' : label
+}
 
 /**
  * `text` split around the first case-insensitive match of `term`, so the
@@ -93,11 +98,15 @@ export function splitMatch(text, term) {
   ].filter((p) => p.text)
 }
 
-/** "Showing 50 of 4,201 sites" / "of 12 matching sites". */
-export function footerText(shown, total, filtered) {
+/** The title's count pill: "4,201 sites", or "97 of 4,201 sites" while a
+ * search or filter is active (UEP-28 §A1). Null until there is a number. */
+export function countText(total, all, filtered) {
   const n = (v) => v.toLocaleString('en-US')
-  const noun = filtered ? (total === 1 ? 'matching site' : 'matching sites') : total === 1 ? 'site' : 'sites'
-  return { shown: n(shown), rest: `of ${n(total)} ${noun}` }
+  const whole = all ?? total
+  if (whole == null) return null
+  const noun = whole === 1 ? 'site' : 'sites'
+  if (!filtered || total == null) return `${n(whole)} ${noun}`
+  return `${n(total)} of ${n(whole)} ${noun}`
 }
 
 // --------------------------------------------------------------------------

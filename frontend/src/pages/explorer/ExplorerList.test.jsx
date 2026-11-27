@@ -1,6 +1,7 @@
-// Explorer's list (UEP-11a §B): one card with search, filter chips and the
-// Filter popover; sortable column headers kept in the URL; rows that open the
-// site record; inline villages; continuous scroll; keyboard; the bulk bar.
+// Explorer's list (UEP-28 Part A): the title row and its count pill, search
+// and filter pills; sortable headers kept in the URL; rows with the Stage
+// cell and the matched village under them; inline villages; continuous
+// scroll; keyboard; the bulk bar. No footer.
 import { act, fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
@@ -78,13 +79,16 @@ const where = () => screen.getByTestId('where').textContent
 const table = () => screen.getByRole('table', { name: 'Sites' })
 const bodyRows = () => within(table()).getAllByRole('row').filter((r) => r.classList.contains('exl-site-row'))
 const header = (name) => within(table()).getByRole('button', { name })
-const footer = () => document.querySelector('.exl-footer')
+const pill = () => document.querySelector('.exl-count')
 
 describe('Explorer list: the page', () => {
   it('has a title with the count pill, one card, and none of the old controls', async () => {
     await draw()
     expect(screen.getByRole('heading', { level: 1, name: 'Explorer' })).toBeInTheDocument()
-    expect(document.querySelector('.uw-count-pill')).toHaveTextContent('120 sites')
+    expect(pill()).toHaveTextContent('120 sites')
+    expect(pill()).toHaveAttribute('aria-live', 'polite')
+    expect(document.querySelector('.uep-page-header')).toBeNull()
+    expect(document.querySelector('.exl-app-tile')).not.toBeNull()
     expect(screen.queryByRole('tablist')).not.toBeInTheDocument()
     expect(screen.queryByRole('navigation', { name: 'Pages' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /^sort$/i })).not.toBeInTheDocument()
@@ -92,26 +96,42 @@ describe('Explorer list: the page', () => {
     expect(screen.getByRole('button', { name: 'History' })).toBeInTheDocument()
   })
 
-  it('shows the columns, 50 rows and the footer count', async () => {
+  it('shows the columns in order, 50 rows, and no footer', async () => {
     await draw()
     const heads = within(table()).getAllByRole('columnheader').map((h) => h.textContent.trim())
-    expect(heads).toEqual(['', 'Site', 'Province', 'Type', 'Technology', 'Villages', 'DT contractor', 'Open'])
+    expect(heads).toEqual(['', 'Site', 'Province', 'Villages', 'Technology', 'DT contractor', 'Stage', 'Open'])
     expect(table()).toHaveAttribute('aria-rowcount', '121')
     expect(bodyRows()).toHaveLength(50)
-    expect(footer()).toHaveTextContent('Showing 50 of 120 sites')
+    expect(document.querySelector('.exl-footer')).toBeNull()
   })
 
-  it('renders a row: link, Persian province, type, technology chips, villages pill, contractor', async () => {
+  it('renders a row: link and type tag, Persian province, villages pill, technology, contractor, stage', async () => {
     await draw()
     const row = bodyRows()[0]
     expect(within(row).getByRole('link', { name: 'W4001' })).toHaveAttribute('href', '/explorer/sites/1')
+    expect(row.querySelector('.exl-type-tag')).toHaveTextContent('New')
+    expect(bodyRows()[3].querySelector('.exl-type-tag')).toHaveTextContent('Add tech')
     expect(row.querySelector('bdi[lang="fa"]')).toHaveTextContent('تهران')
-    expect(row.querySelector('.exl-type')).toHaveTextContent('New site')
-    expect(row.querySelector('.exl-type')).toHaveClass('is-new')
     expect([...row.querySelectorAll('.exl-tech')].map((t) => t.textContent)).toEqual(['4G'])
     expect(within(row).getByRole('button', { name: 'Show 1 village of W4001' })).toHaveAttribute('aria-expanded', 'false')
     expect(within(bodyRows()[6]).getByText('Not assigned')).toBeInTheDocument()
-    expect(bodyRows()[3].querySelector('.exl-type')).toHaveTextContent('Add tech')
+    // No villages: a dash, not a button.
+    expect(within(bodyRows()[4]).queryByRole('button', { name: /villages? of/ })).toBeNull()
+    expect(row.querySelector('[data-icon]:not(.exl-chev-cell *):not(.exl-villages-pill *)')).toBeNull()
+  })
+
+  it('reads the Stage cell: step, days, red with a mark only over the SLA, Accepted when done', async () => {
+    await draw()
+    const stage = (i) => bodyRows()[i].querySelector('.exl-stage')
+    expect(stage(0)).toHaveAccessibleName('Assignment, 1 day')
+    expect(stage(0).querySelector('.exl-stage-days')).not.toHaveClass('is-late')
+    expect(stage(37)).toHaveAccessibleName('Drive test, 18 days, over SLA')
+    expect(stage(37).querySelector('.exl-stage-days')).toHaveClass('is-late')
+    expect(stage(37).querySelector('[data-icon="warning--alt"]')).not.toBeNull()
+    expect(stage(4)).toHaveAccessibleName('Accepted')
+    expect(stage(4).querySelector('.exl-stage-days')).toBeNull()
+    expect(stage(2)).toHaveAccessibleName('Sent to ICT, 3 days')
+    expect(stage(2).querySelector('.exl-stage-done').style.width).toBe(`${(4 / 6) * 100}%`)
   })
 })
 
@@ -136,43 +156,46 @@ describe('Explorer list: sorting', () => {
 })
 
 describe('Explorer list: filters and search', () => {
-  it('filters through the two-level popover, shows a chip, and removes it', async () => {
+  it('filters with a pill: one click opens it, one click chooses, and the pill shows the value', async () => {
     await draw()
-    await userEvent.click(screen.getByRole('button', { name: 'Filter' }))
-    const pop = screen.getByRole('dialog', { name: 'Filter by' })
-    expect(within(pop).getAllByRole('button').map((b) => b.textContent)).toEqual([
-      'Province', 'Site type', 'Requested tech', 'DT contractor',
+    const pills = screen.getByRole('group', { name: 'Filters' })
+    expect(within(pills).getAllByRole('button').map((b) => b.textContent)).toEqual([
+      'Province', 'Site type', 'Technology', 'DT contractor',
     ])
-    await userEvent.click(within(pop).getByRole('button', { name: 'Province' }))
-    await userEvent.click(within(pop).getByRole('button', { name: 'تهران' }))
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    await userEvent.click(within(pills).getByRole('button', { name: 'Province' }))
+    expect(screen.getByRole('searchbox', { name: 'Search provinces' })).toHaveFocus()
+    await userEvent.click(screen.getByRole('button', { name: 'تهران' }))
     expect(where()).toBe('/explorer?province=2')
-    const chips = screen.getByRole('list', { name: 'Active filters' })
-    expect(chips).toHaveTextContent('Province تهران')
-
-    // The active value chosen again removes the filter.
-    await userEvent.click(screen.getByRole('button', { name: 'Filter' }))
-    const again = screen.getByRole('dialog', { name: 'Filter by' })
-    await userEvent.click(within(again).getByRole('button', { name: 'Province' }))
-    expect(within(again).getByRole('button', { name: 'تهران' })).toHaveAttribute('aria-pressed', 'true')
-    await userEvent.click(within(again).getByRole('button', { name: 'تهران' }))
-    expect(where()).toBe('/explorer')
+    expect(within(pills).getAllByRole('button')[0]).toHaveTextContent('Provinceتهران')
+    expect(pill()).toHaveTextContent('of 120 sites')
+    expect(pill()).toHaveClass('is-filtered')
   })
 
-  it('removes a filter from its chip', async () => {
-    await draw('/explorer?type=New+Site')
-    expect(screen.getByRole('list', { name: 'Active filters' })).toHaveTextContent('Site type New Site')
+  it('removes a filter with its ×, and clears them all', async () => {
+    await draw('/explorer?type=New+Site&tech=4G')
     await userEvent.click(screen.getByRole('button', { name: 'Remove Site type filter' }))
+    expect(where()).toBe('/explorer?tech=4G')
+    await userEvent.click(screen.getByRole('button', { name: 'Clear filters' }))
     expect(where()).toBe('/explorer')
+    expect(screen.queryByRole('button', { name: 'Clear filters' })).toBeNull()
   })
 
-  it('closes the popover with Escape and returns focus to Filter', async () => {
+  it('narrows the Province menu by its search box, and closes on Escape', async () => {
     await draw()
-    const button = screen.getByRole('button', { name: 'Filter' })
-    await userEvent.click(button)
+    const province = within(screen.getByRole('group', { name: 'Filters' })).getByRole('button', { name: 'Province' })
+    await userEvent.click(province)
+    await userEvent.type(screen.getByRole('searchbox', { name: 'Search provinces' }), 'فار')
+    expect(within(screen.getByRole('group', { name: 'Province values' })).getAllByRole('button').map((b) => b.textContent)).toEqual(['فارس'])
     await userEvent.keyboard('{Escape}')
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
-    expect(button).toHaveFocus()
+    expect(screen.queryByRole('group', { name: 'Province values' })).toBeNull()
+    expect(province).toHaveFocus()
+  })
+
+  it('focuses the search with / from anywhere on the page', async () => {
+    await draw()
+    expect(document.querySelector('.exl-slash')).toHaveTextContent('/')
+    await userEvent.keyboard('/')
+    expect(screen.getByRole('searchbox', { name: /find a site/i })).toHaveFocus()
   })
 
   it('searches after typing stops, marks the match, and says "matching"', async () => {
@@ -187,8 +210,7 @@ describe('Explorer list: filters and search', () => {
       await act(async () => {})
       expect(bodyRows()).toHaveLength(10)
       expect(bodyRows()[0].querySelector('mark')).toHaveTextContent('W401')
-      expect(footer()).toHaveTextContent('Showing 10 of 10 matching sites')
-      expect(document.querySelector('.uw-count-pill')).toHaveTextContent('120 sites')
+      expect(pill()).toHaveTextContent('10 of 120 sites')
     } finally {
       vi.useRealTimers()
     }
@@ -256,11 +278,11 @@ describe('Explorer list: rows', () => {
     expect(screen.getByRole('list', { name: 'Target villages of W4003' })).toBeInTheDocument()
   })
 
-  it('highlights the village a search matched, and links the record to it', async () => {
+  it('shows the matched village under its row, with Open record landing on it', async () => {
     api.get.mockImplementation((url) => {
       if (url === '/explorer/sites') {
         const page = sitesPage({ total: 3 })
-        page.items[1].village_match = { code: 'V10002', name: 'روستای 2' }
+        page.items[1].village_match = { code: 'V10002', name: 'روستای 2', more: 2 }
         return Promise.resolve({ data: page })
       }
       if (url.endsWith('/villages')) return Promise.resolve({ data: siteVillages(3) })
@@ -269,8 +291,15 @@ describe('Explorer list: rows', () => {
     await draw('/explorer?q=V10002')
     const row = bodyRows()[1]
     expect(within(row).getByRole('link', { name: 'W4002' })).toHaveAttribute('href', '/explorer/sites/2?village=V10002')
+    const line = document.querySelector('.exl-match')
+    expect(line).toHaveTextContent('Villageروستای 2V10002+2Open record')
+    expect(line.querySelector('mark')).toHaveTextContent('V10002')
+    expect(within(line).getByRole('link', { name: /Open record of W4002/ })).toHaveAttribute('href', '/explorer/sites/2?village=V10002')
+    expect(document.querySelectorAll('.exl-match')).toHaveLength(1)
+    // Opening the villages strip replaces the line, and marks the village there.
     await userEvent.click(within(row).getByRole('button', { name: /villages of W4002/ }))
-    expect(document.querySelector('.exl-village.is-match')).toHaveTextContent('V10002')
+    expect(document.querySelector('.exl-match')).toBeNull()
+    expect(document.querySelector('.exv.is-match')).toHaveTextContent('V10002')
   })
 
   it('moves between rows with ↑ and ↓; Enter opens', async () => {
@@ -292,7 +321,6 @@ describe('Explorer list: continuous scroll and coming back', () => {
     await reachEnd()
     expect(listCalls().at(-1)[1].params).toMatchObject({ cursor: '50', limit: 50 })
     expect(bodyRows()).toHaveLength(100)
-    expect(footer()).toHaveTextContent('Showing 100 of 120 sites')
     await reachEnd()
     await reachEnd()
     expect(bodyRows()).toHaveLength(120)
@@ -344,10 +372,10 @@ describe('Explorer list: selection', () => {
   it('exports the current view from the page Export button', async () => {
     window.URL.createObjectURL = vi.fn(() => 'blob:x')
     window.URL.revokeObjectURL = vi.fn()
-    await draw('/explorer?q=W40&sort=type')
+    await draw('/explorer?q=W40&sort=stage')
     await userEvent.click(screen.getByRole('button', { name: 'Export' }))
     const exportCall = api.get.mock.calls.find(([url]) => url === '/explorer/sites/export')
-    expect(exportCall[1].params).toEqual({ q: 'W40', sort: 'type', dir: 'asc' })
+    expect(exportCall[1].params).toEqual({ q: 'W40', sort: 'stage', dir: 'asc' })
   })
 })
 
@@ -363,9 +391,8 @@ describe('Explorer list: motion', () => {
 
   it('turns every animation off under reduced motion, on the list and the record', () => {
     const reduce = css.slice(css.indexOf('@media (prefers-reduced-motion: reduce)'))
-    expect(reduce).toContain('.ex-page, .ex-fade, .exl-page { animation: none; }')
-    expect(reduce).toContain(':is(.ex-page, .exl-page) *')
+    expect(reduce).toContain(':is(.ex-page, .exl-page, .exh) *')
     expect(reduce).toContain('animation: none !important')
-    expect(css).toContain("html[data-uep-motion='reduce'] :is(.ex-page, .exl-page) * { animation: none !important; transition: none !important; }")
+    expect(css).toContain("html[data-uep-motion='reduce'] :is(.ex-page, .exl-page, .exh) * { animation: none !important; transition: none !important; }")
   })
 })

@@ -4,6 +4,8 @@ no quota for one).
 * Take the System health snapshot (yesterday's, final; today's, so far).
 * Delete expired access exceptions, logging each (they already stopped
   working at their expiry: core/access.py ignores them).
+* Recompute Explorer's cached lifecycle stage (UEP-28), in case a bulk write
+  bypassed the listener that normally keeps it current.
 
 Every backend pod runs the loop, hourly. A PostgreSQL advisory lock, taken
 for the transaction, lets only one pod do the work at a time; the others skip
@@ -43,7 +45,7 @@ def _take_lock(db: Session) -> bool:
 def run_once(db: Session, now: datetime | None = None) -> dict | None:
     """Run both jobs if this pod gets the lock. Returns what was done, or None
     when another pod holds the lock."""
-    from app.services import access_admin, system_health
+    from app.services import access_admin, lifecycle_stage, system_health
 
     now = now or datetime.now(timezone.utc)
     if not _take_lock(db):
@@ -53,10 +55,12 @@ def run_once(db: Session, now: datetime | None = None) -> dict | None:
     today = now.date()
     system_health.take_snapshot(db, today - timedelta(days=1))
     system_health.take_snapshot(db, today)
+    # UEP-28's safety net: rows a bulk UPDATE changed around the listener.
+    restaged = lifecycle_stage.refresh_all(db)
     db.commit()  # Also releases the transaction-scoped lock.
     if expired:
         log.info("expired access exceptions removed", extra={"count": expired})
-    return {"expired_exceptions": expired, "snapshot": today.isoformat()}
+    return {"expired_exceptions": expired, "snapshot": today.isoformat(), "restaged": restaged}
 
 
 def _run_in_thread() -> None:

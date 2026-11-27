@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useParams, useSearchParams } from 'react-router-dom'
 import { useFillPage } from '../../components/pageMode'
 import { useAuth } from '../../context/AuthContext'
@@ -6,31 +6,36 @@ import NoAccess from '../../components/NoAccess'
 import { AREA, canAccess } from '../../lib/access'
 import { canFileAcceptance } from '../../lib/roles'
 import { hasAnyAction, workflowActions } from './explorerModel'
-import GeneralInfoCard from './GeneralInfoCard'
 import JourneyCard from './JourneyCard'
 import RecordHeader from './RecordHeader'
+import SitePassport from './SitePassport'
 import TakeActionDrawer from './TakeActionDrawer'
 import useSiteRecord from './useSiteRecord'
+import VillageHistoryPanel from './VillageHistoryPanel'
 import '../../styles/home.css'
 import '../../styles/work.css'
 import '../../styles/explorer.css'
 
 /**
- * Explorer's site record page (UEP-11 §B3–B5): general information on the
- * left, the site's journey through UEP on the right with ICT and CRA
- * acceptance per village. One read, GET /explorer/sites/{id}.
+ * Explorer's site record page (UEP-28 Part B), top to bottom: the header, the
+ * site passport, and the Journey card (its numbers, the timeline ribbon and
+ * acceptance by village). One read, GET /explorer/sites/{id}.
  *
- * Fills the height under the shell; at 1440×900 nothing scrolls for up to six
- * villages, and above that only the village table's body does.
+ * Fills the height under the shell: at 1440×900 and 1366×768 the page never
+ * scrolls; only the village table's body (and the history panel) do.
  */
 export default function SiteRecord() {
   useFillPage()
   const { workItemId } = useParams()
   const [params] = useSearchParams()
-  const highlight = params.get('village')
+  const linked = params.get('village')
   const { user } = useAuth()
   const { status, data, retry, reload } = useSiteRecord(workItemId)
   const [drawerOpen, setDrawerOpen] = useState(false)
+  const [historyOpen, setHistoryOpen] = useState(false)
+  // ?village= highlights a row; a passport chip moves or clears it.
+  const [highlight, setHighlight] = useState(linked)
+  useEffect(() => setHighlight(linked), [linked])
   const headingRef = useRef(null)
 
   const role = user?.role?.name
@@ -61,10 +66,16 @@ export default function SiteRecord() {
         isContractor={role === 'Contractor'}
         onTakeAction={hasAnyAction(actions) ? () => setDrawerOpen(true) : undefined}
       />
-      <div className="ex-cards">
-        <GeneralInfoCard general={data?.general} status={status} onRetry={retry} />
-        <JourneyCard record={data} status={status} onRetry={retry} highlight={highlight} />
-      </div>
+      <SitePassport
+        record={data}
+        status={status}
+        onRetry={retry}
+        highlight={highlight}
+        onHighlight={setHighlight}
+        onHistory={() => setHistoryOpen(true)}
+      />
+      <JourneyCard record={data} status={status} onRetry={retry} highlight={highlight} />
+      <VillageHistoryPanel open={historyOpen} onClose={() => setHistoryOpen(false)} record={data} />
       {data && hasAnyAction(actions) && (
         <TakeActionDrawer
           open={drawerOpen}

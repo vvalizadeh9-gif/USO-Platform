@@ -9,6 +9,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import text
 
 from app.services import daily_jobs
+from app.services import lifecycle_stage  # noqa: F401 -- installs the UEP-28 stage listener
 from app.services.system_status import APP_VERSION
 from app.api import api_router
 from app.core.bootstrap import init_db

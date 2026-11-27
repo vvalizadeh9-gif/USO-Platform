@@ -285,58 +285,61 @@
   --uep-ease-grow: cubic-bezier(0.2, 0.7, 0.2, 1);
   --uep-grow-follow: 150ms;          /* the difference segment follows the fill */
 
-  /* ---- Component: Explorer record page (UEP-11) ----
-     General information tiles: one colour per field, a white icon on each
-     (every one at least 4.5:1 against white). Status keeps green / yellow /
-     red; the journey is cobalt; ICT and CRA labels are deep cobalt. */
-  --uep-field-on-air: #1D4ED8;            /* blue */
-  --uep-field-dt-date: #4338CA;           /* indigo */
-  --uep-field-site-contractor: #C2410C;   /* orange */
-  --uep-field-dt-contractor: #0E7490;     /* cyan */
-  --uep-field-technology: #7E22CE;        /* purple */
-  --uep-field-province: #BE185D;          /* pink */
-  --uep-field-villages: #475569;          /* slate */
-  --uep-explorer-info-width: 360px;
-  --uep-explorer-field-row: 62px;
-  --uep-explorer-field-tile: 36px;
-  --uep-explorer-aging-icon: 26px;
-  --uep-explorer-step-circle: 48px;
-  --uep-explorer-step-line: 2px;
-  --uep-explorer-step-dash: #93B2FF;      /* the line into the open step */
-  --uep-explorer-mark: 28px;
-  --uep-explorer-status-cell: 250px;
-  --uep-explorer-authority-height: 32px;
-  --uep-explorer-row-roomy: 62px;         /* up to 3 villages */
-  --uep-explorer-row-compact: 50px;       /* 4 to 6, so six fit at 1440x900 */
-  --uep-explorer-table-row: 52px;         /* above 6 villages */
-  --uep-explorer-scrollbar: 8px;
-  --uep-fs-explorer-count: 24px;
-  --uep-dur-explorer-enter: 240ms;        /* the page fades in once */
-  --uep-dur-explorer-hover: 120ms;
-  --uep-dur-explorer-filter: 160ms;       /* All / Open cross-fade */
-
-  /* ---- Component: Explorer list (UEP-11a) ----
-     One colour rule: cobalt for actions, links, selection and focus; the
-     field icons reuse the record tiles' hues above, softened. */
+  /* ---- Component: Explorer (UEP-11, redesigned in UEP-28) ----
+     One colour rule on both pages: cobalt for the journey, actions, links,
+     selection and focus; green approved only, yellow waiting, red rejected or
+     late only; ICT plum and CRA blue, never green. */
   --uep-explorer-list-max: 1200px;
   --uep-explorer-toolbar: 56px;
-  --uep-explorer-footer: 44px;
-  --uep-explorer-row: 48px;
-  --uep-explorer-search: 380px;
-  --uep-explorer-popover: 230px;
+  --uep-explorer-row: 44px;
+  --uep-explorer-match-row: 38px;
+  --uep-explorer-search: 440px;
+  --uep-explorer-menu: 240px;
   --uep-explorer-pill: 26px;
   --uep-explorer-strip-indent: 52px;
-  --uep-explorer-field-icon-opacity: 0.8;  /* still 3:1 against white */
+  --uep-explorer-app-tile: 36px;
+  --uep-explorer-stage-bar: 72px;
+  --uep-explorer-stage-bar-height: 6px;
+  --uep-explorer-stage-open: #93B2FF;      /* the open step's stripes */
+  --uep-explorer-stage-open-2: #C9D8FF;
+  --uep-explorer-match-fill: #FAFBFD;      /* the village-match line under a row */
   --uep-row-hover-accent: #F5F8FE;         /* very light cobalt: a row under the pointer */
   --uep-row-selected: #EDF2FD;             /* a checked row */
   --uep-search-mark: #FDF0C4;              /* soft yellow under matched text */
+  /* Record: the passport, the ribbon and the village table. */
+  --uep-explorer-wash-1: #EEF3FF;          /* the Province cell's soft cobalt wash */
+  --uep-explorer-wash-2: #F6F8FF;
+  --uep-explorer-map: 112px;
+  --uep-explorer-map-land: #CDD6EA;        /* every province */
+  --uep-explorer-map-me: var(--uep-app-explorer); /* this site's province */
+  --uep-explorer-tech-bar: #AFC3F2;        /* an unlit signal bar */
+  --uep-explorer-ribbon: 128px;
+  --uep-explorer-ribbon-open: #C9D8FF;     /* the step in progress, up to Today */
+  --uep-explorer-table-head: 46px;
+  --uep-explorer-table-row: 58px;
+  --uep-explorer-table-row-tight: 52px;    /* under 820px of height */
+  --uep-explorer-village-col: 27%;
+  --uep-explorer-panel: 460px;             /* the village history panel */
+  --uep-radius-box: 10px;                  /* the village table box, menus, the bulk bar */
+  --uep-radius-option: 6px;                /* menu options, tech tags, small buttons */
+  --uep-explorer-scrollbar: 8px;
   --uep-explorer-rise-distance: 6px;
+  --uep-dur-explorer-enter: 240ms;         /* the page fades in once */
+  --uep-dur-explorer-hover: 120ms;
+  --uep-dur-explorer-filter: 160ms;        /* pills, menus, All / Open */
   --uep-dur-explorer-rise: 360ms;          /* rows and record cards rise in */
   --uep-explorer-rise-stagger: 24ms;       /* per row, first 20 rows only */
-  --uep-explorer-card-stagger: 60ms;       /* Journey after General information */
-  --uep-dur-explorer-strip: 200ms;         /* the villages strip opening */
-  --uep-dur-explorer-bulk: 220ms;          /* the bulk bar sliding up */
-  --uep-explorer-pop-distance: 4px;        /* popovers and chips slide in this far */
+  --uep-explorer-card-stagger: 60ms;       /* the Journey card after the passport */
+  --uep-dur-explorer-strip: 220ms;         /* villages strip, match line */
+  --uep-dur-explorer-bulk: 220ms;          /* the bulk bar rising */
+  --uep-dur-explorer-bar: 450ms;           /* a stage bar growing */
+  --uep-dur-explorer-fill: 500ms;          /* the province filling */
+  --uep-dur-explorer-pin: 420ms;           /* the pin dropping */
+  --uep-dur-explorer-ribbon: 950ms;        /* the ribbon revealing */
+  --uep-dur-explorer-panel: 260ms;         /* the history panel sliding in */
+  --uep-explorer-chip-stagger: 50ms;
+  --uep-explorer-table-stagger: 30ms;
+  --uep-explorer-pop-distance: 4px;        /* menus slide in this far */
 
   /* ---- Component: sign-in (UEP-26) ----
      A deep cobalt band across the top, one centred card resting on its edge.

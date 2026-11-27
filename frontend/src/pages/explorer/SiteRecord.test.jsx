@@ -1,9 +1,9 @@
-// Explorer's site record page (UEP-11 §B3–B5, §B9).
+// Explorer's site record page (UEP-28 Part B).
 import { act, fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { manyVillages, record, side, village } from './fixtures'
+import { manyVillages, record } from './fixtures'
 import { pickOption } from '../../test/pickOption'
 
 const auth = vi.hoisted(() => ({ role: 'Coordinator' }))
@@ -35,9 +35,6 @@ async function draw(path = '/explorer/sites/7') {
   await act(async () => {})
 }
 
-const panel = (name) => screen.getByRole('region', { name: `${name} acceptance` })
-const rowCodes = (container) =>
-  within(container).getAllByRole('listitem').map((li) => li.querySelector('.ex-village-id').textContent)
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -50,7 +47,8 @@ describe('the header', () => {
     await draw()
     expect(screen.queryByRole('navigation', { name: 'Breadcrumb' })).toBeNull()
     expect(screen.getByRole('heading', { level: 1, name: 'W4318' })).toBeInTheDocument()
-    expect(screen.getByText('Acceptance in progress')).toHaveClass('ex-badge', 'is-progress')
+    // The badge is the open step, the same one the ribbon shows in progress.
+    expect(screen.getByText('Awaiting submission to ICT')).toHaveClass('ex-badge', 'is-progress')
   })
 
   it('opens My Work on the site, and offers File letter to a filing role', async () => {
@@ -72,181 +70,207 @@ describe('the header', () => {
   })
 })
 
-describe('General information', () => {
-  it('shows all seven rows, Gregorian dates and Persian text isolated', async () => {
+describe('the site passport', () => {
+  const passport = () => screen.getByRole('region', { name: 'Site passport' })
+
+  it('shows Province, Target villages, Site type and technology, Contractors, in that order', async () => {
     await draw()
-    const card = screen.getByRole('region', { name: 'General information' })
-    const terms = within(card).getAllByRole('term').map((t) => t.textContent)
-    expect(terms).toEqual([
-      'On air date', 'DT date', 'Site contractor', 'DT contractor', 'Requested technology', 'Province', 'Target villages',
-    ])
-    expect(within(card).getByText('2 Sept 2026')).toBeInTheDocument()
-    expect(within(card).getByText('30 Sept 2026')).toBeInTheDocument()
-    expect(within(card).getByText('سازه گستر')).toHaveAttribute('lang', 'fa')
-    expect(within(card).getByText('3G')).toBeInTheDocument()
-    expect(card.querySelector('[data-field="villages"] dd')).toHaveTextContent('3')
+    const titles = within(passport()).getAllByRole('heading', { level: 3 }).map((h) => h.textContent.replace(/\d+$/, '').trim())
+    expect(titles).toEqual(['Province', 'Target villages', 'Site type', 'Requested technology', 'Contractors'])
+    expect(within(passport()).getByText('کرمان')).toHaveAttribute('lang', 'fa')
+    expect(within(passport()).getByRole('img', { name: 'Map of Iran, کرمان highlighted' })).toBeInTheDocument()
+    expect(within(passport()).getByText('New site')).toBeInTheDocument()
+    expect(within(passport()).getByText('3G')).toHaveClass('exp-tech')
+    expect(within(passport()).getByText('Site contractor')).toBeInTheDocument()
+    expect(within(passport()).getByText('آریا موج')).toBeInTheDocument()
   })
 
-  it('shows "—" for every missing value', async () => {
+  it('has no CRA region, no avatars, and no on-air or DT date', async () => {
+    await draw()
+    const card = passport()
+    expect(card.textContent).not.toMatch(/region/i)
+    expect(card.querySelector('.ava, .ex-field-tile')).toBeNull()
+    expect(card.textContent).not.toMatch(/On air|DT date/)
+  })
+
+  it('says "Not assigned" for a missing contractor and "—" for a missing province', async () => {
     const r = record()
-    r.general = { ...r.general, on_air_date: null, site_contractor: null, requested_technology: [], province: null }
+    r.general = { ...r.general, dt_contractor: null, province: null, requested_technology: [] }
     serve(r)
     await draw()
-    const card = screen.getByRole('region', { name: 'General information' })
-    for (const field of ['on_air', 'site_contractor', 'technology', 'province']) {
-      expect(card.querySelector(`[data-field="${field}"] dd`)).toHaveTextContent('—')
-    }
-  })
-})
-
-describe('Journey', () => {
-  it('renders the six steps in order, On air first, with their aging pills', async () => {
-    await draw()
-    const steps = within(screen.getByRole('list', { name: 'Journey' })).getAllByRole('listitem')
-    expect(steps[0].querySelector('[data-icon]')).toHaveAttribute('data-icon', 'cell-tower')
-    expect(steps.map((s) => s.getAttribute('aria-label'))).toEqual([
-      'On air: done, 2 Sept 2026',
-      'Health check: done, 9 Sept 2026, 7 days after the previous step',
-      'Assigned: done, 16 Sept 2026, 7 days after the previous step',
-      'DT done: done, 30 Sept 2026, 14 days after the previous step',
-      'Sent to ICT: in progress, 14 days so far',
-      'Acceptance: not yet reached',
-    ])
-    expect([...document.querySelectorAll('.ex-step-pill')].map((p) => p.textContent)).toEqual([
-      '+7 d', '+7 d', '+14 d', '+14 d so far', '—',
-    ])
-    expect(document.querySelector('.ex-step.is-in_progress .ex-step-date')).toHaveTextContent('In progress')
+    expect(within(passport()).getByText('Not assigned')).toBeInTheDocument()
+    expect(within(passport()).getByRole('img', { name: 'Map of Iran' })).toBeInTheDocument()
   })
 
-  it('shows "No date" and a dash where CPM carried no date, never a negative pill', async () => {
-    const r = record()
-    r.journey.steps = r.journey.steps.map((s, i) => (i < 4 ? { ...s, date: null, gap_days: null } : { ...s, gap_days: null }))
-    r.journey.aging = { total_days: null, current_step_days: null, longest_step: null, oldest_pending: null }
-    serve(r)
-    await draw()
-    expect(screen.getAllByText('No date')).toHaveLength(4)
-    const pills = [...document.querySelectorAll('.ex-step-pill')].map((p) => p.textContent)
-    expect(pills).toEqual(['—', '—', '—', '—', '—'])
-    expect(pills.join('')).not.toMatch(/-\d/)
-    expect(document.querySelector('[data-tile="total"] .ex-aging-value')).toHaveTextContent('—')
-  })
-
-  it('renders the aging tiles, Oldest pending only while something is pending', async () => {
-    await draw()
-    const aging = screen.getByRole('list', { name: 'Aging' })
-    expect(within(aging).getAllByRole('listitem')).toHaveLength(4)
-    expect(within(aging).getByText('42 d')).toBeInTheDocument()
-    // The journey starts on air (UEP-11a Part C): total aging counts from there.
-    expect(document.querySelector('[data-tile="total"] .ex-aging-context')).toHaveTextContent('since on air')
-    expect(within(aging).getByText('Assigned to DT done')).toBeInTheDocument()
-    expect(within(aging).getByText('CRA, 2 villages')).toBeInTheDocument()
-  })
-
-  it('hides Oldest pending when nothing is pending', async () => {
-    const r = record()
-    r.journey.aging.oldest_pending = null
-    serve(r)
-    await draw()
-    expect(within(screen.getByRole('list', { name: 'Aging' })).getAllByRole('listitem')).toHaveLength(3)
-  })
-})
-
-describe('Acceptance by village', () => {
-  it('shows up to six villages as two panels, rows in the same order in both', async () => {
-    await draw()
-    expect(rowCodes(panel('ICT'))).toEqual(['V10002', 'V10003', 'V10001'])
-    expect(rowCodes(panel('CRA'))).toEqual(rowCodes(panel('ICT')))
-    expect(screen.queryByRole('table')).toBeNull()
-  })
-
-  it('heads each panel with ICT or CRA and the three counts, words beside the numbers', async () => {
-    await draw()
-    const head = panel('ICT').querySelector('.ex-authority-head')
-    expect(within(head).getByText('ICT')).toHaveClass('ex-authority')
-    expect([...head.querySelectorAll('.ex-count')].map((c) => c.textContent)).toEqual(['Approved1', 'Pending1', 'Rejected1'])
-  })
-
-  it('carries each status as a word with its mark, and the dated line under it', async () => {
-    await draw()
-    const ict = panel('ICT')
-    expect(within(ict).getByText('Rejected', { selector: '.ex-mark-word *, .ex-mark-word' }).closest('.ex-mark')).toHaveClass('is-rejected')
-    expect(within(ict).getByText('2 Oct 2026, not re-filed yet')).toBeInTheDocument()
-    expect(within(ict).getByText('Re-filed', { selector: '.ex-mark-chip' })).toBeInTheDocument()
-    expect(within(ict).getByText('4 Oct 2026, took 4 days')).toBeInTheDocument()
-    expect(within(panel('CRA')).getByText('Not filed yet')).toBeInTheDocument()
-  })
-
-  it('filters to the open villages with the All / Open tabs', async () => {
+  it('highlights a village row from its chip, and clears it on a second click', async () => {
     const user = userEvent.setup()
     await draw()
-    const tabs = screen.getByRole('tablist', { name: 'Villages' })
-    expect(within(tabs).getAllByRole('tab').map((t) => t.textContent)).toEqual(['All 3', 'Open 2'])
-    await user.click(within(tabs).getByRole('tab', { name: /Open/ }))
-    expect(within(tabs).getByRole('tab', { name: /Open/ })).toHaveAttribute('aria-selected', 'true')
-    expect(rowCodes(panel('ICT'))).toEqual(['V10002', 'V10003'])
-    fireEvent.keyDown(tabs, { key: 'ArrowLeft' })
-    expect(rowCodes(panel('ICT'))).toHaveLength(3)
+    const chip = within(passport()).getByRole('button', { name: /V10002/ })
+    await user.click(chip)
+    expect(chip).toHaveAttribute('aria-pressed', 'true')
+    expect(document.querySelector('tr[data-village="V10002"]')).toHaveClass('is-highlight')
+    await user.click(chip)
+    expect(document.querySelector('tr.is-highlight')).toBeNull()
   })
 
-  it('switches to one scrolling table above six villages', async () => {
-    serve(record({ villages: manyVillages(10) }))
-    await draw()
-    const scroller = screen.getByRole('region', { name: /Villages, ICT and CRA status/ })
-    expect(scroller).toHaveAttribute('tabindex', '0')
-    const table = within(scroller).getByRole('table')
-    expect(within(table).getAllByRole('columnheader').map((h) => h.getAttribute('aria-label') || h.textContent)).toEqual([
-      'Village', 'ICT status', 'CRA status',
-    ])
-    expect(within(table).getAllByRole('row')).toHaveLength(11)
-    // Longest wait first.
-    expect(within(table).getAllByRole('rowheader')[0]).toHaveTextContent('V20009')
-  })
-
-  it('highlights, scrolls to and focuses the ?village= row', async () => {
-    const scrolled = vi.fn()
-    Element.prototype.scrollIntoView = scrolled
-    await draw('/explorer/sites/7?village=V10003')
-    const row = panel('ICT').querySelector('[data-village="V10003"]')
-    expect(row).toHaveClass('is-highlight')
-    expect(row).toHaveFocus()
-    expect(scrolled).toHaveBeenCalled()
-    expect(panel('CRA').querySelectorAll('.is-highlight')).toHaveLength(1)
-  })
-
-  it('says when acceptance has not started, and when the site has no hadaf villages', async () => {
+  it('disables the chips until acceptance has started', async () => {
     serve(record({ acceptance_started: false }))
     await draw()
-    expect(screen.getByText('Acceptance starts when the site is on air and drive-tested.')).toBeInTheDocument()
-    expect(screen.queryByRole('tablist')).toBeNull()
+    expect(within(passport()).getByRole('button', { name: /V10001/ })).toBeDisabled()
+  })
+})
+
+describe('the journey', () => {
+  it('shows total aging since the health check and the oldest pending side, nothing else', async () => {
+    await draw()
+    const stats = document.querySelector('.exj-stats')
+    expect(within(stats).getAllByRole('term').map((t) => t.textContent)).toEqual(['Total aging', 'Oldest pending'])
+    expect(stats).toHaveTextContent('Total aging35dayssince health check')
+    expect(stats).toHaveTextContent('Oldest pending14daysCRA · 2 villages')
+    expect(document.body.textContent).not.toMatch(/Longest step|In current step/)
   })
 
-  it('says when the site has no hadaf villages', async () => {
-    serve(record({ villages: [] }))
+  it('says "health check not done" without a total, and hides Oldest pending when nothing waits', async () => {
+    const r = record()
+    r.journey = {
+      ...r.journey,
+      aging: { total_days: null, oldest_pending: null },
+      steps: r.journey.steps.map((s) => (s.key === 'on_air' ? s : { ...s, state: s.key === 'health_check' ? 'in_progress' : 'upcoming', date: null })),
+    }
+    serve(r)
     await draw()
-    expect(screen.getByText('No hadaf villages on this site.')).toBeInTheDocument()
+    const stats = document.querySelector('.exj-stats')
+    expect(stats).toHaveTextContent('Total aging—health check not done')
+    expect(stats).not.toHaveTextContent('Oldest pending')
   })
 
-  it('keeps every date on the page Gregorian', async () => {
-    serve(record({ villages: [village('V1', side('approved', { decided_date: '2026-10-06' }), side('approved', { decided_date: '2026-01-15' }))] }))
+  it('names every step, its date or days so far, and both lanes on the ribbon', async () => {
     await draw()
-    expect(screen.getByText('6 Oct 2026')).toBeInTheDocument()
-    expect(screen.getByText('15 Jan 2026')).toBeInTheDocument()
-    expect(document.body.textContent).not.toMatch(/[۰-۹]|\d{4}\/\d{2}\/\d{2}|\d{4}-\d{2}-\d{2}/)
+    expect(screen.getByRole('img', { name: /^On air 2 Sept 2026; Health check 9 Sept 2026;/ })).toHaveAccessibleName(
+      'On air 2 Sept 2026; Health check 9 Sept 2026; Assigned 16 Sept 2026; DT done 30 Sept 2026; '
+      + 'Sent to ICT in progress, 14 days so far; Acceptance not yet; ICT 1 of 3 approved; CRA 1 of 3 approved',
+    )
+  })
+
+  it('draws real proportions, the fork lanes and Today at the measured width', async () => {
+    const width = vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(1100)
+    await draw()
+    const ribbon = document.querySelector('.exr')
+    expect(ribbon.querySelectorAll('.exr-lane')).toHaveLength(2)
+    expect(ribbon.querySelector('.exr-today')).not.toBeNull()
+    expect([...ribbon.querySelectorAll('.exr-dur')].map((d) => d.textContent)).toEqual(['7 d', '7 d', '14 d', expect.stringMatching(/ d so far$/)])
+    expect(ribbon.querySelector('.exr-ms.is-big .exr-ms-date')).toHaveTextContent('2 Sept 2026')
+    width.mockRestore()
+  })
+
+  it('links the batch the site went to ICT HQ in', async () => {
+    const r = record()
+    r.journey.sent_to_ict = [{ batch_number: 12, outside_uep: false, sent_at: '2026-10-06', villages: 3, mtn: null, ict: null, cra: null, in_mojri_since: null, in_mojri: 0 }]
+    serve(r)
+    await draw()
+    expect(screen.getByRole('link', { name: 'Sent to ICT in batch #12' })).toHaveAttribute('href', '/submissions/batches/12')
+  })
+})
+
+describe('acceptance by village', () => {
+  const rows = () => [...document.querySelectorAll('.exa-table tbody tr')].map((tr) => tr.dataset.village)
+
+  it('is one table for 1, 3 and 15 villages, worst first, with no aging', async () => {
+    for (const villages of [manyVillages(1), undefined, manyVillages(15)]) {
+      serve(record(villages ? { villages } : {}))
+      const { unmount } = render(<div />)
+      await draw()
+      expect(document.querySelectorAll('.exa-table')).toHaveLength(1)
+      expect(document.querySelector('.ex-panels')).toBeNull()
+      expect(document.querySelector('.exa-table').textContent).not.toMatch(/waiting|took| d\b|days/)
+      unmount()
+      document.body.innerHTML = ''
+    }
+  })
+
+  it('orders rejected, then pending, then approved, then village code', async () => {
+    await draw()
+    expect(rows()).toEqual(['V10002', 'V10003', 'V10001'])
+  })
+
+  it('heads ICT and CRA with their counts', async () => {
+    await draw()
+    const ict = screen.getByRole('columnheader', { name: 'ICT status' })
+    expect(ict).toHaveTextContent('ICT1 approved1 pending1 rejected')
+    expect(within(ict).getByText('ICT')).toHaveClass('ex-auth')
+  })
+
+  it('reads each status as a word, a mark and a dated line', async () => {
+    await draw()
+    const row = document.querySelector('tr[data-village="V10002"]')
+    expect(row).toHaveTextContent('ICT: Rejected2 Oct 2026, not re-filed yet')
+    expect(row).toHaveTextContent('CRA: PendingFiled 7 Oct 2026')
+    expect(document.querySelector('tr[data-village="V10003"]')).toHaveTextContent('ICT: PendingRe-filedRe-filed 10 Oct 2026')
+    expect(document.querySelector('tr[data-village="V10003"]')).toHaveTextContent('Not filed yet')
+  })
+
+  it('filters to the open villages', async () => {
+    const user = userEvent.setup()
+    await draw()
+    await user.click(screen.getByRole('tab', { name: /Open/ }))
+    expect(rows()).toEqual(['V10002', 'V10003'])
+  })
+
+  it('highlights the ?village= row', async () => {
+    await draw('/explorer/sites/7?village=V10003')
+    expect(document.querySelector('tr[data-village="V10003"]')).toHaveClass('is-highlight')
+  })
+
+  it('says when acceptance has not started yet', async () => {
+    serve(record({ acceptance_started: false }))
+    await draw()
+    expect(screen.getByText('Acceptance starts when drive test is done.')).toBeInTheDocument()
+  })
+})
+
+describe('village history', () => {
+  it('opens from History, traps focus, closes on Esc and gives focus back', async () => {
+    const user = userEvent.setup()
+    await draw()
+    const trigger = screen.getByRole('button', { name: /History/ })
+    expect(trigger).toHaveTextContent('2')
+    await user.click(trigger)
+    const panel = screen.getByRole('dialog', { name: 'Villages' })
+    expect(panel).toHaveTextContent('W4318 · 3 target villages')
+    expect(within(panel).getByText('Village removed')).toBeInTheDocument()
+    expect(within(panel).getByText('Ignored by Sara Ahmadi on 19 Nov 2026 · still on this site')).toBeInTheDocument()
+    expect(within(panel).getByText('Applied by Sara Ahmadi on 2 Oct 2026')).toBeInTheDocument()
+    expect(panel.contains(document.activeElement)).toBe(true)
+    await user.keyboard('{Escape}')
+    expect(screen.queryByRole('dialog', { name: 'Villages' })).toBeNull()
+    expect(trigger).toHaveFocus()
+  })
+
+  it('exports the history to Excel', async () => {
+    const user = userEvent.setup()
+    globalThis.URL.createObjectURL = vi.fn(() => 'blob:x')
+    globalThis.URL.revokeObjectURL = vi.fn()
+    await draw()
+    await user.click(screen.getByRole('button', { name: /History/ }))
+    api.get.mockResolvedValueOnce({ data: new Blob(['x']) })
+    await user.click(screen.getByRole('button', { name: /Export to Excel/ }))
+    expect(api.get).toHaveBeenCalledWith('/explorer/sites/7/villages/export', { responseType: 'blob' })
   })
 })
 
 describe('states', () => {
-  it('draws skeletons while loading', async () => {
+  it('draws skeletons at final size while loading', async () => {
     api.get.mockImplementation(() => new Promise(() => {}))
     await draw()
-    expect(document.querySelectorAll('.ex-skel-value')).toHaveLength(7)
+    expect(document.querySelector('.exp-skel-map')).not.toBeNull()
+    expect(document.querySelector('.exj-skel-ribbon')).not.toBeNull()
     expect(screen.getByRole('region', { name: 'Journey' })).toHaveAttribute('aria-busy', 'true')
   })
 
   it('says it could not load each card, and retries', async () => {
     api.get.mockRejectedValueOnce({ response: { status: 500 } })
     await draw()
-    expect(screen.getByText("Couldn't load general information.")).toBeInTheDocument()
+    expect(screen.getByText("Couldn't load the site passport.")).toBeInTheDocument()
     expect(screen.getByText("Couldn't load the journey.")).toBeInTheDocument()
     fireEvent.click(screen.getAllByRole('button', { name: 'Retry' })[0])
     await act(async () => {})

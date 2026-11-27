@@ -20,7 +20,7 @@
    shrink to nothing (min-height: 0) rather than push the rows off the page. A
    row that only scrolls sideways is still a fixed row: left at flex-shrink 1
    it collapses to the height of its scrollbar. */
-.uw-page > :not(.uw-content, .uw-card, .ex-cards),
+.uw-page > :not(.uw-content, .uw-card, .exj),
 .uw-card > :not(.uw-card-body) { flex: none; }
 .uw-content {
   flex: 1 1 auto;

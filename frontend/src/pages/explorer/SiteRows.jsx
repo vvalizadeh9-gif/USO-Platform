@@ -4,21 +4,12 @@ import Icon from '../../components/Icon'
 import { Fa } from '../../components/work/parts'
 import { siteRecordPath } from '../../lib/explorerLinks'
 import { formatNumber } from '../../lib/numbers'
-import { FIELD_ICONS } from './explorerModel'
-import { COLUMNS, isNewSite, splitMatch, typeLabel } from './listModel'
+import { stageCell } from './explorerModel'
+import { COLUMNS, splitMatch, typeTag } from './listModel'
+import VillageChip from './VillageChip'
 
 const RISE_CAP = 20
 const SKELETON_ROWS = 12
-
-/** A column's line icon: the record tile's hue, no tile (UEP-11a §B4). */
-function FieldIcon({ field, muted = false }) {
-  const { icon, hue } = FIELD_ICONS[field]
-  return (
-    <span className={`exl-field-icon ${muted ? 'is-muted' : ''}`.trim()} style={muted ? undefined : { color: `var(${hue})` }} aria-hidden="true">
-      <Icon name={icon} size={16} />
-    </span>
-  )
-}
 
 /** Text with the search match marked. */
 function Marked({ text, term }) {
@@ -60,16 +51,45 @@ function HeaderRow({ sort, dir, onSort, allChecked, someChecked, onSelectAll, lo
   )
 }
 
+/**
+ * The Stage cell (UEP-28 §A4): a 72×6 mini timeline (steps done in cobalt,
+ * the open step striped), the open step's short name and its days -- red with
+ * a warning mark only when over that step's SLA. Done reads "Accepted".
+ */
+export function StageCell({ row }) {
+  const stage = stageCell(row)
+  if (!stage) return <span className="uw-none">—</span>
+  return (
+    <span className={`exl-stage ${stage.done ? 'is-done' : ''}`.trim()} aria-label={stage.name} role="img">
+      <span className="exl-stage-bar" aria-hidden="true">
+        <i className="exl-stage-done" style={{ width: `${stage.filled * 100}%` }} />
+        {!stage.done && <i className="exl-stage-open" style={{ left: `${stage.filled * 100}%`, width: `${stage.open * 100}%` }} />}
+      </span>
+      <span className="exl-stage-name" aria-hidden="true">
+        {stage.done && <Icon name="checkmark--filled" size={16} />}
+        {stage.label}
+      </span>
+      {stage.days != null && (
+        <span className={`exl-stage-days ${stage.late ? 'is-late' : ''}`.trim()} aria-hidden="true">
+          <span className="exl-stage-sep">·</span>
+          {stage.late && <Icon name="warning--alt" size={16} />}
+          {stage.days} d
+        </span>
+      )}
+    </span>
+  )
+}
+
 /** One site. The site code is the row's link, stretched over the row; the
  * checkbox and the villages pill sit above it and keep their own clicks. */
-function SiteRow({ row, index, term, checked, onSelect, expanded, onToggle, rise }) {
+function SiteRow({ row, index, term, checked, onSelect, expanded, onToggle, rise, matched }) {
   const count = row.hadaf_villages
   const stripId = `exl-villages-${row.id}`
   return (
     <div
       role="row"
       aria-rowindex={index + 2}
-      className={`exl-row exl-site-row ${checked ? 'is-selected' : ''} ${rise ? 'is-rising' : ''}`.trim()}
+      className={`exl-row exl-site-row ${checked ? 'is-selected' : ''} ${rise ? 'is-rising' : ''} ${matched ? 'has-match' : ''}`.trim()}
       style={rise ? { '--exl-i': index } : undefined}
     >
       <span role="cell" className="exl-check-cell">
@@ -81,17 +101,32 @@ function SiteRow({ row, index, term, checked, onSelect, expanded, onToggle, rise
           onChange={(e) => onSelect(row.id, e.target.checked)}
         />
       </span>
-      <span role="cell">
+      <span role="cell" className="exl-site-cell">
         <Link className="exl-site" to={siteRecordPath(row.id, row.village_match?.code)}>
           <Marked text={row.site_code} term={term} />
         </Link>
+        {typeTag(row.type) && <span className="exl-type-tag">{typeTag(row.type)}</span>}
       </span>
-      {/* No decorative icons in the rows (UEP-13 §3.14b); they stay on the record page. */}
+      {/* No decorative icons in the rows (UEP-13 §3.14b). */}
+      <span role="cell" className="exl-province">
+        {row.province ? <Fa><Marked text={row.province} term={term} /></Fa> : <span className="uw-none">—</span>}
+      </span>
       <span role="cell">
-        <Fa>{row.province}</Fa>
-      </span>
-      <span role="cell" className={`exl-type ${isNewSite(row.type) ? 'is-new' : ''}`.trim()}>
-        {typeLabel(row.type) || <span className="uw-none">—</span>}
+        {count > 0 ? (
+          <button
+            type="button"
+            className="exl-villages-pill"
+            aria-expanded={expanded}
+            aria-controls={expanded ? stripId : undefined}
+            aria-label={`${expanded ? 'Hide' : 'Show'} ${count} ${count === 1 ? 'village' : 'villages'} of ${row.site_code}`}
+            onClick={() => onToggle(row.id)}
+          >
+            <span className="uw-num">{formatNumber(count)}</span>
+            <Icon name="chevron--down" size={16} />
+          </button>
+        ) : (
+          <span className="uw-none" aria-label="No target villages">—</span>
+        )}
       </span>
       <span role="cell">
         {row.requested_technology.length ? (
@@ -103,32 +138,9 @@ function SiteRow({ row, index, term, checked, onSelect, expanded, onToggle, rise
         )}
       </span>
       <span role="cell">
-        <button
-          type="button"
-          className="exl-villages-pill"
-          aria-expanded={expanded}
-          aria-controls={expanded ? stripId : undefined}
-          aria-label={`${expanded ? 'Hide' : 'Show'} ${count} ${count === 1 ? 'village' : 'villages'} of ${row.site_code}`}
-          disabled={count === 0}
-          onClick={() => onToggle(row.id)}
-        >
-          <span className="uw-num">{formatNumber(count)} {count === 1 ? 'village' : 'villages'}</span>
-          <Icon name="chevron--down" size={16} />
-        </button>
+        {row.dt_contractor ? <Fa>{row.dt_contractor.name}</Fa> : <span className="exl-unassigned">Not assigned</span>}
       </span>
-      <span role="cell" className="exl-with-icon">
-        {row.dt_contractor ? (
-          <>
-            <FieldIcon field="dt_contractor" />
-            <Fa>{row.dt_contractor.name}</Fa>
-          </>
-        ) : (
-          <>
-            <FieldIcon field="dt_contractor" muted />
-            <span className="exl-unassigned">Not assigned</span>
-          </>
-        )}
-      </span>
+      <span role="cell"><StageCell row={row} /></span>
       <span role="cell" className="exl-chev-cell" aria-hidden="true">
         <Icon name="chevron--right" size={16} />
       </span>
@@ -151,13 +163,35 @@ function VillageStrip({ row, villages }) {
         ) : (
           <ul className="exl-strip-chips" aria-label={`Target villages of ${row.site_code}`}>
             {villages.list.map((v) => (
-              <li key={v.code ?? v.name} className={`exl-village ${v.code && v.code === match ? 'is-match' : ''}`.trim()}>
-                <Fa className="exl-village-name">{v.name}</Fa>
-                <span className="exl-village-code uw-num">{v.code}</span>
+              <li key={v.code ?? v.name}>
+                <VillageChip village={v} className={v.code && v.code === match ? 'is-match' : ''} />
               </li>
             ))}
           </ul>
         )}
+      </span>
+    </div>
+  )
+}
+
+/**
+ * The village the search matched, on its own line under the site's row
+ * (UEP-28 §A5): no click needed to see why the site is listed. "+n" when more
+ * of the site's villages matched; Open record lands on that village.
+ */
+function MatchLine({ row, term }) {
+  const hit = row.village_match
+  return (
+    <div role="row" className="exl-match">
+      <span role="cell" aria-colspan={COLUMNS.length + 2} className="exl-match-cell">
+        <span className="exl-match-mark" aria-hidden="true" />
+        <span className="exl-match-label">Village</span>
+        <Fa className="exl-match-name"><Marked text={hit.name} term={term} /></Fa>
+        <span className="exl-match-code uw-num"><Marked text={hit.code} term={term} /></span>
+        {hit.more > 0 && <span className="exl-match-more" aria-label={`and ${hit.more} more matching villages`}>+{hit.more}</span>}
+        <Link className="exl-match-open" to={siteRecordPath(row.id, hit.code)} aria-label={`Open record of ${row.site_code} at village ${hit.name || hit.code}`}>
+          Open record <Icon name="arrow--right" size={16} />
+        </Link>
       </span>
     </div>
   )
@@ -201,9 +235,9 @@ function moveFocus(e) {
 }
 
 /**
- * The list as a table (UEP-11a §B3–B6, §B8): header, rows, the open row's
- * villages, skeletons while the first page loads, and the line at the end
- * while the next page does.
+ * The list as a table (UEP-11a §B, UEP-28 §A3–A6): header, 44px rows, the
+ * matched village under its row, the open row's villages, skeletons while the
+ * first page loads, and the line at the end while the next page does.
  */
 export default function SiteRows({
   list, state, onSort, selected, onSelect, onSelectAll, expanded, villages, onToggle, scrollRef,
@@ -273,9 +307,11 @@ export default function SiteRows({
 }
 
 function SiteRowGroup({ row, expanded, villages, ...rest }) {
+  const matched = Boolean(row.village_match) && !expanded
   return (
     <>
-      <SiteRow row={row} expanded={expanded} {...rest} />
+      <SiteRow row={row} expanded={expanded} matched={matched} {...rest} />
+      {matched && <MatchLine row={row} term={rest.term} />}
       {expanded && <VillageStrip row={row} villages={villages} />}
     </>
   )

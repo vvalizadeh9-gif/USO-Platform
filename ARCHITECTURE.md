@@ -1903,13 +1903,19 @@ paths are declared before `/sites/{work_item_id}`.
 
 | Endpoint | Answers |
 |---|---|
-| `GET /explorer/sites` | `{items, total, next_cursor}`. Params: `q`; `province`, `type`, `tech`, `dt_contractor` (each repeatable); `sort` = `site` (default) · `province` · `type` · `tech` · `villages` · `dt_contractor`; `dir` = `asc` · `desc`; `cursor`, `limit` (default 50, max 100) |
+| `GET /explorer/sites` | `{items, total, next_cursor}`. Params: `q`; `province`, `type`, `tech`, `dt_contractor` (each repeatable); `sort` = `site` (default) · `province` · `type` · `tech` · `villages` · `dt_contractor` · `stage` (UEP-28); `dir` = `asc` · `desc`; `cursor`, `limit` (default 50, max 100) |
 | `GET /explorer/sites/{id}/villages` | `[{code, name}]`, the site's hadaf villages; 404 outside scope |
 | `GET /explorer/sites/filters` | `{provinces, types, technologies, dt_contractors}` the caller's own sites carry |
-| `GET /explorer/sites/export` | the list's rows as .xlsx, same params, plus `ids` to narrow to a selection (≤ 20,000 rows) |
+| `GET /explorer/sites/export` | the list's rows as .xlsx (with Stage and Days since UEP-28), same params, plus `ids` to narrow to a selection (≤ 20,000 rows) |
+| `GET /explorer/sites/{id}/villages/export` | UEP-28: the record's village history as .xlsx — "Current villages" and "History" sheets; scoped like the record (403/404), audited (`EXPORTED`), text never written as a formula; needs the Exports feature |
 
 An item: `{id, site_code, province, type, requested_technology: ["3G","4G"],
-hadaf_villages, dt_contractor: {id, name} | null, village_match: {code, name} | null}`.
+hadaf_villages, dt_contractor: {id, name} | null, village_match: {code, name, more} | null,
+stage, stage_days, stage_late}` — `more` counts the site's other matching
+villages; `stage` is the open journey step (`on_air` · `health_check` ·
+`assigned` · `dt_done` · `sent_to_ict` · `acceptance` · `done`), `stage_days`
+whole days in it (`null` when its start is unknown, and for `done`),
+`stage_late` true only over that step's SLA (see *Lifecycle stage* below).
 
 - **Scope** is `visible_work_item_ids`, the same rule as every list; filters
   and search are applied inside it, so they can only narrow it.
@@ -1924,9 +1930,14 @@ hadaf_villages, dt_contractor: {id, name} | null, village_match: {code, name} | 
   either direction), then site code and id ascending; the cursor is those
   values, base64 JSON, and is refused (400) for another sort. The page reads
   `limit + 1` rows to know there is more.
-- **Queries per request are fixed**: the هدف values, the total, the page, and
-  (when searching) the matched villages. A test holds 1 and 100 rows to the
-  same count.
+- **Queries per request are fixed**: the هدف values, the total, the page, the
+  SLA policy (once per request), and (when searching) the matched villages. A
+  test holds 1 and 100 rows to the same count.
+- **Stage sort** orders by the cached `lifecycle_stage` (in the chosen
+  direction, unstaged rows last), then by `lifecycle_stage_since` ascending
+  (oldest in its step first), then site code and id. The keyset cursor carries
+  the date as a tagged JSON value. On PostgreSQL 16 with 4,201 sites a page
+  sorted by stage measured p50 33 ms, p95 39 ms.
 
 ### `GET /explorer/sites/{work_item_id}`
 
@@ -1941,12 +1952,15 @@ the assignment screens rely on that.
   "status": {"step": "acceptance", "state": "in_progress"},
   "general": {"on_air_date": "2026-10-06", "dt_date": "2026-09-30",
               "site_contractor": "…", "dt_contractor": "…",
-              "requested_technology": ["3G", "4G"], "province": "…", "hadaf_villages": 3},
+              "requested_technology": ["3G", "4G"], "province": "…", "site_type": "New Site",
+              "hadaf_villages": 3},
   "journey": {
     "steps": [{"key": "on_air", "state": "done", "date": "2026-09-02", "gap_days": null}, "…"],
-    "aging": {"total_days": 42, "current_step_days": 14,
-              "longest_step": {"from": "assigned", "to": "dt_done", "days": 14},
-              "oldest_pending": {"authority": "CRA", "days": 14, "villages": 2}}
+    "aging": {"total_days": 35,
+              "oldest_pending": {"authority": "CRA", "days": 14, "villages": 2}},
+    "lanes": {"ict": {"approved": 2, "total": 3, "done_on": null},
+              "cra": {"approved": 3, "total": 3, "done_on": "2026-11-21"}},
+    "sent_to_ict": ["…"]
   },
   "acceptance_started": true,
   "villages": [{"id": 9, "code": "V10232", "name": "…",
@@ -1955,11 +1969,15 @@ the assignment screens rely on that.
                         "round": 1, "filed": true, "refiled": false},
                 "cra": {"…": "same shape"}}],
   "counts": {"ict": {"approved": 1, "pending": 1, "rejected": 1}, "cra": {"…": "…"}},
+  "village_history": [{"date": "2026-11-18", "kind": "removed",
+                       "villages": [{"code": "V20022", "name": "…"}],
+                       "status": "ignored", "decided_by": "…", "decided_at": "2026-11-19"}],
   "workflow": {"current_stage": "DT Done", "active_drive_test_id": 3, "dt_submission_date": "2026-09-30"}
 }
 ```
 
-- **Scope** is `apply_work_item_scope`; a site the caller may not see is 404.
+- **Scope** is `explorer_work_item_ids`; a live site the caller may not see is
+  403 (the no-access screen), an unknown one 404.
 - **Queries:** a fixed number however many villages: the work item with its
   graph (`selectinload`), the villages with their acceptance rows, and the
   site's rounds and request letters as plain columns. A test holds 1 and 20
@@ -1989,8 +2007,13 @@ site was assigned). Dates: on air as above; health check is the latest
 `health_checks` table; assigned is `relevant_assignment().assigned_at`; DT
 done is `dt_date_gregorian`; acceptance is the date the last village became
 fully approved (the latest ICT and CRA verdict date), when every village has
-one. Acceptance starts when the drive test is Done. Total aging runs from
-the on-air date only; without it, `total_days` is `null`.
+one. Acceptance starts when the drive test is Done. Since UEP-28 total aging
+runs from the **health check done date** to today (to the acceptance done date
+once done); without a health check date, `total_days` is `null`. `lanes` reuse
+`counts()`; a lane's `done_on` is its latest approval date once every village
+is approved for that authority (`authority_done_on`, which
+`acceptance_done_on` now builds on). The badge (`status`) is always the open
+step of these same steps.
 
 **A village side** is My Work's state (`villages.ict_status` / `cra_status`
 read through `my_work_status.display_status`), in three words with a phase:
@@ -2010,15 +2033,60 @@ means both sides approved, which is the existing `village_verdict`.
 
 ### The page
 
-`pages/explorer/`: `ExplorerList` (the list: `useSiteList`, `SiteRows`,
-`FilterPopover`, `BulkBar`, with its URL, words and back-navigation memory in
-`listModel.js`),
-`SiteRecord` (one request, `useSiteRecord`), `GeneralInfoCard`, `JourneyCard`
-(`AgingTiles`, `StepPath`, `VillageAcceptance`) and `TakeActionDrawer`.
-Labels, the row order and which workflow forms apply are in `explorerModel.js`.
-The old detail page's forms (assign, submit DT, return to coordinator, DT
-review) live in the drawer unchanged; assignment is offered only on sites
-awaiting one. Every link to a site goes through `lib/explorerLinks.js`.
+`pages/explorer/`: `ExplorerList` (the list: `useSiteList`, `SiteRows` with
+its `StageCell` and village-match line, `FilterPills`, `BulkBar`, with its URL,
+words and back-navigation memory in `listModel.js`), `SiteRecord` (one request,
+`useSiteRecord`): `RecordHeader`, `SitePassport` (`ProvinceMap` over
+`iranMini.json`, `VillageChip`), `JourneyCard` (`JourneyRibbon` drawing
+`ribbonModel.js`, `VillageAcceptance`), `VillageHistoryPanel` and
+`TakeActionDrawer`. Labels, the stage cell, the row order and which workflow
+forms apply are in `explorerModel.js`. The old detail page's forms (assign,
+submit DT, return to coordinator, DT review) live in the drawer unchanged;
+assignment is offered only on sites awaiting one. Every link to a site goes
+through `lib/explorerLinks.js`.
+
+### Lifecycle stage (UEP-28)
+
+The list sorts every site by its open journey step in SQL, but the step facts
+include a Shamsi on-air date only Python can parse, so the stage is cached on
+the work item rather than recomputed as a second SQL definition:
+
+- `work_items.lifecycle_stage` (smallint, index in
+  `explorer_journey.STAGES`, 6 = done) and `lifecycle_stage_since` (date the
+  open step's clock started), indexed together. Migration `a8c4e2f7b913`.
+- **One rule.** `services/lifecycle_stage.compute` builds the steps with
+  `explorer.journey_steps` — the record page's own `_step_facts` →
+  `build_steps` — and `explorer_journey.open_step`, in a fixed number of
+  queries per 500 sites. Neither value depends on today; the list derives
+  `stage_days` as today − since. A parity test compares every listed site
+  with its record.
+- **Kept in sync in one place.** A `SessionLocal` listener notes every work
+  item a flush touched through a fact (the work item, its villages, HC tasks,
+  legacy health checks, assignments, submission items and batches) and
+  refreshes exactly those in `before_commit`, inside a savepoint, so a fault in
+  the cache is logged and never blocks the business write. Safety nets: rows
+  still NULL are filled at start-up (`bootstrap.init_db`), and the hourly jobs
+  (`daily_jobs`) refresh all (≈2 s for 4,201 sites).
+- **Late** (`lifecycle_stage.stage_sla_days`, from Admin › SLA policies):
+  health check = `hc_assign` + `hc_check` + `hc_decide`; assigned =
+  `dt_assign`; dt_done = `dt_test` + `dt_review`; sent_to_ict = `submit_cycle`;
+  acceptance = max(`ict_file`, `cra_file`) + `validate` + max(`ict_reply`,
+  `cra_reply`); on air and done have none and are never late.
+
+### Village history (UEP-28)
+
+`services/explorer_village_history.py`: the site's `cpm_change_requests` of
+type `village_qty`, newest first by import batch date, one event per kind
+(a request may both add and remove). `status` maps Accepted → applied,
+Ignored → ignored, Pending → pending; `decided_by` is the PM's name. Two
+queries (requests joined to their batch, then the names). Removed villages
+were stored as bare codes until UEP-28; `cpm_import._detect_removed_villages`
+now stores `{"village_code", "village_name"}`, and `cpm_apply` and the
+Validate CPM tab read both shapes. An old code-only removal shows its name
+only when the village is still on the site. There is no "site created" event:
+a work item has no link to the import that created it. Applying a removal
+still hard-deletes the village and its acceptance rows (open decision: soft
+delete).
 
 ### Database
 

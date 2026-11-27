@@ -3,21 +3,19 @@ import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import api from '../../api/client'
 import Icon from '../../components/Icon'
 import { useFillPage } from '../../components/pageMode'
-import PageHeading from '../../components/work/PageHeading'
 import RecentActions from '../../components/work/RecentActions'
 import { WorkProvider, useWork } from '../../components/work/WorkContext'
-import { Fa, StepError } from '../../components/work/parts'
+import { StepError } from '../../components/work/parts'
 import { useToast } from '../../context/ToastContext'
 import { describeBlobError, saveBlob } from '../../lib/download'
 import { EXPLORER_PATH, explorerListPath } from '../../lib/explorerLinks'
 import AppFooter from '../../shell/AppFooter'
 import { useHomeData } from '../../shell/HomeData'
 import BulkBar from './BulkBar'
-import FilterPopover from './FilterPopover'
+import FilterPills from './FilterPills'
 import SiteRows from './SiteRows'
 import {
-  FILTER_FIELDS, apiParams, fieldOptions, footerText, isFiltered, listParams, nextSort,
-  readListState, recallList, rememberList,
+  apiParams, countText, isFiltered, listParams, nextSort, readListState, recallList, rememberList,
 } from './listModel'
 import useSiteList from './useSiteList'
 import '../../styles/home.css'
@@ -27,10 +25,12 @@ import '../../styles/explorer.css'
 const SEARCH_DELAY = 250
 
 /**
- * Explorer (UEP-11a §B): the list of all sites, for finding one fast and
- * opening its record. One card: search, filter chips and Filter on top, the
- * sortable table in the middle (the only thing that scrolls), the count and
- * keyboard hints at the foot. Search, filters and sort live in the URL.
+ * Explorer (UEP-11a §B, redesigned in UEP-28 Part A): the list of all sites,
+ * for finding one fast and opening its record. The title row on the page
+ * background, then one card: search and filter pills on top, the sortable
+ * table (the only thing that scrolls) below. No footer: the count is the
+ * title's pill and the keyboard hints are the search box's tooltip. Search,
+ * filters and sort live in the URL.
  */
 export default function ExplorerList() {
   useFillPage()
@@ -158,15 +158,12 @@ function SitesPage() {
     }
   }
 
-  const foot = list.total != null ? footerText(list.items.length, list.total, filtered) : null
-
   return (
     <div className="uep-home uw-page exl-page">
-      <PageHeading
-        title="Explorer"
-        count={allTotal}
-        pill
+      <TitleRow
         headingRef={headingRef}
+        count={countText(list.total, allTotal, filtered)}
+        filtered={filtered}
         historyOpen={historyOpen}
         onHistory={() => navigate(historyOpen ? EXPLORER_PATH : explorerListPath({ view: 'history' }))}
         onExport={historyOpen ? undefined : () => exportSites(null)}
@@ -180,9 +177,12 @@ function SitesPage() {
         <section className="uw-card exl-card" aria-label="All sites">
           <header className="exl-toolbar">
             <SearchField value={state.q} onChange={(q) => setState({ q })} />
-            <FilterChips state={state} options={options} onRemove={(key) => toggleFilter(key, null)} />
-            <span className="exl-toolbar-spacer" />
-            <FilterPopover options={options} filters={state.filters} onToggle={toggleFilter} />
+            <FilterPills
+              options={options}
+              filters={state.filters}
+              onChange={toggleFilter}
+              onClear={() => setState({ filters: {} })}
+            />
           </header>
           <div className="uw-card-body exl-body" ref={scrollRef} onScroll={onScroll}>
             {list.status === 'error' ? (
@@ -204,14 +204,6 @@ function SitesPage() {
               />
             )}
           </div>
-          <footer className="exl-footer">
-            <span role="status">
-              {foot && <>Showing <b className="uw-num">{foot.shown}</b> {foot.rest}</>}
-            </span>
-            <span className="exl-keys" aria-hidden="true">
-              <kbd>↑</kbd> <kbd>↓</kbd> move · <kbd>Enter</kbd> open
-            </span>
-          </footer>
           <BulkBar
             count={selected.size}
             exporting={exporting}
@@ -255,11 +247,61 @@ function useScrollMemory(scrollRef, list, search) {
   }, [])
 }
 
-/** The search field: 380px, clear button, Esc clears. The URL updates a
- * moment after typing stops. */
+/**
+ * The title row (UEP-28 §A1), on the page background and aligned with the
+ * card: Explorer's app tile, the title, the count pill ("97 of 4,201 sites"
+ * while searching or filtering, announced politely), History and Export.
+ */
+function TitleRow({ headingRef, count, filtered, historyOpen, onHistory, onExport, exporting }) {
+  return (
+    <div className="exl-title-row">
+      <span className="exl-app-tile" aria-hidden="true"><Icon name="search--locate" size={20} /></span>
+      <h1 ref={headingRef} tabIndex={-1}>Explorer</h1>
+      <span className={`exl-count uw-num ${filtered ? 'is-filtered' : ''}`.trim()} role="status" aria-live="polite">
+        {count}
+      </span>
+      <span className="exl-title-spacer" />
+      <button
+        type="button"
+        className={`uw-btn ${historyOpen ? 'is-current' : ''}`.trim()}
+        aria-current={historyOpen ? 'page' : undefined}
+        onClick={onHistory}
+      >
+        <Icon name="recently-viewed" size={16} /> History
+      </button>
+      {onExport && (
+        <button type="button" className="uw-btn" onClick={onExport} disabled={exporting} aria-busy={exporting || undefined}>
+          <Icon name="download" size={16} /> Export
+        </button>
+      )}
+    </div>
+  )
+}
+
+/** "/" anywhere on the page (outside a text field) focuses the search. */
+function useSlashFocus(inputRef) {
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key !== '/' || e.ctrlKey || e.metaKey || e.altKey) return
+      const t = e.target
+      if (t instanceof HTMLElement && (t.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(t.tagName))) return
+      e.preventDefault()
+      inputRef.current?.focus()
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [inputRef])
+}
+
+const SEARCH_HINT = 'Find a site by ID, village ID, village name or province'
+
+/** The search field: 440px, the "/" hint, clear button, Esc clears. The URL
+ * updates a moment after typing stops. */
 function SearchField({ value, onChange }) {
   const [text, setText] = useState(value)
   const sent = useRef(value)
+  const inputRef = useRef(null)
+  useSlashFocus(inputRef)
   useEffect(() => {
     if (value !== sent.current) {
       sent.current = value
@@ -282,13 +324,15 @@ function SearchField({ value, onChange }) {
     onChange('')
   }
   return (
-    <label className="exl-search">
+    <label className="exl-search" title="/ to search · ↑ ↓ to move · Enter to open">
       <Icon name="search" size={16} />
       <input
+        ref={inputRef}
         type="search"
         value={text}
-        placeholder="Find a site by ID, village ID or village name"
-        aria-label="Find a site by ID, village ID, village name or province"
+        placeholder={SEARCH_HINT}
+        aria-label={SEARCH_HINT}
+        aria-keyshortcuts="/"
         onChange={(e) => setText(e.target.value)}
         onKeyDown={(e) => {
           if (e.key === 'Escape' && text) {
@@ -297,34 +341,14 @@ function SearchField({ value, onChange }) {
           }
         }}
       />
-      {text && (
+      {text ? (
         <button type="button" className="exl-search-clear" aria-label="Clear search" onClick={clear}>
           <Icon name="close" size={16} />
         </button>
+      ) : (
+        <kbd className="exl-slash" aria-hidden="true">/</kbd>
       )}
     </label>
-  )
-}
-
-/** "Province کرمان ×" for each active filter. */
-function FilterChips({ state, options, onRemove }) {
-  const chips = FILTER_FIELDS.filter((f) => state.filters[f.key])
-  if (chips.length === 0) return null
-  return (
-    <ul className="exl-chips" aria-label="Active filters">
-      {chips.map((f) => {
-        const value = state.filters[f.key]
-        const label = fieldOptions(f, options).find((o) => o.value === value)?.label ?? value
-        return (
-          <li key={f.key} className="exl-chip">
-            {f.label} <b>{f.persian ? <Fa>{label}</Fa> : label}</b>
-            <button type="button" className="exl-chip-remove" aria-label={`Remove ${f.label} filter`} onClick={() => onRemove(f.key)}>
-              <Icon name="close" size={16} />
-            </button>
-          </li>
-        )
-      })}
-    </ul>
   )
 }
 

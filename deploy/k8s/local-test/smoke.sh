@@ -92,6 +92,21 @@ curl_in_cluster() {
 curl_in_cluster http://frontend.prd-uep.svc.cluster.local:8080/api/health/ready | grep '"ready"' >/dev/null \
   || fail "readiness through the frontend Service"
 
+# After a pod is replaced, the Service's endpoints and nginx's upstream catch
+# up a few seconds after "rolled out": ask again for up to a minute before
+# calling it a failure (one try made this step flaky in CI).
+ready_soon() {
+  local i
+  for i in $(seq 1 12); do
+    if curl_in_cluster http://frontend.prd-uep.svc.cluster.local:8080/api/health/ready 2>/dev/null \
+        | grep '"ready"' >/dev/null; then
+      return 0
+    fi
+    sleep 5
+  done
+  fail "$1"
+}
+
 say "Step 5 (last part): the Ingress"
 kubectl apply -f "$WORK/uep-k8s.yaml"
 kubectl get ingress -n "$NS" uep
@@ -99,7 +114,7 @@ kubectl get ingress -n "$NS" uep
 say "A deleted pod is replaced and UEP stays ready"
 kubectl delete "$(kubectl get pods -n "$NS" -l app.kubernetes.io/name=backend -o name | head -1)" -n "$NS"
 kubectl rollout status deploy/backend -n "$NS" --timeout=300s
-curl_in_cluster http://frontend.prd-uep.svc.cluster.local:8080/api/health/ready | grep '"ready"' >/dev/null
+ready_soon "readiness after a backend pod was replaced"
 
 say "Step 10: restart; step 9: roll back"
 kubectl rollout restart deploy/backend -n "$NS"
@@ -133,7 +148,7 @@ run_task '["app.scripts.db_preflight"]' | grep 'The database is empty' >/dev/nul
 kubectl delete pod uep-task -n "$NS"
 kubectl scale deploy/backend -n "$NS" --replicas=2
 kubectl rollout status deploy/backend -n "$NS" --timeout=600s
-curl_in_cluster http://frontend.prd-uep.svc.cluster.local:8080/api/health/ready | grep '"ready"' >/dev/null
+ready_soon "readiness after scaling the backend back up"
 
 say "Quota in use"
 kubectl describe resourcequota -n "$NS"

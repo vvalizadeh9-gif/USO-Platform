@@ -1,11 +1,12 @@
 # Explorer
 
-*For everyone who works on drive tests: PM, coordinators, contractors,
-regional managers and viewers. Open it from the Drive test app's rail.*
+*For everyone who works on drive tests and acceptance: PM, coordinators,
+contractors, regional managers and viewers.*
 
 Explorer is every site you can see, and one page per site that tells its
-whole story: what the site is, where it is in UEP, how long each step took,
-and where each of its villages stands with ICT and CRA.
+whole story: where the site is, which villages it serves, where it stands in
+its journey and how long each step took, and where each village stands with
+ICT and CRA.
 
 Every date on Explorer is Gregorian, for example **6 Oct 2026**. The rest of
 UEP still shows Shamsi dates.
@@ -13,120 +14,114 @@ UEP still shows Shamsi dates.
 ## The list
 
 Explorer opens on the list of every site you can see. Its job is to find one
-site fast and open its record. The count beside the title is every site you
-can see.
+site fast and open its record. The pill beside the title counts them
+(**4,201 sites**); while you search or filter it reads **97 of 4,201 sites**.
 
-- **Search** (*Find a site by ID, village ID or village name*) narrows the
-  list as you type: site ID, village ID, village name or province. Persian
-  names match however the letters were typed. The matching part of a site ID
-  is highlighted; when a site was found through one of its villages, that
-  village is highlighted when you open the row's villages, and on the record
-  page. **Esc** or **×** clears it.
-- **Filter** filters by Province, Site type, Requested tech or DT contractor:
-  choose a field, then a value. Each filter shows as a chip after the search;
-  **×** on a chip removes it, and choosing the active value again does too.
-- **Sort** by clicking a column header (Site, Province, Type, Technology,
-  Villages, DT contractor); click it again to reverse. The list starts sorted
-  by site ID.
+- **Search** (*Find a site by ID, village ID, village name or province*)
+  narrows the list as you type. Persian names match however the letters were
+  typed, and the matching text is highlighted. Press **/** anywhere on the page
+  to jump to the search; **Esc** or **×** clears it.
+- **When the search finds a village**, the village shows on its own line under
+  its site: its name and ID, **+n** when more of the site's villages matched,
+  and **Open record**, which opens the site with that village highlighted.
+- **Filters** are the pills beside the search: Province, Site type,
+  Technology and DT contractor. Click a pill, then a value (Province has its
+  own search box). A chosen pill turns blue and shows its value; **×** removes
+  it and **Clear filters** removes them all.
+- **Sort** by clicking a column header; click it again to reverse. The list
+  starts sorted by site ID.
 - Search, filters and sort are in the page address, so you can share a view
-  by sharing its link.
+  by sharing its link. **Export** downloads exactly what the list shows.
 
-Each row shows the site ID, province, type (*New site* or *Add tech*), the
-requested technologies, the number of the site's هدف villages, and the DT
-contractor (*Not assigned* when there is none).
+Each row shows the site ID with its type (**New** or **Add tech**), the
+province, the number of target villages, the requested technologies, the DT
+contractor (*Not assigned* when there is none) and the **Stage**:
+
+- a small bar: the steps done out of six, and the open step striped;
+- the open step: *Health check*, *Assignment*, *Drive test*, *Sent to ICT* or
+  *Acceptance*, then how many days the site has been in it;
+- the days turn **red with a warning mark** only when the site is over that
+  step's time limit (set in Admin › SLA policies);
+- **Accepted** with a green check once every village is approved by ICT and
+  CRA.
+
+Sorting by Stage lists sites in journey order, and inside each step the one
+waiting longest first.
 
 - **Click anywhere on a row** to open the site's record. The checkbox and the
   villages pill do not open it.
-- **The villages pill** shows the site's هدف villages, name and ID, under the
-  row. One row is open at a time.
-- **More rows load by themselves** as you scroll to the end, fifty at a time.
-  The footer says how many are shown. When you come back from a record, the
-  list is where you left it.
-- **Select rows** with their checkboxes (the header checkbox selects every row
-  loaded so far). A bar appears at the bottom: **Export** downloads the
-  selected sites, **Copy IDs** copies their site IDs, **×** clears the
-  selection. The **Export** button at the top downloads the whole list as you
-  see it, with its search, filters and sort.
-- **Keyboard:** Tab to the first row, **↑** and **↓** move between rows,
-  **Enter** opens the record.
-- **History** beside Export lists your recent actions with Undo, as before.
-
-Stage chips, numbered pages and bulk assignment are no longer on Explorer;
-assign drive tests from the Drive test page. Old links to `/work-items` still
-work and land here.
+- **The villages pill** shows the site's target villages under the row.
+- **↑ ↓** move between rows, **Enter** opens one (the search box's tooltip
+  reminds you).
+- **Tick rows** to export them or copy their IDs from the bar that appears.
+- Coming back from a record returns you to the same place in the list.
 
 ## A site's record
 
-The header shows the site ID and one badge for where the site is now, for
-example *Acceptance in progress*, or *Acceptance done* in green when every
-village is fully approved.
+One screen, top to bottom: the site ID with its status, the site passport, and
+the journey.
 
-- **Open in My Work** opens My Work searched to this site.
-- **File letter** (contractors, coordinators and PM) opens My Work on this
-  site's villages that still need a letter. It is shown while the site has
-  open villages.
-- **Take action** appears only when you have something to do on this site:
-  assign it for a drive test, submit its drive test or hand it back, or review
-  the submitted drive test. The forms are the same as before, in a side panel.
+### The status
 
-### General information
+Beside the site ID, one badge says which step the site is in: *Health check in
+progress*, *Awaiting assignment*, *Drive test in progress*, *Awaiting
+submission to ICT*, *Acceptance in progress*, or **Acceptance done** in green.
+It is always the step the timeline shows in progress. On the right: **Take
+action** (when you have something to do on this site), **Open in My Work**,
+and **File letter** for the roles that file.
 
-On air date, DT date, site contractor, DT contractor, requested technology,
-province and the number of هدف villages. A dash means the value is not known
-yet. The site contractor comes from the CPM file's *پیمانکار اجرایی سایت*
-column and appears after the next CPM import.
+### The site passport
 
-### Journey
+- **Province:** a small map of Iran with the site's province filled in and
+  pinned, and its name.
+- **Target villages:** the villages as chips, name and ID. Click a chip to
+  highlight that village in the table below; click it again to clear it.
+  **+n more** and **History** open the village history.
+- **Site type** and **Requested technology** (2G, 3G, 4G with signal bars).
+- **Contractors:** the site contractor and the DT contractor.
 
-The five steps a site goes through, in the order they happen: **On air →
-Health check → Assigned → DT done → Acceptance**. A finished step is a filled
-blue circle with its date; the current step has a blue ring and says *In
-progress*. On air is always the first step: a site goes on air, then it is
-health-checked. Between two steps a pill shows how many days the step took
-("+7 d"), and on the current step how long it has been going ("+8 d so far").
+### The journey
 
-Sites imported from CPM before Mehr 1405 may have no dates for early steps.
-Those steps read *No date*, and any number that needs the date shows a dash.
-Some sites have a drive test dated before their on-air date; the steps keep
-their order, show the real dates, and the pill between them shows a dash.
-Nothing is ever guessed.
+At the top right, two numbers:
 
-Above the steps, four small tiles:
+- **Total aging:** days since the health check was done (until acceptance
+  was done, for a finished site). Before the health check it reads "—".
+- **Oldest pending:** how long the longest-waiting ICT or CRA side has waited,
+  and how many villages that authority still has pending. Hidden when nothing
+  is pending.
 
-| Tile | What it counts |
-|---|---|
-| Total aging | Days since the site went on air, to today (to the acceptance date once acceptance is done). A dash when the on-air date is not known |
-| In current step | Days since the current step started |
-| Longest step | The longest gap between two steps |
-| Oldest pending | The longest wait among ICT or CRA sides still pending, and how many villages that authority has pending. Hidden when nothing is pending |
+The **timeline** draws the site's steps to scale: a long step looks long.
+Above the line, the days each step took ("8 d", or "16 d so far" for the open
+one); below it, each step and its date, with **On air** and **DT done** in
+bold blue. A dashed line marks **Today**. Once the drive test is done the line
+splits in two: the **ICT** lane (plum) and the **CRA** lane (blue), each
+filling as villages are approved and ending in "**2** of 3 approved", or "All
+approved" with the date. *Sent to ICT* sits on the ICT lane. Steps still to
+come are a dashed grey tail. A step CPM imported without a date shows "—".
+
+**Sent to ICT in batch #n** beside the title opens that Submissions batch.
 
 ### Acceptance by village
 
-Each village's ICT and CRA status. Up to six villages are shown as two panels
-side by side; more than six as one table whose rows scroll under a fixed
-header. **All** shows every village, **Open** only those not yet approved by
-both. Villages with a rejection come first, then those with most pending,
-then the longest waiting; fully approved villages are last, in the same order
-for ICT and CRA.
+One table for every site: each village, then its ICT and its CRA status. The
+column heads count approved, pending and rejected. Each status is a word with
+its mark and a date: "15 Nov 2026" (approved), "13 Nov 2026, not re-filed
+yet" (rejected), "Re-filed 17 Nov 2026", "Filed 20 Nov 2026" or "Not filed
+yet". Rejected villages come first, then pending, then approved. **Open**
+shows only villages not yet approved by both. Before the drive test is done
+the table says *Acceptance starts when drive test is done.*
 
-| You see | It means | The line under it |
-|---|---|---|
-| Approved (green tick) | The authority approved every requested technology | The decision date, and how many days it took from the request letter |
-| Rejected (red cross) | A technology was rejected and nothing has been filed since | The decision date, "not re-filed yet" |
-| Pending (amber clock) | With ICT or CRA: a request letter is out | "With ICT since …, waiting n days" |
-| Pending | The answer has been filed and is with the coordinator | "Answer filed …, with coordinator" |
-| Pending · Returned | The coordinator sent the filing back | "Returned …, needs a new letter" |
-| Pending · Re-filed | Round 2 or later is in progress | "Re-filed …, waiting n days" |
-| Pending | Nothing has been filed | "Not filed yet" |
+### Village history
 
-Opening a village from the header search, or from My Work's village record,
-lands on its site with that village highlighted.
+**History** opens a panel with the site's current villages and every village
+a monthly CPM import added or removed, newest first, and what the PM decided:
+"Applied by … on …", or "Ignored by … on … · still on this site". **Export to
+Excel** downloads the current villages and the history as two sheets (if you
+have the Export feature). Villages removed before this release show their ID
+only. **Esc** closes the panel.
 
-Before the drive test is done the section says *Acceptance starts when the
-site is on air and drive-tested.*
+### When something is missing
 
-## The Drive Test dashboard
-
-The Drive test app's rail no longer lists Dashboard. The dashboard is in
-**Insights › Dashboards**, and old links to it still work. The Drive test app
-now opens on its first queue.
+A site you may not see shows the no-access screen; a site that does not exist
+says it was not found. If a part of the page cannot load, it says so with
+**Retry**.
