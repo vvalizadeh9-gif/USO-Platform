@@ -57,10 +57,16 @@ def is_overdue(item: PendingItem, kind: SlaKind, sla_days: int, now: datetime) -
     return due is not None and now > due
 
 
-# An item's standing on Home. Every item is exactly one of the three.
+# An item's standing on Home. Every item is exactly one of these.
 LATE = "late"
 DUE_SOON = "due_soon"
 ON_TIME = "on_time"
+#: UEP-27: imported from CPM before dated data (1 Mehr 1405) -- no clock start
+#: and no due date. Home shows it apart and never calls it late.
+NO_DATE = "no_date"
+
+#: Home's order: late first, undated last (the list panel sorts by it).
+STATUS_ORDER: tuple[str, ...] = (LATE, DUE_SOON, ON_TIME, NO_DATE)
 
 
 def due_soon_window() -> timedelta:
@@ -90,6 +96,26 @@ def item_status(
     if due is not None and due - now <= window:
         return DUE_SOON
     return ON_TIME
+
+
+def has_no_date(item: PendingItem) -> bool:
+    """No start date and no due date: nothing to measure the item against."""
+    return item.started_at is None and item.due_at is None
+
+
+def home_status(
+    item: PendingItem, kind: SlaKind, sla_days: int, now: datetime, window: timedelta
+) -> str:
+    """Home's four-way status (UEP-27 §5.2): :data:`NO_DATE` before anything
+    else, otherwise :func:`item_status`.
+
+    Only Home reads this. The board and the digest keep :func:`is_overdue`,
+    which measures an undated item from the tracking epoch -- the SLA rules are
+    unchanged; Home only declines to call an undated item late.
+    """
+    if has_no_date(item):
+        return NO_DATE
+    return item_status(item, kind, sla_days, now, window)
 
 
 def sla_days_by_queue(db: Session, keys: list[str]) -> dict[str, int]:

@@ -108,6 +108,7 @@ const PATTERNS = [
   [/^\/explorer\/sites\/\d+\/villages$/, () => siteVillages(3)],
   [/^\/explorer\/sites\/\d+$/, explorerSite],
   [/^\/submissions\/batches\/\d+$/, (url) => SB.batch(Number(url.split('/').pop()))],
+  [/^\/me\/queues\/[^/]+\/items$/, (url) => F.queueItems(url)],
 ]
 
 const viewOf = (user) => (user.role.name === 'Contractor' ? 'contractor' : 'staff')
@@ -118,6 +119,15 @@ export async function signIn(page, user = F.PM) {
   }, user)
   await page.route('**/api/v1/**', async (route) => {
     const path = new URL(route.request().url()).pathname.replace('/api/v1', '')
+    // UEP-27: a Home list's export (a real .xlsx, so the download completes).
+    if (/^\/me\/(queues\/[^/]+\/export|home\/export)\.xlsx$/.test(path)) {
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        headers: { 'content-disposition': 'attachment; filename="UEP_DT-assignment_26-Nov-2026.xlsx"' },
+        body: villagesXlsx(3),
+      })
+    }
     if (path === '/gaps/villages.xlsx') {
       const count = F.exportCount(route.request().url())
       return route.fulfill({

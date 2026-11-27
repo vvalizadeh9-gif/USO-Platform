@@ -168,9 +168,11 @@ def _ticket(row: _Row) -> dict:
         "short_label": s.queue.short_label,
         "unit": s.queue.unit,
         "count": s.count,
+        "holder": s.queue.holder,
         "on_time": s.on_time,
         "due_soon": s.due_soon,
-        "late": s.overdue,
+        "late": s.late,
+        "no_date": s.no_date,
         "oldest_started_at": s.oldest_started_at,
         "earliest_due_at": s.earliest_due_at,
         "date_kind": s.date_kind,
@@ -261,10 +263,14 @@ def build(db: Session, user: User, now: datetime | None = None) -> dict:
 
     done_days = None
     if role not in NO_DONE_ROLES:
+        trend_start = today - timedelta(days=home_trends.TREND_DAYS - 1)
         done_days = done.done_per_day(
-            db, user, role, today - timedelta(days=home_trends.TREND_DAYS - 1), today
+            db, user, role, min(trend_start, done.week_start(today) - timedelta(days=7)), today
         )
     trends = home_trends.build_trends(db, user, [q.key for q in queues], today, live, done_days)
+    work = work_totals(tickets)
+    work["todo_change_7d"] = _todo_change(db, user, queues, today, work["todo"])
+    work.update(_done_weeks(done_days, today))
 
     configured = {q.key: days[q.key] for q in queues if q.sla is SlaKind.CONFIGURED}
     distinct_days = set(configured.values())
@@ -289,15 +295,74 @@ def build(db: Session, user: User, now: datetime | None = None) -> dict:
             "pending_week_delta": home_trends.week_delta(trends["pending"]),
             "overdue_week_delta": home_trends.week_delta(trends["overdue"]),
             "due_soon_week_delta": home_trends.week_delta(trends["due_soon"]),
+            **work,
         },
         "trends": trends,
         "groups": groups,
         "plan": _plan(db, user, role, today),
         "app_badges": _badges(tickets),
+        "cpm_imported_at": _cpm_imported_at(db),
         # Counted like a card's rows, shown on none: a page's own number for
         # its rail badge and header (types.RAIL_QUEUES; UEP-16 Filing).
         "rail_tickets": _case_meta_on(ctx, [_ticket(_rail_row(q, ctx, days[q.key], window)) for q in rail_queues]),
     }
+
+
+# --------------------------------------------------------------------------
+# UEP-27: To do, Waiting on others, Done this week
+# --------------------------------------------------------------------------
+def work_totals(tickets: list[dict]) -> dict:
+    """To do is the ``self`` tickets, Waiting on others the ``others``; a
+    ``reminder`` (the Mojri tracker) is in neither. Late + due + on time + no
+    date == To do, because each ticket's four parts add up to its count."""
+    mine = [t for t in tickets if t["holder"] == "self"]
+    theirs = [t for t in tickets if t["holder"] == "others"]
+
+    def total(rows: list[dict], key: str) -> int:
+        return sum(t[key] for t in rows)
+
+    return {
+        "todo": total(mine, "count"),
+        "todo_late": total(mine, "late"),
+        "todo_due_soon": total(mine, "due_soon"),
+        "todo_on_time": total(mine, "on_time"),
+        "todo_no_date": total(mine, "no_date"),
+        "waiting": total(theirs, "count"),
+        "waiting_late": total(theirs, "late"),
+        "waiting_no_date": total(theirs, "no_date"),
+    }
+
+
+def _todo_change(db: Session, user: User, queues, today: date, todo: int) -> int | None:
+    """To do now less To do seven days ago, from this user's snapshot over the
+    same ``self`` queues; None when that day's snapshot cannot answer."""
+    keys = [q.key for q in queues if q.holder == "self"]
+    if not keys:
+        return 0 if todo == 0 else None
+    then = today - timedelta(days=home_trends.WEEK)
+    past = home_trends.snapshot_days(db, user, keys, then, then).get(then)
+    return None if past is None or past.pending is None else todo - past.pending
+
+
+def _done_weeks(done_days: dict[date, int] | None, today: date) -> dict:
+    """Acts this week (Saturday to today, Tehran) and all of last week."""
+    if done_days is None:
+        return {"done_this_week": None, "done_last_week": None}
+    start = done.week_start(today)
+    last = start - timedelta(days=7)
+    return {
+        "done_this_week": sum(n for d, n in done_days.items() if start <= d <= today),
+        "done_last_week": sum(n for d, n in done_days.items() if last <= d < start),
+    }
+
+
+def _cpm_imported_at(db: Session) -> datetime | None:
+    """When the last CPM workbook was imported (the footer's data freshness)."""
+    from sqlalchemy import func, select
+
+    from app.models.acceptance import CpmImportBatch
+
+    return db.execute(select(func.max(CpmImportBatch.created_at))).scalar()
 
 
 def _add_case_meta(ctx: QueueContext, tickets: list[dict]) -> None:

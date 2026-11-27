@@ -1,7 +1,7 @@
-/* KPI strip, shared by Home and the Drive Test dashboard (UEP-04).
+/* KPI strip of the Drive Test and Acceptance dashboards (UEP-04).
    One white container holding a 4-column grid of transparent tiles; a tile
    is label, figure, change line and a 28px sparkline that draws in and then
-   fades its area up. Home lifts its first tile as the hero. */
+   fades its area up. Home stopped using it in UEP-27 (pages/home/HomeOverview). */
 @keyframes hk-enter {
   from { opacity: 0; transform: translateY(var(--uep-enter-distance)); }
   to { opacity: 1; transform: none; }
@@ -27,12 +27,10 @@
   --spark: var(--uep-accent);
   --spark-area: var(--uep-area-opacity);
 }
-.hk-tile.is-hero { background: var(--uep-accent); color: var(--uep-on-accent); --spark: var(--uep-on-accent); --spark-area: var(--uep-hero-area-opacity); }
 .hk-label { font-size: var(--uep-fs-small); font-weight: var(--uep-weight-medium); }
 .hk-value { font-size: var(--uep-fs-kpi); font-weight: var(--uep-weight-semibold); line-height: 1.15; }
 .hk-delta { font-size: var(--uep-fs-caption); font-weight: var(--uep-weight-medium); color: var(--uep-text-3); }
 .hk-delta[data-tone='bad'] { color: var(--uep-danger); }
-.is-hero .hk-label, .is-hero .hk-delta, .is-hero .hk-delta[data-tone='bad'] { color: var(--uep-accent-on-tint); }
 .hk-spark { width: 100%; height: var(--uep-spark-height); margin-top: var(--uep-space-4); overflow: visible; }
 .hk-line {
   fill: none;

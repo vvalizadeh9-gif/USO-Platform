@@ -128,6 +128,22 @@ DateKind = Literal["since", "due"]
 #: ``days`` is the Mojri tracker row (UEP-24 F9): one item, worded by age.
 Unit = Literal["sites", "villages", "fixes", "plans", "changes", "days"]
 
+#: Who acts next on a queue's items (UEP-27 §5.1):
+#:
+#: * ``self``     -- the viewer: Home's **To do**;
+#: * ``others``   -- someone else holds them (ICT, CRA, a contractor, a team)
+#:   and the viewer chases: **Waiting on others**;
+#: * ``reminder`` -- a nudge, never counted in either (the Mojri tracker).
+Holder = Literal["self", "others", "reminder"]
+HOLDERS: tuple[str, ...] = ("self", "others", "reminder")
+
+#: What a queue's ``PendingItem.entity_id`` points at, so Home's list panel can
+#: say which site, village and province each item is (``details.py``).
+EntityKind = Literal[
+    "work_item", "hc_task", "remediation", "drive_test", "village",
+    "submission_item", "case", "plan", "cpm_change", "none",
+]
+
 
 @dataclass(frozen=True)
 class OwnerRef:
@@ -167,6 +183,11 @@ class QueueDefinition:
     sla: SlaKind
     date_kind: DateKind
     fetch: Callable[[QueueContext], list[PendingItem]]
+    #: Who acts next (UEP-27). Required: a queue cannot be added without
+    #: saying whether it is the viewer's to do or someone else's to chase.
+    holder: Holder
+    #: What its items' ids are (UEP-27 list panel).
+    entity: EntityKind
     unit: Unit = "sites"
     #: False for a queue only Home shows (and the snapshot records): it
     #: overlaps queues already on the board, which would count it twice.

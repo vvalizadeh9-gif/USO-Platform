@@ -1,6 +1,7 @@
 # UEP Home — design
 
-Status: **built**, then redesigned to Microsoft 365 / Fluent 2 (§0). Source brief: `uep-home-landing-prompt.md`;
+Status: **built**, redesigned to Microsoft 365 / Fluent 2 (§0), then to To do /
+Waiting on others with a list behind every number (**UEP-27, §00 — current**). Source brief: `uep-home-landing-prompt.md`;
 approved screen: `design-previews/home/uep-home-design-reference.html`.
 
 Home is the landing page for PM, Coordinator, Contractor and problem owners,
@@ -11,10 +12,112 @@ Action Center's queue registry and adds nothing that could disagree with it.
 
 ---
 
-## 0. The Microsoft 365 redesign (current)
+## 00. UEP-27: To do, Waiting on others, numbers that open their lists (current)
 
-This section describes Home as it is now. Sections 1–9 below record the
-first build; where they disagree with this section, this section wins.
+This section describes Home as it is now. §0 and §1–9 record earlier builds;
+where they disagree with this section, this section wins. Visual reference:
+artifact "UEP Home Proposed", colour option *Today refined*.
+
+### 00.1 What the page shows
+
+| Part | Content | Click |
+|---|---|---|
+| Overview card | **To do** (number, change against 7 days ago, stacked bar Late / Due in 1 week / On time / No date, legend) · **Waiting on others** (number, "{n} late, {n} no date") · **Done this week** (Saturday to today, against last week) | bar part / legend / Waiting **filter the cards**; To do and Done **open the panel** |
+| Work cards | One per group (Drive test, Acceptance, Plans). Rows held by the viewer, then the Mojri tracker, then "Waiting on others". Each row: name, 4 px status strip, count + unit, chevron. No card total. Plans keeps Contractor PIP. | a row opens its list (pre-filtered to the active status); PIP opens PIP by contractor (PM) |
+| Apps panel | Tile grid, 3 columns; a group spans as many columns as it has apps (Planning + Insights share a row). Data and Admin are quiet white tiles. Badge "1k" style. Description is a tooltip. | tile opens the app; badge opens that app's to-do summary |
+| Footer | System status, "CPM data from {date}", "Updated {time}", version | — |
+
+Removed: the four KPI tiles and their sparklines, card totals, "SLA 14 days".
+
+### 00.2 Rules
+
+- **Who acts next** is `QueueDefinition.holder`, required on every queue:
+  `self` (To do), `others` (Waiting on others), `reminder` (counted nowhere:
+  the Mojri tracker). The spec's table, plus these calls for queues it does not
+  name: *others* -- DT with contractors, Fixes open, ICT/CRA follow-up, Follow up
+  with ICT; *self* -- Fixes (problem owner), re-filing, ICT corrections,
+  Rejected · Contractor, Your basket, Filing (rail only).
+  `test_every_queue_says_who_acts_next_and_what_its_items_are` fails a queue
+  with none.
+- **Status** is `sla.home_status`: **No date** first (no start date and no due
+  date -- imported from CPM before 1 Mehr 1405), otherwise `item_status` with
+  `HOME_DUE_SOON_DAYS = 7`. `late + due_soon + on_time + no_date == count` on
+  every ticket, and To do's four parts add up to To do.
+- **The board and digest are unchanged.** `is_overdue` still measures an
+  undated item from the tracking epoch; `QueueSummary.overdue` is that rule.
+  Home reads `QueueSummary.late`, which never counts an undated item. The DT
+  pipeline strip reads Home's late too, so a step and its Home row agree.
+- **Filters** (cards): a status shows each row's part of that status, `0` for
+  rows someone else holds; Waiting on others shows those rows whole. Zero rows
+  fade: strip to 40 %, text to `--uep-text-3` (still 4.5:1).
+- **Accessibility.** The bar's parts are buttons for the mouse; a small part
+  can be a few pixels wide, so the legend -- the same control at full size --
+  is the keyboard and screen-reader path (WCAG 2.5.8 "equivalent"), and the
+  bar is `aria-hidden` and out of the tab order. App badges draw a 20 px dot in
+  a 24 × 24 button. Every clickable number has a name ("To do: 168, show
+  list"). axe (WCAG 2.2 AA) runs on the page, with a filter on, and on the panel.
+
+### 00.3 Endpoints
+
+All scoped to the signed-in user exactly as `/me/home` is (the queue's own
+fetch), and refused for a role without Home.
+
+| Endpoint | Returns |
+|---|---|
+| `GET /me/home` | + ticket `holder`, `no_date`; totals `todo*`, `waiting*`, `done_this_week`, `done_last_week`, `todo_change_7d`; `cpm_imported_at` |
+| `GET /me/queues/{key}/items?status=&q=&group=&page=&size=` | items sorted late → due → on time → no date, oldest first; `total`, `counts_by_status` (search applied, status not), `groups`. 404 for a queue not on the user's Home. `size` ≤ 1000 |
+| `GET /me/queues/{key}/export.xlsx` | the same list, every row, a sheet per group; `EXPORTER`; audit `home.export` |
+| `GET /me/home/export.xlsx?panel=summary\|done\|pip` | a summary panel, one row per line, rows built server-side; `EXPORTER`; audit `home.export` |
+| `GET /me/done?period=week` | acts since Saturday, newest first (the rules `done_per_day` counts) |
+| `GET /me/pip/by-contractor` | each contractor's delivered vs approved PIP this month; PM and Viewer only |
+
+Item details (site, village, province, CRA region) come from
+`action_queues/details.py`: each queue declares an `entity` kind; ids are
+anchored to a work item / village in one query per kind and described in one
+query per table. Lists are cached 5 s per user and queue (`count_cache`).
+Export cells pass `core/spreadsheet.formula_safe` (`= + - @`, tab, CR).
+
+### 00.4 Frontend
+
+```
+Home.jsx                 filter (toggle, Esc) · views (panel stack) · openers
+├── home/HomeOverview    To do + bar + legend · Waiting · Done      (useCountUp)
+├── home/WorkCard        QueueRow (strip) · MojriRow · "Waiting on others" · PIP
+├── home/AppsPanel       tile grid · badge button → app summary
+└── home/DrillPanel      SummaryView · ListView · DoneView · PipView
+                         useDialogFocus (focus in, Esc, focus back) · useExport
+```
+
+Pure rules are in `home/homeLogic.js` (`todoParts`, `rowCount`,
+`cardSections`, `ageBar`, `changeOf`, `openUrl`, ...). Status swatches use the
+`hs-` classes, scoped to bar elements so they never leak to other pages.
+
+**Open in {app}** appends `status` and `q` to the queue's own URL. The queue
+pages were out of scope (spec §3 "must not change"), so a page that does not
+yet read those parameters opens unfiltered.
+
+### 00.5 Tokens
+
+`--uep-home-late` `#B42318`, `--uep-home-due` `#E0A800`, `--uep-home-on-time`
+`#9DB2E0`, `--uep-home-no-date` (hatched), plus layout and motion tokens
+(`--uep-home-page-max`, `--uep-home-rail`, `--uep-home-drawer`,
+`--uep-dur-home-*`). Type: only 12/13/14/16/18/20/24/26/32 px (checked by
+`e2e/home.spec.js`). No green status anywhere; the one green is Excel's on
+the export icon.
+
+### 00.6 Tests
+
+`backend/tests/test_home_drilldown.py` (holders, no date, window, sorting,
+search, grouping, scope, export, formula escaping, audit, done, PIP);
+`frontend/src/pages/home/HomeRedesign.test.jsx`, `homeLogic.test.js`;
+`frontend/e2e/home.spec.js` (fit, font sizes, the PM journey to a file, axe).
+
+---
+
+## 0. The Microsoft 365 redesign
+
+Superseded by §00 where they differ. Sections 1–9 below record the first
+build.
 
 ### 0.0 Layout (UEP-12)
 

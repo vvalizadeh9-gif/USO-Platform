@@ -36,11 +36,14 @@ from app.services.action_queues.types import QueueDefinition, SlaKind, Stage
 from app.services.drive_test_analytics import DriveTestAnalytics, is_dt_done
 
 
-def _pipeline_queue(key, stage, label, fetch, *, kind=SlaKind.CONFIGURED) -> QueueDefinition:
+def _pipeline_queue(
+    key, stage, label, fetch, *, kind=SlaKind.CONFIGURED, entity="work_item"
+) -> QueueDefinition:
+    # Work held by somebody else: never on Home, so "others" is descriptive.
     return QueueDefinition(
         key=key, stage=stage, label=label, short_label=label, url="",
         roles=frozenset(), sla=kind, date_kind="since", fetch=fetch,
-        on_board=False,
+        holder="others", entity=entity, on_board=False,
     )
 
 
@@ -48,11 +51,13 @@ def _pipeline_queue(key, stage, label, fetch, *, kind=SlaKind.CONFIGURED) -> Que
 PIPELINE_ONLY: dict[str, QueueDefinition] = {
     q.key: q
     for q in (
-        _pipeline_queue("hc_in_check", Stage.HC, "In health check", lifecycle.hc_to_submit),
+        _pipeline_queue("hc_in_check", Stage.HC, "In health check", lifecycle.hc_to_submit,
+                        entity="hc_task"),
         _pipeline_queue("dt_in_test", Stage.DT, "With contractor", lifecycle.sites_to_drive_test),
         _pipeline_queue("dt_sent_back", Stage.DT, "Sent back", lifecycle.returned_to_redo),
         _pipeline_queue(
-            "hc_remediation", Stage.HC, "Remediation", lifecycle.fixes, kind=SlaKind.CATEGORY
+            "hc_remediation", Stage.HC, "Remediation", lifecycle.fixes, kind=SlaKind.CATEGORY,
+            entity="remediation",
         ),
     )
 }
@@ -104,11 +109,16 @@ def summary(ctx: QueueContext) -> dict[str, dict]:
             }
             continue
         queue = queue_for(queue_key)
-        s = board.summarize(queue, queue.fetch(ctx), days[queue_key], ctx.now)
+        # Home's late (UEP-27): an undated imported item is never late, so a
+        # step's number stays the number on its Home row.
+        s = board.summarize(
+            queue, queue.fetch(ctx), days[queue_key], ctx.now,
+            due_soon_window=sla.due_soon_window(),
+        )
         oldest = s.oldest_started_at
         out[strip_key] = {
             "count": s.count,
-            "late": s.overdue,
+            "late": s.late,
             "oldest_days": max(0, (ctx.now - oldest).days) if oldest else None,
             "sla_days": days[queue_key] if queue.sla is SlaKind.CONFIGURED else None,
         }

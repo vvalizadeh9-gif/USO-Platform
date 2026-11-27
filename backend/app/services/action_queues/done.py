@@ -46,6 +46,10 @@ class DoneRule:
     #: The queues this act takes items off.
     drains: frozenset[str]
     selects: SelectsFor
+    #: What Home's "Done this week" list calls the act (UEP-27).
+    action: str = ""
+    #: What the selects' row ids are (``details.ANCHORS``).
+    entity: str = "none"
 
 
 def _acceptance_keys(*suffixes: str) -> frozenset[str]:
@@ -58,61 +62,61 @@ RULES: tuple[DoneRule, ...] = (
         select(HcTask.id, HcAssignment.assigned_at)
         .join(HcAssignment, HcTask.hc_assignment_id == HcAssignment.id)
         .where(HcAssignment.assigned_by == u.id, HcAssignment.assigned_at >= since),
-    ]),
+    ], action="Health check assigned", entity="hc_task"),
     DoneRule("hc_reviewed", frozenset({"hc_review"}), lambda u, since: [
         select(HcTask.id, HcTask.reviewed_at)
         .where(HcTask.reviewed_by == u.id, HcTask.reviewed_at >= since),
-    ]),
+    ], action="Health check reviewed", entity="hc_task"),
     DoneRule("hc_submitted", frozenset({"hc_submit"}), lambda u, since: [
         select(HcTask.id, HcTask.completed_at)
         .join(HcAssignment, HcTask.hc_assignment_id == HcAssignment.id)
         .where(HcAssignment.contractor_id == u.contractor_id, HcTask.completed_at >= since),
-    ]),
+    ], action="Health check submitted", entity="hc_task"),
     DoneRule("fixes_closed", frozenset({"hc_fixes"}), lambda u, since: [
         select(HcRemediation.id, HcRemediation.closed_at)
         .where(HcRemediation.closed_by == u.id, HcRemediation.closed_at >= since),
-    ]),
+    ], action="Fix closed", entity="remediation"),
     DoneRule("dt_assigned", frozenset({"dt_assign"}), lambda u, since: [
         select(Assignment.id, Assignment.assigned_at)
         .where(Assignment.assigned_by == u.id, Assignment.assigned_at >= since),
-    ]),
+    ], action="Drive test assigned", entity="assignment"),
     DoneRule("dt_reviewed", frozenset({"dt_review"}), lambda u, since: [
         select(DriveTest.id, DriveTest.coordinator_reviewed_at)
         .where(DriveTest.coordinator_reviewed_by == u.id,
                DriveTest.coordinator_reviewed_at >= since),
         select(DriveTest.id, DriveTest.pm_reviewed_at)
         .where(DriveTest.pm_reviewed_by == u.id, DriveTest.pm_reviewed_at >= since),
-    ]),
+    ], action="Drive test reviewed", entity="drive_test"),
     DoneRule("dt_submitted", frozenset({"dt_todo", "dt_redo"}), lambda u, since: [
         select(DriveTest.id, DriveTest.submitted_at)
         .join(Assignment, Assignment.work_item_id == DriveTest.work_item_id)
         .where(Assignment.contractor_id == u.contractor_id, Assignment.is_active.is_(True),
                DriveTest.submitted_at >= since),
-    ]),
+    ], action="Drive test submitted", entity="drive_test"),
     DoneRule("acceptance_filed", _acceptance_keys("to_file", "refile", "returned"), lambda u, since: [
         select(AcceptanceSubmission.id, AcceptanceSubmission.submitted_at)
         .where(AcceptanceSubmission.submitted_by == u.id,
                AcceptanceSubmission.submitted_at >= since),
-    ]),
+    ], action="Acceptance filed", entity="acceptance_submission"),
     DoneRule("acceptance_validated", _acceptance_keys("to_validate"), lambda u, since: [
         select(AcceptanceSubmission.id, AcceptanceSubmission.reviewed_at)
         .where(AcceptanceSubmission.reviewed_by == u.id,
                AcceptanceSubmission.reviewed_at >= since),
-    ]),
+    ], action="Acceptance filing validated", entity="acceptance_submission"),
     DoneRule("plans_decided", frozenset({"plans_approve"}), lambda u, since: [
         select(ContractorMonthlyPlan.id, ContractorMonthlyPlan.decided_at)
         .where(ContractorMonthlyPlan.decided_by == u.id,
                ContractorMonthlyPlan.decided_at >= since),
-    ]),
+    ], action="Plan decided", entity="plan"),
     DoneRule("cpm_decided", frozenset({"cpm_changes"}), lambda u, since: [
         select(CpmChangeRequest.id, CpmChangeRequest.decided_at)
         .where(CpmChangeRequest.decided_by == u.id, CpmChangeRequest.decided_at >= since),
-    ]),
+    ], action="CPM change decided", entity="cpm_change"),
     DoneRule("plan_submitted", frozenset({"plan_submit"}), lambda u, since: [
         select(ContractorMonthlyPlan.id, ContractorMonthlyPlan.submitted_at)
         .where(ContractorMonthlyPlan.submitted_by == u.id,
                ContractorMonthlyPlan.submitted_at >= since),
-    ]),
+    ], action="Monthly plan submitted", entity="plan"),
 )
 
 
@@ -124,6 +128,15 @@ def rules_for(board_role: str) -> list[DoneRule]:
 def start_of_day(day: date) -> datetime:
     """Midnight in Tehran, the day "today" means everywhere on the board."""
     return datetime.combine(day, time.min, tzinfo=sla.TEHRAN)
+
+
+#: Python's weekday for Saturday: the Iranian working week starts on it.
+SATURDAY = 5
+
+
+def week_start(day: date) -> date:
+    """The Saturday that starts ``day``'s week (Home's "Done this week")."""
+    return day - timedelta(days=(day.weekday() - SATURDAY) % 7)
 
 
 def done_per_day(
@@ -148,3 +161,29 @@ def done_per_day(
                 if day in counts:
                     counts[day] += 1
     return counts
+
+
+@dataclass(frozen=True)
+class DoneAct:
+    """One act Home's "Done this week" list shows."""
+
+    rule: DoneRule
+    row_id: int
+    when: datetime
+
+
+def done_acts(db: Session, user: User, board_role: str, first: date) -> list[DoneAct]:
+    """Every act this user finished from ``first`` on, newest first -- the
+    same rules and rows :func:`done_per_day` counts, so the list and the
+    number cannot disagree."""
+    since = start_of_day(first)
+    acts: list[DoneAct] = []
+    for rule in rules_for(board_role):
+        seen: set = set()
+        for stmt in rule.selects(user, since):
+            for row_id, when in db.execute(stmt).all():
+                if row_id in seen or when is None:
+                    continue
+                seen.add(row_id)
+                acts.append(DoneAct(rule, row_id, sla.as_datetime(when)))
+    return sorted(acts, key=lambda a: a.when, reverse=True)

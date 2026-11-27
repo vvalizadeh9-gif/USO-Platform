@@ -514,9 +514,9 @@ export const accProgress = {
 
 // UEP Home for the PM: a full Drive test card (with a queue past the
 // 30-item dot limit), acceptance all on time, and the month's plan.
-export const homeTicket = (queue_key, short_label, label, url, { on_time = 0, due_soon = 0, late = 0, age = 5, owners = [], more = 0, unit = 'sites' } = {}) => ({
-  queue_key, short_label, label, url, unit,
-  count: on_time + due_soon + late, on_time, due_soon, late,
+export const homeTicket = (queue_key, short_label, label, url, { on_time = 0, due_soon = 0, late = 0, no_date = 0, age = 5, owners = [], more = 0, unit = 'sites', holder = 'self' } = {}) => ({
+  queue_key, short_label, label, url, unit, holder,
+  count: on_time + due_soon + late + no_date, on_time, due_soon, late, no_date,
   oldest_started_at: new Date(Date.now() - age * 86400000).toISOString(),
   earliest_due_at: null, date_kind: 'since', owners, owners_more: more, owners_total: owners.length + more,
 })
@@ -534,8 +534,9 @@ const homeGroups = [
   {
     key: 'acceptance', label: 'Acceptance', scope_label: 'All project',
     tickets: [
-      homeTicket('ict_pending', 'Pending ICT', 'Open ICT acceptance', '/my-work?authority=ICT', { on_time: 30, late: 12, age: 19, unit: 'villages', owners: ['پیشرو فن'], more: 4 }),
-      homeTicket('cra_pending', 'Pending CRA', 'Open CRA acceptance', '/my-work?authority=CRA', { on_time: 41, due_soon: 2, late: 7, age: 17, unit: 'villages', owners: ['آرین ارتباط'], more: 5 }),
+      // UEP-27: held by ICT and CRA -- the PM's Waiting on others.
+      homeTicket('ict_pending', 'Pending ICT', 'Open ICT acceptance', '/my-work?authority=ICT', { on_time: 30, late: 12, no_date: 18, age: 19, unit: 'villages', owners: ['پیشرو فن'], more: 4, holder: 'others' }),
+      homeTicket('cra_pending', 'Pending CRA', 'Open CRA acceptance', '/my-work?authority=CRA', { on_time: 41, due_soon: 2, late: 7, no_date: 22, age: 17, unit: 'villages', owners: ['آرین ارتباط'], more: 5, holder: 'others' }),
     ],
   },
   {
@@ -556,6 +557,16 @@ for (const t of homeTickets.filter((x) => x.count)) {
   homeBadges[path].count += t.count
   homeBadges[path].parts.push({ label: t.short_label, count: t.count })
 }
+
+/** UEP-27's To do / Waiting on others totals, summed from tickets as the server does. */
+export function workTotals(tickets) {
+  const of = (holder, key) => tickets.filter((t) => t.holder === holder).reduce((n, t) => n + t[key], 0)
+  return {
+    todo: of('self', 'count'), todo_late: of('self', 'late'), todo_due_soon: of('self', 'due_soon'),
+    todo_on_time: of('self', 'on_time'), todo_no_date: of('self', 'no_date'),
+    waiting: of('others', 'count'), waiting_late: of('others', 'late'), waiting_no_date: of('others', 'no_date'),
+  }
+}
 const homeDays = Array.from({ length: 14 }, (_, i) => new Date(Date.UTC(2026, 8, 26 + i)).toISOString().slice(0, 10))
 
 export const homeSummaryPm = {
@@ -563,12 +574,14 @@ export const homeSummaryPm = {
   scope_label: 'All project',
   generated_at: '2026-10-09T08:54:00Z',
   shamsi_date: '1405-07-17',
-  due_soon_days: 3,
+  due_soon_days: 7,
   sla_uniform_days: 14,
+  cpm_imported_at: '2026-10-07T06:00:00Z',
   sla_days: { hc_review: 14, dt_assign: 14, dt_review: 14 },
   totals: {
     pending: homeSum('count'), queues: homeTickets.length, overdue: homeSum('late'), due_soon: homeSum('due_soon'),
     pending_week_delta: 4, overdue_week_delta: -2, due_soon_week_delta: -1, done_today: 6, done_yesterday: 4,
+    ...workTotals(homeTickets), done_this_week: 23, done_last_week: 31, todo_change_7d: -9,
   },
   trends: {
     days: homeDays,
@@ -584,6 +597,28 @@ export const homeSummaryPm = {
 
 // GET /search for the header search (UEP-12): whatever the term, one site
 // with a Persian province and a village, so rows, meta and <bdi> all render.
+/** GET /me/queues/{key}/items: late sites first, oldest first (UEP-27). */
+export function queueItems(url) {
+  const u = new URL(url)
+  const key = u.pathname.split('/').at(-2)
+  const ticket = homeTickets.find((t) => t.queue_key === key) || homeTickets[0]
+  const status = u.searchParams.get('status') || 'all'
+  const parts = [['late', ticket.late], ['due_soon', ticket.due_soon], ['on_time', ticket.on_time], ['no_date', ticket.no_date]]
+  const all = parts.flatMap(([st, n]) => Array.from({ length: Math.min(n, 40) }, (_, i) => ({
+    id: `${key}-${st}-${i}`, label: `TEH-${String(1000 + i).padStart(4, '0')}`, site_id: `TEH-${1000 + i}`,
+    village_name: null, province: i % 2 ? 'Fars' : 'Tehran', cra_region: null, holder_name: 'Arya Telecom',
+    contractor: 'Arya Telecom', status: st,
+    age_days: st === 'no_date' ? null : st === 'late' ? 40 - i : st === 'due_soon' ? 10 : 3,
+    sla_days: st === 'no_date' ? null : 14, due_at: null, url: '/explorer/sites/1',
+  })))
+  const items = all.filter((x) => status === 'all' || x.status === status)
+  return {
+    queue_key: key, label: ticket.short_label, unit: ticket.unit, url: ticket.url, holder: ticket.holder,
+    total: items.length, counts_by_status: Object.fromEntries(parts), group: 'none', groups: [],
+    page: 1, size: 1000, items,
+  }
+}
+
 export const searchResults = {
   sites: [{ id: 7, site_code: 'W4-1021', province: 'کرمان', stage: 'Acceptance' }],
   villages: [{ work_item_id: 7, village_name: 'دهنو', village_code: 'V10232', site_code: 'W4-1021' }],

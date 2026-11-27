@@ -80,6 +80,9 @@ EXPORTED = "EXPORTED"
 # UEP-26: Admin > Sign-in page saved (support contact, planned-update notice).
 SIGNIN_SETTINGS_CHANGED = "signin_settings.changed"
 
+# UEP-27: a list behind a Home number downloaded as Excel.
+HOME_EXPORT = "home.export"
+
 # ---------------------------------------------------------------------------
 # Result / status of the recorded attempt
 # ---------------------------------------------------------------------------

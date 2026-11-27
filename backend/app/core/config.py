@@ -254,8 +254,9 @@ class Settings(DatabaseSettings):
     # written every day the job runs; only the email follows this list.
     digest_weekdays: str = "sat,sun,mon,tue,wed"
 
-    # Home's "due soon": an item that turns late within this many days.
-    home_due_soon_days: int = 3
+    # Home's "Due in 1 week" (UEP-27; 3 before): an item that turns late
+    # within this many days. The digest and snapshot read the same setting.
+    home_due_soon_days: int = 7
 
     @property
     def cors_origin_list(self) -> list[str]:

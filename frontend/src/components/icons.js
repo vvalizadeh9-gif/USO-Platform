@@ -18,6 +18,10 @@ import meter16 from '@carbon/icons/es/meter/16.js'
 import meter20 from '@carbon/icons/es/meter/20.js'
 import pending16 from '@carbon/icons/es/pending/16.js'
 import pending20 from '@carbon/icons/es/pending/20.js'
+import caretUp16 from '@carbon/icons/es/caret--up/16.js'
+import caretUp20 from '@carbon/icons/es/caret--up/20.js'
+import caretDown16 from '@carbon/icons/es/caret--down/16.js'
+import caretDown20 from '@carbon/icons/es/caret--down/20.js'
 import close16 from '@carbon/icons/es/close/16.js'
 import close20 from '@carbon/icons/es/close/20.js'
 import download16 from '@carbon/icons/es/download/16.js'
@@ -227,6 +231,9 @@ export const ICONS = Object.freeze({
   notification: { 16: notification16, 20: notification20 },
   'chevron--down': { 16: chevronDown16, 20: chevronDown20 },
   'chevron--right': { 16: chevronRight16, 20: chevronRight20 },
+  // UEP-27: Home's change against 7 days ago.
+  'caret--up': { 16: caretUp16, 20: caretUp20 },
+  'caret--down': { 16: caretDown16, 20: caretDown20 },
   'arrow--left': { 16: arrowLeft16, 20: arrowLeft20 },
   user: { 16: user16, 20: user20 },
   password: { 16: password16, 20: password20 },
