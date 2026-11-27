@@ -1,33 +1,35 @@
-// UEP-11 / UEP-11a: Explorer's list and site record page in a real browser.
+// UEP-28: Explorer's list and site record in a real browser.
 //
-// The list (UEP-11a): at 1440×900 and 1366×768 the page never scrolls; only
-// the list body does, and the title row, tool bar, header row and footer keep
-// their height (the Part A regression: a fixed row once shrank to 8px). axe
-// finds nothing on it either.
-//
-// The record page:
-// * 1440×900: no page scroll with 3 and with 6 villages (boards B4, B5); with
-//   10 (board B6) only the village table's body scrolls, under its header;
-// * 1366×768: still no page scroll; only the village lists scroll;
-// * axe (WCAG 2.2 AA, contrast included) finds nothing, once the page has
-//   faded in.
+// * No page scroll at 1440×900 and 1366×768: on the list, and on records
+//   with 1, 3, 10 and 25 villages. Only the list body, the village table and
+//   the history panel scroll.
+// * Long Persian village names wrap; missing dates show "—".
+// * Every computed font size on both pages is on the type scale.
+// * axe (WCAG 2.2 AA, contrast included) finds nothing on the list, the
+//   record, or the open history panel.
 import AxeBuilder from '@axe-core/playwright'
 import { expect, test } from '@playwright/test'
 import { signIn } from './mockApi.js'
 
-// The site id picks the village count (e2e/explorerFixtures.js).
-const SITES = [
-  { villages: 3, id: 3 },
-  { villages: 6, id: 6 },
-  { villages: 10, id: 10, table: true },
-]
+const VIEWPORTS = [{ width: 1440, height: 900 }, { width: 1366, height: 768 }]
+const SITES = [1, 3, 10, 25]
+const SCALE = [12, 13, 14, 16, 20, 24, 32]
+const TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa']
 
 async function open(page, id, query = '') {
   await signIn(page)
   await page.goto(`/explorer/sites/${id}${query}`)
   await expect(page.getByRole('heading', { level: 2, name: 'Journey' })).toBeVisible()
   await page.waitForLoadState('networkidle')
-  await page.waitForTimeout(400) // the 240ms fade, then settle
+  await page.waitForTimeout(1800) // the ribbon reveal and the table rows, once
+}
+
+async function openList(page) {
+  await signIn(page)
+  await page.goto('/explorer')
+  await expect(page.locator('.exl-site-row').first()).toBeVisible()
+  await page.waitForLoadState('networkidle')
+  await page.waitForTimeout(900)
 }
 
 const pageScroll = (page) =>
@@ -36,155 +38,122 @@ const pageScroll = (page) =>
     return { sh: el.scrollHeight, sw: el.scrollWidth, ih: window.innerHeight, iw: window.innerWidth }
   })
 
-const lastRow = (page, table) =>
-  table ? page.locator('.ex-table tbody tr').last() : page.locator('.ex-panel').first().locator('.ex-row').last()
-
-test.describe('1440×900', () => {
-  test.use({ viewport: { width: 1440, height: 900 } })
-
-  for (const site of SITES) {
-    test(`${site.villages} villages: the page does not scroll`, async ({ page }) => {
-      await open(page, site.id)
-      const m = await pageScroll(page)
-      expect(m.sh).toBeLessThanOrEqual(m.ih)
-      expect(m.sw).toBeLessThanOrEqual(m.iw)
-      await expect(page.getByRole('region', { name: 'General information' })).toBeInViewport({ ratio: 1 })
-      if (!site.table) {
-        // Every village is on screen, nothing scrolls inside either.
-        await expect(lastRow(page, false)).toBeInViewport({ ratio: 1 })
-        const rows = await page.locator('.ex-rows').first().evaluate((el) => el.scrollHeight - el.clientHeight)
-        expect(rows).toBeLessThanOrEqual(1)
-      }
-      if (process.env.SCREENSHOTS) {
-        await page.screenshot({ path: `${process.env.SCREENSHOTS}/explorer-${site.villages}-1440.png` })
-      }
-    })
-  }
-
-  test('10 villages: only the table body scrolls, under a header that stays', async ({ page }) => {
-    await open(page, 10)
-    const scroller = page.getByRole('region', { name: /Villages, ICT and CRA status/ })
-    const inner = await scroller.evaluate((el) => ({ sh: el.scrollHeight, ch: el.clientHeight }))
-    expect(inner.sh).toBeGreaterThan(inner.ch)
-    await scroller.evaluate((el) => el.scrollTo(0, el.scrollHeight))
-    await expect(scroller.locator('thead th').first()).toBeInViewport()
-    await expect(lastRow(page, true)).toBeInViewport()
-  })
-
-  test('the cards end where their content ends', async ({ page }) => {
-    await open(page, 3)
-    const { info, journey, cards } = await page.evaluate(() => ({
-      info: document.querySelector('.ex-info').getBoundingClientRect().bottom,
-      journey: document.querySelector('.ex-journey').getBoundingClientRect().bottom,
-      cards: document.querySelector('.ex-cards').getBoundingClientRect().bottom,
-    }))
-    expect(info).toBeLessThan(cards - 1)
-    expect(journey).toBeLessThan(cards - 1)
-  })
-
-  test('the ?village= row is highlighted and focused', async ({ page }) => {
-    await open(page, 6, '?village=V10004')
-    const row = page.locator('.ex-panel').first().locator('[data-village="V10004"]')
-    await expect(row).toHaveClass(/is-highlight/)
-    await expect(row).toBeFocused()
-  })
-})
-
-test.describe('1366×768', () => {
-  test.use({ viewport: { width: 1366, height: 768 } })
-
-  for (const site of SITES) {
-    test(`${site.villages} villages: no page scroll, only the village list may scroll`, async ({ page }) => {
-      await open(page, site.id)
-      const m = await pageScroll(page)
-      expect(m.sh).toBeLessThanOrEqual(m.ih)
-      expect(m.sw).toBeLessThanOrEqual(m.iw)
-      await expect(page.getByRole('list', { name: 'Journey' })).toBeInViewport({ ratio: 1 })
-      await expect(page.getByRole('list', { name: 'Aging' })).toBeInViewport({ ratio: 1 })
-      // Whatever does not fit is inside the village list, reachable by scrolling it.
-      const list = site.table ? page.locator('.ex-table-scroll') : page.locator('.ex-rows').first()
-      await list.evaluate((el) => el.scrollTo(0, el.scrollHeight))
-      await expect(lastRow(page, site.table)).toBeInViewport()
-      if (process.env.SCREENSHOTS) {
-        await page.screenshot({ path: `${process.env.SCREENSHOTS}/explorer-${site.villages}-1366.png` })
-      }
-    })
-  }
-})
-
-test.describe('accessibility', () => {
-  test.use({ viewport: { width: 1440, height: 900 } })
-  for (const site of SITES) {
-    test(`${site.villages} villages: no WCAG 2.2 AA violations`, async ({ page }) => {
-      await open(page, site.id, '?village=V10002')
-      const { violations } = await new AxeBuilder({ page })
-        .include('.ex-page')
-        .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
-        .analyze()
-      expect(violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(' ')).slice(0, 3).join(', ')}`)).toEqual([])
-    })
-  }
-})
-
-// --------------------------------------------------------------------------
-// The list (UEP-11a)
-// --------------------------------------------------------------------------
-async function openList(page) {
-  await signIn(page)
-  await page.goto('/explorer')
-  await expect(page.getByRole('table', { name: 'Sites' })).toBeVisible()
-  await expect(page.locator('.exl-site-row').first()).toBeVisible()
-  await page.waitForLoadState('networkidle')
-  await page.waitForTimeout(900) // the fade, then twenty staggered rows
+const expectNoPageScroll = async (page) => {
+  const m = await pageScroll(page)
+  expect(m.sh).toBeLessThanOrEqual(m.ih)
+  expect(m.sw).toBeLessThanOrEqual(m.iw)
 }
 
-const heights = (page) =>
-  page.evaluate(() => {
-    const h = (sel) => document.querySelector(sel)?.getBoundingClientRect().height ?? 0
-    return {
-      title: h('.uep-page-header'), toolbar: h('.exl-toolbar'), head: h('.exl-head'), footer: h('.exl-footer'),
+/** Every font size used by visible text under `root`, off the scale. */
+const offScale = (page, root) =>
+  page.evaluate(([sel, scale]) => {
+    const out = new Set()
+    for (const el of document.querySelectorAll(`${sel} *`)) {
+      const own = [...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim())
+      const box = el.getBoundingClientRect()
+      if (!own || box.width <= 1 || box.height <= 1) continue // hidden, or screen-reader-only text
+      const px = Number.parseFloat(getComputedStyle(el).fontSize)
+      if (!scale.includes(px)) out.add(`${px}px ${el.className || el.tagName}`)
     }
-  })
+    return [...out]
+  }, [root, SCALE])
 
-for (const viewport of [{ width: 1440, height: 900 }, { width: 1366, height: 768 }]) {
-  test.describe(`list at ${viewport.width}×${viewport.height}`, () => {
+const axe = (page, include) =>
+  new AxeBuilder({ page }).include(include).withTags(TAGS).analyze()
+    .then(({ violations }) => violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(' ')).slice(0, 3).join(', ')}`))
+
+for (const viewport of VIEWPORTS) {
+  test.describe(`${viewport.width}×${viewport.height}`, () => {
     test.use({ viewport })
 
-    test('the page does not scroll; only the list body does, and no fixed row shrinks', async ({ page }) => {
+    for (const id of SITES) {
+      test(`record with ${id} villages: no page scroll, only the table body scrolls`, async ({ page }) => {
+        await open(page, id)
+        await expectNoPageScroll(page)
+        await expect(page.getByRole('region', { name: 'Site passport' })).toBeInViewport({ ratio: 1 })
+        await expect(page.locator('.exr')).toBeInViewport({ ratio: 1 })
+        const table = page.locator('.exa-scroll')
+        await table.evaluate((el) => el.scrollTo(0, el.scrollHeight))
+        await expect(table.locator('thead th').first()).toBeInViewport()
+        await expect(table.locator('tbody tr').last()).toBeInViewport()
+        if (process.env.SCREENSHOTS) {
+          await page.screenshot({ path: `${process.env.SCREENSHOTS}/explorer-${id}-${viewport.width}.png` })
+        }
+      })
+    }
+
+    test('the list: no page scroll, only its body scrolls, no footer', async ({ page }) => {
       await openList(page)
-      const m = await pageScroll(page)
-      expect(m.sh).toBeLessThanOrEqual(m.ih)
-      expect(m.sw).toBeLessThanOrEqual(m.iw)
-      const body = page.locator('.exl-body')
-      const inner = await body.evaluate((el) => ({ sh: el.scrollHeight, ch: el.clientHeight }))
+      await expectNoPageScroll(page)
+      const inner = await page.locator('.exl-body').evaluate((el) => ({ sh: el.scrollHeight, ch: el.clientHeight }))
       expect(inner.sh).toBeGreaterThan(inner.ch)
-
-      const h = await heights(page)
+      expect(await page.locator('.exl-footer').count()).toBe(0)
+      const h = await page.evaluate(() => ({
+        toolbar: document.querySelector('.exl-toolbar').getBoundingClientRect().height,
+        row: document.querySelector('.exl-site-row').getBoundingClientRect().height,
+      }))
       expect(h.toolbar).toBeGreaterThanOrEqual(56)
-      expect(h.head).toBeGreaterThanOrEqual(40)
-      expect(h.footer).toBeGreaterThanOrEqual(44)
-      expect(h.title).toBeGreaterThanOrEqual(28)
-
-      await body.evaluate((el) => el.scrollTo(0, el.scrollHeight))
-      await expect(page.locator('.exl-head')).toBeInViewport()
-      await expect(page.locator('.exl-footer')).toBeInViewport()
+      expect(Math.round(h.row)).toBe(44)
       if (process.env.SCREENSHOTS) {
         await page.screenshot({ path: `${process.env.SCREENSHOTS}/explorer-list-${viewport.width}.png` })
       }
     })
+
+    test('the list title row lines up with the card edges', async ({ page }) => {
+      await openList(page)
+      const { title, card } = await page.evaluate(() => ({
+        title: document.querySelector('.exl-title-row').getBoundingClientRect(),
+        card: document.querySelector('.exl-card').getBoundingClientRect(),
+      }))
+      expect(Math.abs(title.left - card.left)).toBeLessThanOrEqual(1)
+      expect(Math.abs(title.right - card.right)).toBeLessThanOrEqual(1)
+    })
   })
 }
 
-test.describe('list accessibility', () => {
+test.describe('content at 1440×900', () => {
   test.use({ viewport: { width: 1440, height: 900 } })
-  test('no WCAG 2.2 AA violations, with a row focused and villages open', async ({ page }) => {
+
+  test('long Persian village names wrap, and missing dates show "—"', async ({ page }) => {
+    await open(page, 99)
+    await expectNoPageScroll(page)
+    const name = page.locator('.exa-village-name').first()
+    const { height, line } = await name.evaluate((el) => ({ height: el.getBoundingClientRect().height, line: Number.parseFloat(getComputedStyle(el).lineHeight) }))
+    expect(height).toBeGreaterThan(line * 1.5)
+    await expect(page.locator('.exr-ms').first()).toContainText('—')
+    await expect(page.locator('.exj-stats')).toContainText('—')
+  })
+
+  test('every font size on the record and the list is on the scale', async ({ page }) => {
+    await open(page, 3)
+    expect(await offScale(page, '.ex-page')).toEqual([])
+    await openList(page)
+    expect(await offScale(page, '.exl-page')).toEqual([])
+  })
+})
+
+test.describe('accessibility', () => {
+  test.use({ viewport: { width: 1440, height: 900 } })
+
+  test('the record has no WCAG 2.2 AA violations', async ({ page }) => {
+    await open(page, 3, '?village=V10002')
+    expect(await axe(page, '.ex-page')).toEqual([])
+  })
+
+  test('the open history panel has no violations', async ({ page }) => {
+    await open(page, 3)
+    await page.getByRole('button', { name: /History/ }).click()
+    await expect(page.getByRole('dialog', { name: 'Villages' })).toBeVisible()
+    await page.waitForTimeout(600)
+    expect(await axe(page, '.exh')).toEqual([])
+  })
+
+  test('the list has none, with a row focused, villages open and a filter menu open', async ({ page }) => {
     await openList(page)
     await page.locator('.exl-site-row').nth(1).getByRole('button', { name: /villages of/ }).click()
     await page.locator('.exl-site').first().focus()
-    const { violations } = await new AxeBuilder({ page })
-      .include('.exl-page')
-      .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
-      .analyze()
-    expect(violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(' ')).slice(0, 3).join(', ')}`)).toEqual([])
+    expect(await axe(page, '.exl-page')).toEqual([])
+    await page.getByRole('group', { name: 'Filters' }).getByRole('button', { name: 'Province' }).click()
+    expect(await axe(page, '.exl-page')).toEqual([])
   })
 })

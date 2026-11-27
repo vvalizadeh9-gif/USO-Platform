@@ -120,7 +120,7 @@ export default function JourneyRibbon({ record, today }) {
               <>
                 <Lanes lanes={layout.lanes} width={width} />
                 <Milestone
-                  m={{ key: 'sent_to_ict', x: layout.lanes.sent.x, name: 'Sent to ICT', date: layout.lanes.sent.date, future: !layout.lanes.sent.done }}
+                  m={{ key: 'sent_to_ict', x: layout.lanes.sent.labelX, name: 'Sent to ICT', date: layout.lanes.sent.date, future: !layout.lanes.sent.done }}
                   y={R.y + R.laneOffset + 10}
                   width={width}
                 />

@@ -146,7 +146,7 @@ export default function SitePassport({ record, status, onRetry, highlight, onHig
             onHighlight={onHighlight}
             onHistory={onHistory}
           />
-          <div className="exp-cell exp-tech">
+          <div className="exp-cell exp-type">
             <div className="exp-group">
               <h3 className="exp-title">Site type</h3>
               <span className="exp-value">{typeLabel(g.site_type) || '—'}</span>

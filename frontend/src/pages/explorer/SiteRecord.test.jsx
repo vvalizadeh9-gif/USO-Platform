@@ -3,7 +3,7 @@ import { act, fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { manyVillages, record, side, village } from './fixtures'
+import { manyVillages, record } from './fixtures'
 import { pickOption } from '../../test/pickOption'
 
 const auth = vi.hoisted(() => ({ role: 'Coordinator' }))

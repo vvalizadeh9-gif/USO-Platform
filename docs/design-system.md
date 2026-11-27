@@ -352,134 +352,131 @@ The 360px right panel of DT review: the Site ID (18px/600) with type, province a
 - **Error:** "Couldn't load {step}." with Retry inside the card; the rest of the page still renders.
 - **Saving:** the pressed control is disabled with `aria-busy`.
 
-## Explorer: the list (UEP-11a)
+## Explorer: type scale and colour roles (UEP-28)
 
-The list of all sites (`pages/explorer/ExplorerList.jsx`, `styles/explorer.css`,
-`.exl-*`). Max width 1200px plus 24px gutters; one card fills the height:
+The list (`pages/explorer/ExplorerList.jsx`, `.exl-*`) and the record
+(`SiteRecord.jsx`, `.ex-*`, `.exp-*`, `.exj-*`, `.exr-*`, `.exa-*`, `.exh-*`)
+share one stylesheet (`styles/explorer.css`), its tokens (the Explorer block in
+`uep-tokens.css`) and its motion. No page scroll at 1440×900 or 1366×768:
+only the list body, the village table and the history panel scroll.
 
-- **Title row:** "Explorer" and a neutral count pill (`.uw-count-pill`, 12px,
-  grey tint with a 1px inset border; `PageHeading` with `pill`), History and
-  Export on the right.
-- **Tool bar (56px):** a 380px search field whose focus is a cobalt border
-  plus `--uep-focus-ring`, with a clear button; active filter chips in
-  cobalt tint ("Province **کرمان** ×"); **Filter** on the right opening a 230px
-  popover: an uppercase 12px "FILTER BY" title, the fields, then one field's
-  values behind a back row. No Sort button: the headers sort.
-- **Header row (40px, sticky):** 12px, 600, uppercase, letter-spacing .06em,
-  muted, as the Roles Performance group titles. Each label is a button; the
-  sorted one is in ink with an arrow and carries `aria-sort`.
-- **Rows (48px):** one CSS grid template for header and rows, so no column
-  takes all the spare width. The site code is the row's link, its `::after`
-  stretched over the row; the checkbox and the villages pill sit above it
-  (`z-index: 1`). Hover: `--uep-row-hover-accent` with a 3px cobalt inset edge,
-  the code turns cobalt and a cobalt chevron slides in 4px. A focused row
-  (`:focus-visible` on its link) gets a 2px cobalt inset ring. Selected:
-  `--uep-row-selected` and a filled checkbox, which otherwise shows only on
-  hover or focus.
-- **Field icons** are the record page's General information hues
-  (`FIELD_ICONS`, `--uep-field-*`) as 16px line icons at 80% opacity, no tile:
-  pin for province, signal for technology, building for villages, briefcase
-  for DT contractor; grey when the value is missing. No other colour on the
-  list: cobalt is only for actions, links, selection and focus.
-- **Inline villages:** a strip under the row (page grey, 52px indent), a
-  chip per village (name 600, ID 12px muted); the one a search matched is
-  marked with `--uep-search-mark` and a cobalt border.
-- **Footer (44px):** "Showing **50** of 4,201 sites" ("matching sites" when
-  narrowed) and the keyboard hints.
-- **Bulk bar:** deep cobalt (`--uep-brand-deep`), white text, bottom centre
-  of the card: "{n} selected", Export, Copy IDs, ×.
-- **States:** 12 shimmering skeleton rows under the real header; "No sites
-  match" with **Clear search and filters**; "Couldn't load sites." with Retry.
+| Role | Size |
+|---|---|
+| Site ID on the record | 32/600 |
+| List title | 24/600 |
+| Card titles | 16/600 |
+| Section titles | 14/600 |
+| Data | 14 |
+| Labels and second lines | 13 |
+| Codes only (village IDs, list column headers) | 12 |
+| Big numbers (province, journey numbers) | 20/600 |
 
-## Explorer: the record page (UEP-11)
+ICT/CRA chips are 13/700 everywhere on Explorer (`auth-chip ex-auth`). No size
+outside 12/13/14/16/20/24/32; `explorerTypeScale.test.js` resolves every
+`font-size` in the stylesheet and `e2e/explorer.spec.js` walks the computed
+styles. Colours: cobalt for the journey, actions, links, selection and focus;
+green approved only, yellow waiting, red rejected or late only; ICT plum and
+CRA blue, never green. Every colour is a token. Dates on Explorer are Gregorian
+("6 Oct 2026", `formatGregorian`).
 
-A site's record (`pages/explorer/`, `styles/explorer.css`) on Home's frame
-(`.uep-home`), Home's card and header (`.hw-card`, `.hw-head`), Home's colour
-tiles (`.uep-app-tile`) and the work pages' buttons (`.uw-btn`). It fills the
-height under the shell: no page scroll at 1440×900 up to six villages; at
-1366×768 only the village lists scroll. Every date on Explorer is Gregorian,
-"6 Oct 2026" (`lib/dates.formatGregorian`, `Intl` en-GB), an exception to the
-Shamsi rule that holds on Explorer only.
+### Filter pills
 
-**Colour roles.** Cobalt `--uep-accent` is the journey and primary actions;
-deep cobalt `--uep-brand-deep` is the ICT and CRA labels. Green, yellow and red
-are approved, pending and rejected, and nothing else. Everything else is grey.
-Every status has an icon and a word.
+Province, Site type, Technology, DT contractor as 34px pills beside the search
+(`FilterPills.jsx`, `.exf-*`). Empty: a dashed outline and a chevron. One click
+opens a 240px menu of values (Province gets a search box); one click chooses.
+Chosen: solid, cobalt tint, "Province **کرمان**" with a × to remove it.
+"Clear filters" appears at the right while any filter is set. Escape or a
+click outside closes; focus returns to the pill.
 
-### Header
+### Stage mini-bar
 
-Breadcrumb "Explorer / {site ID}", then the site ID (24/600) and **one** badge
-for the current step ("Acceptance in progress" on `--uep-accent-tint`,
-"Acceptance done" on `--uep-status-success-soft`). Nothing under the title. On
-the right: Take action (secondary, only when the user has an action), Open in
-My Work (secondary) and File letter (primary, filing roles only).
+The list's Stage cell (`StageCell` in `SiteRows.jsx`): a 72×6 bar (steps done
+out of six in cobalt, the open step as a striped light-cobalt segment), the
+open step's short name, then "· {n} d". Days turn red with a `warning--alt`
+mark only over that step's SLA. Done: a green check and "Accepted", no days.
+One accessible name per cell: "Drive test, 14 days, over SLA".
 
-### General information list with colour icon tiles
+### List rows and the village match
 
-A fixed 360px card. Rows are 62px: a 36px rounded tile in the field's colour
-with a 20px white Carbon icon, the label (14px `--uep-text`) and the value
-right-aligned (14/600), with hairline `--uep-divider` rules. One token per tile:
-`--uep-field-on-air`, `-dt-date`, `-site-contractor`, `-dt-contractor`,
-`-technology`, `-province`, `-villages`; each holds at least 4.5:1 against the
-white icon. A missing value is "—" in `--uep-text-3`. Persian values are
-wrapped in `<bdi dir="rtl" lang="fa">` in Vazirmatn (`Fa`).
+44px rows: checkbox, site code (14/600) with its type tag ("New" / "Add tech",
+12px neutral outline), province (Vazirmatn), the villages pill ("—" when 0),
+technology chips, DT contractor ("Not assigned" muted), Stage, and the chevron
+that slides in on hover. No row icons. When the search matched a village, a
+38px line under the row shows it (connector mark, "Village", name and ID with
+the match marked, "+n" for more) and **Open record**, which lands on that
+village (`?village=`). The title row sits on the page background, aligned with
+the card: the Explorer app tile, "Explorer" and the count pill ("97 of 4,201
+sites" in cobalt tint while narrowed, a polite live region). No footer; the
+keyboard hints are the search box's tooltip, and `/` focuses the search.
 
-### Compact aging tiles
+### Site passport
 
-Four equal tiles in one row (1px border, radius 8, padding `7px 12px`): a 26px
-tinted icon tile, a 12px label, then the value (14/600) and a 12px muted
-context on one line. They stay smaller than the steps below. Oldest pending is
-the yellow one and is left out when nothing is pending. A value that cannot be
-computed is "—".
+One card in four cells (`SitePassport.jsx`): **Province** (a 112px map of Iran
+from `iranMini.json` — built by `scripts/build-iran-mini.py`: integer
+coordinates, points under 4 units apart dropped, centroids precomputed — with
+only this province filled in Explorer cobalt and a pin on its centre, then the
+name at 20/600 on a soft cobalt wash); **Target villages** (count pill,
+History with the number of changes, village chips on at most two lines then
+"+n more"; a chip highlights its table row and is disabled before acceptance
+starts); **Site type** and **Requested technology** (badges with 2/3/4 signal
+bars, always one line); **Contractors** (name 14/600 Vazirmatn, role 13 muted,
+no initials). No CRA region. On air and DT dates are on the ribbon instead.
 
-### Step path with aging pills
+### Journey ribbon
 
-Five steps on one line, in the process's order (On air, Health check,
-Assigned, DT done, Acceptance), as an ordered list whose items are named
-"{Step}: {state}, {date}". Each step is a 48px circle with its icon, the name
-(15/600) and the date (13px). Done: filled cobalt and a solid cobalt line in.
-Current: white with a 2px cobalt ring, a dashed `--uep-explorer-step-dash` line
-in, and "In progress" in cobalt. Between two steps a pill shows the days from
-the previous one ("+7 d"; "+8 d so far" on the open step, cobalt tint). A gap
-the server cannot measure is "—", never negative; a step without a date reads
-"No date". No "Day N", no "N of 5" counter.
+`JourneyRibbon.jsx` draws `ribbonModel.layoutRibbon` at its real pixel width
+(re-laid out by a `ResizeObserver`):
 
-### Acceptance: the two-panel / table switch at six rows
+- finished steps on a real time scale: a segment's length is its days, never
+  under 124px (164px for the first, whose label is left-aligned); the others
+  shrink proportionally; thin white cuts mark each step;
+- the open step is a light-cobalt segment up to a dashed **Today** marker;
+  days sit above the line ("8 d"; "16 d so far" in cobalt 13/600), names
+  (14/600) and dates (13) below; **On air** and **DT done** are the big pins
+  (filled dot, date 16/600 cobalt);
+- from DT done the line forks into an **ICT lane (plum)** and a **CRA lane
+  (blue)**, 6px tracks filled by approved ÷ villages, ending in the chip and
+  "**2** of 3 approved" or "All approved · 21 Nov 2026" in green; Sent to ICT is
+  a pin on the ICT lane;
+- steps still to come are a dashed grey tail with hollow dots ("Acceptance ·
+  ICT · CRA").
 
-Title "Acceptance by village" with an **All n / Open n** filter
-(`role="tablist"`, ←/→, Home/End) that cross-fades the rows (160ms). Rows are
-ordered once for both authorities: any rejection, then more pending sides, then
-the longest wait, fully approved last.
+The drawing is `aria-hidden`; the container is `role="img"` with every step's
+date or "in progress, N days so far" and both lanes in its name.
 
-- **Up to six villages:** ICT and CRA as two panels. A light grey head with the
-  deep-cobalt label (32px, 14/700 white) and three large counts (24/600 in the
-  status ink, the word under each; zero is grey). Rows: name (14/600) and ID
-  (12px muted), then the status cell. 62px rows up to three villages, 50px for
-  four to six.
-- **Above six:** one table. A sticky light-grey header row "Village | ICT + its
-  counts | CRA + its counts", 52px rows, and a thin visible scrollbar; only the
-  body scrolls, inside a focusable, labelled region.
-- `?village=` tints the row (`--uep-accent-tint`), scrolls it into view and
-  focuses it.
+### Acceptance by village: one table
 
-### The fixed status column and the status mark
+Village (27%) | ICT | CRA, for every site. A sticky 46px header: each
+authority cell has a 3px plum/blue top edge, the chip and "**2** approved ·
+**1** pending · **0** rejected" (13, coloured numbers, grey at zero). 58px rows
+(52px under 820px of height): name 14/600 Vazirmatn and ID 12 mono, then each
+side's mark, word, Re-filed tag and one dated 13px line — dates only, never an
+age. Worst first (rejected, pending, approved), then village code. The box
+ends where its rows end; only its body scrolls. Before acceptance: a dashed
+box, "Acceptance starts when drive test is done."
 
-The status cell is a fixed 250px, left-aligned, so the marks line up in one
-column. The mark is a 28px circle with a tinted fill and a coloured icon
-(approved: green tick; pending: amber clock; rejected: red cross), the word in
-the status ink (14/600) and a 12px muted line under it ("6 Oct 2026, took 4
-days", "Answer filed 7 Oct 2026, with coordinator", "Not filed yet"). A
-Re-filed or Returned chip sits beside a pending word. Data without dates shows
-the word only.
+### Side panel with export
 
-### Motion and states
+The village history (`VillageHistoryPanel.jsx`): 460px from the right over a
+scrim, focus trapped (`useDialogFocus`), Esc closes and returns focus. Header:
+title, "{site} · {n} target villages", **Export to Excel** (with the Exports
+feature) and close. Body: current villages as chips, then a vertical timeline,
+newest first: "Village added" (plus) or "Village removed" (minus, name struck
+through once applied), "CPM import · {date}", the chips, and "Applied by {name}
+on {date}" or "Ignored by {name} on {date} · still on this site" in yellow.
 
-The page fades in once (240ms); the two cards rise in, Journey 60ms after
-General information (see Motion); hover is 120ms; under reduced motion nothing
-animates. Loading draws skeletons at their final size;
-an error reads "Couldn't load {section}." with Retry inside each card. "No
-hadaf villages on this site." and "Acceptance starts when the site is on air
-and drive-tested." stand in for the village block.
+### Motion
+
+Off under `prefers-reduced-motion` and `data-uep-motion="reduce"`. List: rows
+rise (6px + fade, 360ms, 24ms stagger, first 20), stage bars grow (450ms),
+pills and menus pop (160ms), the match line and the villages strip open
+(220ms, grid rows 0fr → 1fr), the bulk bar rises (220ms). Record: the passport
+then the Journey card rise; the province fills (500ms) and the pin drops
+(420ms, expressive ease); chips cascade (50ms); the ribbon reveals left to
+right (clip-path, 950ms) with each label fading in as the line reaches it;
+the lanes fill; table rows rise (30ms stagger) after the ribbon. History
+panel: slides in (260ms), events rise in turn. Hover and focus 120–150ms. No
+count-ups, pulsing or loops.
 
 ## Roles Performance: measure list and deviation bar (UEP-09)
 

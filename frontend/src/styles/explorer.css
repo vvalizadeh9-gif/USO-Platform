@@ -205,7 +205,7 @@
 .exp-chips li { animation: ex-rise 300ms var(--uep-ease-grow) both; animation-delay: calc(380ms + var(--exp-i, 0) * var(--uep-explorer-chip-stagger)); }
 .exp-none { color: var(--uep-text-3); font-size: var(--uep-fs-body); }
 .exp-group { display: flex; flex-direction: column; gap: var(--uep-space-4); }
-.exp-tech { gap: 10px; }
+.exp-type { gap: 10px; }
 .exp-value { font-size: var(--uep-fs-body); font-weight: var(--uep-weight-semibold); }
 .exp-techs { display: flex; flex-wrap: nowrap; gap: var(--uep-space-4); }
 .exp-tech {
@@ -224,7 +224,7 @@
 .exp-bars rect { fill: var(--uep-explorer-tech-bar); }
 .exp-bars rect.is-on { fill: var(--uep-app-explorer); }
 .exp-contractors { gap: var(--uep-space-8); }
-.exp-contractor { display: flex; flex-direction: column; min-width: 0; line-height: 1.25; }
+.exp-contractor { display: flex; flex-direction: column; align-items: flex-start; min-width: 0; max-width: 100%; line-height: 1.25; }
 .exp-contractor-name { font-size: var(--uep-fs-body); font-weight: var(--uep-weight-semibold); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .exp-contractor-name.is-none { color: var(--uep-text-3); font-weight: var(--uep-weight-medium); }
 .exp-role { font-size: var(--uep-fs-small); color: var(--uep-text-3); }
@@ -326,6 +326,8 @@
 }
 .exa-table { width: 100%; border-collapse: separate; border-spacing: 0; table-layout: fixed; }
 .exa-table thead th {
+  text-transform: none;
+  letter-spacing: normal;
   position: sticky;
   top: 0;
   z-index: 1;

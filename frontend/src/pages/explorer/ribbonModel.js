@@ -26,6 +26,7 @@ export const RIBBON = Object.freeze({
   minStep: 124,
   minFork: 190,
   tailStep: 96,
+  sentLabelGap: 130, // Sent to ICT's label from the fork, clear of DT done's
 })
 
 const MAIN_KEYS = ['on_air', 'health_check', 'assigned', 'dt_done']
@@ -150,7 +151,8 @@ function forkLanes(steps, lanes, a, b, end) {
     a,
     start,
     b,
-    sent: { x: sentAt, done: sent.state === 'done', date: milestoneDate(sent) },
+    // Its label never sits on DT done's, which is centred on the fork.
+    sent: { x: sentAt, labelX: Math.max(sentAt, a + R.sentLabelGap), done: sent.state === 'done', date: milestoneDate(sent) },
     authorities: ['ict', 'cra'].map((key, i) => {
       const lane = lanes?.[key] || { approved: 0, total: 0, done_on: null }
       const share = lane.total ? lane.approved / lane.total : 0
