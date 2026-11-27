@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- **Home: To do, Waiting on others, and a list behind every number (UEP-27).** User note: "Home now shows To do and Waiting on others; click any number to see the list and export it."
+  - **Overview.** One **To do** figure (items where you act next) with a bar split into Late, Due in 1 week, On time and No date, then **Waiting on others** (items ICT, CRA, contractors or teams hold and you chase) and **Done this week** against last week. The four KPI tiles, their sparklines, card totals and "SLA 14 days" are gone. Clicking a part of the bar, a legend item or Waiting on others filters the cards; Esc clears it.
+  - **Every number opens its list** in a right-side panel: To do, Done this week, every queue row, every app badge and Contractor PIP. A list has status chips, search, grouping by province or contractor, an age bar against the SLA per item, **Export to Excel** (the whole filtered list; needs the Exports feature; audited as `home.export`; formula cells escaped) and **Open in {app}**.
+  - **Due soon is now 1 week** (`HOME_DUE_SOON_DAYS` default 7, was 3); the digest and snapshot read the same setting.
+  - **Imported items with no date** are their own status, hatched grey, and never late on Home. The board and digest rules are unchanged. The DT pipeline strip's "late" now matches its Home row (undated sites are no longer counted late there either).
+  - Work cards: each row has a status strip and its unit; rows others hold sit under "Waiting on others". Apps: a three-column tile grid. Footer: "CPM data from {date}".
+  - New endpoints: `GET /me/queues/{key}/items`, `GET /me/queues/{key}/export.xlsx`, `GET /me/home/export.xlsx`, `GET /me/done`, `GET /me/pip/by-contractor`. `GET /me/home` gains fields only.
+  - **Deploy:** one image tag. No migration and no new table; the only setting change is the `HOME_DUE_SOON_DAYS` default.
+
 - **New sign-in page; Admin › Sign-in page (UEP-26).** User note: "New sign-in page. Admins can set the support contact and a planned-update notice in Admin → Sign-in page."
   - **Sign-in.** One centred card on a deep cobalt band with the big title *USO Enterprise Platform*. Username first (Continue asks the server nothing, so the page never reveals whether a username exists), then the password. A remembered username opens on the password step with "Not you?". Five wrong passwords in 15 minutes still lock the username for 15 minutes; the page now shows a calm "Too many attempts" box with a countdown instead of an error. "Forgot password?" and "Need access?" open a help panel with the contact Admin sets. Privacy, Terms and Help links are gone until their texts exist; `/forgot-password` and `/request-access` open the help panel, `/privacy`, `/terms` and `/help` go to sign-in.
   - **The maths question is gone.** New setting `LOGIN_CAPTCHA_ENABLED` (default `false`): the captcha is never required and a sent one is ignored. `/auth/captcha` stays; setting it to `true` restores the server behaviour from before.

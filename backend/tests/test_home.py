@@ -11,6 +11,7 @@
 * the trends are 14 days of this user's snapshot, with gaps where it is silent;
 * the board itself is unchanged by any of this.
 """
+import io
 import os
 import sys
 from datetime import datetime, timedelta, timezone
@@ -198,7 +199,7 @@ def _user_id(username):
 def test_home_is_served_to_the_working_roles_and_regional_managers(client, username, role):
     body = _home(client, username)
     assert body["role"] == role
-    assert body["due_soon_days"] == 3
+    assert body["due_soon_days"] == 7  # UEP-27: "Due in 1 week"
 
 
 def test_a_viewer_is_refused(client):
@@ -217,7 +218,7 @@ def test_the_figures_add_up(client, username):
     tickets = _tickets(body)
     for g in body["groups"]:
         for t in g["tickets"]:
-            assert t["on_time"] + t["due_soon"] + t["late"] == t["count"]
+            assert t["on_time"] + t["due_soon"] + t["late"] + t["no_date"] == t["count"]
             assert t["owners_total"] == len(t["owners"]) + t["owners_more"]
             if g["key"] != "acceptance":
                 assert t["count"] > 0, "zero-count tickets are left off, as on the board"
@@ -477,3 +478,185 @@ def test_oldest_days_counts_whole_days():
     assert oldest_days(None, now) is None
     assert oldest_days(now - timedelta(days=21, hours=3), now) == 21
     assert oldest_days(now + timedelta(hours=1), now) == 0
+
+
+# ==========================================================================
+# UEP-27: the lists behind Home's numbers (endpoints; the rules on their own
+# are in test_home_drilldown.py)
+# ==========================================================================
+from datetime import date  # noqa: E402
+
+from openpyxl import load_workbook  # noqa: E402
+
+from app.services import home_export  # noqa: E402
+from app.services.action_queues import done  # noqa: E402
+
+# --------------------------------------------------------------------------
+# The items endpoint
+# --------------------------------------------------------------------------
+def _items(client, user, key, **params):
+    return client.get(f"{API}/me/queues/{key}/items", headers=_headers(client, user), params=params)
+
+
+def test_a_queue_list_is_the_count_on_its_home_row(client):
+    tickets = {t["queue_key"]: t for t in _tickets(_home(client, "h_pm"))}
+    for key, ticket in tickets.items():
+        body = _items(client, "h_pm", key).json()
+        assert body["total"] == ticket["count"], key
+        assert body["counts_by_status"] == {
+            "late": ticket["late"], "due_soon": ticket["due_soon"],
+            "on_time": ticket["on_time"], "no_date": ticket["no_date"],
+        }, key
+
+
+def test_an_item_says_its_site_village_province_and_holder(client):
+    items = _items(client, "h_pm", "ict_pending").json()["items"]
+    home_v1 = next(i for i in items if i["label"] == "HOME-V1")
+    assert home_v1["site_id"] == "HOME-1"
+    assert home_v1["village_name"] == "HOME-V1"
+    assert home_v1["province"]
+    assert home_v1["holder_name"] == "Home Co"
+    assert home_v1["url"].startswith("/explorer/sites/")
+    assert home_v1["sla_days"] and home_v1["age_days"] is not None
+
+
+def test_undated_items_list_as_no_date_with_no_age(client):
+    body = _items(client, "h_pm", "submit_to_ict").json()
+    assert body["counts_by_status"]["no_date"] == body["total"] > 0
+    assert all(i["status"] == "no_date" and i["age_days"] is None and i["due_at"] is None
+               for i in body["items"])
+
+
+def test_search_status_group_and_paging_on_the_endpoint(client):
+    assert _items(client, "h_pm", "ict_pending", q="far").json()["total"] == 1
+    assert _items(client, "h_pm", "ict_pending", status="late").json()["total"] == 0
+    grouped = _items(client, "h_pm", "cra_pending", group="province").json()
+    assert sum(g["count"] for g in grouped["groups"]) == grouped["total"]
+    paged = _items(client, "h_pm", "cra_pending", size=1, page=2).json()
+    assert len(paged["items"]) == 1 and paged["total"] == 3
+
+
+def test_bad_parameters_are_refused(client):
+    assert _items(client, "h_pm", "ict_pending", status="soon").status_code == 422
+    assert _items(client, "h_pm", "ict_pending", group="village").status_code == 422
+    assert _items(client, "h_pm", "ict_pending", size=5000).status_code == 422
+
+
+def test_a_contractor_sees_only_their_own_items(client):
+    items = _items(client, "h_sc", "cra_case_waiting").json()["items"]
+    assert items and all(i["site_id"] == "HOME-1" for i in items)
+    assert all(i["holder_name"] in (None, "Home Co") for i in items)
+
+
+def test_a_queue_outside_the_users_home_is_not_found(client):
+    assert _items(client, "h_sc", "ict_pending").status_code == 404
+    assert _items(client, "h_pm", "no_such_queue").status_code == 404
+
+
+def test_a_role_without_home_is_refused(client):
+    assert _items(client, "h_viewer", "ict_pending").status_code == 403
+
+
+# --------------------------------------------------------------------------
+# Export
+# --------------------------------------------------------------------------
+def _sheets(response):
+    return load_workbook(io.BytesIO(response.content), read_only=True)
+
+
+def _audits(username):
+    from app.models.acceptance import AuditLog
+
+    db = SessionLocal()
+    try:
+        return db.query(AuditLog).filter_by(user_id=_user_id(username), action="home.export").all()
+    finally:
+        db.close()
+
+
+def test_the_export_is_the_whole_filtered_list_with_the_listed_columns(client):
+    before = len(_audits("h_pm"))
+    r = client.get(f"{API}/me/queues/cra_pending/export.xlsx", headers=_headers(client, "h_pm"),
+                   params={"q": "home"})
+    assert r.status_code == 200, r.text
+    assert r.headers["content-type"] == home_export.XLSX_MEDIA_TYPE
+    assert 'filename="UEP_Pending-CRA_' in r.headers["content-disposition"]
+    wb = _sheets(r)
+    rows = list(wb.worksheets[0].iter_rows(values_only=True))
+    assert list(rows[0]) == [c[0] for c in home_export.ITEM_COLUMNS]
+    assert len(rows) - 1 == _items(client, "h_pm", "cra_pending", q="home").json()["total"]
+    assert wb.sheetnames[-1] == "About"
+    audits = _audits("h_pm")
+    assert len(audits) == before + 1
+    assert audits[-1].new_value["queue"] == "cra_pending"
+
+
+def test_a_grouped_export_has_a_sheet_per_group(client):
+    r = client.get(f"{API}/me/queues/cra_pending/export.xlsx", headers=_headers(client, "h_pm"),
+                   params={"group": "province"})
+    groups = _items(client, "h_pm", "cra_pending", group="province").json()["groups"]
+    assert _sheets(r).sheetnames == [g["key"] for g in groups] + ["About"]
+
+
+def test_the_export_needs_the_export_feature(client):
+    from app.core import access
+    from app.models.access import UserFeatureOverride
+
+    db = SessionLocal()
+    try:
+        db.add(UserFeatureOverride(user_id=_user_id("h_coord"), feature_key="exports",
+                                   level="none", reason="test"))
+        access.bump_version(db)
+        db.commit()
+        h = _headers(client, "h_coord")
+        assert client.get(f"{API}/me/queues/ict_pending/export.xlsx", headers=h).status_code == 403
+        assert client.get(f"{API}/me/home/export.xlsx", headers=h,
+                          params={"panel": "done"}).status_code == 403
+        assert client.get(f"{API}/me/queues/ict_pending/items", headers=h).status_code == 200
+    finally:
+        db.query(UserFeatureOverride).filter_by(user_id=_user_id("h_coord")).delete()
+        access.bump_version(db)
+        db.commit()
+        db.close()
+
+
+def test_a_summary_panel_exports_one_row_per_line(client):
+    tickets = [t for t in _tickets(_home(client, "h_pm")) if t["holder"] == "others"]
+    r = client.get(f"{API}/me/home/export.xlsx", headers=_headers(client, "h_pm"), params={
+        "panel": "summary", "title": "Waiting on others",
+        "queues": ",".join(t["queue_key"] for t in tickets) + ",not_mine",
+    })
+    assert r.status_code == 200, r.text
+    rows = list(_sheets(r).worksheets[0].iter_rows(values_only=True))
+    assert [row[0] for row in rows[1:]] == [t["short_label"] for t in tickets]
+
+
+# --------------------------------------------------------------------------
+# Done this week and the PIP by contractor
+# --------------------------------------------------------------------------
+def test_done_is_this_weeks_acts_from_saturday(client):
+    body = client.get(f"{API}/me/done", headers=_headers(client, "h_pm")).json()
+    assert date.fromisoformat(body["since"]).weekday() == done.SATURDAY
+    assert body["total"] == len(body["items"])
+    totals = _home(client, "h_pm")["totals"]
+    assert body["total"] == totals["done_this_week"]
+
+
+def test_done_has_only_the_week_period_and_needs_a_home(client):
+    h = _headers(client, "h_pm")
+    assert client.get(f"{API}/me/done", headers=h, params={"period": "month"}).status_code == 422
+    assert client.get(f"{API}/me/done", headers=_headers(client, "h_viewer")).status_code == 403
+    rm = client.get(f"{API}/me/done", headers=_headers(client, "h_rm")).json()
+    assert rm["items"] == []
+
+
+@pytest.mark.parametrize(("username", "code"), [
+    ("h_pm", 200), ("h_viewer", 200), ("h_coord", 403), ("h_sc", 403),
+])
+def test_pip_by_contractor_is_for_pm_and_viewer(client, username, code):
+    r = client.get(f"{API}/me/pip/by-contractor", headers=_headers(client, username))
+    assert r.status_code == code, r.text
+    if code == 200:
+        body = r.json()
+        assert body["days_left"] >= 0
+        assert all(row["delivered"] >= 0 for row in body["rows"])

@@ -4,31 +4,6 @@
 import { joinMeta } from '../../lib/joinMeta'
 import { formatNumber } from '../../lib/numbers'
 
-/** For which KPIs a rise is bad. Done today is the one where a fall is. */
-const UP_IS_BAD = { pending: true, overdue: true, dueSoon: true, done: false }
-
-/** "↑ 13 vs last week", "↓ 3 vs last week", "No change"; null without a figure. */
-export function deltaText(delta) {
-  if (delta === null || delta === undefined) return null
-  if (delta === 0) return 'No change'
-  return `${delta > 0 ? '↑' : '↓'} ${formatNumber(Math.abs(delta))} vs last week`
-}
-
-/** 'bad' only when the change goes the wrong way for this KPI; never 'good'. */
-export function deltaTone(kpi, delta) {
-  if (!delta) return 'neutral'
-  const bad = UP_IS_BAD[kpi] ? delta > 0 : delta < 0
-  return bad ? 'bad' : 'neutral'
-}
-
-/** Today less seven days ago in a series that ends today; null without both. */
-export function weekDelta(series) {
-  if (!series || series.length < 8) return null
-  const now = series[series.length - 1]
-  const then = series[series.length - 8]
-  return now === null || now === undefined || then === null || then === undefined ? null : now - then
-}
-
 const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`
 
 /** The owner part of a meta line: "5 contractors" (a count, never names). */
@@ -101,4 +76,147 @@ export function greeting(date = new Date()) {
 /** "14:05", local time. */
 export function clock(date) {
   return new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false }).format(date)
+}
+
+// ---------------------------------------------------------------------------
+// UEP-27: To do, Waiting on others, and the lists behind every number
+// ---------------------------------------------------------------------------
+
+/** Home's four statuses, in bar order. `cls` names the swatch class. */
+export const STATUSES = Object.freeze([
+  { key: 'late', label: 'Late', cls: 'hs-late' },
+  { key: 'due_soon', label: 'Due in 1 week', cls: 'hs-due' },
+  { key: 'on_time', label: 'On time', cls: 'hs-on-time' },
+  { key: 'no_date', label: 'No date', cls: 'hs-no-date' },
+])
+
+/** The group an item with no province or contractor falls into (the server's words). */
+export const NO_GROUP = Object.freeze({ province: 'No province', contractor: 'No contractor' })
+
+/** The work-card filter for the Waiting on others figure. */
+export const WAITING = 'waiting'
+
+export const statusLabel = (key) => (key === WAITING ? 'Waiting on others' : STATUSES.find((s) => s.key === key)?.label ?? key)
+export const statusClass = (key) => (key === WAITING ? 'hs-waiting' : STATUSES.find((s) => s.key === key)?.cls ?? '')
+
+/** The To do bar's parts from GET /me/home totals; zero parts left out. */
+export function todoParts(totals) {
+  return STATUSES.map((s) => ({ ...s, count: totals?.[`todo_${s.key}`] || 0 })).filter((p) => p.count > 0)
+}
+
+/** The legend: every status, except No date when there is none. */
+export function legendParts(totals) {
+  return STATUSES.map((s) => ({ ...s, count: totals?.[`todo_${s.key}`] || 0 }))
+    .filter((p) => p.key !== 'no_date' || p.count > 0)
+}
+
+/** One queue row's status strip: its own four parts, zero parts left out. */
+export function ticketParts(ticket) {
+  return STATUSES.map((s) => ({ ...s, count: ticket[s.key] || 0 })).filter((p) => p.count > 0)
+}
+
+/** What a row's number says with `filter` on: that part of the row. The
+ * status filters are the To do bar's, so a row someone else holds shows 0;
+ * Waiting on others shows those rows whole. */
+export function rowCount(ticket, filter) {
+  if (!filter) return ticket.count
+  if (filter === WAITING) return ticket.holder === 'others' ? ticket.count : 0
+  return ticket.holder === 'self' ? ticket[filter] || 0 : 0
+}
+
+const SINGULAR = { sites: 'site', villages: 'village', fixes: 'fix', plans: 'plan', changes: 'change', days: 'day', items: 'item', lines: 'line' }
+
+/** "1 site", "9 sites": the unit agreeing with its number. */
+export function unitFor(n, unit) {
+  if (!unit) return ''
+  return n === 1 ? SINGULAR[unit] || unit : unit
+}
+
+/** A change against a past figure: { text, dir, worse }. `upIsWorse` for
+ * To do; Done this week is worse when it falls. */
+export function changeOf(delta, { vs = 'vs 7 days ago', upIsWorse = true } = {}) {
+  if (delta === null || delta === undefined) return null
+  if (delta === 0) return { text: `No change ${vs}`, dir: null, worse: false }
+  return {
+    text: `${formatNumber(Math.abs(delta))} ${vs}`,
+    dir: delta > 0 ? 'up' : 'down',
+    worse: upIsWorse ? delta > 0 : delta < 0,
+  }
+}
+
+/** A badge's count: "1k" style above 999. */
+export function compactCount(n) {
+  return n > 999 ? `${Math.floor(n / 1000)}k` : formatNumber(n)
+}
+
+/** "24 Nov": the footer's CPM date, in the viewer's time zone. */
+export function shortDate(value) {
+  if (!value) return null
+  return new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short' }).format(new Date(value))
+}
+
+/** The Mojri tracker row (a reminder): its days, and whether it is late. */
+export function mojriRow(ticket) {
+  const days = ticket.mojri?.age_days ?? 0
+  const stale = Boolean(ticket.mojri?.stale)
+  return { days, stale, text: stale ? `upload is ${plural(days, 'day', 'days')} old` : 'Days since last upload' }
+}
+
+/** Every ticket on Home's cards, in card order. */
+export const allTickets = (data) => (data?.groups || []).flatMap((g) => g.tickets)
+
+/** The rows a card shows, split as the card draws them: the viewer's own
+ * (with any reminder after them) and, under their own label, Waiting on others. */
+export function cardSections(tickets) {
+  const live = tickets.filter((t) => t.count > 0)
+  return {
+    mine: [...live.filter((t) => t.holder === 'self'), ...live.filter((t) => t.holder === 'reminder')],
+    theirs: live.filter((t) => t.holder === 'others'),
+  }
+}
+
+/** Summary lines for a set of tickets: the panel's rows. */
+export function summaryLines(tickets) {
+  return tickets.filter((t) => t.count > 0).map((t) => ({
+    key: t.queue_key, label: t.short_label, count: t.count, late: t.late, unit: t.unit, ticket: t,
+  }))
+}
+
+/** A list item's age bar: { width (% of the track), tick (% where the SLA
+ * falls), text }. The track spans twice the SLA, so the tick sits at its
+ * middle; an item with no SLA fills against itself. */
+export function ageBar(item) {
+  if (item.status === 'no_date') return { width: 100, tick: null }
+  if (item.age_days == null) return { width: 0, tick: null }
+  if (!item.sla_days) return { width: Math.min(100, item.age_days * 4), tick: null }
+  const span = item.sla_days * 2
+  return { width: Math.min(100, (item.age_days / span) * 100), tick: 50 }
+}
+
+/** The order Home's lists use, for the client-side Done list. */
+export function groupByDay(items, now = new Date()) {
+  const fmt = new Intl.DateTimeFormat('en-GB', { weekday: 'long' })
+  const key = (d) => new Date(d).toDateString()
+  const today = key(now)
+  const groups = []
+  for (const item of items) {
+    const k = key(item.closed_at)
+    let g = groups.find((x) => x.key === k)
+    if (!g) {
+      g = { key: k, label: k === today ? 'Today' : fmt.format(new Date(item.closed_at)), items: [] }
+      groups.push(g)
+    }
+    g.items.push(item)
+  }
+  return groups
+}
+
+/** The queue page with the panel's filter and search, for "Open in {app}". */
+export function openUrl(url, { status, q } = {}) {
+  const [path, query = ''] = url.split('?')
+  const params = new URLSearchParams(query)
+  if (status && status !== 'all') params.set('status', status)
+  if (q && q.trim()) params.set('q', q.trim())
+  const text = params.toString()
+  return text ? `${path}?${text}` : path
 }

@@ -40,10 +40,15 @@ class HomeTicketOut(BaseModel):
     #: What one item is: "sites", "villages", "fixes", "plans" or "changes".
     unit: str
     count: int
-    #: on_time + due_soon + late == count.
+    #: Who acts next (UEP-27): "self" (To do), "others" (Waiting on others)
+    #: or "reminder" (counted in neither).
+    holder: Literal["self", "others", "reminder"] = "self"
+    #: on_time + due_soon + late + no_date == count. ``late`` never counts an
+    #: undated item; those are ``no_date``.
     on_time: int
     due_soon: int
     late: int
+    no_date: int = 0
     oldest_started_at: datetime | None
     earliest_due_at: datetime | None
     date_kind: Literal["since", "due"]
@@ -87,6 +92,24 @@ class HomeTotalsOut(BaseModel):
     pending_week_delta: int | None
     overdue_week_delta: int | None
     due_soon_week_delta: int | None
+    # --- UEP-27 -----------------------------------------------------------
+    #: The ``self`` tickets: todo_late + todo_due_soon + todo_on_time +
+    #: todo_no_date == todo.
+    todo: int = 0
+    todo_late: int = 0
+    todo_due_soon: int = 0
+    todo_on_time: int = 0
+    todo_no_date: int = 0
+    #: The ``others`` tickets.
+    waiting: int = 0
+    waiting_late: int = 0
+    waiting_no_date: int = 0
+    #: Saturday to today, and the whole week before (Tehran days); None for a
+    #: role with no done count.
+    done_this_week: int | None = None
+    done_last_week: int | None = None
+    #: To do now less To do seven days ago; None without that day's snapshot.
+    todo_change_7d: int | None = None
 
 
 class HomeTrendsOut(BaseModel):
@@ -141,6 +164,8 @@ class HomeSummaryOut(BaseModel):
     app_badges: dict[str, HomeBadgeOut]
     #: Rail-only queues (UEP-16): a page's own count and lateness, on no card.
     rail_tickets: list[HomeTicketOut] = []
+    #: When the last CPM workbook was imported (UEP-27 footer).
+    cpm_imported_at: datetime | None = None
 
 
 class SystemStatusOut(BaseModel):
@@ -158,3 +183,80 @@ class MeHomeOut(HomeSummaryOut):
 
     system: SystemStatusOut
     version: str
+
+
+# --------------------------------------------------------------------------
+# UEP-27: the lists behind Home's numbers
+# --------------------------------------------------------------------------
+ItemStatus = Literal["late", "due_soon", "on_time", "no_date"]
+
+
+class QueueItemOut(BaseModel):
+    #: The queue's own id for the item (stable key).
+    id: str
+    #: What the list shows: the site ID, or the village ID.
+    label: str
+    site_id: str | None = None
+    village_name: str | None = None
+    province: str | None = None
+    cra_region: str | None = None
+    holder_name: str | None = None
+    contractor: str | None = None
+    status: ItemStatus
+    #: Whole days since the clock started; None with no start.
+    age_days: int | None = None
+    #: The SLA the item is measured against, in days; None when it has none.
+    sla_days: int | None = None
+    due_at: datetime | None = None
+    url: str
+
+
+class QueueGroupOut(BaseModel):
+    key: str
+    count: int
+    late: int
+
+
+class QueueItemsOut(BaseModel):
+    queue_key: str
+    label: str
+    unit: str
+    url: str
+    holder: Literal["self", "others", "reminder"]
+    #: Items matching the filter and search (before paging).
+    total: int
+    #: Every status's count in the whole queue (the chips), search applied.
+    counts_by_status: dict[str, int]
+    group: Literal["none", "province", "contractor"]
+    groups: list[QueueGroupOut]
+    page: int
+    size: int
+    items: list[QueueItemOut]
+
+
+class DoneItemOut(BaseModel):
+    id: str
+    action: str
+    closed_at: datetime
+    province: str | None = None
+    label: str | None = None
+
+
+class DoneListOut(BaseModel):
+    period: Literal["week"]
+    since: date
+    total: int
+    items: list[DoneItemOut]
+
+
+class PipContractorOut(BaseModel):
+    contractor: str
+    delivered: int
+    #: None when the contractor has no approved plan for the month.
+    target: int | None
+
+
+class PipByContractorOut(BaseModel):
+    month_name: str
+    days_left: int
+    rows: list[PipContractorOut]

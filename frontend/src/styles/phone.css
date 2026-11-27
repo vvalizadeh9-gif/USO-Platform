@@ -46,7 +46,7 @@
   .main-scroll .page-outlet > :first-child > .uep-page-header:first-child { margin: calc(-1 * var(--uep-space-16)) calc(-1 * var(--uep-space-16)) var(--uep-space-16); top: calc(-1 * var(--uep-space-16)); padding-inline: var(--uep-space-16); }
 
   /* Home: KPI strip 2×2, work cards stacked, no Apps panel (the launcher has it). */
-  .uep-home-page .hk-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .uep-home-page .ho-card { grid-template-columns: minmax(0, 1fr); }
   .uep-home-page .h-layout { display: flex; flex-direction: column; }
   .uep-home-page .hw-grid { grid-template-columns: minmax(0, 1fr); }
   .uep-home-page .ha-panel { display: none; }

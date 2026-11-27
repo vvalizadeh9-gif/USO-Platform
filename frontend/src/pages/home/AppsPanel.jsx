@@ -1,7 +1,16 @@
+import { useId } from 'react'
 import { Link } from 'react-router-dom'
 import AppTile from '../../shell/AppTile'
 import { appCount, appGroupsFor, appRoute, appState } from '../../shell/appRegistry'
 import { formatNumber } from '../../lib/numbers'
+import { compactCount } from './homeLogic'
+
+/** The grid's columns: a group spans as many as it has apps, so small groups
+ * share a row (Planning + Insights). */
+export const GRID_COLUMNS = 3
+
+/** Platform apps draw as quiet white tiles: they are not where work is. */
+const QUIET_APPS = new Set(['data', 'admin'])
 
 /**
  * A group's entries. Normally one per app. An app named in `expand` is listed
@@ -24,30 +33,72 @@ export function panelEntries(apps, expand = []) {
   })
 }
 
-/** Every app this user may open, by group, with its pending count. Apps only:
- * dashboards and trackers are pages inside apps. */
-export default function AppsPanel({ user, counts, expand }) {
+function AppEntry({ entry, count, onOpenBadge, index }) {
+  const descId = useId()
+  return (
+    <div className="ha-tile-wrap" style={{ '--a': index }}>
+      <Link
+        to={entry.to}
+        state={appState(entry.app)}
+        className={`ha-app${QUIET_APPS.has(entry.app.id) ? ' is-quiet' : ''}`}
+        data-app={entry.key}
+        data-tip={entry.description}
+        aria-describedby={descId}
+      >
+        <AppTile app={entry.app} size={40} />
+        <span className="ha-app-name">{entry.name}</span>
+        <span id={descId} className="sr-only">{entry.description}</span>
+      </Link>
+      {count > 0 && (
+        <button
+          type="button"
+          className="ha-badge"
+          data-testid={`badge-${entry.key}`}
+          aria-label={`${entry.name}: ${formatNumber(count)} pending, show list`}
+          onClick={(e) => onOpenBadge?.(entry.app, e.currentTarget)}
+        >
+          <span className="ha-badge-dot">{compactCount(count)}</span>
+        </button>
+      )}
+    </div>
+  )
+}
+
+/** Every app this user may open, as a tile grid by group, each with its
+ * pending count (UEP-27 §4.3). A count opens the app's to-do summary. */
+export default function AppsPanel({ user, counts, expand, onOpenBadge }) {
+  let index = 0
   return (
     <aside className="ha-panel" aria-labelledby="home-apps">
       <h2 id="home-apps">Apps</h2>
-      {appGroupsFor(user).map((group) => (
-        <section key={group.id} className="ha-group" aria-label={group.label}>
-          <h3>{group.label}</h3>
-          {panelEntries(group.apps, expand).map((entry) => {
-            const count = entry.single ? 0 : appCount(entry.app, counts)
-            return (
-              <Link key={entry.key} to={entry.to} state={appState(entry.app)} className="ha-app" data-app={entry.key}>
-                <AppTile app={entry.app} size={36} />
-                <span className="ha-app-text">
-                  <span className="ha-app-name">{entry.name}</span>
-                  <span className="ha-app-desc">{entry.description}</span>
-                </span>
-                {count > 0 && <span className="ha-pill" aria-label={`${formatNumber(count)} pending`}>{formatNumber(count)}</span>}
-              </Link>
-            )
-          })}
-        </section>
-      ))}
+      <div className="ha-grid">
+        {appGroupsFor(user).map((group) => {
+          const entries = panelEntries(group.apps, expand)
+          const span = Math.min(entries.length, GRID_COLUMNS)
+          return (
+            <section
+              key={group.id}
+              className="ha-group"
+              aria-label={group.label}
+              data-group={group.id}
+              style={{ gridColumn: `span ${span}`, '--n': span }}
+            >
+              <h3>{group.label}</h3>
+              <div className="ha-tiles">
+                {entries.map((entry) => (
+                  <AppEntry
+                    key={entry.key}
+                    entry={entry}
+                    index={index++}
+                    count={entry.single ? 0 : appCount(entry.app, counts)}
+                    onOpenBadge={onOpenBadge}
+                  />
+                ))}
+              </div>
+            </section>
+          )
+        })}
+      </div>
     </aside>
   )
 }

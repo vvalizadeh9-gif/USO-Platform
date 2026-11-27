@@ -202,6 +202,29 @@
   --uep-home-max: 1280px;
   --uep-home-apps-width: 340px;   /* every app description fits on one line */
   --uep-home-card-min: 270px;
+  /* ---- UEP-27 Home: status colours (no green on Home), layout, motion ---- */
+  --uep-home-late: #B42318;      /* = --uep-danger */
+  --uep-home-due: #E0A800;       /* Due in 1 week */
+  --uep-home-on-time: #9DB2E0;   /* On time */
+  --uep-home-no-date: repeating-linear-gradient(135deg, #7A8291 0 2px, #E3E6EC 2px 5px);
+  --uep-home-due-ink: #8A5600;   /* "due" text on white (4.5:1) */
+  --uep-home-edge: #868F9F;      /* quiet app tiles' border, 3:1 on white */
+  --uep-home-badge: #14171F;
+  --uep-home-page-max: 1440px;
+  --uep-home-rail: 296px;        /* the Apps tile grid */
+  --uep-home-cards-min: 260px;
+  --uep-home-drawer: 520px;
+  --uep-home-scrim: rgba(20, 23, 31, 0.2);
+  --uep-home-drawer-shadow: -12px 0 32px rgba(20, 23, 31, 0.10);
+  --uep-dur-home-bar: 700ms;     /* the To do bar's parts grow in */
+  --uep-dur-home-count: 800ms;   /* the figures count up (useCountUp) */
+  --uep-dur-home-drawer: 300ms;
+  --uep-dur-home-filter: 200ms;
+  --uep-home-radius-mark: 2px;    /* strips, tracks, small swatches */
+  --uep-home-radius-swatch: 3px;  /* legend swatches, line bars */
+  --uep-home-radius-chip: 6px;    /* legend items, segmented buttons, tooltips */
+  --uep-home-radius-tile: 10px;   /* the 40px app tiles */
+  --uep-home-excel: #1D6F42;      /* Excel's green, on the export icon only */
   --uep-spark-height: 28px;
   --uep-progress-height: 6px;
   --uep-fs-queue-count: 20px;

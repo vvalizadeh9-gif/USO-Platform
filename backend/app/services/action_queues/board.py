@@ -5,6 +5,7 @@ oldest clock start and the earliest due date.
 """
 from __future__ import annotations
 
+from collections import Counter
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
@@ -39,6 +40,15 @@ class QueueSummary:
     earliest_due_at: datetime | None
     #: Items turning late within the due-soon window; 0 unless one was given.
     due_soon: int = 0
+    #: UEP-27, with a window only: undated items (``sla.NO_DATE``)...
+    no_date: int = 0
+    #: ...and Home's late, which never counts them. Without a window it is
+    #: ``overdue``. ``overdue`` itself stays the board's rule (the digest).
+    late: int | None = None
+
+    def __post_init__(self) -> None:
+        if self.late is None:
+            object.__setattr__(self, "late", self.overdue)
 
     @property
     def date_kind(self) -> DateKind:
@@ -46,7 +56,8 @@ class QueueSummary:
 
     @property
     def on_time(self) -> int:
-        return self.count - self.overdue - self.due_soon
+        """Home's on time: on_time + due_soon + late + no_date == count."""
+        return self.count - self.late - self.due_soon - self.no_date
 
 
 # --------------------------------------------------------------------------
@@ -60,23 +71,29 @@ def summarize(
     *,
     due_soon_window: timedelta | None = None,
 ) -> QueueSummary:
-    """One queue's items as a ticket. With ``due_soon_window``, items that turn
-    late inside it are counted too (Home); the digest leaves it out."""
+    """One queue's items as a ticket. With ``due_soon_window`` (Home and the
+    snapshot), each item gets Home's four-way status (``sla.home_status``)."""
     starts = [sla.effective_start(i.started_at) for i in items]
     dues = [d for d in (sla.as_datetime(i.due_at) for i in items) if d is not None]
-    due_soon = 0
-    if due_soon_window is not None:
-        due_soon = sum(
-            1 for i in items
-            if sla.item_status(i, queue.sla, sla_days, now, due_soon_window) == sla.DUE_SOON
+    overdue = sum(1 for i in items if sla.is_overdue(i, queue.sla, sla_days, now))
+    if due_soon_window is None:
+        return QueueSummary(
+            queue=queue, count=len(items), overdue=overdue,
+            oldest_started_at=min(starts) if starts else None,
+            earliest_due_at=min(dues) if dues else None,
         )
+    statuses = Counter(
+        sla.home_status(i, queue.sla, sla_days, now, due_soon_window) for i in items
+    )
     return QueueSummary(
         queue=queue,
         count=len(items),
-        overdue=sum(1 for i in items if sla.is_overdue(i, queue.sla, sla_days, now)),
+        overdue=overdue,
         oldest_started_at=min(starts) if starts else None,
         earliest_due_at=min(dues) if dues else None,
-        due_soon=due_soon,
+        due_soon=statuses[sla.DUE_SOON],
+        no_date=statuses[sla.NO_DATE],
+        late=statuses[sla.LATE],
     )
 
 

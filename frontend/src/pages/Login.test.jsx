@@ -204,6 +204,9 @@ describe('step 2: password', () => {
     expect(button.querySelector('.uep-signin-spinner')).not.toBeNull()
     await user.click(button)
     expect(login).toHaveBeenCalledTimes(1)
+    // Finish on the fake clock: a real 900 ms arrival timer left running here
+    // fired inside a later test on slow CI and called navigate there.
+    vi.useFakeTimers()
     await act(async () => finish({ username: 'sara' }))
   })
 })
