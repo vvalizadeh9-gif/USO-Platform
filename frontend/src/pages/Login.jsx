@@ -68,6 +68,10 @@ export default function Login({ onArriving = () => {} }) {
   const helpBackRef = useRef(null)
   // Set when going back to step 1, so the name is selected for retyping.
   const selectUsername = useRef(false)
+  // The pending "go to the landing page" after a sign-in. Cancelled if the
+  // page goes away first, so a stale navigation never fires later.
+  const arrivalTimer = useRef(null)
+  useEffect(() => () => clearTimeout(arrivalTimer.current), [])
 
   // Focus follows the step. On load too: the first thing to type is focused.
   useEffect(() => {
@@ -132,7 +136,7 @@ export default function Login({ onArriving = () => {} }) {
     setArrived(true)
     const delay = reducedMotion() ? 0 : ARRIVAL_MS
     // Every sign-in lands on the landing page ("/" resolves to the role's home).
-    setTimeout(() => navigate('/', { replace: true }), delay)
+    arrivalTimer.current = setTimeout(() => navigate('/', { replace: true }), delay)
   }
 
   async function onSignIn(e) {
