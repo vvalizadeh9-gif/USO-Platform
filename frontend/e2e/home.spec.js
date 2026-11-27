@@ -186,8 +186,14 @@ test('the Apps grid puts Planning and Insights on one row, descriptions as toolt
   await signIn(page)
   await page.goto('/home')
   const panel = page.getByRole('complementary', { name: 'Apps' })
-  const top = (name) => panel.getByRole('region', { name }).evaluate((el) => el.getBoundingClientRect().top)
-  expect(await top('Planning')).toBe(await top('Insights'))
+  await expect(panel.getByRole('region', { name: 'Insights' })).toBeVisible()
+  // Both read in one frame, after the panel's entrance: two reads during the
+  // rise would compare two positions of a moving panel.
+  await panel.evaluate((el) => Promise.all(el.getAnimations({ subtree: true }).map((a) => a.finished)))
+  const tops = await panel.evaluate((el) => ['Planning', 'Insights'].map(
+    (name) => el.querySelector(`[aria-label="${name}"]`).getBoundingClientRect().top,
+  ))
+  expect(Math.abs(tops[0] - tops[1])).toBeLessThanOrEqual(1)
   const tile = panel.locator('.ha-app').first()
   await expect(tile).toHaveAttribute('data-tip', /.+/)
 })
