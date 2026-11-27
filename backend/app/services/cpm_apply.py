@@ -19,6 +19,7 @@ from app.models.workitem import Village, WorkItem
 from app.services.audit import record_audit
 from app.services.cpm_columns import is_pure_target
 from app.services.drive_test_analytics import is_dt_done
+from app.services.explorer_village_history import removed_code
 from app.services.dt_workflow import reopen_for_new_villages
 from app.services.mojri_tracker import match_key
 from app.services.submissions import sightings
@@ -101,7 +102,8 @@ def _apply_village_qty(db: Session, cr: CpmChangeRequest, user_id: int | None = 
             )
         )
 
-    for code in payload.get("removed", []):
+    for entry in payload.get("removed", []):
+        code = removed_code(entry)  # a bare code before UEP-28, a dict since
         village = next((x for x in wi.villages if x.village_code == code), None)
         if village is not None:
             # Remove dependent acceptance rows first (no DB-level cascade).

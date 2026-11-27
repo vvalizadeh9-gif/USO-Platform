@@ -86,8 +86,19 @@ def init_db() -> None:
         _seed_province_mapping(db)
         _seed_admin(db)
         db.commit()
+        _fill_lifecycle_stages(db)
     finally:
         db.close()
+
+
+def _fill_lifecycle_stages(db: Session) -> None:
+    """UEP-28: compute the Explorer list's cached stage for every row that
+    has none (the column is new, or a row was written around the ORM).
+    Importing the module also installs the listener that keeps it current."""
+    from app.services import lifecycle_stage
+
+    if lifecycle_stage.refresh_missing(db):
+        db.commit()
 
 
 def _seed_roles(db: Session) -> None:

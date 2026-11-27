@@ -1,13 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import {
+  decisionLine,
   orderVillages,
   openVillages,
-  pillText,
   sideChip,
   sideLine,
   siteBadge,
-  stepAccessibleName,
-  stepDateText,
+  stageCell,
   workflowActions,
 } from './explorerModel'
 import { VILLAGES, side, village } from './fixtures'
@@ -16,15 +15,12 @@ import { userWithAccess } from '../../test/seededAccess'
 const as = (role) => userWithAccess({ role: { name: role } })
 
 describe('orderVillages', () => {
-  it('puts rejections first, then more pending sides, then the longest wait, approved last', () => {
+  it('puts rejected first, then pending, then approved -- the worse side decides -- then village code', () => {
     const approved = village('V1', side('approved'), side('approved'))
-    const oneShort = village('V2', side('pending', { days: 2 }), side('approved'))
-    const oneLong = village('V3', side('pending', { days: 9 }), side('approved'))
-    const twoPending = village('V4', side('pending', { days: 1 }), side('pending', { days: 1 }))
-    const rejected = village('V5', side('rejected'), side('approved'))
-    expect(orderVillages([approved, oneShort, oneLong, twoPending, rejected]).map((v) => v.code)).toEqual([
-      'V5', 'V4', 'V3', 'V2', 'V1',
-    ])
+    const pendingB = village('V3', side('pending', { days: 9 }), side('approved'))
+    const pendingA = village('V2', side('approved'), side('pending', { days: 2 }))
+    const rejected = village('V5', side('approved'), side('rejected'))
+    expect(orderVillages([approved, pendingB, pendingA, rejected]).map((v) => v.code)).toEqual(['V5', 'V2', 'V3', 'V1'])
   })
 
   it('counts open villages as those not fully approved', () => {
@@ -32,54 +28,68 @@ describe('orderVillages', () => {
   })
 })
 
-describe('the step path', () => {
-  it('reads the aging pill, never negative, "so far" on the open step', () => {
-    expect(pillText({ state: 'done', gap_days: 7 })).toBe('+7 d')
-    expect(pillText({ state: 'in_progress', gap_days: 8 })).toBe('+8 d so far')
-    expect(pillText({ state: 'done', gap_days: null })).toBe('—')
-  })
-
-  it('shows "No date" for an undated done step and "In progress" for the open one', () => {
-    expect(stepDateText({ state: 'done', date: null })).toBe('No date')
-    expect(stepDateText({ state: 'done', date: '2026-10-06' })).toBe('6 Oct 2026')
-    expect(stepDateText({ state: 'in_progress', date: null })).toBe('In progress')
-  })
-
-  it('names each step with its state and date', () => {
-    expect(stepAccessibleName({ key: 'dt_done', state: 'done', date: '2026-09-30', gap_days: 14 })).toBe(
-      'DT done: done, 30 Sept 2026, 14 days after the previous step',
+describe('the badge', () => {
+  it('names the open step in the agreed words, and acceptance done in green', () => {
+    const words = ['health_check', 'assigned', 'dt_done', 'sent_to_ict', 'acceptance'].map(
+      (step) => siteBadge({ step, state: 'in_progress' }).label,
     )
-    expect(stepAccessibleName({ key: 'acceptance', state: 'in_progress', gap_days: 1 })).toBe('Acceptance: in progress, 1 day so far')
-  })
-
-  it('badges the site by its current step', () => {
-    expect(siteBadge({ step: 'acceptance', state: 'in_progress' })).toEqual({ label: 'Acceptance in progress', tone: 'progress' })
+    expect(words).toEqual([
+      'Health check in progress', 'Awaiting assignment', 'Drive test in progress',
+      'Awaiting submission to ICT', 'Acceptance in progress',
+    ])
     expect(siteBadge({ step: 'acceptance', state: 'done' })).toEqual({ label: 'Acceptance done', tone: 'done' })
   })
 })
 
+describe('the stage cell', () => {
+  it('reads the open step, its days and, only over the SLA, late', () => {
+    expect(stageCell({ stage: 'dt_done', stage_days: 14, stage_late: true })).toMatchObject({
+      label: 'Drive test', days: 14, late: true, name: 'Drive test, 14 days, over SLA',
+    })
+    expect(stageCell({ stage: 'assigned', stage_days: 1, stage_late: false }).name).toBe('Assignment, 1 day')
+    expect(stageCell({ stage: 'health_check', stage_days: null, stage_late: false }).name).toBe('Health check')
+  })
+
+  it('fills the bar by steps done out of six, the open step after them', () => {
+    expect(stageCell({ stage: 'sent_to_ict', stage_days: 3 })).toMatchObject({ filled: 4 / 6, open: 1 / 6 })
+    expect(stageCell({ stage: 'on_air', stage_days: null })).toMatchObject({ filled: 0, label: 'On air' })
+  })
+
+  it('says Accepted with no days once every village is approved', () => {
+    expect(stageCell({ stage: 'done', stage_days: null })).toMatchObject({ done: true, label: 'Accepted', days: null, filled: 1 })
+    expect(stageCell({ stage: null })).toBeNull()
+  })
+})
+
 describe('a side’s line', () => {
-  it('reads each state in Gregorian dates', () => {
-    expect(sideLine(side('approved', { decided_date: '2026-10-06', days: 4 }), 'ICT')).toBe('6 Oct 2026, took 4 days')
-    expect(sideLine(side('rejected', { decided_date: '2026-10-02' }), 'ICT')).toBe('2 Oct 2026, not re-filed yet')
-    expect(sideLine(side('pending', { filed_date: '2026-10-07' }), 'CRA')).toBe('Answer filed 7 Oct 2026, with coordinator')
-    expect(sideLine(side('pending', { filed_date: '2026-10-10', days: 1, refiled: true }), 'ICT')).toBe('Re-filed 10 Oct 2026, waiting 1 day')
-    expect(sideLine(side('pending', { phase: 'with_authority', filed_date: '2026-10-01', days: 13 }), 'CRA')).toBe(
-      'With CRA since 1 Oct 2026, waiting 13 days',
-    )
-    expect(sideLine(side('pending', { phase: 'returned', decided_date: '2026-10-04' }), 'ICT')).toBe('Returned 4 Oct 2026, needs a new letter')
-    expect(sideLine(side('pending', { phase: 'not_filed' }), 'ICT')).toBe('Not filed yet')
+  it('shows dates only, never an age', () => {
+    expect(sideLine(side('approved', { decided_date: '2026-11-15', days: 4 }))).toBe('15 Nov 2026')
+    expect(sideLine(side('rejected', { decided_date: '2026-11-13' }))).toBe('13 Nov 2026, not re-filed yet')
+    expect(sideLine(side('pending', { filed_date: '2026-11-17', days: 1, refiled: true }))).toBe('Re-filed 17 Nov 2026')
+    expect(sideLine(side('pending', { filed_date: '2026-11-20', days: 7 }))).toBe('Filed 20 Nov 2026')
+    expect(sideLine(side('pending', { phase: 'with_authority', filed_date: '2026-10-01', days: 13 }))).toBe('Filed 1 Oct 2026')
+    expect(sideLine(side('pending', { phase: 'not_filed' }))).toBe('Not filed yet')
   })
 
   it('shows the word only when the data has no date', () => {
-    expect(sideLine(side('approved'), 'ICT')).toBeNull()
-    expect(sideLine(side('rejected'), 'ICT')).toBeNull()
+    expect(sideLine(side('approved'))).toBeNull()
+    expect(sideLine(side('rejected'))).toBeNull()
   })
 
-  it('chips a re-filed or returned side', () => {
+  it('tags a re-filed or returned side', () => {
     expect(sideChip(side('pending', { refiled: true }))).toBe('Re-filed')
     expect(sideChip(side('pending', { phase: 'returned' }))).toBe('Returned')
     expect(sideChip(side('pending'))).toBeNull()
+  })
+})
+
+describe('the history panel’s status line', () => {
+  it('says who applied or ignored a change, and when', () => {
+    const base = { kind: 'removed', decided_by: 'Sara Ahmadi', decided_at: '2026-11-19' }
+    expect(decisionLine({ ...base, status: 'applied' })).toBe('Applied by Sara Ahmadi on 19 Nov 2026')
+    expect(decisionLine({ ...base, status: 'ignored' })).toBe('Ignored by Sara Ahmadi on 19 Nov 2026 · still on this site')
+    expect(decisionLine({ ...base, kind: 'added', status: 'ignored' })).toBe('Ignored by Sara Ahmadi on 19 Nov 2026')
+    expect(decisionLine({ kind: 'added', status: 'pending' })).toBe('Waiting for the PM')
   })
 })
 

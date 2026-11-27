@@ -12,6 +12,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    SmallInteger,
     String,
     Text,
     UniqueConstraint,
@@ -56,7 +57,10 @@ class WorkItem(Base):
     """Aggregate root. Unique per (site, site_type)."""
 
     __tablename__ = "work_items"
-    __table_args__ = (UniqueConstraint("site_id", "site_type", name="uq_site_type"),)
+    __table_args__ = (
+        UniqueConstraint("site_id", "site_type", name="uq_site_type"),
+        Index("ix_work_items_lifecycle_stage", "lifecycle_stage", "lifecycle_stage_since"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     site_id: Mapped[int] = mapped_column(ForeignKey("sites.id"), nullable=False, index=True)
@@ -105,6 +109,13 @@ class WorkItem(Base):
     site_contractor_id: Mapped[int | None] = mapped_column(
         ForeignKey("contractors.id"), index=True
     )
+
+    # UEP-28: the open journey step (index in explorer_journey.STEP_ORDER,
+    # 6 = acceptance done) and the day its clock started. A cache of the
+    # record page's step facts, kept by services.lifecycle_stage so the
+    # Explorer list can sort every site by stage in SQL.
+    lifecycle_stage: Mapped[int | None] = mapped_column(SmallInteger)
+    lifecycle_stage_since: Mapped[date | None] = mapped_column(Date)
 
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 

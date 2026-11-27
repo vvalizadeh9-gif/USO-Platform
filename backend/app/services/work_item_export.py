@@ -35,18 +35,26 @@ _COLUMNS: list[tuple[str, str]] = [
 _WIDTHS = [16, 14, 18, 14, 20]
 
 
+#: A text cell starting with one of these is a formula to Excel; it is
+#: written with a leading apostrophe instead (CSV/formula injection).
+_FORMULA_START = ("=", "+", "-", "@", "\t", "\r")
+
+
 def _cell(value) -> object:
     """Render one value for a spreadsheet cell.
 
     Dates go in as dates rather than strings so Excel sorts and filters them
     as dates; a tz-aware datetime is dropped to its date, both because the
     assignment is a day-grained fact and because openpyxl refuses to write
-    timezone-aware datetimes at all.
+    timezone-aware datetimes at all. Text that Excel would run as a formula is
+    kept as text (UEP-28).
     """
     if isinstance(value, datetime):
         return value.date()
     if isinstance(value, date):
         return value
+    if isinstance(value, str) and value.startswith(_FORMULA_START):
+        return "'" + value
     return value if value is not None else ""
 
 
@@ -55,10 +63,25 @@ def build_sheet(
 ) -> bytes:
     """One .xlsx sheet: a header row from ``columns`` (header, row key), then
     a line per row. Dates stay dates; the header is frozen and filterable."""
-    wb = Workbook()
-    ws = wb.active
-    ws.title = title
+    return build_workbook([(title, columns, widths, rows)])
 
+
+#: One sheet: (title, columns, widths, rows), as :func:`build_sheet` takes them.
+Sheet = tuple[str, list[tuple[str, str]], list[int], list[dict]]
+
+
+def build_workbook(sheets: list[Sheet]) -> bytes:
+    """An .xlsx with one sheet per entry, each laid out as :func:`build_sheet`."""
+    wb = Workbook()
+    wb.remove(wb.active)
+    for title, columns, widths, rows in sheets:
+        _write_sheet(wb.create_sheet(title), columns, widths, rows)
+    buf = io.BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
+
+def _write_sheet(ws, columns: list[tuple[str, str]], widths: list[int], rows: list[dict]) -> None:
     ws.append([header for header, _ in columns])
     for col_idx in range(1, len(columns) + 1):
         cell = ws.cell(row=1, column=col_idx)
@@ -76,10 +99,6 @@ def build_sheet(
     # a contractor with four hundred sites reads this file by filtering it.
     ws.freeze_panes = "A2"
     ws.auto_filter.ref = f"A1:{get_column_letter(len(columns))}{len(rows) + 1}"
-
-    buf = io.BytesIO()
-    wb.save(buf)
-    return buf.getvalue()
 
 
 def build_assigned_sites_export(rows: list[dict]) -> bytes:

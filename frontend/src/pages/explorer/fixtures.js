@@ -34,11 +34,24 @@ const countOf = (villages, key) => {
   return out
 }
 
+const lanesOf = (villages) => Object.fromEntries(['ict', 'cra'].map((k) => [k, {
+  approved: villages.filter((v) => v[k].status === 'approved').length,
+  total: villages.length,
+  done_on: null,
+}]))
+
+/** Two CPM village changes: an addition applied, a removal ignored. */
+export const HISTORY = [
+  { date: '2026-11-18', kind: 'removed', villages: [{ code: 'V10002', name: 'روستای V10002' }], status: 'ignored', decided_by: 'Sara Ahmadi', decided_at: '2026-11-19' },
+  { date: '2026-10-01', kind: 'added', villages: [{ code: 'V10003', name: 'روستای V10003' }], status: 'applied', decided_by: 'Sara Ahmadi', decided_at: '2026-10-02' },
+]
+
 export function record({ villages = VILLAGES, ...over } = {}) {
   return {
     id: 7,
     site_code: 'W4318',
-    status: { step: 'acceptance', state: 'in_progress' },
+    // The badge is the open journey step: Sent to ICT here (UEP-28 §B1).
+    status: { step: 'sent_to_ict', state: 'in_progress' },
     general: {
       on_air_date: '2026-09-02',
       dt_date: '2026-09-30',
@@ -46,6 +59,7 @@ export function record({ villages = VILLAGES, ...over } = {}) {
       dt_contractor: 'آریا موج',
       requested_technology: ['3G', '4G'],
       province: 'کرمان',
+      site_type: 'New Site',
       hadaf_villages: villages.length,
     },
     journey: {
@@ -58,15 +72,16 @@ export function record({ villages = VILLAGES, ...over } = {}) {
         { key: 'acceptance', state: 'upcoming', date: null, gap_days: null },
       ],
       aging: {
-        total_days: 42,
-        current_step_days: 14,
-        longest_step: { from: 'assigned', to: 'dt_done', days: 14 },
+        total_days: 35,
         oldest_pending: { authority: 'CRA', days: 14, villages: 2 },
       },
+      lanes: lanesOf(villages),
+      sent_to_ict: [],
     },
     acceptance_started: true,
     villages,
     counts: { ict: countOf(villages, 'ict'), cra: countOf(villages, 'cra') },
+    village_history: HISTORY,
     workflow: { current_stage: 'DT Done', active_drive_test_id: 3, dt_submission_date: '2026-09-30' },
     ...over,
   }
@@ -94,6 +109,9 @@ export const siteRow = (i, over = {}) => ({
   hadaf_villages: i % 5,
   dt_contractor: i % 7 === 0 ? null : CONTRACTORS[i % 2],
   village_match: null,
+  stage: ['health_check', 'assigned', 'dt_done', 'sent_to_ict', 'acceptance', 'done'][i % 6],
+  stage_days: i % 6 === 5 ? null : i % 20,
+  stage_late: i % 6 === 2 && i % 20 > 15,
   ...over,
 })
 

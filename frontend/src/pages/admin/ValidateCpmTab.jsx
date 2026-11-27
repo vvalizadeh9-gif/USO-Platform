@@ -136,11 +136,16 @@ function VillageChanges({ cr }) {
           + {v.village_code || '?'}{v.village_name ? ` · ${v.village_name}` : ''}
         </span>
       ))}
-      {removed.map((code) => (
-        <span key={`r-${code}`} className="pill pill-red" style={{ textDecoration: 'line-through' }}>
-          − {code}
-        </span>
-      ))}
+      {removed.map((entry) => {
+        // UEP-28: a bare code before, {village_code, village_name} since.
+        const code = typeof entry === 'string' ? entry : entry?.village_code
+        const name = typeof entry === 'string' ? null : entry?.village_name
+        return (
+          <span key={`r-${code}`} className="pill pill-red" style={{ textDecoration: 'line-through' }}>
+            − {code || '?'}{name ? ` · ${name}` : ''}
+          </span>
+        )
+      })}
       {added.length === 0 && removed.length === 0 && (
         <span className="dim">No village-level detail.</span>
       )}

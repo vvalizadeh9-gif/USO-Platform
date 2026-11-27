@@ -5,8 +5,9 @@ import { usePageCrumb } from '../../shell/crumbs'
 import { openVillages, siteBadge } from './explorerModel'
 
 /**
- * The header row (UEP-11 §B3; the breadcrumb is the shell's, UEP-13 §3.12): the site ID with its one
- * status badge, and nothing under it. Actions on the right: Take action (only
+ * The header row (UEP-28 §B1; the breadcrumb is the shell's, UEP-13 §3.12):
+ * the site ID (32/600) with its one status badge -- always the open journey
+ * step, from the same steps the ribbon draws -- and nothing under it. Actions on the right: Take action (only
  * with an action to take), Open in My Work (for the roles with an acceptance
  * workspace -- never a dead link), and File letter for the roles that file,
  * while the site has open villages.
