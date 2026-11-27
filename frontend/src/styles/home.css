@@ -144,7 +144,7 @@
 .ho-waiting:hover { background: var(--uep-page); }
 .ho-waiting[aria-pressed='true'] { background: var(--uep-accent-tint); }
 
-.ho-bar { display: flex; gap: 2px; height: 14px; border-radius: 7px; overflow: hidden; background: var(--uep-divider); }
+.ho-bar { display: flex; gap: 2px; height: 14px; border-radius: var(--uep-radius-pill); overflow: hidden; background: var(--uep-divider); }
 .ho-seg {
   flex-basis: 0;
   min-width: 4px;
@@ -164,7 +164,7 @@
   padding: 2px 6px;
   margin: 0 -6px;
   border: 0;
-  border-radius: 6px;
+  border-radius: var(--uep-home-radius-chip);
   background: none;
   color: inherit;
   font: inherit;
@@ -175,7 +175,7 @@
 .ho-lg[aria-pressed='true'] { background: var(--uep-accent-tint); }
 .ho-lg b { font-size: var(--uep-fs-card-title); font-weight: var(--uep-weight-semibold); }
 .ho-lg span { font-size: var(--uep-fs-small); color: var(--uep-text-2); }
-.ho-swatch { display: inline-block; flex: none; width: 10px; height: 10px; border-radius: 3px; }
+.ho-swatch { display: inline-block; flex: none; width: 10px; height: 10px; border-radius: var(--uep-home-radius-swatch); }
 /* A filter is on: everything else fades. Graphics fade to 32 %; text goes
    to the lightest allowed grey instead, so it keeps 4.5:1 (axe, WCAG 1.4.3). */
 .ho-card.is-filtering .ho-seg:not(.is-on),
@@ -203,7 +203,7 @@
   cursor: pointer;
 }
 .hw-clear:hover { border-color: var(--uep-home-edge); }
-.hw-clear .ho-swatch { width: 8px; height: 8px; border-radius: 2px; }
+.hw-clear .ho-swatch { width: 8px; height: 8px; border-radius: var(--uep-home-radius-mark); }
 .hw-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(var(--uep-home-card-min), 1fr)); gap: var(--uep-space-16); }
 .uep-home-page .hw-grid { grid-template-columns: repeat(auto-fit, minmax(var(--uep-home-cards-min), 1fr)); align-items: stretch; }
 .hw-card {
@@ -276,7 +276,7 @@
 .hw-qcount small { display: block; font-size: var(--uep-fs-caption); font-weight: var(--uep-weight-medium); color: var(--uep-text-3); }
 .hw-qcount.is-late { color: var(--uep-home-late); }
 .hw-chev { grid-row: 1 / 3; grid-column: 3; color: var(--uep-text-3); transition: transform var(--uep-dur-fast) var(--uep-ease-productive), color var(--uep-dur-fast) var(--uep-ease-productive); }
-.hw-strip { display: flex; gap: 1px; height: 4px; border-radius: 2px; overflow: hidden; background: var(--uep-divider); }
+.hw-strip { display: flex; gap: 1px; height: 4px; border-radius: var(--uep-home-radius-mark); overflow: hidden; background: var(--uep-divider); }
 .hw-strip i { display: block; flex-basis: 0; height: 100%; transform-origin: left; transition: opacity var(--uep-dur-home-filter) var(--uep-ease-productive); }
 .hw-strip i.is-dim { opacity: 0.25; }
 .hw-qmeta { font-size: var(--uep-fs-caption); color: var(--uep-text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -365,14 +365,14 @@
   align-items: center;
   gap: 6px;
   padding: 10px var(--uep-space-4) var(--uep-space-8);
-  border-radius: 10px;
+  border-radius: var(--uep-home-radius-tile);
   color: var(--uep-text);
   text-align: center;
   text-decoration: none;
   transition: background var(--uep-dur-fast) var(--uep-ease-productive);
 }
 .ha-app:hover { background: var(--uep-page); }
-.ha-app .uep-app-tile { border-radius: 10px; transition: transform var(--uep-dur-card-hover) var(--uep-ease-expressive); }
+.ha-app .uep-app-tile { border-radius: var(--uep-home-radius-tile); transition: transform var(--uep-dur-card-hover) var(--uep-ease-expressive); }
 .ha-app:hover .uep-app-tile { transform: translateY(-2px); }
 .ha-app.is-quiet .uep-app-tile { background: var(--uep-surface) !important; border: var(--uep-border-width) solid var(--uep-home-edge); color: var(--uep-text-2); }
 /* The hidden description is on the scale too: the font-size check reads every node. */
@@ -389,7 +389,7 @@
   width: max-content;
   max-width: 220px;
   padding: 6px 9px;
-  border-radius: 6px;
+  border-radius: var(--uep-home-radius-chip);
   background: var(--uep-home-badge);
   color: var(--uep-on-accent);
   font-size: var(--uep-fs-caption);
@@ -504,7 +504,7 @@
 .hd-close { flex: none; width: 32px; height: 32px; display: grid; place-items: center; border: var(--uep-border-width) solid var(--uep-border); border-radius: var(--uep-radius-control); background: var(--uep-surface); color: var(--uep-text-2); cursor: pointer; }
 .hd-close:hover { border-color: var(--uep-home-edge); color: var(--uep-text); }
 .hd-sum { margin-top: var(--uep-space-12); }
-.hd-bar { display: flex; gap: 2px; height: 8px; border-radius: 4px; overflow: hidden; background: var(--uep-divider); }
+.hd-bar { display: flex; gap: 2px; height: 8px; border-radius: var(--uep-radius-sm); overflow: hidden; background: var(--uep-divider); }
 .hd-bar i, .hd-hbar i { display: block; flex-basis: 0; height: 100%; transform-origin: left; animation: h-grow 600ms var(--uep-ease-expressive) 120ms backwards; }
 .hd-chips { display: flex; flex-wrap: wrap; gap: var(--uep-space-4) 6px; margin-top: 10px; }
 .hd-chip {
@@ -524,7 +524,7 @@
 }
 .hd-chip.is-static { cursor: default; }
 .hd-chip:not(.is-static):hover { border-color: var(--uep-home-edge); }
-.hd-chip i { width: 8px; height: 8px; border-radius: 2px; }
+.hd-chip i { width: 8px; height: 8px; border-radius: var(--uep-home-radius-mark); }
 .hd-chip b { font-weight: var(--uep-weight-semibold); color: var(--uep-text); }
 .hd-chip[aria-pressed='true'] { background: var(--uep-text); border-color: var(--uep-text); color: var(--uep-on-accent); }
 .hd-chip[aria-pressed='true'] b { color: var(--uep-on-accent); }
@@ -533,7 +533,7 @@
 .hd-search:focus-within { border-color: var(--uep-accent); box-shadow: 0 0 0 3px rgba(29, 78, 216, 0.18); }
 .hd-search input { flex: 1; min-width: 0; border: 0; outline: 0; background: none; color: var(--uep-text); font: inherit; font-size: var(--uep-fs-small); }
 .hd-seg { display: inline-flex; padding: 2px; border-radius: var(--uep-radius-control); background: var(--uep-page); }
-.hd-seg button { height: 30px; padding: 0 10px; border: 0; border-radius: 6px; background: none; color: var(--uep-text-2); font: inherit; font-size: var(--uep-fs-small); font-weight: var(--uep-weight-medium); white-space: nowrap; cursor: pointer; }
+.hd-seg button { height: 30px; padding: 0 10px; border: 0; border-radius: var(--uep-home-radius-chip); background: none; color: var(--uep-text-2); font: inherit; font-size: var(--uep-fs-small); font-weight: var(--uep-weight-medium); white-space: nowrap; cursor: pointer; }
 .hd-seg button[aria-pressed='true'] { background: var(--uep-surface); color: var(--uep-text); box-shadow: 0 1px 2px rgba(20, 23, 31, 0.12); }
 .hd-list { flex: 1; min-height: 0; overflow: auto; padding: var(--uep-space-4) var(--uep-space-12) var(--uep-space-8); }
 .hd-list[aria-busy='true'] > :not(.hd-skel) { opacity: 0.6; }
@@ -562,8 +562,8 @@
 .hd-age-text b { font-weight: var(--uep-weight-semibold); color: var(--uep-text); }
 .hd-age.hs-late .hd-age-text b { color: var(--uep-home-late); }
 .hd-age.hs-due .hd-age-text b { color: var(--uep-home-due-ink); }
-.hd-track { position: relative; height: 4px; border-radius: 2px; background: var(--uep-divider); }
-.hd-track i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 2px; background: var(--uep-text-3); transform-origin: left; animation: h-grow 600ms var(--uep-ease-expressive) 120ms backwards; }
+.hd-track { position: relative; height: 4px; border-radius: var(--uep-home-radius-mark); background: var(--uep-divider); }
+.hd-track i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: var(--uep-home-radius-mark); background: var(--uep-text-3); transform-origin: left; animation: h-grow 600ms var(--uep-ease-expressive) 120ms backwards; }
 .hd-age.hs-late .hd-track i { background: var(--uep-home-late); }
 .hd-age.hs-due .hd-track i { background: var(--uep-home-due); }
 .hd-age.hs-no-date .hd-track { background: var(--uep-home-no-date); }
@@ -589,12 +589,12 @@
 .hd-line:not(.is-static):hover { background: var(--uep-page); }
 .hd-line:not(.is-static):hover .hd-chev { transform: translateX(2px); color: var(--uep-text); }
 .hd-line-label { display: flex; align-items: center; gap: var(--uep-space-8); font-size: var(--uep-fs-body); font-weight: var(--uep-weight-medium); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.hd-line-label i { flex: none; width: 8px; height: 8px; border-radius: 2px; }
+.hd-line-label i { flex: none; width: 8px; height: 8px; border-radius: var(--uep-home-radius-mark); }
 .hd-line-count { font-size: var(--uep-fs-card-title); font-weight: var(--uep-weight-semibold); text-align: right; white-space: nowrap; }
 .hd-line-count small { margin-left: 3px; font-size: var(--uep-fs-caption); font-weight: var(--uep-weight-medium); color: var(--uep-text-3); }
 .hd-line-count em { margin-right: var(--uep-space-8); font-style: normal; font-size: var(--uep-fs-caption); font-weight: var(--uep-weight-medium); color: var(--uep-home-late); }
 .hd-chev { grid-row: 1 / 3; grid-column: 3; color: var(--uep-text-3); transition: transform var(--uep-dur-fast) var(--uep-ease-productive); }
-.hd-hbar { grid-column: 1 / 3; display: flex; gap: 1px; height: 6px; border-radius: 3px; overflow: hidden; }
+.hd-hbar { grid-column: 1 / 3; display: flex; gap: 1px; height: 6px; border-radius: var(--uep-home-radius-swatch); overflow: hidden; }
 .hd-empty { display: grid; justify-items: center; gap: var(--uep-space-4); padding: 32px var(--uep-space-12); color: var(--uep-text-3); font-size: var(--uep-fs-small); text-align: center; }
 .hd-empty b { color: var(--uep-text); font-size: var(--uep-fs-body); font-weight: var(--uep-weight-semibold); }
 .hd-more { margin: var(--uep-space-8); font-size: var(--uep-fs-caption); color: var(--uep-text-3); }
@@ -617,7 +617,7 @@
 .hd-export { border: var(--uep-border-width) solid var(--uep-border); background: var(--uep-surface); color: var(--uep-text); }
 .hd-export:hover { border-color: var(--uep-home-edge); background: var(--uep-page); }
 /* Excel's own green, on the icon only: the one green on Home is a file type, not a status. */
-.hd-export svg { color: #1D6F42; }
+.hd-export svg { color: var(--uep-home-excel); }
 .hd-export.is-busy svg { animation: hd-dl 600ms var(--uep-ease-productive) infinite alternate; }
 @keyframes hd-dl { to { transform: translateY(2px); } }
 .hd-open { border: 0; background: var(--uep-accent); color: var(--uep-on-accent); }

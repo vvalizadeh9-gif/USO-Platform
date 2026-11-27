@@ -220,6 +220,11 @@
   --uep-dur-home-count: 800ms;   /* the figures count up (useCountUp) */
   --uep-dur-home-drawer: 300ms;
   --uep-dur-home-filter: 200ms;
+  --uep-home-radius-mark: 2px;    /* strips, tracks, small swatches */
+  --uep-home-radius-swatch: 3px;  /* legend swatches, line bars */
+  --uep-home-radius-chip: 6px;    /* legend items, segmented buttons, tooltips */
+  --uep-home-radius-tile: 10px;   /* the 40px app tiles */
+  --uep-home-excel: #1D6F42;      /* Excel's green, on the export icon only */
   --uep-spark-height: 28px;
   --uep-progress-height: 6px;
   --uep-fs-queue-count: 20px;
