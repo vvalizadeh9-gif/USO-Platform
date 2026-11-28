@@ -1,6 +1,7 @@
 // GET /explorer/sites/{id} for the layout tests. The site id picks the case:
-// 1, 3, 10 or 25 villages; 99 is a site with long Persian village names and
-// no on-air, health check or DT date (UEP-28 §E).
+// 1, 3, 5, 10, 15 or 25 villages; 98 is 25 villages with long Persian names
+// (UEP-30 §6); 99 is a site with long Persian village names and no on-air,
+// health check or DT date (UEP-28 §E).
 import { VILLAGES, manyVillages, record, sitesPage, village, side } from '../src/pages/explorer/fixtures.js'
 
 const LONG = 'روستای حسین آباد علیا و سفلی بخش مرکزی شهرستان'
@@ -17,7 +18,9 @@ function undated() {
 
 export function explorerSite(url) {
   const id = Number(new URL(url).pathname.split('/').pop())
-  const base = id === 99 ? undated() : record({ villages: id === 3 ? VILLAGES : manyVillages(id) })
+  const base = id === 99 ? undated()
+    : id === 98 ? record({ villages: manyVillages(25).map((v, i) => ({ ...v, name: `${LONG} ${i + 1}` })) })
+      : record({ villages: id === 3 ? VILLAGES : manyVillages(id) })
   return { ...base, id, site_code: `W43${String(id).padStart(2, '0')}` }
 }
 

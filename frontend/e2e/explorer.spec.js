@@ -12,7 +12,7 @@ import { expect, test } from '@playwright/test'
 import { signIn } from './mockApi.js'
 
 const VIEWPORTS = [{ width: 1440, height: 900 }, { width: 1366, height: 768 }]
-const SITES = [1, 3, 10, 25]
+const SITES = [1, 3, 5, 10, 15, 25, 98]
 const SCALE = [12, 13, 14, 16, 20, 24, 32]
 const TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa']
 
@@ -79,6 +79,22 @@ for (const viewport of VIEWPORTS) {
         if (process.env.SCREENSHOTS) {
           await page.screenshot({ path: `${process.env.SCREENSHOTS}/explorer-${id}-${viewport.width}.png` })
         }
+      })
+    }
+
+    for (const id of [1, 5, 15, 25, 98]) {
+      test(`the passport with ${id === 98 ? '25 long-named' : id} villages: at most two chip lines, then "+n more", about 150px tall`, async ({ page }) => {
+        await open(page, id)
+        const measure = () => page.locator('.exp').evaluate((card) => ({
+          height: card.getBoundingClientRect().height,
+          lines: new Set([...card.querySelectorAll('.exp-chips > li')].map((li) => li.offsetTop)).size,
+          more: !!card.querySelector('.exp-chips .is-more'),
+        }))
+        // A resize (late fonts) shows every chip for a frame, then cuts again.
+        await expect.poll(async () => (await measure()).lines).toBeLessThanOrEqual(2)
+        const m = await measure()
+        expect(m.height).toBeLessThanOrEqual(156)
+        if (id >= 15) expect(m.more).toBe(true)
       })
     }
 

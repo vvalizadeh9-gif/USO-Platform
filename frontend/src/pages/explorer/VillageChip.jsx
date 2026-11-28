@@ -1,8 +1,8 @@
 import { Fa } from '../../components/work/parts'
 
 /**
- * One village as a chip: its Persian name (Vazirmatn 14/600) and its ID
- * (12, monospaced digits). The list's villages strip, the record's passport
+ * One village as a chip: its Persian name (Vazirmatn 14/500) and its ID
+ * (Plex Sans 12/500, tabular figures). The list's villages strip, the record's passport
  * and the history panel all use it, so a village looks the same everywhere.
  * With `onClick` it is a button (`pressed` marks the highlighted one).
  */

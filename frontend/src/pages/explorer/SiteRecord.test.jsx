@@ -76,10 +76,15 @@ describe('the site passport', () => {
   it('shows Province, Target villages, Site type and technology, Contractors, in that order', async () => {
     await draw()
     const titles = within(passport()).getAllByRole('heading', { level: 3 }).map((h) => h.textContent.replace(/\d+$/, '').trim())
-    expect(titles).toEqual(['Province', 'Target villages', 'Site type', 'Requested technology', 'Contractors'])
+    expect(titles).toEqual(['Province', 'Target villages', 'Site type', 'Technology', 'Contractors'])
+    expect(within(passport()).getByRole('heading', { name: 'Province' })).toHaveClass('uw-sr-only')
+    expect(passport().querySelectorAll('.exp-title')).toHaveLength(4)
     expect(within(passport()).getByText('کرمان')).toHaveAttribute('lang', 'fa')
     expect(within(passport()).getByRole('img', { name: 'Map of Iran, کرمان highlighted' })).toBeInTheDocument()
     expect(within(passport()).getByText('New site')).toBeInTheDocument()
+    expect(within(passport()).getByText('New site').tagName).toBe('SPAN')
+    expect(within(passport()).getByText('New site')).toHaveClass('exp-value')
+    expect(within(passport()).getByRole('group', { name: 'Requested technology: 3G, 4G' })).toBeInTheDocument()
     expect(within(passport()).getByText('3G')).toHaveClass('exp-tech')
     expect(within(passport()).getByText('Site contractor')).toBeInTheDocument()
     expect(within(passport()).getByText('آریا موج')).toBeInTheDocument()
@@ -93,12 +98,46 @@ describe('the site passport', () => {
     expect(card.textContent).not.toMatch(/On air|DT date/)
   })
 
+  it('shows only the requested technologies, as tiles, with no signal bars', async () => {
+    const r = record()
+    r.general = { ...r.general, requested_technology: ['4G'] }
+    serve(r)
+    await draw()
+    const tiles = [...passport().querySelectorAll('.exp-tech')].map((t) => t.textContent)
+    expect(tiles).toEqual(['4G'])
+    expect(within(passport()).queryByText('2G')).toBeNull()
+    expect(within(passport()).queryByText('3G')).toBeNull()
+    expect(passport().querySelector('.exp-bars')).toBeNull()
+  })
+
+  it('draws a tower tile for the site contractor and a car tile for the DT contractor', async () => {
+    await draw()
+    const rows = [...passport().querySelectorAll('.exp-contractor')]
+    expect(rows.map((row) => row.querySelector('.exp-contractor-tile svg').dataset.icon)).toEqual(['cell-tower', 'car'])
+    expect(rows.map((row) => row.querySelector('.exp-role').textContent)).toEqual(['Site contractor', 'DT contractor'])
+  })
+
+  it.each([
+    [2, 'History · 2 changes'],
+    [1, 'History · 1 change'],
+    [0, 'History'],
+  ])('names History with %i changes in words', async (n, name) => {
+    serve(record({ village_history: record().village_history.slice(0, n) }))
+    await draw()
+    const button = within(passport()).getByRole('button', { name })
+    expect(button).toHaveTextContent(name)
+    expect(button.querySelector('b')).toBeNull()
+  })
+
   it('says "Not assigned" for a missing contractor and "—" for a missing province', async () => {
     const r = record()
     r.general = { ...r.general, dt_contractor: null, province: null, requested_technology: [] }
     serve(r)
     await draw()
     expect(within(passport()).getByText('Not assigned')).toBeInTheDocument()
+    expect(within(passport()).getByText('Not assigned').closest('.exp-contractor').querySelector('[data-icon="car"]')).not.toBeNull()
+    expect(within(passport()).getByText('—', { selector: '.exp-none' })).toBeInTheDocument()
+    expect(within(passport()).queryByText('Province', { ignore: '.uw-sr-only' })).toBeNull()
     expect(within(passport()).getByRole('img', { name: 'Map of Iran' })).toBeInTheDocument()
   })
 

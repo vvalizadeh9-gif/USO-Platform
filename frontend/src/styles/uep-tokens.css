@@ -312,7 +312,8 @@
   --uep-explorer-map: 112px;
   --uep-explorer-map-land: #CDD6EA;        /* every province */
   --uep-explorer-map-me: var(--uep-app-explorer); /* this site's province */
-  --uep-explorer-tech-bar: #AFC3F2;        /* an unlit signal bar */
+  --uep-explorer-contractor-tile: #EEF1F5; /* the passport's contractor icon tiles */
+  --uep-explorer-contractor-icon: #334155;
   --uep-explorer-ribbon: 128px;
   --uep-explorer-ribbon-open: #C9D8FF;     /* the step in progress, up to Today */
   --uep-explorer-table-head: 46px;

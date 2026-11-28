@@ -6,20 +6,6 @@ import { typeLabel } from './listModel'
 import ProvinceMap from './ProvinceMap'
 import VillageChip from './VillageChip'
 
-const BARS = { '2G': 2, '3G': 3, '4G': 4 }
-
-/** A signal-strength mark: 2G two bars, 3G three, 4G four. */
-function SignalBars({ tech }) {
-  const on = BARS[tech] || 1
-  return (
-    <svg className="exp-bars" width="14" height="12" viewBox="0 0 14 12" aria-hidden="true">
-      {[0, 1, 2, 3].map((i) => (
-        <rect key={i} x={i * 3.6} y={9 - i * 3} width="2.4" height={3 + i * 3} rx="1" className={i < on ? 'is-on' : undefined} />
-      ))}
-    </svg>
-  )
-}
-
 /**
  * How many chips fit on two lines, leaving room for "+n more". Measured after
  * each layout: everything is drawn first, then the overflow is cut.
@@ -65,8 +51,8 @@ function Villages({ villages, changes, started, highlight, onHighlight, onHistor
           Target villages <span className="exp-count uw-num">{formatNumber(villages.length)}</span>
         </h3>
         <button type="button" className="exp-history" onClick={onHistory} data-history-trigger>
-          <Icon name="recently-viewed" size={16} /> History
-          {changes > 0 && <b className="uw-num" aria-label={`${changes} changes`}>{changes}</b>}
+          <Icon name="recently-viewed" size={16} />
+          {changes > 0 ? `History · ${formatNumber(changes)} ${changes === 1 ? 'change' : 'changes'}` : 'History'}
         </button>
       </div>
       {villages.length === 0 ? (
@@ -94,11 +80,15 @@ function Villages({ villages, changes, started, highlight, onHighlight, onHistor
   )
 }
 
-function Contractor({ name, role }) {
+/** A contractor: a grey icon tile (tower or car), then name over role. */
+function ContractorRow({ icon, name, role }) {
   return (
     <div className="exp-contractor">
-      {name ? <Fa className="exp-contractor-name">{name}</Fa> : <span className="exp-contractor-name is-none">Not assigned</span>}
-      <span className="exp-role">{role}</span>
+      <span className="exp-contractor-tile"><Icon name={icon} size={16} /></span>
+      <span className="exp-contractor-text">
+        {name ? <Fa className="exp-contractor-name">{name}</Fa> : <span className="exp-contractor-name is-none">Not assigned</span>}
+        <span className="exp-role">{role}</span>
+      </span>
     </div>
   )
 }
@@ -134,7 +124,7 @@ export default function SitePassport({ record, status, onRetry, highlight, onHig
           <div className="exp-location">
             <ProvinceMap province={g.province} />
             <div className="exp-location-text">
-              <h3 className="exp-title">Province</h3>
+              <h3 className="uw-sr-only">Province</h3>
               <span className="exp-province">{g.province ? <Fa>{g.province}</Fa> : '—'}</span>
             </div>
           </div>
@@ -152,20 +142,20 @@ export default function SitePassport({ record, status, onRetry, highlight, onHig
               <span className="exp-value">{typeLabel(g.site_type) || '—'}</span>
             </div>
             <div className="exp-group">
-              <h3 className="exp-title">Requested technology</h3>
+              <h3 className="exp-title">Technology</h3>
               {g.requested_technology?.length ? (
-                <span className="exp-techs">
-                  {g.requested_technology.map((t) => (
-                    <span key={t} className="exp-tech"><SignalBars tech={t} />{t}</span>
-                  ))}
+                <span className="exp-techs" role="group" aria-label={`Requested technology: ${g.requested_technology.join(', ')}`}>
+                  {g.requested_technology.map((t) => <span key={t} className="exp-tech">{t}</span>)}
                 </span>
               ) : <span className="exp-none">—</span>}
             </div>
           </div>
           <div className="exp-cell exp-contractors">
             <h3 className="exp-title">Contractors</h3>
-            <Contractor name={g.site_contractor} role="Site contractor" />
-            <Contractor name={g.dt_contractor} role="DT contractor" />
+            <div className="exp-contractor-rows">
+              <ContractorRow icon="cell-tower" name={g.site_contractor} role="Site contractor" />
+              <ContractorRow icon="car" name={g.dt_contractor} role="DT contractor" />
+            </div>
           </div>
         </>
       )}

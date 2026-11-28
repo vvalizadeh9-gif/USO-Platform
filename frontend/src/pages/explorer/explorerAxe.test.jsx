@@ -19,10 +19,13 @@ const SiteRecord = (await import('./SiteRecord')).default
 const { ToastProvider } = await import('../../context/ToastContext')
 
 const CASES = [
+  ['one village', record({ villages: manyVillages(1) })],
   ['three villages', record()],
+  ['five villages', record({ villages: manyVillages(5) })],
   ['the village history panel open', record(), true],
   ['fifteen villages', record({ villages: manyVillages(15) })],
   ['ten villages (table)', record({ villages: manyVillages(10) })],
+  ['a missing contractor', { ...record(), general: { ...record().general, dt_contractor: null } }],
   ['acceptance not started', record({ acceptance_started: false })],
   ['a site awaiting assignment', record({ workflow: { current_stage: 'Ready for Assignment', active_drive_test_id: null, dt_submission_date: null } })],
 ]
