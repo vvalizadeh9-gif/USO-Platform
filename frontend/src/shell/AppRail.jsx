@@ -31,7 +31,7 @@ export default function AppRail({ app, activePage, counts }) {
       </div>
       <nav className="uep-rail-items">
         {app.pages.map((page, i) => {
-          const count = pageCount(page, counts)
+          const count = page.railCount === false ? 0 : pageCount(page, counts)
           const active = page.id === activePage?.id
           const section = page.section && page.section !== page.label && page.section !== app.pages[i - 1]?.section
           return (

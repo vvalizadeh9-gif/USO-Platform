@@ -123,3 +123,8 @@ def status_change_action(new_status: str, previous_status: str | None = None) ->
             return USER_REACTIVATED
         return USER_ACTIVATED
     return USER_UPDATED
+
+# UEP-31: Admin > Contractors. A contractor added by hand, or shown in /
+# hidden from Drive test.
+CONTRACTOR_CREATED = "contractor.created"
+CONTRACTOR_VISIBILITY_CHANGED = "contractor.visibility_changed"

@@ -50,6 +50,6 @@ describe('the step tiles', () => {
     const step = STEPS.find((s) => s.key === 'dt_tests')
     const f = stepFigures(step, { dt5: { count: 200, late: 3 }, sent_back: { count: 5, late: 1 }, dt6: { count: 12, late: 0 } })
     expect(f).toMatchObject({ count: 205, decide: 12, late: 4 })
-    expect(stepSpokenName(step, f)).toBe('Step 4, Tests: 205 sites, 12 to decide, 4 overdue, Contractors, then you')
+    expect(stepSpokenName(step, f)).toBe('Step 4, Tests: 205 sites, 12 to decide, 4 late')
   })
 })

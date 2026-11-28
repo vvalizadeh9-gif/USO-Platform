@@ -541,7 +541,7 @@
   border-radius: var(--uep-radius-card);
 }
 .uw-review-panel.is-empty { justify-content: center; color: var(--uep-text-3); font-size: var(--uep-fs-small); text-align: center; }
-.uw-review-head h2 { margin: 0; font-size: var(--uep-fs-section); font-weight: var(--uep-weight-semibold); }
+.uw-review-head h2 { margin: 0; font-size: var(--uep-fs-card-title); font-weight: var(--uep-weight-semibold); }
 .uw-review-head p { margin: 2px 0 0; font-size: var(--uep-fs-small); color: var(--uep-text-3); }
 .uw-review-facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--uep-space-8); margin: 0; }
 .uw-review-facts dt { font-size: var(--uep-fs-caption); color: var(--uep-text-3); }
@@ -620,10 +620,9 @@
 
 /* ---- 1366×768: tighter, nothing hidden ---- */
 @media (max-height: 820px) {
-  .uw-tile-figure { font-size: var(--uep-fs-strip-figure-tight); }
+  .uw-tile-figure { font-size: var(--uep-fs-page-title); }
   .uw-tile { padding: 4px 10px 8px; }
   .uw-strip-caption { padding-top: 2px; }
-  .uw-heading h1 { font-size: var(--uep-fs-section); }
   .uw-assign { padding-block: var(--uep-space-8); }
   .uw-assign-card { min-height: var(--uep-assign-card-min-tight); padding-block: var(--uep-space-8); gap: 4px; }
 }

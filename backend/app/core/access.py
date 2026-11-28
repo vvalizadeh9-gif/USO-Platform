@@ -110,6 +110,8 @@ class Feature(StrEnum):
     USERS = "users"
     ACCESS = "access"
     PROVINCE_ASSIGNMENTS = "province_assignments"
+    #: Admin > Contractors (UEP-31): who appears in Drive test; add by hand.
+    CONTRACTORS = "contractors"
     SLA_POLICIES = "sla_policies"
     #: Admin > Sign-in page (UEP-26): support contact and planned-update notice.
     SIGNIN_SETTINGS = "signin_settings"

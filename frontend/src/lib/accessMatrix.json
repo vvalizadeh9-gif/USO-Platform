@@ -315,6 +315,16 @@
       ],
       "hidden": []
     },
+    "contractors": {
+      "view": [
+        "Viewer"
+      ],
+      "edit": [
+        "PM",
+        "Admin"
+      ],
+      "hidden": []
+    },
     "cpm_import": {
       "view": [],
       "edit": [

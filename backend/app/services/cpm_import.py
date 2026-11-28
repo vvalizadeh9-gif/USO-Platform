@@ -68,6 +68,7 @@ class CpmImportService:
         self._province_cache: dict[str, Province] = {}
         self._region_cache: dict[str, Region] = {}
         self._contractor_cache: dict[str, Contractor] = {}
+        self._new_dt_shown = False  # set when the caches load (UEP-31)
 
         # ---- domain caches (loaded once, updated as we create) ----
         # site_code -> Site
@@ -215,6 +216,11 @@ class CpmImportService:
             self._region_cache[reg.name] = reg
         for con in self._db.query(Contractor).all():
             self._contractor_cache[" ".join(con.name.split()).lower()] = con
+        # UEP-31: a new drive-test name arrives hidden, unless no drive-test
+        # contractor is shown yet (the first import on an empty system).
+        self._new_dt_shown = not any(
+            c.type == "drive_test" and c.show_in_drive_test for c in self._contractor_cache.values()
+        )
 
     def _load_domain_caches(self) -> None:
         """Bulk-load existing sites, work items and villages for re-imports."""
@@ -746,7 +752,10 @@ class CpmImportService:
         normalized_key = " ".join(name.split()).lower()
         con = self._contractor_cache.get(normalized_key)
         if con is None:
-            con = Contractor(name=" ".join(name.split()), type=kind, active=True)
+            con = Contractor(
+                name=" ".join(name.split()), type=kind, active=True, source="cpm",
+                show_in_drive_test=kind != "drive_test" or self._new_dt_shown,
+            )
             self._db.add(con)
             self._contractor_cache[normalized_key] = con
         return con

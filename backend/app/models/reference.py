@@ -54,6 +54,11 @@ class Contractor(Base):
     # 'site' = execution contractor, 'drive_test' = DT contractor
     type: Mapped[str] = mapped_column(String(20), nullable=False, default="drive_test")
     active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    # UEP-31: listed in Drive test's Assign columns. Hiding keeps every open
+    # site, history and login; ``active`` is a different switch.
+    show_in_drive_test: Mapped[bool] = mapped_column(Boolean, default=True, server_default=true(), nullable=False)
+    # 'cpm' (created by the CPM import) | 'manual' (Admin · Contractors).
+    source: Mapped[str] = mapped_column(String(10), default="cpm", server_default="cpm", nullable=False)
 
 
 class ProblemCategory(Base):

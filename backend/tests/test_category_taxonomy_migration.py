@@ -130,16 +130,17 @@ def _seed_site_with_open_fix(category_name):
     one row is written with only the columns every revision has.
     """
     from app.models.health_check import HcAssignment, HcRemediation, HcTask
-    from app.models.reference import Contractor, ProblemCategory
+    from app.models.reference import ProblemCategory
     from app.models.workitem import Site
 
     db = SessionLocal()
     try:
-        contractor = db.query(Contractor).first()
-        if contractor is None:
-            contractor = Contractor(name="Taxonomy Telecom", type="drive_test")
-            db.add(contractor)
-            db.flush()
+        # Plain SQL: the model carries UEP-31's show_in_drive_test / source.
+        contractor_id = db.execute(text("SELECT id FROM contractors LIMIT 1")).scalar()
+        if contractor_id is None:
+            contractor_id = db.execute(text(
+                "INSERT INTO contractors (name, type, active) VALUES ('Taxonomy Telecom', 'drive_test', :t)"
+            ), {"t": True}).lastrowid
 
         category = (
             db.query(ProblemCategory)
@@ -162,7 +163,7 @@ def _seed_site_with_open_fix(category_name):
         # Core inserts of the columns that exist at PREVIOUS: the models carry
         # later ones (UEP-29's source / import_batch_id).
         assignment_id = db.execute(HcAssignment.__table__.insert().values(
-            code=f"HC-TAXO-{category.id}", contractor_id=contractor.id,
+            code=f"HC-TAXO-{category.id}", contractor_id=contractor_id,
             assigned_at=now, status="Open", created_at=now, updated_at=now,
         )).inserted_primary_key[0]
         task_id = db.execute(HcTask.__table__.insert().values(

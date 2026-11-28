@@ -104,9 +104,9 @@ describe('every route opens its step', () => {
 })
 
 describe('the heading and the strip', () => {
-  it('leads the meta line with the step count and overdue', async () => {
+  it('has no meta line: the strip shows the numbers (UEP-31 §1.1)', async () => {
     await landOn('/health-check')
-    expect(document.querySelector('.uw-heading-meta')).toHaveTextContent('196 sites waiting · 3 overdue')
+    expect(document.querySelector('.uw-heading-meta')).toBeNull()
     expect(heading()).toHaveAttribute('tabindex', '-1')
     expect(api.get).toHaveBeenCalledWith('/drive-test/pipeline/summary')
   })

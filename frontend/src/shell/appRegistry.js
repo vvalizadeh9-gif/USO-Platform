@@ -32,6 +32,9 @@ import { canOpenMonthlyPlan } from '../lib/roles'
  * @property {string} [section] Rail group caption (UEP-14: Health check, Drive test, …).
  * @property {IconName} [icon]   The rail item's white Carbon icon.
  * @property {string} [tile]     CSS custom property for the rail item's colour tile.
+ * @property {boolean} [railCount] false: the rail shows no count (UEP-31: the
+ *                               pipeline strip shows the same number). Home's
+ *                               counts are unchanged.
  * @property {string[] | '*'} [queues] Home queue keys ('*' for all of them) whose counts make its pending
  *                               count (the count query). Read from GET /me/home,
  *                               so a rail count always equals Home's.
@@ -97,22 +100,22 @@ export const APPS = Object.freeze([
     pages: [
       { id: 'hc-check', label: 'Health check', route: '/my-health-check', need: F.CONTRACTOR_WORK, queues: ['hc_submit'], icon: 'task--approved', tile: '--uep-accent' },
       {
-        id: 'hc-assign', section: 'Health check', label: 'Assign', route: '/health-check?tab=assign', need: [F.HC_WORK, 'edit'], queues: ['hc_assign'],
+        id: 'hc-assign', section: 'Health check', label: 'Assign', route: '/health-check?tab=assign', need: [F.HC_WORK, 'edit'], queues: ['hc_assign'], railCount: false,
         icon: 'user--follow', tile: '--uep-accent',
         also: ['/health-check', '/health-check?tab=pool', '/health-check?tab=basket'],
       },
       {
-        id: 'hc-checks', section: 'Health check', label: 'Checks', route: '/health-check?tab=checks', need: [F.HC_WORK, 'edit'], queues: ['hc_review'],
+        id: 'hc-checks', section: 'Health check', label: 'Checks', route: '/health-check?tab=checks', need: [F.HC_WORK, 'edit'], queues: ['hc_review'], railCount: false,
         icon: 'task--approved', tile: '--uep-accent',
         also: ['/health-check?tab=running', '/health-check?tab=review', '/health-check?tab=results'],
       },
       {
-        id: 'dt-assign', section: 'Drive test', label: 'Assign', route: '/drive-test?tab=assign', need: [F.DT_ASSIGNMENT, 'edit'], queues: ['dt_assign'],
+        id: 'dt-assign', section: 'Drive test', label: 'Assign', route: '/drive-test?tab=assign', need: [F.DT_ASSIGNMENT, 'edit'], queues: ['dt_assign'], railCount: false,
         icon: 'user--follow', tile: '--uep-app-drive-test',
         also: ['/drive-test', '/drive-test?tab=assignment'],
       },
       {
-        id: 'dt-tests', section: 'Drive test', label: 'Tests', route: '/drive-test?tab=tests', need: [F.DT_REVIEW, 'edit'], queues: ['dt_review'],
+        id: 'dt-tests', section: 'Drive test', label: 'Tests', route: '/drive-test?tab=tests', need: [F.DT_REVIEW, 'edit'], queues: ['dt_review'], railCount: false,
         icon: 'data--check', tile: '--uep-app-drive-test',
         also: ['/drive-test?tab=in-progress', '/drive-test?tab=review', '/drive-test?tab=sent-back', '/drive-test?tab=done'],
       },
@@ -221,6 +224,8 @@ export const APPS = Object.freeze([
       { id: 'sla-policies', label: 'SLA policies', route: '/admin/sla', need: [F.SLA_POLICIES, 'edit'], adminDuplicate: true },
       // PM's way in to Admin > Province assignments (UEP-17), the same way.
       { id: 'province-assignments', label: 'Province assignments', route: '/admin/provinces', need: [F.PROVINCE_ASSIGNMENTS, 'edit'], adminDuplicate: true },
+      // UEP-31: PM's way in to Admin > Contractors, the same way.
+      { id: 'contractors', label: 'Contractors', route: '/admin/contractors', need: [F.CONTRACTORS, 'edit'], adminDuplicate: true },
       // UEP-25: PM and Viewer read Access and System health from here; anyone
       // with the Admin app finds them there instead.
       { id: 'access', label: 'Access', route: '/admin?tab=access', need: F.ACCESS, adminDuplicate: true },
@@ -252,6 +257,11 @@ export const APPS = Object.freeze([
       {
         id: 'provinces', section: 'People', label: 'Province assignments', route: '/admin/provinces', need: F.PROVINCE_ASSIGNMENTS,
         icon: 'location', tile: '--uep-app-admin',
+      },
+      // UEP-31: which contractors appear in Drive test; add one by hand.
+      {
+        id: 'contractors', section: 'People', label: 'Contractors', route: '/admin/contractors', need: F.CONTRACTORS,
+        icon: 'enterprise', tile: '--uep-app-admin',
       },
       {
         id: 'sla', section: 'Workflow', label: 'SLA policies', route: '/admin/sla', need: F.SLA_POLICIES,

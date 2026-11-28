@@ -1,0 +1,49 @@
+/* UEP-31 §7: Admin > Contractors. Tokens only; 12/13/14/16/24. */
+.cad-page .page-body { display: flex; flex-direction: column; gap: var(--uep-space-12); min-height: 0; }
+.cad-info { flex: none; display: flex; align-items: center; gap: var(--uep-space-8); margin: 0; font-size: var(--uep-fs-small); color: var(--uep-text-2); }
+.cad-info svg { color: var(--uep-accent); }
+.cad-link { padding: 0; border: 0; background: none; color: var(--uep-accent); font: inherit; font-size: var(--uep-fs-small); text-decoration: underline; cursor: pointer; }
+.cad-card { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; overflow: hidden; border-radius: var(--uep-radius-card); }
+.cad-tools { flex: none; display: flex; align-items: center; gap: var(--uep-space-8); padding: var(--uep-space-12) var(--uep-space-16); border-bottom: var(--uep-border-width) solid var(--uep-border); }
+.cad-seg { display: inline-flex; padding: 2px; gap: 2px; border: var(--uep-border-width) solid var(--uep-border-strong); border-radius: var(--uep-radius-control); background: var(--uep-surface); }
+.cad-seg-btn { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border: 0; border-radius: var(--uep-radius-sm); background: transparent; color: var(--uep-text-2); font: inherit; font-size: var(--uep-fs-small); cursor: pointer; }
+.cad-seg-btn:hover { background: var(--uep-hover); }
+.cad-seg-btn[aria-checked='true'] { background: var(--uep-accent-tint); color: var(--uep-accent); font-weight: var(--uep-weight-medium); }
+.cad-seg-count { font-variant-numeric: tabular-nums; }
+.cad-search { display: inline-flex; align-items: center; gap: var(--uep-space-8); width: var(--uep-search-width); height: var(--uep-control-height); margin-left: auto; padding: 0 var(--uep-space-8); border: var(--uep-border-width) solid var(--uep-border-strong); border-radius: var(--uep-radius-control); color: var(--uep-text-3); box-sizing: border-box; }
+.cad-search input { flex: 1; min-width: 0; border: 0; background: transparent; color: var(--uep-text); font: inherit; font-size: var(--uep-fs-small); }
+.cad-search input:focus { outline: none; }
+.cad-search:focus-within { outline: var(--uep-focus-outline-width) solid var(--uep-accent); outline-offset: 1px; }
+.cad-scroll { flex: 1 1 auto; min-height: 0; overflow: auto; }
+.cad-table { width: 100%; table-layout: fixed; border-collapse: separate; border-spacing: 0; font-size: var(--uep-fs-body); }
+.cad-table th { position: sticky; top: 0; z-index: 1; height: 40px; padding: 0 var(--uep-space-16); background: var(--uep-surface); border-bottom: var(--uep-border-width) solid var(--uep-border); text-align: left; font-size: var(--uep-fs-caption); font-weight: var(--uep-weight-medium); color: var(--uep-text-3); }
+.cad-table td { height: 44px; padding: 0 var(--uep-space-16); border-bottom: var(--uep-border-width) solid var(--uep-divider); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cad-table tbody tr:hover td { background: var(--uep-hover); }
+.cad-name { font-weight: var(--uep-weight-medium); }
+.cad-fa { font-family: var(--uep-font-persian); font-size: var(--uep-fs-small); }
+.cad-none { color: var(--uep-text-3); }
+.cad-num { font-variant-numeric: tabular-nums; }
+.cad-num.is-late { color: var(--uep-danger); font-weight: var(--uep-weight-semibold); }
+.cad-switch { position: relative; width: 36px; height: 20px; padding: 0; border: 0; border-radius: var(--uep-radius-pill); background: var(--uep-border-strong); cursor: pointer; transition: background var(--uep-dur-fast) var(--uep-ease-standard); }
+.cad-switch::after { content: ''; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: var(--uep-radius-pill); background: var(--uep-surface); transition: transform var(--uep-dur-fast) var(--uep-ease-standard); }
+.cad-switch[aria-checked='true'] { background: var(--uep-accent); }
+.cad-switch[aria-checked='true']::after { transform: translateX(16px); }
+.cad-switch:disabled { cursor: not-allowed; opacity: 0.6; }
+.cad-switch:focus-visible { outline: var(--uep-focus-outline-width) solid var(--uep-accent); outline-offset: 2px; }
+.cad-add td { height: auto; padding-block: var(--uep-space-8); vertical-align: top; white-space: normal; }
+.cad-input { width: 100%; height: var(--uep-control-height); padding: 0 10px; border: var(--uep-border-width) solid var(--uep-border-strong); border-radius: var(--uep-radius-control); font: inherit; font-size: var(--uep-fs-body); box-sizing: border-box; }
+.cad-input[aria-invalid='true'] { border-color: var(--uep-danger); }
+.cad-error { display: block; margin-top: 4px; font-size: var(--uep-fs-caption); color: var(--uep-danger); }
+.cad-add-actions { display: inline-flex; gap: 6px; }
+.cad-state { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--uep-space-8); height: 100%; padding: var(--uep-space-24); font-size: var(--uep-fs-small); color: var(--uep-text-3); }
+.cad-state b { color: var(--uep-text); font-size: var(--uep-fs-card-title); }
+.cad-toast {
+  position: fixed; left: 50%; bottom: var(--uep-space-24); z-index: 40; transform: translateX(-50%);
+  display: flex; align-items: center; gap: var(--uep-space-12); max-width: min(720px, calc(100vw - 32px));
+  padding: 10px var(--uep-space-16); border-radius: var(--uep-radius-tile); background: var(--uep-text); color: var(--uep-on-accent);
+  font-size: var(--uep-fs-small); box-shadow: var(--uep-shadow-popover); animation: cad-rise var(--uep-dur-pop) var(--uep-ease-entrance) both;
+}
+.cad-toast.is-error { background: var(--uep-danger); }
+.cad-toast-undo { padding: 0; border: 0; background: none; color: var(--uep-accent-light); font: inherit; font-weight: var(--uep-weight-semibold); cursor: pointer; }
+@keyframes cad-rise { from { opacity: 0; transform: translate(-50%, 8px); } }
+@media (prefers-reduced-motion: reduce) { .cad-toast { animation: none; } .cad-switch, .cad-switch::after { transition: none; } }

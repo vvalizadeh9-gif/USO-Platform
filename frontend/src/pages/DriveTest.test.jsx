@@ -1,16 +1,18 @@
-// Step 4, Assign drive test: the site table and the assign panel (UEP-06 §4).
-// Select sites, click a contractor card: assigned through the endpoint the
-// page has always used, with a confirmation that stays and can be undone.
+// Drive test · Assign: the site table and the Contractors column (UEP-31 §2).
+// Select sites, pick a contractor, press Assign: assigned through the endpoint
+// the page has always used, with a confirmation that stays and can be undone.
 import { act, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { pickOption } from '../test/pickOption'
 
+const V = (id, n) => Array.from({ length: n }, (_, i) => ({ id: id * 10 + i, name: `ده ${id}-${i}`, code: `${id}${i}`, is_new: false }))
+
 const READY = [
-  { work_item_id: 1, site_code: 'YZD-1', province: 'یزد', village: 'ده نو', village_count: 1, requested_technologies: ['4G'], rounds_taken: 1, hc_contractor: 'پارس تل', days_waiting: 7, returned_reason: null },
-  { work_item_id: 2, site_code: 'YZD-2', province: 'یزد', village: null, village_count: 0, requested_technologies: ['4G'], rounds_taken: 3, hc_contractor: 'پارس تل', days_waiting: 35, returned_reason: null },
-  { work_item_id: 3, site_code: 'THR-1', province: 'تهران', village: 'کن', village_count: 3, requested_technologies: ['3G', '4G'], rounds_taken: 1, hc_contractor: 'رعد', days_waiting: 30, returned_reason: 'Road closed' },
+  { work_item_id: 1, site_code: 'YZD-1', site_type: 'New Site', province: 'یزد', village: 'ده نو', village_count: 1, villages: V(1, 1), requested_technologies: ['4G'], rounds_taken: 1, hc_contractor: 'پارس تل', days_waiting: 7, returned_reason: null },
+  { work_item_id: 2, site_code: 'YZD-2', site_type: 'Add Tech', province: 'یزد', village: null, village_count: 0, villages: [], requested_technologies: ['4G'], rounds_taken: 3, hc_contractor: 'پارس تل', days_waiting: 35, returned_reason: null },
+  { work_item_id: 3, site_code: 'THR-1', site_type: 'New Site', province: 'تهران', village: 'کن', village_count: 3, villages: V(3, 3), requested_technologies: ['3G', '4G'], rounds_taken: 1, hc_contractor: 'رعد', days_waiting: 30, returned_reason: 'Road closed' },
 ]
 const LOAD = [
   { contractor_id: 5, name: 'آریا موج', open: 2, late: 0, avg_submit_days: 4, provinces: [{ province: 'یزد', share: 0.8 }] },
@@ -49,49 +51,49 @@ async function draw() {
 
 const row = (code) => screen.getByText(code).closest('tr')
 const card = (name) => screen.getAllByRole('radio').find((b) => b.textContent.includes(name))
-const assignButton = () => screen.getByRole('button', { name: /^Assign \d+ sites? ·/ })
+const assignButton = () => screen.getByRole('button', { name: /^Assign( to |$)/ })
 
 describe('the site table', () => {
-  it('has Village and Province and no Type column', async () => {
+  it('shows villages as a count and Site type, not Requested tech', async () => {
     await draw()
-    const heads = screen.getAllByRole('columnheader').map((h) => h.textContent)
-    expect(heads).toEqual(expect.arrayContaining(['Site ID', 'Villages', 'Province', 'Requested tech', 'HC by']))
-    expect(heads).not.toContain('Type')
-    expect(heads.find((h) => h.startsWith('Waiting'))).toMatch(/^Waiting · SLA 14 d/)
-    expect(within(row('THR-1')).getByText('+2')).toBeInTheDocument()
-    expect(within(row('THR-1')).getByText('Handed back')).toBeInTheDocument()
+    const heads = screen.getAllByRole('columnheader').map((h) => h.textContent).filter(Boolean)
+    expect(heads).toEqual(['Site ID', 'Villages', 'Province', 'Site type', 'Health check by', 'Waiting'])
+    expect(within(row('THR-1')).getByRole('button', { name: '3 villages, show names' })).toBeInTheDocument()
+    expect(within(row('THR-1')).getByText('New site')).toBeInTheDocument()
+    expect(within(row('THR-1')).getByText('Handed back')).toHaveClass('uw-sub')
   })
 
   it('marks waiting past the SLA as late, in words too', async () => {
     await draw()
-    expect(within(row('YZD-2')).getByText('35 d', { exact: false }).closest('.uw-wait')).toHaveClass('is-late')
-    expect(within(row('YZD-1')).getByText('7 d').closest('.uw-wait')).not.toHaveClass('is-late')
+    expect(within(row('YZD-2')).getByText('35 d', { exact: false })).toHaveClass('uw-days', 'is-late')
+    expect(within(row('YZD-1')).getByText('7 d')).not.toHaveClass('is-late')
     expect(within(row('YZD-2')).getByText('late')).toHaveClass('uw-sr-only')
   })
 
-  it('sorts longest waiting first by default, or by province from the Sort select', async () => {
+  it('sorts longest waiting first by default, or by the Province header', async () => {
+    const user = userEvent.setup()
     await draw()
     const order = () => screen.getAllByRole('row').slice(1).map((r) => r.querySelector('.uw-site-id').textContent)
-    expect(screen.getByRole('combobox', { name: 'Sort' })).toHaveTextContent('Longest waiting')
     expect(order()).toEqual(['YZD-2', 'THR-1', 'YZD-1'])
-    await pickOption(screen.getByRole('combobox', { name: 'Sort' }), 'By province')
-    expect(order()).toEqual(['YZD-2', 'YZD-1', 'THR-1'])
+    await user.click(screen.getByRole('button', { name: 'Province' }))
+    expect(screen.getByRole('columnheader', { name: /Province/ })).toHaveAttribute('aria-sort', 'ascending')
+    expect(order()).toEqual(['THR-1', 'YZD-2', 'YZD-1'])
   })
 
   it('toggles a row by clicking it, and the header selects the filtered set', async () => {
     const user = userEvent.setup()
     await draw()
-    await user.click(within(row('YZD-1')).getByText('ده نو'))
+    await user.click(within(row('YZD-1')).getByText('New site'))
     expect(within(row('YZD-1')).getByRole('checkbox')).toBeChecked()
-    await user.click(within(row('YZD-1')).getByText('ده نو'))
+    await user.click(within(row('YZD-1')).getByText('New site'))
     expect(within(row('YZD-1')).getByRole('checkbox')).not.toBeChecked()
 
     await pickOption(screen.getByRole('combobox', { name: 'Province' }), 'یزد')
     await user.click(screen.getByRole('checkbox', { name: 'Select every site shown' }))
-    expect(screen.getByText('2 sites selected')).toBeInTheDocument()
+    expect(screen.getByText('2 sites')).toBeInTheDocument()
     // Selection survives filtering.
     await pickOption(screen.getByRole('combobox', { name: 'Province' }), '')
-    expect(screen.getByText('2 sites selected')).toBeInTheDocument()
+    expect(screen.getByText('2 sites')).toBeInTheDocument()
     expect(within(row('THR-1')).getByRole('checkbox')).not.toBeChecked()
   })
 })

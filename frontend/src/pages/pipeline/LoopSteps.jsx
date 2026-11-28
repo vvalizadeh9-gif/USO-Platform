@@ -6,7 +6,7 @@ import Icon from '../../components/Icon'
 import SiteHistoryDrawer from '../../components/SiteHistoryDrawer'
 import { ConfirmDialog } from '../../components/ui'
 import {
-  EmptyStep, Fa, SiteIdButton, SkeletonRows, StepError, ToolSelect, WaitingCell, WorkListCard,
+  EmptyStep, Fa, SearchBox, SiteIdButton, SkeletonRows, StepError, ToolSelect, WaitingCell, WorkListCard,
 } from '../../components/work/parts'
 import { useWork } from '../../components/work/WorkContext'
 import { useToast } from '../../context/ToastContext'
@@ -54,78 +54,153 @@ const REMEDIATION_EXPORT = [
   { label: 'Late (days)', value: (r) => r.days_late },
 ]
 
-/** Every open fix, across every category. Read-only: closing a fix stays with
- * the team doing it. Late is the fix's own due date, set by its category. */
+/** A fix's SLA in days: its category's deadline, from opened to due. */
+const slaOf = (r) => (r.due_at && r.opened_at ? Math.round((new Date(r.due_at) - new Date(r.opened_at)) / DAY) : null)
+
+/** One tile per owning team: open, late and the SLA (a range when the team's
+ * categories differ). `shared`: a team owns several categories, so the list
+ * names the category under the team. */
+function teamsOf(rows) {
+  const byTeam = new Map()
+  for (const r of rows) {
+    const key = r.owner_role || ''
+    const t = byTeam.get(key) || { key, open: 0, late: 0, slas: new Set(), categories: new Set() }
+    t.open += 1
+    if (r.days_late > 0) t.late += 1
+    if (slaOf(r) != null) t.slas.add(slaOf(r))
+    if (r.category) t.categories.add(r.category)
+    byTeam.set(key, t)
+  }
+  const teams = [...byTeam.values()].sort((a, b) => teamName(a.key).localeCompare(teamName(b.key)))
+  return { teams, shared: teams.some((t) => t.categories.size > 1) }
+}
+
+const teamName = (role) => (role ? roleLabel(role) : 'No team')
+
+function slaText(slas) {
+  if (!slas.size) return null
+  const lo = Math.min(...slas)
+  const hi = Math.max(...slas)
+  return lo === hi ? `SLA ${lo} d` : `SLA ${lo}–${hi} d`
+}
+
+/** Every open fix, across every owning team (UEP-31 §5). Read-only: closing a
+ * fix stays with the team doing it. Late is the fix's own due date, set by
+ * its category; the most late come first. */
 export function RemediationStep({ step, panelProps, onExport }) {
   const { rows, error, retry } = useStepData('/hc/queues/remediations')
-  const [category, setCategory] = useState('')
+  const [team, setTeam] = useState(null)
+  const [query, setQuery] = useState('')
+  const [province, setProvince] = useState('')
   const [openHistory, drawer] = useHistoryDrawer()
-  const categories = useMemo(() => [...new Set((rows || []).map((r) => r.category).filter(Boolean))].sort(), [rows])
-  const shown = useMemo(() => (rows || []).filter((r) => !category || r.category === category), [rows, category])
+  const { teams, shared } = useMemo(() => teamsOf(rows || []), [rows])
+  const provinces = useMemo(() => [...new Set((rows || []).map((r) => r.province).filter(Boolean))].sort(), [rows])
+  const shown = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    return (rows || []).filter(
+      (r) =>
+        (team === null || (r.owner_role || '') === team) &&
+        (!province || r.province === province) &&
+        (!q || (r.site_code || '').toLowerCase().includes(q) || (r.issue || '').toLowerCase().includes(q)),
+    )
+  }, [rows, team, query, province])
   useExportRows(onExport, REMEDIATION_EXPORT, rows ? shown : null)
+  const picked = teams.find((t) => t.key === team)
 
   return (
-    <WorkListCard
-      {...panelProps}
-      busy={!rows && !error}
-      tools={<ToolSelect label="Category" value={category} onChange={setCategory} options={categories} allLabel="All categories" />}
-      description="Worst overdue first · late is past the category's own deadline"
-    >
-      {error && !rows ? (
-        <StepError stepName={step.name} onRetry={retry} />
-      ) : rows && rows.length === 0 ? (
-        <EmptyStep stepName={step.name} />
-      ) : (
-        <table className="uw-table uw-table-wrap" aria-label={step.name}>
-          <colgroup>
-            <col style={{ width: '13%' }} />
-            <col style={{ width: '13%' }} />
-            <col style={{ width: '14%' }} />
-            <col style={{ width: '13%' }} />
-            <col />
-            <col style={{ width: '18%' }} />
-          </colgroup>
-          <thead>
-            <tr>
-              <th scope="col">Site ID</th>
-              <th scope="col">Province</th>
-              <th scope="col">Category</th>
-              <th scope="col">Owning team</th>
-              <th scope="col">Issue</th>
-              <th scope="col">Waiting</th>
-            </tr>
-          </thead>
-          {!rows ? (
-            <SkeletonRows columns={6} />
-          ) : (
-            <tbody>
-              {shown.map((r) => (
-                <tr key={r.id}>
-                  <td>
-                    <span className="uw-site">
-                      <SiteIdButton siteCode={r.site_code} onClick={() => openHistory(r)} />
-                      {r.reroute_pending && <span className="uw-flag">Disputed</span>}
-                    </span>
-                  </td>
-                  <td><Fa>{r.province}</Fa></td>
-                  <td>{r.category || '—'}</td>
-                  <td>{r.owner_role ? roleLabel(r.owner_role) : '—'}</td>
-                  <td className="uw-wrap">
-                    {r.technologies.length > 0 && <b>{r.technologies.join(', ')}: </b>}
-                    <Fa>{r.issue || 'No detail recorded'}</Fa>
-                  </td>
-                  <td>
-                    <WaitingCell days={r.days_open} late={r.days_late > 0} />
-                    {r.days_late > 0 && <span className="uw-late uw-late-note">{formatNumber(r.days_late)} d late</span>}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          )}
-        </table>
+    <div {...panelProps} className="uw-remediation">
+      {teams.length > 0 && (
+        <div className="uw-teams" role="group" aria-label="Owning teams" style={{ '--n': teams.length }}>
+          {teams.map((t) => (
+            <button
+              key={t.key}
+              type="button"
+              className="uw-team"
+              aria-pressed={team === t.key}
+              onClick={() => setTeam(team === t.key ? null : t.key)}
+            >
+              <span className="uw-team-name">{teamName(t.key)}</span>
+              <span className="uw-team-open"><b>{formatNumber(t.open)}</b> open</span>
+              <span className="uw-team-meta">
+                {t.late > 0 && <span className="uw-team-late">{formatNumber(t.late)} late</span>}
+                {slaText(t.slas) && <span>{slaText(t.slas)}</span>}
+              </span>
+            </button>
+          ))}
+        </div>
       )}
-      {drawer}
-    </WorkListCard>
+      <WorkListCard
+        busy={!rows && !error}
+        tools={
+          <>
+            <SearchBox value={query} onChange={setQuery} label="Search site ID or issue" placeholder="Site or issue…" />
+            <ToolSelect label="Province" value={province} onChange={setProvince} options={provinces} allLabel="All provinces" />
+          </>
+        }
+        description={
+          picked && (
+            <>
+              {teamName(picked.key)} · {formatNumber(shown.length)} {shown.length === 1 ? 'site' : 'sites'}{' '}
+              <button type="button" className="uw-link" onClick={() => setTeam(null)}>Show all</button>
+            </>
+          )
+        }
+      >
+        {error && !rows ? (
+          <StepError stepName={step.name} onRetry={retry} />
+        ) : rows && rows.length === 0 ? (
+          <EmptyStep stepName={step.name} />
+        ) : (
+          <table className="uw-table uw-table-wrap" aria-label={step.name}>
+            <colgroup>
+              <col style={{ width: '14%' }} />
+              <col style={{ width: '14%' }} />
+              <col style={{ width: '22%' }} />
+              <col />
+              <col style={{ width: '12%' }} />
+            </colgroup>
+            <thead>
+              <tr>
+                <th scope="col">Site ID</th>
+                <th scope="col">Province</th>
+                <th scope="col">Owning team</th>
+                <th scope="col">Issue</th>
+                <th scope="col" aria-sort="descending">Open</th>
+              </tr>
+            </thead>
+            {!rows ? (
+              <SkeletonRows columns={5} />
+            ) : (
+              <tbody>
+                {shown.map((r) => (
+                  <tr key={r.id}>
+                    <td>
+                      <span className="uw-site">
+                        <SiteIdButton siteCode={r.site_code} onClick={() => openHistory(r)} />
+                        {r.reroute_pending && <span className="uw-flag">Disputed</span>}
+                      </span>
+                    </td>
+                    <td><Fa>{r.province}</Fa></td>
+                    <td>
+                      <span className="uw-cell-two">
+                        {teamName(r.owner_role)}
+                        {shared && r.category && <span className="uw-sub">{r.category}</span>}
+                      </span>
+                    </td>
+                    <td className="uw-wrap">
+                      {r.technologies.length > 0 && <b>{r.technologies.join(', ')}: </b>}
+                      <Fa>{r.issue || 'No detail recorded'}</Fa>
+                    </td>
+                    <td><WaitingCell days={r.days_open} late={r.days_late > 0} /></td>
+                  </tr>
+                ))}
+              </tbody>
+            )}
+          </table>
+        )}
+        {drawer}
+      </WorkListCard>
+    </div>
   )
 }
 

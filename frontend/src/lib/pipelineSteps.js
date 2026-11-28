@@ -129,13 +129,12 @@ export function stepFigures(step, summary) {
 
 const plural = (n, one, many = `${one}s`) => `${n.toLocaleString('en-US')} ${n === 1 ? one : many}`
 
-/** "Step 4, Tests: 263 sites, 12 to decide, 4 overdue, Contractors, then you" -- the tab's name. */
+/** "Step 4, Tests: 263 sites, 12 to decide, 4 late" -- the tab's name. */
 export function stepSpokenName(step, figures) {
   const head = step.number ? `Step ${step.number}, ${step.short}` : step.short
   if (!figures) return `${head}: loading`
   const parts = [plural(figures.count ?? 0, 'site')]
   if (figures.decide > 0) parts.push(`${figures.decide.toLocaleString('en-US')} to decide`)
-  if (figures.late > 0) parts.push(`${figures.late.toLocaleString('en-US')} overdue`)
-  parts.push(step.owner)
+  if (figures.late > 0) parts.push(`${figures.late.toLocaleString('en-US')} late`)
   return `${head}: ${parts.join(', ')}`
 }

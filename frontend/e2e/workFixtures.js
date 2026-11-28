@@ -63,13 +63,14 @@ export const remediations = Array.from({ length: 30 }, (_, i) => ({
   site_code: `SITE-${70000 + i}`,
   province: PROVINCES[i % PROVINCES.length],
   category: ['Temp Power', 'CPG Project', 'Managed Service'][i % 3],
-  owner_role: 'CpgPower',
+  owner_role: ['CpgPower', 'CpgRolloutPM', 'ManagedService'][i % 3],
   round_no: 1,
   technologies: ['4G'],
   issue: 'برق سایت قطع است',
   days_open: 30 - i,
   days_late: i < 5 ? 5 - i : 0,
-  due_at: null,
+  opened_at: '2026-10-01T08:00:00Z',
+  due_at: ['2026-10-08T08:00:00Z', '2026-10-08T08:00:00Z', '2026-10-11T08:00:00Z'][i % 3],
   reroute_pending: i === 2,
 }))
 
@@ -118,7 +119,15 @@ export const hcBasket = Array.from({ length: 240 }, (_, i) => ({
   waiting_since: null,
   village: i % 4 ? `روستای ${i}` : null,
   village_count: i % 4 ? 1 + (i % 3) : 0,
+  villages: i % 4 ? villagesFor(i, 1 + (i % 3)) : [],
+  previous_contractor: i % 9 ? null : CONTRACTORS[i % CONTRACTORS.length],
+  previous_contractor_id: i % 9 ? null : (i % CONTRACTORS.length) + 1,
 }))
+
+/** A site's villages: id, name, code and whether CPM added it since. */
+function villagesFor(i, n, fresh = 0) {
+  return Array.from({ length: n }, (_, j) => ({ id: i * 10 + j, name: `روستای ${i}-${j + 1}`, code: `${7700 + i * 10 + j}`, is_new: j < fresh }))
+}
 
 export const hcInProgress = Array.from({ length: 6 }, (_, i) => ({
   assignment_id: i + 1, code: `HC-${1400 + i}`, contractor_id: i + 1, contractor_name: CONTRACTORS[i],
@@ -134,7 +143,8 @@ export const dtAssignment = Array.from({ length: 38 }, (_, i) => ({
   work_item_id: 5000 + i, site_code: `SITE-${30000 + i}`, site_type: 'Macro', province: PROVINCES[i % PROVINCES.length],
   requested_technologies: ['2G', '4G'], rounds_taken: i % 4 === 0 ? 2 : 1, hc_contractor: CONTRACTORS[i % CONTRACTORS.length],
   ready_since: null, days_waiting: 20 - (i % 20), returned_reason: i % 7 ? null : 'راه بسته است', returned_at: null,
-  village: `ده ${i}`, village_count: 1,
+  village: `ده ${i}`, village_count: 1, new_villages: i % 5 === 0 ? 1 : 0,
+  villages: villagesFor(500 + i, i % 5 === 0 ? 2 : 1, i % 5 === 0 ? 1 : 0),
 }))
 
 export const dtInProgress = Array.from({ length: 96 }, (_, i) => ({
@@ -163,6 +173,62 @@ export const hcBatches = {
     status: i % 2 ? 'to_decide' : 'open',
   })),
 }
+
+/** One batch's sites (GET /hc/batches/:id): to decide first, then pending, then decided. */
+export const hcBatchDetail = (id) => {
+  const row = hcBatches.rows[(id - 1) % hcBatches.rows.length]
+  const state = (j) => (j < 6 ? 'to_decide' : j < 8 ? 'pending' : 'decided')
+  return {
+    ...row,
+    site_rows: Array.from({ length: 9 }, (_, j) => ({
+      task_id: id * 100 + j,
+      work_item_id: 3000 + j,
+      site_code: `HC${id}-${j}`,
+      province: PROVINCES[j % PROVINCES.length],
+      round: 1,
+      villages: villagesFor(id * 100 + j, 1 + (j % 3)),
+      result: state(j) === 'pending' ? null : j === 1 ? 'NotReady' : 'Ready',
+      not_normal: j === 1 ? [{ technology: '2G', comment: 'Transmission link down' }] : [],
+      reason_categories: j === 1 ? ['Managed Service'] : [],
+      submitted_at: state(j) === 'pending' ? null : '2026-10-17T08:00:00Z',
+      hours_taken: 24,
+      late: j === 3,
+      state: state(j),
+      decision: state(j) === 'decided' ? 'Confirmed ready → Drive test' : null,
+      decided_by: null,
+      decided_at: null,
+    })),
+  }
+}
+
+/** Admin › Contractors (UEP-31). */
+export const adminContractors = [
+  ...CONTRACTORS.map((name, i) => ({
+    id: i + 1, name, source: 'cpm', show_in_drive_test: true, created_at: '2025-01-10T08:00:00Z',
+    open_hc: i, open_dt: 2 * i, provinces: [PROVINCES[i % PROVINCES.length]],
+  })),
+  { id: 101, name: 'زاگرس لینک', source: 'cpm', show_in_drive_test: false, created_at: '2026-11-27T08:00:00Z', open_hc: 0, open_dt: 0, provinces: [] },
+  { id: 102, name: 'رایان سازه', source: 'cpm', show_in_drive_test: false, created_at: '2024-03-01T08:00:00Z', open_hc: 2, open_dt: 0, provinces: [PROVINCES[0]] },
+  { id: 103, name: 'کویر نت', source: 'manual', show_in_drive_test: true, created_at: '2026-11-20T08:00:00Z', open_hc: 0, open_dt: 0, provinces: [] },
+]
+
+/** A contractor's own health checks (GET /hc/my/assignments). */
+export const myAssignments = [
+  {
+    id: 1, code: 'HC-27NOV-05', title: 'HC-27NOV-05', contractor_id: 1, status: 'Open', remarks: null,
+    created_at: '2026-11-27T08:00:00Z', due_at: new Date(Date.now() + 23 * 3600000).toISOString(),
+    tasks: Array.from({ length: 12 }, (_, j) => ({
+      id: 400 + j, work_item_id: 4000 + j, site_code: `W${4300 + j}`, site_type: j % 2 ? 'Add Tech' : 'New Site',
+      province: PROVINCES[j % PROVINCES.length], requested_technologies: ['2G', '4G'],
+      overall_result: j < 7 ? (j === 2 ? 'NotReady' : 'Ready') : null, technologies: [],
+    })),
+  },
+  {
+    id: 2, code: 'HC-20NOV-02', title: 'HC-20NOV-02', contractor_id: 1, status: 'Completed', remarks: null,
+    created_at: '2026-11-20T08:00:00Z', due_at: '2026-11-22T08:00:00Z',
+    tasks: [{ id: 300, work_item_id: 3900, site_code: 'W4200', site_type: 'New Site', province: PROVINCES[1], requested_technologies: ['3G'], overall_result: 'Ready', technologies: [] }],
+  },
+]
 
 export const dtTests = {
   counts: { review: 8, with: 20, reviewed: 12 },

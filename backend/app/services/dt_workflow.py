@@ -291,6 +291,11 @@ def batch_detail(db: Session, user: User, assignment: HcAssignment) -> dict:
                 "result": t.overall_result,
                 # The categories the contractor gave on Not Normal results,
                 # pre-selected in review (UEP-24 F13).
+                # What the contractor said was wrong, per technology (UEP-31).
+                "not_normal": [
+                    {"technology": x.technology, "comment": x.comment}
+                    for x in t.technologies if x.result == "NotNormal"
+                ],
                 "reason_categories": sorted({
                     x.reason_category for x in t.technologies
                     if x.result == "NotNormal" and x.reason_category

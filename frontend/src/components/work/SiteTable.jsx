@@ -1,4 +1,4 @@
-import { useRef } from 'react'
+import { Fragment, useRef } from 'react'
 import { SkeletonRows } from './parts'
 
 /**
@@ -15,7 +15,7 @@ import { SkeletonRows } from './parts'
  *
  * @param {{
  *   rows: object[], rowId: (row: object) => number,
- *   columns: { key: string, label: React.ReactNode, width?: string, className?: string, render: (row: object) => React.ReactNode }[],
+ *   columns: { key: string, label?: React.ReactNode, header?: React.ReactElement, width?: string, className?: string, render: (row: object) => React.ReactNode }[],
  *   selected?: Set<number>, onSelect?: (ids: number[], on: boolean) => void,
  *   label: string, siteLabel?: (row: object) => string, loading?: boolean, after?: React.ReactNode,
  *   filterIds?: number[], onOpen?: (row: object) => void,
@@ -76,9 +76,10 @@ export default function SiteTable({ rows, rowId, columns, selected, onSelect, la
               </span>
             </th>
           )}
-          {columns.map((c) => (
-            <th key={c.key} scope="col" className={c.className}>{c.label}</th>
-          ))}
+          {/* `header` is a whole <th>, such as a SortHeader. */}
+          {columns.map((c) =>
+            c.header ? <Fragment key={c.key}>{c.header}</Fragment> : <th key={c.key} scope="col" className={c.className}>{c.label}</th>,
+          )}
         </tr>
       </thead>
       {loading ? (

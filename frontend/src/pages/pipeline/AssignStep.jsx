@@ -4,17 +4,17 @@ import AssignPanel from '../../components/work/AssignPanel'
 import SiteHistoryDrawer from '../../components/SiteHistoryDrawer'
 import SiteTable from '../../components/work/SiteTable'
 import {
-  EmptyStep, Fa, Flag, SearchBox, SiteIdButton, StepError, TechChips,
-  ToolSelect, WaitingCell, WorkListCard,
+  EmptyStep, Fa, SearchBox, SiteIdButton, SortHeader, StepError,
+  ToolSelect, VillageCount, WaitingCell, WorkListCard,
 } from '../../components/work/parts'
 import { useWork } from '../../components/work/WorkContext'
 import { useToast } from '../../context/ToastContext'
 import { useAuth } from '../../context/AuthContext'
 import { formatDateTime } from '../../lib/dates'
-import { orderSites } from '../../lib/siteOrder'
+import { byWait } from '../../lib/siteOrder'
+import { typeLabel } from '../explorer/listModel'
 import useStepData, { useExportRows } from './useStepData'
 import { formatNumber } from '../../lib/numbers'
-import Select from '../../components/Select'
 
 /** The server takes at most this many sites in one assignment. */
 const MAX_ASSIGN = 500
@@ -33,13 +33,11 @@ const PROCESS = {
   hc: {
     url: '/hc/basket',
     rows: (data) => data.filter((b) => HC_READY.has(b.hc_state)),
-    // Re-check · Round 2 is the only Health check flag besides new village;
-    // there is no "DT ongoing" tag (UEP-14 §3.3).
-    flags: (r) => [
+    // The site ID's second line (UEP-31 §2.1): a re-check and its round.
+    note: (r) =>
       (r.hc_state === 'Ready for re-check' || r.round_no > 1) && (
-        <Flag key="re" title={r.returning_reason || undefined}>Re-check · Round {Math.max(2, r.round_no || 2)}</Flag>
+        <span className="uw-sub" title={r.returning_reason || undefined}>Re-check · Round {Math.max(2, r.round_no || 2)}</span>
       ),
-    ],
     who: { key: 'prev', label: 'Previous contractor', render: (r) => <Fa>{r.previous_contractor}</Fa> },
     async assign(ids, contractor) {
       const { data } = await api.post('/hc/assignments', { contractor_id: contractor.contractor_id, work_item_ids: ids })
@@ -49,8 +47,8 @@ const PROCESS = {
   dt: {
     url: '/hc/queues/dt-assignment',
     rows: (data) => data,
-    flags: (r) => [r.returned_reason && <Flag key="back" title={r.returned_reason}>Handed back</Flag>],
-    who: { key: 'hcby', label: 'HC by', render: (r) => <Fa>{r.hc_contractor}</Fa> },
+    note: (r) => r.returned_reason && <span className="uw-sub" title={r.returned_reason}>Handed back</span>,
+    who: { key: 'hcby', label: 'Health check by', render: (r) => <Fa>{r.hc_contractor}</Fa> },
     async assign(ids, contractor) {
       const { data } = await api.post('/work-items/assign', {
         work_item_ids: ids, contractor_id: contractor.contractor_id, assignment_type: 'official',
@@ -65,14 +63,31 @@ const EXPORT_COLUMNS = [
   { label: 'Village', value: (r) => r.village },
   { label: 'Villages', value: (r) => r.village_count },
   { label: 'Province', value: (r) => r.province },
+  { label: 'Site type', value: (r) => typeLabel(r.site_type) },
   { label: 'Requested tech', value: (r) => (r.requested_technologies || []).join(' ') },
   { label: 'Waiting (days)', value: (r) => r.days_waiting },
 ]
 
+/** Waiting (longest first) or Province: the two sortable headers. */
+function sortRows(rows, sort) {
+  const dir = sort.dir === 'asc' ? 1 : -1
+  if (sort.key === 'province') {
+    return [...rows].sort((a, b) => dir * (a.province || '').localeCompare(b.province || '', 'fa') || byWait(a, b))
+  }
+  return [...rows].sort((a, b) => -dir * byWait(a, b))
+}
+
+/** Search matches the site ID and each village's name or code. */
+function matches(r, q) {
+  if (!q) return true
+  if ((r.site_code || '').toLowerCase().includes(q)) return true
+  return (r.villages || []).some((v) => (v.name || '').toLowerCase().includes(q) || String(v.code || '').includes(q))
+}
+
 /**
- * Health check and Drive test Assign (UEP-14 §3.3): the sites waiting to be
- * assigned, and the assign bar docked under them. Select sites, pick a
- * contractor, press Assign.
+ * Health check and Drive test Assign (UEP-31 §2): the sites waiting to be
+ * assigned on the left, the Contractors column on the right. Select sites,
+ * pick a contractor, press Assign.
  */
 export default function AssignStep({ process, step, figures, summary, panelProps, onExport }) {
   const config = PROCESS[process]
@@ -83,7 +98,7 @@ export default function AssignStep({ process, step, figures, summary, panelProps
   const [selected, setSelected] = useState(() => new Set())
   const [query, setQuery] = useState('')
   const [province, setProvince] = useState('')
-  const [byProvince, setByProvince] = useState(false)
+  const [sort, setSort] = useState({ key: 'waiting', dir: 'desc' })
   const [limit, setLimit] = useState(PAGE)
   const [busy, setBusy] = useState(false)
   const [leaving, setLeaving] = useState(() => new Set())
@@ -100,13 +115,8 @@ export default function AssignStep({ process, step, figures, summary, panelProps
   const shown = useMemo(() => {
     if (!rows) return []
     const q = query.trim().toLowerCase()
-    const kept = rows.filter(
-      (r) =>
-        (!province || r.province === province) &&
-        (!q || (r.site_code || '').toLowerCase().includes(q) || (r.village || '').toLowerCase().includes(q) || String(r.village_code || '').includes(q)),
-    )
-    return orderSites(kept, byProvince)
-  }, [rows, query, province, byProvince])
+    return sortRows(rows.filter((r) => (!province || r.province === province) && matches(r, q)), sort)
+  }, [rows, query, province, sort])
   useExportRows(onExport, EXPORT_COLUMNS, shown)
 
   // A selection only holds sites still in the queue; it survives filtering.
@@ -159,32 +169,25 @@ export default function AssignStep({ process, step, figures, summary, panelProps
   }
 
   const open = (r) => setHistory({ id: r.work_item_id, code: r.site_code })
+  const onSort = (key) =>
+    setSort((s) => (s.key === key ? { key, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: key === 'waiting' ? 'desc' : 'asc' }))
   const columns = [
     {
-      key: 'site', label: 'Site ID', width: '16%',
+      key: 'site', label: 'Site ID', width: '17%',
       render: (r) => (
-        <span className="uw-site">
+        <span className="uw-cell-two">
           <SiteIdButton siteCode={r.site_code} onClick={() => open(r)} />
-          {config.flags(r)}
+          {config.note(r)}
         </span>
       ),
     },
-    {
-      key: 'village', label: 'Villages', width: '19%',
-      render: (r) => (
-        <span className="uw-site">
-          <Fa>{r.village}</Fa>
-          {r.village_count > 1 && <span className="uw-muted"> +{formatNumber(r.village_count - 1)}</span>}
-          {r.new_villages > 0 && <Flag>{plural(r.new_villages, 'new village')}</Flag>}
-        </span>
-      ),
-    },
-    { key: 'province', label: 'Province', width: '13%', render: (r) => <Fa>{r.province}</Fa> },
-    { key: 'tech', label: 'Requested tech', width: '14%', render: (r) => <TechChips techs={r.requested_technologies} /> },
-    { ...config.who, width: '15%' },
+    { key: 'village', label: 'Villages', width: '12%', render: (r) => <VillageCount villages={r.villages} /> },
+    { key: 'province', header: <SortHeader id="province" label="Province" sort={sort} onSort={onSort} />, width: '19%', render: (r) => <Fa>{r.province}</Fa> },
+    { key: 'type', label: 'Site type', width: '13%', render: (r) => typeLabel(r.site_type) || <span className="uw-none">—</span> },
+    { ...config.who, width: '19%' },
     {
       key: 'waiting',
-      label: <>Waiting · SLA {slaDays ?? '–'} d</>,
+      header: <SortHeader id="waiting" label="Waiting" sort={sort} onSort={onSort} />,
       render: (r) => <WaitingCell days={r.days_waiting} slaDays={slaDays} />,
     },
   ]
@@ -193,43 +196,16 @@ export default function AssignStep({ process, step, figures, summary, panelProps
   const selectedProvinces = live.map((id) => byId.get(id)?.province)
 
   return (
-    <WorkListCard
-      {...panelProps}
-      stage={process}
-      chip={process === 'hc' ? 'Step 1 · Sites waiting for a health check' : 'Step 3 · Sites cleared for a drive test'}
-      busy={!rows && !error}
-      tools={
-        <>
-          <SearchBox value={query} onChange={setQuery} label="Search site ID, village ID or name" placeholder="Site, village ID or name…" />
-          <ToolSelect label="Province" value={province} onChange={setProvince} options={provinces} allLabel="All provinces" />
-          <Select
-            aria-label="Sort"
-            className="uw-select"
-            value={byProvince ? 'province' : 'waiting'}
-            onChange={(e) => setByProvince(e.target.value === 'province')}
-            options={[
-              { value: 'waiting', label: 'Longest waiting' },
-              { value: 'province', label: 'By province' },
-            ]}
-          />
-          <span className="uw-count">{plural(shown.length, 'site')}</span>
-        </>
-      }
-      foot={
-        readOnly ? null : (
-          <AssignPanel
-            process={process}
-            selectedCount={live.length}
-            villageCount={villageCount}
-            selectedProvinces={selectedProvinces}
-            previousContractorId={previousContractorId}
-            onClear={() => setSelected(new Set())}
-            onAssign={assign}
-            busy={busy}
-          />
-        )
-      }
-    >
+    <div {...panelProps} className={`uw-assign-layout ${readOnly ? 'is-read-only' : ''}`.trim()}>
+      <WorkListCard
+        busy={!rows && !error}
+        tools={
+          <>
+            <SearchBox value={query} onChange={setQuery} label="Search site ID, village ID or name" placeholder="Site, village ID or name…" />
+            <ToolSelect label="Province" value={province} onChange={setProvince} options={provinces} allLabel="All provinces" />
+          </>
+        }
+      >
       {error && !rows ? (
         <StepError stepName={step.name} onRetry={retry} />
       ) : rows && rows.length === 0 ? (
@@ -251,7 +227,7 @@ export default function AssignStep({ process, step, figures, summary, panelProps
               <tr className="uw-more-row">
                 <td colSpan={columns.length + 1}>
                   <button type="button" className="uw-btn uw-btn-sm" onClick={() => setLimit((n) => n + PAGE)}>
-                    Show {Math.min(PAGE, shown.length - visible.length)} more of {shown.length.toLocaleString('en-US')}
+                    Show {Math.min(PAGE, shown.length - visible.length)} more
                   </button>
                 </td>
               </tr>
@@ -259,7 +235,20 @@ export default function AssignStep({ process, step, figures, summary, panelProps
           }
         />
       )}
-      <SiteHistoryDrawer workItemId={history.id} siteCode={history.code} onClose={() => setHistory({ id: null, code: null })} />
-    </WorkListCard>
+        <SiteHistoryDrawer workItemId={history.id} siteCode={history.code} onClose={() => setHistory({ id: null, code: null })} />
+      </WorkListCard>
+      {!readOnly && (
+        <AssignPanel
+          process={process}
+          selectedCount={live.length}
+          villageCount={villageCount}
+          selectedProvinces={selectedProvinces}
+          previousContractorId={previousContractorId}
+          onClear={() => setSelected(new Set())}
+          onAssign={assign}
+          busy={busy}
+        />
+      )}
+    </div>
   )
 }

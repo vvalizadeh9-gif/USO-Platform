@@ -268,6 +268,52 @@ def test_load_counts_open_work_per_contractor(client, pm):
     assert dt.status_code == 200, dt.text
 
 
+def test_rows_carry_each_village_with_its_new_flag(client, pm):
+    """UEP-31: the village count's list, on both Assign queues."""
+    basket = client.get(f"{API}/hc/basket", headers=pm).json()
+    with_villages = [b for b in basket if b["villages"]]
+    assert with_villages
+    for b in with_villages:
+        assert set(b["villages"][0]) == {"id", "name", "code", "is_new"}
+    assert all(b["site_type"] for b in basket)
+    rows = client.get(f"{API}/hc/queues/dt-assignment", headers=pm).json()
+    assert all("villages" in r and r["site_type"] for r in rows)
+
+
+def test_a_hidden_contractor_leaves_both_assign_columns(client, pm):
+    """UEP-31: only contractors switched on for Drive test are offered."""
+    shown = client.get(f"{API}/hc/contractors/load", headers=pm).json()
+    victim = shown[0]["contractor_id"]
+    r = client.patch(f"{API}/admin/contractors/{victim}", headers=pm, json={"show_in_drive_test": False})
+    assert r.status_code == 200, r.text
+    try:
+        for url in ("/hc/contractors/load", "/drive-test/contractors/load"):
+            ids = [c["contractor_id"] for c in client.get(f"{API}{url}", headers=pm).json()]
+            assert victim not in ids
+    finally:
+        client.patch(f"{API}/admin/contractors/{victim}", headers=pm, json={"show_in_drive_test": True})
+
+
+def test_batch_detail_says_what_was_not_normal(client, pm):
+    """UEP-31: Not ready shows the technology and the contractor's comment."""
+    site = _ready_to_assign(client, pm)[0]
+    assignment = _assign_hc(client, pm, [site])
+    techs = site["requested_technologies"]
+    r = client.post(
+        f"{API}/hc/tasks/{assignment['tasks'][0]['id']}/result", headers=pm,
+        json={"technology_results": [
+            {"technology": t, "result": "NotNormal" if i == 0 else "Normal",
+             "comment": "Transmission link down" if i == 0 else None}
+            for i, t in enumerate(techs)
+        ]},
+    )
+    assert r.status_code == 200, r.text
+    detail = client.get(f"{API}/hc/batches/{assignment['id']}", headers=pm).json()
+    row = detail["site_rows"][0]
+    assert row["result"] == "NotReady"
+    assert row["not_normal"] == [{"technology": techs[0], "comment": "Transmission link down"}]
+
+
 def test_average_needs_five_samples_and_shares_need_twenty_percent(client, pm):
     from app.services import contractor_load as L
 
