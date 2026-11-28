@@ -1064,6 +1064,19 @@ def owner_queue(db: Session, user: User) -> list[dict]:
     return out
 
 
+def imported_actor(db: Session, record, actor: str | None) -> str | None:
+    """The actor shown for a record: "Imported · batch #n · by {user}" when
+    Admin > Data import wrote it (UEP-29), else the person as before."""
+    batch_id = getattr(record, "import_batch_id", None)
+    if not batch_id:
+        return actor
+    from app.models.data_import import ImportBatch
+
+    batch = db.get(ImportBatch, batch_id)
+    label = f"Imported · batch #{batch.number}" if batch else "Imported"
+    return f"{label} · by {actor}" if actor else label
+
+
 def site_history(db: Session, work_item_id: int) -> list[dict]:
     """One flat timeline for a site: every round, owner and comment.
 
@@ -1099,7 +1112,8 @@ def site_history(db: Session, work_item_id: int) -> list[dict]:
                 "kind": "assigned",
                 "title": f"Assigned for health check — round {rnd}",
                 "detail": assignment.code if assignment else None,
-                "actor": users.get(assignment.assigned_by) if assignment else None,
+                "actor": imported_actor(db, assignment, users.get(assignment.assigned_by))
+                if assignment else None,
             }
         )
 
@@ -1137,7 +1151,7 @@ def site_history(db: Session, work_item_id: int) -> list[dict]:
                         "kind": "routed",
                         "title": f"Routed to {names}",
                         "detail": None,
-                        "actor": users.get(task.reviewed_by),
+                        "actor": imported_actor(db, task, users.get(task.reviewed_by)),
                     }
                 )
             elif task.overall_result == "Ready":
@@ -1152,7 +1166,7 @@ def site_history(db: Session, work_item_id: int) -> list[dict]:
                         "kind": "confirmed",
                         "title": "Confirmed ready for drive test",
                         "detail": None,
-                        "actor": users.get(task.reviewed_by),
+                        "actor": imported_actor(db, task, users.get(task.reviewed_by)),
                     }
                 )
 
@@ -1279,7 +1293,7 @@ def _drive_test_events(
                 "title": "Assigned for official drive test"
                 + (f" — {contractor}" if contractor else ""),
                 "detail": assignment.remarks,
-                "actor": users.get(assignment.assigned_by),
+                "actor": imported_actor(db, assignment, users.get(assignment.assigned_by)),
             }
         )
         if assignment.returned_at is not None:
@@ -1310,7 +1324,7 @@ def _drive_test_events(
                     if dt.execution_date
                     else None
                 ),
-                "actor": None,
+                "actor": imported_actor(db, dt, None),
             }
         )
         if dt.coordinator_reviewed_at is None:
@@ -1328,7 +1342,7 @@ def _drive_test_events(
                 if approved
                 else f"Drive test {dt.status.lower()}",
                 "detail": dt.coordinator_comment,
-                "actor": users.get(dt.coordinator_reviewed_by),
+                "actor": imported_actor(db, dt, users.get(dt.coordinator_reviewed_by)),
             }
         )
 
