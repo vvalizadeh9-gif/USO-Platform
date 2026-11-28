@@ -94,10 +94,14 @@ def build(checked: Checked, dt_now: dict, acc_now: dict) -> tuple[list[Change], 
                 if new is None:
                     continue
                 current = now.get(field, Value(None))
+                if field == "letter_number" and new == C.NO_LETTER and current.value:
+                    # The cell was empty: an empty cell never changes UEP's letter.
+                    continue
                 kind = compare(field, current, new)
                 kinds.append(kind)
                 if kind != SAME:
                     changes.append(Change(row, ENTITY_OF[authority], village_id, prefix + field,
                                           current.value, new, kind, current.source))
             counts[group][_unit(kinds)] += 1
+    counts["no_letter"] = sum(len(r.no_letter) for r in checked.rows if r.acc)
     return changes, counts

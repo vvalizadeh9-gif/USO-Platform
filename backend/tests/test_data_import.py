@@ -350,7 +350,7 @@ def test_row_rules(client):
     assert "Technology not requested" in text
     assert "not a known contractor" in text
     assert "not found in UEP" in text
-    assert "letter number and date required" in text
+    assert "letter date required" in text
     assert "Duplicate row" in text
 
 
@@ -398,6 +398,41 @@ def test_acceptance_only_file_touches_no_drive_test(client):
         assert case.state == "rejected" and case.basket_role == "CpgPower"
         assert db.scalar(select(func.count()).select_from(DriveTest).where(
             DriveTest.work_item_id == IDS[("S3", "New Site")])) == 0
+    finally:
+        db.close()
+
+
+def test_a_missing_letter_number_becomes_no_letter(client):
+    """Agreed with the PM: a historical verdict with a date but no letter
+    number is filed as NO-LETTER. An empty cell never replaces a letter UEP
+    already holds."""
+    from app.models.acceptance_workflow import AcceptanceSubmission
+
+    h = _pm(client)
+    r = _upload(client, h, [
+        # New verdict, no letter number.
+        {"Site ID": "S3", "Site type": "New Site", "Village code": "3002", "ICT result": "Approved",
+         "ICT letter date": "2026-10-22"},
+        # Same verdict UEP holds (ICT/123, 2026-10-20), letter number left blank.
+        {"Site ID": "S3", "Site type": "New Site", "Village code": "3001", "ICT result": "Approved",
+         "ICT letter date": "2026-10-20"},
+    ])
+    body = r.json()
+    assert body["counts"]["no_letter"] == 2
+    assert "2 verdicts had no letter number: NO-LETTER is used" in body["counts"]["warnings"]
+    assert body["counts"]["ict"] == {"new": 1, "same": 1, "conflicts": 0, "errors": 0}
+    assert client.post(f"/api/v1/data-import/batches/{body['id']}/apply", headers=h).status_code == 200
+
+    db = SessionLocal()
+    try:
+        new = db.execute(select(AcceptanceSubmission).where(
+            AcceptanceSubmission.village_id == IDS[("S3", "New Site", "3002")],
+            AcceptanceSubmission.authority == "ICT")).scalar_one()
+        assert new.letter_number == "NO-LETTER" and new.letter_date == date(2026, 10, 22)
+        kept = db.execute(select(AcceptanceSubmission).where(
+            AcceptanceSubmission.village_id == IDS[("S3", "New Site", "3001")],
+            AcceptanceSubmission.authority == "ICT")).scalars().all()
+        assert [s.letter_number for s in kept] == ["ICT/123"]
     finally:
         db.close()
 

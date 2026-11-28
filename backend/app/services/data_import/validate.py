@@ -32,6 +32,8 @@ class Row:
     #: authority -> field -> canonical value, only for an authority whose
     #: cells passed every rule.
     acc: dict[str, dict[str, str]] = field(default_factory=dict)
+    #: Authorities whose letter number was blank and became NO-LETTER.
+    no_letter: set[str] = field(default_factory=set)
 
     def error(self, column: str | None, message: str) -> None:
         self.errors.append({"field": column, "message": message})
@@ -266,9 +268,12 @@ def _check_acceptance(row: Row, universe: Universe, sites: dict[int, Site], dt_n
             parsed["comment"] = comment
 
         res = parsed.get("result")
-        if res and not (parsed.get("letter_number") and parsed.get("letter_date")):
-            row.error(C.acc_key(authority, "letter_number"),
-                      f"{authority}: letter number and date required")
+        if res and parsed.get("letter_date") and not parsed.get("letter_number"):
+            # A historical verdict with no letter number: the agreed placeholder.
+            parsed["letter_number"] = C.NO_LETTER
+            row.no_letter.add(authority)
+        if res and not parsed.get("letter_date"):
+            row.error(C.acc_key(authority, "letter_date"), f"{authority}: letter date required")
         if not res and (parsed.get("letter_number") or parsed.get("letter_date")):
             row.error(C.acc_key(authority, "result"),
                       f"{authority}: result required with a letter")
@@ -286,3 +291,5 @@ def _check_acceptance(row: Row, universe: Universe, sites: dict[int, Site], dt_n
 
         if len(row.errors) == before:
             row.acc[authority] = parsed
+        else:
+            row.no_letter.discard(authority)

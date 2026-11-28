@@ -2294,7 +2294,9 @@ outside UEP, for the first load and for big corrections. Code:
 **Merge only.** An empty cell changes nothing. A value where UEP is empty is
 New; the same value is No change; a different value is a Conflict that the
 PM decides (Keep UEP / Use file) before Confirm is allowed. Comments are never
-conflicts: a new one is added.
+conflicts: a new one is added. A verdict with a letter date but no letter
+number is filed as `NO-LETTER` (agreed with the PM); the blank cell never
+replaces a letter number UEP already holds.
 
 **Keys.** Rows match on site code + site type + village code through
 `mojri_tracker.match_key`, never internal ids. Drive test columns are per

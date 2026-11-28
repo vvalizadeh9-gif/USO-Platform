@@ -75,6 +75,10 @@ EXAMPLE_PREFIX = "EXAMPLE"
 
 MAX_COMMENT = 1000
 
+#: The letter number written for a historical verdict that has none (agreed
+#: with the PM for UEP-29). The letter date is still required.
+NO_LETTER = "NO-LETTER"
+
 
 def label(field: str) -> str:
     """The header people see for a field key (``ict_result`` -> ``ICT result``)."""

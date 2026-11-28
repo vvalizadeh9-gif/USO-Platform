@@ -45,6 +45,8 @@ class Plan:
     village_ids: list[int]
     authority: str
     new: dict[str, str]
+    #: The file's letter number cell was blank (NO-LETTER).
+    no_letter: bool = False
 
 
 def _projection(village: Village, authority: str) -> dict:
@@ -150,7 +152,9 @@ def _new_round(ctx: Ctx, plan: Plan, village: Village, target: dict, rounds: dic
     moment = noon(target.get("letter_date"))
     submission = AcceptanceSubmission(
         village_id=village.id, authority=plan.authority, round_no=rounds[key],
-        letter_number=target.get("letter_number") or "", letter_date=date.fromisoformat(target["letter_date"])
+        letter_number=plan.new.get("letter_number")
+        or (C.NO_LETTER if plan.no_letter else target.get("letter_number")) or C.NO_LETTER,
+        letter_date=date.fromisoformat(target["letter_date"])
         if target.get("letter_date") else None,
         source=SOURCE_IMPORT, review_status=REVIEW_VALIDATED,
         submitted_by=ctx.user.id, submitted_at=moment,
@@ -228,5 +232,10 @@ def group_plans(changes, rows_by_id) -> list[Plan]:
         grouped[key][field] = c.new_value
         row = rows_by_id[c.row_id]
         meta.setdefault(key, (row.id, (row.raw or {}).get("_village_ids") or [c.entity_id]))
-    return [Plan(meta[k][0], meta[k][1], k[1], fields) for k, fields in grouped.items()]
+    plans = []
+    for k, fields in grouped.items():
+        row = rows_by_id[meta[k][0]]
+        blank = not ((row.raw or {}).get(C.acc_key(k[1], "letter_number")) or "").strip()
+        plans.append(Plan(meta[k][0], meta[k][1], k[1], fields, no_letter=blank))
+    return plans
 

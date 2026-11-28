@@ -114,6 +114,10 @@ def preview(db: Session, user: User, filename: str, content: bytes) -> ImportBat
 
     digest = evidence_store.store_retained(db, "xlsx", content)
     warnings = [f"Unknown column ignored: {h}" for h in read.unknown_headers] + checked.warnings
+    if counts.get("no_letter"):
+        n = counts["no_letter"]
+        warnings.append(f"{n} verdict{'s' if n != 1 else ''} had no letter number: "
+                        f"{C.NO_LETTER} is used")
     earlier = db.scalar(
         select(ImportBatch.number).where(
             ImportBatch.file_sha256 == digest, ImportBatch.status == STATUS_APPLIED

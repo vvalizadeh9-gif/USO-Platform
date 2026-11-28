@@ -46,7 +46,7 @@ RULES = (
     "2. One row per village. Drive test columns are per site: repeat them on every village of the site, or fill one village.",
     "3. Dates: Gregorian (2026-10-15) or Shamsi (1405/07/23). UEP understands both.",
     "4. Dates must be in order: assignment, DT date, SSV submission, DT approved.",
-    "5. Problematic needs a problem category. Approved or Rejected needs a letter number and date; Rejected also a rejection category.",
+    "5. Problematic needs a problem category. Approved or Rejected needs a letter date (no letter number: UEP writes NO-LETTER); Rejected also a rejection category.",
     "6. Acceptance only for villages whose site has DT result = Done (in this file or in UEP).",
     "7. Where UEP already holds a different value you choose which one to keep before anything is saved.",
 )
