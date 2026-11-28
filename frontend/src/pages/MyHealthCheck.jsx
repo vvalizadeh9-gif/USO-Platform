@@ -44,6 +44,9 @@ export default function MyHealthCheck() {
   useEffect(() => {
     if (!assignments?.length || activeId != null) return
     const linked = assignments.find((a) => String(a.id) === String(deepLinkAssignmentId))
+    // On a phone the cards come first; an assignment opens when tapped.
+    const phone = window.matchMedia?.('(max-width: 820px)').matches
+    if (phone && !linked) return
     setActiveId((linked || assignments.find((a) => a.status !== 'Completed') || assignments[0]).id)
   }, [assignments, deepLinkAssignmentId, activeId])
 
