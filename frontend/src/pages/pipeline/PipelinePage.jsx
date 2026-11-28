@@ -26,9 +26,6 @@ import '../../styles/work-dt.css'
 
 const PANEL_ID = 'pipeline-panel'
 
-/** The steps whose list card carries its own confirmation (the assign bar). */
-const HAS_PANEL = new Set(['hc_assign', 'dt_assign'])
-
 /** Views with no list of sites to download. */
 const NO_EXPORT = new Set(['done', 'reroutes'])
 
@@ -40,23 +37,6 @@ const STEP_VIEWS = {
   done: (p) => <DoneStep {...p} />,
   remediation: (p) => <RemediationStep {...p} />,
   reroutes: (p) => <ReroutesStep {...p} />,
-}
-
-const plural = (n, one) => `${n.toLocaleString('en-US')} ${n === 1 ? one : `${one}s`}`
-
-/** The header's meta line (UEP-14 §3.2): "39 results to decide · 38 sites
- * with contractors · 7 overdue" -- what is the user's, then what is not. */
-function metaLine(step, figures, homeCount) {
-  if (!step || !figures) return null
-  const parts = []
-  if (figures.decide != null) {
-    parts.push(`${plural(homeCount ?? figures.decide, step.key === 'hc_checks' ? 'result' : 'drive test')} to decide`)
-    parts.push(`${plural(figures.count, 'site')} with contractors`)
-  } else {
-    parts.push(`${plural(homeCount ?? figures.count, 'site')}${step.owner === 'You' ? ' waiting' : ''}`)
-  }
-  if (figures.late > 0) parts.push(`${figures.late.toLocaleString('en-US')} overdue`)
-  return parts.join(' · ')
 }
 
 /** The strip's figures, read again after every action. */
@@ -106,7 +86,7 @@ function PipelineView({ page, resolved, highlightTaskId }) {
   const navigate = useNavigate()
   const location = useLocation()
   const { headingRef, clearNotice } = useWork()
-  const { data: home, error: homeError, counts } = useHomeData()
+  const { data: home, error: homeError } = useHomeData()
   const summary = useSummary(canReview(user))
   const exportRef = useRef(null)
   const exporting = false
@@ -148,10 +128,8 @@ function PipelineView({ page, resolved, highlightTaskId }) {
   return (
     <div className="uep-home uw-page">
       <PageHeading
+        // No meta line (UEP-31 §1.1): the strip already shows the numbers.
         title={step ? step.name : 'History'}
-        // One count per queue (UEP-13 §3.2): the meta line leads with the
-        // number Home and the rail show, read from the same /me/home field.
-        meta={metaLine(step, figures, counts?.[step?.queue])}
         headingRef={headingRef}
         historyOpen={!step}
         onHistory={() => navigate(step ? `${PAGE_PATH[page]}?tab=${HISTORY_TAB}` : PAGE_PATH[page])}
@@ -194,7 +172,7 @@ function PipelineView({ page, resolved, highlightTaskId }) {
           />
         )}
       </div>
-      {step && !HAS_PANEL.has(step.key) && <ActionNotice floating />}
+      {step && <ActionNotice floating />}
       <AppFooter data={home} failed={Boolean(homeError) && !home} />
     </div>
   )

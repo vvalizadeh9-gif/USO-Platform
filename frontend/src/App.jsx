@@ -37,6 +37,7 @@ const KpiMapping = lazy(() => import('./pages/reports/KpiMapping'))
 const Admin = lazy(() => import('./pages/Admin'))
 const SlaPoliciesPage = lazy(() => import('./pages/admin/SlaPoliciesPage'))
 const ProvinceAssignmentsPage = lazy(() => import('./pages/admin/ProvinceAssignmentsPage'))
+const ContractorsPage = lazy(() => import('./pages/admin/ContractorsPage'))
 const SignInSettingsPage = lazy(() => import('./pages/admin/SignInSettingsPage'))
 const ChangePassword = lazy(() => import('./pages/ChangePassword'))
 
@@ -305,6 +306,7 @@ export default function App() {
           <Route path="/admin" element={<Protected need={ADMIN_PAGE}><Admin /></Protected>} />
           <Route path="/admin/sla" element={<Protected need={F.SLA_POLICIES}><SlaPoliciesPage /></Protected>} />
           <Route path="/admin/provinces" element={<Protected need={F.PROVINCE_ASSIGNMENTS}><ProvinceAssignmentsPage /></Protected>} />
+          <Route path="/admin/contractors" element={<Protected need={F.CONTRACTORS}><ContractorsPage /></Protected>} />
           <Route path="/admin/sign-in-page" element={<Protected need={F.SIGNIN_SETTINGS}><SignInSettingsPage /></Protected>} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />

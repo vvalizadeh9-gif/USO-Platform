@@ -72,6 +72,8 @@ const ROUTES = {
   '/hc/queues/remediations': W.remediations,
   '/hc/queues/reroutes': W.reroutes,
   '/hc/batches': W.hcBatches,
+  '/admin/contractors': W.adminContractors,
+  '/hc/my/assignments': W.myAssignments,
   '/drive-test/tests': W.dtTests,
   '/work-items': W.workItems,
   '/work-items/counts': W.workItemCounts,
@@ -108,6 +110,7 @@ const PATTERNS = [
   [/^\/explorer\/sites\/\d+\/villages$/, () => siteVillages(3)],
   [/^\/explorer\/sites\/\d+$/, explorerSite],
   [/^\/submissions\/batches\/\d+$/, (url) => SB.batch(Number(url.split('/').pop()))],
+  [/^\/hc\/batches\/\d+$/, (url) => W.hcBatchDetail(Number(url.split('/').pop()))],
   [/^\/me\/queues\/[^/]+\/items$/, (url) => F.queueItems(url)],
 ]
 

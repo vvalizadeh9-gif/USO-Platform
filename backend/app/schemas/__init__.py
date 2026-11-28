@@ -817,6 +817,15 @@ class NotificationOut(ORMModel):
 
 
 # ---------- Health Check workflow (Phase A) ----------
+class SiteVillage(BaseModel):
+    """One of a site's villages, for the village count's list (UEP-31)."""
+
+    id: int
+    name: str | None = None
+    code: str | None = None
+    is_new: bool = False
+
+
 class HcBasketItem(BaseModel):
     work_item_id: int
     site_code: str | None
@@ -850,6 +859,7 @@ class HcBasketItem(BaseModel):
     # hc_queues.with_villages). Both empty when the site carries none.
     village: str | None = None
     village_count: int = 0
+    villages: list[SiteVillage] = []
 
 
 class HcAssignmentCreate(BaseModel):
@@ -1091,6 +1101,7 @@ class DtAssignmentRow(BaseModel):
     # Villages CPM added after the site's drive test was assigned or done;
     # the site is back in Assign for those alone (UEP-14 §4).
     new_villages: int = 0
+    villages: list[SiteVillage] = []
 
 
 class DtInProgressRow(BaseModel):
@@ -1184,6 +1195,8 @@ class HcAssignmentOut(ORMModel):
     remarks: str | None
     created_at: datetime
     tasks: list[HcTaskOut] = []
+    # When the batch is due back (UEP-31): assigned + the health-check SLA.
+    due_at: datetime | None = None
 
 
 class HcAssignmentListItem(ORMModel):

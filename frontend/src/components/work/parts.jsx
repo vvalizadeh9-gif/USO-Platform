@@ -1,4 +1,5 @@
 // Small pieces every work-page list shares (UEP-06 §4, §5.3).
+import { useEffect, useRef, useState } from 'react'
 import Icon from '../Icon'
 import { isLate } from '../../lib/siteOrder'
 import { useActionLog } from '../../lib/actionLog'
@@ -17,38 +18,106 @@ export function Fa({ children, className = '' }) {
   )
 }
 
-/** "21 d" and a bar filling toward the SLA; red, and read out as late, past it.
- * `late` overrides the day count for items late against their own due date. */
-/** How many SLAs the waiting bar spans. */
-const WAIT_SPAN = 3
-
+/** "21 d", tabular; red past the step's SLA, and read out as late (UEP-31
+ * §1.6). `late` overrides the day count for items late against their own
+ * due date. */
 export function WaitingCell({ days, slaDays, late: lateOverride }) {
-  if (days == null) {
-    return (
-      <span className="uw-wait">
-        <span className="uw-wait-days">—</span>
-        <span className="uw-wait-bar" aria-hidden="true" />
-      </span>
-    )
-  }
+  if (days == null) return <span className="uw-none">—</span>
   const late = lateOverride ?? isLate(days, slaDays)
-  // Less red (UEP-13 §3.9): neutral up to the SLA, danger only for the part
-  // beyond it. The bar spans three SLAs, with the SLA marked on the track.
-  const span = slaDays ? slaDays * WAIT_SPAN : Math.max(days, 1)
-  const pct = (n) => Math.min(100, (100 * Math.max(0, n)) / span)
-  const within = pct(slaDays ? Math.min(days, slaDays) : days)
-  const beyond = late && slaDays ? pct(days) - within : 0
   return (
-    <span className={`uw-wait ${late ? 'is-late' : ''}`.trim()}>
-      <span className="uw-wait-days">
-        {formatNumber(days)} d{late && <span className="uw-sr-only"> late</span>}
-      </span>
-      <span className="uw-wait-bar" aria-hidden="true">
-        <i className="uw-wait-within" style={{ width: `${within}%` }} />
-        {beyond > 0 && <i className="uw-wait-beyond" style={{ width: `${beyond}%` }} />}
-        {slaDays ? <b className="uw-wait-sla" style={{ left: `${pct(slaDays)}%` }} /> : null}
-      </span>
+    <span className={`uw-days ${late ? 'is-late' : ''}`.trim()}>
+      {formatNumber(Math.floor(days))} d{late && <span className="uw-sr-only"> late</span>}
     </span>
+  )
+}
+
+/**
+ * A site's villages as a number (UEP-31 §1.5); a click opens their names.
+ * "N new" follows when CPM added villages since the site's drive test. Esc, a
+ * click outside or a second click closes the list; focus stays on the button.
+ * The click never reaches the row, so it does not tick it.
+ */
+export function VillageCount({ villages }) {
+  const list = villages || []
+  const [at, setAt] = useState(null)
+  const buttonRef = useRef(null)
+  const popRef = useRef(null)
+  const fresh = list.filter((v) => v.is_new).length
+  const open = at !== null
+
+  useEffect(() => {
+    if (!open) return undefined
+    const close = () => setAt(null)
+    const onKey = (e) => {
+      if (e.key !== 'Escape') return
+      e.stopPropagation()
+      close()
+      buttonRef.current?.focus()
+    }
+    const onDown = (e) => {
+      if (!popRef.current?.contains(e.target) && !buttonRef.current?.contains(e.target)) close()
+    }
+    document.addEventListener('keydown', onKey, true)
+    document.addEventListener('mousedown', onDown)
+    window.addEventListener('scroll', close, true)
+    window.addEventListener('resize', close)
+    return () => {
+      document.removeEventListener('keydown', onKey, true)
+      document.removeEventListener('mousedown', onDown)
+      window.removeEventListener('scroll', close, true)
+      window.removeEventListener('resize', close)
+    }
+  }, [open])
+
+  if (list.length === 0) return <span className="uw-none">—</span>
+  const toggle = (e) => {
+    e.stopPropagation()
+    if (open) return setAt(null)
+    const r = buttonRef.current.getBoundingClientRect()
+    setAt({ top: r.bottom + 4, left: r.left })
+  }
+  const count = list.length
+  return (
+    <>
+      <button
+        ref={buttonRef}
+        type="button"
+        className="uw-vcount"
+        aria-expanded={open}
+        aria-label={`${formatNumber(count)} ${count === 1 ? 'village' : 'villages'}${fresh ? `, ${formatNumber(fresh)} new` : ''}, show names`}
+        onClick={toggle}
+      >
+        {formatNumber(count)}
+        {fresh > 0 && <span className="uw-vcount-new">{formatNumber(fresh)} new</span>}
+        <Icon name="chevron--down" size={14} />
+      </button>
+      {open && (
+        <div ref={popRef} className="uw-vpop" style={at} onClick={(e) => e.stopPropagation()}>
+          <span className="uw-vpop-head">{formatNumber(count)} {count === 1 ? 'village' : 'villages'}</span>
+          <ul>
+            {list.map((v) => (
+              <li key={v.id}>
+                <Fa>{v.name}</Fa>
+                <span className="uw-vpop-code">{v.code || v.id}{v.is_new && ' · New in CPM'}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </>
+  )
+}
+
+/** A header that sorts its column, with aria-sort and an accent arrow. */
+export function SortHeader({ id, label, sort, onSort }) {
+  const active = sort.key === id
+  return (
+    <th scope="col" aria-sort={active ? (sort.dir === 'asc' ? 'ascending' : 'descending') : 'none'}>
+      <button type="button" className={`uw-sort ${active ? 'is-active' : ''}`.trim()} onClick={() => onSort(id)}>
+        {label}
+        {active && <Icon name={sort.dir === 'asc' ? 'arrow--up' : 'arrow--down'} size={16} />}
+      </button>
+    </th>
   )
 }
 
@@ -146,16 +215,12 @@ export function SkeletonRows({ columns, rows = 8 }) {
   )
 }
 
-/** Home's card: a tinted tool bar (tools left, description right) over a
- * body that scrolls inside. `panelProps` make it the strip's tab panel. */
-export function WorkListCard({ tools, description, children, foot, className = '', busy, stage, chip, ...panelProps }) {
+/** Home's card: it starts with its tool bar (tools left, description right)
+ * over a body that scrolls inside (UEP-31 §1.4: no stage strip). `panelProps`
+ * make it the strip's tab panel. */
+export function WorkListCard({ tools, description, children, foot, className = '', busy, ...panelProps }) {
   return (
-    <section className={`uw-card ${stage ? `is-stage-${stage}` : ''} ${className}`.trim()} aria-busy={busy || undefined} {...panelProps}>
-      {chip && (
-        <div className="uw-card-stage">
-          <span className="uw-stage-chip">{chip}</span>
-        </div>
-      )}
+    <section className={`uw-card ${className}`.trim()} aria-busy={busy || undefined} {...panelProps}>
       <header className="uw-card-bar">
         <div className="uw-card-tools">{tools}</div>
         {description && <p className="uw-card-desc">{description}</p>}

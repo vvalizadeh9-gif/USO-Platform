@@ -8,6 +8,7 @@ from app.api import (
     admin,
     auth,
     client_errors,
+    contractors_admin,
     data_import,
     drive_test,
     explorer,
@@ -52,6 +53,7 @@ api_router.include_router(work_queues.router)
 api_router.include_router(sla_policies.router)
 api_router.include_router(submissions.router)
 api_router.include_router(province_assignments.router)
+api_router.include_router(contractors_admin.router)
 api_router.include_router(home.router)
 api_router.include_router(search.router)
 api_router.include_router(client_errors.router)

@@ -132,19 +132,21 @@ def _dt_history(ctx: QueueContext, since) -> tuple[dict, dict]:
     return spans, provinces
 
 
-def contractor_load(ctx: QueueContext, process: str) -> list[dict]:
-    """``process`` is ``"hc"`` or ``"dt"``. Lowest open load first."""
+def contractor_load(ctx: QueueContext, process: str, *, shown_only: bool = True) -> list[dict]:
+    """``process`` is ``"hc"`` or ``"dt"``. Lowest open load first.
+
+    ``shown_only``: only contractors switched on for Drive test (UEP-31);
+    Admin · Contractors passes False to list the hidden ones too."""
     since = ctx.now - WINDOW
     open_, late = _open_and_late(ctx, process)
     spans, provinces = (_hc_history if process == "hc" else _dt_history)(ctx, since)
-    contractors = ctx.db.execute(
-        # Drive-test contractors only: site (execution) contractors and the
-        # status words an old CPM import turned into contractors never take
-        # a health check or a drive test (UEP-14 §5.1).
-        select(Contractor.id, Contractor.name).where(
-            Contractor.active.is_(True), Contractor.type == "drive_test"
-        )
-    ).all()
+    # Drive-test contractors only: site (execution) contractors and the
+    # status words an old CPM import turned into contractors never take a
+    # health check or a drive test (UEP-14 §5.1).
+    where = [Contractor.active.is_(True), Contractor.type == "drive_test"]
+    if shown_only:
+        where.append(Contractor.show_in_drive_test.is_(True))
+    contractors = ctx.db.execute(select(Contractor.id, Contractor.name).where(*where)).all()
     rows = [
         {
             "contractor_id": cid,

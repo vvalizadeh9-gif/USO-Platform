@@ -498,6 +498,21 @@
   --uep-not-ready: #B42F2A;
   --uep-waiting: #9A5F00;
   --uep-waiting-tint: #FCF0D9;
+  /* UEP-31: the Drive test pages' calm selection and Carbon motion. A ticked
+     row is lighter than Explorer's; the line under the selected strip step
+     grows from the centre; a basket number bumps after an assign. */
+  --uep-work-row-selected: #F3F6FD;
+  --uep-step-line: 3px;
+  --uep-dur-press: 100ms;
+  --uep-dur-check-pop: 180ms;
+  --uep-dur-swap: 220ms;
+  --uep-dur-step-line: 240ms;
+  --uep-dur-fill: 600ms;
+  --uep-dur-bump: 600ms;
+  --uep-dur-count: 700ms;
+  --uep-assign-column: 232px;
+  --uep-inbox-list: 360px;
+  --uep-my-hc-cards: 280px;
   /* Monthly plan (UEP-18). The PIP line and dots are 3:1 on white (#9AA1AE
      was not); the light accent is "waiting" and the area under the actual
      line; months after the planned one are shaded; red on a selected row. */

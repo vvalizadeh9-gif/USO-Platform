@@ -1,15 +1,13 @@
-import { Fragment, useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import api from '../../api/client'
-import Icon from '../../components/Icon'
 import SiteHistoryDrawer from '../../components/SiteHistoryDrawer'
 import {
-  EmptyStep, Fa, Flag, SearchBox, SiteIdButton, SkeletonRows, StepError, TechChips, WorkListCard,
+  EmptyStep, Fa, Flag, SearchBox, SiteIdButton, SkeletonRows, SortHeader, StepError, VillageCount, WaitingCell, WorkListCard,
 } from '../../components/work/parts'
 import { useWork } from '../../components/work/WorkContext'
 import { useToast } from '../../context/ToastContext'
 import { useAuth } from '../../context/AuthContext'
-import { formatDateTime } from '../../lib/dates'
 import { formatNumber } from '../../lib/numbers'
 import Select from '../../components/Select'
 import useStepData, { useExportRows } from './useStepData'
@@ -32,35 +30,16 @@ const EXPORT_COLUMNS = [
   { label: 'Province', value: (r) => r.province },
   { label: 'Contractor', value: (r) => r.contractor },
   { label: 'Batch', value: (r) => r.batch },
+  { label: 'Report files', value: (r) => r.evidence_count },
   { label: 'Aging (days)', value: (r) => r.aging_days },
   { label: 'Outcome', value: (r) => r.outcome },
 ]
 
-/** Days, or hours under a day, and a bar against the SLA; red over it. */
-function AgingCell({ days, slaDays }) {
-  if (days == null) return <span className="uw-none">—</span>
-  const late = slaDays != null && days > slaDays
-  const text = days < 1 ? `${Math.max(1, Math.round(days * 24))} h` : `${formatNumber(Math.floor(days))} d`
-  const pct = slaDays ? Math.min(100, (100 * days) / slaDays) : 0
-  return (
-    <span className={`uw-wait ${late ? 'is-late' : ''}`.trim()}>
-      <span className="uw-wait-days">{text}{late && <span className="uw-sr-only"> late</span>}</span>
-      <span className="uw-wait-bar" aria-hidden="true"><i className={late ? 'uw-wait-beyond' : 'uw-wait-within'} style={{ width: `${pct}%` }} /></span>
-    </span>
-  )
-}
-
-/** A header that sorts its column, with aria-sort and an accent arrow. */
-function SortHeader({ id, label, sort, onSort }) {
-  const active = sort.key === id
-  return (
-    <th scope="col" aria-sort={active ? (sort.dir === 'asc' ? 'ascending' : 'descending') : 'none'}>
-      <button type="button" className={`uw-sort ${active ? 'is-active' : ''}`.trim()} onClick={() => onSort(id)}>
-        {label}
-        {active && <Icon name={sort.dir === 'asc' ? 'arrow--up' : 'arrow--down'} size={16} />}
-      </button>
-    </th>
-  )
+/** "3 files", or a red "No report"; nothing to show while with the contractor. */
+function ReportCell({ row, tab }) {
+  if (tab === 'with') return <span className="uw-none">—</span>
+  if (!row.evidence_count) return <span className="uw-late">No report</span>
+  return <span>{formatNumber(row.evidence_count)} {row.evidence_count === 1 ? 'file' : 'files'}</span>
 }
 
 /**
@@ -77,7 +56,6 @@ export default function TestsStep({ step, panelProps, onExport }) {
   const [contractor, setContractor] = useState('')
   const [query, setQuery] = useState('')
   const [sort, setSort] = useState({ key: 'aging', dir: 'desc' })
-  const [expanded, setExpanded] = useState(() => new Set())
   const [selected, setSelected] = useState(() => new Set())
   const [decision, setDecision] = useState('accept')
   const [reason, setReason] = useState('')
@@ -144,21 +122,19 @@ export default function TestsStep({ step, panelProps, onExport }) {
     }
   }
 
-  const cols = (reviewing ? 1 : 0) + 7 + (tab === 'reviewed' ? 1 : 0)
+  const cols = (reviewing ? 1 : 0) + 6 + (tab === 'reviewed' ? 1 : 0)
   const allOn = rows?.length > 0 && rows.every((r) => selected.has(r.work_item_id))
 
   return (
     <WorkListCard
       {...panelProps}
-      stage="dt"
-      chip="Step 4 · Drive tests, site by site"
       busy={!rows && !error}
       tools={
         <>
           <div className="uw-seg" role="tablist" aria-label="Tests">
             {TABS.map((t) => (
               <button key={t.key} type="button" role="tab" aria-selected={tab === t.key} className="uw-seg-btn" onClick={() => setTab(t.key)}>
-                {t.label} <span className="uw-seg-count">{formatNumber(data?.counts?.[t.key] ?? 0)}</span>
+                {t.label}
               </button>
             ))}
           </div>
@@ -181,21 +157,22 @@ export default function TestsStep({ step, panelProps, onExport }) {
                 Accept → DT done
               </button>
               <button type="button" role="radio" className="uw-seg-btn" aria-checked={decision === 'back'} onClick={() => setDecision('back')}>
-                Send back → In test
+                Send back → Round 2
               </button>
             </div>
             {decision === 'back' ? (
-              <div className="uw-route-chips" role="radiogroup" aria-label="Reason">
-                {SEND_BACK_REASONS.map((r) => (
-                  <button key={r} type="button" role="radio" className="uw-pick" aria-checked={reason === r} onClick={() => setReason(r)}>
-                    {r}
-                  </button>
-                ))}
-              </div>
+              <Select
+                className="uw-select uw-reason"
+                aria-label="Reason"
+                placeholder="Choose a reason"
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                options={SEND_BACK_REASONS.map((r) => ({ value: r, label: r }))}
+              />
             ) : noFiles ? (
               <label className="uw-check-line">
                 <input type="checkbox" checked={checkedOutside} onChange={(e) => setCheckedOutside(e.target.checked)} />
-                Some have no report: I checked them outside UEP
+                I checked the report outside UEP
               </label>
             ) : null}
             <button
@@ -205,7 +182,7 @@ export default function TestsStep({ step, panelProps, onExport }) {
               aria-busy={busy || undefined}
               onClick={decide}
             >
-              {decision === 'accept' ? `Accept ${plural(chosen.length, 'site')}` : `Send back ${plural(chosen.length, 'site')}`}
+              {decision === 'accept' ? 'Accept' : 'Send back'}
             </button>
           </div>
         ) : null
@@ -219,14 +196,13 @@ export default function TestsStep({ step, panelProps, onExport }) {
         <table className="uw-table" aria-label={TABS.find((t) => t.key === tab).label}>
           <colgroup>
             {reviewing && <col style={{ width: 'var(--uep-col-check)' }} />}
-            <col style={{ width: 'var(--uep-col-icon)' }} />
-            <col style={{ width: '15%' }} />
-            <col style={{ width: '18%' }} />
-            <col style={{ width: '12%' }} />
-            <col style={{ width: '14%' }} />
-            <col style={{ width: '10%' }} />
+            <col style={{ width: '17%' }} />
+            <col style={{ width: '11%' }} />
+            <col style={{ width: '19%' }} />
+            <col style={{ width: '19%' }} />
+            <col style={{ width: '13%' }} />
             <col />
-            {tab === 'reviewed' && <col style={{ width: '11%' }} />}
+            {tab === 'reviewed' && <col style={{ width: '12%' }} />}
           </colgroup>
           <thead>
             <tr>
@@ -243,12 +219,11 @@ export default function TestsStep({ step, panelProps, onExport }) {
                   </span>
                 </th>
               )}
-              <th scope="col"><span className="uw-sr-only">Details</span></th>
               <SortHeader id="site" label="Site ID" sort={sort} onSort={onSort} />
               <th scope="col">Villages</th>
               <SortHeader id="province" label="Province" sort={sort} onSort={onSort} />
               <SortHeader id="contractor" label="Contractor" sort={sort} onSort={onSort} />
-              <th scope="col">Batch</th>
+              <th scope="col">Report</th>
               <SortHeader id="aging" label={tab === 'with' ? `Aging · SLA ${rows?.[0]?.sla_days ?? 14} d` : 'Aging'} sort={sort} onSort={onSort} />
               {tab === 'reviewed' && <th scope="col">Outcome</th>}
             </tr>
@@ -258,74 +233,41 @@ export default function TestsStep({ step, panelProps, onExport }) {
           ) : (
             <tbody>
               {rows.map((r, i) => {
-                const key = `${r.work_item_id}-${r.outcome || ''}`
-                const open = expanded.has(key)
                 const on = selected.has(r.work_item_id)
                 return (
-                  <Fragment key={key}>
-                    <tr
-                      className={`${reviewing ? 'is-selectable' : ''} ${on ? 'is-selected' : ''}`.trim() || undefined}
-                      style={i < 14 ? { '--row-i': i } : undefined}
-                      onClick={(e) => reviewing && !e.target.closest('button, input, label') && toggle(setSelected, r.work_item_id)}
-                    >
-                      {reviewing && (
-                        <td className="uw-col-check">
-                          <label className="uw-check-hit">
-                            <input type="checkbox" checked={on} aria-label={`Select ${r.site_code}`} onChange={() => toggle(setSelected, r.work_item_id)} />
-                          </label>
-                        </td>
-                      )}
-                      <td>
-                        <button
-                          type="button"
-                          className="uw-icon-btn uw-expand"
-                          aria-expanded={open}
-                          aria-label={`${open ? 'Hide' : 'Show'} details of ${r.site_code}`}
-                          onClick={() => toggle(setExpanded, key)}
-                        >
-                          <Icon name="chevron--right" size={16} />
-                        </button>
+                  <tr
+                    key={`${r.work_item_id}-${r.outcome || ''}`}
+                    className={`${reviewing ? 'is-selectable' : ''} ${on ? 'is-selected' : ''}`.trim() || undefined}
+                    style={i < 14 ? { '--row-i': i } : undefined}
+                    onClick={(e) => reviewing && !e.target.closest('button, input, label') && toggle(setSelected, r.work_item_id)}
+                  >
+                    {reviewing && (
+                      <td className="uw-col-check">
+                        <label className="uw-check-hit">
+                          <input type="checkbox" checked={on} aria-label={`Select ${r.site_code}`} onChange={() => toggle(setSelected, r.work_item_id)} />
+                        </label>
                       </td>
-                      <td>
+                    )}
+                    <td>
+                      <span className="uw-cell-two">
                         <span className="uw-site">
                           <SiteIdButton siteCode={r.site_code} onClick={() => setHistory({ id: r.work_item_id, code: r.site_code })} />
                           {r.round > 1 && <Flag>Round {r.round}</Flag>}
                         </span>
-                      </td>
+                        {r.batch && <span className="uw-sub">{r.batch}</span>}
+                      </span>
+                    </td>
+                    <td><VillageCount villages={r.villages} /></td>
+                    <td><Fa>{r.province}</Fa></td>
+                    <td><Fa>{r.contractor}</Fa></td>
+                    <td><ReportCell row={r} tab={tab} /></td>
+                    <td><WaitingCell days={r.aging_days} slaDays={tab === 'reviewed' ? null : r.sla_days} /></td>
+                    {tab === 'reviewed' && (
                       <td>
-                        <Fa>{r.villages[0]?.name}</Fa>
-                        {r.villages.length > 1 && <span className="uw-muted"> +{formatNumber(r.villages.length - 1)}</span>}
+                        <span className={`uw-result ${r.outcome === 'DT done' ? 'is-ready' : 'is-not-ready'}`}><i aria-hidden="true" />{r.outcome}</span>
                       </td>
-                      <td><Fa>{r.province}</Fa></td>
-                      <td><Fa>{r.contractor}</Fa></td>
-                      <td><span className="uw-muted">{r.batch}</span></td>
-                      <td><AgingCell days={r.aging_days} slaDays={r.sla_days} /></td>
-                      {tab === 'reviewed' && (
-                        <td>
-                          <span className={`uw-result ${r.outcome === 'DT done' ? 'is-ready' : 'is-not-ready'}`}><i aria-hidden="true" />{r.outcome}</span>
-                        </td>
-                      )}
-                    </tr>
-                    {open && (
-                      <tr className="uw-detail-row is-open">
-                        <td colSpan={cols}>
-                          <div className="uw-expand-body">
-                            <span className="uw-chips">
-                              {r.villages.map((v) => (
-                                <span key={v.id} className="uw-chip"><Fa>{v.name}</Fa>&nbsp;· {v.code || v.id}{v.is_new && ' · New in CPM'}</span>
-                              ))}
-                            </span>
-                            <TechChips techs={r.technologies} />
-                            <span className="uw-muted">
-                              assigned {formatDateTime(r.assigned_at)}{r.assigned_by ? ` by ${r.assigned_by}` : ''}
-                              {r.submitted_at && ` · submitted ${formatDateTime(r.submitted_at)}`}
-                              {` · ${plural(r.evidence_count, 'evidence file')}`}
-                            </span>
-                          </div>
-                        </td>
-                      </tr>
                     )}
-                  </Fragment>
+                  </tr>
                 )
               })}
             </tbody>

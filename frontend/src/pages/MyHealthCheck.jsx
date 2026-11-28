@@ -1,53 +1,65 @@
-import { motion } from 'framer-motion'
-import { Download, Upload, ChevronRight, CheckCircle2, XCircle, Info, HelpCircle } from '../components/carbon'
 import { useEffect, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import api from '../api/client'
+import Icon from '../components/Icon'
 import { useToast } from '../context/ToastContext'
-import LifecycleStrip from '../components/LifecycleStrip'
-import { EmptyState, Loading, PageHead } from '../components/ui'
+import { EmptyState, Loading, Modal, PageHead } from '../components/ui'
 import { formatNumber } from '../lib/numbers'
+import { typeLabel } from './explorer/listModel'
+import '../styles/my-health-check.css'
 
+const hoursLeft = (due) => (due ? (new Date(due).getTime() - Date.now()) / 3600000 : null)
+
+/** Yellow "Due in 23 h" while open (red "Late 2 h" past it); green "Completed". */
+function StatusPill({ assignment }) {
+  if (assignment.status === 'Completed') return <span className="mhc-pill is-green">Completed</span>
+  const left = hoursLeft(assignment.due_at)
+  if (left == null) return <span className="mhc-pill is-yellow">{assignment.status}</span>
+  const text = (h) => (h >= 24 ? `${Math.floor(h / 24)} d` : `${Math.max(1, Math.ceil(h))} h`)
+  return left < 0
+    ? <span className="mhc-pill is-red">Late {text(-left)}</span>
+    : <span className="mhc-pill is-yellow">Due in {text(left)}</span>
+}
+
+/**
+ * A contractor's own health checks (UEP-31 §6): their assignments on the
+ * left, the open one's sites on the right. A result is sent once per site and
+ * then locked.
+ */
 export default function MyHealthCheck() {
   const [assignments, setAssignments] = useState(null)
-  const [active, setActive] = useState(null)
-  // Deep-linked from Action Center: ?assignment=<id>&task=<id> auto-opens the
-  // assignment and jumps straight into that site's submission form.
+  const [activeId, setActiveId] = useState(null)
+  // Deep-linked from Action Center: ?assignment=<id>&task=<id> opens the
+  // assignment and that site's form.
   const [searchParams] = useSearchParams()
   const deepLinkAssignmentId = searchParams.get('assignment')
   const deepLinkTaskId = searchParams.get('task')
   const [autoOpenedTask, setAutoOpenedTask] = useState(false)
 
   function load() {
-    api.get('/hc/my/assignments').then((r) => {
-      setAssignments(r.data)
-      // keep the open assignment in sync after a submit
-      setActive((cur) => (cur ? r.data.find((a) => a.id === cur.id) || null : null))
-    }).catch(() => setAssignments([]))
+    api.get('/hc/my/assignments').then((r) => setAssignments(r.data)).catch(() => setAssignments([]))
   }
   useEffect(load, [])
 
   useEffect(() => {
-    if (!assignments || !deepLinkAssignmentId) return
-    const match = assignments.find((a) => String(a.id) === String(deepLinkAssignmentId))
-    if (match) setActive(match)
-  }, [assignments, deepLinkAssignmentId])
+    if (!assignments?.length || activeId != null) return
+    const linked = assignments.find((a) => String(a.id) === String(deepLinkAssignmentId))
+    setActiveId((linked || assignments.find((a) => a.status !== 'Completed') || assignments[0]).id)
+  }, [assignments, deepLinkAssignmentId, activeId])
 
   if (!assignments) return <Loading label="Loading your assignments" />
+  const active = assignments.find((a) => a.id === activeId) || null
 
   return (
     <>
       <PageHead title="Health check" />
-
-      <LifecycleStrip current="hc" variant="contractor" />
-
       {assignments.length === 0 ? (
-        <div className="card card-pad"><EmptyState title="No assignments yet" hint="Health check assignments appear here." /></div>
+        <div className="card card-pad"><EmptyState title="No assignments yet" /></div>
       ) : (
-        <div className="grid" style={{ gridTemplateColumns: active ? '0.85fr 1.5fr' : '1fr', gap: 16, alignItems: 'start' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <div className="mhc-layout">
+          <div className="mhc-cards">
             {assignments.map((a) => (
-              <AssignmentCard key={a.id} assignment={a} active={active?.id === a.id} onOpen={() => setActive(a)} />
+              <AssignmentCard key={a.id} assignment={a} active={a.id === activeId} onOpen={() => setActiveId(a.id)} />
             ))}
           </div>
           {active && (
@@ -67,27 +79,23 @@ export default function MyHealthCheck() {
 
 function AssignmentCard({ assignment, active, onOpen }) {
   const total = assignment.tasks.length
-  const done = assignment.tasks.filter((t) => t.overall_result).length
+  const sent = assignment.tasks.filter((t) => t.overall_result).length
   return (
-    <motion.div
-      className="card card-pad"
-      whileHover={{ y: -2 }}
-      onClick={onOpen}
-      style={{ cursor: 'pointer', borderColor: active ? 'var(--uep-accent)' : 'var(--uep-border)', borderWidth: active ? 1.5 : 1 }}
-    >
-      <div className="row between">
-        <span style={{ fontWeight: 600, fontSize: 14 }}>{assignment.title || assignment.code}</span>
-        <span className={`pill ${assignment.status === 'Completed' ? 'pill-green' : 'pill-amber'}`}>{assignment.status}</span>
-      </div>
-      <div className="row between" style={{ marginTop: 10 }}>
-        <span className="dim" style={{ fontSize: 12.5 }}>{formatNumber(done)}/{formatNumber(total)} sites done</span>
-        <ChevronRight size={16} style={{ color: 'var(--uep-text-3)' }} />
-      </div>
-      <div style={{ height: 5, background: 'var(--uep-track)', borderRadius: 3, marginTop: 8, overflow: 'hidden' }}>
-        <div style={{ width: `${total ? (done / total) * 100 : 0}%`, height: '100%', background: 'var(--uep-status-success-ink)' }} />
-      </div>
-    </motion.div>
+    <button type="button" className="mhc-card" aria-pressed={active} onClick={onOpen}>
+      <span className="mhc-card-head">
+        {assignment.code}
+        <StatusPill assignment={assignment} />
+      </span>
+      <span className="mhc-card-sent">{formatNumber(sent)} of {formatNumber(total)} {total === 1 ? 'site' : 'sites'} sent</span>
+      <span className="mhc-bar" aria-hidden="true"><i style={{ width: `${total ? (sent / total) * 100 : 0}%` }} /></span>
+    </button>
   )
+}
+
+function Result({ value }) {
+  if (value === 'Ready') return <span className="mhc-result is-ready"><i aria-hidden="true" />Ready</span>
+  if (value === 'NotReady') return <span className="mhc-result is-not-ready"><i aria-hidden="true" />Not ready</span>
+  return <span className="mhc-result is-pending"><i aria-hidden="true" />Pending</span>
 }
 
 function AssignmentDetail({ assignment, onRefresh, autoOpenTaskId, onAutoOpened }) {
@@ -99,10 +107,9 @@ function AssignmentDetail({ assignment, onRefresh, autoOpenTaskId, onAutoOpened 
   useEffect(() => {
     if (!autoOpenTaskId) return
     const task = tasks.find((t) => String(t.id) === String(autoOpenTaskId))
-    if (task) {
-      setOpenTask(task)
-      onAutoOpened?.()
-    }
+    if (task && !task.overall_result) setOpenTask(task)
+    onAutoOpened?.()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoOpenTaskId, tasks])
 
   async function downloadTemplate() {
@@ -135,62 +142,49 @@ function AssignmentDetail({ assignment, onRefresh, autoOpenTaskId, onAutoOpened 
   }
 
   return (
-    <motion.div className="card" initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} style={{ overflow: 'hidden' }}>
-      <div className="card-pad" style={{ paddingBottom: 12 }}>
-        <div className="row between wrap" style={{ gap: 10 }}>
-          <div>
-            <h3 style={{ fontSize: 15 }}>{assignment.title || assignment.code}</h3>
-            <span className="dim" style={{ fontSize: 12.5 }}>{formatNumber(tasks.length)} sites</span>
-          </div>
-          <div className="row" style={{ gap: 8 }}>
-            <button className="btn btn-sm" onClick={downloadTemplate}><Download size={14} /> Template</button>
-            <button className="btn btn-sm btn-primary" onClick={() => fileRef.current?.click()}><Upload size={14} /> Bulk upload</button>
-            <input ref={fileRef} type="file" accept=".xlsx,.xls" hidden onChange={(e) => uploadTemplate(e.target.files[0])} />
-          </div>
-        </div>
-      </div>
-
-      <div style={{ maxHeight: 520, overflowY: 'auto' }}>
-        <table>
+    <section className="mhc-detail" aria-label={`Sites in ${assignment.code}`}>
+      <header className="mhc-detail-head">
+        <h2>{assignment.code}</h2>
+        <button type="button" className="btn btn-sm" onClick={downloadTemplate}><Icon name="download" size={16} /> Template</button>
+        <button type="button" className="btn btn-sm" onClick={() => fileRef.current?.click()}><Icon name="upload" size={16} /> Bulk upload</button>
+        <input ref={fileRef} type="file" accept=".xlsx,.xls" hidden aria-label="Bulk upload file" onChange={(e) => uploadTemplate(e.target.files[0])} />
+      </header>
+      <div className="mhc-scroll">
+        <table className="mhc-table">
           <thead>
             <tr>
-              <th>Site ID</th>
-              <th>Type</th>
-              <th>Province</th>
-              <th>Tech</th>
-              <th>Result</th>
-              <th style={{ width: 80 }}></th>
+              <th scope="col">Site ID</th>
+              <th scope="col">Site type</th>
+              <th scope="col">Province</th>
+              <th scope="col">Technologies</th>
+              <th scope="col">Result</th>
+              <th scope="col"><span className="sr-only">Action</span></th>
             </tr>
           </thead>
           <tbody>
             {tasks.map((t) => (
               <tr key={t.id}>
-                <td className="text-data" style={{ fontWeight: 500 }}>{t.site_code || `#${t.work_item_id}`}</td>
-                <td className="text-data">{t.site_type || '—'}</td>
-                <td className="text-data dim">{t.province || '—'}</td>
+                <td className="mhc-site">{t.site_code || `#${t.work_item_id}`}</td>
+                <td>{typeLabel(t.site_type) || '—'}</td>
+                <td><bdi dir="rtl" lang="fa" className="mhc-fa">{t.province || '—'}</bdi></td>
                 <td>
-                  <div className="row" style={{ gap: 4 }}>
-                    {(t.requested_technologies || []).map((x) => (
-                      <span key={x} className="pill pill-dim" style={{ fontSize: 11 }}>{x}</span>
-                    ))}
-                  </div>
+                  <span className="mhc-techs">
+                    {(t.requested_technologies || []).map((x) => <span key={x} className="mhc-tech">{x}</span>)}
+                  </span>
                 </td>
+                <td><Result value={t.overall_result} /></td>
                 <td>
-                  {t.overall_result === 'Ready' && <span className="row" style={{ gap: 5, color: 'var(--uep-status-success-ink)', fontSize: 13 }}><CheckCircle2 size={14} /> Ready</span>}
-                  {t.overall_result === 'NotReady' && <span className="row" style={{ gap: 5, color: 'var(--uep-status-danger-ink)', fontSize: 13 }}><XCircle size={14} /> Not Ready</span>}
-                  {!t.overall_result && <span className="dim" style={{ fontSize: 12.5 }}>Pending</span>}
-                </td>
-                <td>
-                  <button className="btn btn-sm" onClick={() => setOpenTask(t)}>
-                    {t.overall_result ? 'Edit' : 'Fill'}
-                  </button>
+                  {t.overall_result ? (
+                    <span className="mhc-locked"><Icon name="locked" size={16} /> Locked</span>
+                  ) : (
+                    <button type="button" className="btn btn-sm" onClick={() => setOpenTask(t)}>Fill</button>
+                  )}
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
-
       {openTask && (
         <TaskFormModal
           task={openTask}
@@ -198,147 +192,81 @@ function AssignmentDetail({ assignment, onRefresh, autoOpenTaskId, onAutoOpened 
           onSaved={() => { setOpenTask(null); onRefresh?.() }}
         />
       )}
-    </motion.div>
+    </section>
   )
 }
 
 function TaskFormModal({ task, onClose, onSaved }) {
   const toast = useToast()
-  // Requested technologies come straight from the task payload now — no
-  // extra work-items API call (which contractors can't access anyway).
   const techs = task.requested_technologies || []
-  const [rows, setRows] = useState(() => {
-    const initial = {}
-    for (const tech of techs) {
-      const existing = task.technologies?.find((x) => x.technology === tech)
-      initial[tech] = {
-        result: existing?.result || '', // blank = force an explicit choice
-        comment: existing?.comment || '',
-      }
-    }
-    return initial
-  })
+  const [rows, setRows] = useState(() => Object.fromEntries(techs.map((t) => [t, { result: '', comment: '' }])))
   const [busy, setBusy] = useState(false)
 
-  function setField(tech, field, value) {
-    setRows((r) => ({ ...r, [tech]: { ...r[tech], [field]: value } }))
-  }
+  const setField = (tech, field, value) => setRows((r) => ({ ...r, [tech]: { ...r[tech], [field]: value } }))
 
   async function save() {
     setBusy(true)
     try {
-      const technology_results = techs.map((tech) => {
-        const row = rows[tech]
-        const isNot = row.result === 'NotNormal'
-        return {
-          technology: tech,
-          result: row.result,
-          comment: isNot ? row.comment : null,
-        }
-      })
+      const technology_results = techs.map((tech) => ({
+        technology: tech,
+        result: rows[tech].result,
+        comment: rows[tech].result === 'NotNormal' ? rows[tech].comment : null,
+      }))
       await api.post(`/hc/tasks/${task.id}/result`, { technology_results })
-      toast.success('Result saved', 'Health check submitted for this site.')
+      toast.success('Result sent', `${task.site_code || 'The site'} is locked.`)
       onSaved()
     } catch (err) {
-      toast.error('Save failed', err.response?.data?.detail || 'Please check the entries.')
+      toast.error('Could not send', err.response?.data?.detail || 'Please check the entries.')
     } finally {
       setBusy(false)
     }
   }
 
-  // Valid = every technology has a Normal/NotNormal chosen, and any NotNormal
-  // has a comment.
+  // Every technology answered; a Not normal one needs a comment.
   const valid = techs.length > 0 && techs.every((t) => {
     const r = rows[t]
-    if (!r || !r.result) return false
-    if (r.result === 'NotNormal') return r.comment.trim().length > 0
-    return true
+    return r.result === 'Normal' || (r.result === 'NotNormal' && r.comment.trim().length > 0)
   })
 
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(20,30,50,0.45)', display: 'grid', placeItems: 'center', zIndex: 200 }} onClick={onClose}>
-      <motion.div
-        initial={{ opacity: 0, y: 16, scale: 0.97 }}
-        animate={{ opacity: 1, y: 0, scale: 1 }}
-        className="card card-pad"
-        style={{ width: 540, maxHeight: '88vh', overflowY: 'auto' }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <h3 style={{ fontSize: 16 }}>
-          Health check · {task.site_code || `Site #${task.work_item_id}`}
-        </h3>
-        <div className="row" style={{ gap: 10, marginTop: 4, marginBottom: 14 }}>
-          {task.site_type && <span className="pill pill-dim">{task.site_type}</span>}
-          {task.province && <span className="text-data dim" style={{ fontSize: 12.5 }}>{task.province}</span>}
+    <Modal
+      open
+      size="sm"
+      onClose={onClose}
+      title={task.site_code || `Site #${task.work_item_id}`}
+      footer={
+        <div className="mhc-modal-foot">
+          <button type="button" className="btn btn-primary" disabled={!valid || busy} aria-busy={busy || undefined} onClick={save}>Send result</button>
+          <button type="button" className="btn btn-ghost" onClick={onClose}>Cancel</button>
+          <span className="mhc-locked"><Icon name="locked" size={16} /> Locked after sending</span>
         </div>
-
-        {/* Tutorial */}
-        <div style={{ background: 'var(--uep-accent-tint)', borderRadius: 'var(--uep-radius-control)', padding: '11px 13px', marginBottom: 16, display: 'flex', gap: 9 }}>
-          <Info size={16} style={{ color: 'var(--uep-accent-hover)', flexShrink: 0, marginTop: 1 }} />
-          <div style={{ fontSize: 12.5, lineHeight: 1.6, color: 'var(--uep-text-2)' }}>
-            For each technology below, pick <b>Normal</b> if the site is fine for that
-            technology. Pick <b>Not Normal</b> if there's a problem — then write a short
-            <b> comment</b> explaining it. When all technologies are Normal the site
-            becomes <b>Ready</b>; if any is Not Normal it becomes <b>Not Ready</b>. A
-            coordinator will review and categorise any problems afterwards.
-          </div>
-        </div>
-
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          {techs.map((tech) => (
-            <div key={tech} style={{ border: '1px solid var(--uep-divider)', borderRadius: 'var(--uep-radius-control)', padding: 12 }}>
-              <div className="row between">
-                <span style={{ fontWeight: 600, fontSize: 15 }}>{tech}</span>
-                <div className="row" style={{ gap: 6 }}>
-                  <ToggleBtn active={rows[tech]?.result === 'Normal'} onClick={() => setField(tech, 'result', 'Normal')} color="var(--uep-status-success-ink)">Normal</ToggleBtn>
-                  <ToggleBtn active={rows[tech]?.result === 'NotNormal'} onClick={() => setField(tech, 'result', 'NotNormal')} color="var(--uep-status-danger-ink)">Not Normal</ToggleBtn>
-                </div>
-              </div>
-              {rows[tech]?.result === 'NotNormal' && (
-                <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  <div>
-                    <label style={{ fontSize: 12, color: 'var(--uep-text-3)', display: 'block', marginBottom: 3 }}>Comment</label>
-                    <input className="input" placeholder="Describe the problem…" value={rows[tech].comment} onChange={(e) => setField(tech, 'comment', e.target.value)} />
-                  </div>
-                </div>
-              )}
-              {!rows[tech]?.result && (
-                <div className="row" style={{ gap: 5, marginTop: 8, color: 'var(--uep-text-3)', fontSize: 11.5 }}>
-                  <HelpCircle size={13} /> Choose Normal or Not Normal
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-
-        <div className="row mt-16" style={{ gap: 8 }}>
-          <button className="btn btn-primary" disabled={!valid || busy} onClick={save}>
-            {busy ? <div className="spinner" /> : 'Submit result'}
-          </button>
-          <button className="btn btn-ghost" onClick={onClose}>Cancel</button>
-        </div>
-        {!valid && techs.length > 0 && (
-          <p className="dim" style={{ fontSize: 11.5, marginTop: 8 }}>
-            Set every technology (and add a comment for any "Not Normal") to submit.
-          </p>
-        )}
-      </motion.div>
-    </div>
-  )
-}
-
-function ToggleBtn({ active, onClick, color, children }) {
-  return (
-    <button
-      className="btn btn-sm"
-      onClick={onClick}
-      style={{
-        background: active ? color : 'var(--uep-surface-subtle)',
-        color: active ? 'var(--uep-on-accent)' : 'var(--uep-text-2)',
-        border: active ? 'none' : '1px solid var(--uep-border)',
-      }}
+      }
     >
-      {children}
-    </button>
+      <p className="mhc-modal-sub">
+        {[typeLabel(task.site_type), task.province].filter(Boolean).join(' · ')}
+      </p>
+      <div className="mhc-techrows">
+        {techs.map((tech) => (
+          <div key={tech} className="mhc-techrow">
+            <div className="mhc-techrow-head">
+              <b>{tech}</b>
+              <span className="mhc-toggle" role="group" aria-label={`${tech} result`}>
+                <button type="button" className="is-normal" aria-pressed={rows[tech].result === 'Normal'} onClick={() => setField(tech, 'result', 'Normal')}>Normal</button>
+                <button type="button" className="is-not-normal" aria-pressed={rows[tech].result === 'NotNormal'} onClick={() => setField(tech, 'result', 'NotNormal')}>Not normal</button>
+              </span>
+            </div>
+            {rows[tech].result === 'NotNormal' && (
+              <input
+                className="input"
+                aria-label={`Problem on ${tech}`}
+                required
+                value={rows[tech].comment}
+                onChange={(e) => setField(tech, 'comment', e.target.value)}
+              />
+            )}
+          </div>
+        ))}
+      </div>
+    </Modal>
   )
 }

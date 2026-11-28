@@ -352,6 +352,56 @@ The 360px right panel of DT review: the Site ID (18px/600) with type, province a
 - **Error:** "Couldn't load {step}." with Retry inside the card; the rest of the page still renders.
 - **Saving:** the pressed control is disabled with `aria-busy`.
 
+## Drive test pages refined (UEP-31)
+
+Supersedes the strip, AssignPanel and WaitingCell notes above for the six Drive test work pages.
+
+### Flow strip
+
+One white card (1px `--uep-border`, radius 12) in three groups split by 1px dividers: **Health check** (1 · Assign → 2 · Checks), **Drive test** (3 · Assign → 4 · Tests) and **Exceptions** (Remediation, DT done). Group caption 12/500 `--uep-text-3`; a grey Carbon `chevron--right` between steps. Each step is a tab: label 13/500 `--uep-text-2`, the number 24/600 tabular, `N to decide` (13/500 cobalt) and `N late` (13/500 `--uep-danger`, only when > 0). Always "late", never "overdue". DT done shows a green `checkmark--filled` and is not a tab. No band notes, owner lines, hatching or fills. The page heading has no meta line and the rail shows no count for the four steps (`railCount: false`); Remediation and Submissions keep theirs.
+
+### Selected states (no blue fill)
+
+| Element | Selected look |
+|---|---|
+| Flow step | no fill; label `--uep-text` 600; a 3px line in the stage colour on the card's bottom edge (cobalt, `--uep-app-drive-test`, `--uep-app-monthly-plan`) |
+| Contractor button, team tile, assignment card | white, 1px `--uep-text` border + 1px inset ring; the contractor button adds an 18px dark circle with a white `checkmark` |
+| Batch row (Checks list) | `--uep-hover` + 3px inset left edge in `--uep-text` |
+| Ticked table row | `--uep-work-row-selected` (#F3F6FD) with the 3px cobalt edge |
+
+Solid cobalt is only the one primary action on a screen. Green is only Ready / DT done / completed, red only late and not ready, yellow only pending and due soon.
+
+### VillageCount
+
+`components/work/parts.jsx`. The number of villages (14/500 cobalt, tabular) and a 14px `chevron--down`; `N new` (12/500, `--uep-accent-hover`) when CPM added villages. A click (Enter, Space) opens a fixed-position popover (white, 1px border, radius 8, popover shadow): `N villages` (12/500 `--uep-text-3`), then one row per village, name in Vazirmatn 13 and code 12 tabular, `· New in CPM` when new. Esc, an outside click or a second click closes it and focus stays on the button. `aria-expanded`, `aria-label="3 villages, show names"`. The click never toggles the row.
+
+### Waiting cell
+
+Days only (`19 d`, tabular), `--uep-danger` 600 past the step SLA, with a hidden " late". No bar.
+
+### Assign: Contractors column
+
+The list card on the left and a 232px column on the right (`--uep-assign-column`, gap 16). Header `Contractors` 16/600 and `Manage` (13/500 cobalt) for users with the `contractors` feature. One 44px button per contractor shown in Drive test, A to Z, 8px apart: the name (14/500) and one number, the basket (14/600 tabular). `role="radiogroup"` / `role="radio"`, `aria-label="Pars Rayan, 18 sites in basket"`. Footer: `N sites · M villages` and Clear (or `No sites selected`), and the 40px primary `Assign to <contractor>` (`Assign` while disabled). A click with no sites selected shows "Select sites first".
+
+### Checks: inbox
+
+A 360px batch list (`--uep-inbox-list`, `role="listbox"`, Up / Down move, Enter opens) and the open batch on the right. A row: an 8px cobalt dot and a 600 code while results wait, the Round flag, the status pill (grey `Due in 23 h`, yellow under 12 h, red `Late 2 h`, green `Completed in 31 h`, red when completed after the SLA), a 6px bar of ready / not ready / pending, and `■ 6 ready ■ 1 not ready ■ 5 pending` with coloured squares. No contractor anywhere on the page.
+
+### Motion
+
+| What | Motion |
+|---|---|
+| Buttons, tiles, steps | press scale .98, `--uep-dur-press` (100 ms) |
+| Hover / selection | `--uep-dur-fast` (150 ms), standard ease |
+| Flow strip numbers | count up from 0 on the first open only, 700 ms ease-out |
+| Step line | grows from the centre, `--uep-dur-step-line` (240 ms), entrance ease |
+| Checks: another batch | fades in from 8px right, `--uep-dur-swap` (220 ms) |
+| Assign | rows slide out; the chosen contractor's number bumps (1 → 1.25 → 1, `--uep-dur-bump`) once the load reloads; check pops in, `--uep-dur-check-pop` |
+| Villages popover | fade + 4px rise, `--uep-dur-pop` (160 ms) |
+| Checks bars | fill from the left, `--uep-dur-fill`, on page open only |
+
+All of it stops under `prefers-reduced-motion` (and `data-uep-motion="reduce"`); none blocks input.
+
 ## Explorer: type scale and colour roles (UEP-28)
 
 The list (`pages/explorer/ExplorerList.jsx`, `.exl-*`) and the record

@@ -57,6 +57,8 @@ export const FEATURE = Object.freeze({
   USERS: 'users',
   ACCESS: 'access',
   PROVINCE_ASSIGNMENTS: 'province_assignments',
+  /** Admin › Contractors (UEP-31): who appears in Drive test. */
+  CONTRACTORS: 'contractors',
   SLA_POLICIES: 'sla_policies',
   /** Admin › Sign-in page (UEP-26). */
   SIGNIN_SETTINGS: 'signin_settings',

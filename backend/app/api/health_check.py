@@ -3,6 +3,8 @@
 Coordinator: basket, create assignment, list assignments, results.
 Subcontractor: my assignments, submit per-site result, download/upload template.
 """
+from datetime import timedelta
+
 from fastapi import (
     APIRouter,
     Depends,
@@ -55,7 +57,8 @@ from app.schemas import (
 )
 from app.services import hc_queues
 from app.services import health_check as hc
-from app.services import contractor_load, dt_workflow, evidence_store, undo
+from app.services import contractor_load, dt_workflow, evidence_store, pipeline, undo
+from app.services.action_queues import sla
 from app.services.action_queues.context import QueueContext
 from app.services.audit import record_audit
 from app.services.tech_parser import parse_technologies
@@ -462,7 +465,15 @@ def my_hc_assignments(
     assignments = (
         db.execute(stmt.order_by(HcAssignment.id.desc()).limit(200)).scalars().all()
     )
-    return [hc.build_assignment_out(a) for a in assignments]
+    # The batch's due time, for "Due in 23 h" on the contractor's cards (UEP-31).
+    days = pipeline.sla_days_for(db, [dt_workflow.HC_CHECK_QUEUE])[dt_workflow.HC_CHECK_QUEUE]
+    out = []
+    for a in assignments:
+        row = hc.build_assignment_out(a)
+        assigned = sla.as_datetime(a.assigned_at)
+        row["due_at"] = assigned + timedelta(days=days) if assigned and days else None
+        out.append(row)
+    return out
 
 
 @router.post("/tasks/{task_id}/result")

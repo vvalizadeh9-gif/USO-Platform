@@ -849,10 +849,17 @@ def with_villages(db: Session, rows: list[dict], key: str = "work_item_id") -> l
             .order_by(Village.village_name.asc(), Village.id.asc())
         ):
             names.setdefault(wi_id, []).append(name)
+    # UEP-31: every village, for the count's list; new = added in CPM after
+    # the site's first drive test and not covered yet.
+    from app.services.dt_workflow import new_village_ids, villages_of
+
+    every = villages_of(db, ids)
+    fresh = {vid for vids in new_village_ids(db, ids).values() for vid in vids}
     for row in rows:
         mine = names.get(row[key], [])
         row["village"] = mine[0] if mine else None
         row["village_count"] = len(mine)
+        row["villages"] = [{**v, "is_new": v["id"] in fresh} for v in every.get(row[key], [])]
     return rows
 
 
