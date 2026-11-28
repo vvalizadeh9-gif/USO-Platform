@@ -33,6 +33,7 @@ from sqlalchemy.orm import Session
 from app.core.config import get_settings
 from app.models.acceptance import CpmImportBatch
 from app.models.acceptance_workflow import AcceptanceEvidence
+from app.models.data_import import ImportBatch
 from app.models.stored_file import StoredFile
 from app.models.submission import SubmissionLetterFile
 from app.models.workitem import DriveTestEvidence
@@ -81,6 +82,8 @@ FILE_REFERENCES = (
     DriveTestEvidence.sha256,
     SubmissionLetterFile.sha256,
     CpmImportBatch.source_sha256,
+    # UEP-29: the uploaded Data import file, kept (retained) for History.
+    ImportBatch.file_sha256,
 )
 
 

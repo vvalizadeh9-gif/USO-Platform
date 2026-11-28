@@ -2283,6 +2283,52 @@ the old `acceptance_workspace` area still guards the My Work API.
 
 Explorer's acceptance details show each side's case (state, basket, days).
 
+## 5l. Data import (UEP-29)
+
+Admin › Data import loads drive test and acceptance history that was collected
+outside UEP, for the first load and for big corrections. Code:
+`services/data_import/` (one job per module: `columns`, `template`, `reader`,
+`current`, `validate`, `diff`, `batches`, `confirm`, `apply_dt`,
+`apply_acceptance`, `undo`, `exports`) and `api/data_import.py`.
+
+**Merge only.** An empty cell changes nothing. A value where UEP is empty is
+New; the same value is No change; a different value is a Conflict that the
+PM decides (Keep UEP / Use file) before Confirm is allowed. Comments are never
+conflicts: a new one is added. A verdict with a letter date but no letter
+number is filed as `NO-LETTER` (agreed with the PM); the blank cell never
+replaces a letter number UEP already holds.
+
+**Keys.** Rows match on site code + site type + village code through
+`mojri_tracker.match_key`, never internal ids. Drive test columns are per
+work item: the one non-empty value of each column across its villages;
+disagreeing villages refuse that site's drive test.
+
+**Staging.** `import_batches` / `import_rows` / `import_changes` hold the
+preview, so Confirm never re-reads the file. Confirm refuses when a staged
+UEP value changed since the preview. On Confirm each record the batch creates
+or changes is written to `import_changes` as an `effect` row; Undo reads only
+those, newest first, and reverses a record only while it still holds what the
+batch wrote.
+
+**One status truth.** Confirm writes the records the app writes: an imported
+HC task (`source = import`, one `IMP-{n}` HC assignment per batch) so
+`assert_ready_for_dt` holds unchanged; a new official assignment and drive
+test (the previous active ones become inactive, never deleted);
+`work_items.dt_*`; a validated `AcceptanceSubmission` (source `Import`) for
+every requested technology, projected by `acceptance_workflow._project`,
+statuses rebuilt by `recompute_authority_statuses`, then the case moved by
+`acceptance_cases.transitions` (rejections go to the category's basket).
+`refresh_stage` runs per site. Nothing calls `notify` or the mailer.
+
+**Problematic.** DT result Problematic sets `dt_status` and
+`dt_problem_category`; with a DT date the drive test is recorded as Rejected
+(reviewed), so the site reads Assigned again rather than flooding the review
+queue.
+
+**Undo and the imported HC.** Drive tests and assignments are deactivated and
+submissions Withdrawn. The imported HC task is removed, since it records no
+real check; the audit log and change log keep its trace.
+
 ## 6. Roles and permissions
 
 Ten roles. Six are staff and workflow roles; four exist solely to own health-check

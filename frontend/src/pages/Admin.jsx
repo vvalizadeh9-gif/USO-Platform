@@ -15,6 +15,7 @@ import ProblemCategoriesTab from './admin/ProblemCategoriesTab'
 import MojriTemplateTab from './admin/MojriTemplateTab'
 import AccessTab from './admin/access/AccessTab'
 import SystemHealthTab from './admin/health/SystemHealthTab'
+import DataImportTab from './admin/DataImportTab'
 import { FEATURE as F, meets } from '../lib/access'
 
 // Each view is its own feature (UEP-25, Admin › Access), read from
@@ -34,6 +35,8 @@ const TABS = [
   // approved and writes nothing. The import that brings the filled file back
   // is the Mojri upload feature at Edit.
   { key: 'mojri', label: 'Mojri template', need: F.MOJRI_UPLOAD },
+  // UEP-29: drive test and acceptance data from Excel, reviewed before saving.
+  { key: 'data-import', label: 'Data import', need: F.DATA_IMPORT, fill: true },
   { key: 'health', label: 'System health', need: F.SYSTEM_HEALTH, fill: true },
   { key: 'audit', label: 'Audit log', need: F.AUDIT_LOG },
 ]
@@ -71,10 +74,11 @@ export default function Admin() {
 
   const shows = (key) => tab === key && current?.key === key
 
-  // Access and System health are one-screen pages (the page never scrolls;
+  // Access, System health and Data import are one-screen pages (the page never scrolls;
   // their lists scroll inside their panels): each draws its own PageFrame.
   if (shows('access')) return <AccessTab />
   if (shows('health')) return <SystemHealthTab />
+  if (shows('data-import')) return <DataImportTab />
 
   return (
     <>

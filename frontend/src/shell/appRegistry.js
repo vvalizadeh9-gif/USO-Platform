@@ -225,6 +225,8 @@ export const APPS = Object.freeze([
       // with the Admin app finds them there instead.
       { id: 'access', label: 'Access', route: '/admin?tab=access', need: F.ACCESS, adminDuplicate: true },
       { id: 'system-health', label: 'System health', route: '/admin?tab=health', need: F.SYSTEM_HEALTH, adminDuplicate: true },
+      // UEP-29: PM's way in to Admin > Data import.
+      { id: 'data-import', label: 'Data import', route: '/admin?tab=data-import', need: F.DATA_IMPORT, adminDuplicate: true },
     ],
   },
   {
@@ -267,6 +269,11 @@ export const APPS = Object.freeze([
       {
         id: 'cpm-import', section: 'Data', label: 'CPM import', route: '/admin?tab=import', need: [F.CPM_IMPORT, 'edit'],
         icon: 'data--base', tile: '--uep-app-admin',
+      },
+      // UEP-29: drive test and acceptance data from Excel, with undo.
+      {
+        id: 'data-import', section: 'Data', label: 'Data import', route: '/admin?tab=data-import', need: F.DATA_IMPORT,
+        icon: 'cloud--upload', tile: '--uep-app-admin',
       },
       {
         id: 'mojri-template', section: 'Data', label: 'Mojri template', route: '/admin?tab=mojri', need: F.MOJRI_UPLOAD,

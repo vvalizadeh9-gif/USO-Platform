@@ -159,23 +159,20 @@ def _seed_site_with_open_fix(category_name):
         ).lastrowid
 
         now = datetime.now(timezone.utc)
-        assignment = HcAssignment(
+        # Core inserts of the columns that exist at PREVIOUS: the models carry
+        # later ones (UEP-29's source / import_batch_id).
+        assignment_id = db.execute(HcAssignment.__table__.insert().values(
             code=f"HC-TAXO-{category.id}", contractor_id=contractor.id,
-            assigned_at=now, status="Open",
-        )
-        db.add(assignment)
-        db.flush()
-        task = HcTask(
-            hc_assignment_id=assignment.id, work_item_id=wi_id, round_no=1,
+            assigned_at=now, status="Open", created_at=now, updated_at=now,
+        )).inserted_primary_key[0]
+        task_id = db.execute(HcTask.__table__.insert().values(
+            hc_assignment_id=assignment_id, work_item_id=wi_id, round_no=1,
             overall_result="NotReady", problem_category=category_name,
-            completed_at=now,
-        )
-        db.add(task)
-        db.flush()
-        # A Core insert of the columns that exist at PREVIOUS: the model
-        # carries later ones (UEP-15's sla_days_applied / on_time).
+            completed_at=now, created_at=now, updated_at=now,
+        )).inserted_primary_key[0]
+        # Likewise: the model carries UEP-15's sla_days_applied / on_time.
         db.execute(HcRemediation.__table__.insert().values(
-            hc_task_id=task.id, work_item_id=wi_id,
+            hc_task_id=task_id, work_item_id=wi_id,
             problem_category_id=category.id,
             owner_role_id=category.owner_role_id,
             status=HcRemediation.STATUS_OPEN, opened_at=now,

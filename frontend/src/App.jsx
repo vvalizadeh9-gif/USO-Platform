@@ -71,7 +71,7 @@ const CHANGE_PASSWORD_PATH = '/change-password'
 // them may open /admin; the page shows only the views they have.
 const ADMIN_PAGE = {
   any: [F.ADMIN_OVERVIEW, F.USERS, F.ACCESS, F.CPM_IMPORT, [F.CPM_CHANGE_REQUESTS, 'edit'],
-    F.PROBLEM_CATEGORIES, F.MOJRI_UPLOAD, F.SYSTEM_HEALTH, F.AUDIT_LOG],
+    F.PROBLEM_CATEGORIES, F.MOJRI_UPLOAD, F.SYSTEM_HEALTH, F.AUDIT_LOG, F.DATA_IMPORT],
 }
 
 // Someone without a route's feature sees the standard no-access screen rather
