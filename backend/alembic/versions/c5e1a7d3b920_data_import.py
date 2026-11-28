@@ -117,8 +117,10 @@ def upgrade() -> None:
                 batch.add_column(sa.Column("source", sa.String(10), nullable=False, server_default="app"))
             if "import_batch_id" not in columns:
                 batch.add_column(sa.Column("import_batch_id", sa.Integer(), nullable=True))
+                # PostgreSQL's own default name, so a database built by
+                # create_all and one built by this migration match.
                 batch.create_foreign_key(
-                    f"fk_{table}_import_batch_id", "import_batches", ["import_batch_id"], ["id"]
+                    f"{table}_import_batch_id_fkey", "import_batches", ["import_batch_id"], ["id"]
                 )
         indexes = {i["name"] for i in sa.inspect(bind).get_indexes(table)}
         name = f"ix_{table}_import_batch_id"
@@ -165,7 +167,7 @@ def downgrade() -> None:
     for table in SOURCE_TABLES:
         op.drop_index(f"ix_{table}_import_batch_id", table_name=table)
         with op.batch_alter_table(table) as batch:
-            batch.drop_constraint(f"fk_{table}_import_batch_id", type_="foreignkey")
+            batch.drop_constraint(f"{table}_import_batch_id_fkey", type_="foreignkey")
             batch.drop_column("import_batch_id")
             batch.drop_column("source")
 
