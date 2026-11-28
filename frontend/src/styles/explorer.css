@@ -44,10 +44,10 @@
   animation: ex-shimmer 1.2s linear infinite;
 }
 
-/* One village as a chip: Persian name 14/600, ID 12. */
+/* One village as a chip: Persian name 14/500, ID Plex Sans 12/500. */
 .exv {
   display: inline-flex;
-  align-items: baseline;
+  align-items: center;
   gap: 6px;
   min-height: 30px;
   padding: 0 10px;
@@ -59,9 +59,17 @@
   line-height: 28px;
   box-sizing: border-box;
 }
-.exv-name { font-size: var(--uep-fs-body); font-weight: var(--uep-weight-semibold); }
+.exv-name { font-size: var(--uep-fs-body); font-weight: var(--uep-weight-medium); }
 .exv-name.is-struck { text-decoration: line-through; text-decoration-color: var(--uep-text-3); }
-.exv-code { font-family: var(--uep-font-mono); font-size: var(--uep-fs-caption); color: var(--uep-text-3); }
+/* A village ID looks the same everywhere: chip, acceptance table, list match line. */
+.exv-code, .exa-village-id, .exl-match-code {
+  font-family: var(--uep-font-sans);
+  font-size: var(--uep-fs-caption);
+  font-weight: var(--uep-weight-medium);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: .02em;
+}
+.exv-code { color: var(--uep-text-3); }
 .exv.is-button {
   cursor: pointer;
   transition: border-color var(--uep-dur-explorer-hover) var(--uep-ease-productive),
@@ -112,32 +120,35 @@
 /* ---- B2 Site passport ---- */
 .exp {
   display: grid;
-  grid-template-columns: minmax(250px, .95fr) minmax(0, 1.6fr) minmax(0, .8fr) minmax(0, 1.05fr);
+  grid-template-columns: minmax(220px, .75fr) minmax(0, 1.95fr) minmax(0, .9fr) minmax(0, .9fr);
   overflow: hidden;
   animation: ex-rise var(--uep-dur-explorer-rise) var(--uep-ease-grow) both;
 }
 .exp.hw-card:hover { box-shadow: none; }
 .exp-error { grid-column: 1 / -1; }
+/* One text rule: titles 14/600, values 14/500, second lines 13/400. Every
+   title sits in a 28px row so the four line up across the card. */
 .exp-title {
   display: inline-flex;
   align-items: center;
   gap: var(--uep-space-8);
+  min-height: 28px;
   margin: 0;
   font-size: var(--uep-fs-body);
   font-weight: var(--uep-weight-semibold);
-  color: var(--uep-text-2);
+  color: var(--uep-text);
   white-space: nowrap;
 }
 .exp-location {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: var(--uep-space-16);
   padding: 14px 18px 14px 14px;
   border-right: var(--uep-border-width) solid var(--uep-divider);
   background: linear-gradient(90deg, var(--uep-explorer-wash-1) 0%, var(--uep-explorer-wash-2) 70%, var(--uep-surface) 100%);
 }
-.exp-location-text { display: flex; flex-direction: column; gap: var(--uep-space-4); min-width: 0; }
-.exp-province { font-family: var(--uep-font-persian); font-size: var(--uep-fs-queue-count); font-weight: var(--uep-weight-semibold); line-height: 1.3; }
+.exp-location-text { display: flex; flex-direction: column; min-width: 0; }
+.exp-province { font-family: var(--uep-font-persian); font-size: var(--uep-fs-card-title); font-weight: var(--uep-weight-semibold); line-height: 1.3; }
 .exp-map { flex: none; width: var(--uep-explorer-map); height: auto; aspect-ratio: 1000 / 904; }
 .exp-map path { fill: var(--uep-explorer-map-land); stroke: var(--uep-surface); stroke-width: 3; stroke-linejoin: round; }
 .exp-map path.is-me { fill: var(--uep-explorer-map-me); animation: exp-fill var(--uep-dur-explorer-fill) var(--uep-ease-productive) 200ms both; }
@@ -152,10 +163,10 @@
 .exp-cell {
   display: flex;
   flex-direction: column;
-  justify-content: center;
+  justify-content: flex-start;
   gap: var(--uep-space-8);
   min-width: 0;
-  padding: var(--uep-space-12) 18px;
+  padding: 14px 18px;
   border-right: var(--uep-border-width) solid var(--uep-divider);
 }
 .exp-cell:last-child { border-right: 0; }
@@ -189,31 +200,20 @@
   cursor: pointer;
 }
 .exp-history:hover { background: var(--uep-accent-tint); }
-.exp-history b {
-  display: inline-grid;
-  place-items: center;
-  min-width: 20px;
-  height: 20px;
-  padding: 0 6px;
-  border-radius: var(--uep-radius-pill);
-  background: var(--uep-accent-tint);
-  font-size: var(--uep-fs-caption);
-  font-weight: var(--uep-weight-semibold);
-  box-sizing: border-box;
-}
 .exp-chips { display: flex; flex-wrap: wrap; gap: 6px; max-height: 66px; overflow: hidden; margin: 0; padding: 0; list-style: none; }
 .exp-chips li { animation: ex-rise 300ms var(--uep-ease-grow) both; animation-delay: calc(380ms + var(--exp-i, 0) * var(--uep-explorer-chip-stagger)); }
 .exp-none { color: var(--uep-text-3); font-size: var(--uep-fs-body); }
 .exp-group { display: flex; flex-direction: column; gap: var(--uep-space-4); }
 .exp-type { gap: 10px; }
-.exp-value { font-size: var(--uep-fs-body); font-weight: var(--uep-weight-semibold); }
-.exp-techs { display: flex; flex-wrap: nowrap; gap: var(--uep-space-4); }
+.exp-type .exp-group + .exp-group { gap: 6px; }
+.exp-type .exp-group + .exp-group .exp-title { min-height: 24px; }
+.exp-value { font-size: var(--uep-fs-body); font-weight: var(--uep-weight-medium); color: var(--uep-text); }
+.exp-techs { display: flex; flex-wrap: nowrap; gap: 6px; }
 .exp-tech {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  height: var(--uep-control-sm);
-  padding: 0 var(--uep-space-8);
+  display: inline-grid;
+  place-items: center;
+  width: 44px;
+  height: 30px;
   border-radius: var(--uep-radius-control);
   background: var(--uep-accent-tint);
   color: var(--uep-app-explorer);
@@ -221,11 +221,20 @@
   font-weight: var(--uep-weight-semibold);
   white-space: nowrap;
 }
-.exp-bars rect { fill: var(--uep-explorer-tech-bar); }
-.exp-bars rect.is-on { fill: var(--uep-app-explorer); }
-.exp-contractors { gap: var(--uep-space-8); }
-.exp-contractor { display: flex; flex-direction: column; align-items: flex-start; min-width: 0; max-width: 100%; line-height: 1.25; }
-.exp-contractor-name { font-size: var(--uep-fs-body); font-weight: var(--uep-weight-semibold); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.exp-contractor-rows { display: flex; flex-direction: column; gap: 10px; }
+.exp-contractor { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.exp-contractor-tile {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: var(--uep-radius-control);
+  background: var(--uep-explorer-contractor-tile);
+  color: var(--uep-explorer-contractor-icon);
+}
+.exp-contractor-text { display: flex; flex-direction: column; align-items: flex-start; min-width: 0; line-height: 1.25; }
+.exp-contractor-name { max-width: 100%; font-size: var(--uep-fs-body); font-weight: var(--uep-weight-medium); color: var(--uep-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .exp-contractor-name.is-none { color: var(--uep-text-3); font-weight: var(--uep-weight-medium); }
 .exp-role { font-size: var(--uep-fs-small); color: var(--uep-text-3); }
 .exp-skel-map { width: var(--uep-explorer-map); height: 101px; }
@@ -367,7 +376,7 @@
 .exa-table tbody tr:last-child > * { border-bottom: 0; }
 .exa-village { display: flex; flex-direction: column; min-width: 0; }
 .exa-village-name { font-size: var(--uep-fs-body); font-weight: var(--uep-weight-semibold); line-height: 1.35; overflow-wrap: anywhere; }
-.exa-village-id { font-family: var(--uep-font-mono); font-size: var(--uep-fs-caption); color: var(--uep-text-3); }
+.exa-village-id { color: var(--uep-text-3); }
 .exa-all-done { color: var(--uep-text-2); }
 .exa-mark { display: flex; align-items: flex-start; gap: 10px; min-width: 0; }
 .exa-mark-circle { flex: none; display: grid; place-items: center; width: 26px; height: 26px; margin-top: 1px; border-radius: var(--uep-radius-pill); }
@@ -441,7 +450,6 @@
 @media (max-width: 1380px) {
   .exa-counts { gap: var(--uep-space-8); }
   .exj-stat { padding: 0 14px; }
-  .exp { grid-template-columns: minmax(230px, .95fr) minmax(0, 1.5fr) minmax(0, .85fr) minmax(0, 1fr); }
 }
 
 /* =================================================================
@@ -807,7 +815,7 @@
 }
 .exl-match-label { margin-left: 6px; font-size: var(--uep-fs-small); color: var(--uep-text-3); }
 .exl-match-name { font-size: var(--uep-fs-body); font-weight: var(--uep-weight-semibold); }
-.exl-match-code { font-family: var(--uep-font-mono); font-size: var(--uep-fs-caption); color: var(--uep-text-2); }
+.exl-match-code { color: var(--uep-text-2); }
 .exl-match-more { font-size: var(--uep-fs-small); color: var(--uep-text-2); }
 .exl-match-open {
   display: inline-flex;

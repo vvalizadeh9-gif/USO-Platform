@@ -25,6 +25,18 @@ describe('the Explorer type scale', () => {
     expect(off).toEqual([])
   })
 
+  // UEP-30: one text rule on the passport. Village names medium, titles semibold.
+  it('sets village names in 500 and passport section titles in 600', () => {
+    const weight = (sel) => {
+      const start = css.indexOf(`\n${sel} {`)
+      const block = start < 0 ? '' : css.slice(start, css.indexOf('}', start))
+      return resolve(/font-weight:\s*([^;]+)/.exec(block)?.[1] ?? '')
+    }
+    expect(weight('.exv-name')).toBe('500')
+    expect(weight('.exp-title')).toBe('600')
+    expect(weight('.exp-value')).toBe('500')
+  })
+
   it('uses no inline colour: every colour is a token', () => {
     const literal = [...css.matchAll(/(?:^|[\s:,(])(#[0-9a-fA-F]{3,8})\b/g)].map((m) => m[1])
     expect(literal).toEqual([])

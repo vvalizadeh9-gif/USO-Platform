@@ -368,8 +368,8 @@ only the list body, the village table and the history panel scroll.
 | Section titles | 14/600 |
 | Data | 14 |
 | Labels and second lines | 13 |
-| Codes only (village IDs, list column headers) | 12 |
-| Big numbers (province, journey numbers) | 20/600 |
+| Codes only (village IDs, list column headers) | 12 (village IDs: Plex Sans 12/500, tabular, .02em) |
+| Big numbers (journey numbers) | 20/600 |
 
 ICT/CRA chips are 13/700 everywhere on Explorer (`auth-chip ex-auth`). No size
 outside 12/13/14/16/20/24/32; `explorerTypeScale.test.js` resolves every
@@ -415,12 +415,28 @@ One card in four cells (`SitePassport.jsx`): **Province** (a 112px map of Iran
 from `iranMini.json` — built by `scripts/build-iran-mini.py`: integer
 coordinates, points under 4 units apart dropped, centroids precomputed — with
 only this province filled in Explorer cobalt and a pin on its centre, then the
-name at 20/600 on a soft cobalt wash); **Target villages** (count pill,
-History with the number of changes, village chips on at most two lines then
-"+n more"; a chip highlights its table row and is disabled before acceptance
-starts); **Site type** and **Requested technology** (badges with 2/3/4 signal
-bars, always one line); **Contractors** (name 14/600 Vazirmatn, role 13 muted,
-no initials). No CRA region. On air and DT dates are on the ribbon instead.
+name at 16/600 Vazirmatn on a soft cobalt wash; the "Province" heading is
+visually hidden); **Target villages** (grey count pill, "History · {n} changes"
+in words — "1 change", or just "History" — village chips on at most two lines
+then "+n more"; a chip highlights its table row and is disabled before
+acceptance starts); **Site type** (plain text) over **Technology** (44×30
+soft-blue tiles, requested technologies only, one line, the group named
+"Requested technology: 3G, 4G"); **Contractors** (two rows 10px apart: a 30×30
+grey icon tile — `cell-tower` for the site contractor, `car` for DT — then
+name over role; "Not assigned" muted). No CRA region. On air and DT dates are
+on the ribbon instead.
+
+One text rule (UEP-30): section titles 14/600 `--uep-text` in a 28px row so the
+four line up; values 14/500; second lines 13/400 muted; cells padded 14×18 and
+top-aligned (Province centred). Columns `.75fr / 1.95fr / .9fr / .9fr` (220px
+minimum for Province); the card stays about 140px at 1440×900 and 1366×768.
+
+### Village chip
+
+`VillageChip.jsx` (`.exv`), the same in the passport, the list's villages strip
+and the history panel: 30px high, 8px radius, name Vazirmatn 14/500, ID Plex
+Sans 12/500 with tabular figures and .02em tracking, centred. No numbers on
+chips. The acceptance table and the list match line use the same ID style.
 
 ### Journey ribbon
 
@@ -449,7 +465,7 @@ date or "in progress, N days so far" and both lanes in its name.
 Village (27%) | ICT | CRA, for every site. A sticky 46px header: each
 authority cell has a 3px plum/blue top edge, the chip and "**2** approved ·
 **1** pending · **0** rejected" (13, coloured numbers, grey at zero). 58px rows
-(52px under 820px of height): name 14/600 Vazirmatn and ID 12 mono, then each
+(52px under 820px of height): name 14/600 Vazirmatn and ID Plex Sans 12/500, then each
 side's mark, word, Re-filed tag and one dated 13px line — dates only, never an
 age. Worst first (rejected, pending, approved), then village code. The box
 ends where its rows end; only its body scrolls. Before acceptance: a dashed
