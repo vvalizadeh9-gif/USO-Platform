@@ -45,6 +45,13 @@ class HcAssignment(Base):
         String(20), default="Open", nullable=False
     )  # Open | Completed
     remarks: Mapped[str | None] = mapped_column(Text)
+    # UEP-29: written by Admin > Data import ("import") or in the app ("app").
+    source: Mapped[str] = mapped_column(
+        String(10), server_default="app", nullable=False
+    )
+    import_batch_id: Mapped[int | None] = mapped_column(
+        ForeignKey("import_batches.id"), index=True
+    )
 
     contractor = relationship("Contractor")
     tasks: Mapped[list[HcTask]] = relationship(
@@ -83,6 +90,13 @@ class HcTask(Base):
     # the four problem categories. reviewed_at marks that validation is done.
     reviewed_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
     reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # UEP-29: written by Admin > Data import ("import") or in the app ("app").
+    source: Mapped[str] = mapped_column(
+        String(10), server_default="app", nullable=False
+    )
+    import_batch_id: Mapped[int | None] = mapped_column(
+        ForeignKey("import_batches.id"), index=True
+    )
 
     assignment: Mapped[HcAssignment] = relationship(back_populates="tasks")
     work_item = relationship("WorkItem", back_populates="hc_tasks")

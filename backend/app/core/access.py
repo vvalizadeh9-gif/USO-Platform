@@ -118,6 +118,8 @@ class Feature(StrEnum):
     ACTION_SLA = "action_sla"
     CPM_IMPORT = "cpm_import"
     CPM_CHANGE_REQUESTS = "cpm_change_requests"
+    #: Admin > Data import (UEP-29): drive test and acceptance from Excel.
+    DATA_IMPORT = "data_import"
     MOJRI_UPLOAD = "mojri_upload"
     ADMIN_OVERVIEW = "admin_overview"
     SYSTEM_HEALTH = "system_health"

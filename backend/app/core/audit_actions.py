@@ -80,6 +80,12 @@ EXPORTED = "EXPORTED"
 # UEP-26: Admin > Sign-in page saved (support contact, planned-update notice).
 SIGNIN_SETTINGS_CHANGED = "signin_settings.changed"
 
+# UEP-29: Admin > Data import. One entry per record a batch created or
+# changed (applied), and one per batch for the preview and the undo.
+DATA_IMPORT_PREVIEWED = "data_import.previewed"
+DATA_IMPORT_APPLIED = "data_import.applied"
+DATA_IMPORT_UNDONE = "data_import.undone"
+
 # UEP-27: a list behind a Home number downloaded as Excel.
 HOME_EXPORT = "home.export"
 

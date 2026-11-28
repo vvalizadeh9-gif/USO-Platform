@@ -40,6 +40,7 @@ from app.models.health_check import (
     HcTaskTechnology,
     HcTaskVillage,
 )
+from app.models.data_import import ImportBatch, ImportChange, ImportRow
 from app.models.kpi import ProvinceMapping
 from app.models.mojri import MojriImportRun, MojriTrackerStatus
 from app.models.performance import LifecycleStatusHistory
@@ -76,6 +77,9 @@ from app.models.workitem import (
 )
 
 __all__ = [
+    "ImportBatch",
+    "ImportChange",
+    "ImportRow",
     "AccessVersion",
     "BackupConfirmation",
     "ErrorEvent",

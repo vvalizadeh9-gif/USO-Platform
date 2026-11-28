@@ -8,6 +8,7 @@ from app.api import (
     admin,
     auth,
     client_errors,
+    data_import,
     drive_test,
     explorer,
     gaps,
@@ -45,6 +46,7 @@ api_router.include_router(gaps.router)
 api_router.include_router(mojri.router)
 api_router.include_router(monthly_plan.router)
 api_router.include_router(admin.router)
+api_router.include_router(data_import.router)
 api_router.include_router(misc.router)
 api_router.include_router(work_queues.router)
 api_router.include_router(sla_policies.router)

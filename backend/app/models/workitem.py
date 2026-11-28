@@ -246,6 +246,13 @@ class Assignment(Base):
     # implicitly whenever a new assignment supersedes this one.
     returned_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     return_reason: Mapped[str | None] = mapped_column(Text)
+    # UEP-29: written by Admin > Data import ("import") or in the app ("app").
+    source: Mapped[str] = mapped_column(
+        String(10), server_default="app", nullable=False
+    )
+    import_batch_id: Mapped[int | None] = mapped_column(
+        ForeignKey("import_batches.id"), index=True
+    )
 
     work_item: Mapped[WorkItem] = relationship(back_populates="assignments")
     contractor = relationship("Contractor")
@@ -305,6 +312,13 @@ class DriveTest(Base):
     pm_comment: Mapped[str | None] = mapped_column(Text)
 
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    # UEP-29: written by Admin > Data import ("import") or in the app ("app").
+    source: Mapped[str] = mapped_column(
+        String(10), server_default="app", nullable=False
+    )
+    import_batch_id: Mapped[int | None] = mapped_column(
+        ForeignKey("import_batches.id"), index=True
+    )
 
     work_item: Mapped[WorkItem] = relationship(back_populates="drive_tests")
     evidence: Mapped[list[DriveTestEvidence]] = relationship(
