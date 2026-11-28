@@ -264,7 +264,7 @@ html[data-uep-motion='reduce'] :is(.uw-step-enter, .uw-table tbody tr, .uw-resul
 .uw-batch-row.is-filling .uw-batch-bar i { animation: uw-fill var(--uep-dur-fill) var(--uep-ease-productive) backwards; }
 .uw-batch-counts { display: flex; gap: var(--uep-space-12); font-size: var(--uep-fs-caption); color: var(--uep-text-2); }
 .uw-batch-counts span { display: inline-flex; align-items: center; gap: 5px; }
-.uw-batch-counts i { width: 8px; height: 8px; border-radius: 2px; }
+.uw-batch-counts i { width: 8px; height: 8px; border-radius: var(--uep-radius-sm); }
 :is(.uw-batch-bar, .uw-batch-counts) .is-ready { background: var(--uep-status-success-dot); }
 :is(.uw-batch-bar, .uw-batch-counts) .is-not-ready { background: var(--uep-danger); }
 :is(.uw-batch-bar, .uw-batch-counts) .is-pending { background: var(--uep-status-pending-dot); }
